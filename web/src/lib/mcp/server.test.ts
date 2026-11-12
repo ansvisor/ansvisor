@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
@@ -41,6 +43,13 @@ describe('the MCP server', () => {
     expect(MCP_INSTRUCTIONS).toContain('call one only when the user asked for that change');
   });
 
+  it('names only the engines Ansvisor tracks', () => {
+    expect(MCP_INSTRUCTIONS).toContain(
+      'ChatGPT, Claude, Gemini, Google AI Overviews, Google AI Mode and Bing AI Mode',
+    );
+    expect(MCP_INSTRUCTIONS).not.toMatch(/Perplexity|Copilot|Grok/);
+  });
+
   it('gives every tool a title and says whether it reads or changes, and what a change does', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
@@ -50,12 +59,61 @@ describe('the MCP server', () => {
       const hints = tool.annotations ?? {};
       // The list_/get_ tools are the reads a read-only workspace keeps.
       expect(hints.readOnlyHint, tool.name).toBe(isReadTool(tool.name));
+      // All three on every tool, reads too: ChatGPT's app review needs them stated.
+      expect(typeof hints.destructiveHint, tool.name).toBe('boolean');
       expect(typeof hints.openWorldHint, tool.name).toBe('boolean');
-      if (!hints.readOnlyHint) {
-        // A change says whether it overwrites, and whether repeating it does more.
-        expect(typeof hints.destructiveHint, tool.name).toBe('boolean');
+      if (hints.readOnlyHint) {
+        // A read changes nothing and reads only what Ansvisor stores.
+        expect(hints.destructiveHint, tool.name).toBe(false);
+        expect(hints.openWorldHint, tool.name).toBe(false);
+      } else {
+        // A change also says whether repeating it does more.
         expect(typeof hints.idempotentHint, tool.name).toBe('boolean');
       }
+    }
+  });
+
+  it("marks as destructive what replaces something or can't be undone", async () => {
+    const client = await connect();
+    const { tools } = await client.listTools();
+    expect(
+      tools
+        .filter((tool) => tool.annotations?.destructiveHint)
+        .map((tool) => tool.name)
+        .sort(),
+    ).toEqual([
+      'dismiss_prompt_suggestion',
+      'dismiss_task_review',
+      'dismiss_topic_suggestion',
+      'generate_content_brief',
+    ]);
+  });
+
+  it("gives every write's hints, and why, in the MCP guide's Tool hints table", async () => {
+    const client = await connect();
+    const { tools } = await client.listTools();
+    const guide = readFileSync(
+      fileURLToPath(new URL('../../../../docs/guides/mcp-server.mdx', import.meta.url)),
+      'utf8',
+    );
+    const section = guide.slice(guide.indexOf('### Tool hints'));
+    const yesNo = (value: boolean | undefined) => (value ? 'yes' : 'no');
+    const writes = tools.filter((tool) => !tool.annotations?.readOnlyHint);
+    expect(writes.length).toBeGreaterThan(10);
+    for (const tool of writes) {
+      const hints = tool.annotations ?? {};
+      const row = section.split('\n').find((line) => line.startsWith(`| \`${tool.name}\` |`));
+      expect(row, tool.name).toBeDefined();
+      const [destructive, repeatable, outside, why] = row!
+        .split('|')
+        .slice(2, 6)
+        .map((cell) => cell.trim());
+      expect([destructive, repeatable, outside], tool.name).toEqual([
+        yesNo(hints.destructiveHint),
+        yesNo(hints.idempotentHint),
+        yesNo(hints.openWorldHint),
+      ]);
+      expect(why.length, tool.name).toBeGreaterThan(20);
     }
   });
 

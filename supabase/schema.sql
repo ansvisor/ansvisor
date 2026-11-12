@@ -61726,3 +61726,1354 @@ create policy "topic_catalog_categories: member select"
 
 notify pgrst, 'reload schema';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00495_report_card_request_language.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00495: the language a report card request's PDF and e-mail are written in
+-- ============================================================================
+-- The free report card's form on www.ansvisor.com may choose the report's
+-- language (owner decision 2026-11-09): English, Turkish, French, Spanish,
+-- German, Portuguese, Italian or Dutch. The questions are still asked in the
+-- target country's main language (report_cards.language, 00472), so the
+-- card's figures and cost don't change: only the words of its PDF and e-mail
+-- do. The PDF isn't kept but drawn for each e-mail (server
+-- lib/report-card/deliver.js), so the language is the request's, not the
+-- card's: two people at one company may get the same card in two languages.
+--
+-- Null is the form's "Auto": Turkish for a Türkiye card, English elsewhere,
+-- as before. The check is on the code's form (ISO 639-1), not a list, so a
+-- language added later needs no migration; the API checks the code against
+-- the languages it writes.
+
+alter table public.report_card_requests
+  add column if not exists report_language text
+    check (report_language ~ '^[a-z]{2}$');
+
+comment on column public.report_card_requests.report_language is
+  'The language the request''s PDF and e-mail are written in, as the form chose it (ISO 639-1; 00495); null: by the card''s country, Turkish for TR and English elsewhere.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00497_prompt_tags.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Multiple custom tags on a tracked prompt, cutting across Topics (#2151).
+-- A prompt keeps its one topic_id; tags are many-per-prompt, cross-cutting
+-- labels (campaign, funnel stage, product line, priority) so grouping does
+-- not have to duplicate prompts or mint near-duplicate topics. A text[]
+-- column matches the house style of prompts.platforms, models and regions,
+-- and a GIN index serves the "has any of / has all of" filters on the
+-- prompts list. The Chat agents' Signal trigger filter already declares
+-- entity_filter.prompt_tags (web/src/lib/chat/agent-rules.ts); its matcher
+-- stubs the filter false today because prompts kept no tags yet.
+
+alter table public.prompts
+  add column if not exists tags text[] not null default '{}'::text[];
+
+comment on column public.prompts.tags is
+  'Cross-cutting labels many-per-prompt, orthogonal to topic_id (campaign, funnel stage, product line, priority).';
+
+create index if not exists idx_prompts_tags on public.prompts using gin (tags);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00510_mcp_oauth.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00510: MCP over OAuth: apps, connections, codes, tokens, their log (#2141)
+-- ============================================================================
+-- Claude, ChatGPT and other MCP apps connect to /api/mcp by signing the person
+-- in (OAuth 2.1), instead of a pasted ans_ key (00003), which keeps working.
+-- Ansvisor is its own small authorization server: the tokens it issues are
+-- opaque, kept here only as sha256 hashes like api_keys.key_hash, and good for
+-- the MCP endpoint alone. Behind MCP_OAUTH_ENABLED: nothing writes these
+-- tables while it is off.
+--
+--   * oauth_clients: the apps. A DCR client registers itself (RFC 7591) and
+--     gets an ansc_ id; a public one (token_endpoint_auth_method 'none',
+--     PKCE only) has no secret, a confidential one a hashed secret. Nothing
+--     in metadata is fetched or shown (logo_uri, client_uri…).
+--   * oauth_authorization_requests: a request to connect, checked and kept
+--     while the person signs in and decides (10 minutes): the consent page's
+--     address holds only its id. user_id is the person who opened it.
+--   * oauth_codes: an approved request's one-time code (5 minutes), with what
+--     the token request must match. grant_id is set when it is redeemed: a
+--     second use revokes that connection (OAuth 2.1 §4.1.2).
+--   * oauth_grants: a connection: one person, the organization they were in
+--     when they approved it, one app, its scopes (mcp:read, and mcp:write
+--     when they allowed changes) and the resource (the MCP endpoint's URL).
+--     Revoking it ends every token at once; revoked_reason says why.
+--   * oauth_tokens: access tokens (1 hour) and refresh tokens (30 days,
+--     rotated on every use: rotated_at), hashed.
+--   * oauth_events: the log: a connection made, refused or ended, a code or
+--     refresh token used twice.
+--   * oauth_rate_limits and oauth_rate_hit(): fixed-window counters for the
+--     registration, token and consent endpoints.
+--
+-- Only the server reads and writes them, with the service role: RLS is on
+-- with no policy, and anon and authenticated get nothing. Settings lists a
+-- person's connections through an API route that reads them as the service
+-- role for that person. No brand_id: a connection carries its person's brand
+-- access, read again on every call (BRAND-ACCESS §5.3), as an API key does.
+
+-- ─── Apps ───────────────────────────────────────────────────────────────────
+
+create table if not exists public.oauth_clients (
+  id uuid primary key default gen_random_uuid(),
+  client_id text not null unique check (char_length(client_id) between 8 and 2000),
+  -- 'dcr': registered at /api/oauth/register.
+  kind text not null default 'dcr' check (kind in ('dcr')),
+  -- Self-asserted: the consent page shows it as the app's own word.
+  client_name text check (client_name is null or char_length(client_name) between 1 and 100),
+  -- https://… or a loopback http://… address, matched exactly (a loopback one
+  -- on any port, RFC 8252 §7.3).
+  redirect_uris text[] not null check (cardinality(redirect_uris) between 1 and 5),
+  token_endpoint_auth_method text not null default 'none'
+    check (token_endpoint_auth_method in ('none', 'client_secret_post', 'client_secret_basic')),
+  client_secret_hash text check (client_secret_hash is null or client_secret_hash ~ '^[0-9a-f]{64}$'),
+  -- The rest of the registration as sent, for support: never fetched or shown.
+  metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
+  created_at timestamptz not null default now(),
+  -- The last time a person connected it: a client never connected is
+  -- removed after a day.
+  last_used_at timestamptz,
+  constraint oauth_clients_secret_check
+    check ((token_endpoint_auth_method = 'none') = (client_secret_hash is null))
+);
+
+create index if not exists oauth_clients_unused_idx
+  on public.oauth_clients (created_at)
+  where last_used_at is null;
+
+-- ─── Requests to connect ───────────────────────────────────────────────────
+
+create table if not exists public.oauth_authorization_requests (
+  id uuid primary key default gen_random_uuid(),
+  client_id text not null references public.oauth_clients (client_id) on delete cascade,
+  redirect_uri text not null check (char_length(redirect_uri) <= 2000),
+  -- S256 only: base64url of a sha256, 43 characters.
+  code_challenge text not null check (code_challenge ~ '^[A-Za-z0-9_-]{43}$'),
+  scopes text[] not null
+    check (scopes <@ array['mcp:read', 'mcp:write']::text[] and 'mcp:read' = any (scopes)),
+  state text check (state is null or char_length(state) <= 1000),
+  resource text not null check (char_length(resource) <= 2000),
+  user_id uuid references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
+create index if not exists oauth_authorization_requests_expires_idx
+  on public.oauth_authorization_requests (expires_at);
+
+-- ─── Connections ───────────────────────────────────────────────────────────
+
+create table if not exists public.oauth_grants (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  client_id text not null references public.oauth_clients (client_id) on delete cascade,
+  -- As the consent page showed them.
+  client_name text check (client_name is null or char_length(client_name) <= 100),
+  redirect_host text not null check (char_length(redirect_host) between 1 and 255),
+  scopes text[] not null
+    check (scopes <@ array['mcp:read', 'mcp:write']::text[] and 'mcp:read' = any (scopes)),
+  resource text not null check (char_length(resource) <= 2000),
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz,
+  revoked_at timestamptz,
+  -- person: Disconnect in Settings; client: the app at /api/oauth/revoke;
+  -- member_left: no longer in the organization; code_reuse / refresh_reuse:
+  -- a code or a rotated refresh token used again; expired: unused 30 days.
+  revoked_reason text check (
+    revoked_reason in ('person', 'client', 'member_left', 'code_reuse', 'refresh_reuse', 'expired')
+  ),
+  constraint oauth_grants_revoked_check check ((revoked_at is null) = (revoked_reason is null))
+);
+
+create index if not exists oauth_grants_user_idx
+  on public.oauth_grants (user_id, created_at desc)
+  where revoked_at is null;
+
+-- ─── Codes and tokens ──────────────────────────────────────────────────────
+
+create table if not exists public.oauth_codes (
+  code_hash text primary key check (code_hash ~ '^[0-9a-f]{64}$'),
+  client_id text not null references public.oauth_clients (client_id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  redirect_uri text not null check (char_length(redirect_uri) <= 2000),
+  code_challenge text not null check (code_challenge ~ '^[A-Za-z0-9_-]{43}$'),
+  scopes text[] not null
+    check (scopes <@ array['mcp:read', 'mcp:write']::text[] and 'mcp:read' = any (scopes)),
+  resource text not null check (char_length(resource) <= 2000),
+  client_name text check (client_name is null or char_length(client_name) <= 100),
+  redirect_host text not null check (char_length(redirect_host) between 1 and 255),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  grant_id uuid references public.oauth_grants (id) on delete cascade
+);
+
+create index if not exists oauth_codes_expires_idx on public.oauth_codes (expires_at);
+
+create table if not exists public.oauth_tokens (
+  id uuid primary key default gen_random_uuid(),
+  grant_id uuid not null references public.oauth_grants (id) on delete cascade,
+  kind text not null check (kind in ('access', 'refresh')),
+  token_hash text not null unique check (token_hash ~ '^[0-9a-f]{64}$'),
+  scopes text[] not null
+    check (scopes <@ array['mcp:read', 'mcp:write']::text[] and 'mcp:read' = any (scopes)),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  -- A refresh token swapped for a new pair: the old one is dead from then on.
+  rotated_at timestamptz,
+  revoked_at timestamptz
+);
+
+create index if not exists oauth_tokens_grant_idx on public.oauth_tokens (grant_id);
+create index if not exists oauth_tokens_expires_idx on public.oauth_tokens (expires_at);
+
+-- ─── The log ───────────────────────────────────────────────────────────────
+
+create table if not exists public.oauth_events (
+  id bigint generated always as identity primary key,
+  organization_id uuid references public.organizations (id) on delete cascade,
+  -- Null once the person's account is deleted: the row stays for the admins.
+  user_id uuid references auth.users (id) on delete set null,
+  grant_id uuid references public.oauth_grants (id) on delete set null,
+  client_id text check (client_id is null or char_length(client_id) <= 2000),
+  event text not null check (
+    event in (
+      'client_registered',
+      'consent_granted',
+      'consent_denied',
+      'blocked_trial',
+      'blocked_ended',
+      'code_reuse',
+      'refresh_reuse',
+      'revoked_by_person',
+      'revoked_by_client',
+      'revoked_member_left'
+    )
+  ),
+  -- The address shortened (IPv4 /24, IPv6 /48), and the client's user agent.
+  ip text check (ip is null or char_length(ip) <= 64),
+  user_agent text check (user_agent is null or char_length(user_agent) <= 200),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists oauth_events_org_idx
+  on public.oauth_events (organization_id, created_at desc);
+
+-- ─── Rate limits ───────────────────────────────────────────────────────────
+
+create table if not exists public.oauth_rate_limits (
+  key text not null check (char_length(key) between 1 and 200),
+  window_start timestamptz not null,
+  hits integer not null default 0,
+  primary key (key, window_start)
+);
+
+-- One hit on key in the current window of p_window_seconds: true while the
+-- window holds p_max hits or fewer. Windows older than a day are cleared now
+-- and then. The server's only (service role).
+create or replace function public.oauth_rate_hit(p_key text, p_window_seconds integer, p_max integer)
+returns boolean
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_start timestamptz :=
+    to_timestamp(floor(extract(epoch from now()) / p_window_seconds) * p_window_seconds);
+  v_hits integer;
+begin
+  insert into public.oauth_rate_limits as r (key, window_start, hits)
+  values (p_key, v_start, 1)
+  on conflict (key, window_start) do update set hits = r.hits + 1
+  returning r.hits into v_hits;
+  if random() < 0.01 then
+    delete from public.oauth_rate_limits where window_start < now() - interval '1 day';
+  end if;
+  return v_hits <= p_max;
+end;
+$$;
+
+revoke all on function public.oauth_rate_hit(text, integer, integer) from public, anon, authenticated;
+grant execute on function public.oauth_rate_hit(text, integer, integer) to service_role;
+
+-- ─── Access: the server's only ─────────────────────────────────────────────
+
+alter table public.oauth_clients enable row level security;
+alter table public.oauth_authorization_requests enable row level security;
+alter table public.oauth_grants enable row level security;
+alter table public.oauth_codes enable row level security;
+alter table public.oauth_tokens enable row level security;
+alter table public.oauth_events enable row level security;
+alter table public.oauth_rate_limits enable row level security;
+
+revoke all on table
+  public.oauth_clients,
+  public.oauth_authorization_requests,
+  public.oauth_grants,
+  public.oauth_codes,
+  public.oauth_tokens,
+  public.oauth_events,
+  public.oauth_rate_limits
+from anon, authenticated;
+
+grant all on table
+  public.oauth_clients,
+  public.oauth_authorization_requests,
+  public.oauth_grants,
+  public.oauth_codes,
+  public.oauth_tokens,
+  public.oauth_events,
+  public.oauth_rate_limits
+to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00511_mcp_oauth_cimd.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00511: MCP over OAuth: apps known by a Client ID Metadata Document (#2141)
+-- ============================================================================
+-- An MCP app can name itself by an https URL instead of registering first
+-- (Client ID Metadata Documents: MCP authorization spec 2025-11-25, which
+-- 2026-07-28 prefers to dynamic registration). Claude and ChatGPT use one
+-- when the authorization server says it supports them, and Claude Code
+-- always has one. Ansvisor fetches the document when the app first asks to
+-- connect, checks it (its client_id equal to its URL, its redirect URIs),
+-- and keeps it in oauth_clients as a 'cimd' client, by its URL, for as long
+-- as its Cache-Control allows (five minutes to a day). It is a public
+-- client: PKCE, no secret.
+
+alter table public.oauth_clients drop constraint if exists oauth_clients_kind_check;
+alter table public.oauth_clients
+  add constraint oauth_clients_kind_check check (kind in ('dcr', 'cimd'));
+
+alter table public.oauth_clients add column if not exists metadata_fetched_at timestamptz;
+alter table public.oauth_clients add column if not exists metadata_expires_at timestamptz;
+
+alter table public.oauth_clients drop constraint if exists oauth_clients_cimd_check;
+alter table public.oauth_clients
+  add constraint oauth_clients_cimd_check check (
+    kind <> 'cimd'
+    or (
+      client_id ~ '^https://'
+      and token_endpoint_auth_method = 'none'
+      and metadata_fetched_at is not null
+      and metadata_expires_at is not null
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00515_slack_posts.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00515: Slack posts — what Ansvisor posted to a brand's Slack channel (#2139)
+-- ============================================================================
+-- A brand posts to the Slack channel it picked (brand_integrations.settings,
+-- 00470; server lib/slack/connection.js). Each message is kept here once,
+-- before it is sent, so the same message never goes twice however the job
+-- that sends it is retried or run on two servers (unique per brand and
+-- dedupe key), and so a message can be found again (its channel and Slack's
+-- ts) and the next one held back for a while (the drop alerts' 7 days).
+--
+--   * kind: what it was. The Daily Pulse first; the drop alert, the daily
+--     suggestion and "an agent needs you" follow in their own pull requests,
+--     so they are allowed here from the start.
+--   * dedupe_key: the message's own key within the brand, e.g. pulse:{date}.
+--   * status: sending while Slack is asked, then sent or failed. A failed
+--     post is tried once more (a 429 after Slack's Retry-After, a 5xx or a
+--     timeout after 2 seconds); error_code is Slack's code, or ours, never
+--     its words.
+--
+-- Server only: the service role writes and reads it, after checking the
+-- brand, its plan and the person who connected its workspace. No member
+-- reads it (the brand's card reads brand_integrations), so it has no policy.
+--
+-- sent_pulses.slack_sent: whether the Pulse went to the brand's channel, as
+-- email_sent and webhook_sent say for its other legs.
+
+create table if not exists public.slack_posts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null
+    constraint slack_posts_organization_id_fkey
+    references public.organizations(id) on delete cascade,
+  brand_id uuid not null
+    constraint slack_posts_brand_id_fkey
+    references public.brands(id) on delete cascade,
+  -- The workspace's sign-in it went through; null once that is gone.
+  account_id uuid
+    constraint slack_posts_account_id_fkey
+    references public.integration_accounts(id) on delete set null,
+  kind text not null check (kind in ('pulse', 'drop', 'suggestion', 'needs_you')),
+  dedupe_key text not null check (char_length(dedupe_key) between 1 and 200),
+  channel_id text not null check (channel_id ~ '^[CG][A-Z0-9]{6,20}$'),
+  status text not null default 'sending' check (status in ('sending', 'sent', 'failed')),
+  -- Slack's id of the message in its channel, once sent.
+  message_ts text check (message_ts is null or message_ts ~ '^[0-9]{1,12}\.[0-9]{1,8}$'),
+  error_code text check (error_code is null or char_length(error_code) between 1 and 100),
+  attempts smallint not null default 0 check (attempts between 0 and 5),
+  created_at timestamptz not null default now(),
+  sent_at timestamptz,
+  constraint slack_posts_brand_dedupe_key unique (brand_id, dedupe_key),
+  check ((status = 'sent') = (message_ts is not null and sent_at is not null))
+);
+
+-- The brand's latest posts of a kind (a cooldown, the message to update).
+create index if not exists slack_posts_brand_kind_created_idx
+  on public.slack_posts (brand_id, kind, created_at desc);
+-- The sign-in's posts, for its delete's set null.
+create index if not exists slack_posts_account_id_idx
+  on public.slack_posts (account_id) where account_id is not null;
+create index if not exists slack_posts_organization_id_idx
+  on public.slack_posts (organization_id);
+
+comment on table public.slack_posts is
+  'Slack (00515, #2139): each message posted to a brand''s Slack channel, kept once before it is sent (unique per brand and dedupe_key): its kind, channel, Slack''s ts, and Slack''s error code if it failed. Server only.';
+comment on column public.slack_posts.dedupe_key is
+  'The message''s key within the brand, e.g. pulse:{date}: the same message is never posted twice.';
+comment on column public.slack_posts.error_code is
+  'Slack''s error code (channel_not_found, ratelimited…) or ours (slack_unavailable, timeout), never a message''s words.';
+
+alter table public.slack_posts enable row level security;
+revoke all on table public.slack_posts from anon, authenticated;
+grant all on table public.slack_posts to service_role;
+
+alter table public.sent_pulses
+  add column if not exists slack_sent boolean not null default false;
+
+comment on column public.sent_pulses.slack_sent is
+  'Whether the Pulse was posted to the brand''s Slack channel (00515, #2139).';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00520_hubspot_ai_pipeline.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00520: AI-sourced contacts, deals and revenue from HubSpot (#2140)
+-- ============================================================================
+-- AI Traffic's "AI-sourced pipeline": which HubSpot contacts, deals and
+-- revenue came from AI answers, by AI engine and landing page. A brand
+-- connects HubSpot in Settings › Integrations (per brand, brand_integrations
+-- provider 'hubspot'); the API server reads its HubSpot account once a day
+-- (and on Sync now) into these tables, with the person's consent to mark
+-- contacts. HubSpot stays the source: each sync replaces the brand's rows.
+--
+--   * hubspot_ai_contacts: the brand's AI-sourced contacts.
+--       - origin 'ansvisor': marked by Ansvisor in HubSpot (the "Ansvisor"
+--         properties: AI source, AI landing page, AI first visit, AI
+--         converted), for this brand (its hidden brand id property).
+--       - origin 'hubspot': HubSpot's own "AI Referrals" original traffic
+--         source, whose first page is on one of the brand's domains, and
+--         not marked by Ansvisor. Shown as a line of its own (owner,
+--         2026-11-10).
+--     Only HubSpot's ids, the AI source, the landing page and dates: never a
+--     name or an email.
+--   * hubspot_ai_deals: the deals of those contacts. A deal with several
+--     contacts counts once, in full ("AI-influenced"), credited to its
+--     earliest AI contact marked by Ansvisor, else its earliest HubSpot AI
+--     Referrals contact (owner, 2026-11-10). `amount` is in the HubSpot
+--     account's own currency (amount_in_home_currency, else amount).
+--   * landing_key: the page's key as the other AI Traffic reads compare
+--     pages (lower(normalize_page_path), 00209).
+--   * Members read their brands' rows (user_brand_ids, 00388); only the
+--     server writes them.
+--
+-- brand_ai_pipeline(brand, since, until) returns the section's figures as
+-- one jsonb. Security definer for a person who can access the brand
+-- (can_access_brand) and for the service role; anyone else reads null.
+--   * contacts: AI-sourced contacts by when they converted (HubSpot's create
+--     date for its own AI Referrals contacts), against the period before;
+--   * deals: deals created in the range; won: deals closed won in the range,
+--     with their revenue, against the period before; open: deals open now,
+--     unweighted (owner, 2026-11-10);
+--   * byEngine and byPage (top 10 pages) for Ansvisor's marked contacts;
+--   * hubspotNative: the same totals for HubSpot's own AI Referrals contacts;
+--   * connected, consent, currency and the last sync, from the brand's
+--     HubSpot connection.
+
+create table if not exists public.hubspot_ai_contacts (
+  brand_id uuid not null
+    constraint hubspot_ai_contacts_brand_id_fkey
+    references public.brands(id) on delete cascade,
+  contact_id text not null check (contact_id ~ '^[0-9]{1,20}$'),
+  origin text not null check (origin in ('ansvisor', 'hubspot')),
+  ai_source text not null check (char_length(ai_source) between 1 and 64),
+  landing_url text check (landing_url is null or char_length(landing_url) between 1 and 2048),
+  landing_key text generated always as (
+    case when landing_url is null then null else lower(public.normalize_page_path(landing_url)) end
+  ) stored,
+  first_at timestamptz,
+  converted_at timestamptz,
+  hs_created_at timestamptz,
+  synced_at timestamptz not null default now(),
+  primary key (brand_id, contact_id)
+);
+
+create index if not exists hubspot_ai_contacts_brand_converted
+  on public.hubspot_ai_contacts (brand_id, (coalesce(converted_at, hs_created_at)));
+
+create table if not exists public.hubspot_ai_deals (
+  brand_id uuid not null
+    constraint hubspot_ai_deals_brand_id_fkey
+    references public.brands(id) on delete cascade,
+  deal_id text not null check (deal_id ~ '^[0-9]{1,20}$'),
+  -- The AI contact the deal is credited to.
+  contact_id text not null check (contact_id ~ '^[0-9]{1,20}$'),
+  origin text not null check (origin in ('ansvisor', 'hubspot')),
+  ai_source text not null check (char_length(ai_source) between 1 and 64),
+  landing_url text check (landing_url is null or char_length(landing_url) between 1 and 2048),
+  landing_key text generated always as (
+    case when landing_url is null then null else lower(public.normalize_page_path(landing_url)) end
+  ) stored,
+  amount numeric(16, 2),
+  currency text check (currency is null or currency ~ '^[A-Z]{3}$'),
+  is_closed boolean not null default false,
+  is_won boolean not null default false,
+  close_date timestamptz,
+  hs_created_at timestamptz,
+  synced_at timestamptz not null default now(),
+  primary key (brand_id, deal_id)
+);
+
+create index if not exists hubspot_ai_deals_brand_close
+  on public.hubspot_ai_deals (brand_id, close_date);
+
+alter table public.hubspot_ai_contacts enable row level security;
+revoke all on table public.hubspot_ai_contacts from anon, authenticated;
+grant select on table public.hubspot_ai_contacts to authenticated;
+grant all on table public.hubspot_ai_contacts to service_role;
+
+drop policy if exists "hubspot_ai_contacts: member select" on public.hubspot_ai_contacts;
+create policy "hubspot_ai_contacts: member select" on public.hubspot_ai_contacts
+  for select
+  to authenticated
+  using (brand_id in (select public.user_brand_ids()));
+
+alter table public.hubspot_ai_deals enable row level security;
+revoke all on table public.hubspot_ai_deals from anon, authenticated;
+grant select on table public.hubspot_ai_deals to authenticated;
+grant all on table public.hubspot_ai_deals to service_role;
+
+drop policy if exists "hubspot_ai_deals: member select" on public.hubspot_ai_deals;
+create policy "hubspot_ai_deals: member select" on public.hubspot_ai_deals
+  for select
+  to authenticated
+  using (brand_id in (select public.user_brand_ids()));
+
+comment on table public.hubspot_ai_contacts is
+  'AI-sourced pipeline (#2140, 00520): the brand''s HubSpot contacts from AI answers, as the daily sync reads them: marked by Ansvisor (origin ansvisor) or HubSpot''s own AI Referrals source on the brand''s domains (origin hubspot). HubSpot ids, AI source, landing page and dates only. Members read; the server writes.';
+comment on table public.hubspot_ai_deals is
+  'AI-sourced pipeline (#2140, 00520): the deals of the brand''s AI-sourced HubSpot contacts, each once, credited to its earliest Ansvisor-marked AI contact (else its earliest HubSpot AI Referrals one), with its amount in the HubSpot account''s currency. Members read; the server writes.';
+
+create or replace function public.brand_ai_pipeline(
+  p_brand_id uuid,
+  p_since date,
+  p_until date
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_from timestamptz := coalesce(p_since::timestamp at time zone 'utc', '-infinity');
+  v_until timestamptz := coalesce((p_until + 1)::timestamp at time zone 'utc', 'infinity');
+  v_prev_from timestamptz;
+  v_prev_until timestamptz;
+  v_settings jsonb;
+  v_connected boolean;
+  v_result jsonb;
+begin
+  if not public.can_access_brand(p_brand_id)
+    and auth.role() is distinct from 'service_role' then
+    return null;
+  end if;
+
+  -- The period before, as long, when the range has both ends.
+  if p_since is not null and p_until is not null then
+    v_prev_until := v_from;
+    v_prev_from := v_from - (v_until - v_from);
+  end if;
+
+  select bi.settings, a.status = 'connected'
+  into v_settings, v_connected
+  from public.brand_integrations bi
+  join public.integration_accounts a on a.id = bi.account_id
+  where bi.brand_id = p_brand_id
+    and bi.provider = 'hubspot';
+
+  with
+  contacts as (
+    select c.*, coalesce(c.converted_at, c.hs_created_at) as at
+    from public.hubspot_ai_contacts c
+    where c.brand_id = p_brand_id
+  ),
+  deals as (
+    select d.* from public.hubspot_ai_deals d where d.brand_id = p_brand_id
+  ),
+  -- Each figure as a row: what it counts, its engine and page, and its amount.
+  facts as (
+    select origin, 'contact' as kind, ai_source, landing_key, landing_url, null::numeric as amount
+    from contacts where at >= v_from and at < v_until
+    union all
+    select origin, 'deal', ai_source, landing_key, landing_url, null
+    from deals where hs_created_at >= v_from and hs_created_at < v_until
+    union all
+    select origin, 'won', ai_source, landing_key, landing_url, coalesce(amount, 0)
+    from deals where is_won and close_date >= v_from and close_date < v_until
+    union all
+    select origin, 'open', ai_source, landing_key, landing_url, coalesce(amount, 0)
+    from deals where not is_closed
+  ),
+  totals as (
+    select
+      origin,
+      count(*) filter (where kind = 'contact') as contacts,
+      count(*) filter (where kind = 'deal') as deals,
+      count(*) filter (where kind = 'won') as won_deals,
+      coalesce(sum(amount) filter (where kind = 'won'), 0) as won_revenue,
+      count(*) filter (where kind = 'open') as open_deals,
+      coalesce(sum(amount) filter (where kind = 'open'), 0) as open_pipeline
+    from facts
+    group by origin
+  ),
+  previous as (
+    select
+      (select count(*) from contacts
+        where origin = 'ansvisor' and at >= v_prev_from and at < v_prev_until) as contacts,
+      (select coalesce(sum(amount), 0) from deals
+        where origin = 'ansvisor' and is_won
+          and close_date >= v_prev_from and close_date < v_prev_until) as won_revenue
+  ),
+  engines as (
+    select
+      ai_source as source,
+      count(*) filter (where kind = 'contact') as contacts,
+      count(*) filter (where kind = 'deal') as deals,
+      count(*) filter (where kind = 'won') as won_deals,
+      coalesce(sum(amount) filter (where kind = 'won'), 0) as won_revenue,
+      coalesce(sum(amount) filter (where kind = 'open'), 0) as open_pipeline
+    from facts
+    where origin = 'ansvisor'
+    group by ai_source
+  ),
+  pages as (
+    select
+      landing_key,
+      min(landing_url) as page,
+      count(*) filter (where kind = 'contact') as contacts,
+      count(*) filter (where kind = 'deal') as deals,
+      coalesce(sum(amount) filter (where kind = 'won'), 0) as won_revenue,
+      mode() within group (order by ai_source) filter (where kind = 'contact') as top_source
+    from facts
+    where origin = 'ansvisor' and landing_key is not null
+    group by landing_key
+  ),
+  shown_pages as (
+    select * from pages
+    order by won_revenue desc, contacts desc, deals desc, landing_key
+    limit 10
+  )
+  select jsonb_build_object(
+    'connected', coalesce(v_connected, false),
+    'contactsConsent', coalesce((v_settings -> 'consent' ->> 'contacts')::boolean, false),
+    'currency', v_settings -> 'portal' ->> 'currency',
+    'syncedAt', v_settings -> 'sync' ->> 'at',
+    'syncError', v_settings -> 'sync' ->> 'error',
+    'totals', (
+      select jsonb_build_object(
+        'contacts', coalesce(t.contacts, 0),
+        'contactsPrev', case when v_prev_from is null then null else p.contacts end,
+        'deals', coalesce(t.deals, 0),
+        'wonDeals', coalesce(t.won_deals, 0),
+        'wonRevenue', coalesce(t.won_revenue, 0),
+        'wonRevenuePrev', case when v_prev_from is null then null else p.won_revenue end,
+        'openDeals', coalesce(t.open_deals, 0),
+        'openPipeline', coalesce(t.open_pipeline, 0)
+      )
+      from previous p
+      left join totals t on t.origin = 'ansvisor'
+    ),
+    'byEngine', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'source', e.source,
+        'contacts', e.contacts,
+        'deals', e.deals,
+        'wonDeals', e.won_deals,
+        'wonRevenue', e.won_revenue,
+        'openPipeline', e.open_pipeline
+      ) order by e.won_revenue desc, e.contacts desc, e.source)
+      from engines e
+    ), '[]'::jsonb),
+    'byPage', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'page', s.page,
+        'contacts', s.contacts,
+        'deals', s.deals,
+        'wonRevenue', s.won_revenue,
+        'topSource', s.top_source
+      ) order by s.won_revenue desc, s.contacts desc, s.deals desc, s.landing_key)
+      from shown_pages s
+    ), '[]'::jsonb),
+    'hubspotNative', (
+      select jsonb_build_object(
+        'contacts', coalesce(t.contacts, 0),
+        'deals', coalesce(t.deals, 0),
+        'wonRevenue', coalesce(t.won_revenue, 0)
+      )
+      from (select 1) one
+      left join totals t on t.origin = 'hubspot'
+    )
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.brand_ai_pipeline(uuid, date, date) from public, anon;
+grant execute on function public.brand_ai_pipeline(uuid, date, date) to authenticated, service_role;
+
+comment on function public.brand_ai_pipeline(uuid, date, date) is
+  'AI Traffic "AI-sourced pipeline" (#2140, 00520): the brand''s AI-sourced HubSpot contacts (by conversion), deals (created), won revenue (closed won in the range) against the period before, and open pipeline now, unweighted; by AI engine and top landing page for Ansvisor-marked contacts, and HubSpot''s own AI Referrals contacts apart; with the connection''s state and last sync. Security definer, for a person who can access the brand (can_access_brand) and for the service role; anyone else reads null.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00522_cms_hubspot_blog.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00522: HubSpot blog posts for Send to CMS (#2140)
+-- ============================================================================
+-- After Webflow (00283, 00284), WordPress (00294), Framer (00295) and Wix
+-- (00372), a brand sends pages to its HubSpot blog, as draft posts, through
+-- the HubSpot account it connected in Settings › Integrations (per brand,
+-- brand_integrations provider 'hubspot'; no migration made that). The blog
+-- pages go to is the brand's HubSpot setting (brand_integrations.settings),
+-- and nothing goes without the consent to send pages as drafts.
+--
+--   * content_draft_deliveries.target takes 'hubspot'. `target_collection`
+--     keeps the HubSpot blog's id the post was written to; its id is
+--     external_id, so the page's next send updates that post's draft.
+--   * reserve_content_deliveries: as 00372, a page already queued for the
+--     same CMS (HubSpot among them) isn't sent there again meanwhile.
+--
+-- 00521 is kept for marking HubSpot contacts (#2140, part 2).
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_target_check,
+  add constraint content_draft_deliveries_target_check
+    check (target in ('webhook', 'webflow', 'wordpress', 'framer', 'wix', 'hubspot'));
+
+comment on column public.content_draft_deliveries.target is
+  'Where the page was sent (00284, 00294, 00295, 00372, 00522): the brand''s webhook, its Webflow collection, its WordPress site, its Framer collection, its Wix site''s Blog or its HubSpot blog.';
+comment on column public.content_draft_deliveries.target_collection is
+  'The Webflow or Framer collection (00284, 00295), the WordPress site''s address (00294), the Wix site''s id (00372) or the HubSpot blog''s id (00522) the page''s item or post was written to; its id is external_id.';
+
+-- ----------------------------------------------------------------------------
+-- As 00372, with HubSpot among the CMSs a page isn't sent to twice at once.
+-- ----------------------------------------------------------------------------
+create or replace function public.reserve_content_deliveries(
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_sent_by uuid,
+  p_batch_id uuid,
+  p_items jsonb,
+  p_limit integer,
+  p_target text default 'webhook'
+)
+returns setof public.content_draft_deliveries
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  used integer;
+  room integer;
+begin
+  perform pg_advisory_xact_lock(hashtext('content_deliveries:' || p_organization_id::text));
+
+  -- sent_at stays empty: it was never sent, and its time stays its own.
+  update public.content_draft_deliveries
+  set status = 'failed', error = 'Not sent: interrupted'
+  where organization_id = p_organization_id
+    and status = 'queued'
+    and created_at < now() - interval '30 minutes';
+
+  select count(*) into used
+  from public.content_draft_deliveries
+  where organization_id = p_organization_id
+    and created_at > now() - interval '24 hours';
+
+  room := greatest(0, p_limit - used);
+  if room = 0 or jsonb_typeof(p_items) <> 'array' then
+    return;
+  end if;
+
+  -- Under the lock, so two sends of one page can't both pass: both would
+  -- make an item (Webflow refuses the second on its slug) or a post.
+  if p_target in ('webflow', 'wordpress', 'framer', 'wix', 'hubspot') and exists (
+    select 1
+    from public.content_draft_deliveries d
+    join jsonb_array_elements(p_items) as items(item)
+      on d.draft_id = (item ->> 'draft_id')::uuid
+    where d.organization_id = p_organization_id
+      and d.target = p_target
+      and d.status = 'queued'
+  ) then
+    raise exception 'delivery_in_progress' using errcode = 'P0001';
+  end if;
+
+  return query
+  insert into public.content_draft_deliveries
+    (organization_id, brand_id, draft_id, sent_by, batch_id, title, slug, target)
+  select p_organization_id, p_brand_id, (item ->> 'draft_id')::uuid, p_sent_by, p_batch_id,
+         left(item ->> 'title', 300), nullif(left(item ->> 'slug', 200), ''),
+         coalesce(p_target, 'webhook')
+  from jsonb_array_elements(p_items) with ordinality as items(item, position)
+  order by position
+  limit room
+  returning *;
+end;
+$$;
+
+revoke all on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  from public, anon, authenticated;
+grant execute on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00525_prompt_source_data.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00525: where a tracked prompt came from, and a topic suggestion's category
+-- (AC plan P-8, spec §6.3)
+-- ============================================================================
+-- Tracking suggestions from a store's catalog (ECOM-003, 00362) name the
+-- category or the product they were drawn from (prompt_suggestions
+-- .source_data). Until now that was lost once a suggestion was accepted: the
+-- prompt it made kept only its text and topic. Online-store plays and
+-- measurement need to know which products a prompt is about.
+--
+--   * prompts.source_data: the catalog suggestion an accepted prompt came
+--     from, written with the prompt when a suggestion is added (one, Add
+--     All, an Opportunities "Track N" or the MCP tool). Null for every
+--     other prompt. Its shape:
+--
+--       { "kind": "catalog_category", "category_id": uuid | null,
+--         "category": "Bags > Hiking backpacks", "suggested_at": timestamptz }
+--       { "kind": "catalog_product", "product_ids": [uuid, ...],
+--         "category_id": uuid | null, "category": text | null,
+--         "suggested_at": timestamptz }
+--
+--     Ids are catalog_categories' and catalog_products' (00278); the
+--     category's name is kept too, since it is the brand's key for it.
+--     Catalog data only: nothing about a person.
+--
+--   * topic_suggestions.source_data: for a topic suggested from a catalog
+--     category no topic covers yet (source 'catalog'), that category, its
+--     live products and how many are in stock, for the Topics tab's card:
+--     { "category", "categoryId", "products", "inStock" }. Null for the
+--     model's ideas (source 'llm').
+--
+-- Prompts are written by admins and managers through their own rules
+-- (00001), and topic suggestions are updated by them too (00382), so both
+-- columns are checked here: an object, a few kilobytes at most, and for a
+-- prompt one of the two kinds above.
+
+alter table public.prompts
+  add column if not exists source_data jsonb;
+
+alter table public.prompts drop constraint if exists prompts_source_data_check;
+alter table public.prompts add constraint prompts_source_data_check check (
+  source_data is null
+  or (
+    jsonb_typeof(source_data) = 'object'
+    and octet_length(source_data::text) <= 4096
+    -- coalesce: a check passes on null, so a missing key must read as no.
+    and coalesce(source_data->>'kind', '') in ('catalog_category', 'catalog_product')
+    and (
+      source_data->>'kind' = 'catalog_category'
+      or coalesce(jsonb_typeof(source_data->'product_ids'), '') = 'array'
+    )
+  )
+);
+
+comment on column public.prompts.source_data is
+  'Where the prompt came from (AC plan P-8, 00525): the catalog suggestion it was accepted from, {kind catalog_category|catalog_product, category_id, category, product_ids, suggested_at}. Null for any other prompt.';
+
+alter table public.topic_suggestions
+  add column if not exists source_data jsonb;
+
+alter table public.topic_suggestions drop constraint if exists topic_suggestions_source_data_check;
+alter table public.topic_suggestions add constraint topic_suggestions_source_data_check check (
+  source_data is null
+  or (jsonb_typeof(source_data) = 'object' and octet_length(source_data::text) <= 4096)
+);
+
+comment on column public.topic_suggestions.source_data is
+  'For a topic suggested from a catalog category (source catalog, AC plan P-8, 00525): {category, categoryId, products, inStock}. Null for the model''s ideas.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00526_business_hub_snapshots.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00526: ChatGPT Business Hub numbers, as a brand's members enter them
+-- ============================================================================
+-- Business Hub (Businesses in ChatGPT) shows a business how often ChatGPT
+-- referenced its website (Mentions), the clicks on its links (Website
+-- clicks), its profile's views and its top five discovery topics, over the
+-- last 7 or 28 days. It has no export or API, and keeps no history. A
+-- member copies the numbers into Ansvisor by hand or from Ansvisor's own
+-- CSV template; Visibility shows them beside Ansvisor's ChatGPT numbers for
+-- the same days, and keeps the history Business Hub doesn't. Behind
+-- BUSINESS_HUB_ENABLED until Business Hub's names are confirmed.
+--
+--   * business_hub_snapshots: one entry per brand, length (7 or 28 days)
+--     and last day. A number left empty (null) is one Business Hub doesn't
+--     show: below its volume threshold, or a box it doesn't have. Topics
+--     are the person's own words, trimmed, without control characters,
+--     five at most of 120 characters at most.
+--
+-- Members of the brand read them. Only the server writes (as brand_facts'
+-- values, 00269): it checks the numbers, the dates and the topics, and who
+-- may delete an entry (admins and managers); every member may enter one.
+-- The demo brand's entries are sample data, refused to anyone else.
+
+create table if not exists public.business_hub_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  period_days smallint not null check (period_days in (7, 28)),
+  period_end date not null,
+  mentions integer check (mentions is null or mentions >= 0),
+  website_clicks integer check (website_clicks is null or website_clicks >= 0),
+  profile_views integer check (profile_views is null or profile_views >= 0),
+  discovery_topics text[] not null default '{}',
+  source text not null default 'manual' check (source in ('manual', 'csv')),
+  entered_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (brand_id, period_days, period_end),
+  -- Five topics at most, none null or empty, none with a control character
+  -- (so a line break splits them one per line), and none over 120
+  -- characters. A check can't read the array with a subquery.
+  constraint business_hub_snapshots_topics_check check (
+    cardinality(discovery_topics) <= 5
+    and array_position(discovery_topics, null) is null
+    and not ('' = any (discovery_topics))
+    and array_to_string(discovery_topics, '') !~ '[[:cntrl:]]'
+    and array_to_string(discovery_topics, E'\n') !~ '[^\n]{121}'
+  )
+);
+
+create index if not exists business_hub_snapshots_brand_end_idx
+  on public.business_hub_snapshots (brand_id, period_end desc);
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.business_hub_snapshots enable row level security;
+revoke all on table public.business_hub_snapshots from anon, authenticated;
+grant select on table public.business_hub_snapshots to authenticated;
+grant all on table public.business_hub_snapshots to service_role;
+
+-- Through the brands table, so brand access (00388, 00389) applies.
+drop policy if exists "business_hub_snapshots: member select" on public.business_hub_snapshots;
+create policy "business_hub_snapshots: member select"
+  on public.business_hub_snapshots
+  for select
+  to authenticated
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+create or replace trigger business_hub_snapshots_refuse_demo_brand_writes
+  before insert or update or delete on public.business_hub_snapshots
+  for each row execute function public.refuse_demo_brand_writes();
+
+comment on table public.business_hub_snapshots is
+  'ChatGPT Business Hub numbers (00526), entered by a brand''s members by hand or from Ansvisor''s CSV template: Mentions, Website clicks, Profile views (null where Business Hub shows none) and the top five discovery topics, for 7 or 28 days ending period_end. One per brand, length and last day. Members read; the server writes.';
+comment on column public.business_hub_snapshots.mentions is
+  'Business Hub''s Mentions over the period: ChatGPT referencing the brand''s website, as OpenAI describes it. Null: not shown.';
+comment on column public.business_hub_snapshots.website_clicks is
+  'Business Hub''s Website clicks over the period: clicks on links to the site in ChatGPT. Null: not shown.';
+comment on column public.business_hub_snapshots.profile_views is
+  'Business Hub''s Profile views over the period. Null: not shown (the box may not be there).';
+comment on column public.business_hub_snapshots.discovery_topics is
+  'Business Hub''s top discovery topics, as typed: five at most, 120 characters each, trimmed, without control characters.';
+comment on column public.business_hub_snapshots.source is
+  'How it was entered: manual (the Enter numbers dialog) or csv (Ansvisor''s template).';
+comment on column public.business_hub_snapshots.entered_by is
+  'Who entered it last; null once they are gone.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00527_prompt_suggestions_business_hub_source.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00527: ChatGPT Business Hub discovery topics as a prompt-suggestion source
+-- ============================================================================
+-- Prompts › Suggestions › From ChatGPT Business Hub: an admin or a manager
+-- pastes up to five of the discovery topics Business Hub shows (OpenAI's
+-- "Businesses in ChatGPT"), and Ansvisor writes two or three prompts for each.
+-- Those rows carry source 'business_hub', with the topic in source_data:
+--
+--   { "topic": "office coffee subscriptions", "periodEnd": "2026-11-09" | null,
+--     "enteredAt": timestamptz }
+--
+-- They stay 30 days (expires_at) and a refresh never replaces them. Without
+-- 'business_hub' in the check their insert fails outright, so this lands with
+-- the route that writes them. Nothing else changes: topic_suggestions.source
+-- has no check, and a tracked prompt keeps where it came from through the
+-- suggestion row's added_prompt_id. The text is what a person typed into the
+-- dialog, copied from their own Business Hub page: nothing about a person.
+--
+-- Safe to run twice.
+
+alter table public.prompt_suggestions drop constraint if exists prompt_suggestions_source_check;
+alter table public.prompt_suggestions add constraint prompt_suggestions_source_check
+  check (source = any (array['llm', 'heuristic', 'gsc', 'ga', 'catalog', 'business_hub']));
+
+comment on column public.prompt_suggestions.source is
+  'Where the suggestion came from: llm, heuristic, gsc, ga, catalog, or business_hub (00527: a ChatGPT Business Hub discovery topic, kept 30 days and never replaced by a refresh).';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00528_chat_date_range.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00528: Chat's date range — the person's default, and the card that asks it
+-- ============================================================================
+-- Owner request 2026-11-11: before the first analysis that reads data, Chat
+-- asks which time range to use (Last 24 hours, Last 7 days, Last 30 days,
+-- Last 90 days, or two days picked), and keeps the answer as the person's
+-- default from then on: in the main Chat and in the side panel alike, for
+-- every brand. A short message ("last 7d", "son 7d") changes it, and so does
+-- Chat Settings or the line under the message box.
+--
+--   * chat_user_prefs.date_range: the person's default range, as the app's
+--     date control names its presets ('24h', '7d', '30d', '90d'), or two
+--     days, first and last ('2026-10-01/2026-10-15'). Null: not picked yet,
+--     so Chat asks on the next analysis that reads data. The person reads
+--     and writes their own row (00400's policies and table grants cover the
+--     new column); the engine writes it with the service role when the
+--     person answers its card or sends a short range.
+--   * chat_ask_options_valid: a question card may have 2–5 options, one
+--     more than before. The range card offers the page's own range first
+--     when the side panel is open on a page with a custom range, then the
+--     four presets. The model's questions are still held to 4 by the server
+--     (asks.ts askToolInput); the rest of the rule is 00417's.
+
+alter table public.chat_user_prefs
+  add column if not exists date_range text check (
+    date_range ~ '^(24h|7d|30d|90d|[0-9]{4}-[0-9]{2}-[0-9]{2}/[0-9]{4}-[0-9]{2}-[0-9]{2})$'
+    and (
+      position('/' in date_range) = 0
+      or split_part(date_range, '/', 1) <= split_part(date_range, '/', 2)
+    )
+  );
+
+comment on column public.chat_user_prefs.date_range is
+  'Chat''s date range (00528): the period a read covers when the person names none, as a preset (24h, 7d, 30d, 90d) or two days (YYYY-MM-DD/YYYY-MM-DD). Null: Chat asks before the next analysis that reads data.';
+
+-- Whether a question's options are 2–5 rows, each with a label, exactly one
+-- of them Recommended (CHAT-07 Data notes; 5 for the range card, 00528).
+create or replace function public.chat_ask_options_valid(p_options jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when jsonb_typeof(p_options) <> 'array' then false
+    when jsonb_array_length(p_options) not between 2 and 5 then false
+    else coalesce(
+      (
+        select bool_and(
+            jsonb_typeof(o) = 'object'
+            and jsonb_typeof(o -> 'label') = 'string'
+            and char_length(o ->> 'label') between 1 and 120
+          )
+          and count(*) filter (where o -> 'recommended' = 'true'::jsonb) = 1
+        from jsonb_array_elements(p_options) as t(o)
+      ),
+      false
+    )
+  end;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00529_user_brand_state.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00529: a person's Today and menu state, per brand (Simplify PR 6)
+-- ============================================================================
+-- The simplified layout (SIMPLE_NAV) keeps a little state for each person on
+-- each brand. It lives on the server, so it holds on every device the person
+-- uses (the owner's call, 2026-11-11: not the browser).
+--
+--   * nav_seen: when the person last opened each menu area,
+--     { "<area>": "<ISO time>" }. A menu dot ("New results", "Needs you")
+--     compares the newest data with it, and opening the page moves it on.
+--     nav_seen.today is the person's last Today visit: "Since yesterday" and
+--     the focus's "New" tag start from it.
+--   * focus: Today's focus as the person keeps it, at most 3
+--     [{ "id": "<action id>", "added_at": "<ISO time>" }]: an open action and
+--     when it took its slot. Empty slots fill from the ranking.
+--   * hidden: the cards the person hid or snoozed, { "<key>": "<ISO time>" }
+--     until that time, or { "<key>": null } for good. The keys:
+--       setup          "Finish setting up", hidden by someone who isn't an
+--                      admin or manager (they hide it for the brand instead)
+--       prompts_check  a brand's first day: "Check the prompts we track"
+--       topic:<key>    "New area to track", Not now (30 days)
+--       skip:<id>      a focus card's "Skip for now" (7 days); the action
+--                      itself doesn't change
+--
+-- Why a table of its own: chat_user_prefs (00400) is per person, not per
+-- brand, and is written only with the new Chat on; getting_started_steps is
+-- per brand, not per person.
+--
+-- The web reads and writes it as the person (lib/actions/user-brand-state.ts),
+-- never through the plan check: it is UI state, so it works while the
+-- workspace is read-only and on the demo brand too, and it costs nothing.
+-- RLS keeps every row the person's own, on a brand they can access (00388).
+-- Each jsonb is checked here (its shape, 8 KB at most); the web checks the
+-- area names, the keys and the times, and drops what has expired.
+
+create table if not exists public.user_brand_state (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  nav_seen jsonb not null default '{}'::jsonb,
+  focus jsonb not null default '[]'::jsonb,
+  hidden jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, brand_id),
+  -- An object of times, as text.
+  constraint user_brand_state_nav_seen_check check (
+    jsonb_typeof(nav_seen) = 'object'
+    and octet_length(nav_seen::text) <= 8192
+    and not jsonb_path_exists(nav_seen, '$.* ? (@.type() != "string")')
+  ),
+  -- A list of at most 3 objects, each with its action's id and when it was
+  -- added, as text. A check can't count a non-array: the case guards it.
+  constraint user_brand_state_focus_check check (
+    jsonb_typeof(focus) = 'array'
+    and octet_length(focus::text) <= 8192
+    and case when jsonb_typeof(focus) = 'array' then jsonb_array_length(focus) <= 3 else false end
+    and not jsonb_path_exists(
+      focus,
+      '$[*] ? (@.type() != "object" || !(@.id.type() == "string") || !(@.added_at.type() == "string"))'
+    )
+  ),
+  -- An object of times, as text, or null for good.
+  constraint user_brand_state_hidden_check check (
+    jsonb_typeof(hidden) = 'object'
+    and octet_length(hidden::text) <= 8192
+    and not jsonb_path_exists(hidden, '$.* ? (@.type() != "string" && @.type() != "null")')
+  )
+);
+
+-- The primary key serves the person's reads (user_id first); this serves
+-- deleting a brand, whose rows go with it.
+create index if not exists user_brand_state_brand_idx
+  on public.user_brand_state (brand_id);
+
+drop trigger if exists trg_user_brand_state_updated_at on public.user_brand_state;
+create trigger trg_user_brand_state_updated_at
+  before update on public.user_brand_state
+  for each row execute function public.handle_updated_at();
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+-- The person, on their own rows, for a brand they can access (00388). Rows on
+-- a brand they lost access to stay, unread, and come back with the access.
+-- No delete: the rows go with the person or the brand.
+
+alter table public.user_brand_state enable row level security;
+revoke all on table public.user_brand_state from anon, authenticated;
+grant select, insert, update on table public.user_brand_state to authenticated;
+grant all on table public.user_brand_state to service_role;
+
+drop policy if exists "user_brand_state: own select" on public.user_brand_state;
+create policy "user_brand_state: own select"
+  on public.user_brand_state
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and brand_id in (select public.user_brand_ids())
+  );
+
+drop policy if exists "user_brand_state: own insert" on public.user_brand_state;
+create policy "user_brand_state: own insert"
+  on public.user_brand_state
+  for insert
+  to authenticated
+  with check (
+    user_id = auth.uid()
+    and public.can_access_brand(brand_id)
+  );
+
+drop policy if exists "user_brand_state: own update" on public.user_brand_state;
+create policy "user_brand_state: own update"
+  on public.user_brand_state
+  for update
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and public.can_access_brand(brand_id)
+  )
+  with check (
+    user_id = auth.uid()
+    and public.can_access_brand(brand_id)
+  );
+
+comment on table public.user_brand_state is
+  'A person''s Today and menu state per brand (00529, Simplify PR 6): when they last opened each menu area (nav_seen), the focus they keep (focus) and the cards they hid or snoozed (hidden). Theirs to read and write, on brands they can access; UI state, so written while read-only and on the demo brand too.';
+comment on column public.user_brand_state.nav_seen is
+  'When the person last opened each menu area: {"<area>": "<ISO time>"}. Menu dots and Today''s "Since yesterday" compare with it.';
+comment on column public.user_brand_state.focus is
+  'Today''s focus as the person keeps it: at most 3 [{"id": "<action id>", "added_at": "<ISO time>"}].';
+comment on column public.user_brand_state.hidden is
+  'Cards the person hid or snoozed: {"<key>": "<ISO time>"} until then, or null for good. Keys: setup, prompts_check, topic:<key>, skip:<action id>.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00535_prompts_waiting_for_spot.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00535: a prompt can wait for a spot (Simplify PR 14)
+-- ============================================================================
+-- When the plan's prompt locations are all used, a prompt someone adds will
+-- be kept as "Waiting for a spot" instead of being refused (Simplify PRs 15
+-- and 16). This migration only adds the state; nothing saves a prompt
+-- waiting yet.
+--
+--   * prompts.waiting_since: when the prompt started waiting; null when it
+--     isn't waiting. A waiting prompt is never active (the check below), so
+--     it is already not tracked (the tracking worker reads active prompts
+--     only) and not counted against the plan (org_prompt_location_usage
+--     counts active prompts only, 00128 and 00390). A paused prompt stays
+--     inactive with no waiting_since. prompts.work_status (00031) is a
+--     workflow field and isn't reused.
+--   * A waiting prompt doesn't start by itself when a spot frees up (the
+--     owner's call, 2026-11-11): the person picks it. Whatever makes it
+--     active clears waiting_since in the same write, or the check refuses
+--     the write.
+--   * import_prompts (00122) takes p_over_limit: 'skip' (the default, as
+--     before: the rows past the limit aren't saved) or 'wait' (they are
+--     saved waiting). It says which saved rows wait.
+
+alter table public.prompts
+  add column if not exists waiting_since timestamptz;
+
+alter table public.prompts drop constraint if exists prompts_waiting_not_active_check;
+alter table public.prompts add constraint prompts_waiting_not_active_check
+  check (waiting_since is null or not is_active);
+
+-- The prompts waiting for a spot, per prompt set: the Tracked Prompts filter
+-- and banner, Today's row and the menu dot (PRs 13 and 16).
+create index if not exists idx_prompts_waiting
+  on public.prompts (prompt_set_id)
+  where waiting_since is not null;
+
+comment on column public.prompts.waiting_since is
+  'When the prompt started waiting for a spot on the plan (00535); null when it isn''t waiting. A waiting prompt is never active (prompts_waiting_not_active_check), so it isn''t tracked or counted against the plan, and it doesn''t start by itself when a spot frees up.';
+
+-- ── import_prompts: rows past the limit can wait ────────────────────────────
+-- As 00122, plus p_over_limit. The rows are taken in the order given; once
+-- one doesn't fit, it and every row after it are past the limit: skipped
+-- with 'skip' (the default, so the callers before this behave as before),
+-- or saved waiting with 'wait' (is_active false, waiting_since now). Waiting
+-- rows take no room, so a second import still counts only what is tracked.
+-- SECURITY INVOKER: prompts keeps its admin/manager insert policy through the
+-- prompt set's brand, so RLS still decides whether the caller may write.
+
+drop function if exists public.import_prompts(uuid, uuid, integer, jsonb);
+
+create or replace function public.import_prompts(
+  p_prompt_set_id uuid,
+  p_organization_id uuid,
+  p_max_locations integer,
+  p_rows jsonb,
+  p_over_limit text default 'skip'
+)
+returns table (idx integer, id uuid, waiting boolean)
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $$
+declare
+  v_used bigint;
+  v_row jsonb;
+  v_regions text[];
+  v_cost integer;
+  v_id uuid;
+  v_over boolean := false;
+begin
+  if p_over_limit is null or p_over_limit not in ('skip', 'wait') then
+    raise exception 'p_over_limit must be skip or wait' using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('import_prompts:' || p_organization_id::text, 0));
+
+  select coalesce(sum(u.locations), 0) into v_used
+  from public.org_prompt_location_usage(p_organization_id) u;
+
+  for v_row in select value from jsonb_array_elements(p_rows) loop
+    v_regions := array(select jsonb_array_elements_text(v_row -> 'regions'));
+    -- Same unit as org_prompt_location_usage: one per region, minimum one.
+    v_cost := greatest(coalesce(array_length(v_regions, 1), 0), 1);
+    v_over := v_over or (p_max_locations <> -1 and v_used + v_cost > p_max_locations);
+    exit when v_over and p_over_limit = 'skip';
+
+    insert into public.prompts
+      (prompt_set_id, text, category, topic_id, platforms, models, regions, is_active, waiting_since)
+    values (
+      p_prompt_set_id,
+      v_row ->> 'text',
+      nullif(v_row ->> 'category', ''),
+      nullif(v_row ->> 'topic_id', '')::uuid,
+      array(select jsonb_array_elements_text(v_row -> 'platforms')),
+      array(select jsonb_array_elements_text(v_row -> 'models')),
+      v_regions,
+      not v_over,
+      case when v_over then now() end
+    )
+    returning prompts.id into v_id;
+
+    if not v_over then
+      v_used := v_used + v_cost;
+    end if;
+    idx := (v_row ->> 'idx')::integer;
+    id := v_id;
+    waiting := v_over;
+    return next;
+  end loop;
+end;
+$$;
+
+revoke all on function public.import_prompts(uuid, uuid, integer, jsonb, text) from public, anon;
+grant execute on function public.import_prompts(uuid, uuid, integer, jsonb, text) to authenticated, service_role;
+
+comment on function public.import_prompts(uuid, uuid, integer, jsonb, text) is
+  'Bulk-inserts prompts [{idx, text, category, topic_id, platforms, models, regions}] in order under a per-organization advisory lock, up to p_max_locations tracked locations for the org (-1 = unlimited). Past the limit: p_over_limit ''skip'' (default) stops there, ''wait'' saves the rest waiting for a spot (inactive, waiting_since now; 00535). Returns (idx, id, waiting) for each saved row. PROMPT-005.';
+
+notify pgrst, 'reload schema';
+

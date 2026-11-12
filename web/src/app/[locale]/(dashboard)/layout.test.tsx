@@ -151,10 +151,10 @@ let container: HTMLDivElement;
 let root: Root;
 
 /** The layout around a page, drawn; or the address it redirected to. */
-async function open(): Promise<string | null> {
+async function open(page: ReactNode = <p>Page content</p>): Promise<string | null> {
   let tree: ReactNode;
   try {
-    tree = await DashboardLayout({ children: <p>Page content</p> });
+    tree = await DashboardLayout({ children: page });
   } catch (err) {
     const match = /^NEXT_REDIRECT (.+)$/.exec((err as Error).message);
     if (match) return match[1];

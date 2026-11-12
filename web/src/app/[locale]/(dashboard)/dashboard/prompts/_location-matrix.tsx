@@ -142,7 +142,7 @@ export function LocationPending({
   awaiting,
   className,
 }: {
-  prompt: Pick<Prompt, 'isActive' | 'platforms' | 'models'>;
+  prompt: Pick<Prompt, 'isActive' | 'platforms' | 'models' | 'waitingSince'>;
   /** Undefined for the prompt across every location it's tracked in. */
   region?: string;
   /** The table's window: one that ended before today just had no answers there. */
@@ -155,6 +155,7 @@ export function LocationPending({
   className?: string;
 }) {
   const t = useTranslations('prompts.locations');
+  const tWaiting = useTranslations('prompts.waiting');
   const countries = useTrackingCountries();
   const firstRun = useFirstRun();
   const tipId = useId();
@@ -162,7 +163,9 @@ export function LocationPending({
   const state = !reachesToday(window)
     ? null
     : !prompt.isActive
-      ? 'paused'
+      ? prompt.waitingSince
+        ? 'waiting'
+        : 'paused'
       : parsed && !answersFrom(prompt, parsed, countries)
         ? 'noEngine'
         : awaiting
@@ -182,9 +185,11 @@ export function LocationPending({
   const arriving = state === 'pending' && firstRun !== null;
   const tip = arriving
     ? t('arrivingTip')
-    : !region && state === 'pending'
-      ? t('promptPendingTip')
-      : t(`${state}Tip`, { location: region ? regionLabel(region) : '' });
+    : state === 'waiting'
+      ? tWaiting('cellTip')
+      : !region && state === 'pending'
+        ? t('promptPendingTip')
+        : t(`${state}Tip`, { location: region ? regionLabel(region) : '' });
   // Why, on hover and on keyboard focus; and for a screen reader, as the
   // label's description.
   return (
@@ -208,7 +213,7 @@ export function LocationPending({
           }
         >
           {state === 'pending' && <Clock className="h-3 w-3" aria-hidden />}
-          {arriving ? t('arriving') : t(state)}
+          {arriving ? t('arriving') : state === 'waiting' ? tWaiting('cell') : t(state)}
         </TooltipTrigger>
         <TooltipContent className="max-w-72">{tip}</TooltipContent>
       </Tooltip>

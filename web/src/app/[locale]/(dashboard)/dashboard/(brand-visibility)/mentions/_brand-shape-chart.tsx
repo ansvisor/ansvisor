@@ -66,7 +66,7 @@ export function BrandShapeChart({
           {/* No axis line: the grid draws the outline, and the class's fill would cover the shapes. */}
           <PolarAngleAxis
             dataKey="attribute"
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             axisLine={false}
             className="fill-muted-foreground"
           />

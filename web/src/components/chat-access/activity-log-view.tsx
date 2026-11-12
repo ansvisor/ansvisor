@@ -238,11 +238,11 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
       </div>
 
       {page.rows.length === 0 ? (
-        <p className="rounded-xl border px-3.5 py-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl border bg-card px-3.5 py-6 text-center text-sm text-muted-foreground">
           {filtered ? t('emptyFiltered') : t('empty')}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border">
+        <div className="overflow-x-auto rounded-xl border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

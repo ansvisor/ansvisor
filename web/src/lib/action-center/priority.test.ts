@@ -39,6 +39,7 @@ const action = (over: Partial<ActionItem> = {}): ActionItem =>
 const reason = (over: Partial<PriorityReason> = {}): PriorityReason => ({
   change: 'lost',
   subject: { entity: 'prompts', count: 7 },
+  competitorGap: null,
   demand: 'high',
   commercial: true,
   heldBefore: true,
@@ -309,6 +310,125 @@ describe('priorityReasonText', () => {
     });
     expect(stored?.realDemand).toBeNull();
     expect(priorityReasonText(stored!, t)).not.toContain('measured demand');
+  });
+
+  /** A topic gap sent from Visibility (VIS-010), as the server stores it. */
+  it('names the gap and the rival of a topic gap sent from Visibility', () => {
+    const stored = parsePriorityReason({
+      version: 1,
+      change: 'gap',
+      subject: { entity: 'prompts', count: 12 },
+      competitorGap: { points: 23.4, competitor: 'Northbound Roasters' },
+      demand: 'medium',
+      realDemand: null,
+      commercial: true,
+      heldBefore: false,
+      days: null,
+      kinds: 0,
+      sources: 0,
+      factors: { confidence: 0.6 },
+    });
+    expect(stored?.competitorGap).toEqual({ points: 23.4, competitor: 'Northbound Roasters' });
+    expect(priorityReasonText(stored!, t)).toBe(
+      'A 23.4-pt gap with Northbound Roasters on 12 prompts — commercial intent.',
+    );
+    // One decimal, as its title; high demand in the subject, as any gap's.
+    expect(
+      priorityReasonText(
+        reason({
+          change: 'gap',
+          subject: { entity: 'prompts', count: 1 },
+          competitorGap: { points: 20, competitor: 'Peec AI' },
+          commercial: false,
+          heldBefore: false,
+          days: null,
+        }),
+        t,
+      ),
+    ).toBe('A 20.0-pt gap with Peec AI on 1 high-demand prompt.');
+    // No count to name: the gap and rival alone.
+    expect(
+      priorityReasonText(
+        reason({
+          change: 'gap',
+          subject: { entity: 'prompts', count: null },
+          competitorGap: { points: 8.5, competitor: 'Peec AI' },
+          demand: null,
+          commercial: false,
+          heldBefore: false,
+          days: null,
+        }),
+        t,
+      ),
+    ).toBe('An 8.5-pt gap with Peec AI.');
+    // "An" where the number is said with a vowel first.
+    const lead = (points: number) =>
+      priorityReasonText(
+        reason({
+          change: 'gap',
+          subject: { entity: null, count: null },
+          competitorGap: { points, competitor: 'Peec AI' },
+          demand: null,
+          commercial: false,
+          heldBefore: false,
+          days: null,
+        }),
+        t,
+      ).split(' ')[0];
+    expect([8, 11, 18, 80, 86.2, 1, 12, 28, 81 / 10, 100].map(lead)).toEqual([
+      'An',
+      'An',
+      'An',
+      'An',
+      'An',
+      'A',
+      'A',
+      'A',
+      'An',
+      'A',
+    ]);
+  });
+
+  it('reads a stored topic gap defensively, and reads any other gap as before', () => {
+    for (const competitorGap of [
+      { points: 0, competitor: 'Peec AI' },
+      { points: 12, competitor: ' ' },
+      { points: '12', competitor: 'Peec AI' },
+      'Peec AI',
+      undefined,
+    ]) {
+      expect(parsePriorityReason({ change: 'gap', competitorGap })?.competitorGap).toBeNull();
+    }
+    expect(
+      priorityReasonText(
+        reason({
+          change: 'gap',
+          subject: { entity: 'prompts', count: 12 },
+          demand: null,
+          commercial: false,
+          heldBefore: false,
+          days: null,
+        }),
+        t,
+      ),
+    ).toBe('A gap to close on 12 prompts.');
+  });
+
+  it('says no "days ago" for a standing gap or room to grow', () => {
+    const standing = (change: 'gap' | 'opportunity') =>
+      priorityReasonText(
+        reason({
+          change,
+          subject: { entity: 'prompts', count: 3 },
+          demand: null,
+          commercial: true,
+          heldBefore: false,
+          days: 1,
+        }),
+        t,
+      );
+    expect(standing('opportunity')).toBe('Room to grow on 3 prompts — commercial intent.');
+    expect(standing('gap')).toBe('A gap to close on 3 prompts — commercial intent.');
   });
 
   it('falls back to a plain subject when the count is unknown', () => {

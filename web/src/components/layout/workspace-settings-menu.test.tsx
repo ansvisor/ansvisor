@@ -10,6 +10,8 @@ const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
 const plan = vi.hoisted(() => ({ isCloud: true }));
 vi.mock('@/components/providers/plan-provider', () => ({ usePlanContext: () => plan }));
+const chat = vi.hoisted(() => ({ on: false }));
+vi.mock('@/components/providers/chat-agentic-provider', () => ({ useChatAgentic: () => chat.on }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -56,9 +58,27 @@ describe('WorkspaceSettingsMenu', () => {
     await render('admin');
     expect(trigger()!.textContent).toBe('Workspace Settings');
     const items = await openMenu();
-    expect(items.map((i) => i.textContent)).toEqual(['Account', 'Organization', 'Team', 'Billing']);
-    await act(async () => items[2].click());
+    expect(items.map((i) => i.textContent)).toEqual(['Account', 'Organization', 'Billing', 'Team']);
+    await act(async () => items[3].click());
     expect(push).toHaveBeenCalledWith('/dashboard/settings/team');
+  });
+
+  it('opens Team, roles & access for the team while the new Chat is on (2026-11-09)', async () => {
+    chat.on = true;
+    try {
+      await render('admin');
+      const items = await openMenu();
+      expect(items.map((i) => i.textContent)).toEqual([
+        'Account',
+        'Organization',
+        'Billing',
+        'Team, roles & access',
+      ]);
+      await act(async () => items[3].click());
+      expect(push).toHaveBeenCalledWith('/dashboard/settings/roles-access');
+    } finally {
+      chat.on = false;
+    }
   });
 
   it('shows for managers too', async () => {

@@ -173,3 +173,37 @@ export function countryLanguage(code) {
 export function languageName(code) {
   return languageNames.of(code) ?? code;
 }
+
+/**
+ * The languages a card's PDF and e-mail can be written in (ISO 639-1),
+ * whichever its questions were asked in (owner decision 2026-11-09). The
+ * web's copy (lib/report-card/copy.ts REPORT_LANGUAGES) lists the same.
+ * Chinese, Japanese and Arabic wait for fonts and right-to-left pages.
+ */
+export const REPORT_LANGUAGES = ['en', 'tr', 'fr', 'es', 'de', 'pt', 'it', 'nl'];
+
+/**
+ * The language a request's PDF and e-mail are in: the one the form chose,
+ * else the card's country's rule, Turkish for Türkiye and English elsewhere.
+ */
+export function reportLanguage(countryCode, chosen) {
+  if (REPORT_LANGUAGES.includes(chosen)) return chosen;
+  return String(countryCode ?? '').toUpperCase() === 'TR' ? 'tr' : 'en';
+}
+
+const regionNamesIn = new Map();
+
+/** The country's name in `language`: "États-Unis" in French; null when the runtime has none. */
+export function countryNameIn(code, language) {
+  if (!regionNamesIn.has(language)) {
+    regionNamesIn.set(
+      language,
+      new Intl.DisplayNames([language], { type: 'region', fallback: 'none' }),
+    );
+  }
+  try {
+    return regionNamesIn.get(language).of(String(code).toUpperCase()) ?? null;
+  } catch {
+    return null;
+  }
+}

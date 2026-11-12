@@ -53,6 +53,15 @@ vi.mock('./_why-changed', () => ({ WhyChanged: () => <div>WHY</div> }));
 vi.mock('./_topic-heatmap', () => ({ TopicHeatmap: () => <div>TOPICS</div> }));
 vi.mock('./_opportunities', () => ({ Opportunities: () => <div>OPPORTUNITIES</div> }));
 vi.mock('./_metric-breakdown-sheet', () => ({ MetricBreakdownSheet: () => null }));
+// The ChatGPT Business Hub card reads for itself: with BUSINESS_HUB_ENABLED off
+// it reads nothing, so a Supabase client asked for here is a failure.
+const supabaseAsked = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: async () => {
+    supabaseAsked();
+    throw new Error('read with BUSINESS_HUB_ENABLED off');
+  },
+}));
 vi.mock('./_formula-dialog', () => ({
   FormulaDialog: () => <button type="button">Formulas</button>,
 }));
@@ -234,6 +243,22 @@ describe('the Overview tab while it loads', () => {
     );
     await render();
     expect(container.textContent).toContain('No tracking data yet');
+  });
+});
+
+describe('the ChatGPT Business Hub card', () => {
+  it('isn’t there, and reads nothing, while BUSINESS_HUB_ENABLED is off', async () => {
+    vi.stubEnv('BUSINESS_HUB_ENABLED', '');
+    actions.getInsightsData.mockResolvedValue(
+      insights({ whyChanged: { status: 'steady' } as unknown as InsightsData['whyChanged'] }),
+    );
+    await render();
+    await act(async () => {});
+    expect(container.textContent).toContain('WHY');
+    expect(container.querySelector('[data-testid="business-hub-card"]')).toBeNull();
+    expect(container.textContent).not.toContain('ChatGPT Business Hub');
+    expect(supabaseAsked).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
   });
 });
 

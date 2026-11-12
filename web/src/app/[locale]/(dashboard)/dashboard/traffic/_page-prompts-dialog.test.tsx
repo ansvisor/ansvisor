@@ -116,23 +116,18 @@ const trackButton = () =>
   )!;
 
 describe('PagePromptsDialog', () => {
-  it("shows the page's suggestions, ticking as many as the plan has slots for", async () => {
+  it("shows the page's suggestions, all ticked, and says which wait for a spot past the plan's slots", async () => {
     await render();
     expect(suggestPagePrompts).toHaveBeenCalledWith(BRAND, WEEK, '/gifts');
     expect(text()).toContain('The page: Coffee gifts');
     expect(text()).toContain('What coffee gift box should I buy for a coffee lover?');
     expect(text()).toContain('From Search Console: “coffee gift box ideas” · 1,400 impressions');
-    expect(ticked()).toEqual([true, true, false]);
-    expect(text()).toContain('2 prompts left to add on your plan');
-    expect(trackButton().textContent).toBe('Track 2 prompts');
-  });
-
-  it('never tracks more than the slots left', async () => {
-    await render();
-    await act(async () => boxes()[2].click());
     expect(ticked()).toEqual([true, true, true]);
-    expect(text()).toContain("Select up to 2 prompts: that's what your plan has left");
-    expect(trackButton().disabled).toBe(true);
+    expect(text()).toContain("1 prompt past your plan's limit will be saved as waiting for a spot");
+    expect(trackButton().textContent).toBe('Track 3 prompts');
+    expect(trackButton().disabled).toBe(false);
+    await act(async () => boxes()[2].click());
+    expect(text()).toContain('2 prompts left to add on your plan');
   });
 
   it('ticks every suggestion on a plan without a prompt limit', async () => {
@@ -145,6 +140,7 @@ describe('PagePromptsDialog', () => {
   it('tracks the ticked prompts pointing at the page, then refreshes the list', async () => {
     trackPagePrompts.mockResolvedValue({ promptIds: ['p1', 'p2'] });
     await render({ domain: 'https://acme-coffee.example.com/' });
+    await act(async () => boxes()[2].click());
     await act(async () => trackButton().click());
 
     expect(trackPagePrompts).toHaveBeenCalledWith(BRAND, 'https://acme-coffee.example.com/gifts', [
@@ -170,7 +166,7 @@ describe('PagePromptsDialog', () => {
     await render();
     await act(async () => trackButton().click());
     expect(toast.warning).toHaveBeenCalledWith(
-      "Tracked 1 of 2: your plan's prompt locations are full.",
+      "Tracked 1 of 3: your plan's prompt locations are full.",
       expect.anything(),
     );
     expect(onTracked).toHaveBeenCalled();
@@ -231,7 +227,7 @@ describe('PagePromptsDialog', () => {
     await render({ page: null });
     await render();
     expect(text()).not.toContain('Add a topic first');
-    expect(trackButton().textContent).toBe('Track 2 prompts');
+    expect(trackButton().textContent).toBe('Track 3 prompts');
   });
 
   it('says when every prompt the page answers is tracked already', async () => {

@@ -260,10 +260,21 @@ describe('chatComposerSetup', () => {
   it("lists the library's skills for the / menu, by name and title, and none with the new Chat off", async () => {
     facts.ctx = ctxOf('manager', true, true);
     const { skills } = await chatComposerSetup();
-    expect(skills).toHaveLength(24);
+    expect(skills).toHaveLength(25);
     expect(skills.every((skill) => Object.keys(skill).join() === 'name,title')).toBe(true);
     vi.stubEnv('CHAT_AGENTIC', 'false');
     expect((await chatComposerSetup()).skills).toEqual([]);
+  });
+
+  it('lists the ChatGPT profile check in the / menu only with ChatGPT Business Hub on', async () => {
+    facts.ctx = ctxOf('manager', true, true);
+    expect((await chatComposerSetup()).skills.map((skill) => skill.name)).not.toContain(
+      'chatgpt-profile',
+    );
+    vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    const { skills } = await chatComposerSetup();
+    expect(skills).toContainEqual({ name: 'chatgpt-profile', title: 'ChatGPT profile check' });
+    expect(skills).toHaveLength(26);
   });
 
   it("adds the person's own and the shared skills to the / menu, without what the workspace turned off (W3-06)", async () => {
@@ -310,7 +321,7 @@ describe('chatComposerSetup', () => {
     expect(skills).toContainEqual({ name: 'house-tone', title: 'House tone' });
     const names = skills.map((skill) => skill.name);
     for (const name of ['faq', 'their-own', 'switched-off']) expect(names).not.toContain(name);
-    expect(skills).toHaveLength(25);
+    expect(skills).toHaveLength(26);
   });
 
   it("puts the person's focus's skills first in the / menu (CHAT-24 §1)", async () => {
@@ -322,7 +333,7 @@ describe('chatComposerSetup', () => {
       'report',
       'facts',
     ]);
-    expect(skills).toHaveLength(24);
+    expect(skills).toHaveLength(25);
   });
 
   it('passes on the period whose 80% line was seen, and whether Chat runs on its own key', async () => {

@@ -85,6 +85,13 @@ vi.mock('./catalog-category-pages', () => ({
 }));
 vi.mock('./webflow-card', () => ({ WebflowCard: () => <div data-card="webflow">Webflow</div> }));
 vi.mock('./wix-card', () => ({ WixCard: () => <div data-card="wix">Wix</div> }));
+vi.mock('./slack-card', () => ({ SlackCard: () => <div data-card="slack">Slack</div> }));
+vi.mock('./hubspot-card', () => ({
+  HubspotCard: () => <div data-card="hubspot">HubSpot</div>,
+}));
+// ChatGPT Business Hub (BUSINESS_HUB_ENABLED, read on the server): off unless a test turns it on.
+const businessHub = vi.hoisted(() => ({ readBusinessHubSetup: vi.fn() }));
+vi.mock('@/lib/actions/business-hub-setup', () => businessHub);
 
 const { IntegrationsSection } = await import('./integrations-section');
 const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
@@ -105,6 +112,7 @@ beforeEach(() => {
   for (const key of Object.keys(statuses)) delete statuses[key];
   config.answer = { googleMerchantCenter: true };
   client.readIntegrationsConfig.mockImplementation(async () => config.answer);
+  businessHub.readBusinessHubSetup.mockResolvedValue({ enabled: false });
   client.readIntegrationStatus.mockImplementation(async (provider: string) => {
     const status = statuses[provider] ?? 'not_connected';
     if (typeof status === 'string') return { ok: true, value: status };
@@ -174,6 +182,8 @@ describe('IntegrationsSection', () => {
     expect(headings().map((h) => [h.tagName, h.textContent])).toEqual([
       ['H3', 'Stores and marketplaces'],
       ['H3', 'Content management systems'],
+      ['H3', 'Team and alerts'],
+      ['H3', 'CRM'],
     ]);
     for (const heading of headings()) {
       expect(heading.closest('section')?.getAttribute('aria-labelledby')).toBe(heading.id);
@@ -189,9 +199,47 @@ describe('IntegrationsSection', () => {
     expect(groupOf(container.querySelector('[data-card="webflow"]'))).toBe(
       'Content management systems',
     );
+    // Where a brand's alerts go (#2139), with its anchor for Chat's Connections.
+    expect(groupOf(container.querySelector('[data-card="slack"]'))).toBe('Team and alerts');
+    expect(container.querySelector('#slack [data-card="slack"]')).not.toBeNull();
+    // HubSpot (#2140) in a group of its own, last.
+    expect(groupOf(container.querySelector('[data-card="hubspot"]'))).toBe('CRM');
     // The Google data sources come first, in no group.
     expect(groupOf(byText('Google Search Console'))).toBeNull();
     expect(groupOf(byText('Google Analytics'))).toBeNull();
+  });
+
+  it('has no ChatGPT Business Hub group or card with the flag off', async () => {
+    await render();
+    expect(businessHub.readBusinessHubSetup).toHaveBeenCalled();
+    expect(groupNamed('Business profiles')).toBeNull();
+    expect(container.querySelector('[data-integration="chatgpt-business-hub"]')).toBeNull();
+    expect(container.textContent).not.toContain('ChatGPT Business Hub');
+  });
+
+  it('shows ChatGPT Business Hub last, in Business profiles, with the flag on', async () => {
+    businessHub.readBusinessHubSetup.mockResolvedValue({
+      enabled: true,
+      actionHref: '/dashboard/action-center/actions/AC-7',
+      failed: false,
+    });
+    await render();
+    expect(headings().map((h) => h.textContent)).toEqual([
+      'Stores and marketplaces',
+      'Content management systems',
+      'Team and alerts',
+      'CRM',
+      'Business profiles',
+    ]);
+    const hub = container.querySelector(
+      '#chatgpt-business-hub [data-integration="chatgpt-business-hub"]',
+    );
+    expect(groupOf(hub)).toBe('Business profiles');
+    expect(byText('ChatGPT Business Hub')).not.toBeNull();
+    // A manual setup: no Connect, no Connected.
+    expect(badges(hub!)).toEqual(['Manual: Business Hub has no API yet']);
+    expect(hub!.querySelector('button')).toBeNull();
+    expect(hub!.textContent).not.toMatch(/\bConnect(ed)?\b/);
   });
 
   it("hides Merchant Center's card where the server doesn't offer it, with no Coming soon", async () => {

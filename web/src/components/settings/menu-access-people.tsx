@@ -26,7 +26,7 @@ import {
   type MenuRole,
 } from '@/lib/actions/menu-access';
 
-/** The menu's sections with their nav titles, in its order. */
+/** The menu's sections with their nav titles, in its order: Agents is "Agents · in Action Center". */
 const SECTION_TITLES = menuSectionEntries(dashboardNav.flatMap((group) => group.items));
 
 function initials(member: MenuMember): string {

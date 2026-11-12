@@ -40,6 +40,7 @@ import { ActionCenterTabs } from '@/components/action-center/action-center-tabs'
 import { HistoryTable } from '@/components/action-center/history-table';
 import { HistoryDrawer } from '@/components/action-center/history-drawer';
 import { ScorecardTable } from '@/components/action-center/scorecard-table';
+import { HistoryViews } from '@/components/action-center/history-views';
 import { cn } from '@/lib/utils';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
@@ -255,6 +256,7 @@ export default function ActionCenterHistoryPage() {
     <div className="space-y-6">
       {header}
       <ActionCenterTabs />
+      <HistoryViews current={view} onPick={setView} />
 
       {isLoading ? (
         <div className="space-y-4">
@@ -314,24 +316,6 @@ export default function ActionCenterHistoryPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex overflow-hidden rounded-md border">
-              {VIEWS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={view === option}
-                  onClick={() => setView(option)}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium transition-colors',
-                    view === option
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-card text-foreground hover:bg-muted',
-                  )}
-                >
-                  {t(`view.${option}`)}
-                </button>
-              ))}
-            </div>
             <div className="inline-flex overflow-hidden rounded-md border">
               {RANGE_PRESETS.map((preset) => (
                 <button

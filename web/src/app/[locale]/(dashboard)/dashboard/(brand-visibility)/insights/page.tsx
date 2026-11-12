@@ -88,6 +88,7 @@ import { TopicHeatmap } from './_topic-heatmap';
 import { Opportunities } from './_opportunities';
 import type { TopicCompetitors } from '@/lib/insights-topics';
 import { WhyChanged } from './_why-changed';
+import { BusinessHubCard } from './_business-hub-card';
 import type { WhyChanged as WhyChangedData } from '@/lib/insights-drivers';
 
 // ─── Filter Types ─────────────────────────────────────────────────────────────
@@ -1022,8 +1023,10 @@ export default function InsightsPage() {
                 <NoCompetitorsTeaser />
               )}
 
-              {/* By AI platform (VIS-008) and Why it changed (VIS-009), side by side as in the mockup. */}
-              {((platforms && platforms.length > 0) || whyChanged) && (
+              {/* By AI platform (VIS-008) and Why it changed (VIS-009), side by side as in the mockup.
+                  Beside them, the ChatGPT Business Hub card: its own read, shown only once
+                  the brand has Business Hub numbers (BUSINESS_HUB_ENABLED). */}
+              {(platforms && platforms.length > 0) || whyChanged ? (
                 <div className="flex flex-wrap gap-4">
                   {platforms && platforms.length > 0 && (
                     <PlatformTable className="min-w-0 flex-[1_1_520px]" rows={platforms} />
@@ -1038,7 +1041,14 @@ export default function InsightsPage() {
                       }}
                     />
                   )}
+                  <BusinessHubCard
+                    key={brand.id}
+                    className="min-w-0 flex-[1_1_420px]"
+                    brandId={brand.id}
+                  />
                 </div>
+              ) : (
+                <BusinessHubCard key={brand.id} brandId={brand.id} />
               )}
 
               {/* Topics vs competitors (VIS-010): the trend's brands, topic by topic. */}
@@ -1063,11 +1073,6 @@ export default function InsightsPage() {
                   trackedTopicIds={opportunities.trackedTopicIds}
                   topics={topicCompetitors}
                   entities={rateTrend?.entities ?? null}
-                  slotsLeft={
-                    !trackedPrompts || trackedPrompts.quotaLimit < 0
-                      ? null
-                      : Math.max(0, trackedPrompts.quotaLimit - trackedPrompts.quotaUsed)
-                  }
                   contentUsage={opportunities.contentUsage}
                   onTracked={(count) =>
                     setTrackedPrompts(

@@ -61,10 +61,22 @@ export interface AskAnswer {
   via: 'card' | 'composer';
 }
 
+/** The most options a question card has: the range card's 5 (00528); the model's are held to 4. */
+export const MAX_ASK_OPTIONS = 5;
+
 /** POST /api/chat/runs/{id}/answer: the card's step and the answer. */
 export const askAnswerInput = z.object({
   n: z.number().int().min(1),
-  selected: z.array(z.number().int().min(0).max(3)).max(4).default([]),
+  selected: z
+    .array(
+      z
+        .number()
+        .int()
+        .min(0)
+        .max(MAX_ASK_OPTIONS - 1),
+    )
+    .max(MAX_ASK_OPTIONS)
+    .default([]),
   other: z.string().trim().max(ANSWER_MAX).nullish(),
   skipped: z.boolean().default(false),
   via: z.enum(['card', 'composer']).default('card'),

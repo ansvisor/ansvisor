@@ -71,7 +71,11 @@ vi.mock('@/components/prompts/prompt-positions-sheet', () => ({
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
-vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+const role = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: role.canManage }) }));
+// The swap dialog's reads (Simplify PR 16).
+const swap = vi.hoisted(() => ({ getSwapOptions: vi.fn(), swapPrompts: vi.fn() }));
+vi.mock('@/lib/actions/prompt-swap', () => swap);
 // The brand's first run: null unless a test says it goes on.
 const firstRun = vi.hoisted(() => ({ run: null as FirstRun | null }));
 vi.mock('@/hooks/use-first-run', () => ({ useFirstRun: () => firstRun.run }));
@@ -113,6 +117,8 @@ const toast = vi.hoisted(() =>
   }),
 );
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
 
 const { default: PromptsPage } = await import('./page');
 const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
@@ -131,6 +137,7 @@ const prompt: Prompt = {
   workStatus: null,
   targetUrlCount: 0,
   citedUrlCount: 0,
+  tags: [],
   createdAt: '2026-09-01T00:00:00.000Z',
 };
 
@@ -165,6 +172,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   nav.pathname = '/dashboard/prompts/tracked';
   query.search = '';
+  role.canManage = true;
+  swap.getSwapOptions.mockResolvedValue({ error: 'not read in these tests' });
   filterOptions.regions = [];
   firstRun.run = null;
   contentUsage.value = null;
@@ -256,6 +265,99 @@ describe('Tracked Prompts on a read-only workspace', () => {
     await act(async () => button('Pause')!.click());
     expect(actions.setPromptsActive).toHaveBeenCalledWith(['p1'], false);
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('prompts waiting for a spot', () => {
+  // Saved past the plan's limit (PR 15): inactive, waiting since yesterday.
+  const waiting: Prompt = {
+    ...prompt,
+    id: 'p2',
+    text: 'Best cold brew concentrate?',
+    isActive: false,
+    waitingSince: '2026-11-10T09:00:00.000Z',
+  };
+  const older: Prompt = {
+    ...waiting,
+    id: 'p3',
+    text: 'Cold brew ratio?',
+    waitingSince: '2026-11-09T09:00:00.000Z',
+  };
+  const withWaiting = (...list: Prompt[]) =>
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [prompt, ...list] }],
+      visibility: {},
+      positions: {},
+    });
+  const banner = () => container.querySelector<HTMLElement>('[data-waiting-banner]');
+
+  it('says how many wait in a yellow banner, and shows them with their own pill and filter', async () => {
+    withWaiting(waiting, older);
+    await render(false);
+    expect(banner()?.textContent).toContain('2 prompts waiting for a spot');
+    // Tracked opens without them.
+    expect(container.textContent).not.toContain('Best cold brew concentrate?');
+    await act(async () => button('Show them')!.click());
+    expect(container.textContent).toContain('Prompts waiting for a spot (2)');
+    expect(container.textContent).toContain('Best cold brew concentrate?');
+    const pills = [...container.querySelectorAll('[title]')].filter(
+      (el) => el.textContent === 'Waiting for a spot',
+    );
+    expect(pills).toHaveLength(2);
+    expect(container.textContent).not.toContain('Best coffee subscription?');
+  });
+
+  it('opens the swap dialog for the prompt waiting longest from Free up a spot', async () => {
+    withWaiting(waiting, older);
+    await render(false);
+    await act(async () => button('Free up a spot')!.click());
+    expect(swap.getSwapOptions).toHaveBeenCalledWith('p3');
+    expect(dialog()).not.toBeNull();
+  });
+
+  it('opens the swap dialog when tracking one from its row finds no room', async () => {
+    withWaiting(waiting);
+    actions.setPromptActive.mockResolvedValue({ error: 'Your plan…', code: 'plan_limit' });
+    await render(false);
+    await act(async () => button('Show them')!.click());
+    const trigger = container.querySelector<HTMLElement>(
+      `[aria-label="Actions for ${waiting.text}"]`,
+    )!;
+    await act(async () => trigger.click());
+    const track = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === 'Track it',
+    )!;
+    await act(async () => track.click());
+    expect(actions.setPromptActive).toHaveBeenCalledWith('p2', true);
+    expect(swap.getSwapOptions).toHaveBeenCalledWith('p2');
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("opens on the waiting prompts and the dialog from Today's link", async () => {
+    withWaiting(waiting, older);
+    query.search = 'status=waiting&swap=1';
+    await render(false);
+    expect(container.textContent).toContain('Prompts waiting for a spot (2)');
+    expect(swap.getSwapOptions).toHaveBeenCalledWith('p3');
+  });
+
+  it('shows a member the banner and the pill, with no action, and nothing once the plan ended', async () => {
+    withWaiting(waiting);
+    role.canManage = false;
+    query.search = 'status=waiting&swap=1';
+    await render(false);
+    expect(banner()?.textContent).toContain('1 prompt waiting for a spot');
+    expect(button('Show them')).toBeDefined();
+    expect(button('Free up a spot')).toBeUndefined();
+    expect(container.textContent).toContain('Waiting for a spot');
+    expect(swap.getSwapOptions).not.toHaveBeenCalled();
+
+    role.canManage = true;
+    await render(true);
+    expect(banner()).not.toBeNull();
+    expect(button('Free up a spot')).toBeUndefined();
   });
 });
 
@@ -374,6 +476,67 @@ describe('Add Prompt on a brand without topics', () => {
     expect(actions.importPrompts).toHaveBeenCalled();
     expect(dialog()?.textContent).toContain('Add a topic first');
     expect(addTopic()).toBeDefined();
+  });
+});
+
+describe("Add Prompt's prompt_add flow", () => {
+  const flows = () =>
+    analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
+  const typePrompt = async (text: string) => {
+    const input = dialog()!.querySelector<HTMLInputElement>('input')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+  async function save(text = 'Best espresso beans?') {
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    await typePrompt(text);
+    await act(async () => button('Save & close')!.click());
+  }
+
+  it('starts as the dialog opens and completes once prompts are added, never sending them', async () => {
+    actions.importPrompts.mockResolvedValue({
+      importedIdx: [0],
+      promptIds: ['p2'],
+      analysisStarted: true,
+    });
+    await save();
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'prompt_add' }],
+      ['flow_completed', { flow: 'prompt_add' }],
+    ]);
+    expect(JSON.stringify(analytics.track.mock.calls)).not.toContain('espresso');
+  });
+
+  it('fails with the server’s code, and with none when the save broke', async () => {
+    actions.importPrompts.mockResolvedValueOnce({ error: 'Add a topic first.', code: 'no_topics' });
+    await save();
+    act(() => root.unmount());
+    root = createRoot(container);
+    actions.importPrompts.mockRejectedValueOnce(new Error('Failed to fetch'));
+    await save();
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'prompt_add' }],
+      ['flow_failed', { flow: 'prompt_add', error_code: 'no_topics' }],
+      ['flow_started', { flow: 'prompt_add' }],
+      ['flow_failed', { flow: 'prompt_add', error_code: null }],
+    ]);
+  });
+
+  it('fails as nothing added when the limit or duplicates take every prompt', async () => {
+    actions.importPrompts.mockResolvedValue({
+      importedIdx: [],
+      promptIds: [],
+      analysisStarted: false,
+    });
+    await save();
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'prompt_add' }],
+      ['flow_failed', { flow: 'prompt_add', error_code: 'none_added' }],
+    ]);
   });
 });
 

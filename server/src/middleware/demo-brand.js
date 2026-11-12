@@ -102,6 +102,11 @@ export const DEMO_GUARDED = [
   guard('POST /brand-facts/fetch', brandIn('body')),
   guard('PATCH /brand-facts/:id', rowIn('brand_facts', 'path')),
 
+  // ChatGPT Business Hub numbers (business-hub.js): the demo's are sample entries.
+  guard('PUT /business-hub/:brandId/snapshots', brandIn('path')),
+  guard('POST /business-hub/:brandId/snapshots/import', brandIn('path')),
+  guard('DELETE /business-hub/snapshots/:id', rowIn('business_hub_snapshots', 'path')),
+
   // Brands (brands.js): reading the site's home page, and AI, for its kind,
   // and for the tracking snippet (a demo brand's site is a sample).
   guard('POST /brands/:id/detect-site-type', brandIn('path', 'id')),
@@ -137,6 +142,15 @@ export const DEMO_GUARDED = [
   guard('POST /cms/brands/:brandId/indexnow', brandIn('path')),
   guard('POST /cms/brands/:brandId/indexnow/check', brandIn('path')),
   guard('DELETE /cms/brands/:brandId/indexnow', brandIn('path')),
+  // HubSpot (hubspot.js, #2140): connecting, the account used, what Ansvisor may write, disconnecting.
+  guard('PUT /hubspot/brands/:brandId/blog', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/connect', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/activate', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/use', brandIn('path')),
+  guard('PUT /hubspot/brands/:brandId/settings', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/setup', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/sync', brandIn('path')),
+  guard('DELETE /hubspot/brands/:brandId', brandIn('path')),
 
   // Content Editor (content-drafts.js): the draft's brand is in the body;
   // the draft itself is checked too.
@@ -148,6 +162,7 @@ export const DEMO_GUARDED = [
   guard('POST /content-drafts/wordpress-status', brandIn('body')),
   guard('POST /content-drafts/framer-status', brandIn('body')),
   guard('POST /content-drafts/wix-status', brandIn('body')),
+  guard('POST /content-drafts/hubspot-status', brandIn('body')),
   guard(
     'POST /content-drafts/:draftId/brief',
     brandIn('body'),
@@ -212,6 +227,13 @@ export const DEMO_GUARDED = [
   guard('POST /integrations/:provider/brands/:brandId/connect', brandIn('path')),
   guard('POST /integrations/:provider/brands/:brandId/activate', brandIn('path')),
   guard('DELETE /integrations/:provider/brands/:brandId', brandIn('path')),
+  // A brand's Slack (slack.js, #2139): the demo brand connects nothing (the route refuses it too).
+  guard('POST /slack/brands/:brandId/connect', brandIn('path')),
+  guard('POST /slack/brands/:brandId/activate', brandIn('path')),
+  guard('POST /slack/brands/:brandId/use', brandIn('path')),
+  guard('PUT /slack/brands/:brandId', brandIn('path')),
+  guard('POST /slack/brands/:brandId/test', brandIn('path')),
+  guard('DELETE /slack/brands/:brandId', brandIn('path')),
 
   // Mentions (mentions.js).
   guard('POST /mentions/action', brandIn('body')),
@@ -219,6 +241,7 @@ export const DEMO_GUARDED = [
   // Prompts (prompts.js).
   guard('POST /prompts/suggestions/:brandId/refresh', brandIn('path')),
   guard('POST /prompts/suggestions/:brandId/page', brandIn('path')),
+  guard('POST /prompts/suggestions/:brandId/business-hub', brandIn('path')),
   guard('POST /prompts/suggestions/:id/dismiss', rowIn('prompt_suggestions', 'path')),
   guard('POST /prompts/suggestions/:id/accept', rowIn('prompt_suggestions', 'path')),
   guard('POST /prompts/:promptId/improve', rowIn('prompts', 'path', 'promptId')),

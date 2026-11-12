@@ -72,6 +72,8 @@ export interface Prompt {
   platforms: AIPlatform[];
   regions: string[];
   models: string[];
+  /** Cross-cutting custom labels (#2151), orthogonal to the topic. */
+  tags: string[];
   isActive: boolean;
   /** Workflow state (#463 follow-up): null = no status set. */
   workStatus: 'todo' | 'in_progress' | 'done' | null;
@@ -80,6 +82,11 @@ export interface Prompt {
   /** Target URLs cited by at least one answer. */
   citedUrlCount: number;
   createdAt: string;
+  /**
+   * When it started waiting for a spot on the plan (00535): saved past the
+   * limit, inactive and not tracked. Absent when it isn't waiting.
+   */
+  waitingSince?: string | null;
 }
 
 export interface Topic {

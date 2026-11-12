@@ -36,6 +36,14 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// HubSpot's pipeline section comes with the plan's crm_integrations (#2140).
+const plan = vi.hoisted(() => ({ crm: true }));
+vi.mock('@/hooks/use-feature-gate', () => ({
+  useFeatureGate: () => ({
+    canUse: (feature: string) => feature !== 'crm_integrations' || plan.crm,
+    requiredPlanFor: () => 'Growth',
+  }),
+}));
 
 const { default: ReportsPage } = await import('./page');
 
@@ -48,6 +56,7 @@ const openUpgrade = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  plan.crm = true;
   reports.getReports.mockResolvedValue([
     {
       id: 'r1',
@@ -120,5 +129,25 @@ describe('Reports', () => {
     const link = container.querySelector('[data-action="reports.openImpact"]')!;
     expect(link.textContent).toBe('What Ansvisor did for you');
     expect(link.getAttribute('href')).toBe('/dashboard/reports/impact');
+  });
+
+  it('offers the AI-sourced pipeline section on Growth, and shows it off with Growth below', async () => {
+    const section = () =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((b) =>
+        b.textContent?.startsWith('AI-sourced pipeline'),
+      )!;
+    await render(false);
+    await act(async () => generate().click());
+    expect(section().disabled).toBe(false);
+    expect(section().textContent).toBe('AI-sourced pipeline');
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    document.body.replaceChildren(container);
+    plan.crm = false;
+    await render(false);
+    await act(async () => generate().click());
+    expect(section().disabled).toBe(true);
+    expect(section().textContent).toBe('AI-sourced pipelineGrowth');
   });
 });

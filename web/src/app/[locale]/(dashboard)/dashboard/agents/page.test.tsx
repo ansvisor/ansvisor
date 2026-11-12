@@ -28,6 +28,8 @@ vi.mock('@/lib/chat/agents/ready-setup', () => ({
 }));
 vi.mock('@/components/chat/agents/agent-detail', () => ({ AgentDetail: () => null }));
 vi.mock('@/components/chat/agents/agent-form', () => ({ AgentForm: () => null }));
+// Action Center › Agents' frame (layout.test.tsx); a client frame.
+vi.mock('@/components/action-center/agents-tab-frame', () => ({ AgentsTabFrame: () => null }));
 const form = vi.hoisted(() => ({
   setup: { role: 'manager' } as unknown,
   agent: {
@@ -59,7 +61,6 @@ const params = (id: string) => ({ params: Promise.resolve({ id }) });
 const search = (skill?: string, preset?: string) => ({
   searchParams: Promise.resolve({ ...(skill ? { skill } : {}), ...(preset ? { preset } : {}) }),
 });
-const tabbed = (tab?: string) => ({ searchParams: Promise.resolve(tab ? { tab } : {}) });
 
 beforeEach(() => {
   access.open = true;
@@ -71,24 +72,40 @@ beforeEach(() => {
 describe('Agent Center pages', () => {
   it('are not found while the new Chat is off for the workspace', async () => {
     access.open = false;
-    await expect(AgentsPage(tabbed())).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(AgentsPage()).rejects.toThrow('NEXT_NOT_FOUND');
     await expect(AgentPage(params(ID))).rejects.toThrow('NEXT_NOT_FOUND');
     expect(notFound).toHaveBeenCalledTimes(2);
   });
 
   it('show Agent Center on Ready to use with its plan locks and the person’s work areas, Your agents when asked, and the detail for an agent id', async () => {
-    const center = (await AgentsPage(tabbed())) as {
+    const center = (await AgentsPage()) as {
       type: unknown;
-      props: { initialTab: string; locks: unknown; workAreas: unknown };
+      props: { locks: unknown; workAreas: unknown; presets: unknown[] };
     };
     expect(isValidElement(center) && center.type).toBe(AgentCenter);
-    expect(center.props).toEqual({ initialTab: 'ready', locks, workAreas: ['content', 'growth'] });
-    const yours = (await AgentsPage(tabbed('yours'))) as { props: { initialTab: string } };
-    expect(yours.props.initialTab).toBe('yours');
+    expect(center.props).toEqual({
+      locks,
+      workAreas: ['content', 'growth'],
+      presets: expect.any(Array),
+    });
     const one = await AgentPage(params(ID));
     expect(isValidElement(one) && one.type).toBe(AgentDetail);
     expect((one as { props: { id: string } }).props.id).toBe(ID);
     expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it('offer the ready-to-use agents as this install does: the Guardian’s ChatGPT profile check only with Business Hub on', async () => {
+    const guardianSkills = async () => {
+      const center = (await AgentsPage()) as {
+        props: { presets: { id: string; skills: string[] }[] };
+      };
+      return center.props.presets.find((p) => p.id === 'brand-facts-guardian')?.skills;
+    };
+    vi.stubEnv('BUSINESS_HUB_ENABLED', '');
+    expect(await guardianSkills()).toEqual(['wrongclaim', 'facts']);
+    vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    expect(await guardianSkills()).toEqual(['wrongclaim', 'facts', 'chatgpt-profile']);
+    vi.unstubAllEnvs();
   });
 
   it("are not found for an address that isn't an agent's id", async () => {
@@ -102,7 +119,7 @@ describe('Agent Center layout', () => {
       children: ReactElement[];
     }>;
     const parts = Children.toArray(tree.props.children) as ReactElement[];
-    expect(parts.map((part) => part.type)).toEqual([AgentsSeen, 'p']);
+    expect(parts[0].type).toBe(AgentsSeen);
   });
 });
 
@@ -137,6 +154,20 @@ describe('New agent and Edit (W2-15)', () => {
       const other = (await NewAgentPage(search(undefined, id))) as { props: { preset: unknown } };
       expect(other.props.preset).toBeNull();
     }
+  });
+
+  it('fill the Guardian without the ChatGPT profile check while Business Hub is off', async () => {
+    const guardian = async () =>
+      (
+        (await NewAgentPage(search(undefined, 'brand-facts-guardian'))) as {
+          props: { preset: { skills: string[] } | null };
+        }
+      ).props.preset?.skills;
+    vi.stubEnv('BUSINESS_HUB_ENABLED', '');
+    expect(await guardian()).toEqual(['wrongclaim', 'facts']);
+    vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    expect(await guardian()).toEqual(['wrongclaim', 'facts', 'chatgpt-profile']);
+    vi.unstubAllEnvs();
   });
 
   it('show Edit filled with the agent, keyed by its version and last save', async () => {

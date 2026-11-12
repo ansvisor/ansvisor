@@ -30,6 +30,7 @@ import { site } from './site.js';
 import { traffic } from './traffic.js';
 import { reports } from './reports.js';
 import { suggestions } from './suggestions.js';
+import { businessHub } from './business-hub.js';
 import { demoWriter } from './write.js';
 
 /**
@@ -39,8 +40,13 @@ import { demoWriter } from './write.js';
  * 4: Chat's sample chats, one set per person (demo Chat).
  * 5: Agent Center's sample agents, their runs and the runs' chats (demo Agent Center).
  * 6: Copilot and Perplexity out, ChatGPT's sampled searches in (engines after Cloro, 00487).
+ * 7: Prompt tags on the Brewline prompts (prompt-tags).
+ * 8: Four weeks of ChatGPT Business Hub numbers (00526).
+ * 9: Action Center › Today (SIMPLE_NAV): the build night's Up, Down and Rival, a topic
+ *    gap and a product sent this week, a result in last week, the weekly Business Hub
+ *    reminder (with BUSINESS_HUB_ENABLED).
  */
-export const DEMO_VERSION = 6;
+export const DEMO_VERSION = 10;
 
 /** Data older than this is rebuilt, so the demo's latest run stays recent. */
 export const DEMO_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -88,6 +94,8 @@ export const DEMO_MODULES = [
   actionCenter,
   content,
   reports,
+  // Visibility's ChatGPT Business Hub card: four weeks of numbers (00526).
+  businessHub,
   // demo Chat: each person's sample chats, whose answers link to the actions and drafts above.
   chat,
   // demo Agent Center: agents at work on the demo brand, after the chats (it clears their runs' chats).

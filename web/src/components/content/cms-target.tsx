@@ -7,6 +7,7 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import { cn } from '@/lib/utils';
 import type { CmsTarget } from '@/lib/content/cms-send-client';
 import { readFramer } from '@/lib/framer-client';
+import { readHubspot } from '@/lib/hubspot-client';
 import { readWebflow } from '@/lib/webflow-client';
 import { readWix } from '@/lib/wix-client';
 import { readWordPress } from '@/lib/wordpress-client';
@@ -18,7 +19,9 @@ import { readWordPress } from '@/lib/wordpress-client';
  * (00294; no collection or fields to pick there), its Framer collection
  * once ready (00295; connected, a collection with its title and body
  * fields), or its Wix site's Blog once connected (00372; its API key not
- * refused). The choice, picked or sent to, is remembered per brand, in this
+ * refused), or its HubSpot blog once its HubSpot card has a blog picked
+ * and consent to send pages as drafts (00522). The choice, picked or sent
+ * to, is remembered per brand, in this
  * browser; the first ready of Webflow, WordPress, Framer and Wix is the
  * first choice where none is remembered, or the remembered one is no longer
  * connected. One remembered and connected but not ready leaves the
@@ -42,7 +45,8 @@ function remembered(brandId: string): CmsTarget | null {
       value === 'webflow' ||
       value === 'wordpress' ||
       value === 'framer' ||
-      value === 'wix'
+      value === 'wix' ||
+      value === 'hubspot'
       ? value
       : null;
   } catch {
@@ -94,6 +98,24 @@ export type CmsWix =
   /** Not connected, not set up on this server, or not read. */
   | null;
 
+/** The brand's HubSpot, as Send to CMS reads it (00522). */
+export type CmsHubspot =
+  /** Ready: pages go to this blog as draft posts (its name). */
+  | { ready: true; blog: string }
+  /** Connected, but its sign-in refused, its plan without HubSpot, or no blog picked. */
+  | { ready: false }
+  /** Not connected, not set up on this server, sending pages not allowed, or not read. */
+  | null;
+
+function hubspotOf(result: Awaited<ReturnType<typeof readHubspot>>): CmsHubspot {
+  const connection = result.ok && result.configured ? result.connection : null;
+  // Sending pages is the person's own choice on the card: off, HubSpot isn't offered here.
+  if (!connection || !connection.consent.pages) return null;
+  return result.ok && result.allowed && connection.connected && connection.blog
+    ? { ready: true, blog: connection.blog.name ?? connection.blog.id }
+    : { ready: false };
+}
+
 function wixOf(result: Awaited<ReturnType<typeof readWix>>): CmsWix {
   const connection = result.ok && result.configured ? result.connection : null;
   if (!connection) return null;
@@ -142,6 +164,7 @@ export function useCmsTarget(brandId: string) {
     wordpress: CmsWordPress;
     framer: CmsFramer;
     wix: CmsWix;
+    hubspot: CmsHubspot;
     /** The connections that couldn't be read. */
     failed: CmsLocal[];
   } | null>(null);
@@ -156,7 +179,8 @@ export function useCmsTarget(brandId: string) {
       readWordPress(brandId),
       readFramer(brandId),
       readWix(brandId),
-    ]).then(([webflow, wordpress, framer, wix]) => {
+      readHubspot(brandId),
+    ]).then(([webflow, wordpress, framer, wix, hubspot]) => {
       if (cancelled) return;
       setRead({
         key,
@@ -164,11 +188,13 @@ export function useCmsTarget(brandId: string) {
         wordpress: wordpressOf(wordpress),
         framer: framerOf(framer),
         wix: wixOf(wix),
+        hubspot: hubspotOf(hubspot),
         failed: [
           ...(webflow.ok ? [] : ['webflow' as const]),
           ...(wordpress.ok ? [] : ['wordpress' as const]),
           ...(framer.ok ? [] : ['framer' as const]),
           ...(wix.ok ? [] : ['wix' as const]),
+          ...(hubspot.ok ? [] : ['hubspot' as const]),
         ],
       });
     });
@@ -182,11 +208,12 @@ export function useCmsTarget(brandId: string) {
   const wordpress = current ? current.wordpress : undefined;
   const framer = current ? current.framer : undefined;
   const wix = current ? current.wix : undefined;
+  const hubspot = current ? current.hubspot : undefined;
   const chosen = picked?.brandId === brandId ? picked.target : remembered(brandId);
   // Read again after a failure: the note stays, as trying, until the answer.
   const failed = current ? current.failed : read?.key.startsWith(`${brandId}:`) ? read.failed : [];
   const unchecked = chosen && chosen !== 'webhook' && failed.includes(chosen) ? chosen : null;
-  const connectionOf = (to: CmsLocal) => ({ webflow, wordpress, framer, wix })[to];
+  const connectionOf = (to: CmsLocal) => ({ webflow, wordpress, framer, wix, hubspot })[to];
   // The choice stands while it's still connected; ready or not, it's never swapped for another CMS.
   const kept = chosen && (chosen === 'webhook' || connectionOf(chosen)) ? chosen : null;
   const target: CmsTarget | undefined = !current
@@ -205,7 +232,9 @@ export function useCmsTarget(brandId: string) {
               ? 'framer'
               : wix?.ready
                 ? 'wix'
-                : 'webhook';
+                : hubspot?.ready
+                  ? 'hubspot'
+                  : 'webhook';
 
   return {
     /** The brand's Webflow; undefined while read; null without one, or when it couldn't be read. */
@@ -216,6 +245,8 @@ export function useCmsTarget(brandId: string) {
     framer,
     /** The brand's Wix, as `webflow`. */
     wix,
+    /** The brand's HubSpot blog, as `webflow`. */
+    hubspot,
     target,
     /**
      * The target the person picked before that couldn't be read: the page
@@ -234,7 +265,7 @@ export function useCmsTarget(brandId: string) {
   };
 }
 
-const TARGETS = ['webflow', 'wordpress', 'framer', 'wix', 'webhook'] as const;
+const TARGETS = ['webflow', 'wordpress', 'framer', 'wix', 'hubspot', 'webhook'] as const;
 
 /**
  * The targets the brand has, when it has Webflow, WordPress, Framer or Wix:
@@ -249,6 +280,7 @@ export function CmsTargetPicker({
   wordpress,
   framer,
   wix,
+  hubspot,
   onChange,
   disabled,
 }: {
@@ -257,12 +289,13 @@ export function CmsTargetPicker({
   wordpress: CmsWordPress | undefined;
   framer: CmsFramer | undefined;
   wix?: CmsWix | undefined;
+  hubspot?: CmsHubspot | undefined;
   onChange: (target: CmsTarget) => void;
   disabled?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.send.target');
   const cards = useRef<Partial<Record<CmsTarget, HTMLButtonElement | null>>>({});
-  const connections = { webflow, wordpress, framer, wix };
+  const connections = { webflow, wordpress, framer, wix, hubspot };
   const shown = TARGETS.filter((target) => target === 'webhook' || connections[target]);
   const off = (target: CmsTarget) =>
     disabled || (target !== 'webhook' && !connections[target]?.ready);
@@ -295,6 +328,9 @@ export function CmsTargetPicker({
     }
     if (target === 'wix') {
       return wix?.ready ? t('wix.hint', { site: wix.site }) : t('wix.notReady');
+    }
+    if (target === 'hubspot') {
+      return hubspot?.ready ? t('hubspot.hint', { blog: hubspot.blog }) : t('hubspot.notReady');
     }
     return framer?.ready
       ? t('framer.hint', { collection: framer.collection || t('framer.collection') })
@@ -370,7 +406,9 @@ export function CmsTargetUnchecked({
               ? 'uncheckedFramer'
               : target === 'wix'
                 ? 'uncheckedWix'
-                : 'unchecked',
+                : target === 'hubspot'
+                  ? 'uncheckedHubspot'
+                  : 'unchecked',
         )}
       </span>
       <Button

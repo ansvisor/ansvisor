@@ -372,6 +372,30 @@ describe('/api/chat/skills/{id}/review', () => {
     expect((await review.GET(new Request('https://x'), params(id))).status).toBe(404);
   });
 
+  it("says why the creator can't approve it, naming the Admins to ask, and why an Admin on an ended plan can't", async () => {
+    const id = await waiting();
+    const admin = db.tables.profiles.find((p) => p.id === PEOPLE.admin)!;
+    admin.full_name = 'Ayşe Yılmaz';
+    admin.created_at = '2026-01-01T00:00:00Z';
+    as(PEOPLE.manager);
+    const mine = await (await review.GET(new Request('https://x'), params(id))).json();
+    expect(mine.review.waiting).toEqual({
+      why: 'not_admin',
+      role: 'manager',
+      admins: ['Ayşe Yılmaz'],
+    });
+    // An Admin approves: nothing waits on them.
+    as(PEOPLE.admin);
+    expect(
+      (await (await review.GET(new Request('https://x'), params(id))).json()).review.waiting,
+    ).toBeNull();
+    // An Admin on a plan that ended.
+    db.tables.organizations[0].subscription_status = 'canceled';
+    const ended = await (await review.GET(new Request('https://x'), params(id))).json();
+    expect(ended.review.waiting).toEqual({ why: 'read_only' });
+    expect(ended.review.can.approve).toBe(false);
+  });
+
   it('lets an Admin approve it, on for its creator, and answers the review request', async () => {
     const id = await waiting();
     db.tables.chat_access_requests = [

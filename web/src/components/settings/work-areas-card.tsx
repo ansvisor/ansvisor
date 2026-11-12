@@ -21,7 +21,7 @@ import {
 import { useMenuSections } from '@/components/providers/menu-access-provider';
 import { getMyMenu, setMyWorkAreas, type MyMenu } from '@/lib/actions/menu-access';
 
-/** The menu's sections with their icons and nav titles, in its order. */
+/** The menu's sections with their icons and nav titles, in its order: Agents under the Action Center. */
 const SECTIONS = menuSectionEntries(dashboardNav.flatMap((group) => group.items));
 
 /**
@@ -50,7 +50,7 @@ export function WorkAreasCard() {
   const t = useTranslations('settings.menuAccess');
   const tNav = useTranslations('nav');
   const { canAdmin } = useUserRole();
-  // Agent Center only with the new Chat on.
+  // Agents only with the new Chat on.
   const sections = useMenuSections();
   const shown = SECTIONS.filter((s) => sections.includes(s.section));
   const [menu, setMenu] = useState<MyMenu | null>(null);

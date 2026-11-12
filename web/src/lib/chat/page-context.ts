@@ -1,4 +1,4 @@
-import { dashboardNav } from '@/config/dashboard';
+import { dashboardNav, type NavGroup } from '@/config/dashboard';
 import type { ChatReference } from './references';
 
 /**
@@ -72,11 +72,12 @@ export function contextChips(
 /**
  * The menu entry a page is under, by the longest route that holds it (a
  * topic's page is under Topics): its title, for the menu's translations;
- * null off the menu (Settings, Brands).
+ * null off the menu (Settings, Brands). Today and Agents are the Action
+ * Center's entries.
  */
-export function menuTitleOf(pathname: string): string | null {
+export function menuTitleOf(pathname: string, nav: NavGroup[] = dashboardNav): string | null {
   let best: { title: string; length: number } | null = null;
-  for (const group of dashboardNav) {
+  for (const group of nav) {
     for (const item of group.items) {
       for (const entry of [item, ...(item.children ?? [])]) {
         const holds = pathname === entry.href || pathname.startsWith(`${entry.href}/`);

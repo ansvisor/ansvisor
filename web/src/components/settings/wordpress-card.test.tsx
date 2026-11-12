@@ -28,6 +28,11 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
+/** The cms_connect events sent, in order. */
+const flows = () =>
+  analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
 // The read-only workspace's upgrade dialog.
 const openUpgrade = vi.hoisted(() => vi.fn());
 const gate = vi.hoisted(() => ({ isLocked: false }));
@@ -105,6 +110,7 @@ const submit = async () => {
 };
 
 beforeEach(() => {
+  analytics.track.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -138,6 +144,10 @@ describe('WordPressCard', () => {
       password: 'abcd efgh ijkl mnop qrst uvwx',
     });
     expect(toast.success).toHaveBeenCalledWith('WordPress connected');
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'wordpress' }],
+      ['flow_completed', { flow: 'cms_connect', target: 'wordpress' }],
+    ]);
     expect(container.textContent).toContain('Connected');
     expect(container.textContent).toContain('Site: https://blog.acme.example · signs in as editor');
     expect(container.textContent).toContain('Pages go to Acme Coffee Blog as draft posts.');
@@ -166,6 +176,10 @@ describe('WordPressCard', () => {
     await submit();
     expect(toast.error).toHaveBeenCalledWith(ERROR_TEXTS.header_dropped);
     expect(field('Site address').value).toBe('blog.acme.example');
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'wordpress' }],
+      ['flow_failed', { flow: 'cms_connect', target: 'wordpress', error_code: 'header_dropped' }],
+    ]);
   });
 
   it('asks to connect again after a refused sign-in, with the site and user filled in', async () => {

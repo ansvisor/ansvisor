@@ -103,6 +103,9 @@ interface RunRow {
 export const listQuery = z.object({
   view: z.enum(['active', 'archived']).default('active'),
   limit: z.coerce.number().int().min(1).max(CHAT_LIST_MAX).default(CHAT_LIST_DEFAULT),
+  /** Only this brand's chats (Today's Waiting for you); every brand's when left out. */
+  // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
+  brandId: z.guid().optional(),
 });
 export type ListQuery = z.infer<typeof listQuery>;
 
@@ -133,13 +136,15 @@ export function initialsOf(name: string | null | undefined): string | null {
 
 /**
  * A chat's dot from its newest run: working, waiting on the person or paused
- * while the run is open; done or failed while that result is unread; idle
- * once it is read, or with no run.
+ * while the run is open; failed while it errored, read or not, until the
+ * next run (the menu's red stays until fixed); done or stopped while that
+ * result is unread; idle once it is read, or with no run.
  */
 export function chatState(run: RunRow | null, unread: boolean): ListDotState {
   if (!run) return 'idle';
   const state = chatTrayState(run.status);
   if (state === 'running' || state === 'needsYou' || state === 'paused') return state;
+  if (run.status === 'error') return 'failed';
   if (unread && (state === 'done' || state === 'failed')) return state;
   return 'idle';
 }
@@ -265,22 +270,25 @@ async function itemsOf(reader: Reader, actor: ChatActor, chats: ChatRow[]) {
 /**
  * The person's chats for the menu (`active`: not archived, their own and the
  * team's shared ones) or All chats › Archived (`archived`: their own), newest
- * first, with the counts beside the menu's titles.
+ * first, with the counts beside the menu's titles. With `brandId`, only that
+ * brand's chats, rows and counts alike (Today's Waiting for you).
  */
 export async function listChats(
   reader: Reader,
   actor: ChatActor,
   query: ListQuery,
 ): Promise<ChatListResult> {
-  const own = () =>
-    reader
+  const own = () => {
+    const q = reader
       .from('chat_conversations')
       .select(CHAT_COLUMNS)
       .eq('user_id', actor.userId)
       .eq('organization_id', actor.organizationId)
       .is('deleted_at', null);
-  const team = () =>
-    reader
+    return query.brandId ? q.eq('brand_id', query.brandId) : q;
+  };
+  const team = () => {
+    const q = reader
       .from('chat_conversations')
       .select(CHAT_COLUMNS)
       .neq('user_id', actor.userId)
@@ -288,12 +296,15 @@ export async function listChats(
       .not('shared_at', 'is', null)
       .is('deleted_at', null)
       .is('archived_at', null);
+    return query.brandId ? q.eq('brand_id', query.brandId) : q;
+  };
   const count = (shared: boolean, archived: boolean) => {
     let q = reader
       .from('chat_conversations')
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', actor.organizationId)
       .is('deleted_at', null);
+    if (query.brandId) q = q.eq('brand_id', query.brandId);
     q = shared
       ? q.neq('user_id', actor.userId).not('shared_at', 'is', null)
       : q.eq('user_id', actor.userId);

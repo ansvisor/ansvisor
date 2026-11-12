@@ -4,14 +4,14 @@ route: /dashboard/action-center/review
 keywords: [needs review, approve task, dismiss task, task review, missing fields]
 synonyms: [review queue, pending tasks, tasks to approve, incomplete tasks]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-A task the AI writes without its **URL**, its **Change**, **Done when** or **How we check** doesn't reach the action's task list. It waits on the Action Center's **Needs review** tab instead, with what it misses. Only admins and managers see the tab and review tasks.
+A task the AI writes without its **URL**, its **Change**, **Done when** or **How we check** doesn't reach the action's task list. It waits on the Action Center's **Needs review** page instead, with what it misses. Admins and managers open it from **Waiting for you** on the **Today** tab; only they review tasks.
 
 ## Approve a task
 

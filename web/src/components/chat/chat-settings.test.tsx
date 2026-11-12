@@ -56,8 +56,15 @@ vi.mock('@/lib/actions/chat-prefs', () => ({
   }),
 }));
 vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
+// The person's date range (00528): hidden unless a test reads one.
+const range = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn() }));
+vi.mock('@/lib/actions/chat-range', () => ({
+  readChatDateRange: range.read,
+  saveChatDateRange: range.save,
+}));
 
 const { ChatSettings } = await import('./chat-settings');
+const { useChatRangeStore } = await import('./range/use-chat-range');
 const { ChatTourProvider } = await import('./tour/chat-tour');
 const { ChatPanelContext } = await import('./panel/chat-panel-context');
 const tourActions = await import('@/lib/actions/chat-tour');
@@ -79,6 +86,9 @@ let root: Root;
 let host: HTMLDivElement;
 
 beforeEach(() => {
+  useChatRangeStore.setState({ state: undefined });
+  range.read.mockReset().mockResolvedValue({ ok: false });
+  range.save.mockReset().mockResolvedValue({ ok: true });
   saved.ok = true;
   saved.patches = [];
   saved.focus = [];
@@ -153,6 +163,24 @@ describe('ChatSettings', () => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
     expect(saved.patches).toEqual([{ notifyVia: 'inbox' }]);
+  });
+
+  it('offers Inbox + Slack once a brand the person can see posts to Slack (#2139)', async () => {
+    await render(undefined, { ...OPEN, slack: true });
+    const select = action('chatSettings.notifyChannel')[0] as HTMLSelectElement;
+    expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
+      ['Inbox + email', false],
+      ['Inbox only', false],
+      ['Inbox + Slack', false],
+    ]);
+    expect(host.textContent).toContain(
+      'or with Inbox + Slack a message in the brand’s Slack channel that mentions you',
+    );
+    await act(async () => {
+      select.value = 'inbox_slack';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(saved.patches).toEqual([{ notifyVia: 'inbox_slack' }]);
   });
 
   it('offers the answer languages Chat reads, "Same as my question" first, and keeps a pick at once', async () => {
@@ -346,5 +374,69 @@ describe('ChatSettings › Product tour (00486)', () => {
     // Without the dashboard's tour (a test, the Chat flag off): none either.
     await render();
     expect(action('chatSettings.takeTour')).toHaveLength(0);
+  });
+});
+
+describe('ChatSettings › Date range (owner request 2026-11-11)', () => {
+  const select = () => action('chatSettings.dateRange')[0] as HTMLSelectElement;
+  const choose = async (value: string) => {
+    await act(async () => {
+      select().value = value;
+      select().dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  };
+  const day = (offset: number) =>
+    new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
+  it("isn't shown when the range can't be read", async () => {
+    await render();
+    expect(select()).toBeUndefined();
+  });
+
+  it("shows the person's range, keeps a pick at once, and Ask me clears it", async () => {
+    range.read.mockResolvedValue({ ok: true, range: '30d' });
+    await render();
+    expect(host.textContent).toContain('Date range');
+    expect(host.textContent).toContain('The period Chat reads when your message names none');
+    expect([...select().options].map((o) => o.textContent)).toEqual([
+      'Ask me before the first analysis',
+      'Last 24 hours',
+      'Last 7 days',
+      'Last 30 days',
+      'Last 90 days',
+      'Custom',
+    ]);
+    expect(select().value).toBe('30d');
+    await choose('7d');
+    expect(range.save).toHaveBeenLastCalledWith('7d');
+    expect(select().value).toBe('7d');
+    await choose('');
+    expect(range.save).toHaveBeenLastCalledWith(null);
+    expect(select().value).toBe('');
+  });
+
+  it('keeps two days picked under Custom', async () => {
+    range.read.mockResolvedValue({ ok: true, range: '30d' });
+    await render();
+    await choose('custom');
+    const [from, to] = [
+      ...host.querySelectorAll<HTMLInputElement>('[data-slot="range-custom"] input'),
+    ];
+    for (const [input, value] of [
+      [from, day(-9)],
+      [to, day(-2)],
+    ] as const) {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          input,
+          value,
+        );
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    }
+    await act(async () => action('chatSettings.dateRangeDates')[0].click());
+    expect(range.save).toHaveBeenLastCalledWith(`${day(-9)}/${day(-2)}`);
+    expect(host.querySelector('[data-slot="range-custom"]')).toBeNull();
+    expect(select().value).toBe('custom');
   });
 });

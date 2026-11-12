@@ -44,10 +44,8 @@ import {
 } from '@/components/billing/plan-start';
 import { setPersonProperties, track } from '@/lib/analytics';
 
-/** "What do you work on?" (menu access): once the brand is set up, before the plan. */
-const WORK_AREAS_STEP = 6;
-/** Choose a plan (cloud only): the last step. */
-const PLAN_STEP = 7;
+/** Choose a plan (cloud only): the last step, right after the competitors. */
+const PLAN_STEP = 6;
 
 const ONBOARDING_STEP_NAMES: Record<number, string> = {
   1: 'brand_setup',
@@ -55,7 +53,6 @@ const ONBOARDING_STEP_NAMES: Record<number, string> = {
   3: 'topics',
   4: 'prompts',
   5: 'competitors',
-  [WORK_AREAS_STEP]: 'work_areas',
   [PLAN_STEP]: 'plan',
 };
 import type { Brand } from '@/types';
@@ -100,11 +97,19 @@ import {
   type SuggestFailure,
 } from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
-import { ExploreDemoCard } from '@/components/onboarding/explore-demo-card';
-import { usePreloadDemo } from '@/hooks/use-explore-demo';
+import { ExploreDemoChoice, ExploreDemoLine } from '@/components/onboarding/explore-demo-card';
+import { DemoSetupDialog } from '@/components/demo/demo-setup-dialog';
+import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
 import { wantsDemoAhead } from '@/lib/demo/demo-ahead';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
-import { WorkAreasStep } from '@/components/onboarding/work-areas-step';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  defaultPickCount,
+  pickedCount,
+  promptRoom,
+  withDefaultPicks,
+  type TopicPromptPicks,
+} from '@/lib/onboarding-prompt-picks';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
@@ -145,24 +150,23 @@ function BrandHeader({ name, domain }: { name: string; domain: string }) {
 
 // ── Topic Prompt Accordion ─────────────────────────────────────────────────────
 
-interface TopicPromptsData {
-  topic: string;
-  prompts: string[];
-}
+// A topic's suggested prompts, each ticked or not: a checklist.
+type TopicPromptsData = TopicPromptPicks;
 
 function TopicAccordion({
   data,
   defaultOpen = false,
   onRemoveTopic,
   onAddPrompt,
-  onRemovePrompt,
+  onTogglePrompt,
 }: {
   data: TopicPromptsData;
   defaultOpen?: boolean;
   onRemoveTopic: () => void;
   onAddPrompt: (prompt: string) => void;
-  onRemovePrompt: (index: number) => void;
+  onTogglePrompt: (index: number) => void;
 }) {
+  const t = useTranslations('onboarding.prompts');
   const [open, setOpen] = useState(defaultOpen);
   const [newPrompt, setNewPrompt] = useState('');
 
@@ -187,7 +191,12 @@ function TopicAccordion({
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
           <span className="font-medium">{data.topic}</span>
-          <span className="text-xs text-muted-foreground">{data.prompts.length} prompts</span>
+          <span className="text-xs text-muted-foreground">
+            {t('topicCount', {
+              picked: data.prompts.filter((p) => p.picked).length,
+              total: data.prompts.length,
+            })}
+          </span>
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger className="p-1 rounded hover:bg-muted text-muted-foreground">
@@ -206,18 +215,17 @@ function TopicAccordion({
       {open && (
         <div className="pl-7 pb-3 space-y-1.5">
           {data.prompts.map((p, idx) => (
-            <div
+            <label
               key={idx}
-              className="flex items-center gap-2 group rounded-md border bg-muted/30 px-3 py-2"
+              data-slot="prompt-pick"
+              className={cn(
+                'flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2',
+                p.picked ? 'bg-muted/30' : 'text-muted-foreground',
+              )}
             >
-              <span className="text-sm flex-1">{p}</span>
-              <button
-                onClick={() => onRemovePrompt(idx)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
+              <Checkbox checked={p.picked} onCheckedChange={() => onTogglePrompt(idx)} />
+              <span className="text-sm flex-1">{p.text}</span>
+            </label>
           ))}
           <div className="flex items-center gap-2 mt-2">
             <Input
@@ -255,7 +263,6 @@ const STATE_ITEMS = [{ value: 'nationwide', label: 'Nationwide (no state)' }, ..
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = {
   3: 'wide',
   4: 'wide',
-  [WORK_AREAS_STEP]: 'wide',
   [PLAN_STEP]: 'medium',
 };
 
@@ -283,7 +290,9 @@ export default function OnboardingPage() {
   const tWizard = useTranslations('brands.wizard');
   const tOffer = useTranslations('planOffer');
   const tPlans = useTranslations('readOnly.plans');
-  const tWelcome = useTranslations('welcome');
+  const tWaiting = useTranslations('prompts.waiting');
+  const tPrompts = useTranslations('onboarding.prompts');
+  const tSetup = useTranslations('onboarding');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
@@ -369,7 +378,9 @@ export default function OnboardingPage() {
   // the first-month offer shown from the first frame (the person setting up
   // the workspace is its admin), its code checked once the step is reached.
   const [offer, setOffer] = useFirstMonthOffer(firstMonthOfferOn(), step === PLAN_STEP);
-  const [choice, setChoice] = useStartChoice(trialDays != null);
+  // The free trial first, while the workspace may have one: Monthly once
+  // it's found used.
+  const [choice, setChoice] = useStartChoice(trialDays != null, 'trial');
   // The plans' details (what each is for and includes), in the cards.
   const [planDetails, setPlanDetails] = useState(false);
   const { checkout, failed, start } = useStartCheckout({
@@ -422,6 +433,12 @@ export default function OnboardingPage() {
       cancelled = true;
     };
   }, [step, organizationId]);
+  usePreloadDemo(step === PLAN_STEP && demoMissing);
+  // The demo brand, the plan step's other way in: chosen in the switch above
+  // the plans (its card then shows in their place), or straight from the line
+  // under them. Both run the one explore action, with its setup screen.
+  const [demoChosen, setDemoChosen] = useState(false);
+  const exploreDemo = useExploreDemo();
 
   // A new workspace's demo brand is built as soon as the organization exists,
   // while its admin sets up their own brand: the first build takes a few
@@ -487,8 +504,7 @@ export default function OnboardingPage() {
     };
   }, [step, planBrandId]);
 
-  // Self-host has no plan step, and asks "What do you work on?" on the
-  // dashboard's first visit instead (/dashboard/welcome).
+  // Self-host has no plan step.
   const totalSteps = isCloud() ? PLAN_STEP : 5;
 
   // Determine which scrapers/models are available based on the plan
@@ -518,6 +534,24 @@ export default function OnboardingPage() {
 
     return () => clearInterval(interval);
   }, [loadingCompetitors]);
+
+  // Auto-fetch topic suggestions when arriving at step 3 with none loaded:
+  // coming back to setup with the brand saved but no topics yet. Saved topics
+  // fill the list on resume, and step 2 → 3 starts its own fetch, which this
+  // sees in flight. After a failure, the step's message and Try again stand.
+  useEffect(() => {
+    if (
+      step === 3 &&
+      !initialLoading &&
+      !loadingTopics &&
+      !topicSuggestError &&
+      suggestedTopics.length === 0 &&
+      createdBrand
+    ) {
+      fetchTopicSuggestions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, initialLoading]);
 
   // Auto-fetch competitor suggestions when arriving at step 5 with none loaded
   useEffect(() => {
@@ -556,7 +590,7 @@ export default function OnboardingPage() {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('organization_id, onboarding_completed, work_areas_asked_at')
+          .select('organization_id, onboarding_completed')
           .eq('id', user.id)
           .single();
 
@@ -573,7 +607,7 @@ export default function OnboardingPage() {
             if (subStatus !== 'active' && subStatus !== 'trialing') {
               setOrganizationId(profile.organization_id);
               void loadResumedPreview(profile.organization_id);
-              setStep(profile.work_areas_asked_at ? PLAN_STEP : WORK_AREAS_STEP);
+              setStep(PLAN_STEP);
               setInitialLoading(false);
               return;
             }
@@ -839,16 +873,22 @@ export default function OnboardingPage() {
     }
 
     try {
-      const { topicPrompts: generated } = await generatePromptsFromTopics(
-        {
-          brandName: brandName.trim(),
-          description: description.trim(),
-          website: domain,
-          language,
-        },
-        topicNames,
-      );
-      setTopicPrompts(generated);
+      // The plan's room, read alongside: the prompts ticked at first fit in
+      // it, so none start out waiting for a spot. Unread, 15 as usual.
+      const [{ topicPrompts: generated }, capacity] = await Promise.all([
+        generatePromptsFromTopics(
+          {
+            brandName: brandName.trim(),
+            description: description.trim(),
+            website: domain,
+            language,
+          },
+          topicNames,
+        ),
+        promptCapacity ?? getPromptCapacity(createdBrand.id).catch(() => null),
+      ]);
+      if (capacity) setPromptCapacity(capacity);
+      setTopicPrompts(withDefaultPicks(generated, defaultPickCount(promptRoom(capacity))));
       track('onboarding_step_completed', {
         step: 3,
         step_name: 'topics',
@@ -877,13 +917,15 @@ export default function OnboardingPage() {
     setSaveError(null);
     try {
       const allPrompts = topicPrompts.flatMap((tp) =>
-        tp.prompts.map((text) => ({
-          text,
-          category: tp.topic,
-          platforms: activeScrapers.map((s) => s.id),
-          models: activeModels.map((m) => m.id),
-          isActive: true,
-        })),
+        tp.prompts
+          .filter((p) => p.picked)
+          .map(({ text }) => ({
+            text,
+            category: tp.topic,
+            platforms: activeScrapers.map((s) => s.id),
+            models: activeModels.map((m) => m.id),
+            isActive: true,
+          })),
       );
 
       if (allPrompts.length === 0) {
@@ -1065,11 +1107,11 @@ export default function OnboardingPage() {
         onboarding_completed: true,
       });
 
-      // Cloud mode → what they work on, then the subscription step (tracking
-      // triggered after payment)
+      // Cloud mode → subscription step (tracking triggered after payment)
       if (isCloud()) {
         setSavingCompetitors(false);
-        setStep(WORK_AREAS_STEP);
+        toast.success(tSetup('saved', { trial: trialDays != null ? 'yes' : 'no' }));
+        setStep(PLAN_STEP);
         return;
       }
 
@@ -1133,28 +1175,36 @@ export default function OnboardingPage() {
 
   const addPromptToTopic = (topicIndex: number, prompt: string) => {
     setTopicPrompts((prev) =>
-      prev.map((tp, i) => (i === topicIndex ? { ...tp, prompts: [...tp.prompts, prompt] } : tp)),
+      prev.map((tp, i) =>
+        i === topicIndex ? { ...tp, prompts: [...tp.prompts, { text: prompt, picked: true }] } : tp,
+      ),
     );
   };
 
-  const removePromptFromTopic = (topicIndex: number, promptIndex: number) => {
+  const togglePrompt = (topicIndex: number, promptIndex: number) => {
     setTopicPrompts((prev) =>
       prev.map((tp, i) =>
         i === topicIndex
-          ? { ...tp, prompts: tp.prompts.filter((_, pi) => pi !== promptIndex) }
+          ? {
+              ...tp,
+              prompts: tp.prompts.map((p, pi) =>
+                pi === promptIndex ? { ...p, picked: !p.picked } : p,
+              ),
+            }
           : tp,
       ),
     );
   };
 
-  const totalPrompts = topicPrompts.reduce((sum, tp) => sum + tp.prompts.length, 0);
-  // Prompts this brand may save before hitting the org's plan cap (null =
-  // unknown or unlimited); over that, Continue is disabled with an inline hint.
-  const promptLimit =
-    promptCapacity && promptCapacity.maxPrompts !== -1
-      ? Math.max(0, promptCapacity.maxPrompts - promptCapacity.used)
-      : null;
-  const excessPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
+  // The prompts offered, and the ticked ones: only those are saved, and they
+  // count toward the plan.
+  const offeredPrompts = topicPrompts.reduce((sum, tp) => sum + tp.prompts.length, 0);
+  const totalPrompts = pickedCount(topicPrompts);
+  // Prompts this brand may track before hitting the org's plan cap (null =
+  // unknown or unlimited); past it, the rest are saved waiting for a spot
+  // (savePromptSet), as on a new brand's wizard, and a note says how many.
+  const promptLimit = promptRoom(promptCapacity);
+  const overPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
 
   async function loadResumedPreview(orgId: string) {
     try {
@@ -1583,11 +1633,8 @@ export default function OnboardingPage() {
             <BrandHeader name={brandName} domain={domain} />
 
             <div className="mb-6">
-              <h1 className="text-2xl font-bold tracking-tight">Review your prompts</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                These prompts will be sent to AI platforms daily. Feel free to edit, add, or remove
-                any before starting.
-              </p>
+              <h1 className="text-2xl font-bold tracking-tight">{tPrompts('title')}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{tPrompts('intro')}</p>
             </div>
 
             {promptGenError && (
@@ -1603,13 +1650,13 @@ export default function OnboardingPage() {
               </div>
             )}
 
-            {excessPrompts > 0 && (
+            {overPrompts > 0 && (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                Your plan includes up to {promptLimit} prompts — remove {excessPrompts} to continue.
+                {tWaiting('brandNote', { room: promptLimit ?? 0, count: overPrompts })}
               </div>
             )}
 
-            {saveError && excessPrompts === 0 && (
+            {saveError && (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                 {saveError}
               </div>
@@ -1617,7 +1664,9 @@ export default function OnboardingPage() {
 
             <div className="mb-4">
               <p className="text-sm font-medium">Your Prompt List</p>
-              <p className="text-xs text-muted-foreground">{totalPrompts} prompts total</p>
+              <p data-slot="prompt-count" className="text-xs text-muted-foreground">
+                {tPrompts('count', { picked: totalPrompts, total: offeredPrompts })}
+              </p>
             </div>
 
             <div className="rounded-lg border">
@@ -1631,7 +1680,7 @@ export default function OnboardingPage() {
                   defaultOpen={idx === 0}
                   onRemoveTopic={() => removeTopic(idx)}
                   onAddPrompt={(p) => addPromptToTopic(idx, p)}
-                  onRemovePrompt={(pi) => removePromptFromTopic(idx, pi)}
+                  onTogglePrompt={(pi) => togglePrompt(idx, pi)}
                 />
               ))}
               {topicPrompts.length === 0 && (
@@ -1644,7 +1693,7 @@ export default function OnboardingPage() {
             <Button
               className="mt-6 w-full"
               onClick={handleSavePromptsAndContinue}
-              disabled={isLoading || totalPrompts === 0 || excessPrompts > 0}
+              disabled={isLoading || totalPrompts === 0}
             >
               {isLoading ? (
                 <>
@@ -1827,11 +1876,23 @@ export default function OnboardingPage() {
                       Finishing setup...
                     </>
                   ) : hasSelectedCompetitors ? (
-                    `Start tracking with ${selectedCompetitorCount} competitor${selectedCompetitorCount !== 1 ? 's' : ''}`
+                    // On the cloud, tracking starts with the plan step's
+                    // Checkout (the trial or a plan bought), not here.
+                    tSetup(isCloud() ? 'competitors.continue' : 'competitors.startTracking', {
+                      count: selectedCompetitorCount,
+                    })
                   ) : (
                     'Add a competitor to continue'
                   )}
                 </Button>
+                {isCloud() && (
+                  <p
+                    data-slot="tracking-starts"
+                    className="text-center text-xs text-muted-foreground"
+                  >
+                    {tSetup('trackingStarts', { trial: trialDays != null ? 'yes' : 'no' })}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -1848,38 +1909,6 @@ export default function OnboardingPage() {
             <div className="w-12" />
           </div>
         </div>
-      );
-    }
-
-    // ── What do you work on? (menu access) ──
-
-    if (step === WORK_AREAS_STEP) {
-      return (
-        <WorkAreasStep
-          title={tWelcome('title')}
-          lede={tWelcome('lede')}
-          onDone={() => {
-            track('onboarding_step_completed', {
-              step: WORK_AREAS_STEP,
-              step_name: 'work_areas',
-            });
-            toast.success('Almost done! Choose a plan to get started.');
-            setStep(PLAN_STEP);
-          }}
-          footer={
-            <div className="flex mx-auto w-full max-w-4xl items-center justify-between mt-8">
-              <button
-                onClick={() => setStep(5)}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back
-              </button>
-              <StepDots current={WORK_AREAS_STEP} total={totalSteps} />
-              <div className="w-12" />
-            </div>
-          }
-        />
       );
     }
 
@@ -1924,57 +1953,77 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          {/* How the plan starts: the trial, monthly with the offer, or a year */}
+          {/* How the plan starts: the trial, monthly, or a year; or the demo first */}
           <div className="mb-5 flex">
             <StartChoicePicker
               choice={choice}
-              onChange={setChoice}
+              onChange={(next) => {
+                setDemoChosen(false);
+                setChoice(next);
+              }}
               trialOffered={trialOffered}
-              offer={offer}
               centered
+              demo={{ chosen: demoChosen, onChoose: () => setDemoChosen(true) }}
             />
           </div>
 
-          {/* Plan cards */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            {SUBSCRIBABLE_PLANS.map((planId) => (
-              <PlanStartCard
-                key={planId}
-                planId={planId}
-                choice={choice}
-                offer={offer}
-                details={planDetails}
-              >
-                <PlanStart
-                  planId={planId}
-                  choice={choice}
-                  offer={offer}
-                  trialOffered={trialOffered}
-                  opening={checkout?.planId === planId ? checkout.mode : null}
-                  disabled={!organizationId || checkout != null}
-                  error={failed?.planId === planId ? failed.message : null}
-                  onStart={(mode) => handleCheckout(planId, mode)}
+          {demoChosen ? (
+            // The demo, chosen above: its card in place of the plans.
+            <ExploreDemoChoice
+              brandName={planBrandName}
+              opening={exploreDemo.opening}
+              onExplore={() => void exploreDemo.explore()}
+            />
+          ) : (
+            <>
+              {/* Plan cards */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {SUBSCRIBABLE_PLANS.map((planId) => (
+                  <PlanStartCard
+                    key={planId}
+                    planId={planId}
+                    choice={choice}
+                    offer={offer}
+                    details={planDetails}
+                  >
+                    <PlanStart
+                      planId={planId}
+                      choice={choice}
+                      offer={offer}
+                      trialOffered={trialOffered}
+                      opening={checkout?.planId === planId ? checkout.mode : null}
+                      disabled={!organizationId || checkout != null}
+                      error={failed?.planId === planId ? failed.message : null}
+                      onStart={(mode) => handleCheckout(planId, mode)}
+                    />
+                  </PlanStartCard>
+                ))}
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span data-slot="card-note">
+                  {tOffer('cardNote', { both: trialOffered ? 'yes' : 'no' })}
+                </span>
+                <PlanDetailsToggle
+                  open={planDetails}
+                  onToggle={() => setPlanDetails((open) => !open)}
                 />
-              </PlanStartCard>
-            ))}
-          </div>
+              </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span data-slot="card-note">
-              {tOffer('cardNote', { both: trialOffered ? 'yes' : 'no' })}
-            </span>
-            <PlanDetailsToggle
-              open={planDetails}
-              onToggle={() => setPlanDetails((open) => !open)}
-            />
-          </div>
-
-          <ExploreDemoCard brandName={planBrandName} preload={demoMissing} />
+              {/* Not ready for a card: the demo, straight from one line. */}
+              <ExploreDemoLine
+                className="mt-5"
+                opening={exploreDemo.opening}
+                onExplore={() => void exploreDemo.explore()}
+              />
+            </>
+          )}
+          <DemoSetupDialog {...exploreDemo.setupDialog} />
         </div>
 
         <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-5">
           <button
-            onClick={() => setStep(WORK_AREAS_STEP)}
+            onClick={() => setStep(5)}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />

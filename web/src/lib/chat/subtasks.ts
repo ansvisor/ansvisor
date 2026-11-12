@@ -144,8 +144,16 @@ export function partQuestion(
 
 // ─── The parent ─────────────────────────────────────────────────────────────
 
-/** The parent's progress, as the engine keeps it: its question and page context too. */
-export type ParentProgress = RunProgress & { question?: string; scope?: unknown };
+/**
+ * The parent's progress, as the engine keeps it: its question and page
+ * context too, and the date range it set (the range card's pick, a period
+ * its question named).
+ */
+export type ParentProgress = RunProgress & {
+  question?: string;
+  scope?: unknown;
+  range?: { range: string; how: string };
+};
 
 /** What the parent lends its parts: the engine's run, driver and Stop. */
 export interface SubtasksHost {
@@ -207,6 +215,8 @@ async function makeParts(host: SubtasksHost, input: SubtasksInput, ids: string[]
       ...newProgress(progress.timezone, progress.brandId, 'read'),
       question: partQuestion(progress.question, part, i + 1, input.parts.length),
       ...(progress.scope ? { scope: progress.scope } : {}),
+      // The parent's range is its parts' too: read with, never said again (range.ts).
+      ...(progress.range ? { range: { range: progress.range.range, how: 'question' } } : {}),
       // What the parent read outside the workspace's numbers taints its parts too.
       ...(progress.tainted ? { tainted: true } : {}),
       // A job's parts are metered as the job's (CHAT-12 item 14).

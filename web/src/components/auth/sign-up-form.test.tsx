@@ -75,6 +75,16 @@ describe('SignUpForm', () => {
     expect(oauthNext.at(-1)).toBe('/en/invite/tok_123');
   });
 
+  it('labels the address Email, and only suggests a work one', () => {
+    render();
+    expect(container.querySelector('label[for="email"]')?.textContent).toBe('Email');
+    expect(container.querySelector('#email-hint')?.textContent).toBe('Work email suggested');
+    expect(emailInput().getAttribute('aria-describedby')).toBe('email-hint');
+    // A suggestion, not a rule: any address is accepted.
+    expect(emailInput().type).toBe('email');
+    expect(emailInput().getAttribute('pattern')).toBeNull();
+  });
+
   it('leaves a sign-up without an invitation as it is', () => {
     window.history.replaceState(null, '', '/en/sign-up?next=%2Fen%2Fdashboard%2Fchat');
     render();

@@ -4,11 +4,11 @@ route: /dashboard/action-center/actions
 keywords: [start now, content editor, start in content editor, write page, open draft, chat, what to do, play, also worth doing]
 synonyms: [one click to editor, start writing, draft from action, work on action, which page to write, playbook]
 plan: all
-updated: 2026-11-07
+updated: 2026-11-11
 last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 When an action's work is writing, a new page or a better existing one, its drawer opens with a **Start now** block at the top of **Overview**. It takes you straight to the writing, with what the action knows already filled in.
@@ -27,16 +27,23 @@ On an online store, a topic action whose topic is linked to a catalog category w
 
 When the category has products in stock but no live page, it reads **Write a buying guide**: a new page for the topic, its shopping path starting with the category's best sellers.
 
+## A buying guide next to the category page
+
+When the category page is live but the category has no buying guide yet, **Also worth doing here** starts with **Write a buying guide next to** that page: a guide for the topic that links the category page and its best sellers.
+
+A draft or a published page counts as the category's guide when its title names the category or its shopping path links it, as in the Content plan's **Shopping opportunities**. The category needs at least three products in stock.
+
 ## What Content Editor opens
 
 Click **Content Editor**. A draft is written for the action's writing task and opens in the Content Editor:
 
+- a page title, not the action's: the existing page's, or the main prompt a new page answers;
 - the action's prompts, so its sources and brief answer them;
 - the page it works on, read from your site, for an existing page;
-- the page type, from the page's address, or from the kind of page the action picked;
+- the page type, from the page's address, or the kind of page the action or its opportunity picked;
 - on an online shop, the products the action is about, locked into the page's shopping path.
 
-A new draft builds its brief as it opens, from your AI usage. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it.
+As in **Write this**, once you confirm its AI usage, the Content Agent builds the brief and writes the page, or suggests changes. If the page can't be read, only the brief is built. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it.
 
 ## Several pages
 

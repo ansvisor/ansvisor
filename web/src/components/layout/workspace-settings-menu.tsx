@@ -6,8 +6,10 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import {
   hasSettingsSection,
+  teamSection,
   type SettingsSection,
 } from '@/app/[locale]/(dashboard)/dashboard/settings/_sections';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -21,8 +23,8 @@ import { Building2, ChevronDown, CreditCard, Settings, UserRound, Users } from '
 const SECTIONS = [
   { id: 'account', icon: UserRound },
   { id: 'organization', icon: Building2 },
-  { id: 'team', icon: Users },
   { id: 'billing', icon: CreditCard },
+  { id: 'team', icon: Users },
 ] satisfies { id: SettingsSection; icon: typeof Settings }[];
 
 /**
@@ -37,6 +39,8 @@ export function WorkspaceSettingsMenu() {
   const router = useRouter();
   const { canManage } = useUserRole();
   const { isCloud } = usePlanContext();
+  // Team is in Team, roles & access with the new Chat on (owner, 2026-11-09).
+  const team = teamSection(useChatAgentic());
 
   if (!canManage) return null;
 
@@ -48,12 +52,18 @@ export function WorkspaceSettingsMenu() {
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        {SECTIONS.filter((s) => hasSettingsSection(s.id, { isCloud })).map(({ id, icon: Icon }) => (
-          <DropdownMenuItem key={id} onClick={() => router.push(`/dashboard/settings/${id}`)}>
-            <Icon className="mr-2 h-4 w-4 text-muted-foreground" />
-            {t(id)}
-          </DropdownMenuItem>
-        ))}
+        {SECTIONS.filter((s) => hasSettingsSection(s.id, { isCloud })).map(({ id, icon: Icon }) => {
+          const section = id === 'team' ? team : id;
+          return (
+            <DropdownMenuItem
+              key={id}
+              onClick={() => router.push(`/dashboard/settings/${section}`)}
+            >
+              <Icon className="mr-2 h-4 w-4 text-muted-foreground" />
+              {section === 'roles-access' ? t('teamRolesAccess') : t(id)}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

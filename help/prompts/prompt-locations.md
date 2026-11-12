@@ -4,8 +4,8 @@ route: /dashboard/prompts/tracked
 keywords: [locations, add location, remove location, locations view, countries, us states, cities]
 synonyms: [track in another country, regional tracking, geo tracking, stop tracking a location]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -33,7 +33,7 @@ Open **Track in more locations** from **+ Add location** in the Locations view, 
 
 ## When locations would pass your plan's limit
 
-If the choice would pass your plan's limit, the dialog says how many it needs and how many are left, and saves nothing. Pick fewer prompts or places, or follow your plan's way to track more.
+If the choice would pass your plan's limit, the dialog says how many it needs and how many are left, and saves nothing. Pick fewer prompts or places, or follow your plan's way to track more. Only new prompts wait for a spot; locations added to prompts you track don't.
 
 ## Which engines answer from a state or city
 

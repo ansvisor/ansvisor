@@ -10,12 +10,14 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Download, FileSpreadsheet, Info, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
 import { formatNumber } from '@/lib/format';
 import { importPrompts } from '@/lib/actions/prompt';
+import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 import {
   MAX_IMPORT_ROWS,
   TEMPLATE_HEADER,
@@ -88,13 +90,20 @@ export function BulkImportPrompts({
   const [importing, setImporting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const freeSlots =
+  const planSlots =
     !quota || quota.maxPrompts === -1 ? -1 : Math.max(0, quota.maxPrompts - quota.used);
+  // The rows past the plan's limit are imported too, saved waiting for a
+  // spot, so the preview holds none back.
+  const tWaiting = useTranslations('prompts.waiting');
+  const showWaiting = useWaitingForSpotToast();
 
   const preview = useMemo(
-    () => (sheet ? buildPreview(sheet, { existingTexts, freeSlots }) : null),
-    [sheet, existingTexts, freeSlots],
+    () => (sheet ? buildPreview(sheet, { existingTexts, freeSlots: -1 }) : null),
+    [sheet, existingTexts],
   );
+  // Rows that will wait for a spot: one location each, past the free slots.
+  const waitingRows =
+    planSlots !== -1 && preview ? Math.max(0, preview.counts.valid - planSlots) : 0;
 
   const readFile = useCallback(async (file: File) => {
     setReadError(null);
@@ -141,6 +150,11 @@ export function BulkImportPrompts({
       }
       const imported = result.importedIdx.length;
       const notImported = totalCandidates - imported;
+      const waiting = result.waitingIdx?.length ?? 0;
+      if (showWaiting('import', imported - waiting, waiting)) {
+        onImported();
+        return;
+      }
       toast.success(
         notImported > 0
           ? `${imported} imported · ${notImported} not imported due to plan limit`
@@ -254,6 +268,18 @@ export function BulkImportPrompts({
             <p className="text-xs text-muted-foreground">
               Only the prompt column is read; the file&apos;s other columns were ignored.
             </p>
+          )}
+
+          {waitingRows > 0 && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+              <div className="space-y-2">
+                <p className="text-amber-900 dark:text-amber-200">
+                  {tWaiting('overNote', { count: waitingRows })}
+                </p>
+                <div className="flex flex-wrap gap-2">{limitActions}</div>
+              </div>
+            </div>
           )}
 
           {overRows.length > 0 && quota && (

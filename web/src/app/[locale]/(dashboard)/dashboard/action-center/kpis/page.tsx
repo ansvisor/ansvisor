@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
+import { HistoryViews } from '@/components/action-center/history-views';
 import { KpiFrameworkDrawer } from '@/components/action-center/kpi-framework-drawer';
 import { KpiTable } from '@/components/action-center/kpi-table';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ function utcDay(offset = 0): string {
 export default function ActionCenterKpisPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const t = useTranslations('actionCenter.kpis');
+  // KPIs is one of History's views: the tab shown above it is History's.
 
   return (
     <div className="space-y-6">
@@ -59,6 +61,7 @@ export default function ActionCenterKpisPage() {
         </div>
       </HeaderWithAiUsage>
       <ActionCenterTabs />
+      <HistoryViews current="kpis" />
       {brand ? (
         <KpisContent key={brand.id} brand={brand} />
       ) : (

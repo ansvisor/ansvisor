@@ -30,7 +30,8 @@ import {
   Image,
 } from '@react-pdf/renderer';
 import type { Report, ReportPromptPerf } from '@/lib/actions/reports';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney, percentChange } from '@/lib/format';
+import { getPlatformName } from '@/lib/traffic-platforms';
 import { withInter } from '@/lib/pdf-font';
 import { auditScoreView } from '@/lib/reports/audit-score';
 import type { ScoreRange } from '@/lib/audit/score-range';
@@ -655,6 +656,116 @@ export function ReportPdfDocument({
                 ))}
               </View>
             )}
+          </View>
+        )}
+
+        {/* HubSpot's AI-sourced pipeline (#2140) */}
+        {payload.aiPipeline && (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>AI-sourced pipeline (HubSpot)</Text>
+            <View style={styles.kpiRow}>
+              {[
+                {
+                  label: 'AI-sourced contacts',
+                  value: String(payload.aiPipeline.totals.contacts),
+                  change: percentChange(
+                    payload.aiPipeline.totals.contacts,
+                    payload.aiPipeline.totals.contactsPrev,
+                  ),
+                },
+                {
+                  label: 'AI-influenced deals',
+                  value: String(payload.aiPipeline.totals.deals),
+                  change: null,
+                },
+                {
+                  label: 'Open pipeline',
+                  value: formatMoney(
+                    payload.aiPipeline.totals.openPipeline,
+                    payload.aiPipeline.currency,
+                  ),
+                  change: null,
+                },
+                {
+                  label: 'Won revenue',
+                  value: formatMoney(
+                    payload.aiPipeline.totals.wonRevenue,
+                    payload.aiPipeline.currency,
+                  ),
+                  change: percentChange(
+                    payload.aiPipeline.totals.wonRevenue,
+                    payload.aiPipeline.totals.wonRevenuePrev,
+                  ),
+                },
+              ].map((kpi) => (
+                <View key={kpi.label} style={styles.kpiBox}>
+                  <Text style={styles.kpiLabel}>{kpi.label}</Text>
+                  <View style={styles.kpiValueRow}>
+                    <Text style={styles.kpiValue}>{kpi.value}</Text>
+                    <DeltaText value={kpi.change} />
+                  </View>
+                </View>
+              ))}
+            </View>
+            {payload.aiPipeline.byEngine.length > 0 && (
+              <View style={{ marginTop: 6 }}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1 }]}>AI engine</Text>
+                  <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
+                    Contacts
+                  </Text>
+                  <Text style={[styles.tableHeaderCell, { width: 80, textAlign: 'right' }]}>
+                    Won revenue
+                  </Text>
+                </View>
+                {payload.aiPipeline.byEngine.map((e) => (
+                  <View key={e.source} style={styles.tableRow}>
+                    <Text style={[styles.cell, { flex: 1 }]}>{getPlatformName(e.source)}</Text>
+                    <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
+                      {e.contacts}
+                    </Text>
+                    <Text style={[styles.cell, { width: 80, textAlign: 'right' }]}>
+                      {formatMoney(e.wonRevenue, payload.aiPipeline!.currency)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {payload.aiPipeline.byPage.length > 0 && (
+              <View style={{ marginTop: 6 }}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Landing page</Text>
+                  <Text style={[styles.tableHeaderCell, { width: 80, textAlign: 'right' }]}>
+                    Won revenue
+                  </Text>
+                </View>
+                {payload.aiPipeline.byPage.map((p) => (
+                  <View key={p.page} style={styles.tableRow}>
+                    <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{p.page}</Text>
+                    <Text style={[styles.cell, { width: 80, textAlign: 'right' }]}>
+                      {formatMoney(p.wonRevenue, payload.aiPipeline!.currency)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {payload.aiPipeline.hubspotNative.contacts > 0 && (
+              <Text style={{ fontSize: 8, color: MUTED, marginTop: 6 }}>
+                HubSpot also counts {payload.aiPipeline.hubspotNative.contacts} contacts from its
+                own AI Referrals source on the brand&apos;s domains, with{' '}
+                {payload.aiPipeline.hubspotNative.deals} deals and{' '}
+                {formatMoney(
+                  payload.aiPipeline.hubspotNative.wonRevenue,
+                  payload.aiPipeline.currency,
+                )}{' '}
+                won. They aren&apos;t in the figures above.
+              </Text>
+            )}
+            <Text style={{ fontSize: 8, color: MUTED, marginTop: 4 }}>
+              A deal counts once, in full, credited to its earliest contact who came from an AI
+              answer. Won revenue: deals closed won in the period. Open pipeline: deals open when
+              the report was made.
+            </Text>
           </View>
         )}
 

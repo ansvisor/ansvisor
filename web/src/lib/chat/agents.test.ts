@@ -1262,7 +1262,11 @@ describe('reading', () => {
     expect(detail).toMatchObject({
       usage30d: { share: 0.032, runs: 4 },
       usagePeriod: { share: 0.032 },
-      lastRun: { status: 'done', at: '2026-10-28T09:05:00.000Z' },
+      lastRun: {
+        status: 'done',
+        at: '2026-10-28T09:05:00.000Z',
+        chatId: 'cccccccc-0000-4000-8000-000000000009',
+      },
       outcomes30d: { improved: 1, pending: 0 },
       recentRuns: [
         {
@@ -1410,6 +1414,59 @@ describe('reading', () => {
       'cccccccc-0000-4000-8000-000000000022',
       null,
     ]);
+  });
+
+  it("gives each listed agent its last run's chat, for those who can open it (Action Center › Agents)", async () => {
+    const { id } = await create(PEOPLE.manager, { visibility: 'workspace' });
+    const quiet = await create(PEOPLE.manager, { name: 'Quiet one', visibility: 'workspace' });
+    const run = (n: number, status: string) => ({
+      id: `dddddddd-0000-4000-8000-00000000003${n}`,
+      organization_id: ORG,
+      agent_id: id,
+      agent_version: 1,
+      brand_id: BRAND,
+      trigger_kind: 'schedule',
+      acting_user_id: PEOPLE.manager,
+      status,
+      max_share: 0.1,
+      usage_share: 0.01,
+      queued_at: `2026-10-28T0${n}:00:00.000Z`,
+    });
+    // The newest run waits on someone; an older one is done.
+    db.tables.chat_agent_runs.push(run(1, 'done'), run(2, 'needs_you'));
+    db.tables.chat_conversations.push(
+      {
+        id: 'cccccccc-0000-4000-8000-000000000031',
+        organization_id: ORG,
+        user_id: PEOPLE.manager,
+        shared_at: null,
+        agent_run_id: run(1, 'done').id,
+      },
+      {
+        id: 'cccccccc-0000-4000-8000-000000000032',
+        organization_id: ORG,
+        user_id: PEOPLE.manager,
+        shared_at: null,
+        agent_run_id: run(2, 'needs_you').id,
+      },
+    );
+    const lastRunOf = async (person: string, agentId: string) =>
+      (await agents.listAgents(await ctxOf(person), { view: 'workspace' }, NOW)).agents.find(
+        (a) => a.id === agentId,
+      )?.lastRun;
+    expect(await lastRunOf(PEOPLE.manager, id)).toEqual({
+      status: 'needs_you',
+      at: '2026-10-28T02:00:00.000Z',
+      chatId: 'cccccccc-0000-4000-8000-000000000032',
+    });
+    // Its chat is the author's own: an Admin sees the run, with no chat to open.
+    expect(await lastRunOf(PEOPLE.admin, id)).toMatchObject({ status: 'needs_you', chatId: null });
+    // An agent that never ran has no last run.
+    expect(await lastRunOf(PEOPLE.manager, quiet.id)).toBeNull();
+    // Its detail says the same.
+    expect((await agents.readAgent(await ctxOf(PEOPLE.manager), id, NOW))?.lastRun).toMatchObject({
+      chatId: 'cccccccc-0000-4000-8000-000000000032',
+    });
   });
 });
 

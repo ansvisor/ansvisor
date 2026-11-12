@@ -42,7 +42,10 @@ import { MenuManagersCard, MenuPeopleCard } from '@/components/settings/menu-acc
 
 const MENU_ROLES: MenuRole[] = ['manager', 'analyst', 'agency_partner'];
 
-/** The menu's sections, by its groups, as the role table lists them. */
+/**
+ * The menu's sections, by its groups, as the role table lists them: Agents
+ * right under the Action Center, named "Agents · in Action Center".
+ */
 const GROUPS = dashboardNav.map((group) => ({
   title: group.title,
   items: menuSectionEntries(group.items),
@@ -79,7 +82,7 @@ function MenuAccessSettingsView() {
   const t = useTranslations('settings.menuAccess');
   const tSettings = useTranslations('settings');
   const tNav = useTranslations('nav');
-  // The rows: the sections the workspace has (Agent Center only with the new Chat on).
+  // The rows: the sections the workspace has (Agents only with the new Chat on).
   const sections = useMenuSections();
   const groups = GROUPS.map((group) => ({
     ...group,

@@ -65,7 +65,7 @@ export function GoogleAccountsOverview({ refreshKey = 0 }: { refreshKey?: number
         <h3 className="text-sm font-medium">{t('title')}</h3>
         <p className="text-xs text-muted-foreground">{t('description')}</p>
       </div>
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>

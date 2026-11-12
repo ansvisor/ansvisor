@@ -4,14 +4,14 @@ route: /dashboard/brands/new
 keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial]
 synonyms: [get started, create a brand, set up my account, onboard, add another brand]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/add-your-first-brand.mdx]
 ---
-When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and seven on the cloud: the extra two ask what you work on and pick your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
+When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and six on the cloud: the extra one picks your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
 
 ## Step 1: Brand basics
 
@@ -45,13 +45,13 @@ Aim for four to seven topics. Too few gives a narrow view; too many is noisy and
 
 ## Step 4: Prompts
 
-On **Review your prompts**, Ansvisor writes five starter prompts for each topic you chose: real questions a potential customer would ask an AI engine. Review the list:
+On **Choose your prompts**, Ansvisor writes five starter prompts for each topic you chose: real questions a potential customer would ask an AI engine. They come as a checklist, up to 15 ticked, within your plan's room:
 
-- remove prompts that don't fit;
+- untick the ones that don't fit; only ticked prompts are saved;
 - remove a whole topic from its **…** menu with **Remove topic**;
-- add your own prompts under each topic.
+- add your own under each topic; they come ticked.
 
-If the list holds more prompts than your plan allows, the step says how many to remove before you can continue. The prompts are asked daily, on every AI platform your plan allows.
+Tick more than your plan has room for, and the rest are saved as waiting for a spot: not tracked until you pause a prompt or raise your limit. Once tracking starts, the prompts are asked daily, on every AI platform your plan allows.
 
 Keep prompts free of your brand name. A question about your brand by name almost always scores high, because the AI talks about you when asked, so it doesn't measure how AI engines find you on their own.
 
@@ -59,23 +59,17 @@ Keep prompts free of your brand name. A question about your brand by name almost
 
 On **Add your competitors**, Ansvisor suggests competitors for your brand. Check the real rivals, and uncheck or remove the ones that aren't comparable. Add your own with a company name and domain, using the name as it appears in AI answers rather than the website address.
 
-Select at least one competitor to continue. **Start tracking with N competitors** finishes the brand. Competitor tracking is on every plan.
+Select at least one competitor to continue. On the cloud, **Continue with N competitors** saves the brand and opens the plan step: tracking starts there, when you start the free trial or buy a plan. On a self-hosted install, **Start tracking with N competitors** finishes the brand and starts its first run. Competitor tracking is on every plan.
 
 If your site looks like an online store, Ansvisor turns on Product Visibility for the brand and says so on this step. You can turn it off in the brand settings.
 
-## Step 6 on the cloud: What do you work on?
-
-Pick what you work on or lead, such as Founders & leaders, Brand & PR, Content or Growth, and your left menu keeps only the sections you need. **Skip: show me everything** keeps every section. You can change it later in **Settings › Account**.
-
-A self-hosted install asks the same the first time you open the dashboard.
-
-## Step 7 on the cloud: Plan and checkout
+## Step 6 on the cloud: Plan and checkout
 
 The final step picks your plan, **Starter** or **Growth**, and starts checkout.
 
-While a free trial is on offer, **Choose how to start** lets you pick the trial, **Monthly** or **Yearly**. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.
+While a free trial is on offer, **Choose how to start** opens on the trial, and lets you pick **Monthly** or **Yearly** instead. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.
 
-Not ready to add a card? **Explore the demo** opens a demo brand with sample data. Your brand stays saved, and its tracking starts when you pick a plan.
+Not ready to add a card? Pick **Demo**, after **Yearly**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The demo is a made-up brand with sample data: you can open every page, but nothing runs or changes. Your brand stays saved, and its tracking starts when you pick a plan.
 
 A self-hosted install skips this step.
 

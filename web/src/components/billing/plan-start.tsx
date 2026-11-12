@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, ChevronDown, CircleAlert, Loader2, Lock } from 'lucide-react';
+import { Check, ChevronDown, CircleAlert, CirclePlay, Loader2, Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePlanFeatures } from '@/components/settings/plan-features';
@@ -131,11 +131,12 @@ export function useFirstMonthOffer(applies: boolean, check: boolean = applies) {
 
 /**
  * The start selector's choice: Monthly at first, where the first-month
- * offer is. A trial picked falls back to Monthly once the trial isn't
+ * offer is, unless `initial` says otherwise (onboarding's plan step opens on
+ * the trial). A trial picked falls back to Monthly once the trial isn't
  * offered (a workspace found to have used it).
  */
-export function useStartChoice(trialOffered: boolean) {
-  const [picked, setPicked] = useState<StartChoice>('month');
+export function useStartChoice(trialOffered: boolean, initial: StartChoice = 'month') {
+  const [picked, setPicked] = useState<StartChoice>(initial);
   const choice: StartChoice = picked === 'trial' && !trialOffered ? 'month' : picked;
   return [choice, setPicked] as const;
 }
@@ -225,23 +226,25 @@ export function useStartCheckout({
 
 /**
  * The one choice above the plan cards: the free trial (when `trialOffered`),
- * monthly with what the code takes off (`offer`), or a year up front with
- * its saving. The cards' prices and buttons follow it.
+ * monthly (what a code takes off shows on the cards), or a year up front with
+ * its saving. The cards' prices and buttons follow it. With `demo`
+ * (onboarding's plan step), the demo brand comes after a thin line, as one
+ * more way in; while it is chosen, none of the others is.
  */
 export function StartChoicePicker({
   choice,
   onChange,
   trialOffered,
-  offer,
   centered = false,
+  demo,
 }: {
   choice: StartChoice;
   onChange: (choice: StartChoice) => void;
   trialOffered: boolean;
-  /** The code a monthly plan is bought with, if any. */
-  offer: PromoOffer | null;
   /** Centered in its row (onboarding), not at its start. */
   centered?: boolean;
+  /** The demo brand as a choice of its own, and whether it is the one chosen. */
+  demo?: { chosen: boolean; onChoose: () => void };
 }) {
   const tSettings = useTranslations('settings');
   const tOffer = useTranslations('planOffer');
@@ -253,31 +256,45 @@ export function StartChoicePicker({
       // On the chosen one's light fill (dark theme), a solid ground keeps it legible.
       selected && 'dark:bg-emerald-950',
     );
+  const chosen = (value: StartChoice) => !demo?.chosen && choice === value;
+  const choiceClass = (selected: boolean) =>
+    cn(
+      'inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+      // The chosen one filled, as the site's other toggles (date range,
+      // market): dark on light, light on dark.
+      selected
+        ? 'bg-primary text-primary-foreground shadow-sm'
+        : 'text-muted-foreground hover:text-foreground',
+    );
 
-  // In a narrow space (Billing beside the settings menu) the choices keep one
-  // row, each with its word under its name, rather than wrapping.
+  // In a narrow space (Billing beside the settings menu, a phone) the choices
+  // keep one row, each with its word under its name, rather than wrapping;
+  // the demo, if offered, takes a row of its own under them.
   return (
     <div className={cn('@container min-w-0 flex-1', centered && 'text-center')}>
       <div
         role="group"
         aria-label={tOffer('choice.label')}
         data-slot="start-choice"
-        className="inline-flex rounded-lg border bg-muted/40 p-0.5 @max-lg:grid @max-lg:w-full @max-lg:auto-cols-fr @max-lg:grid-flow-col"
+        className={cn(
+          'inline-flex rounded-lg border bg-muted/40 p-0.5 @max-lg:grid @max-lg:w-full',
+          !demo
+            ? '@max-lg:auto-cols-fr @max-lg:grid-flow-col'
+            : trialOffered
+              ? '@max-lg:grid-cols-3'
+              : '@max-lg:grid-cols-2',
+        )}
       >
         {choices.map((value) => (
           <button
             key={value}
             type="button"
             data-choice={value}
-            aria-pressed={choice === value}
+            aria-pressed={chosen(value)}
             onClick={() => onChange(value)}
             className={cn(
-              'inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 @max-lg:flex-col @max-lg:gap-0.5 @max-lg:px-1.5',
-              // The chosen one filled, as the site's other toggles (date range,
-              // market): dark on light, light on dark.
-              choice === value
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
+              choiceClass(chosen(value)),
+              '@max-lg:flex-col @max-lg:gap-0.5 @max-lg:px-1.5',
             )}
           >
             {value === 'trial'
@@ -285,18 +302,49 @@ export function StartChoicePicker({
               : value === 'month'
                 ? tOffer('choice.month')
                 : tOffer('choice.year')}
-            {value === 'month' && offer && (
-              <span className={pill(choice === value)}>
-                {tOffer('choice.monthOffer', offerValues(offer))}
-              </span>
-            )}
             {value === 'year' && saving > 0 && (
-              <span className={pill(choice === value)}>
+              <span className={pill(chosen(value))}>
                 {tSettings('savePercent', { percent: saving })}
               </span>
             )}
           </button>
         ))}
+        {demo && (
+          <>
+            <span
+              aria-hidden
+              data-slot="start-choice-divider"
+              className="mx-1 my-1.5 w-px bg-border @max-lg:col-span-full @max-lg:mx-1.5 @max-lg:my-0.5 @max-lg:h-px @max-lg:w-auto"
+            />
+            <button
+              type="button"
+              data-choice="demo"
+              aria-pressed={demo.chosen}
+              onClick={demo.onChoose}
+              className={cn(
+                choiceClass(demo.chosen),
+                // Not chosen, it reads as plainly as a plan's name: a way in, not a setting.
+                !demo.chosen && 'text-foreground',
+                '@max-lg:col-span-full',
+              )}
+            >
+              <CirclePlay className="size-3.5 shrink-0" aria-hidden />
+              <span>
+                {tOffer.rich('choice.demo', {
+                  note: (chunks) => (
+                    <span
+                      className={
+                        demo.chosen ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                      }
+                    >
+                      {chunks}
+                    </span>
+                  ),
+                })}
+              </span>
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -325,9 +373,10 @@ export function PlanPrice({
   const firstPrice = discounted && monthly != null ? discountedPrice(monthly, discounted) : null;
 
   return (
+    // Tall enough for the offer's line with its room around it, so a choice never moves the button.
     <div
       data-slot="plan-price"
-      className="flex flex-wrap content-end items-baseline gap-x-1.5 lg:min-h-20"
+      className="flex flex-wrap content-end items-baseline gap-x-1.5 lg:min-h-[5.625rem]"
     >
       {period === 'year' && price != null && monthly != null ? (
         <>
@@ -345,7 +394,8 @@ export function PlanPrice({
         </>
       ) : discounted && firstPrice != null && monthly != null ? (
         <>
-          <span className="inline-flex w-full flex-wrap items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+          {/* Room above and below, so the offer doesn't crowd the plan's name or its price. */}
+          <span className="mt-2 mb-2.5 inline-flex w-full flex-wrap items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
             {firstMonthOfferOn() && discounted.code.toUpperCase() === FIRST_MONTH_CODE ? (
               <Badge
                 data-slot="limited-offer"

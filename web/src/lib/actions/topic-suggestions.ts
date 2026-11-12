@@ -9,12 +9,25 @@ import { NO_ANSWER, responseFailure, type ReadFailure } from '@/lib/api-failure'
 
 const AEO_SERVER_URL = API_BASE_URL;
 
+/**
+ * The catalog category behind a topic suggested from it (AC plan P-8): its
+ * live products and how many are in stock. No topic covers it yet.
+ */
+export interface CatalogTopicSourceData {
+  category: string;
+  categoryId: string;
+  products: number;
+  inStock: number;
+}
+
 export interface TopicSuggestion {
   id: string;
   brandId: string;
   name: string;
   reason: string | null;
-  source: 'llm';
+  /** The model's idea, or a category of the brand's catalog (00525). */
+  source: 'llm' | 'catalog';
+  sourceData: CatalogTopicSourceData | null;
   status: 'new' | 'added' | 'dismissed';
   generatedAt: string;
 }
@@ -24,7 +37,8 @@ interface SuggestionRow {
   brand_id: string;
   name: string;
   reason: string | null;
-  source: 'llm';
+  source: 'llm' | 'catalog';
+  source_data?: CatalogTopicSourceData | null;
   status: 'new' | 'added' | 'dismissed';
   generated_at: string;
 }
@@ -36,6 +50,11 @@ function mapRow(row: SuggestionRow): TopicSuggestion {
     name: row.name,
     reason: row.reason,
     source: row.source,
+    // Only a catalog row carries its category, and only in its shape.
+    sourceData:
+      row.source === 'catalog' && typeof row.source_data?.category === 'string'
+        ? row.source_data
+        : null,
     status: row.status,
     generatedAt: row.generated_at,
   };

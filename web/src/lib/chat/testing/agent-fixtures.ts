@@ -46,7 +46,7 @@ export function listItem(extra: Partial<AgentListItem> = {}): AgentListItem {
       },
     ],
     scope: { allBrands: false, brands: ['Ansvisor'] },
-    lastRun: { status: 'done', at: '2026-10-30T09:14:00.000Z' },
+    lastRun: { status: 'done', at: '2026-10-30T09:14:00.000Z', chatId: null },
     outcomes30d: { ...noOutcomes, improved: 4, pending: 2 },
     usage30d: { share: 0.034, ownKeyShare: 0, runs: 4 },
     maxRunShare: 0.1,

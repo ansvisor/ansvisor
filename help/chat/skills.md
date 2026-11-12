@@ -1,17 +1,17 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, setup guide, /setup, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, skill from skills.sh, skills.sh, review a skill, skill update, update available, library, skill library, library skills, add a skill from the library, third-party skills, mit skills, pending approval, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, fan-out gaps, fanout, sub-questions ai searches, prompt portfolio, prompts to add, prompts to pause]
+keywords: [manager adds library skill, skills, skill, setup guide, /setup, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, skill from skills.sh, skills.sh, review a skill, skill update, update available, library, skill library, library skills, add a skill from the library, third-party skills, mit skills, pending approval, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, fan-out gaps, fanout, sub-questions ai searches, prompt portfolio, prompts to add, prompts to pause, 30-day plan, /plan, monthly plan, task list, plan actions]
 synonyms: [slash commands, playbooks, how-tos, templates, marketplace, skills directory]
 plan: all
-updated: 2026-11-07
-last_checked: 2026-11-07
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, skills/README.md]
 ---
-Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-four Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**.
+Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-five Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan** and **Setup guide**.
 
 ## Use a skill
 
@@ -47,6 +47,10 @@ Admins and Managers on a paid plan can bring in a skill from outside. On the **S
 
 An imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it.
 
+## Why you can't approve a skill
+
+Only an Admin approves a skill, while the workspace's plan is active. Anyone else who opens **Review** sees why they can't, and the Admins to ask by name. On a plan that ended, an Admin sees why too, with **See plans**.
+
 ## The Library
 
 The **Library** tab lists 701 skills that other people share on GitHub under the MIT license, for SEO, content, brand, analytics, social, CRO, email, paid ads, growth and go-to-market work. Pick a topic, or search by a skill's name, what it does or its repository. **Most stars** sorts by the repository's GitHub stars, **Most installs** by its installs on skills.sh. The first 30 show; **Show more** adds 30 at a time.
@@ -55,9 +59,9 @@ Click a skill to read it before you add it: its SKILL.md at the version the Libr
 
 ## Add a skill from the Library
 
-Admins and Managers on a paid plan can click **Add**. The skill comes in as an imported skill does: instructions only, cleaned, scanned and kept with its license and source. It stays off until an Admin reviews it. An Admin's **Add** opens the review; a Manager's asks the Admins. The card then says **Pending approval**, then **Added** once an Admin approves it, and the skill is under **My skills**, on for whoever added it.
+Admins and Managers on a paid plan can click **Add**. The skill comes in as an imported skill does: instructions only, cleaned, scanned again and kept with its license and source. Ansvisor already checked the Library, so no Admin's review is needed: it's on at once for you, private, under **My skills**, and the card says **Added**. Share it there to give it to your team; a Manager's share asks the Admins. Uploads and GitHub imports still wait for an Admin.
 
-Each skill is added once per workspace and stays at the version it was added at. Analysts and Agency partners can browse the Library but can't add. Its review lists a price, an email address or a tracking link in the skill as worth a look. A skill the scan blocks as unsafe, or whose file Ansvisor can't read, can't be added: its page says why.
+Each skill is added once per workspace and stays at the version it was added at. Analysts and Agency partners can browse the Library but can't add. Its page lists a price, an email address or a tracking link in the skill as worth a look. A skill the scan blocks as unsafe, or whose file Ansvisor can't read, can't be added: its page says why.
 
 ## Updates to an imported skill
 
@@ -68,9 +72,9 @@ A skill shapes how Chat works, not what it may do. It gives Chat no new tools, d
 
 ## The Ansvisor skills
 
-Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps and Prompt portfolio.
+Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio and 30-day plan.
 
-**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent.
+**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent.
 
 ## Fan-out gaps
 
@@ -79,3 +83,7 @@ Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fa
 ## Prompt portfolio
 
 **Prompt portfolio** (**/prompts**) proposes prompts to track, from your prompt suggestions, the sub-questions AI engines search and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each change is a card you approve, and the **Activity** log can undo it.
+
+## 30-day plan
+
+**30-day plan** (**/plan**) reads your brand's visibility, prompts, competitors, content opportunities and open actions over your date range, and proposes a plan for four weeks: 8 to 12 actions, each with why, its effort and the prompts and pages it covers. Chat asks you once before it adds them to the **Action Center**, then links each one (AC-n) and says what to do first. Where an open action already covers something, the plan links that action instead of adding another.

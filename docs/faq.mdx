@@ -23,7 +23,7 @@ description: "Common questions about Ansvisor."
 
     - Everyone can still sign in, open every page and read everything.
     - Adding, running, writing and AI open a dialog: **Choose a plan to keep going**, or **Update your payment method to keep going** after a failed payment. Admins choose a plan or update the payment method from it; other members are asked to turn to an admin.
-    - These still work: **Billing** and choosing a plan, your own profile and signing out; stopping a tracking job that is running and stopping the Content Agent; disconnecting Search Console, Analytics, Webflow, an AI-bot log or a store; removing your own AI provider key; deleting an Agent Chat conversation; deleting API keys, removing members, revoking invitations and accepting an invitation; creating API keys (the [MCP server](/guides/mcp-server) only reads for this workspace); and deleting a brand.
+    - These still work: **Billing** and choosing a plan, your own profile and signing out; stopping a tracking job that is running and stopping the Content Agent; disconnecting Search Console, Analytics, Webflow, an AI-bot log or a store; removing your own AI provider key; deleting an Agent Chat conversation; deleting API keys and disconnecting connected apps, removing members, revoking invitations and accepting an invitation; creating API keys (the [MCP server](/guides/mcp-server) only reads for this workspace); and deleting a brand.
     - Nothing runs on its own: no tracking, scraping or AI, no agents, no syncs with outside services, no new signals, actions or suggestions. AI-bot logs, the tracking snippet's visits and [webhook](/api-reference/webhooks) callbacks are answered but not stored.
 
     Once an admin chooses a plan, the workspace works as before. Self-hosted installs are never read-only. Setup is unchanged: a new workspace that has never had a plan goes through setup and its plan step as before. Setup suggests its topics, prompts and competitors with three suggestion requests, and a workspace can make 20 suggestion requests a day in all.
@@ -59,6 +59,10 @@ description: "Common questions about Ansvisor."
 
   <Accordion title="Can I try Ansvisor without a card?">
     On Ansvisor Cloud, both ways to start a plan, buying it or the 14-day free trial, take a card. Without one, explore a demo brand with sample data from the plan step of sign-up. Your own brand stays saved, and tracking starts on it when you pick a plan. See [Demo brand](/guides/demo-brand).
+  </Accordion>
+
+  <Accordion title="Is there a dark mode?">
+    Yes. The sun/moon button beside the logo, at the top of the main menu while it is open, switches between light and dark, and the choice is kept per browser. On Ansvisor Cloud, a new account starts in dark mode for now, from the sign-up page on; everyone who used Ansvisor before keeps the mode they had. Self-hosted installs start in light mode.
   </Accordion>
 
   <Accordion title="Does Ansvisor work for non-English brands?">

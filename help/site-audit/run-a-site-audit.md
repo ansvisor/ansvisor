@@ -4,14 +4,14 @@ route: /dashboard/audit
 keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audit again, bulk audit, audit all]
 synonyms: [page audit, check my page, scan a page, AI readiness check]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/site-audit.mdx]
 ---
-**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **Execution**, after **Content**. It is on every plan.
+**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **More**, after **Content**. It is on every plan.
 
 ## Start an audit
 

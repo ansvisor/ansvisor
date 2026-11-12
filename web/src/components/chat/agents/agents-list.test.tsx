@@ -49,8 +49,13 @@ vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: vi.fn(async () => ({ ok: true, id: 'request-1' })),
 }));
+vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
+// Action Center › Agents' jobs made in Chat, read with the Scheduled page's action.
+const schedules = vi.hoisted(() => ({ listChatSchedules: vi.fn(async () => ({ ok: false })) }));
+vi.mock('@/lib/actions/chat-schedules', () => schedules);
 
 const { AgentCenter } = await import('./agent-center');
+const { track } = await import('@/lib/analytics');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -69,7 +74,7 @@ async function render(role: TeamRole = 'manager') {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role={role}>
-          <AgentCenter initialTab="yours" now={NOW} timeZone="UTC" />
+          <AgentCenter now={NOW} timeZone="UTC" />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -189,7 +194,9 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     );
     const status = first.querySelector('[data-slot="agent-status"]')!;
     expect(status.textContent).toBe('Active · Next run Mon 09:00');
-    expect(first.querySelector('[data-slot="agent-dot"]')?.getAttribute('data-dot')).toBe('active');
+    // The menu's dots, not the status dot: its last run finished, so none.
+    expect(first.querySelector('[data-slot="agent-dot"]')).toBeNull();
+    expect(first.querySelector('[data-menu-dot]')).toBeNull();
     expect(first.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
       '/winback/refreshAuto, ask before changes',
     );
@@ -202,9 +209,10 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     expect(second.querySelector('[data-slot="agent-status"]')?.textContent).toBe(
       'Paused · AI limit reached',
     );
-    expect(second.querySelector('[data-slot="agent-dot"]')?.getAttribute('data-dot')).toBe(
-      'paused',
-    );
+    // Paused: the words only.
+    expect(
+      second.querySelector('[data-slot="agent-status"] [data-menu-dot], [data-slot="agent-dot"]'),
+    ).toBeNull();
     expect(cell(second, 'trigger')).toBe('TriggerManual only');
     expect(cell(second, 'scope')).toBe('Scope3 brands');
     expect(cell(second, 'lastRun')).toBe('Last run—');
@@ -448,5 +456,163 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     expect(empty.textContent).toContain('No agents here');
     expect(empty.textContent).toContain('Make one with New agent.');
     expect(action('agents.showAll')).toHaveLength(0);
+  });
+});
+
+describe('Action Center › Agents', () => {
+  const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+  const withRun = (n: number, status: string, chatId: string | null) =>
+    listItem({
+      id: `aaaaaaaa-0000-4000-8000-00000000001${n}`,
+      name: `Agent ${n}`,
+      lastRun: { status, at: '2026-10-30T09:14:00.000Z', chatId },
+    });
+
+  beforeEach(() => {
+    vi.mocked(track).mockClear();
+  });
+
+  it("shows the menu's dots on each card: grey running, yellow needs your OK, red failed", async () => {
+    page = listResult([
+      withRun(1, 'running', CHAT),
+      withRun(2, 'needs_you', CHAT),
+      withRun(3, 'failed', CHAT),
+      withRun(4, 'done', CHAT),
+      { ...withRun(5, 'needs_you', CHAT), status: 'paused' },
+    ]);
+    await render('manager');
+    const dots = cards().map((card) =>
+      card.querySelector<HTMLElement>('[data-slot="agent-status"] [data-menu-dot]'),
+    );
+    expect(dots.map((dot) => dot?.dataset.menuDot ?? null)).toEqual([
+      'grey',
+      'yellow',
+      'red',
+      null,
+      null,
+    ]);
+    expect(dots.slice(0, 3).map((dot) => dot?.getAttribute('aria-label'))).toEqual([
+      'Working on it: it is running now',
+      'Needs you: it is waiting for your OK',
+      'Needs attention: its last run failed',
+    ]);
+    expect(dots[0]?.getAttribute('role')).toBe('img');
+    expect(dots[0]?.getAttribute('title')).toBe(dots[0]?.getAttribute('aria-label'));
+    expect(dots[0]?.className).toContain('animate-menu-dot-pulse');
+    expect(dots[0]?.className).toContain('motion-reduce:animate-none');
+    expect(container.querySelector('[data-slot="list-dot"]')).toBeNull();
+  });
+
+  it("opens each card's run in Chat: while it runs, while it needs someone, or its last one", async () => {
+    page = listResult([
+      withRun(1, 'running', CHAT),
+      withRun(2, 'needs_you', CHAT),
+      withRun(3, 'done', CHAT),
+      // No chat the person can open (someone else's private one): no button.
+      withRun(4, 'done', null),
+      listItem({ id: 'aaaaaaaa-0000-4000-8000-000000000015', name: 'Never ran', lastRun: null }),
+    ]);
+    await render('manager');
+    const buttons = cards().map((card) =>
+      card.querySelector<HTMLAnchorElement>('[data-action="agents.openInChat"]'),
+    );
+    expect(buttons.map((b) => b?.textContent ?? null)).toEqual([
+      'Open the run in Chat',
+      'Review in Chat',
+      'Open the last run',
+      null,
+      null,
+    ]);
+    expect(buttons[0]?.getAttribute('href')).toBe(`/dashboard/chat/${CHAT}`);
+    // The card's first button; Run now, Pause and Open stay beside it.
+    const first = cards()[0];
+    const runNow = first.querySelector<HTMLElement>('[data-action="agents.run"]')!;
+    expect(runNow.parentElement?.firstElementChild).toBe(buttons[0]);
+    expect(first.querySelector('[data-action="agents.pauseResume"]')?.textContent).toBe('Pause');
+    await click(buttons[1]!);
+    expect(track).toHaveBeenCalledWith('agents_open_in_chat', { state: 'needsYou' });
+  });
+
+  it('puts Your agents first and Ready to use under it, with Ask Chat to make one and New agent', async () => {
+    await render('manager');
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+    expect(container.querySelector('h1')).toBeNull();
+    const titles = all('h2').map((h) => h.textContent);
+    expect(titles[0]).toMatch(/^Your agents/);
+    expect(titles[1]).toBe('Ready to use');
+    // Both on the page: nothing hidden behind a tab.
+    for (const slot of ['agent-center-yours', 'agent-center-ready']) {
+      expect(container.querySelector(`[data-slot="${slot}"]`)?.hasAttribute('hidden')).toBe(false);
+    }
+    expect(container.querySelector('[data-slot="agents-count"]')?.textContent).toBe('4');
+    expect(cards()).toHaveLength(2);
+    // Ask Chat to make one only fills Chat's box: the person reads it and sends it.
+    const ask = action('agents.askChat')[0];
+    expect(ask.textContent).toBe('Ask Chat to make one');
+    expect(ask.getAttribute('href')).toBe(
+      `/dashboard/chat?${new URLSearchParams({
+        compose:
+          'Help me set up an agent for recurring work. Ask me what it should do and how often.',
+      })}`,
+    );
+    await click(ask);
+    expect(track).toHaveBeenCalledWith('agents_ask_chat_clicked');
+    expect(action('agents.new')[0].getAttribute('href')).toBe('/dashboard/agents/new');
+  });
+
+  it('lists the recurring work made in Chat under Your agents, before Ready to use', async () => {
+    schedules.listChatSchedules.mockResolvedValueOnce({
+      ok: true,
+      jobs: [
+        {
+          id: 'a1111111-1111-4111-8111-111111111111',
+          kind: 'recurring',
+          title: 'Espresso watch',
+          skill: null,
+          prompt: 'Check my espresso prompts',
+          brand: null,
+          when: { kind: 'recurring', rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=8;BYMINUTE=0' },
+          timezone: 'UTC',
+          nextRunAt: '2026-11-02T08:00:00.000Z',
+          dueAt: null,
+          enabled: true,
+          pausedReason: null,
+          deliver: 'chat',
+          external: [],
+          changeOnly: false,
+          mode: 'auto',
+          auto: false,
+          createdBy: null,
+          mine: true,
+          lastRun: null,
+          chatHref: null,
+          canManage: true,
+          canEdit: true,
+          canTakeOver: false,
+        },
+      ],
+      agents: [],
+      admin: false,
+      active: 1,
+      limit: 25,
+      canCreate: true,
+    } as never);
+    await render('manager');
+    const made = container.querySelector<HTMLElement>('[data-slot="chat-made-agents"]')!;
+    expect(made.closest('[data-slot="agent-center-yours"]')).not.toBeNull();
+    expect(made.querySelector('[data-slot="chat-made-when"]')?.textContent).toBe(
+      'Every Monday, 08:00 · made in Chat',
+    );
+    // Flag off: Agent Center doesn't read them.
+    schedules.listChatSchedules.mockClear();
+    await render('manager');
+    expect(schedules.listChatSchedules).not.toHaveBeenCalled();
+  });
+
+  it('gives readers the read-only line, and neither Ask Chat nor New agent', async () => {
+    await render('analyst');
+    expect(container.querySelector('[data-slot="agents-read-only"]')).not.toBeNull();
+    expect(action('agents.askChat')).toHaveLength(0);
+    expect(action('agents.new')).toHaveLength(0);
   });
 });

@@ -26,6 +26,7 @@ import { useRangeReady } from './_range-ready';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { isNoTopics } from '@/lib/topics-required';
+import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 
 /**
  * Prompt slots left on the plan: null when the plan has no cap, or it
@@ -112,6 +113,8 @@ export function UntrackedQueriesCard({
   const result = current?.result ?? null;
   const slotsLeft = current ? (quota?.slotsLeft ?? null) : null;
   const busy = tracking.size > 0;
+  // No free slot doesn't stop Track; the prompts wait for a spot.
+  const showWaiting = useWaitingForSpotToast();
 
   const track = guard(
     async (queries: string[]) => {
@@ -123,7 +126,10 @@ export function UntrackedQueriesCard({
       ).catch((err: Error) => ({ promptIds: [] as string[], error: err.message, code: undefined }));
       setTracking(new Set());
       const tracked = outcome.promptIds.length;
-      if (tracked > 0) toast.success(t('tracked', { count: tracked }));
+      const waiting = ('waitingIds' in outcome && outcome.waitingIds?.length) || 0;
+      if (tracked > 0 && !showWaiting('untracked_queries', tracked - waiting, waiting)) {
+        toast.success(t('tracked', { count: tracked }));
+      }
       if (isNoTopics(outcome)) {
         topicFirst.show();
       } else if (outcome.error) {
@@ -141,9 +147,9 @@ export function UntrackedQueriesCard({
     { action: tActions('trackPrompts') },
   );
 
-  const trackTitle = !canTrack ? t('trackNotAllowed') : slotsLeft === 0 ? t('noSlots') : undefined;
-  const trackable = canTrack && slotsLeft !== 0 && !busy;
-  const allCount = result ? Math.min(result.rows.length, slotsLeft ?? result.rows.length) : 0;
+  const trackTitle = !canTrack ? t('trackNotAllowed') : undefined;
+  const trackable = canTrack && !busy;
+  const allCount = result ? result.rows.length : 0;
 
   const message = (text: string) => (
     <p className="px-6 py-4 text-sm text-muted-foreground">{text}</p>

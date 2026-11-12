@@ -18,6 +18,8 @@ import {
 import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
 import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
+import { useAdsEnabled } from '@/components/providers/ads-provider';
+import { NewPill } from '@/components/agentic/new-pill';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
@@ -29,8 +31,15 @@ import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { menuSectionOf } from '@/lib/menu-access';
+import { ACTION_CENTER_ITEM, NEW_RESULTS_ITEM } from '@/lib/menu-dots';
+import {
+  MenuDot,
+  NewResultsWords,
+  OpenActionsCount,
+  useMenuDots,
+} from '@/components/layout/menu-dots';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { Crown, ExternalLink, Menu, MessageSquareHeart, MessageSquareText } from 'lucide-react';
+import { Crown, Menu, MessageSquareText } from 'lucide-react';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
 
@@ -40,6 +49,9 @@ export function MobileNav() {
   const t = useTranslations('nav');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
   const chatAgentic = useChatAgentic();
+  // Ads only with Ads on (ADS_ENABLED), as the sidebar has it.
+  const ads = useAdsEnabled();
+  const nav = dashboardNav;
   // Probe once per session — shares the module-level cache with sidebar.tsx
   // so at most one network request is made even when both components mount.
   // None with the new Chat on: that one runs on the plan's AI limit.
@@ -49,8 +61,10 @@ export function MobileNav() {
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
   const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
-  const childGates = { brandPrefs, canUse };
+  const childGates = { brandPrefs, canUse, chatAgentic };
   const hiddenSections = useHiddenMenuSections();
+  // The menu's dots and the Action Center's count, as the sidebar shows them.
+  const dots = useMenuDots(nav);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Hydration guard — see sidebar.tsx for the rationale; the two
@@ -113,10 +127,17 @@ export function MobileNav() {
                 </span>
               </Link>
             )}
-            {dashboardNav.flatMap((group) =>
+            {nav.flatMap((group) =>
               group.items.map((item) => {
                 if (
-                  !shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic, canUse)
+                  !shouldShowDashboardNavItem(
+                    item,
+                    brandPrefs,
+                    hiddenSections,
+                    chatAgentic,
+                    canUse,
+                    ads,
+                  )
                 ) {
                   return null;
                 }
@@ -161,8 +182,21 @@ export function MobileNav() {
                     ? children[0].href
                     : href;
 
+                // Every submenu shows here: an item's own dot is for one
+                // without (AI Referral Traffic), or Visibility's, in words too.
+                const itemDot = dots.itemDot(item);
+                const words = itemDot?.colour === 'green' && item.href === NEW_RESULTS_ITEM;
+                const dot = children.length === 0 || words ? itemDot : null;
+                const openActions = item.href === ACTION_CENTER_ITEM ? dots.openActions : null;
                 const link = (
-                  <Link key={item.href} href={linkHref} onClick={() => setOpen(false)}>
+                  <Link
+                    key={item.href}
+                    href={linkHref}
+                    onClick={() => {
+                      if (dot) dots.clicked(dot, false);
+                      setOpen(false);
+                    }}
+                  >
                     <span
                       className={cn(
                         'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -172,7 +206,10 @@ export function MobileNav() {
                       )}
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
-                      <span className="flex-1">{label}</span>
+                      <span className={dot ? undefined : 'flex-1'}>{label}</span>
+                      {dot && <MenuDot dot={dot} className="mr-auto" />}
+                      {words && <NewResultsWords />}
+                      {openActions !== null && <OpenActionsCount count={openActions} />}
                       {effectiveBadge && (
                         <Badge
                           variant="secondary"
@@ -181,11 +218,13 @@ export function MobileNav() {
                           {effectiveBadge}
                         </Badge>
                       )}
+                      {item.newPill && <NewPill />}
                     </span>
                   </Link>
                 );
                 if (children.length === 0) return link;
-                // A submenu (Brand Visibility, Prompts, Content), always shown on mobile.
+                // A submenu (the Action Center, Prompts, Brand Visibility,
+                // Content), always shown on mobile.
                 const currentChild = activeChildHref(children, pathname);
                 return (
                   <div key={item.href}>
@@ -193,6 +232,11 @@ export function MobileNav() {
                     <div className="ml-7 border-l pl-2">
                       {children.map((child) => {
                         const tab = brandVisibilityTabOf(child.href);
+                        const childDot = dots.dotOf(child.href);
+                        const onChildClick = () => {
+                          if (childDot) dots.clicked(childDot, false);
+                          setOpen(false);
+                        };
                         const childBody = (
                           <span
                             className={cn(
@@ -203,6 +247,7 @@ export function MobileNav() {
                             )}
                           >
                             {getDashboardNavLabel(child.title, t)}
+                            {childDot && <MenuDot dot={childDot} />}
                             {child.badge && (
                               <Badge
                                 variant="secondary"
@@ -216,18 +261,14 @@ export function MobileNav() {
                         // Brand Visibility's tabs keep the date range, engine,
                         // country and topic, as its tab bar does.
                         return tab ? (
-                          <BrandVisibilityTabLink
-                            key={child.href}
-                            tab={tab}
-                            onClick={() => setOpen(false)}
-                          >
+                          <BrandVisibilityTabLink key={child.href} tab={tab} onClick={onChildClick}>
                             {childBody}
                           </BrandVisibilityTabLink>
                         ) : (
                           <Link
                             key={child.href}
                             href={childLinkHref(child, pathname)}
-                            onClick={() => setOpen(false)}
+                            onClick={onChildClick}
                           >
                             {childBody}
                           </Link>
@@ -241,17 +282,6 @@ export function MobileNav() {
           </nav>
         </div>
         <div className="border-t p-2">
-          <a
-            href={siteConfig.links.feedback}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => setOpen(false)}
-            className="mb-1 flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <MessageSquareHeart className="h-4 w-4 shrink-0" />
-            <span className="flex-1 truncate">{t('feedback')}</span>
-            <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
-          </a>
           <UserProfileNavItem onClick={() => setOpen(false)} />
         </div>
       </SheetContent>

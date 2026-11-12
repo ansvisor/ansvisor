@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createFakeSupabase, type FakeSupabase } from '@/lib/chat/testing/fake-supabase';
 
 /**
  * A Getting started explore page opened (AC-ALT2 §4): recorded through
  * getting_started_page_opened, answered as a value and never thrown
  * (#1777). The demo brand keeps no steps: nothing is recorded or logged.
+ * Skipping Getting started writes the brand's row, made when it has none.
  */
 
 const db = vi.hoisted(() => ({
@@ -12,6 +14,7 @@ const db = vi.hoisted(() => ({
   data: true as unknown,
   error: null as { message: string } | null,
   throws: false,
+  tables: null as { from: (table: string) => unknown } | null,
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -22,12 +25,13 @@ vi.mock('@/lib/supabase/server', () => ({
         db.calls.push({ fn, args });
         return { data: db.data, error: db.error };
       },
+      from: (table: string) => db.tables!.from(table),
     };
   },
 }));
 vi.mock('@/lib/subscription-guard', () => ({ assertWritable: vi.fn() }));
 
-const { markGettingStartedPageOpened } = await import('./getting-started');
+const { markGettingStartedPageOpened, skipGettingStarted } = await import('./getting-started');
 
 let errorLog: ReturnType<typeof vi.spyOn>;
 
@@ -85,5 +89,44 @@ describe('markGettingStartedPageOpened', () => {
       failure: 'step',
     });
     expect(db.calls).toEqual([]);
+  });
+});
+
+describe('skipGettingStarted', () => {
+  const BRAND = 'brand-1';
+  const AT = '2026-10-01T00:00:00.000Z';
+  let fake: FakeSupabase;
+
+  beforeEach(() => {
+    fake = createFakeSupabase();
+    fake.tables.getting_started = [];
+    db.tables = fake;
+  });
+
+  it('skips it for a brand from before Getting started, which has no row yet', async () => {
+    await skipGettingStarted(BRAND);
+    expect(fake.log).toEqual([['getting_started', 'upsert']]);
+    expect(fake.tables.getting_started).toEqual([
+      expect.objectContaining({ brand_id: BRAND, dismissed_at: expect.any(String) }),
+    ]);
+  });
+
+  it('skips it for a brand that runs it, keeping when it started and was confirmed', async () => {
+    fake.tables.getting_started = [
+      { brand_id: BRAND, started_at: AT, confirmed_at: AT, dismissed_at: null },
+    ];
+    await skipGettingStarted(BRAND);
+    expect(fake.tables.getting_started).toEqual([
+      { brand_id: BRAND, started_at: AT, confirmed_at: AT, dismissed_at: expect.any(String) },
+    ]);
+  });
+
+  it('throws when the policies refuse it (not an admin or manager), writing nothing', async () => {
+    fake.failures.getting_started = {
+      code: '42501',
+      message: 'new row violates row-level security policy for table "getting_started"',
+    };
+    await expect(skipGettingStarted(BRAND)).rejects.toThrow('row-level security');
+    expect(fake.tables.getting_started).toEqual([]);
   });
 });

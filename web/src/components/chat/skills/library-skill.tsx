@@ -68,8 +68,15 @@ export function LibrarySkill({ id }: { id: string }) {
       return;
     }
     const { skill } = added;
-    toast.success(skill.requested ? tCard('requested') : tCard('added'));
-    if (detail.can.add === 'add') {
+    toast.success(
+      skill.status === 'approved'
+        ? tCard('addedOn', { name: skill.name })
+        : skill.requested
+          ? tCard('requested')
+          : tCard('added'),
+    );
+    // On at once (owner, 2026-11-09): the page says Added. One still waiting opens its review.
+    if (skill.status !== 'approved' && detail.can.add === 'add') {
       router.push(`/dashboard/chat/skills/${skill.id}`);
       return;
     }

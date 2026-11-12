@@ -9,6 +9,8 @@ import messages from '../../../../../../messages/en.json';
  * (429 onboarding_daily_limit): each step says so, and says how to go on,
  * with no Try again; any other failure keeps Try again. The wizard resumes on
  * a brand already created, so the steps are reached without walking them.
+ * The topics step asks for its suggestions once, whether it is resumed on or
+ * reached from step 2, and not when topics are saved already.
  */
 
 /** The brand's rows the resume reads; prompt sets decide step 3 or step 5. */
@@ -20,6 +22,8 @@ const db = vi.hoisted(() => ({
   brandFilters: [] as [string, unknown][][],
   // The organization has its demo brand already.
   hasDemo: false,
+  // The own brand is saved: the resume opens on it, past steps 1 and 2.
+  ownBrand: true,
 }));
 vi.mock('@/lib/supabase/client', () => {
   /** A query that answers `data` however it ends (single, limit, or awaited). */
@@ -42,21 +46,19 @@ vi.mock('@/lib/supabase/client', () => {
         : []
       : null;
   const rows: Record<string, () => unknown> = {
-    // "What do you work on?" (menu access) answered: the resume goes on to the plan step.
-    profiles: () => ({
-      organization_id: 'org-1',
-      onboarding_completed: db.onboarded,
-      work_areas_asked_at: db.onboarded ? '2026-10-01T00:00:00Z' : null,
-    }),
-    brands: () => [
-      {
-        id: 'b1',
-        organization_id: 'org-1',
-        name: 'Acme',
-        slug: 'acme',
-        brand_domains: [{ id: 'd1', brand_id: 'b1', domain: 'acme.com', is_primary: true }],
-      },
-    ],
+    profiles: () => ({ organization_id: 'org-1', onboarding_completed: db.onboarded }),
+    brands: () =>
+      db.ownBrand
+        ? [
+            {
+              id: 'b1',
+              organization_id: 'org-1',
+              name: 'Acme',
+              slug: 'acme',
+              brand_domains: [{ id: 'd1', brand_id: 'b1', domain: 'acme.com', is_primary: true }],
+            },
+          ]
+        : [],
     prompt_sets: () => db.promptSets,
   };
   return {
@@ -79,6 +81,16 @@ vi.mock('@/lib/demo/demo-client', () => ({
   demoPreparation: () => null,
   setDemoHidden: vi.fn(),
 }));
+// The demo's one explore action: the setup ahead (usePreloadDemo) stays real.
+const exploreDemo = vi.hoisted(() => ({ explore: vi.fn(async () => {}), opening: false }));
+vi.mock('@/hooks/use-explore-demo', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/hooks/use-explore-demo')>()),
+  useExploreDemo: () => ({
+    explore: exploreDemo.explore,
+    opening: exploreDemo.opening,
+    setupDialog: { setup: null, onRetry: exploreDemo.explore, onClose: () => {} },
+  }),
+}));
 vi.mock('@/lib/actions/topic', () => ({
   getTopics: vi.fn(async () => [{ id: 't1', name: 'Coffee' }]),
   createTopics: vi.fn(async () => undefined),
@@ -88,7 +100,8 @@ vi.mock('@/lib/actions/competitor', () => ({
   getCompetitors,
   addCompetitor: vi.fn(),
 }));
-vi.mock('@/lib/actions/brand', () => ({ createBrand: vi.fn(), markBrandAsEcommerce: vi.fn() }));
+const createBrand = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/brand', () => ({ createBrand, markBrandAsEcommerce: vi.fn() }));
 const getTrackedPromptCount = vi.hoisted(() => vi.fn(async () => 10));
 vi.mock('@/lib/actions/prompt', () => ({
   getPromptCapacity: vi.fn(async () => ({ maxPrompts: 50, used: 0 })),
@@ -97,7 +110,6 @@ vi.mock('@/lib/actions/prompt', () => ({
 }));
 vi.mock('@/lib/actions/tracking', () => ({ triggerTrackingCheck: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ bootstrapBrandVolumes: vi.fn() }));
-vi.mock('@/lib/actions/menu-access', () => ({ setMyWorkAreas: vi.fn() }));
 const setup = vi.hoisted(() => ({
   suggestTopics: vi.fn(),
   generatePromptsFromTopics: vi.fn(),
@@ -124,6 +136,8 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const { default: OnboardingPage } = await import('./page');
 const { SetupDailyLimitError } = await import('@/lib/ai-brand-setup');
+// The brand's saved topics: Coffee, unless a test says none.
+const getTopics = vi.mocked((await import('@/lib/actions/topic')).getTopics);
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -135,9 +149,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   db.promptSets = [];
+  db.ownBrand = true;
   db.onboarded = false;
   db.brandFilters = [];
   db.hasDemo = false;
+  exploreDemo.opening = false;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -197,6 +213,157 @@ describe('setup suggestions used up for the day', () => {
     );
     expect(text()).not.toContain("Couldn't generate prompt suggestions");
   });
+
+  it('says so on the topics step, with no Try again', async () => {
+    getTopics.mockResolvedValueOnce([]);
+    setup.suggestTopics.mockRejectedValueOnce(new SetupDailyLimitError('limit'));
+    await render();
+    expect(setup.suggestTopics).toHaveBeenCalledOnce();
+    expect(text()).toContain(
+      'Setup suggestions are used up for today. Try again tomorrow, or add your own.',
+    );
+    expect(button('Try again')).toBeUndefined();
+  });
+});
+
+describe('the prompts step', () => {
+  it('offers the suggested prompts as a checklist, 15 ticked, and saves only the ticked ones', async () => {
+    const topics = ['Beans', 'Brewing', 'Grinders', 'Gifts'];
+    setup.generatePromptsFromTopics.mockResolvedValue({
+      topicPrompts: topics.map((topic) => ({
+        topic,
+        prompts: [1, 2, 3, 4, 5].map((n) => `Best ${topic.toLowerCase()} question ${n}`),
+      })),
+    });
+    await render();
+    await act(async () => button('Looks good')!.click());
+    expect(text()).toContain('Choose your prompts');
+    expect(container.querySelector('[data-slot="prompt-count"]')?.textContent).toBe(
+      '15 of 20 prompts ticked',
+    );
+    expect(text()).toContain('4 of 5 ticked');
+    expect(text()).toContain('3 of 5 ticked');
+    // The first topic is open: its first four ticked, its fifth not.
+    const boxes = () => [...container.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')];
+    expect(boxes().map((b) => b.getAttribute('aria-checked'))).toEqual([
+      'true',
+      'true',
+      'true',
+      'true',
+      'false',
+    ]);
+    await act(async () => boxes()[0].click());
+    expect(container.querySelector('[data-slot="prompt-count"]')?.textContent).toBe(
+      '14 of 20 prompts ticked',
+    );
+    const { savePromptSet } = await import('@/lib/actions/prompt');
+    await act(async () => button('Continue')!.click());
+    const saved = vi.mocked(savePromptSet).mock.calls[0][0].prompts.map((p) => p.text);
+    expect(saved).toHaveLength(14);
+    expect(saved).not.toContain('Best beans question 1');
+    expect(saved).not.toContain('Best beans question 5');
+    expect(saved).toContain('Best gifts question 3');
+  });
+  it('ticks no more than the plan has room for, so no note shows until more are ticked', async () => {
+    const { getPromptCapacity } = await import('@/lib/actions/prompt');
+    vi.mocked(getPromptCapacity).mockResolvedValueOnce({ maxPrompts: 50, used: 40 });
+    setup.generatePromptsFromTopics.mockResolvedValue({
+      topicPrompts: ['Beans', 'Brewing', 'Grinders', 'Gifts'].map((topic) => ({
+        topic,
+        prompts: [1, 2, 3, 4, 5].map((n) => `Best ${topic.toLowerCase()} question ${n}`),
+      })),
+    });
+    await render();
+    await act(async () => button('Looks good')!.click());
+    expect(container.querySelector('[data-slot="prompt-count"]')?.textContent).toBe(
+      '10 of 20 prompts ticked',
+    );
+    expect(text()).not.toContain('waiting for a spot');
+    const unticked = container.querySelector<HTMLButtonElement>(
+      '[role="checkbox"][aria-checked="false"]',
+    )!;
+    await act(async () => unticked.click());
+    expect(text()).toContain('Your plan has room for 10 more prompts: the other 1 will be saved');
+  });
+});
+
+describe('topic suggestions', () => {
+  async function type(id: string, value: string) {
+    const input = container.querySelector<HTMLInputElement>(`#${id}`)!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+  /** The topic rows: the checkable buttons above "Add custom topic". */
+  const topicRows = () =>
+    ['Espresso', 'Cold brew', 'Coffee'].filter((topic) => button(topic) !== undefined);
+  /** Holds the suggestions back, so the step shows while they load, as it does for real. */
+  function suggestLater() {
+    let answer!: () => void;
+    setup.suggestTopics.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = () => resolve({ topics: ['Espresso', 'Cold brew'] });
+      }),
+    );
+    return () => act(async () => answer());
+  }
+
+  it('are fetched once on coming back to the topics step with no topics saved', async () => {
+    getTopics.mockResolvedValueOnce([]);
+    const answer = suggestLater();
+    await render();
+    expect(text()).toContain('Choose topics to monitor');
+    expect(text()).toContain('Researching topics for your brand...');
+    await answer();
+    expect(setup.suggestTopics).toHaveBeenCalledOnce();
+    expect(setup.suggestTopics).toHaveBeenCalledWith({
+      brandName: 'Acme',
+      description: '',
+      website: 'acme.com',
+      language: 'en',
+    });
+    expect(topicRows()).toEqual(['Espresso', 'Cold brew']);
+    expect(button('Looks good')!.disabled).toBe(false);
+  });
+
+  it('are fetched once on the way from the target market to the topics step', async () => {
+    db.ownBrand = false;
+    createBrand.mockResolvedValueOnce({
+      brand: {
+        id: 'b1',
+        organizationId: 'org-1',
+        name: 'Acme',
+        slug: 'acme',
+        region: 'US',
+        language: 'en',
+        domains: [{ id: 'd1', brandId: 'b1', domain: 'acme.com', isPrimary: true }],
+      },
+    });
+    const answer = suggestLater();
+    await render();
+    expect(text()).toContain('Set up your brand');
+    await type('brandName', 'Acme');
+    await type('website', 'acme.com');
+    await act(async () => button('Continue')!.click());
+    expect(text()).toContain('Select your target market');
+    await act(async () => button('Continue')!.click());
+    await act(async () => {});
+    expect(text()).toContain('Choose topics to monitor');
+    expect(text()).toContain('Researching topics for your brand...');
+    await answer();
+    expect(createBrand).toHaveBeenCalledOnce();
+    expect(setup.suggestTopics).toHaveBeenCalledOnce();
+    expect(topicRows()).toEqual(['Espresso', 'Cold brew']);
+  });
+
+  it('are not fetched on coming back with topics saved', async () => {
+    await render();
+    await act(async () => {});
+    expect(text()).toContain('Choose topics to monitor');
+    expect(setup.suggestTopics).not.toHaveBeenCalled();
+    expect(topicRows()).toEqual(['Coffee']);
+  });
 });
 
 describe('the plan step', () => {
@@ -236,7 +403,7 @@ describe('the plan step', () => {
     [...container.querySelectorAll(`[data-slot="${slot}"]`)].map((el) => el.textContent);
   const choices = () =>
     [...container.querySelectorAll('[data-choice]')].map((el) => el.textContent);
-  async function choose(choice: 'trial' | 'month' | 'year') {
+  async function choose(choice: 'trial' | 'month' | 'year' | 'demo') {
     await act(async () => {
       container.querySelector<HTMLButtonElement>(`[data-choice="${choice}"]`)!.click();
     });
@@ -258,28 +425,120 @@ describe('the plan step', () => {
     getCompetitors.mockResolvedValue([]);
   });
 
-  it('offers the demo brand under the plans, for someone not ready to add a card', async () => {
+  it('comes straight after the competitors, the last of six steps, with no "What do you work on?"', async () => {
+    db.onboarded = false;
+    db.promptSets = [{ id: 's1' }];
+    setup.suggestCompetitors.mockResolvedValue({
+      competitors: [{ name: 'Rival', domain: 'rival.com' }],
+      isEcommerce: false,
+    });
+    await render();
+    // Tracking starts with the plan step's Checkout, so the button only goes on.
+    expect(button('Start tracking with 1 competitor')).toBeUndefined();
+    expect(container.querySelector('[data-slot="tracking-starts"]')?.textContent).toBe(
+      'Next, choose how to start. Tracking starts when you start the free trial or buy a plan.',
+    );
+    await act(async () => button('Continue with 1 competitor')!.click());
+    await act(async () => {});
+    expect(text()).toContain('Choose how to start');
+    expect(text()).not.toContain('What do you work on?');
+    // The step dots: six, the plan's the current one.
+    const dots = [...container.querySelector('.w-6.bg-foreground')!.parentElement!.children];
+    expect(dots).toHaveLength(6);
+    expect(dots.findIndex((dot) => dot.classList.contains('w-6'))).toBe(5);
+  });
+
+  it('offers the demo brand in one line under the plans, for someone not ready to add a card', async () => {
     db.onboarded = true;
     await render();
     expect(text()).toContain('Choose how to start');
-    const card = container.querySelector('[data-slot="explore-demo"]')!;
-    expect(card.textContent).toContain('Not ready to add a card? Explore a demo brand');
+    const line = container.querySelector('[data-slot="explore-demo"]')!;
+    expect(line.textContent).toBe('Not ready for a card? Explore a sample brand first →');
+    // The old box is gone.
+    expect(text()).not.toContain('Explore a demo brand');
     // The own brand, read without the demo brand.
-    expect(card.textContent).toContain('Acme stays saved');
     expect(db.brandFilters).toContainEqual([
       ['organization_id', 'org-1'],
       ['is_demo', false],
     ]);
-    expect(button('Explore the demo')).toBeDefined();
+    await act(async () => button('Explore a sample brand first →')!.click());
+    expect(exploreDemo.explore).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the demo as the last choice: its card in place of the plans, the same action', async () => {
+    await render();
+    expect(container.querySelector('[data-slot="start-choice-divider"]')).not.toBeNull();
+    expect(container.querySelector('[data-choice="demo"]')?.textContent).toBe('Demo · no card');
+    expect(container.querySelector('[data-slot="demo-choice"]')).toBeNull();
+
+    await choose('demo');
+    const pressed = () =>
+      [...container.querySelectorAll('[data-choice][aria-pressed="true"]')].map(
+        (el) => (el as HTMLElement).dataset.choice,
+      );
+    expect(pressed()).toEqual(['demo']);
+    const card = container.querySelector('[data-slot="demo-choice"]')!;
+    expect(card.querySelector('h3')?.textContent).toBe('Look around a sample brand');
+    expect(card.textContent).toContain('Brewline Coffee · sample data');
+    // A made-up brand, not the own one, which stays saved.
+    expect(card.textContent).toContain(
+      "You'll explore Brewline Coffee, a made-up brand with sample data, not Acme. You can open every page, but nothing runs or changes there. Acme stays saved, and tracking starts when you pick a plan. No card needed.",
+    );
+    // In place of the plans, their note and the line under them.
+    expect(container.querySelector('[data-plan]')).toBeNull();
+    expect(container.querySelector('[data-slot="card-note"]')).toBeNull();
+    expect(container.querySelector('[data-slot="explore-demo"]')).toBeNull();
+    const explore = [...card.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Explore the sample brand',
+    )!;
+    await act(async () => explore.click());
+    expect(exploreDemo.explore).toHaveBeenCalledTimes(1);
+    // No Checkout for the demo.
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/stripe/checkout');
+
+    // Monthly again: the plans are back, as they were.
+    await choose('month');
+    expect(pressed()).toEqual(['month']);
+    expect(container.querySelector('[data-slot="demo-choice"]')).toBeNull();
+    expect(slots('due-amount')).toEqual(['$24.50', '$124.50']);
+    expect(container.querySelector('[data-slot="explore-demo"]')).not.toBeNull();
+  });
+
+  it('waits while the demo opens, on its card and on the line', async () => {
+    exploreDemo.opening = true;
+    await render();
+    const line = container.querySelector<HTMLButtonElement>('[data-slot="explore-demo"] button')!;
+    expect(line.disabled).toBe(true);
+    expect(line.textContent).toBe('Setting up the demo…');
+    await choose('demo');
+    const cardButton = container.querySelector<HTMLButtonElement>(
+      '[data-slot="demo-choice"] button',
+    )!;
+    expect(cardButton.disabled).toBe(true);
+    expect(cardButton.textContent).toBe('Setting up the demo…');
+  });
+
+  it('opens on the free trial, while the workspace may have one', async () => {
+    await render();
+    const pressed = container.querySelector('[data-choice][aria-pressed="true"]');
+    expect(pressed?.getAttribute('data-choice')).toBe('trial');
+    expect(modeButtons('trial').map((b) => b.textContent)).toEqual([
+      'Start 14-day free trial',
+      'Start 14-day free trial',
+    ]);
+    expect(modeButtons('buy')).toEqual([]);
   });
 
   it('offers one choice of how to start, then one button on each plan, a card for both', async () => {
     await render();
+    await choose('month');
     expect(text()).toContain('Choose how to start');
     expect(text()).not.toContain('Start Your 14-Day Free Trial');
     expect(text()).not.toContain('No charge today');
-    expect(choices()).toEqual(['14-day trial', 'Monthly50% off the first month', 'YearlySave 20%']);
-    // Monthly first, with the first-month offer: its price large on the card.
+    // The first-month offer is on the cards, not by Monthly; the demo comes last.
+    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
+    expect(text()).not.toContain('50% off the first month');
+    // Monthly, with the first-month offer: its price large on the card.
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual(['Buy now', 'Buy now']);
     expect(modeButtons('trial')).toEqual([]);
     expect(slots('plan-price')[0]).toContain('$24.50first month');
@@ -297,7 +556,7 @@ describe('the plan step', () => {
     expect(text()).toContain('For small teams getting started with AI visibility');
     expect(text()).toContain('50 prompts tracked');
     expect(text()).not.toContain('Core Platform Features');
-    // The demo card stays below the plans.
+    // The demo's line stays below the plans.
     expect(container.querySelector('[data-slot="explore-demo"]')).not.toBeNull();
   });
 
@@ -344,6 +603,7 @@ describe('the plan step', () => {
 
   it('buys now with the first-month offer, and starts the trial without it', async () => {
     await render();
+    await choose('month');
     await act(async () => modeButtons('buy')[0].click());
     expect(checkoutBody()).toEqual({
       planId: 'starter',
@@ -357,7 +617,6 @@ describe('the plan step', () => {
     root = createRoot(container);
     fetchMock.mockClear();
     await render();
-    await choose('trial');
     await act(async () => modeButtons('trial')[1].click());
     expect(checkoutBody()).toEqual({
       planId: 'growth',
@@ -386,6 +645,7 @@ describe('the plan step', () => {
 
   it('says by the button when Checkout would not open, and stops waiting', async () => {
     await render();
+    await choose('month');
     fetchMock.mockImplementation(async (url: string) =>
       url === '/api/stripe/checkout'
         ? Response.json({ error: 'Price not configured for this plan' }, { status: 400 })
@@ -409,7 +669,7 @@ describe('the plan step', () => {
         : answer(url),
     );
     await act(async () => modeButtons('trial')[0].click());
-    expect(choices()).toEqual(['Monthly50% off the first month', 'YearlySave 20%']);
+    expect(choices()).toEqual(['Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(container.querySelector('[data-plan="starter"] [role="alert"]')?.textContent).toBe(
       "This workspace's free trial has been used. Buy now to start the plan.",
     );
@@ -419,6 +679,7 @@ describe('the plan step', () => {
   it('keeps the offer as configured when its code could not be checked', async () => {
     promo.status = 500;
     await render();
+    await choose('month');
     await act(async () => {});
     expect(slots('due-amount')).toEqual(['$24.50', '$124.50']);
     await act(async () => modeButtons('buy')[0].click());
@@ -429,7 +690,7 @@ describe('the plan step', () => {
     trialAvailable.value = false;
     await render();
     expect(text()).toContain('Choose Your Plan');
-    expect(choices()).toEqual(['Monthly50% off the first month', 'YearlySave 20%']);
+    expect(choices()).toEqual(['Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(modeButtons('trial')).toEqual([]);
     expect(slots('start-terms')).toEqual([]);
     expect(container.querySelector('[data-slot="card-note"]')?.textContent).toBe('Card required.');
@@ -438,7 +699,8 @@ describe('the plan step', () => {
   it('shows the plain price with the first-month offer off', async () => {
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     await render();
-    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%']);
+    await choose('month');
+    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual([
       'Choose Starter',
       'Choose Growth',

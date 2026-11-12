@@ -5,9 +5,7 @@ import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
 import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
-import { landingPageFor } from '@/config/home';
-import { chatAgenticEnabled } from '@/lib/chat/flag';
-import { chatStartAudience } from '@/lib/chat/start-audience';
+import { DASHBOARD_HOME } from '@/config/home';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -65,18 +63,8 @@ export async function GET(req: NextRequest) {
           console.error('[stripe/success] DB update error:', updateError);
         } else {
           console.log('[stripe/success] DB updated for org:', orgId);
-          landing = landingPageFor({
-            chatOn: chatAgenticEnabled(orgId),
-            audience: chatStartAudience({
-              org: {
-                plan: planId || 'starter',
-                subscription_status: subscription?.status ?? 'trialing',
-                stripe_subscription_id: subscriptionId,
-              },
-              // The demo brand steps aside with the plan (below).
-              demoShown: false,
-            }),
-          });
+          // The buyer, on the workspace they just paid for: Action Center › Today.
+          landing = DASHBOARD_HOME;
 
           // Align onboarding-created prompts to the just-confirmed plan's
           // engine set. Onboarding saves prompts at step 4 with the default

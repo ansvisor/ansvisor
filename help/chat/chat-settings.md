@@ -1,15 +1,15 @@
 ---
 title: Change your Chat settings
 route: /dashboard/chat/settings
-keywords: [chat settings, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, thought for, thinking time, ask chat on every page, full auto]
+keywords: [chat settings, date range, default date range, time range, ask me before the first analysis, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, slack when an agent waits, thought for, thinking time, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json]
+sources: [web/messages/en.json, web/src/lib/chat/range.ts]
 ---
 **Settings** in the chat menu holds your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so. The bar next to **Settings** shows how much of this month's AI usage your workspace has used.
 
@@ -25,9 +25,13 @@ sources: [web/messages/en.json]
 
 **Answer language** sets the language Chat answers in. **Same as my question**, the default, answers in the language you write in. Pick a language, such as English, and Chat answers in it whatever language you write in: useful for agencies and teams that write in several languages. Asking for a language in a message, such as "answer in German", always wins for that answer. The app itself stays in English.
 
+## Date range
+
+**Date range** is the period Chat reads when your message names none, in Chat and in the panel beside every page, for every brand. Pick **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days**, or **Custom** with a first and a last day: it is kept at once. **Ask me before the first analysis** clears it, so Chat asks again on the next analysis that reads data. The line under the message box shows the same range, with **change**.
+
 ## Notify me when an agent needs me
 
-When one of your agents stops to ask you something or to wait for your OK on a change, its chat moves to **Needs you** in your Inbox. **Notify me when an agent needs me** sets whether you also get an email: **Inbox + email**, the default, sends one email per run, with a link to open it; **Inbox only** sends none. **Inbox + Slack** comes once Slack can be connected.
+When one of your agents stops to ask you something or to wait for your OK on a change, its chat moves to **Needs you** in your Inbox. **Notify me when an agent needs me** sets what else you get, once per run, with a link to open it: **Inbox + email**, the default, sends an email; **Inbox only** sends nothing more; **Inbox + Slack** posts in the brand's Slack channel and mentions you. **Inbox + Slack** can be picked once a brand you can see posts to Slack. For a brand that doesn't, you get the email instead, and notices Slack doesn't carry, such as an agent going live, still come by email.
 
 ## Thought for N s
 

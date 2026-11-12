@@ -2,6 +2,7 @@
 import { inflateSync } from 'node:zlib';
 import { Font } from '@react-pdf/renderer';
 import { describe, expect, it, vi } from 'vitest';
+import { REPORT_LANGUAGES, type ReportLanguage } from './copy';
 import type { ReportCardPayload } from './payload';
 import { reportCardPdf } from './pdf';
 import { SAMPLE_REPORT_CARD } from './sample';
@@ -170,11 +171,67 @@ describe('reportCardPdf', () => {
     expect(pages(await reportCardPdf(tall))).toBe(4);
   }, 30_000);
 
+  it('keeps a Turkish card’s two plans, the work and the trial button on four pages, both buttons linked', async () => {
+    const pdf = await reportCardPdf({
+      ...SAMPLE_REPORT_CARD,
+      country: { code: 'TR', name: 'Türkiye' },
+      language: 'Turkish',
+      dealValue: { amount: 1_500, currency: 'TRY' },
+    });
+    expect(pages(pdf)).toBe(4);
+    // Page 1's small button and page 4's: real links, each marked with its page.
+    expect(
+      Buffer.from(pdf)
+        .toString('latin1')
+        .match(/\/URI \([^)]*\)/g),
+    ).toEqual([
+      '/URI (https://app.ansvisor.com/en/sign-up?utm_source=report-card&utm_medium=pdf&utm_content=page1)',
+      '/URI (https://app.ansvisor.com/en/sign-up?utm_source=report-card&utm_medium=pdf&utm_content=page4)',
+    ]);
+  }, 30_000);
+
   it('keeps a card with no ad data and no deal value on four pages', async () => {
     expect(pages(await reportCardPdf({ ...SAMPLE_REPORT_CARD, cpc: null, dealValue: null }))).toBe(
       4,
     );
   }, 30_000);
+});
+
+describe('reportCardPdf in the language the request chose', () => {
+  it.each(REPORT_LANGUAGES)(
+    '%s: keeps the sample on four pages, with a deal value and without',
+    async (language) => {
+      expect(pages(await reportCardPdf(SAMPLE_REPORT_CARD, { language }))).toBe(4);
+      expect(
+        pages(await reportCardPdf({ ...SAMPLE_REPORT_CARD, dealValue: null }, { language })),
+      ).toBe(4);
+    },
+    30_000,
+  );
+
+  it('keeps long names, long questions and every finding on four pages in German and French', async () => {
+    expect(pages(await reportCardPdf(long, { language: 'de' }))).toBe(4);
+    expect(pages(await reportCardPdf(long, { language: 'fr' }))).toBe(4);
+  }, 30_000);
+
+  it('draws every accented letter the languages use, and the words of each', async () => {
+    const accents = { ...SAMPLE_REPORT_CARD, companyName: 'Ça Straße Mañana São Ørsted Müller' };
+    // A word of each language's own, read back through the font's map: a
+    // letter missing from Inter's subset would read as "?".
+    const words: [ReportLanguage, string][] = [
+      ['fr', 'Généréavec'],
+      ['es', 'Añade'],
+      ['de', 'Pläne'],
+      ['pt', 'Comeceotestegrátis'],
+      ['it', 'Quantovalgono'],
+      ['nl', 'zoekwoorden'],
+    ];
+    for (const [language, word] of words) {
+      const text = pdfText(await reportCardPdf(accents, { language }));
+      expect(text).toContain('ÇaStraßeMañanaSãoØrstedMüller');
+      expect(text).toContain(word);
+    }
+  }, 60_000);
 });
 
 describe('reportCardPdf, card after card on one server', () => {

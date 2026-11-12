@@ -97,6 +97,20 @@ afterEach(() => {
 });
 
 describe('the Visibility group', () => {
+  it('is a group under ANALYTICS, after Prompts', async () => {
+    await render('/dashboard/mentions', []);
+    expect(group().textContent).toBe('Visibility');
+    expect(entries()).toEqual([
+      { label: 'Overview', href: '/dashboard/insights', current: null },
+      { label: 'Mentions', href: '/dashboard/mentions', current: 'page' },
+      { label: 'Citations', href: '/dashboard/citations', current: null },
+    ]);
+    const parents = [...container.querySelectorAll('[data-nav-item="parent"]')].map((el) =>
+      el.getAttribute('data-submenu'),
+    );
+    expect(parents.indexOf('/dashboard/insights')).toBe(parents.indexOf('/dashboard/prompts') + 1);
+  });
+
   it('lists Overview, Mentions and Citations under it, with no Mentions or Citations items of their own', async () => {
     await render('/dashboard/action-center');
     expect(group().textContent).toBe('Visibility');

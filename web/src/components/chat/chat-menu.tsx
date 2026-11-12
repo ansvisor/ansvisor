@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { ArrowUpRight } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
 import { NewPill } from '@/components/agentic/new-pill';
@@ -270,7 +271,7 @@ export function ChatMenuView({
   const [query, setQuery] = useState('');
   const found = useChatSearch(query);
   const searching = query.trim() !== '';
-  // The "New" pill beside Agent Center, until it is first opened in this browser.
+  // The "New" pill beside Agents, until it is first opened in this browser.
   const [agentsNew, setAgentsNew] = useState(false);
   useEffect(() => {
     // Browser storage exists only after hydration.
@@ -407,15 +408,23 @@ export function ChatMenuView({
               </span>
             )}
           </MenuItem>
-          {/* Agent Center is its own page, out of Chat: never the one open here. */}
+          {/* Action Center › Agents, out of Chat: never the one open here. "Agents · in Action Center ↗". */}
           <MenuItem
             href="/dashboard/agents"
             action="chatMenu.openAgents"
             active={false}
             onNavigate={onNavigate}
+            label={t('agentsLabel')}
           >
-            {t('agents')}
-            {agentsNew && <NewPill className="ml-auto" />}
+            {t('agentsShort')}
+            {agentsNew && <NewPill />}
+            <span
+              data-slot="agents-where"
+              className="ml-auto flex shrink-0 items-center gap-1 text-[11.5px] text-muted-foreground"
+            >
+              {t('agentsWhere')}
+              <ArrowUpRight className="size-3" aria-hidden />
+            </span>
           </MenuItem>
           <MenuItem
             href="/dashboard/chat/skills"
@@ -512,7 +521,7 @@ export function ChatMenuView({
           <SectionHead>
             {t('atWork')}
             <Count value={atWork.length} />
-            <DotLegend className="ml-0.5" />
+            <DotLegend dots="menu" className="ml-0.5" />
             <FoldButton
               folded={folded.atWork}
               label={t('toggleAtWork')}

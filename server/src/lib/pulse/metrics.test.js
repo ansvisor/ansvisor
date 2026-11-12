@@ -214,8 +214,8 @@ describe('degradedPlatforms', () => {
   }
 
   it('flags a collapse, but not the paused platforms, whose answers stop by design', async () => {
-    // Copilot and Perplexity were paused on 2026-11-06, Grok before them:
-    // a busy week, then nothing today.
+    // Perplexity was paused on 2026-11-06, Grok before it: a busy week, then
+    // nothing today. Copilot runs again (Bing AI Mode), so it is watched.
     const read = stubCounts({
       'chatgpt-web': { today: 10, week: 7000 },
       'gemini-web': { today: 1000, week: 7000 },
@@ -223,8 +223,11 @@ describe('degradedPlatforms', () => {
       'perplexity-web': { today: 0, week: 7000 },
       'grok-web': { today: 0, week: 7000 },
     });
-    expect(await degradedPlatforms(new Date('2026-11-07T12:00:00Z'))).toEqual(['chatgpt-web']);
-    for (const paused of ['copilot-web', 'perplexity-web', 'grok-web']) {
+    expect(await degradedPlatforms(new Date('2026-11-07T12:00:00Z'))).toEqual([
+      'chatgpt-web',
+      'copilot-web',
+    ]);
+    for (const paused of ['perplexity-web', 'grok-web']) {
       expect(read.has(paused)).toBe(false);
     }
   });
@@ -232,7 +235,7 @@ describe('degradedPlatforms', () => {
   it('finds no outage when only the paused platforms went quiet', async () => {
     stubCounts({
       'chatgpt-web': { today: 1000, week: 7000 },
-      'copilot-web': { today: 0, week: 7000 },
+      'copilot-web': { today: 1000, week: 7000 },
       'perplexity-web': { today: 0, week: 7000 },
     });
     expect(await degradedPlatforms(new Date('2026-11-07T12:00:00Z'))).toEqual([]);

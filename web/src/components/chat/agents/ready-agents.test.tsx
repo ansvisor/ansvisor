@@ -24,8 +24,8 @@ vi.hoisted(() => {
 });
 
 /**
- * Agent Center › Ready to use (AGENTS plan §1, §3; CHAT-21 §D item 15),
- * the tab Agent Center opens on: the eight ready-to-use agents first, each
+ * Action Center › Agents › Ready to use (AGENTS plan §1, §3; CHAT-21 §D
+ * item 15), under Your agents: the eight ready-to-use agents first, each
  * with its skills, triggers and mode and Use this agent, which opens New
  * agent filled with it; then the Soon cards, which say what they wait for
  * and open nothing. A mode the plan keeps closed shows its lock; readers
@@ -33,8 +33,7 @@ vi.hoisted(() => {
  * headers (Goal ▾, Business type ▾, Role ▾) for the goals, the business
  * types and the work areas the presets have, each opening its options under
  * it, one at a time, and naming its pick. The packs for the
- * brand's site type and the person's work areas come first, marked. The
- * tab is kept in the address.
+ * brand's site type and the person's work areas come first, marked.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -49,6 +48,8 @@ vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: vi.fn(async () => ({ ok: true, id: 'request-1' })),
 }));
+// Action Center › Agents' jobs made in Chat, a server action.
+vi.mock('@/lib/actions/chat-schedules', () => ({ listChatSchedules: vi.fn() }));
 
 const { AgentCenter } = await import('./agent-center');
 
@@ -65,20 +66,13 @@ async function settle() {
 async function render(
   role: TeamRole = 'manager',
   locks: Record<string, PresetLock> = {},
-  initialTab?: 'ready' | 'yours',
   workAreas: string[] = [],
 ) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role={role}>
-          <AgentCenter
-            initialTab={initialTab}
-            locks={locks}
-            workAreas={workAreas}
-            now={NOW}
-            timeZone="UTC"
-          />
+          <AgentCenter locks={locks} workAreas={workAreas} now={NOW} timeZone="UTC" />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -119,8 +113,6 @@ function onBrand(siteType: string | undefined) {
   const brand = { id: 'brand-1', name: 'Ansvisor', siteType, shoppingModeEnabled: false } as Brand;
   useBrandStore.setState({ brands: [brand], activeBrandId: brand.id, loaded: true });
 }
-const panel = (tab: string) =>
-  container.querySelector<HTMLElement>(`[data-slot="agent-center-${tab}"]`)!;
 async function click(el: HTMLElement) {
   await act(async () => {
     el.click();
@@ -142,32 +134,6 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
-});
-
-describe('Agent Center tabs', () => {
-  it('open on Ready to use, keep the tab in the address, and keep Your agents a click away', async () => {
-    await render();
-    const tabs = action('agents.tab');
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Ready to use', 'Your agents']);
-    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
-    expect(panel('ready').hidden).toBe(false);
-    expect(panel('yours').hidden).toBe(true);
-    // Your agents is read already: its count shows beside the title from the start.
-    expect(container.querySelector('[data-slot="agents-count"]')?.textContent).toBe('4');
-
-    await click(tabs[1]);
-    expect(window.location.search).toBe('?tab=yours');
-    expect(panel('ready').hidden).toBe(true);
-    expect(panel('yours').hidden).toBe(false);
-    await click(action('agents.tab')[0]);
-    expect(window.location.search).toBe('?tab=ready');
-  });
-
-  it('open on Your agents when the address says so', async () => {
-    await render('manager', {}, 'yours');
-    expect(action('agents.tab')[1].getAttribute('aria-selected')).toBe('true');
-    expect(panel('yours').hidden).toBe(false);
-  });
 });
 
 describe('Ready to use', () => {
@@ -458,7 +424,7 @@ describe('Ready to use', () => {
 
   it('puts the agents for the brand’s site type and the person’s work areas first, marked', async () => {
     onBrand('b2b');
-    await render('manager', {}, undefined, ['product', 'content']);
+    await render('manager', {}, ['product', 'content']);
     expect(ids().slice(0, 5)).toEqual([
       'content-freshness',
       'alternatives-comparison-pages',

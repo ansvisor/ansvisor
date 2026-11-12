@@ -17,8 +17,11 @@ import type {
 } from '@/lib/chat/general-settings';
 import { PAGE_OPENS } from '@/lib/chat/page-open';
 import type { ChatMode } from '@/lib/chat/precedence';
+import { RANGE_PRESETS, customDays, isRangePreset, rangeWords } from '@/lib/chat/range';
 import { cn } from '@/lib/utils';
 import { useFocusLabel } from './focus-picker';
+import { CustomRangeFields, useRangeT } from './range/range-picker';
+import { useChatRange } from './range/use-chat-range';
 import { useChatTour } from './tour/chat-tour';
 
 /**
@@ -86,6 +89,65 @@ function Switch({
         )}
       />
     </button>
+  );
+}
+
+/**
+ * Date range (owner request 2026-11-11): the period Chat reads when a
+ * message names none, the same as the line under the message box. Ask me
+ * clears it, so Chat asks before the next analysis; Custom opens two days.
+ * Hidden when it can't be read.
+ */
+function RangeRow() {
+  const t = useTranslations('chatRange');
+  const say = useRangeT();
+  const { range, available, save } = useChatRange();
+  const [customOpen, setCustomOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!available) return null;
+  const custom = range ? customDays(range) : null;
+  const keep = async (next: Parameters<typeof save>[0]) => {
+    setBusy(true);
+    const kept = await save(next);
+    setBusy(false);
+    if (kept) setCustomOpen(false);
+  };
+  return (
+    <>
+      <Row label={t('settingLabel')} note={t('settingNote')}>
+        <select
+          data-action="chatSettings.dateRange"
+          aria-label={t('settingLabel')}
+          value={customOpen || custom ? 'custom' : (range ?? '')}
+          disabled={busy}
+          onChange={(event) => {
+            const value = event.target.value;
+            if (value === 'custom') setCustomOpen(true);
+            else void keep(isRangePreset(value) ? value : null);
+          }}
+          className={SELECT}
+        >
+          <option value="">{t('settingAsk')}</option>
+          {RANGE_PRESETS.map((preset) => (
+            <option key={preset} value={preset}>
+              {rangeWords(preset, say)}
+            </option>
+          ))}
+          <option value="custom">
+            {range && custom ? rangeWords(range, say) : t('customButton')}
+          </option>
+        </select>
+      </Row>
+      {customOpen && (
+        <CustomRangeFields
+          initial={custom}
+          busy={busy}
+          action="chatSettings.dateRangeDates"
+          onUse={(picked) => void keep(picked)}
+          className="justify-end pb-3"
+        />
+      )}
+    </>
   );
 }
 
@@ -292,6 +354,8 @@ export function ChatSettings({
               ))}
             </select>
           </Row>
+
+          <RangeRow />
 
           <Row label={t('notify.label')} note={t('notify.note')}>
             <select

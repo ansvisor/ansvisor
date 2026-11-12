@@ -58,6 +58,14 @@ vi.mock('@/components/action-center/action-center-tabs', () => ({
   ActionCenterTabs: () => null,
 }));
 
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock('@/components/action-center/kpi-framework-drawer', () => ({
   KpiFrameworkDrawer: () => null,
 }));
@@ -262,6 +270,24 @@ describe('KPIs status filter', () => {
     expect(menu?.textContent).toContain('table.status');
     expect(menu?.querySelectorAll('[role="menuitemcheckbox"]')).toHaveLength(4);
 
+    await act(async () => root.unmount());
+  });
+});
+
+describe('KPIs, one of History’s views', () => {
+  it('shows KPIs current, the others linking back to History', async () => {
+    const { container, root } = await renderPage();
+    const group = container.querySelector('[role="group"][aria-label="view.label"]')!;
+    const views = [...group.children].map((v) => [
+      v.textContent,
+      v.getAttribute('href'),
+      v.getAttribute('aria-current'),
+    ]);
+    expect(views).toEqual([
+      ['view.actions', '/dashboard/action-center/history', null],
+      ['view.scorecard', '/dashboard/action-center/history?view=scorecard', null],
+      ['view.kpis', null, 'page'],
+    ]);
     await act(async () => root.unmount());
   });
 });

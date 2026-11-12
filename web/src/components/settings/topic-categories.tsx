@@ -128,7 +128,7 @@ export function TopicCategories({ refreshKey = 0 }: { refreshKey?: number }) {
       {current.data === null ? (
         <p className="text-sm text-muted-foreground">{t('unavailable')}</p>
       ) : (
-        <div className="relative overflow-x-auto rounded-md border">
+        <div className="relative overflow-x-auto rounded-md border bg-card">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">

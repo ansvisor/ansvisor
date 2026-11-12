@@ -236,6 +236,37 @@ describe('listChats', () => {
     expect(row).toMatchObject({ pinned: false, unread: false, state: 'idle' });
   });
 
+  it("lists one brand's chats when asked for it, rows and counts alike", async () => {
+    const OTHER_BRAND = '33333333-3333-4333-8333-333333333333';
+    db.tables.brands.push({ id: OTHER_BRAND, organization_id: ORG, name: 'Northbound' });
+    const shared = { user_id: TEAMMATE.userId, shared_at: '2026-10-12T00:00:00.000Z' };
+    const archived = { archived_at: '2026-10-20T00:00:00.000Z' };
+    db.tables.chat_conversations = [
+      chat(1, { brand_id: BRAND }),
+      chat(2, { brand_id: OTHER_BRAND }),
+      chat(3, { brand_id: BRAND, ...shared }),
+      chat(4, { brand_id: OTHER_BRAND, ...shared }),
+      chat(5),
+      chat(6, { brand_id: BRAND, ...archived }),
+      chat(7, { brand_id: OTHER_BRAND, ...archived }),
+    ];
+    const one = await chats.listChats(reader, ME, chats.listQuery.parse({ brandId: BRAND }));
+    expect(one.chats.map((c) => c.id)).toEqual([CHAT(3), CHAT(1)]);
+    expect(one.chats.map((c) => c.brand)).toEqual(['Ansvisor', 'Ansvisor']);
+    expect(one).toMatchObject({ total: 2, archived: 1 });
+    const other = await chats.listChats(
+      reader,
+      ME,
+      chats.listQuery.parse({ brandId: OTHER_BRAND }),
+    );
+    expect(other.chats.map((c) => c.id)).toEqual([CHAT(4), CHAT(2)]);
+    // Without one, every brand's, and the chats with none.
+    const all = await chats.listChats(reader, ME, chats.listQuery.parse({}));
+    expect(all.chats.map((c) => c.id)).toEqual([CHAT(5), CHAT(4), CHAT(3), CHAT(2), CHAT(1)]);
+    expect(all).toMatchObject({ total: 5, archived: 2 });
+    expect(chats.listQuery.safeParse({ brandId: 'b1' }).success).toBe(false);
+  });
+
   it('masks an id in a title', async () => {
     db.tables.chat_conversations = [chat(1, { title: `About ${BRAND}` })];
     const [row] = (await chats.listChats(reader, ME, chats.listQuery.parse({}))).chats;
@@ -526,5 +557,27 @@ describe('searchTermsOf', () => {
     expect(chats.searchTermsOf("') | !foo:* <-> bar\\'")).toBe("'!foo:*':* & 'bar ''':*");
     expect(chats.searchTermsOf('   ')).toBeNull();
     expect(chats.searchTermsOf('a b c d e f g h i j')?.split(' & ')).toHaveLength(8);
+  });
+});
+
+describe('chatState', () => {
+  const run = (status: string) => ({
+    id: 'run-1',
+    conversation_id: 'chat-1',
+    status,
+    created_at: '2026-10-30T08:00:00Z',
+    finished_at: '2026-10-30T08:02:00Z',
+  });
+
+  it('keeps an errored chat red once it is read; a done or stopped one goes once read', () => {
+    expect(chats.chatState(run('error'), false)).toBe('failed');
+    expect(chats.chatState(run('error'), true)).toBe('failed');
+    expect(chats.chatState(run('stopped'), true)).toBe('failed');
+    expect(chats.chatState(run('stopped'), false)).toBe('idle');
+    expect(chats.chatState(run('done'), true)).toBe('done');
+    expect(chats.chatState(run('done'), false)).toBe('idle');
+    expect(chats.chatState(run('waiting'), false)).toBe('needsYou');
+    expect(chats.chatState(run('running'), false)).toBe('running');
+    expect(chats.chatState(null, false)).toBe('idle');
   });
 });

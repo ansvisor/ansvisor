@@ -6,6 +6,7 @@ import {
   Gauge,
   Globe,
   LineChart,
+  Megaphone,
   MessageCircleMore,
   Quote,
   ShoppingBag,
@@ -54,6 +55,17 @@ export interface NavChild {
    */
   requiredFeature?: Feature;
   requiresBrandPref?: BrandPrefKey;
+  /**
+   * Only with the new Chat on for the workspace (CHAT_AGENTIC), as an item's
+   * flag of that name: off, the entry is on no menu and in no list of the
+   * menu's sections. Action Center › Agents.
+   */
+  requiresChatAgentic?: boolean;
+  /**
+   * Pages of another address it is also the current entry on: History on
+   * KPIs, one of its views.
+   */
+  currentOn?: string[];
 }
 
 export interface NavItem {
@@ -69,9 +81,17 @@ export interface NavItem {
   /**
    * Only with the new Chat on for the workspace (CHAT_AGENTIC): off, the item
    * is on no menu and in no list of the menu's sections, as its pages aren't
-   * there either. Agent Center.
+   * there either.
    */
   requiresChatAgentic?: boolean;
+  /**
+   * Only with Ads on (ADS_ENABLED, lib/ads/flag.ts): off, the item is on no
+   * menu and in no list of the menu's sections, as its page isn't there
+   * either. Ads, while it is in development.
+   */
+  requiresAds?: boolean;
+  /** An outlined "New" pill after the label (NewPill), for a new area: Ads. */
+  newPill?: boolean;
 }
 
 export interface NavGroup {
@@ -80,6 +100,15 @@ export interface NavGroup {
 }
 
 /**
+ * The left menu (the owner's decisions of 2026-11-11). Chat, then the
+ * Action Center, where everyone lands, as a group of its own tabs: Today,
+ * Actions, Signals, Agents (Agent Center at its own address, so its menu
+ * section, links and Chat's routes stay; only with the new Chat on and a
+ * plan with agents) and History. ANALYTICS, with Prompts first (adding
+ * prompts is the way in), then Visibility, AI Referral Traffic and Ads,
+ * last and only with ADS_ENABLED. MORE: Content, Site Audit, Reports and
+ * Competitors.
+ *
  * The brands page has no item here: the brand switcher above the menu opens
  * it ("Show My All Brands") and the selected brand's settings.
  */
@@ -89,10 +118,6 @@ export const dashboardNav: NavGroup[] = [
    * about anything below, or let the agent do the work. The route stays
    * /dashboard/agent: renaming the URL would break every existing link for a
    * label change, and the sidebar's "Set up" badge keys off that href.
-   *
-   * Agent Center right under it: the agents that run in Chat, on a page of
-   * their own (was Chat › Agents, /dashboard/chat/agents, which redirects
-   * here). Gated as Chat is, and there only with the new Chat on.
    */
   {
     items: [
@@ -103,57 +128,48 @@ export const dashboardNav: NavGroup[] = [
         requiredFeature: 'ai_agent',
       },
       {
-        title: 'Agent Center',
-        href: '/dashboard/agents',
-        icon: Bot,
-        requiredFeature: 'ai_agent',
-        requiresChatAgentic: true,
-      },
-    ],
-  },
-  /**
-   * New Ansvisor: the groups name the two things the product does. Execution
-   * does the work (actions, content, page fixes); Analytics shows where the
-   * brand stands in AI search.
-   */
-  {
-    title: 'Execution',
-    items: [
-      {
         title: 'Action Center',
         href: '/dashboard/action-center',
         icon: Target,
-      },
-      // Content Editor (CE-001): a group, like Prompts, and new as a whole.
-      // Its pages in the order the work goes: Opportunities (today's page,
-      // keeping /dashboard/content) finds what to write, the Plan says what
-      // to do next (CE-014), the Editor goes back to the draft last opened,
-      // else starts a new page, and the Library lists every page written or
-      // changed in Ansvisor.
-      {
-        title: 'Content',
-        href: '/dashboard/content',
-        icon: FileText,
-        requiredFeature: 'content_optimization',
         children: [
-          { title: 'Opportunities', href: '/dashboard/content' },
-          { title: 'Plan', href: '/dashboard/content/plan' },
-          // A draft open in the editor (CE-004) is under it.
-          { title: 'Editor', href: '/dashboard/content/editor', keepsPage: true },
-          { title: 'Library', href: '/dashboard/content/library' },
+          { title: 'Today', href: '/dashboard/action-center/today' },
+          { title: 'Actions', href: '/dashboard/action-center/actions' },
+          { title: 'Signals', href: '/dashboard/action-center/signals' },
+          {
+            title: 'Agents',
+            href: '/dashboard/agents',
+            icon: Bot,
+            // Where menu access lists the sections: under the Action Center's row.
+            sectionTitle: 'Agents · in Action Center',
+            requiredFeature: 'ai_agent',
+            requiresChatAgentic: true,
+          },
+          {
+            title: 'History',
+            href: '/dashboard/action-center/history',
+            currentOn: ['/dashboard/action-center/kpis'],
+          },
         ],
-      },
-      {
-        title: 'Site Audit',
-        href: '/dashboard/audit',
-        icon: Gauge,
-        requiredFeature: 'content_optimization',
       },
     ],
   },
   {
     title: 'Analytics',
     items: [
+      // Prompts first: adding prompts is the way in.
+      {
+        title: 'Prompts',
+        href: '/dashboard/prompts',
+        icon: Globe,
+        children: [
+          { title: 'Tracked Prompts', href: '/dashboard/prompts/tracked' },
+          { title: 'Prompt Suggestions', href: '/dashboard/prompts/suggestions' },
+          // Was the Topics page (/dashboard/topics, which redirects here).
+          { title: 'Topics', href: '/dashboard/prompts/topics' },
+          { title: 'Query Fan-outs', href: '/dashboard/prompts/fan-outs' },
+          { title: 'Prompts Insights', href: '/dashboard/prompts/insights' },
+        ],
+      },
       // Brand Visibility (the owner's mockup): one page with its tabs, a
       // group like Prompts and Content. Each tab keeps its page's address
       // (Mentions & Sentiment, Citations and Product Visibility were items
@@ -180,50 +196,63 @@ export const dashboardNav: NavGroup[] = [
           },
         ],
       },
-      // Prompts right under Brand Visibility: adding prompts is the way in,
-      // so nothing sits between them (Competitors moved under Reports).
-      {
-        title: 'Prompts',
-        href: '/dashboard/prompts',
-        icon: Globe,
-        children: [
-          { title: 'Tracked Prompts', href: '/dashboard/prompts/tracked' },
-          { title: 'Prompt Suggestions', href: '/dashboard/prompts/suggestions' },
-          // Was the Topics page (/dashboard/topics, which redirects here).
-          { title: 'Topics', href: '/dashboard/prompts/topics' },
-          { title: 'Query Fan-outs', href: '/dashboard/prompts/fan-outs' },
-          { title: 'Prompts Insights', href: '/dashboard/prompts/insights' },
-        ],
-      },
       {
         title: 'AI Referral Traffic',
         href: '/dashboard/traffic',
         icon: LineChart,
         requiredFeature: 'advanced_analytics',
       },
+      // Ads (ADS-01): earn the AI answer, pay for it, or both. Last of
+      // Analytics, after AI Referral Traffic, new. Only with ADS_ENABLED on,
+      // while it is in development (owner, 2026-11-10). No requiredFeature:
+      // Starter opens the page and sees what Growth adds there (DECISIONS J),
+      // so the item isn't locked here.
+      {
+        title: 'Ads',
+        href: '/dashboard/ads',
+        icon: Megaphone,
+        requiresAds: true,
+        newPill: true,
+      },
     ],
   },
-  /**
-   * Reports sits in its own group rather than under Analytics or Execution,
-   * because it draws on both: of its thirteen sections, `auditScore` comes from
-   * Site Audit and the rest from the analytics surfaces. Filing it under either
-   * heading would understate what it covers.
-   *
-   * It is also the only way into /dashboard/reports besides the Reports
-   * button in Brand Visibility's header, on each of its tabs — from Site
-   * Audit there is no other route to it.
-   *
-   * Competitors, the head-to-head with each competitor, sits right under it,
-   * out of Analytics so that group stays short. Brand Visibility's
-   * Leaderboard still opens it.
-   */
   {
+    title: 'More',
     items: [
+      // Content Editor (CE-001): a group, like Prompts, and new as a whole.
+      // Its pages in the order the work goes: Opportunities (today's page,
+      // keeping /dashboard/content) finds what to write, the Plan says what
+      // to do next (CE-014), the Editor goes back to the draft last opened,
+      // else starts a new page, and the Library lists every page written or
+      // changed in Ansvisor.
+      {
+        title: 'Content',
+        href: '/dashboard/content',
+        icon: FileText,
+        requiredFeature: 'content_optimization',
+        children: [
+          { title: 'Opportunities', href: '/dashboard/content' },
+          { title: 'Plan', href: '/dashboard/content/plan' },
+          // A draft open in the editor (CE-004) is under it.
+          { title: 'Editor', href: '/dashboard/content/editor', keepsPage: true },
+          { title: 'Library', href: '/dashboard/content/library' },
+        ],
+      },
+      {
+        title: 'Site Audit',
+        href: '/dashboard/audit',
+        icon: Gauge,
+        requiredFeature: 'content_optimization',
+      },
+      // Reports draws on both Analytics and Site Audit; Brand Visibility's
+      // header also opens it, on each of its tabs.
       {
         title: 'Reports',
         href: '/dashboard/reports',
         icon: FileBarChart,
       },
+      // The head-to-head with each competitor; Brand Visibility's
+      // Leaderboard still opens it.
       {
         title: 'Competitors',
         href: '/dashboard/competitors',

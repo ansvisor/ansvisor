@@ -35,7 +35,7 @@ import { platformName } from '@/lib/signals/names';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { NewPill } from '@/components/agentic/new-pill';
-import { useFillHomeDraft } from './home-draft';
+import { useFillHomeDraft, useHomeChat } from './home-draft';
 import { useChatList } from './chat-list-provider';
 import { inboxItems, useNow } from './chat-inbox';
 import { FocusPill, useChatFocus } from './focus-picker';
@@ -676,6 +676,7 @@ export function ChatHome({
   // item 19). The Default view shows neither.
   const [whatsNew, setWhatsNew] = useState<WhatsNewHome | null>(null);
   const fillBox = useFillHomeDraft();
+  const homeChat = useHomeChat();
   useEffect(() => {
     if (plain) return;
     let current = true;
@@ -704,6 +705,9 @@ export function ChatHome({
       openUpgrade();
       return;
     }
+    // Home's chat below takes it at once: the page gives way and the question shows with the
+    // run's first step while it starts (owner, 2026-11-09).
+    if (homeChat?.send(message, shortcutId)) return;
     setStarting(true);
     const started = await startChatRun(message, brandId ?? null, { shortcutId });
     if (!started.ok) {
@@ -717,6 +721,8 @@ export function ChatHome({
     router.push(`/dashboard/chat/${started.chatId}`);
   }
 
+  // A chat started from Home is its own page now: the greeting and the rest give way.
+  if (homeChat?.started) return null;
   // The counts of the brand open now: none while another brand's are shown.
   const mine = counts && counts.brandId === brandId ? counts : null;
   return (

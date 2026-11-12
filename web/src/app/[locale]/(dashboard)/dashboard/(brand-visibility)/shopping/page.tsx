@@ -20,7 +20,6 @@ const DynamicShoppingTrendChart = dynamic(
 );
 import {
   ShoppingBag,
-  Crown,
   Download,
   ExternalLink,
   Layers,
@@ -66,7 +65,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Link } from '@/i18n/navigation';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { UpgradeCard } from '@/components/billing/upgrade-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -151,7 +151,7 @@ export default function ShoppingPage() {
   const { shown } = useBrandVisibilityShell();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
-  const { canUse, requiredPlanFor } = useFeatureGate();
+  const { canUse } = useFeatureGate();
   const { canManage } = useUserRole();
   const hasFullAccess = canUse('shopping_analytics');
 
@@ -537,7 +537,7 @@ export default function ShoppingPage() {
                   </div>
                 </>
               ) : (
-                <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
+                <ShoppingUpgradeCard t={t} />
               )}
             </TabsContent>
 
@@ -551,7 +551,7 @@ export default function ShoppingPage() {
                   results={categoryResults}
                 />
               ) : (
-                <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
+                <ShoppingUpgradeCard t={t} />
               )}
             </TabsContent>
 
@@ -623,7 +623,7 @@ export default function ShoppingPage() {
                   />
                 </>
               ) : (
-                <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
+                <ShoppingUpgradeCard t={t} />
               )}
             </TabsContent>
 
@@ -677,7 +677,7 @@ export default function ShoppingPage() {
                   )}
                 </ReadinessTab>
               ) : (
-                <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
+                <ShoppingUpgradeCard t={t} />
               )}
             </TabsContent>
 
@@ -745,7 +745,7 @@ export default function ShoppingPage() {
                   />
                 </>
               ) : (
-                <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
+                <ShoppingUpgradeCard t={t} />
               )}
             </TabsContent>
           </>
@@ -979,35 +979,15 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
-function UpgradeCard({
-  t,
-  requiredPlan,
-}: {
-  t: ReturnType<typeof useTranslations<'shopping'>>;
-  requiredPlan: string;
-}) {
+/** Full shopping analytics, locked: Growth and up (the shared UpgradeCard). */
+function ShoppingUpgradeCard({ t }: { t: ReturnType<typeof useTranslations<'shopping'>> }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <Crown className="mt-1 h-5 w-5 text-amber-500" />
-          <div>
-            <p className="font-medium">{t('lockedTitle')}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{t('lockedDescription')}</p>
-          </div>
-        </div>
-        <Link
-          href="/dashboard/settings?tab=billing"
-          className={buttonVariants({ variant: 'default' })}
-        >
-          <Badge variant="secondary" className="mr-2 gap-1">
-            <Crown className="h-3 w-3" />
-            {requiredPlan}
-          </Badge>
-          Upgrade
-        </Link>
-      </CardContent>
-    </Card>
+    <UpgradeCard
+      feature="shopping_analytics"
+      source="shopping"
+      title={t('lockedTitle')}
+      description={t('lockedDescription')}
+    />
   );
 }
 

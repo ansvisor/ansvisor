@@ -6,6 +6,7 @@ import messages from '../../../../messages/en.json';
 import { CHAT_TOOLS } from '../registry/tools';
 import { SHORTCUTS, SHORTCUT_IDS } from '../shortcuts';
 import { checkSkillFile, parseSkillFile } from './format';
+import { RESERVED_SKILL_NAMES } from './reserved-names';
 import {
   MAX_LISTED_SKILLS,
   SHORTCUT_PLAYBOOKS,
@@ -72,7 +73,10 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
  * The AGENTS plan's /setup (§7 step 3) is the Onboarding & Help agent's,
  * its /fanout (§3 #9) the Fan-out Gap Filler's and its /prompts (§3 #10)
  * the Prompt Portfolio Manager's: each line says what the agent's card
- * does.
+ * does. The ChatGPT Business Hub plan's /chatgpt-profile (PR 7) follows
+ * /facts, and is offered only with BUSINESS_HUB_ENABLED (flagged.ts).
+ * /plan comes last: a 30-day plan whose actions it adds to the Action
+ * Center with create_action, once the person says yes.
  */
 const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
   winback: {
@@ -126,6 +130,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     title: 'Brand facts check',
     description: 'Checks every draft against your approved brand facts.',
   },
+  'chatgpt-profile': {
+    title: 'ChatGPT profile check',
+    description:
+      'Checks what ChatGPT says about your business against your facts, and prepares your Business Hub corrections and site fixes.',
+  },
   compare: {
     title: 'Comparison page',
     description: 'Compares cited pages and drafts a balanced comparison with dated facts.',
@@ -177,6 +186,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'Proposes prompts to add and to pause, with the evidence for each. Every change waits for your click.',
   },
+  plan: {
+    title: '30-day plan',
+    description:
+      "Plans your next 30 days from your brand's data, and adds its actions to Action Center once you confirm.",
+  },
 };
 const LIBRARY_NAMES = Object.keys(ANSVISOR_SKILLS);
 
@@ -218,7 +232,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's twenty-four, with the mockup's titles and descriptions", () => {
+  it("are Ansvisor's twenty-six, with the mockup's titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {
@@ -371,13 +385,74 @@ describe('enabledSkills', () => {
   it('gives the whole library with it on, in its order, no playbook', () => {
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', '');
-    expect(enabledSkills('org-1')).toBe(SKILL_LIBRARY);
+    vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    expect(enabledSkills('org-1')).toEqual(SKILL_LIBRARY);
     expect(enabledSkills('org-1').map((skill) => skill.name)).toEqual([...SKILL_ORDER]);
     expect(
       enabledSkills('org-1').some((skill) =>
         (SHORTCUT_IDS as readonly string[]).includes(skill.name),
       ),
     ).toBe(false);
+  });
+});
+
+describe('a skill behind a flag (flagged.ts)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('leaves the ChatGPT profile check out until BUSINESS_HUB_ENABLED is on', () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    vi.stubEnv('BUSINESS_HUB_ENABLED', '');
+    const names = enabledSkills('org-1').map((skill) => skill.name);
+    expect(names).not.toContain('chatgpt-profile');
+    expect(names).toEqual(SKILL_ORDER.filter((name) => name !== 'chatgpt-profile'));
+    vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    expect(enabledSkills('org-1').map((skill) => skill.name)).toContain('chatgpt-profile');
+  });
+
+  it('keeps its name the library’s while it is off, so no workspace skill takes it', () => {
+    vi.stubEnv('BUSINESS_HUB_ENABLED', '');
+    expect(RESERVED_SKILL_NAMES.has('chatgpt-profile')).toBe(true);
+  });
+});
+
+describe('the ChatGPT profile check (ChatGPT Business Hub plan, PR 7)', () => {
+  const body = SKILL_LIBRARY.find((skill) => skill.name === 'chatgpt-profile')?.body ?? '';
+  const section = (title: string) =>
+    body.split(/^## /m).find((part) => part.startsWith(title)) ?? '';
+
+  it('takes facts only from approved facts, the person, or the brand’s pages quoted word for word', () => {
+    const truth = section('Where the truth comes from');
+    expect(truth).toContain('`get_brand_facts`');
+    expect(truth).toContain('says or confirms in this chat');
+    expect(truth).toContain('quoted word for word');
+    expect(truth).toContain('Never your own knowledge, and never what ChatGPT says');
+    expect(truth).toContain('[confirm: …]');
+  });
+
+  it('reads ChatGPT’s own answers, with caps', () => {
+    const reads = section('What to read');
+    expect(reads).toContain('`list_mentions` for the platform chatgpt-web');
+    expect(reads).toContain('`get_mention` for at most 8');
+    expect(reads).toContain("`fetch_page` for at most 3 pages of the brand's own site");
+  });
+
+  it('gives the paste list for Business Hub and the site fixes, as drafts or Action Center tasks', () => {
+    const output = section('Output');
+    expect(output).toContain('Paste into Business Hub');
+    expect(output).toContain('Fix on your site');
+    expect(output).toContain('Needs your answer');
+    const steps = section('Steps');
+    for (const tool of ['`create_draft`', '`attach_to_action`', '`create_action`']) {
+      expect(steps).toContain(tool);
+    }
+  });
+
+  it('never promises Business Hub will show a correction, or claims to change it', () => {
+    const dont = section("Don't");
+    expect(dont).toContain('Never fill a field that no source gives');
+    expect(dont).toContain('Never say Business Hub or ChatGPT will show the correction');
+    expect(dont).toContain('Never claim to log in to Business Hub');
   });
 });
 

@@ -80,6 +80,7 @@ import {
   type ContentSummary,
 } from '@/lib/content/start';
 import { formatNumber } from '@/lib/format';
+import { frictionFlow } from '@/lib/friction-events';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -163,6 +164,9 @@ export type DialogPreset = (
  */
 type Who = 'me' | 'agent' | 'team';
 const WHO: Who[] = ['agent', 'me', 'team'];
+
+/** content_generate: Start's Open editor, until the draft is with its writer. */
+const CONTENT_GENERATE = frictionFlow('content_generate');
 
 /** The Overview's read for one source: null while it runs. */
 interface OverlapRead {
@@ -502,6 +506,7 @@ export function NewContentDialog({
   const openEditor = async () => {
     if (!start) return;
     setOpening(true);
+    CONTENT_GENERATE.started();
     try {
       // An existing page Start chose to optimize brings its live text; if it
       // can't be read, the draft starts with its title, and says so.
@@ -531,9 +536,11 @@ export function NewContentDialog({
         await sendToAgent(id, bodyHtml);
         return;
       }
+      CONTENT_GENERATE.completed();
       router.push(contentEditorPath(id));
     } catch (err) {
       console.error('Failed to start a draft:', err);
+      CONTENT_GENERATE.failed();
       toast.error(t('start.failed'));
       setOpening(false);
     }
@@ -575,10 +582,12 @@ export function NewContentDialog({
     }
     onSent?.();
     if ('error' in started) {
+      CONTENT_GENERATE.failed(started.error);
       changeOpen(false);
       toast.error(t(`start.agentErrors.${started.error}`), { action: openDraft });
       return;
     }
+    CONTENT_GENERATE.completed();
     // As Me does: the dialog stays, its button busy, until the editor shows
     // the agent at work, rather than the page under it for a few seconds.
     router.push(contentEditorPath(id));
@@ -593,6 +602,7 @@ export function NewContentDialog({
     changeOpen(false);
     onSent?.();
     if ('error' in sent) {
+      CONTENT_GENERATE.failed('send_failed');
       toast.error(t('start.sendFailed'), {
         description: sent.error,
         action: { label: t('start.openDraft'), onClick: () => router.push(contentEditorPath(id)) },
@@ -608,6 +618,7 @@ export function NewContentDialog({
         toast.warning(t('who.assignFailed'));
       }
     }
+    CONTENT_GENERATE.completed();
     toast.success(t('start.sent'), {
       description: t('start.sentDescription', { number: sent.actionNo }),
       duration: 10_000,

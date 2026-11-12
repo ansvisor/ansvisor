@@ -206,6 +206,17 @@ export const SCHEDULE_TOOLS = [
       output && typeof output === 'object' && (output as { ok?: unknown }).ok === true
         ? madeStep(output as MadeSchedule)
         : null,
+    // Recurring work: its card, and its row on Action Center › Agents.
+    scheduleCard: (_input, output) => {
+      const made = output as Partial<MadeSchedule> | null;
+      if (made?.ok !== true || made.recurring !== true) return null;
+      if (typeof made.schedule_id !== 'string') return null;
+      return {
+        title: String(made.title),
+        when: String(made.when),
+        href: `/dashboard/chat/scheduled/${made.schedule_id}`,
+      };
+    },
     fixture: {
       input: {
         brand_id: FIXTURE_IDS.brand,

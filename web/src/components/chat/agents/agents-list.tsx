@@ -11,24 +11,18 @@ import {
 } from 'react';
 import { useTranslations } from 'next-intl';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
-import { ListDot } from '@/components/agentic/list-dot';
 import { RoleContext } from '@/components/providers/role-provider';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from '@/i18n/navigation';
+import { track } from '@/lib/analytics';
 import type { AgentListView } from '@/lib/chat/agent-rules';
 import type { AgentListItem, AgentListResult } from '@/lib/chat/agents';
-import {
-  AGENT_TABS,
-  averageShare,
-  barWidth,
-  percentOf,
-  runDot,
-  writesAgents,
-} from '@/lib/chat/agent-view';
+import { AGENT_TABS, averageShare, barWidth, percentOf, writesAgents } from '@/lib/chat/agent-view';
 import { cn } from '@/lib/utils';
+import { AgentDot, agentDotOf } from './agent-dot';
 import { AgentDenial, FormulaChips, GoLiveBadge, StatusLine, liveRunOf } from './agent-parts';
 import { readAgents } from './agent-requests';
 import { AgentsKeyBanner } from '@/components/chat/own-key-notice';
@@ -44,8 +38,23 @@ import { useAgentActions } from './use-agent-actions';
  * scope, last run, the last 30 days' outcomes and its AI use as a share of
  * the monthly limit with a thin bar. Each card's Run now and Pause / Resume
  * are the ones the server's `can` gives the row. Analysts and Agency
- * partners read, and start on Workspace.
+ * partners read, and start on Workspace. A card's first button opens its
+ * run in Chat (runInChatOf).
  */
+
+/**
+ * The run a card's main button opens in Chat, as Action Center › Agents
+ * shows it: "Open the run in Chat" while it runs, "Review in
+ * Chat" while it waits on someone, "Open the last run" otherwise. None
+ * without a chat the person can open (lastRun.chatId).
+ */
+export function runInChatOf(
+  agent: Pick<AgentListItem, 'status' | 'lastRun'>,
+): { state: 'running' | 'needsYou' | 'last'; href: `/dashboard/chat/${string}` } | null {
+  const chatId = agent.lastRun?.chatId;
+  if (!chatId) return null;
+  return { state: liveRunOf(agent) ?? 'last', href: `/dashboard/chat/${chatId}` };
+}
 
 /** The search asks once the typing stops. */
 const SEARCH_DELAY_MS = 250;
@@ -119,6 +128,8 @@ function AgentCard({
   const can = agent.can;
   const live = liveRunOf(agent);
   const href = `/dashboard/agents/${agent.id}`;
+  // The card's main button opens its run in Chat.
+  const inChat = runInChatOf(agent);
   const next = words.nextRun(agent.triggers);
   const outcomes = words.outcomes(agent.outcomes30d);
   const cell = (label: string, value: ReactNode, slot: string) => (
@@ -155,7 +166,7 @@ function AgentCard({
           >
             {agent.name}
           </Link>
-          <StatusLine agent={agent} words={words} />
+          <StatusLine agent={agent} words={words} mark={<AgentDot dot={agentDotOf(agent)} />} />
         </div>
         {agent.ownerInitials && (
           <span
@@ -183,9 +194,9 @@ function AgentCard({
         {cell(
           tList('cells.lastRun'),
           agent.lastRun ? (
-            <b className="flex min-w-0 items-center gap-1 font-medium text-foreground">
-              <ListDot state={runDot(agent.lastRun.status)} className="-ml-1" />
-              <span className="truncate">{words.when(agent.lastRun.at)}</span>
+            // Its state is the card's dot (agent-dot.tsx), beside the status.
+            <b className="block truncate font-medium text-foreground">
+              {words.when(agent.lastRun.at)}
             </b>
           ) : (
             value(tList('none'))
@@ -196,7 +207,18 @@ function AgentCard({
         {cell(tList('cells.aiUse'), <AiUseCell agent={agent} />, 'aiUse')}
       </div>
 
-      <div className="mt-auto flex items-center gap-1.5 border-t pt-2.5">
+      <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t pt-2.5">
+        {inChat && (
+          <Link
+            href={inChat.href}
+            data-action="agents.openInChat"
+            data-state={inChat.state}
+            onClick={() => track('agents_open_in_chat', { state: inChat.state })}
+            className={buttonVariants({ size: 'sm' })}
+          >
+            {tList(`openInChat.${inChat.state}`)}
+          </Link>
+        )}
         {can.run && (
           <Button
             size="sm"

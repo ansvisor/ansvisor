@@ -118,7 +118,7 @@ describe('planCardOf', () => {
       afterTrial: false,
       benefits: [
         // ChatGPT and Gemini, then Google AI Overviews and AI Mode on Growth.
-        { key: 'morePlatforms', count: 2 },
+        { key: 'morePlatforms', count: 3 },
         { key: 'fullAuto' },
         { key: 'mcpWrite' },
         { key: 'aiLimit', times: 5 },
@@ -128,7 +128,7 @@ describe('planCardOf', () => {
 
   it("offers Enterprise's Claude tracking and contract from Growth, at a contract price", () => {
     const growth = card('growth');
-    expect(chip(growth, 'platforms')).toEqual({ key: 'platforms', count: 4, locked: null });
+    expect(chip(growth, 'platforms')).toEqual({ key: 'platforms', count: 5, locked: null });
     expect(chip(growth, 'fullAuto')?.locked).toBeNull();
     expect(chip(growth, 'mcp')).toEqual({ key: 'mcp', access: 'read_write', locked: null });
     expect(chip(growth, 'claude')?.locked).toBe('enterprise');
@@ -145,8 +145,8 @@ describe('planCardOf', () => {
   it('upsells nothing on Enterprise and shows no lock there', () => {
     const enterprise = card('enterprise');
     expect(enterprise.next).toBeNull();
-    // Growth's four engines plus Claude.
-    expect(chip(enterprise, 'platforms')).toEqual({ key: 'platforms', count: 5, locked: null });
+    // Growth's five engines plus Claude.
+    expect(chip(enterprise, 'platforms')).toEqual({ key: 'platforms', count: 6, locked: null });
     expect(enterprise.chips.every((c) => c.locked === null)).toBe(true);
     expect(chip(enterprise, 'ownKeys')).toEqual({ key: 'ownKeys', locked: null });
     expect(chip(enterprise, 'claude')).toBeUndefined();

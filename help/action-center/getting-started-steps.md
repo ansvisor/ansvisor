@@ -1,47 +1,40 @@
 ---
-title: Getting started steps in the Action Center
-route: /dashboard/action-center/actions
-keywords: [getting started, setup steps, onboarding checklist, new brand, skip get started]
+title: Finish setting up: the 7 set-up steps
+route: /dashboard/action-center/today
+keywords: [getting started, finish setting up, setup steps, onboarding checklist, new brand, hide setup]
 synonyms: [first steps, setup list, where do I start, onboarding]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-A new brand starts with **Getting started**: a fixed list of 17 steps on the Action Center's **Actions** tab. While it runs, the **Getting started** category opens first and lists the steps with their **Stage**, **Status** and **Ready** time, and a **Getting started** card shows how many are done. Click **All** or another category to see your actions.
+**Finish setting up** is a card on the Action Center's **Today** tab: the 7 steps that set a brand up, with how many are done, such as **3 of 7**. It shows the next two steps with about how long each takes; **Show all steps** lists all 7. The card goes away once all 7 are done.
 
-## The four stages
+## The 7 steps
 
-- **Set up**, ready now: set your KPIs, add at least 3 competitors and 3 topics, add 3 prompts per topic, connect Google Search Console and Google Analytics, and add the AI Traffic snippet.
-- **Explore**, when the first AI answers are in (usually within an hour): see where you stand in Visibility, read your first AI answers, track high-value prompt suggestions, check what AI says about you, see who AI quotes and see visits from AI.
-- **Act**, when the first content suggestions are in (about 24 hours): pick content from suggestions, create your first content, optimize a page.
-- **Ready**, after every step above is done or skipped.
+- Set your KPIs.
+- Add at least 3 competitors.
+- Add at least 3 topics.
+- Add 3 prompts per topic.
+- Connect Google Search Console.
+- Connect Google Analytics.
+- Add the AI Traffic snippet.
 
-The high-value prompts step waits about 24 hours after you connect Search Console or Analytics.
+Each step opens its page. Steps are checked from your data, such as three competitors saved or a first AI visit detected, so what you did before counts: an existing brand shows its real count on the first day.
 
-## Complete a step
+## Search Console and Analytics
 
-Click a step to open its card: why it matters, how to do it, and when it counts as done. The card's button opens the step's page in a new tab. Most steps are checked automatically from your data, such as three competitors saved or a first AI visit detected, so the step updates when you come back to the Action Center tab. A step still waiting for its data says when it opens.
+**Connect Google Search Console** and **Connect Google Analytics** are optional. A skipped one counts as done, and you can still connect later from Settings. Without either one, prompt and content suggestions are less accurate.
 
-## While the first tracking runs
+## Hide the card
 
-A new brand's first tracking takes from a few minutes to an hour or two at busy times. Meanwhile, the steps you can do right away come first and carry a **Ready now** mark: KPIs, competitors, topics and prompts you haven't finished, Google Search Console, Google Analytics and the AI Traffic snippet. The steps that need the first answers say **Arriving now**. Their card shows how far tracking is, such as "Your first answers are arriving (18 of 40) · ~6 min", instead of a page that is still empty. When tracking finishes, the app says **Your first results are ready**, the list goes back to its usual order and those steps open.
+**Hide** takes the card away. For admins and managers it hides the steps for everyone on the brand; for anyone else, only for themselves. Steps you finished stay done.
 
-## Skip the Google steps
-
-**Connect Google Search Console** and **Connect Google Analytics** are optional. Admins and managers can **Skip** them. A skipped step counts as complete, and you can still connect later from Settings. Without either one, prompt and content suggestions are less accurate.
-
-## Start or skip Getting started
-
-Admins and managers see **Get Started** or **Skip Get Started** at the top right of the Actions tab.
-
-- **Skip Get Started** puts the actions list back to normal. Steps you finished stay done, and you can start again any time from the same button.
-- **Get Started** appears after a skip, and for an existing brand whose setup looks incomplete: fewer than 3 competitors or topics, no Search Console, or no content in the last 30 days.
-- A brand added to an organization that already has one asks first whether to run Getting started for it. Choose **Run Getting started** or **Skip**.
+A brand added to an organization that already has one asks first, on Today, whether to run the set-up steps for it.
 
 ## Steps are not actions
 
-Getting started steps are not actions: they have no Priority Score and never come from signals. Your actions are listed beside them, under **All** and the other categories.
+The set-up steps are not actions: they have no Priority Score and never come from signals. Your first work on content comes from **Today's focus**, and opening Visibility, your AI answers, Mentions, Citations and AI Referral Traffic needs no step of its own.

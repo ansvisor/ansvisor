@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
-import type { ChatConfirmForm } from '../events';
+import type { ChatConfirmForm, ChatScheduleMade } from '../events';
 import type { PageVersionRead, VersionRun } from '../page-versions';
 
 /**
@@ -346,6 +346,11 @@ interface ToolFields<S extends z.ZodObject> {
   /** What it made, as a card with its Open (CHAT-09 item 19); null when nothing. */
   resultCard?(input: z.output<S>, output: unknown): ToolResultCard | null;
   /**
+   * Recurring work it set up, as its card with Run it now, Open in Agents
+   * and Change the schedule; null when none.
+   */
+  scheduleCard?(input: z.output<S>, output: unknown): ChatScheduleMade | null;
+  /**
    * The kind of step its card and its change are (CHAT-03): `schedule` for a
    * job Chat schedules. Without it, a write's step is `write`.
    */
@@ -373,6 +378,12 @@ interface ToolFields<S extends z.ZodObject> {
    * precedence allows gets it. Not offered, it isn't explained as refused either.
    */
   offerIn?(run: { agentRunId: string | null; parentRunId?: string | null }): Promise<boolean>;
+  /**
+   * A read that runs only while a loaded skill names it (withSkillRefusal):
+   * offered as ever, so the run's tools stay the same for the cache, and
+   * refused at once anywhere else, before it reads anything.
+   */
+  withSkill?: true;
   /**
    * What the change answers is untrusted data (another agent's words): the
    * run is tainted after it, so every later change shows a card (CHAT-20 §16a).

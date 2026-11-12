@@ -170,7 +170,7 @@ export function AiUsageCard() {
             {/* Only what used some is listed: none yet, a line says so. The
                 trial's shares aren't shown. */}
             {trial ? null : usage.features.length > 0 ? (
-              <ul className="divide-y rounded-lg border text-sm">
+              <ul className="divide-y rounded-lg border bg-card text-sm">
                 {usage.features.map(({ feature, percent }) => (
                   <li key={feature} className="flex items-center justify-between gap-3 px-3 py-2">
                     <span>{t(`features.${feature}`)}</span>
@@ -189,7 +189,7 @@ export function AiUsageCard() {
                   {t('byAgent.title')}
                 </h3>
                 {byAgent.length > 0 ? (
-                  <ul className="divide-y rounded-lg border text-sm">
+                  <ul className="divide-y rounded-lg border bg-card text-sm">
                     {byAgent.map((row) => (
                       <li
                         key={

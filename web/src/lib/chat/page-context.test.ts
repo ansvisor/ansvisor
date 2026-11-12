@@ -55,6 +55,14 @@ describe('menuTitleOf', () => {
     expect(menuTitleOf('/dashboard/content/library')).toBe('Library');
     expect(menuTitleOf('/dashboard/settings/team')).toBeNull();
   });
+
+  it('names the page as the menu does: Today and Agents are the Action Center’s', () => {
+    expect(menuTitleOf('/dashboard/agents/abc')).toBe('Agents');
+    expect(menuTitleOf('/dashboard/action-center/actions')).toBe('Actions');
+    expect(menuTitleOf('/dashboard/action-center/today')).toBe('Today');
+    expect(menuTitleOf('/dashboard/action-center/kpis')).toBe('Action Center');
+    expect(menuTitleOf('/dashboard/mentions')).toBe('Mentions');
+  });
 });
 
 describe('rangeChipLabel', () => {

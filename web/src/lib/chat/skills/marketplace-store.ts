@@ -71,7 +71,10 @@ export interface MarketplaceCard {
   added: { status: SkillStatus; skillId: string | null } | null;
 }
 
-/** Add for an Admin; a request to the Admins for a Manager; nothing for the others. */
+/**
+ * Add for an Admin and a Manager: the skill is on for them at once (owner,
+ * 2026-11-09); nothing for the others. 'request' was a Manager's before.
+ */
 export type MarketplaceAdd = 'add' | 'request' | null;
 
 export interface MarketplacePage {
@@ -110,7 +113,7 @@ export function marketplaceQuery(params: URLSearchParams): MarketplaceQuery {
 /** Whether the person adds (an Admin), asks (a Manager) or only browses, while the workspace isn't read-only. */
 export function marketplaceAdd(viewer: Pick<SkillViewer, 'role' | 'plan'>): MarketplaceAdd {
   if (!canSaveSkills(viewer.role) || !viewer.plan.writable) return null;
-  return viewer.role === 'admin' ? 'add' : 'request';
+  return 'add';
 }
 
 type AddedRow = { id: string; library_ref: string; status: string; created_by: string | null };
@@ -295,9 +298,9 @@ export async function readMarketplaceDetail(
  * Adds a catalog skill to the workspace (items 11–13, W4-19): an Admin's
  * or a Manager's, as an import is (a paid plan, the plan's limit, a name
  * of its own), once per workspace. It is read at its pinned commit,
- * cleaned and scanned, and waits off and private for an Admin's review; a
- * Manager's Add asks the Admins. Approved, it is on under My skills with
- * its license, source and commit. One the scan blocks isn't kept.
+ * cleaned and scanned, and is on at once for whoever added it, private,
+ * under My skills with its license, source and commit (owner, 2026-11-09:
+ * no Admin review for the Library's skills). One the scan blocks isn't kept.
  */
 export async function addMarketplaceSkill(
   viewer: SkillViewer,

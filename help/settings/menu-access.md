@@ -4,8 +4,8 @@ route: /dashboard/settings/menu-access
 keywords: [menu access, hide menu sections, role menu, customize menu, sidebar sections, fold menu group]
 synonyms: [hide pages from users, left menu per role, restrict menu, simplify sidebar]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ sources: [docs/guides/menu-access.mdx]
 
 ## Fold a group on your menu
 
-Click a group's title on the left menu, **Execution** or **Analytics**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Agent Center** sit above the groups, and **Reports** and **Competitors** below them, so they don't fold.
+Click a group's title on the left menu, **Analytics** or **More**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Action Center** sit above the groups, so they don't fold; the Action Center's own tabs fold under it.
 
 ## Who can change menus
 
@@ -28,8 +28,8 @@ Only admins choose who changes menus. A manager who becomes another role stops c
 **Sections each role sees** lists the left menu's sections, by group, with a column for each role. Tick what a role sees; each box is saved as you click it.
 
 - **Admin** always sees **Everything**.
-- **Action Center** is on everyone's menu and can't be turned off.
-- **Use a set…** fills a role's column from a work area's ready-made set, or **Everything**. Adjust it from there. **Agent Center** is in every set: right after Chat where the set has Chat, else right after Action Center.
+- **Action Center** is on everyone's menu and can't be turned off. **Agents · in Action Center**, under it, can be hidden on its own.
+- **Use a set…** fills a role's column from a work area's ready-made set, or **Everything**. Adjust it from there. **Agents** is in every set.
 
 Until an admin hides something, every role sees every section.
 

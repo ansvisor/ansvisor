@@ -11,13 +11,14 @@ import {
 import { chatActor, runFailure } from '@/lib/chat/run-api';
 
 /**
- * GET /api/chat/conversations?view=active|archived&limit=
+ * GET /api/chat/conversations?view=active|archived&limit=&brandId=
  *
  * The chat menu's and All chats' rows (CHAT-01 §6, agentic update): the
  * person's chats and the team's shared ones, newest first, each with its
  * brand's name, its dot (running, needs you, done, failed, idle) and the
  * step it is on in words; with the counts beside "Chats" and "Archived".
- * `archived` lists their own archived chats.
+ * `archived` lists their own archived chats. `brandId` keeps one brand's
+ * chats (Today's Waiting for you).
  *
  * POST /api/chat/conversations `{ brandId?, origin?, originPage? }`
  *

@@ -30,6 +30,7 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { NO_TOPICS } from '@/lib/topics-required';
+import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 
 /** Items shown, as in the mockup; "See all" opens the rest. */
 const VISIBLE_ITEMS = 4;
@@ -52,7 +53,6 @@ export function Opportunities({
   trackedTopicIds,
   topics,
   entities,
-  slotsLeft,
   contentUsage,
   onTracked,
   className,
@@ -64,8 +64,6 @@ export function Opportunities({
   topics: TopicCompetitors[] | null;
   /** The trend's brands, for the names of the competitors leading topics. */
   entities: { key: string; name: string; isOwnBrand: boolean }[] | null;
-  /** Prompt locations left on the plan; null when unlimited. */
-  slotsLeft: number | null;
   /** The month's content quota (CONTENT-001); null when it couldn't be read. */
   contentUsage: ContentUsage | null;
   onTracked: (count: number) => void;
@@ -91,6 +89,8 @@ export function Opportunities({
   const [contentSpent, setContentSpent] = useState(0);
   // A brand with no topic yet: Track asks for one first.
   const topicFirst = useTopicFirstDialog();
+  // A full plan doesn't stop Track; the prompts wait for a spot.
+  const showWaiting = useWaitingForSpotToast();
 
   const result = useMemo(() => {
     const names = Object.fromEntries(
@@ -101,7 +101,6 @@ export function Opportunities({
       topicStandings(topics, names, trackedTopicIds && new Set(trackedTopicIds)),
     );
   }, [suggestions, trackedIds, topics, entities, trackedTopicIds]);
-  const planFull = slotsLeft !== null && slotsLeft <= 0;
   const left = contentLeft(contentUsage?.opportunities, contentSpent);
   const contentFullHint = contentUsage?.periodEnd
     ? t('contentLimitResets', {
@@ -224,6 +223,7 @@ export function Opportunities({
     try {
       const {
         trackedIds: done,
+        waitingIds = [],
         skippedIds,
         error,
         code,
@@ -233,7 +233,8 @@ export function Opportunities({
         setTrackedIds((prev) => new Set([...prev, ...done, ...skippedIds]));
       }
       if (done.length > 0) {
-        onTracked(done.length);
+        // Waiting prompts take no room on the plan.
+        onTracked(done.length - waitingIds.length);
         tab.go(TRACKED_HREF);
       } else {
         tab.close();
@@ -244,6 +245,8 @@ export function Opportunities({
         : { label: t('openPrompts'), onClick: () => router.push(TRACKED_HREF) };
       if (!error && done.length === 0) {
         toast.info(t('alreadyHandled'));
+      } else if (!error && waitingIds.length > 0) {
+        showWaiting('track_n', done.length - waitingIds.length, waitingIds.length);
       } else if (!error && item.kind === 'topic' && item.topicId) {
         // Tracking takes the topic off the card; Send action stays one click away.
         toast.success(t('tracked', { count: done.length }), {
@@ -362,17 +365,15 @@ export function Opportunities({
                       {canManage && (
                         <span
                           title={
-                            planFull
-                              ? t('planFull')
-                              : isTopic
-                                ? t('trackCountHint', { count, topic: item.title })
-                                : t('trackHint')
+                            isTopic
+                              ? t('trackCountHint', { count, topic: item.title })
+                              : t('trackHint')
                           }
                         >
                           <Button
                             size="sm"
                             className="h-7 gap-1.5 px-2.5 text-xs"
-                            disabled={planFull || busy !== null}
+                            disabled={busy !== null}
                             onClick={guard(() => track(item), { action: tActions('trackPrompts') })}
                           >
                             {/* Track N adds one prompt at a time, so a big topic takes a moment. */}

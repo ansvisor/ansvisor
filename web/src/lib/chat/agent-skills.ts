@@ -31,6 +31,11 @@
  * Console is connected: Optional, as for /report. Its changes are prompts
  * added and paused, each on a card.
  *
+ * Then /plan: a 30-day plan from the brand's visibility, prompts,
+ * competitors, opportunities and open actions, all Ansvisor's own data, so
+ * it uses no connection. Its actions go to the Action Center with
+ * create_action, once the person says yes.
+ *
  * A workspace's own skills (CHAT-13, W3-06) are instructions only: an
  * agent may name one by its /command, and it needs no connection (skillOf
  * gives none). Whether it may run now is the workspace's to say
@@ -91,6 +96,9 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'wrongclaim', uses: [] },
   { id: 'answerfirst', uses: [] },
   { id: 'facts', uses: [] },
+  // ChatGPT Business Hub plan, PR 7: reads tracked answers, approved facts and
+  // the brand's own pages, and saves drafts: no connection.
+  { id: 'chatgpt-profile', uses: [] },
   { id: 'compare', uses: [] },
   { id: 'translate', uses: [] },
   { id: 'questions', uses: [] },
@@ -103,6 +111,7 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'setup', uses: [] },
   { id: 'fanout', uses: [] },
   { id: 'prompts', uses: [optional('google_search_console')] },
+  { id: 'plan', uses: [] },
 ];
 
 /** Connections any agent may add as Optional (mockup: Google Analytics). */

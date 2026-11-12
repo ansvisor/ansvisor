@@ -64,8 +64,15 @@ const OPEN_ACTIONS: Record<string, string> = {
     'a column layout: costs nothing, and read-only shows the data the same way',
   'prompt-table-views.ts:removePromptTableView':
     'a column layout: costs nothing, and read-only shows the data the same way',
+  // A person's Today and menu state on a brand (00529): UI state, on the demo brand too.
+  'user-brand-state.ts:markSeen':
+    "the person's own record of opening a page (a menu dot clears), nothing that costs",
+  'user-brand-state.ts:setFocus':
+    "the person's own Today focus: which open actions they keep in view, nothing that costs",
+  'user-brand-state.ts:hideCard':
+    "the person's own hidden or snoozed Today cards, nothing that costs",
   'menu-access.ts:setMyWorkAreas':
-    'the person\'s own profile; it answers "What do you work on?", which /dashboard/welcome waits on',
+    "the person's own profile: their work areas only narrow their own menu",
   'chat-uploads.ts:prepareChatUpload':
     'checks the plan itself (isSubscriptionActive), to answer read_only instead of throwing',
   'chat-uploads.ts:finishChatUpload':
@@ -90,6 +97,8 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-prefs.ts:skipChatFocus': "the person's own Chat focus left empty, nothing that costs",
   'chat-prefs.ts:markFocusPrompted':
     "the person's own record of being asked their focus, nothing that costs",
+  'chat-range.ts:saveChatDateRange':
+    "the person's own Chat date range (00528): it only sets the period a run reads, nothing that costs",
   // requestAccess writes through lib/chat/access-request-store.ts: asking an Admin
   // costs nothing, and a read-only workspace is one of the things to ask about.
   'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',
@@ -127,6 +136,12 @@ const OPEN_ROUTES: Record<string, string> = {
   'keys/[id]:DELETE': 'revoking a key takes back access',
   'mcp:POST': 'its tools are gated one by one (gateWriteTools)',
   'mcp:DELETE': 'ends an MCP session',
+  // MCP over OAuth (#2141): no person is signed in here, and no workspace is
+  // known yet. The plan is checked at the consent page and on every MCP call.
+  'oauth/register:POST': 'an app registers itself, before any workspace: no cost',
+  'oauth/token:POST':
+    'an app redeems a code or refreshes its tokens; the MCP calls check the plan (oauthMcpAccess)',
+  'oauth/revoke:POST': 'an app ends its own connection: takes back access',
   'settings/ai-providers:DELETE': 'removing a key takes back access',
   'stripe/checkout:POST': 'billing: choosing a plan',
   'stripe/portal:POST': 'billing: the payment method',
@@ -136,6 +151,9 @@ const OPEN_ROUTES: Record<string, string> = {
   'stripe/webhook:POST': "Stripe's own calls",
   'traffic/read:POST': 'reads only',
   'visibility/read:POST': 'reads only',
+  // Settings › Connected apps (MCP over OAuth, #2141): Disconnect ends one of
+  // the person's own connections.
+  'oauth/connections/[id]:DELETE': 'disconnecting an app takes back access',
   // Chat's runs: the engine answers 402 with the server's body itself
   // (startChatRun, prepareResume), but for a request to the Admins.
   'chat/conversations:POST':
@@ -179,6 +197,9 @@ const OPEN_ROUTES: Record<string, string> = {
   // The API server's report card queue (CRON_SECRET): Ansvisor's own free report card, no workspace.
   'internal/report-card/pdf:POST':
     "draws a free report card's PDF for the API server; no workspace, nothing written",
+  // The API server's daily suggestions job (CRON_SECRET): words an action for its Slack post (#2139).
+  'internal/slack/suggestion:POST':
+    "words an action for the API server's Slack post; reads only, nothing written",
 };
 
 /** What checks a route's plan before it writes. */

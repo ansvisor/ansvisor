@@ -2,14 +2,16 @@
 
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import type { ActionPlay } from '@/lib/action-center/play';
+import { isGuideOption, type ActionPlay } from '@/lib/action-center/play';
 import { pagePath } from '@/lib/content/overlap';
 
 /**
  * "What to do for {an online store | a SaaS | an app | a travel brand}"
  * (AC-ACTION-PLAN spec §5, P-2): the page the action's prompts pick, with
  * the measured reasons behind it, then up to two more worth doing for the
- * same prompts. Start now (§10) sits under it: the play is what it writes.
+ * same prompts; on a store's live category page with no buying guide yet,
+ * a guide next to that page first (P-7). Start now (§10) sits under it: the
+ * play is what it writes.
  */
 export function PlaySection({ play, children }: { play: ActionPlay; children?: ReactNode }) {
   const t = useTranslations('actionCenter.actionsPage.play');
@@ -49,7 +51,13 @@ export function PlaySection({ play, children }: { play: ActionPlay; children?: R
           <ul className="space-y-0.5">
             {play.supporting.map((option) => (
               <li key={option.id} className="text-xs">
-                {t('alsoLine', { name: t(`plays.${option.id}`), share: option.share })}
+                {isGuideOption(option)
+                  ? t('alsoGuideLine', {
+                      name: t(`plays.${option.id}`),
+                      page: pagePath(option.linkTo),
+                      category: option.category,
+                    })
+                  : t('alsoLine', { name: t(`plays.${option.id}`), share: option.share })}
               </li>
             ))}
           </ul>

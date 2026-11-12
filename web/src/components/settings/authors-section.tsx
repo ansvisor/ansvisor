@@ -173,7 +173,7 @@ export function AuthorsSection() {
             {read.authors.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('empty')}</p>
             ) : (
-              <ul className="divide-y rounded-xl border">
+              <ul className="divide-y rounded-xl border bg-card">
                 {read.authors.map((author) => (
                   <li key={author.id} className="flex items-start gap-3 px-3 py-2.5">
                     <AuthorPhoto author={author} />

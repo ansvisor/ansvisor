@@ -100,6 +100,13 @@ vi.mock('./_use-pages-export', () => ({
 // Callable too: a page audited minutes ago asks with a plain toast.
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
+/** The site_audit_run events sent, in order. */
+const flows = () =>
+  analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
+const STARTED = ['flow_started', { flow: 'site_audit_run' }];
+const COMPLETED = ['flow_completed', { flow: 'site_audit_run' }];
 
 const { default: SiteAuditPage } = await import('./page');
 
@@ -169,6 +176,8 @@ describe('SiteAuditPage Run audit', () => {
     expect(openUpgrade).toHaveBeenLastCalledWith('Running an audit needs a plan');
     expect(audits.runAudit).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+    // The wall is the dialog's to count: no flow started.
+    expect(flows()).toEqual([]);
   });
 
   // The server reads 0 of 0 without an active plan (noPlan): not "used up".
@@ -206,6 +215,19 @@ describe('SiteAuditPage Run audit', () => {
     expect(audits.runAudit).toHaveBeenCalledExactlyOnceWith('b1', 'https://acme.com');
     expect(push).toHaveBeenCalledWith('/dashboard/audit/a1');
     expect(openUpgrade).not.toHaveBeenCalled();
+    expect(flows()).toEqual([STARTED, COMPLETED]);
+    expect(JSON.stringify(analytics.track.mock.calls)).not.toContain('acme');
+  });
+
+  it('fails site_audit_run when the audit couldn’t start, sending no message', async () => {
+    audits.runAudit.mockRejectedValue(new Error('Server error: 500'));
+    await render(false);
+    await act(async () => runButton().click());
+    expect(toast.error).toHaveBeenCalledWith('Server error: 500');
+    expect(flows()).toEqual([
+      STARTED,
+      ['flow_failed', { flow: 'site_audit_run', error_code: null }],
+    ]);
   });
 
   it('starts an audit on Enter on an active plan', async () => {
@@ -238,6 +260,8 @@ describe('SiteAuditPage a page audited minutes ago', () => {
     await act(async () => options.action.onClick());
     expect(audits.runAudit).toHaveBeenLastCalledWith('b1', 'https://acme.com', { force: true });
     expect(push).toHaveBeenLastCalledWith('/dashboard/audit/a2');
+    // One Run audit, which Audit again finished.
+    expect(flows()).toEqual([STARTED, COMPLETED]);
   });
 });
 
@@ -327,6 +351,7 @@ describe('SiteAuditPage Opportunities', () => {
     )!;
     await act(async () => go.click());
     expect(audits.runAuditsBulk).toHaveBeenCalledWith('b1', ['https://acme.com/new']);
+    expect(flows()).toEqual([STARTED, COMPLETED]);
   });
 
   it('lets admins and managers pin, exclude and restore pages', async () => {

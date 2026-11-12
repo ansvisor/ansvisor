@@ -4,10 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { ShoppingBag } from 'lucide-react';
 import { dashboardNav } from '@/config/dashboard';
 import {
+  ADS_SECTIONS,
   ALWAYS_ON_SECTION,
   CHAT_AGENTIC_SECTIONS,
   MENU_SECTIONS,
   WORK_AREAS,
+  WORK_AREAS_RESET_AT,
   WORK_AREA_IDS,
   cleanMenuSections,
   hiddenMenuSections,
@@ -18,8 +20,14 @@ import {
   menuSectionsFor,
   readRoleHidden,
   workAreaSections,
+  workAreasOf,
   type MenuAccess,
 } from './menu-access';
+
+/** Work areas picked in Settings after everyone went back to Everything. */
+const PICKED_AT = '2026-11-12T09:00:00Z';
+/** Work areas saved before it: the old "What do you work on?" answer. */
+const OLD_ANSWER_AT = '2026-10-29T09:00:00Z';
 
 const analyst: MenuAccess = {
   role: 'analyst',
@@ -42,8 +50,11 @@ describe('menuSectionOf', () => {
 });
 
 describe('MENU_SECTIONS', () => {
-  it('lists the left menu, Chat and Agent Center first and Action Center right after', () => {
-    expect(MENU_SECTIONS.slice(0, 3)).toEqual(['agent', 'agents', ALWAYS_ON_SECTION]);
+  // Chat, the Action Center and its Agents first, then Analytics; Ads
+  // (ADS-01) closes Analytics, after AI Referral Traffic.
+  it('lists the left menu, Chat, the Action Center and Agents first, then Analytics', () => {
+    expect(MENU_SECTIONS.slice(0, 3)).toEqual(['agent', ALWAYS_ON_SECTION, 'agents']);
+    expect(MENU_SECTIONS.indexOf('ads')).toBe(MENU_SECTIONS.indexOf('traffic') + 1);
     expect(MENU_SECTIONS).toEqual(
       expect.arrayContaining(['agent', 'content', 'audit', 'insights', 'shopping', 'reports']),
     );
@@ -59,7 +70,7 @@ describe('MENU_SECTIONS', () => {
       'mentions',
       'citations',
       'shopping',
-      'prompts',
+      'traffic',
     ]);
     expect(cleanMenuSections(['citations', 'mentions'])).toEqual(['mentions', 'citations']);
     // Product Visibility keeps its name and icon where the sections are listed,
@@ -111,7 +122,7 @@ describe('hiddenMenuSections', () => {
 
   it('narrows the menu to the work areas', () => {
     expect(hidden({ workAreas: ['brand'] }).sort()).toEqual(
-      ['audit', 'content', 'prompts', 'shopping', 'traffic'].sort(),
+      ['ads', 'audit', 'content', 'prompts', 'shopping', 'traffic'].sort(),
     );
   });
 
@@ -144,7 +155,7 @@ describe('hiddenMenuSections', () => {
     expect(hidden({ role: 'admin', roleHidden: ['content'], hidden: ['reports'] })).toEqual([]);
     expect(
       hidden({ role: 'admin', roleHidden: ['mentions'], workAreas: ['brand'] }).sort(),
-    ).toEqual(['audit', 'content', 'prompts', 'shopping', 'traffic'].sort());
+    ).toEqual(['ads', 'audit', 'content', 'prompts', 'shopping', 'traffic'].sort());
   });
 });
 
@@ -156,8 +167,10 @@ describe('Agent Center', () => {
 
   it('is the one section only the new Chat has', () => {
     expect(CHAT_AGENTIC_SECTIONS).toEqual(['agents']);
-    expect(menuSectionsFor(true)).toEqual(MENU_SECTIONS);
-    expect(chatOff).toEqual(MENU_SECTIONS.filter((section) => section !== 'agents'));
+    expect(menuSectionsFor(true, true)).toEqual(MENU_SECTIONS);
+    expect(menuSectionsFor(false, true)).toEqual(
+      MENU_SECTIONS.filter((section) => section !== 'agents'),
+    );
   });
 
   it('is in the work areas Chat is in, right after it', () => {
@@ -211,6 +224,78 @@ describe('Agent Center', () => {
   });
 });
 
+// Ads (ADS-01), in development behind ADS_ENABLED: a section of its own
+// while it is on, which roles, people and work areas hide as they hide any
+// other; off, it is on no menu and in no count or list.
+describe('Ads', () => {
+  const adsOff = menuSectionsFor(true);
+  const adsOn = menuSectionsFor(true, true);
+  const profile = {
+    role: 'analyst' as const,
+    work_areas: [],
+    work_areas_asked_at: PICKED_AT,
+    menu_shown: [],
+    menu_hidden: [],
+    can_manage_menus: null,
+  };
+
+  it('is the one section only Ads has, off unless asked for', () => {
+    expect(ADS_SECTIONS).toEqual(['ads']);
+    expect(adsOff).toEqual(MENU_SECTIONS.filter((section) => section !== 'ads'));
+    expect(menuSectionsFor(false)).not.toContain('ads');
+    expect(adsOn).toEqual(MENU_SECTIONS);
+    expect(menuSectionsFor(false, true)).toContain('ads');
+  });
+
+  it('is on every role’s menu while it is on, until a role or a person hides it', () => {
+    expect(menuOfProfile(profile, [], adsOn).hidden).toEqual([]);
+    expect(menuOfProfile(profile, ['ads'], adsOn).hidden).toEqual(['ads']);
+    expect(menuOfProfile({ ...profile, menu_hidden: ['ads'] }, [], adsOn).hidden).toEqual(['ads']);
+    // Shown for the person although the role hides it.
+    expect(menuOfProfile({ ...profile, menu_shown: ['ads'] }, ['ads'], adsOn).hidden).toEqual([]);
+    expect(cleanMenuSections(['reports', 'ads', 'traffic'])).toEqual(['traffic', 'ads', 'reports']);
+  });
+
+  it('is for Founders & leaders, Growth and Analytics, right after AI Referral Traffic', () => {
+    const withAds = WORK_AREAS.filter((area) =>
+      (area.sections as readonly string[]).includes('ads'),
+    );
+    expect(withAds.map((area) => area.id)).toEqual(['leaders', 'growth', 'analytics']);
+    for (const area of withAds) {
+      const sections = area.sections as readonly string[];
+      expect(sections.indexOf('ads'), area.id).toBe(sections.indexOf('traffic') + 1);
+    }
+    const byAreas = (work_areas: string[]) =>
+      menuOfProfile({ ...profile, work_areas }, [], adsOn).hidden;
+    expect(byAreas(['growth'])).not.toContain('ads');
+    expect(byAreas(['content'])).toContain('ads');
+    expect(byAreas(['content', 'analytics'])).not.toContain('ads');
+  });
+
+  it('is off every count and list while it is off', () => {
+    expect(menuOfProfile(profile, ['ads'], adsOff).hidden).toEqual([]);
+    expect(menuOfProfile({ ...profile, work_areas: ['content'] }, [], adsOff).hidden).not.toContain(
+      'ads',
+    );
+    expect(hiddenWithWorkAreas(['ads'], ['content'], adsOff)).not.toContain('ads');
+    expect(hiddenWithWorkAreas([], ['content'], adsOn)).toContain('ads');
+  });
+});
+
+describe('workAreasOf', () => {
+  it('counts known work areas saved since the reset, none before it or never saved', () => {
+    expect(OLD_ANSWER_AT < WORK_AREAS_RESET_AT && WORK_AREAS_RESET_AT < PICKED_AT).toBe(true);
+    const saved = (work_areas_asked_at: string | null) =>
+      workAreasOf({ work_areas: ['brand', 'retired', 'content'], work_areas_asked_at });
+    expect(saved(PICKED_AT)).toEqual(['brand', 'content']);
+    expect(saved(WORK_AREAS_RESET_AT)).toEqual(['brand', 'content']);
+    expect(saved(OLD_ANSWER_AT)).toEqual([]);
+    expect(saved(null)).toEqual([]);
+    expect(saved('not a date')).toEqual([]);
+    expect(workAreasOf(null)).toEqual([]);
+  });
+});
+
 describe('workAreaSections', () => {
   it('joins the areas’ sections', () => {
     const sections = workAreaSections(['developers', 'brand']);
@@ -227,12 +312,13 @@ describe('workAreaSections', () => {
 describe('hiddenWithWorkAreas', () => {
   it('keeps what the admin takes off and narrows the rest to the areas', () => {
     expect(hiddenWithWorkAreas(['mentions'], ['brand'])).toEqual([
-      'content',
-      'audit',
+      'prompts',
       'mentions',
       'shopping',
-      'prompts',
       'traffic',
+      'ads',
+      'content',
+      'audit',
     ]);
     expect(hiddenWithWorkAreas(['mentions'], [])).toEqual(['mentions']);
   });
@@ -242,7 +328,7 @@ describe('menuOfProfile', () => {
   const profile = {
     role: 'manager' as const,
     work_areas: ['brand', 'retired'],
-    work_areas_asked_at: null,
+    work_areas_asked_at: PICKED_AT,
     menu_shown: ['prompts'],
     menu_hidden: [],
     can_manage_menus: true,
@@ -250,12 +336,51 @@ describe('menuOfProfile', () => {
 
   it('builds the menu from the profile and the role’s row', () => {
     expect(menuOfProfile(profile, ['citations'])).toEqual({
-      hidden: ['content', 'audit', 'citations', 'shopping', 'prompts', 'traffic'],
+      hidden: ['prompts', 'citations', 'shopping', 'traffic', 'ads', 'content', 'audit'],
       hiddenByAdmin: ['citations'],
       workAreas: ['brand'],
-      workAreasAsked: false,
       canManageMenus: true,
     });
+  });
+
+  it('starts on Everything: someone new, invited or exploring the demo, with no work areas picked', () => {
+    const fresh = {
+      ...profile,
+      role: 'analyst' as const,
+      work_areas: [],
+      work_areas_asked_at: null,
+      menu_shown: [],
+    };
+    for (const sections of [MENU_SECTIONS, menuSectionsFor(true), menuSectionsFor(false)]) {
+      expect(menuOfProfile(fresh, [], sections)).toMatchObject({ hidden: [], workAreas: [] });
+    }
+  });
+
+  it('shows everything to someone whose work areas were saved before the reset, roles still hiding theirs', () => {
+    const answered = { ...profile, work_areas_asked_at: OLD_ANSWER_AT };
+    expect(menuOfProfile(answered, [])).toMatchObject({ hidden: [], workAreas: [] });
+    // Menu access (admins' choice) isn't reset.
+    expect(menuOfProfile(answered, ['citations'])).toMatchObject({
+      hidden: ['citations'],
+      hiddenByAdmin: ['citations'],
+    });
+    expect(
+      menuOfProfile({ ...answered, role: 'analyst', menu_shown: [], menu_hidden: ['reports'] }, [
+        'citations',
+      ]).hidden,
+    ).toEqual(['citations', 'reports']);
+  });
+
+  it('narrows the menu again once work areas are picked in Settings after the reset', () => {
+    const repicked = { ...profile, work_areas_asked_at: PICKED_AT };
+    expect(menuOfProfile(repicked, []).hidden).toEqual([
+      'prompts',
+      'shopping',
+      'traffic',
+      'ads',
+      'content',
+      'audit',
+    ]);
   });
 
   it('lets only managers and admins change menus', () => {

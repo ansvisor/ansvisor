@@ -20,8 +20,13 @@ const actions = vi.hoisted(() => ({
   dismissSuggestion: vi.fn(),
   dismissSuggestions: vi.fn(),
   trackSuggestions: vi.fn(),
+  suggestPromptsFromBusinessHub: vi.fn(),
 }));
 vi.mock('@/lib/actions/prompt-suggestions', () => actions);
+
+// The Business Hub dialog's quota line.
+const quota = vi.hoisted(() => ({ getLocationQuota: vi.fn() }));
+vi.mock('@/lib/actions/prompt', () => quota);
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -67,11 +72,7 @@ const onAccepted = vi.fn();
 let isLocked = false;
 const openUpgrade = vi.fn();
 
-async function render(
-  count: number,
-  planId: 'starter' | 'growth' = 'starter',
-  onAddTopic?: () => void,
-) {
+async function render(count: number, onAddTopic?: () => void) {
   actions.getPromptSuggestions.mockResolvedValue({
     ok: true,
     suggestions: Array.from({ length: count }, (_, i) => suggestion(i + 1)),
@@ -88,7 +89,6 @@ async function render(
             onAccepted={onAccepted}
             onAddTopic={onAddTopic}
             sourceStates={null}
-            planId={planId}
             limitActions={<button type="button">Upgrade plan</button>}
           />
         </UpgradeDialogContext.Provider>
@@ -159,65 +159,6 @@ describe('SuggestionsCard — Add All', () => {
     expect(actions.trackSuggestions.mock.calls).toEqual([[ids(1, 25)], [ids(26, 30)]]);
     expect(rows()).toHaveLength(0);
     expect(toast.success).toHaveBeenCalledWith('30 prompts added to your tracked list');
-  });
-
-  it('keeps the rest and says how to make room when the plan limit is reached', async () => {
-    await render(25);
-    actions.trackSuggestions.mockResolvedValue({
-      trackedIds: ids(1, 10),
-      skippedIds: [],
-      error: 'Your Starter plan allows up to 50 active prompt locations…',
-      code: 'plan_limit',
-    } satisfies TrackSuggestionsResult);
-
-    await clickAddAll();
-
-    expect(rows()).toHaveLength(15);
-    expect(rows()[0].textContent).toContain('Prompt 11');
-    expect(toast.success).toHaveBeenCalledWith('10 prompts added to your tracked list');
-    expect(toast.error).not.toHaveBeenCalled();
-    const note = container.querySelector('[role="alert"]')!;
-    expect(note.textContent).toContain("15 suggestions couldn't be added");
-    expect(note.textContent).toContain(
-      "10 were added before your plan's prompt limit was reached.",
-    );
-    expect(note.textContent).toContain(
-      'Upgrade your plan, or pause 15 prompts in Tracked Prompts first and try again.',
-    );
-    expect(note.querySelector('a[href="/dashboard/prompts/tracked"]')?.textContent).toBe(
-      'Go to Tracked Prompts',
-    );
-    // The page's own Upgrade / Contact us buttons.
-    expect([...note.querySelectorAll('button')].map((b) => b.textContent)).toContain(
-      'Upgrade plan',
-    );
-  });
-
-  it('stops after the batch that reached the limit', async () => {
-    await render(30, 'growth');
-    actions.trackSuggestions.mockResolvedValue({
-      trackedIds: [],
-      skippedIds: ['s1'],
-      error: 'limit',
-      code: 'plan_limit',
-    } satisfies TrackSuggestionsResult);
-
-    await clickAddAll();
-
-    expect(actions.trackSuggestions).toHaveBeenCalledOnce();
-    expect(onAccepted).not.toHaveBeenCalled();
-    // The skipped one was handled elsewhere: it leaves, the other 29 stay.
-    expect(rows()).toHaveLength(29);
-    const note = container.querySelector('[role="alert"]')!;
-    expect(note.textContent).toContain("29 suggestions couldn't be added");
-    expect(note.textContent).toContain(
-      "Your plan's prompt limit is reached. Contact us to raise your limit, or pause 29 prompts",
-    );
-
-    await act(async () => {
-      (note.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click();
-    });
-    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('reports any other failure as an error and keeps what was not added', async () => {
@@ -343,12 +284,7 @@ describe('SuggestionsCard — estimated volume', () => {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-          <SuggestionsCard
-            brandId="b1"
-            onAccepted={onAccepted}
-            sourceStates={null}
-            planId="growth"
-          />
+          <SuggestionsCard brandId="b1" onAccepted={onAccepted} sourceStates={null} />
         </NextIntlClientProvider>,
       );
     });
@@ -415,7 +351,7 @@ describe('SuggestionsCard on a brand without topics', () => {
   it('asks for a topic first when Generate Suggestions finds none, and opens Add Topic in place', async () => {
     actions.refreshPromptSuggestions.mockResolvedValue({ ok: false, failure: 'no_topics' });
     const onAddTopic = vi.fn();
-    await render(0, 'starter', onAddTopic);
+    await render(0, onAddTopic);
     await act(async () => button('Generate Suggestions').click());
     expect(askedForTopic()).toBe(true);
     expect(toast.error).not.toHaveBeenCalled();
@@ -598,11 +534,29 @@ describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', (
     },
   };
 
-  async function show(search = '') {
+  // A buyer question about one of the catalog's top products (AC plan P-8).
+  const fromProduct: PromptSuggestion = {
+    ...suggestion(3),
+    suggestedText: 'Atmos AG 65 vs Deuter Aircontact for a week-long trek',
+    topicName: 'Hiking backpacks',
+    estVolume: 900,
+    source: 'catalog',
+    sourceData: {
+      product: 'Atmos AG 65',
+      productId: '7a1c2b9e-1111-4c3d-8e9f-000000000001',
+      productType: 'Backpack',
+      category: 'Bags > Hiking backpacks',
+      categoryId: '7a1c2b9e-2222-4c3d-8e9f-000000000002',
+      cardPrompts: 4,
+      orders: 12,
+    },
+  };
+
+  async function show(search = '', extra: PromptSuggestion[] = []) {
     window.history.replaceState(null, '', `/dashboard/prompts${search}`);
     actions.getPromptSuggestions.mockResolvedValue({
       ok: true,
-      suggestions: [suggestion(1), fromCatalog],
+      suggestions: [suggestion(1), fromCatalog, ...extra],
       stale: false,
     });
     await act(async () => {
@@ -630,6 +584,36 @@ describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', (
       expect.stringContaining('best hiking backpacks under $150'),
     ]);
     expect(container.textContent).toContain('Shopping');
+  });
+
+  it('shows the category a shopping question came from on its row', async () => {
+    await show();
+    const shopping = rows()[1];
+    // Read by its attribute: the DOM's selector parser takes a ">" in one as a combinator.
+    const chip = [...shopping.querySelectorAll('[title]')].find(
+      (el) => el.getAttribute('title') === 'Category from your catalog: Bags > Hiking backpacks',
+    );
+    expect(chip?.textContent).toBe('Bags > Hiking backpacks');
+  });
+
+  it('shows the product a buyer question is about, with its topic and estimated volume', async () => {
+    await show('', [fromProduct]);
+    const product = rows()[2];
+    const chip = product.querySelector('[title="Product from your catalog: Atmos AG 65"]');
+    expect(chip?.textContent).toBe('Atmos AG 65');
+    expect(product.textContent).toContain('Hiking backpacks');
+    expect(product.textContent).toContain('/mo');
+    expect(product.textContent).toContain('Your catalog');
+    // Its category isn't shown as well: the product says more.
+    expect(product.querySelector('[title^="Category from your catalog"]')).toBeNull();
+  });
+
+  it('lists a product’s questions among the shopping ones', async () => {
+    await show('?source=shopping', [fromProduct]);
+    expect([...rows()].map((li) => li.textContent)).toEqual([
+      expect.stringContaining('best hiking backpacks under $150'),
+      expect.stringContaining('Atmos AG 65 vs Deuter Aircontact'),
+    ]);
   });
 });
 
@@ -710,5 +694,175 @@ describe('SuggestionsCard — a failed read', () => {
     });
     expect(container.textContent).toContain("Ansvisor isn't answering right now.");
     expect(container.textContent).not.toContain('Minified React error');
+  });
+});
+
+describe('SuggestionsCard — ChatGPT Business Hub topics (Business Hub plan, PR 6)', () => {
+  const fromHub = (n: number, topic = 'office coffee subscriptions'): PromptSuggestion => ({
+    ...suggestion(n),
+    suggestedText: `Hub prompt ${n}`,
+    topicName: 'Coffee Subscriptions',
+    reason: `From ChatGPT Business Hub: real ChatGPT conversations citing your site are about “${topic}”.`,
+    source: 'business_hub',
+    sourceData: { topic, periodEnd: '2026-11-09', enteredAt: '2026-11-11T09:00:00.000Z' },
+  });
+  const button = (name: string) =>
+    [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name,
+    );
+  const dialogOpen = () =>
+    document.body.textContent?.includes('Suggest prompts from ChatGPT Business Hub') ?? false;
+
+  async function show({
+    search = '',
+    list = [suggestion(1), fromHub(2)],
+    businessHub = true,
+  }: { search?: string; list?: PromptSuggestion[]; businessHub?: boolean } = {}) {
+    window.history.replaceState(null, '', `/dashboard/prompts${search}`);
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: true,
+      suggestions: list,
+      stale: false,
+      businessHub,
+    });
+    // A fresh card each time, as on opening the page: the link is read on mount.
+    mounts += 1;
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <SuggestionsCard key={mounts} brandId="b1" onAccepted={onAccepted} sourceStates={null} />
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+  let mounts = 0;
+
+  function type(input: HTMLInputElement, value: string) {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    setValue.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  beforeEach(() => {
+    quota.getLocationQuota.mockResolvedValue({
+      maxPrompts: 50,
+      used: 47,
+      planId: 'starter',
+      planName: 'Starter',
+    });
+  });
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('offers From ChatGPT Business Hub to admins and managers, only while it is on', async () => {
+    await show();
+    expect(button('From ChatGPT Business Hub')).toBeDefined();
+
+    await show({ businessHub: false });
+    expect(button('From ChatGPT Business Hub')).toBeUndefined();
+
+    viewer.role = 'analyst';
+    await show();
+    expect(button('From ChatGPT Business Hub')).toBeUndefined();
+  });
+
+  it('offers it on an empty list too', async () => {
+    await show({ list: [] });
+    expect(button('Generate Suggestions')).toBeDefined();
+    expect(button('From ChatGPT Business Hub')).toBeDefined();
+  });
+
+  it('marks a Business Hub suggestion with its badge, beside Ansvisor Agents', async () => {
+    await show();
+    const [plain, hub] = [...rows()];
+    expect(plain.textContent).not.toContain('ChatGPT Business Hub');
+    expect(hub.textContent).toContain('ChatGPT Business Hub');
+    expect(hub.textContent).toContain('Ansvisor Agents');
+  });
+
+  it('lists only the Business Hub ones under their filter, and never under Ansvisor Agents only', async () => {
+    await show({ search: '?source=business_hub' });
+    expect([...rows()].map((li) => li.textContent)).toEqual([
+      expect.stringContaining('Hub prompt 2'),
+    ]);
+
+    await show({ search: '?source=agents' });
+    expect([...rows()].map((li) => li.textContent)).toEqual([expect.stringContaining('Prompt 1')]);
+  });
+
+  it('opens the dialog from ?source=business_hub&hub=1, with how many more prompts the plan tracks', async () => {
+    await show({ search: '?source=business_hub&hub=1' });
+    expect(dialogOpen()).toBe(true);
+    expect(document.body.textContent).toContain('You can track 3 more prompts on your plan.');
+    expect(document.body.querySelectorAll('input[id^="business-hub-topic-"]')).toHaveLength(5);
+  });
+
+  it('does not open it from the link for an analyst', async () => {
+    viewer.role = 'analyst';
+    await show({ search: '?source=business_hub&hub=1' });
+    expect(dialogOpen()).toBe(false);
+  });
+
+  it('sends the topics given, says what it did, and lists the new ones under their filter', async () => {
+    actions.suggestPromptsFromBusinessHub.mockResolvedValue({
+      ok: true,
+      result: {
+        added: 2,
+        alreadyTracked: 1,
+        alreadySuggested: 0,
+        topics: [
+          { topic: 'decaf beans', added: 2, matchedTopic: null },
+          { topic: 'office coffee', added: 0, matchedTopic: 'Coffee Subscriptions' },
+        ],
+        suggestions: [fromHub(8, 'decaf beans'), fromHub(9, 'decaf beans')],
+      },
+    });
+    await show();
+    await act(async () => button('From ChatGPT Business Hub')!.click());
+    const inputs = document.body.querySelectorAll<HTMLInputElement>(
+      'input[id^="business-hub-topic-"]',
+    );
+    await act(async () => {
+      type(inputs[0], ' decaf beans ');
+      type(inputs[2], 'office coffee');
+    });
+    await act(async () => button('Suggest prompts')!.click());
+
+    expect(actions.suggestPromptsFromBusinessHub).toHaveBeenCalledWith('b1', [
+      'decaf beans',
+      'office coffee',
+    ]);
+    expect(document.body.textContent).toContain(
+      '2 new suggestions, listed under ChatGPT Business Hub',
+    );
+    expect(document.body.textContent).toContain(
+      'Left out: 1 already tracked, 0 already suggested.',
+    );
+    expect(document.body.textContent).toContain('2 prompts, new topic');
+    expect(document.body.textContent).toContain('nothing new under Coffee Subscriptions');
+    expect([...rows()].map((li) => li.textContent)).toEqual([
+      expect.stringContaining('Hub prompt 8'),
+      expect.stringContaining('Hub prompt 9'),
+      expect.stringContaining('Hub prompt 2'),
+    ]);
+  });
+
+  it('sends nothing without a topic', async () => {
+    await show();
+    await act(async () => button('From ChatGPT Business Hub')!.click());
+    expect(button('Suggest prompts')!.disabled).toBe(true);
+    expect(actions.suggestPromptsFromBusinessHub).not.toHaveBeenCalled();
+  });
+
+  it('asks for a topic first on a brand without one', async () => {
+    actions.suggestPromptsFromBusinessHub.mockResolvedValue({ ok: false, failure: 'no_topics' });
+    await show();
+    await act(async () => button('From ChatGPT Business Hub')!.click());
+    const [first] = document.body.querySelectorAll<HTMLInputElement>(
+      'input[id^="business-hub-topic-"]',
+    );
+    await act(async () => type(first, 'decaf beans'));
+    await act(async () => button('Suggest prompts')!.click());
+    expect(dialogOpen()).toBe(false);
+    expect(document.body.textContent).toContain('Add a topic first');
   });
 });

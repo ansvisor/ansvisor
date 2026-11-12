@@ -48,6 +48,7 @@ const OPEN = {
   'POST /api/content-drafts/wordpress-status': 'Reads where a page stands in WordPress.',
   'POST /api/content-drafts/framer-status': 'Reads where a page stands in Framer.',
   'POST /api/content-drafts/wix-status': 'Reads where a page stands in Wix.',
+  'POST /api/content-drafts/hubspot-status': 'Reads where a page stands in HubSpot.',
   'POST /api/content-pages/import': 'Imports a page into the editor.',
   'POST /api/content-pages/links': "Reads the draft's links.",
   'POST /api/content-pages/source-classes': "Classifies the draft's sources.",
@@ -55,6 +56,10 @@ const OPEN = {
   'POST /api/content-pages/page-read': 'Reads a page for the editor.',
   // Publishing: whose it is, is decided in #1894.
   'POST /api/content-drafts/:draftId/publish': 'Publishing, decided in #1894.',
+  // ChatGPT Business Hub numbers: copying them in is daily work (2026-11-11).
+  'PUT /api/business-hub/:brandId/snapshots': 'Enters Business Hub numbers by hand; no model.',
+  'POST /api/business-hub/:brandId/snapshots/import':
+    "Enters Business Hub numbers from Ansvisor's CSV template; no model.",
   // Reading, with no change to the workspace.
   'POST /api/brands/:id/tracking-snippet/check': 'Checks whether the snippet is installed.',
   'POST /api/prompts/fanout-intents': 'The Fan-out tab calls it on its own.',

@@ -207,6 +207,7 @@ export async function sendProductActions(brandId, { target, work, promptIds, use
       mode: item.mode,
       permission: item.permission,
       depends_on: item.dependsOn,
+      title: item.title,
       title_params: item.titleParams,
       details: item.details,
       status: 'todo',

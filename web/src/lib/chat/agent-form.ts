@@ -99,6 +99,11 @@ export interface AgentFormSetup {
    * form's "Library" skill source, by /command, title and repo.
    */
   librarySkills?: { name: string; title: string; repo: string | null }[];
+  /**
+   * Ansvisor skills this install doesn't offer now, behind a flag that is
+   * off (skills/flagged.ts): the form's pickers leave them out.
+   */
+  offSkills?: string[];
 }
 
 /** How often a Schedule fires, as its token offers it (mockup: Monday, Weekday, 1st of the month). */

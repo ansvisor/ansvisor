@@ -18,6 +18,12 @@ export const SCRAPER_TASK_TYPES = {
   'chatgpt-shopping': 'CHATGPT',
   'google-aio': 'GOOGLE',
   'google-aimode': 'AIMODE',
+  // Microsoft Copilot is asked through Bing AI Mode (bing.com/copilotsearch):
+  // Cloro dropped its COPILOT task when copilot.microsoft.com started
+  // blocking logged-out sessions (2026-11-06), and BING_AIMODE is the same
+  // Copilot answer on Bing. The platform id stays `copilot-web`, so saved
+  // prompts and past results carry on.
+  'copilot-web': 'BING_AIMODE',
   'grok-web': 'GROK',
   'gemini-web': 'GEMINI',
 };
@@ -39,16 +45,17 @@ export const SCRAPER_TASK_TYPES = {
  * than a revert. Empty this list when Cloro reports Grok healthy again and
  * every prompt that still lists it resumes on the next run.
  *
- * Copilot and Perplexity are no longer offered: both block logged-out
- * sessions, and Cloro rejects their tasks (400 MODEL_UNAVAILABLE). Prompts
- * saved with them keep the ids, so the tracking worker skips them
- * (runnablePlatforms), and the prompt's other engines still run.
+ * Perplexity is no longer offered: it blocks logged-out sessions, and Cloro
+ * rejects its tasks (400 MODEL_UNAVAILABLE). Prompts saved with it keep the
+ * id, so the tracking worker skips it (runnablePlatforms), and the prompt's
+ * other engines still run. Copilot, paused for the same reason on
+ * 2026-11-06, runs again through Bing AI Mode (SCRAPER_TASK_TYPES).
  *
  * A paused platform's answers stop, so the daily pulse's outage guard and the
  * health report's fan-out check leave it out: its volume falling to none is
  * the pause, not an incident.
  */
-export const UNAVAILABLE_PLATFORMS = ['grok-web', 'copilot-web', 'perplexity-web'];
+export const UNAVAILABLE_PLATFORMS = ['grok-web', 'perplexity-web'];
 
 const DEFAULT_MAX_WAIT_MS = 30 * 60 * 1000; // 30 minutes
 const DEFAULT_POLL_INTERVAL_MS = 10000; // 10 seconds
@@ -101,6 +108,22 @@ export function buildRequestBody(promptText, scraperId, region, state, location,
       include: {
         html: false,
         aioverview: { markdown: true },
+      },
+    };
+  }
+
+  if (scraperId === 'copilot-web') {
+    // Bing AI Mode takes only these fields (its `include` rejects any other
+    // key, so no searchQueries or rawResponse); a US state is a +2 credit
+    // add-on like on the other AI endpoints. It returns no fan-out and no
+    // product cards.
+    return {
+      prompt: promptText,
+      country,
+      ...stateField,
+      include: {
+        html: false,
+        markdown: true,
       },
     };
   }
@@ -276,6 +299,21 @@ export function parseScraperResponse(result, scraperId) {
       citations,
       model: 'google-aimode',
       shopping_cards: aiMode.shoppingCards ?? [],
+    };
+  }
+
+  if (scraperId === 'copilot-web') {
+    // Bing AI Mode nests its answer under `result`, like Google AI Mode. The
+    // markdown keeps the headings, tables and citation links the plain `text`
+    // drops. The model stays `copilot-web`, as on the answers before the
+    // switch, so the platform reads as one series.
+    const bing = result.result || result;
+    return {
+      text: stripEntityMarkup(bing.markdown || bing.text || ''),
+      citations: toCitations(bing.sources),
+      model: 'copilot-web',
+      shopping_cards: [],
+      search_queries: [],
     };
   }
 

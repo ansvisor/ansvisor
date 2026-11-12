@@ -85,6 +85,17 @@ const toast = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
 );
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
+/** The content_generate events sent, in order. */
+const flows = () =>
+  analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
+const STARTED = ['flow_started', { flow: 'content_generate' }];
+const COMPLETED = ['flow_completed', { flow: 'content_generate' }];
+const failed = (code: string | null) => [
+  'flow_failed',
+  { flow: 'content_generate', error_code: code },
+];
 
 (
   globalThis as typeof globalThis & {
@@ -187,6 +198,7 @@ beforeEach(() => {
   push.mockReset();
   toast.error.mockReset();
   toast.success.mockReset();
+  analytics.track.mockClear();
 });
 
 afterEach(() => {
@@ -225,6 +237,24 @@ describe('New content', () => {
       bodyHtml: undefined,
     });
     expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
+    expect(flows()).toEqual([STARTED, COMPLETED]);
+    // Its title stays out of what is sent.
+    expect(JSON.stringify(analytics.track.mock.calls)).not.toContain('Northwind');
+  });
+
+  it('fails content_generate when the draft can’t be made', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    createContentDraft.mockRejectedValue(new Error('down'));
+    await render();
+    await click(button('Pick a content opportunity'));
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === 'Northwind vs HubSpot',
+    );
+    await click(option);
+    await click(button('Continue'));
+    await click(button('Open editor'));
+    expect(push).not.toHaveBeenCalled();
+    expect(flows()).toEqual([STARTED, failed(null)]);
   });
 
   it('keeps a long pick and a long title inside the dialog', async () => {
@@ -979,6 +1009,7 @@ describe('New content', () => {
       expect(toast.success).not.toHaveBeenCalled();
       // The dialog stays until the editor opens: no page under it meanwhile.
       expect(onOpenChange).not.toHaveBeenCalledWith(false);
+      expect(flows()).toEqual([STARTED, COMPLETED]);
     });
 
     it('aims the agent at a pasted page’s own length (F)', async () => {
@@ -1023,6 +1054,7 @@ describe('New content', () => {
       // Nothing to watch: the editor isn't opened, the toast offers the draft.
       expect(push).not.toHaveBeenCalled();
       expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(flows()).toEqual([STARTED, failed('ai_budget')]);
     });
 
     it('says the draft is the person’s to write when the agent is busy with another', async () => {
@@ -1056,6 +1088,7 @@ describe('New content', () => {
       );
       options.action.onClick();
       expect(push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=a1');
+      expect(flows()).toEqual([STARTED, COMPLETED]);
     });
 
     it('assigns the task to the teammate picked under Team', async () => {
@@ -1109,6 +1142,8 @@ describe('New content', () => {
       expect(onSent).toHaveBeenCalled();
       options.action.onClick();
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
+      // Its words are the server's: a code of its own instead.
+      expect(flows()).toEqual([STARTED, failed('send_failed')]);
     });
   });
 });

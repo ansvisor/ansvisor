@@ -4,8 +4,8 @@ route: /dashboard/competitors
 keywords: [add competitor, track competitors, suggest competitors, remove competitor, competitor domain, competitors page]
 synonyms: [new competitor, follow a rival, competitor list, delete a competitor, where is the competitors page, find competitors]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -21,7 +21,7 @@ Open **Competitors** from the sidebar, or from **Visibility**:
 - a competitor's name on the Leaderboard, which opens the page with that competitor selected;
 - **Head-to-Head Comparison**, shown in the Leaderboard's place before a brand has competitors.
 
-The Action Center's **Add at least 3 competitors** step in Getting started opens it too.
+The **Add at least 3 competitors** step of **Finish setting up**, on the Action Center's **Today** tab, opens it too.
 
 Only admins and managers add, suggest and remove competitors; other members see the list and the comparison.
 
@@ -52,7 +52,7 @@ When a competitor is added, Ansvisor also reads back 90 days of your answers onc
 
 ## How many to track
 
-The Getting started step asks for at least 3 competitors, and 5 to 20 give the clearest picture.
+The set-up step asks for at least 3 competitors, and 5 to 20 give the clearest picture.
 
 AI answers to your prompts may name brands you've never heard of. They are the alternatives people see when you're not cited. Add the most-mentioned ones to your competitors to track them properly.
 

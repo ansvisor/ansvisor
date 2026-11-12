@@ -5,6 +5,7 @@ import { type Feature, isCloud } from '@/config/plans';
 import { ALL_DATE_PRESETS } from '@/config/date-presets';
 import { PROMPT_RANGE_PRESETS, SCRAPER_GROUPS } from '@/config/prompt-options';
 import { dashboardNavLabelKeys } from '@/lib/dashboard-navigation';
+import { adsEnabled } from '@/lib/ads/flag';
 import {
   SETTINGS_SECTIONS,
   hasSettingsSection,
@@ -80,9 +81,11 @@ const SYNONYMS: Record<string, readonly string[]> = {
   // "insights" alone is this page's address and Prompts › Insights' name: the model asks.
   // Named Brand Visibility until 2026-11-06.
   insights: ['brand visibility', 'answer engine insights', 'visibility dashboard', 'insights'],
-  // Was Chat › Agents.
-  agents: ['agents', 'my agents', 'agent centre'],
+  // Was Chat › Agents; now Action Center › Agents.
+  agents: ['agents', 'my agents', 'agent centre', 'agent center'],
   'action-center': ['actions', 'action centre'],
+  // Its name, Today, is asked by already.
+  'action-center/today': ["today's focus", 'my day'],
   'action-center/signals': ['signals'],
   'action-center/kpis': ['kpis', 'kpi', 'goals'],
   'action-center/history': ['action history', 'history'],
@@ -104,16 +107,27 @@ const SYNONYMS: Record<string, readonly string[]> = {
   settings: ['settings'],
   'settings/billing': ['plan', 'subscription'],
   'settings/api-keys': ['api key', 'mcp'],
-  'settings/roles-access': ['roles and access', 'roles', 'permissions'],
+  // Team, roles & access: the team is there with the new Chat on (owner, 2026-11-09).
+  'settings/roles-access': [
+    'team roles and access',
+    'roles and access',
+    'roles',
+    'permissions',
+    'invite member',
+    'invitations',
+  ],
 };
 
-/** Pages the sidebar doesn't list but people go to, named as their page names them. */
-const EXTRA_PAGES: {
+/** A page the sidebar doesn't list but people go to, named as its page names it. */
+interface ExtraPage {
   href: ChatHref;
   name: string;
   section: string | null;
   requiredFeature?: Feature;
-}[] = [
+}
+
+/** Pages the sidebar doesn't list but people go to, named as their page names them. */
+const EXTRA_PAGES: ExtraPage[] = [
   {
     href: '/dashboard/action-center/signals',
     name: actionCenterT('tabs.signals'),
@@ -143,7 +157,7 @@ const SETTINGS_NAMES: Partial<Record<(typeof SETTINGS_SECTIONS)[number], string>
   account: settingsT('account'),
   organization: settingsT('organization'),
   team: settingsT('team'),
-  'roles-access': settingsT('rolesAccess'),
+  'roles-access': settingsT('teamRolesAccess'),
   'menu-access': settingsT('menuAccess.title'),
   notifications: settingsT('notifications'),
   integrations: settingsT('integrations'),
@@ -177,13 +191,19 @@ function route(
 /**
  * Every page Chat can open, from the live sidebar and Settings, in the
  * sidebar's order: Settings' sections this install shows (no Billing or AI
- * Providers on a self-hosted one). Chat itself (its own page) isn't one.
+ * Providers on a self-hosted one). Chat itself (its own page) isn't one,
+ * Ads is one only with Ads on (ADS_ENABLED), as its page is. The Action
+ * Center's tabs are under it, Today and Agents among them.
  */
-export function routeRegistry({ cloud = isCloud() }: { cloud?: boolean } = {}): ChatRoute[] {
+export function routeRegistry({
+  cloud = isCloud(),
+  ads = adsEnabled(),
+}: { cloud?: boolean; ads?: boolean } = {}): ChatRoute[] {
   const out: ChatRoute[] = [];
   for (const group of dashboardNav) {
     for (const item of group.items) {
       if (item.href === '/dashboard/agent') continue;
+      if (item.requiresAds && !ads) continue;
       const name = navName(item.title);
       out.push(route(item.href as ChatHref, name, null, item.requiredFeature));
       for (const child of item.children ?? []) {
@@ -211,6 +231,12 @@ export function routeRegistry({ cloud = isCloud() }: { cloud?: boolean } = {}): 
     if (name && hasSettingsSection(section, { isCloud: cloud })) {
       out.push(route(`/dashboard/settings/${section}`, name, navT('settings')));
     }
+  }
+  // The Action Center opens Today, and Actions is a tab of its own:
+  // "actions" is that tab's name, not another word for the Action Center.
+  const actionCenter = out.find((r) => r.id === 'action-center');
+  if (actionCenter) {
+    actionCenter.synonyms = actionCenter.synonyms.filter((word) => word !== 'actions');
   }
   return out;
 }

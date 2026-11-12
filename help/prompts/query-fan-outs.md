@@ -15,7 +15,7 @@ Behind an answer, an AI engine can run searches of its own. The **Query Fan-out*
 
 ## Which engines share their searches
 
-ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot and Perplexity shared them, but Ansvisor no longer tracks these two engines. Searches from their past answers still show for the dates you pick.
+ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini, Microsoft Copilot and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot shared them until November 2026; Ansvisor now reads its answers from Bing, which doesn't. Perplexity shared them too, but Ansvisor no longer tracks it. Searches from their past answers still show for the dates you pick.
 
 New searches now come from ChatGPT only, so the tab lists fewer of them than before. A note at the top of the tab says so.
 

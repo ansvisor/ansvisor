@@ -21,6 +21,8 @@ export interface DateRangeWindow {
 export function getDateRange(
   preset: DateRangePreset,
   custom: { from: string; to: string },
+  /** The moment the window ends at; now unless a caller (Chat's reads, a test) gives its own. */
+  now: Date = new Date(),
 ): DateRangeWindow {
   if (preset === 'all') return { dateFrom: undefined, dateTo: undefined, days: {} };
   if (preset === 'custom') {
@@ -31,12 +33,12 @@ export function getDateRange(
     };
   }
   if (preset === '24h') {
-    const from = new Date();
+    const from = new Date(now);
     from.setHours(from.getHours() - 24);
     return { dateFrom: from.toISOString(), dateTo: undefined };
   }
   const days = preset === '7d' ? 7 : preset === '30d' ? 30 : 90;
-  const to = new Date();
+  const to = new Date(now);
   const from = new Date(to);
   from.setUTCDate(from.getUTCDate() - (days - 1));
   const dayFrom = from.toISOString().slice(0, 10);

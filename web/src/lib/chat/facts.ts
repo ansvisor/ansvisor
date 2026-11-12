@@ -334,24 +334,49 @@ function decimalsOf(raw: string): number {
   return /[.,](\d+)$/.exec(raw)?.[1].length ?? 0;
 }
 
-/** A figure as the answer wrote it: its value and how closely it was rounded. */
-function figuresOf(match: string): { value: number; tolerance: number }[] {
+/** A figure's value and how closely it was rounded. */
+interface Figure {
+  value: number;
+  tolerance: number;
+}
+
+/**
+ * What a written digit group may mean, the way parseFigure reads it first.
+ * One group of three after a single dot or comma ("1.161", "1,161") reads
+ * either way: as a thousand (1,161 in English, 1.161 in Turkish or German)
+ * or as a decimal (1.161 in English, 1,161 in Turkish). The answer is in the
+ * person's language, so both readings are kept and either one may be known.
+ */
+function readingsOf(raw: string): { value: number; decimals: number }[] {
+  const value = parseFigure(raw);
+  if (value === null) return [];
+  const first = { value, decimals: decimalsOf(raw) };
+  const lone = /^(\d{1,3})[.,](\d{3})$/.exec(raw);
+  if (!lone) return [first];
+  const thousand = Number(lone[1] + lone[2]);
+  return value === thousand
+    ? [first, { value: Number(`${lone[1]}.${lone[2]}`), decimals: 3 }]
+    : [first, { value: thousand, decimals: 0 }];
+}
+
+/**
+ * The figures in a match as the answer wrote them: each digit group's
+ * readings (readingsOf), with their scale ("1.2k") and rounding.
+ */
+function figuresOf(match: string): Figure[][] {
   const scaleWord = /(k|m|bn|thousand|million|billion)\b\s*$/i.exec(match)?.[1]?.toLowerCase();
   const scale = scaleWord ? SCALE[scaleWord] : 1;
   return [...match.matchAll(DIGITS)].flatMap((m) => {
-    const value = parseFigure(m[0]);
-    if (value === null) return [];
-    const decimals = decimalsOf(m[0]);
-    return [{ value: value * scale, tolerance: (0.5 / 10 ** decimals) * scale + 1e-9 }];
+    const readings = readingsOf(m[0]).map(({ value, decimals }) => ({
+      value: value * scale,
+      tolerance: (0.5 / 10 ** decimals) * scale + 1e-9,
+    }));
+    return readings.length > 0 ? [readings] : [];
   });
 }
 
 /** Whether a figure is known, or worked out of known ones, at the answer's rounding. */
-function isKnown(
-  figure: { value: number; tolerance: number },
-  known: KnownFigures,
-  percent: boolean,
-): boolean {
+function isKnown(figure: Figure, known: KnownFigures, percent: boolean): boolean {
   const close = (x: number) => Math.abs(Math.abs(x) - figure.value) <= figure.tolerance;
   for (const x of known.values) {
     if (close(x)) return true;
@@ -438,7 +463,8 @@ export function checkFigures(
       let period: PeriodUnit | null = null;
       let length = false;
       if (groups.number) {
-        if (figures.every((f) => Number.isInteger(f.value) && f.value <= 10)) return match;
+        // Small counts by the figure's first reading: "1.005" isn't one.
+        if (figures.every(([f]) => Number.isInteger(f.value) && f.value <= 10)) return match;
         const line = lead.slice(lead.lastIndexOf('\n') + 1);
         if (NUMBERING_WORD_RE.test(lead)) return match;
         if (/^\s*$/.test(line) && NUMBERING_AFTER_RE.test(tail)) return match;
@@ -447,11 +473,11 @@ export function checkFigures(
         length = LENGTH_RE.test(tail);
       }
       checked += 1;
-      const isFact = (f: { value: number; tolerance: number }) =>
+      const isFact = (f: Figure) =>
         isKnown(f, known, percent) ||
         (period !== null && isKnownPeriod(f, period, known)) ||
         (length && known.targets.has(f.value));
-      if (figures.every(isFact)) return match;
+      if (figures.every((readings) => readings.some(isFact))) return match;
       replaced.push(match);
       return groups.price ? PLACEHOLDER.price : PLACEHOLDER.metric;
     }),

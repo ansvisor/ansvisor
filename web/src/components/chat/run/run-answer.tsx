@@ -11,6 +11,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { Link } from '@/i18n/navigation';
 import type { Components } from 'react-markdown';
 import { MARKDOWN_COMPONENTS, Markdown } from '@/components/ui/markdown';
+import { opensOneAction, remarkActionRefs } from '@/lib/action-center/action-ref';
 import type { ClientRun, ClientRunStatus } from '@/lib/chat/run-state';
 import { cn } from '@/lib/utils';
 import { dataUsed, doneSteps, statusLine } from './run-view';
@@ -19,18 +20,45 @@ const ACTIVE: ClientRunStatus[] = ['queued', 'running'];
 
 const WEB = /^https?:\/\//i;
 
+/** A link's text, for its label. */
+type TextNode = { type: string; value?: string; children?: TextNode[] };
+const textOf = (node?: TextNode): string =>
+  node?.type === 'text' ? (node.value ?? '') : (node?.children ?? []).map(textOf).join('');
+
 /**
  * The answer's Markdown. Its text can quote what a read brought in, so a
  * link opens only an http(s) address (in a new tab) or a page of the app;
  * any other address shows as its text. An image shows as its alt text and
  * is never fetched.
+ *
+ * Each "AC-1497" in the text links to that action (remarkActionRefs), and a
+ * link that opens one action opens it in a new tab: a plan names several, and
+ * the person checks each and comes back to the answer for the next. A link
+ * to a page of the app, the Action Center's own pages included, still opens
+ * in this tab, as the place the answer sends the person next.
  */
 const ANSWER_MARKDOWN: Partial<Components> = {
   ...MARKDOWN_COMPONENTS,
-  a: function AnswerLink({ href, children }) {
+  a: function AnswerLink({ href, children, node }) {
+    const t = useTranslations('chatRun');
     if (href && WEB.test(href)) {
       return (
         <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="underline">
+          {children}
+        </a>
+      );
+    }
+    if (href && opensOneAction(href)) {
+      const text = textOf(node).trim();
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-action="answer.openAction"
+          aria-label={text ? t('openAction', { ref: text }) : undefined}
+          className="underline"
+        >
           {children}
         </a>
       );
@@ -48,6 +76,9 @@ const ANSWER_MARKDOWN: Partial<Components> = {
     return alt ? <span>{alt}</span> : null;
   },
 };
+
+/** After GFM and line breaks: each "AC-1497" in the text links to its action. */
+const ANSWER_PLUGINS = [remarkActionRefs];
 
 const stepsStatus = (status: ClientRunStatus): RunStepsStatus =>
   status === 'done'
@@ -203,7 +234,9 @@ export function RunAnswer({
         {run.text && (
           // Styled as the app's other AI answers (headings, lists, table cells).
           <div data-slot="run-text" className="prose prose-sm dark:prose-invert max-w-none">
-            <Markdown components={ANSWER_MARKDOWN}>{run.text}</Markdown>
+            <Markdown components={ANSWER_MARKDOWN} remarkPlugins={ANSWER_PLUGINS}>
+              {run.text}
+            </Markdown>
           </div>
         )}
         {run.status === 'error' && (

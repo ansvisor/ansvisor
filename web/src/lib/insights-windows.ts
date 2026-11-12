@@ -39,6 +39,38 @@ export function dailyWindow(opts?: WindowedOpts): DayWindow | null {
 
 export const DAY_MS = 86_400_000;
 
+/**
+ * The whole UTC days a date range covers, for the daily rollups; null when a
+ * bound falls inside a day, which only the raw rows can answer. A bare
+ * 'YYYY-MM-DD' is that day. A lower bound at 00:00 UTC starts its day. An
+ * upper bound at 23:59:59 UTC or later ends its day, and one at 00:00 UTC
+ * the day before (it adds only answers of that one instant). A timestamp
+ * without a zone is UTC, as the database reads it. An absent bound is open;
+ * one that isn't a date or a time, null.
+ */
+export function wholeDayWindow(dateFrom?: string | null, dateTo?: string | null): DayWindow | null {
+  const from = wholeDayBound(dateFrom, 'from');
+  const to = wholeDayBound(dateTo, 'to');
+  if (from === null || to === null) return null;
+  return { ...(from ? { dayFrom: from } : {}), ...(to ? { dayTo: to } : {}) };
+}
+
+const BARE_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const HAS_ZONE = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i;
+
+/** A bound's whole day: '' when absent, null when it falls inside a day or can't be read. */
+function wholeDayBound(value: string | null | undefined, side: 'from' | 'to'): string | null {
+  const text = value?.trim();
+  if (!text) return '';
+  if (BARE_DAY.test(text)) return Number.isNaN(Date.parse(text)) ? null : text;
+  const at = Date.parse(HAS_ZONE.test(text) ? text : `${text}Z`);
+  if (Number.isNaN(at)) return null;
+  const intoDay = ((at % DAY_MS) + DAY_MS) % DAY_MS;
+  const day = new Date(at - intoDay).toISOString().slice(0, 10);
+  if (intoDay === 0) return side === 'from' ? day : addDays(day, -1);
+  return side === 'to' && intoDay >= DAY_MS - 1000 ? day : null;
+}
+
 export function utcToday(): string {
   return new Date().toISOString().slice(0, 10);
 }

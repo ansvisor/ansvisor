@@ -32,7 +32,6 @@ const menu = (over: Partial<MyMenu> = {}): MyMenu => ({
   hidden: [],
   hiddenByAdmin: [],
   workAreas: [],
-  workAreasAsked: true,
   canManageMenus: false,
   ...over,
 });
@@ -77,7 +76,15 @@ describe('menuWithWorkAreas', () => {
   it('keeps what the admin takes off and narrows the rest to the areas', () => {
     const next = menuWithWorkAreas(menu({ hiddenByAdmin: ['mentions'] }), ['brand']);
     expect(next.workAreas).toEqual(['brand']);
-    expect(next.hidden).toEqual(['content', 'audit', 'mentions', 'shopping', 'prompts', 'traffic']);
+    expect(next.hidden).toEqual([
+      'prompts',
+      'mentions',
+      'shopping',
+      'traffic',
+      'ads',
+      'content',
+      'audit',
+    ]);
     expect(menuWithWorkAreas(next, []).hidden).toEqual(['mentions']);
   });
 
@@ -116,6 +123,13 @@ describe('WorkAreasCard', () => {
     expect(container.textContent).toContain('Your admin took a section off your menu.');
   });
 
+  it('starts on Everything: no work areas picked since the reset (getMyMenu gives none)', async () => {
+    await render(menu());
+    expect(chip('Everything').getAttribute('aria-pressed')).toBe('true');
+    expect(chip('Brand & PR').getAttribute('aria-pressed')).toBe('false');
+    expect(container.textContent).toContain('12 of 12 sections');
+  });
+
   it('saves the areas as they change, in the list’s order', async () => {
     await render(menu({ workAreas: ['brand'] }));
     await act(async () => chip('Founders & leaders').click());
@@ -136,12 +150,12 @@ describe('WorkAreasCard', () => {
     expect(toast.error).toHaveBeenCalledWith("Couldn't save the menu. Try again.");
   });
 
-  it('lists Agent Center, right under Chat, only with the new Chat on', async () => {
+  it('lists Agents, under the Action Center, only with the new Chat on', async () => {
     await render(menu(), true);
     expect(container.textContent).toContain('13 of 13 sections');
-    expect(section('agents').textContent).toBe('Agent Center');
-    expect(section('agent').nextElementSibling).toBe(section('agents'));
-    // AEO/GEO & Audit keeps Agent Center without Chat, as Analytics does.
+    expect(section('agents').textContent).toBe('Agents · in Action Center');
+    expect(section('action-center').nextElementSibling).toBe(section('agents'));
+    // AEO/GEO & Audit keeps Agents without Chat, as Analytics does.
     await act(async () => chip('AEO/GEO & Audit').click());
     expect(section('agents').textContent).not.toContain('Not in your work areas');
     expect(section('agent').textContent).toContain('Not in your work areas');
@@ -161,5 +175,20 @@ describe('WorkAreasCard', () => {
     canAdmin = true;
     await render(menu());
     expect(container.textContent).toContain("Nobody else can take a section off an admin's menu.");
+  });
+});
+
+describe('WorkAreasCard with the simplified menu (SIMPLE_NAV)', () => {
+  it('lists the menu in its order, Agents under the Action Center, and narrows it as before', async () => {
+    await render(menu(), true);
+    const listed = [...container.querySelectorAll('[data-section]')].map((li) =>
+      li.getAttribute('data-section'),
+    );
+    expect(listed.slice(0, 4)).toEqual(['agent', 'action-center', 'agents', 'prompts']);
+    expect(section('agents').textContent).toBe('Agents · in Action Center');
+    expect(container.textContent).toContain('13 of 13 sections');
+    await act(async () => chip('AEO/GEO & Audit').click());
+    expect(section('agents').textContent).not.toContain('Not in your work areas');
+    expect(section('agent').textContent).toContain('Not in your work areas');
   });
 });

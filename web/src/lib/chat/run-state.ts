@@ -8,6 +8,7 @@ import type {
   ChatDenialCard,
   ChatEvent,
   ChatRunSummary,
+  ChatScheduleMade,
   ChatStep,
   ChatTaskStrip,
   ChatWhatsNewEntry,
@@ -53,6 +54,8 @@ export interface ClientRun {
   deliverables: ChatDeliverable[];
   /** What it sent to the Action Center, in order (CHAT-09 item 19). */
   sent: ChatActionSent[];
+  /** The recurring work it set up, in order: each its card. */
+  scheduled: ChatScheduleMade[];
   /** The Action Center tasks it works on (CHAT-09 §B); null when it has none. */
   tasks: ChatTaskStrip | null;
   /** Why did it move analyses it kept (CHAT-22 §1), in order. */
@@ -84,6 +87,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     denials: [],
     deliverables: [],
     sent: [],
+    scheduled: [],
     tasks: null,
     why: [],
     whatsNew: [],
@@ -151,6 +155,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       return next;
     case 'action.sent':
       next.sent = [...run.sent, event.data];
+      return next;
+    case 'schedule.made':
+      next.scheduled = [...run.scheduled, event.data];
       return next;
     case 'tasks.updated':
       next.tasks = event.data;

@@ -241,6 +241,15 @@ describe('RolesAccessSection', () => {
     expect(text()).toContain('Set by Ayşe');
   });
 
+  it("leaves its members out in Team, roles & access, where the team's table has them", async () => {
+    getChatAccess.mockResolvedValue({ ok: true, access: access({ role: 'admin' }) });
+    await render(<RolesAccessSection showMembers={false} />);
+    expect(listRoleMembers).not.toHaveBeenCalled();
+    expect(text()).not.toContain('sam@ansvisor.example');
+    expect(container.querySelector('[aria-label="Role"]')).toBeNull();
+    expect(text()).toContain('What each role can do');
+  });
+
   it('gives an Admin the e-mails and a role picker for everyone but themselves', async () => {
     getChatAccess.mockResolvedValue({ ok: true, access: access({ role: 'admin' }) });
     listRoleMembers.mockResolvedValue({ ok: true, members });

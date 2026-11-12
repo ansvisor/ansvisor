@@ -3,6 +3,7 @@ import { PLANS, type Plan } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
 import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
 import { planFromOrgRow } from '@/lib/guards/plan-guard';
+import { normalizeTags } from '@/lib/prompt-tags';
 
 /**
  * setPromptActive meters resuming like adding (00128): only active prompts
@@ -188,7 +189,26 @@ describe('setPromptActive', () => {
     const result = await setPromptActive('p1', true);
 
     expect(result).toMatchObject({ prompt: { id: 'p1', isActive: true } });
-    expect(writes).toEqual([{ is_active: true }]);
+    // Resuming also ends any wait for a spot (00535's check refuses an active waiting prompt).
+    expect(writes).toEqual([{ is_active: true, waiting_since: null }]);
+  });
+
+  it('tracks a prompt waiting for a spot once there is room, ending its wait', async () => {
+    promptRow = { regions: ['US'], is_active: false };
+    usedLocations = 49;
+
+    const result = await setPromptActive('p1', true);
+
+    expect(result).toMatchObject({ prompt: { isActive: true } });
+    expect(writes).toEqual([{ is_active: true, waiting_since: null }]);
+  });
+
+  it('still refuses to track a waiting prompt when the plan is full', async () => {
+    promptRow = { regions: ['US'], is_active: false };
+    usedLocations = 50;
+
+    expect(await setPromptActive('p1', true)).toMatchObject({ code: 'plan_limit' });
+    expect(writes).toEqual([]);
   });
 
   it('always lets a prompt be paused, even over the limit', async () => {
@@ -560,5 +580,20 @@ describe('getPromptLocationMatrix (PROMPT-015b)', () => {
     } finally {
       slowReads = null;
     }
+  });
+});
+
+describe('normalizeTags', () => {
+  it('trims, drops empties and duplicates, and caps each tag at 50 characters', () => {
+    expect(normalizeTags([' q4 ', '', 'q4', 'x'.repeat(60)])).toEqual(['q4', 'x'.repeat(50)]);
+  });
+
+  it('caps the list at 10 tags', () => {
+    const many = Array.from({ length: 15 }, (_, i) => `tag-${i}`);
+    expect(normalizeTags(many)).toHaveLength(10);
+  });
+
+  it('returns an empty list when there are no tags', () => {
+    expect(normalizeTags([])).toEqual([]);
   });
 });

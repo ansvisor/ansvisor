@@ -56,6 +56,7 @@ import {
 } from './composer/chat-composer';
 import { useUserRole } from '@/hooks/use-user-role';
 import { ActionSentCard } from './run/action-sent-card';
+import { ScheduleMadeCards } from './run/schedule-made-cards';
 import { ReadyByLine } from './run/ready-by-line';
 import { TaskStrip } from './run/task-strip';
 import { ProposalDetails } from './run/proposal-details';
@@ -64,7 +65,8 @@ import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { WhyCard } from './run/why-card';
 import { WhatsNewCards } from './run/whats-new-cards';
 import { AuditCards } from './run/audit-card';
-import { useHomeDraft } from './home-draft';
+import { useHomeChat, useHomeDraft } from './home-draft';
+import type { ShortcutId } from '@/lib/chat/shortcuts';
 import { useFormAssist } from './run/form-assist';
 import { NextMoves } from './run/next-moves';
 import { OpenPageCard, type OpenPageChoice } from './run/open-page-card';
@@ -145,6 +147,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         steps: message.run.steps,
         deliverables: message.run.deliverables ?? [],
         sent: message.run.sent ?? [],
+        scheduled: message.run.scheduled ?? [],
         tasks: message.run.tasks ?? null,
         nextMoves: message.run.nextMoves ?? [],
         remember: message.run.remember ?? null,
@@ -338,6 +341,16 @@ export function ChatThreadView({
   const boxDraft = ownDraft && ownDraft.over === pageDraft ? ownDraft.draft : pageDraft;
 
   const last = turns[turns.length - 1];
+  // Home's chat once a message is sent (owner, 2026-11-09): laid out as a chat's own page,
+  // its box at the bottom, while the page above gives way (ChatHome).
+  const startedOnHome = variant === 'home' && turns.length > 0;
+  const layout: ComposerVariant = startedOnHome ? 'dock' : variant;
+  const home = useHomeChat();
+  const setHomeStarted = home?.setStarted;
+  const registerHomeSend = home?.registerSend;
+  useEffect(() => {
+    if (variant === 'home') setHomeStarted?.(startedOnHome);
+  }, [variant, startedOnHome, setHomeStarted]);
   const working = !!last?.run && OPEN.includes(last.run.status);
   // The image model the latest answer picked or made images with (CHAT-15 item 18): the
   // model button reads "Image · {model}" until a request that isn't for images, or until
@@ -648,6 +661,24 @@ export function ChatThreadView({
     return true;
   }
 
+  // A question or shortcut picked on Home's page sends here, at once: its question and the
+  // run's first step show while the run starts, as the box's own message does.
+  const sendFromHome = useRef<(message: string, shortcutId?: ShortcutId) => void>(() => {});
+  useEffect(() => {
+    sendFromHome.current = (message, shortcutId) =>
+      void send(message, {
+        context: chips ?? [],
+        references: [],
+        attachments: [],
+        ...(shortcutId ? { shortcutId } : {}),
+      });
+  });
+  useEffect(() => {
+    if (variant !== 'home' || !registerHomeSend) return;
+    registerHomeSend((message, shortcutId) => sendFromHome.current(message, shortcutId));
+    return () => registerHomeSend(null);
+  }, [variant, registerHomeSend]);
+
   /** Approve (or the click) or Skip on the card the run waits on. */
   async function answer(
     turn: Turn,
@@ -827,7 +858,7 @@ export function ChatThreadView({
   return (
     <div
       className={
-        variant === 'home'
+        layout === 'home'
           ? 'mx-auto flex w-full max-w-[720px] flex-col gap-5 px-5 pb-6'
           : variant === 'panel'
             ? 'flex w-full flex-1 flex-col gap-4 px-4 pt-4'
@@ -939,7 +970,7 @@ export function ChatThreadView({
       <div
         data-slot="thread-composer"
         className={
-          variant === 'home'
+          layout === 'home'
             ? 'flex flex-col gap-2'
             : variant === 'panel'
               ? 'sticky bottom-0 mt-auto flex flex-col gap-2 bg-background pt-1 pb-3'
@@ -953,7 +984,7 @@ export function ChatThreadView({
           </>
         )}
         <ChatComposer
-          variant={variant}
+          variant={layout}
           mode={mode}
           onModeChange={setMode}
           fullAutoOpen={fullAutoOpen}
@@ -1167,6 +1198,7 @@ function Answer({
       {run.sent.map((sent, i) => (
         <ActionSentCard key={`${sent.actionNo}-${i}`} sent={sent} />
       ))}
+      <ScheduleMadeCards cards={run.scheduled} />
       {run.status === 'paused_cap' && (
         <p className="text-sm text-amber-700 dark:text-amber-400">{t('pausedCap')}</p>
       )}

@@ -39,7 +39,27 @@ describe('POST /api/internal/report-card/pdf', () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(
       new Uint8Array([0x25, 0x50, 0x44, 0x46]),
     );
-    expect(reportCardPdf).toHaveBeenCalledWith(SAMPLE_REPORT_CARD);
+    // No language: the card's country decides.
+    expect(reportCardPdf).toHaveBeenCalledWith(SAMPLE_REPORT_CARD, { language: null });
+  });
+
+  it('draws the card in the language the request chose', async () => {
+    for (const language of ['fr', 'de', 'tr']) {
+      reportCardPdf.mockClear();
+      const res = await call({ card: SAMPLE_REPORT_CARD, language });
+      expect(res.status).toBe(200);
+      expect(reportCardPdf).toHaveBeenCalledWith(SAMPLE_REPORT_CARD, { language });
+    }
+    reportCardPdf.mockClear();
+    expect((await call({ card: SAMPLE_REPORT_CARD, language: null })).status).toBe(200);
+    expect(reportCardPdf).toHaveBeenCalledWith(SAMPLE_REPORT_CARD, { language: null });
+  });
+
+  it('refuses a language the card isn’t written in', async () => {
+    for (const language of ['xx', 'ja', 'FR', 'auto', 3]) {
+      expect((await call({ card: SAMPLE_REPORT_CARD, language })).status).toBe(422);
+    }
+    expect(reportCardPdf).not.toHaveBeenCalled();
   });
 
   it('refuses a call without the secret, or a wrong one', async () => {

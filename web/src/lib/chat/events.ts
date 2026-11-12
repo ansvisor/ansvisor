@@ -152,6 +152,11 @@ export interface ChatAsk {
   batch?: { at: number; of: number };
   /** What comes after the answer: "Then I'll write the FAQ draft". */
   then?: string;
+  /**
+   * The engine's range card (range.ts): its options are date ranges, each a
+   * click, and Other is Custom, two days sent as "YYYY-MM-DD/YYYY-MM-DD".
+   */
+  dateRange?: true;
 }
 
 /**
@@ -247,6 +252,23 @@ export interface ChatActionSent {
   actionNo: number;
   /** The new action's title, or the finding added. */
   title: string;
+  href: ChatHref;
+}
+
+/**
+ * Recurring work Chat set up (create_schedule, a job on repeat), as its card
+ * under the answer with Run it now, Open in Agents and Change the schedule.
+ * Such jobs show on Action Center › Agents as "made in Chat".
+ */
+export interface ChatScheduleMade {
+  /** The job's title: "Espresso watch". */
+  title: string;
+  /** When it runs, on its clock: "Every Monday, 08:00 · Europe/Istanbul". */
+  when: string;
+  /**
+   * The job's page in Chat › Scheduled, where its schedule changes; its last
+   * part is the job's handle Run it now asks with.
+   */
   href: ChatHref;
 }
 
@@ -498,6 +520,8 @@ export interface ChatEventPayloads {
   'access.denied': ChatDenialCard;
   /** Sent to Action Center, or added to an action there (CHAT-09 item 19). */
   'action.sent': ChatActionSent;
+  /** Recurring work it set up: its card with Run it now and Open in Agents. */
+  'schedule.made': ChatScheduleMade;
   /** The task strip as it stands (CHAT-09 §B): the whole strip each time. */
   'tasks.updated': ChatTaskStrip;
   // Editor in Chat (CHAT-25 §12, Phase 4): payloads grow with it.
@@ -541,6 +565,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'run.stopped': true,
   'access.denied': true,
   'action.sent': true,
+  'schedule.made': true,
   'tasks.updated': true,
   'deliverable.updated': true,
   'suggestion.created': true,

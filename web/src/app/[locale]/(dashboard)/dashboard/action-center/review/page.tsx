@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -15,7 +15,7 @@ import {
   type TaskReview,
 } from '@/lib/actions/action-task-reviews';
 import type { TaskDetailsEdit } from '@/lib/action-center/task-details';
-import { TASK_REVIEWS_CHANGED } from '@/lib/action-center/tabs';
+import { ACTION_CENTER_TODAY } from '@/lib/action-center/tabs';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { TaskDetailForm, TaskDetailView } from '@/components/action-center/task-detail';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
@@ -31,9 +31,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function ActionCenterReviewPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const t = useTranslations('actionCenter.reviewPage');
+  const tToday = useTranslations('actionCenter.today');
 
   return (
     <div className="space-y-6">
+      {/* No tab of its own: reached from Today. */}
+      <Link
+        href={ACTION_CENTER_TODAY}
+        data-action="review.backToToday"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+        {tToday('backToToday')}
+      </Link>
       <HeaderWithAiUsage>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
@@ -95,8 +105,6 @@ function ReviewContent({ brandId }: { brandId: string }) {
   const ref = (review: TaskReview) => (review.actionNo !== null ? `AC-${review.actionNo}` : '');
   const gone = (id: string) => {
     setReviews((list) => (list ?? []).filter((r) => r.id !== id));
-    // The tab's count, on this same page.
-    window.dispatchEvent(new Event(TASK_REVIEWS_CHANGED));
   };
 
   const approve = async (review: TaskReview, edit: TaskDetailsEdit & { title: string | null }) => {

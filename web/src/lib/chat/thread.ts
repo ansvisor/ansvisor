@@ -12,6 +12,7 @@ import {
   type ChatRunSummary,
   type ChatActionSent,
   type ChatAuditCard,
+  type ChatScheduleMade,
   type ChatStep,
   type ChatTaskStrip,
   type ChatWhatsNewEntry,
@@ -80,6 +81,8 @@ export interface ThreadRun {
   remember: string | null;
   /** What it sent to the Action Center (CHAT-09 item 19), in order. */
   sent: ChatActionSent[];
+  /** The recurring work it set up, each its card; none without. */
+  scheduled?: ChatScheduleMade[];
   /** The Action Center tasks it worked on (CHAT-09 §B); null when it had none. */
   tasks: ChatTaskStrip | null;
   /** A job with a due time's line under its tasks (W4-30); on one run of the chat at most. */
@@ -150,6 +153,8 @@ interface FileRow {
 const END_EVENTS = ['run.finished', 'run.stopped', 'run.error', 'run.paused_cap'];
 /** What a run sent to the Action Center (CHAT-09 item 19), read back with its end. */
 const SENT_EVENT = 'action.sent';
+/** The recurring work a run set up, read back the same way. */
+const SCHEDULE_EVENT = 'schedule.made';
 /** "Remember this?" (W4-33): the line a finished run offered to remember. */
 const REMEMBER_EVENT = 'remember.offered';
 /** What's new's cards (CHAT-11 item 10), read back the same way. */
@@ -169,6 +174,7 @@ interface RunEnd {
   errorReason: string | null;
   keyFailed: boolean;
   sent: ChatActionSent[];
+  scheduled: ChatScheduleMade[];
   remember: string | null;
   /** Its filed pages' versions, in order; null for a page without one (W4-12a). */
   versions: (ChatPageVersion | null)[];
@@ -196,6 +202,7 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
     .in('type', [
       ...END_EVENTS,
       SENT_EVENT,
+      SCHEDULE_EVENT,
       REMEMBER_EVENT,
       WHATS_NEW_EVENT,
       AUDIT_EVENT,
@@ -219,6 +226,7 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
       errorReason: null,
       keyFailed: false,
       sent: [],
+      scheduled: [],
       remember: null,
       versions: [],
       whatsNew: [],
@@ -263,6 +271,11 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
     }
     if (row.type === SENT_EVENT) {
       ends.set(row.run_id, { ...kept, sent: [...kept.sent, row.data as ChatActionSent] });
+      continue;
+    }
+    if (row.type === SCHEDULE_EVENT) {
+      const made = row.data as ChatScheduleMade;
+      ends.set(row.run_id, { ...kept, scheduled: [...kept.scheduled, made] });
       continue;
     }
     if (row.type === REMEMBER_EVENT) {
@@ -505,6 +518,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         // The author's own chat only, as the moves.
         remember: mine ? (ends.get(run.id)?.remember ?? null) : null,
         sent: ends.get(run.id)?.sent ?? [],
+        scheduled: ends.get(run.id)?.scheduled ?? [],
         tasks: strips.get(run.id) ?? null,
         ...(readyBy && run.id === readyByRun ? { readyBy: readyBy.line } : {}),
         why: whyByRun.get(run.id) ?? [],

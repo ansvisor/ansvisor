@@ -181,21 +181,13 @@ describe('MenuPeopleCard', () => {
     expect(row('mert').textContent).toContain('All sections');
   });
 
-  // Agent Center, only with the new Chat on: in the count and the boxes then.
-  it('counts and lists Agent Center only with the new Chat on', async () => {
-    await render(true);
-    // Brand & PR's sections now hold Agent Center too.
-    expect(row('deniz').textContent).toContain('8 of 13 sections');
-    await act(async () => buttonIn(row('mert'), 'Customize').click());
-    expect(el('[aria-label="Mert Aydın sees Agent Center"]').getAttribute('aria-checked')).toBe(
-      'true',
-    );
-
-    act(() => root.unmount());
-    root = createRoot(container);
+  // Agents, only with the new Chat on: in the count and the boxes then.
+  it('lists Agents only with the new Chat on', async () => {
     await render(false);
     await act(async () => buttonIn(row('mert'), 'Customize').click());
-    expect(container.querySelector('[aria-label="Mert Aydın sees Agent Center"]')).toBeNull();
+    expect(
+      container.querySelector('[aria-label="Mert Aydın sees Agents · in Action Center"]'),
+    ).toBeNull();
     expect(el('[aria-label="Mert Aydın sees Chat"]')).not.toBeNull();
   });
 
@@ -235,5 +227,23 @@ describe('MenuPeopleCard', () => {
     expect(onFailed).toHaveBeenCalled();
     expect(el('[aria-label="Mert Aydın sees Content"]').getAttribute('aria-checked')).toBe('false');
     expect(toast.error).toHaveBeenCalled();
+  });
+});
+
+describe('MenuPeopleCard and Agents', () => {
+  it('names Agent Center Agents · in Action Center, the same section counted the same', async () => {
+    await render(true);
+    expect(row('deniz').textContent).toContain('8 of 13 sections');
+    await act(async () => buttonIn(row('mert'), 'Customize').click());
+    expect(
+      el('[aria-label="Mert Aydın sees Agents · in Action Center"]').getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(container.querySelector('[aria-label="Mert Aydın sees Agent Center"]')).toBeNull();
+    const boxes = [...row('mert').querySelectorAll('label')].map((l) => l.textContent);
+    expect(boxes.slice(0, 3)).toEqual([
+      'Chat',
+      'Action Centeralways on',
+      'Agents · in Action Center',
+    ]);
   });
 });

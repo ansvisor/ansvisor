@@ -5,9 +5,13 @@ import { createClient } from '@/lib/supabase/server';
 import { addPromptToSet, type PromptAddFailureCode } from '@/lib/actions/prompt';
 import { addPromptTargetUrl } from '@/lib/actions/prompt-workflow';
 import { API_BASE_URL } from '@/config/api';
-// Types only — this file is `'use server'`, so the guards that go with them
-// live in a plain module (every runtime export here must be a server action).
-import type { PromptSuggestionSource, SuggestionSourceData } from '@/lib/prompt-suggestion-source';
+// This file is `'use server'`, so the guards that go with these types live
+// in a plain module (every runtime export here must be a server action).
+import {
+  promptSourceData,
+  type PromptSuggestionSource,
+  type SuggestionSourceData,
+} from '@/lib/prompt-suggestion-source';
 import { assertWritable } from '@/lib/subscription-guard';
 import {
   NO_ANSWER,
@@ -17,6 +21,7 @@ import {
   type ReadFailure,
 } from '@/lib/api-failure';
 import { NO_TOPICS, NO_TOPICS_MESSAGE } from '@/lib/topics-required';
+import { businessHubEnabled } from '@/lib/business-hub/flag';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -81,7 +86,17 @@ async function getSession() {
 }
 
 export type PromptSuggestionsRead =
-  | { ok: true; suggestions: PromptSuggestion[]; stale: boolean }
+  | {
+      ok: true;
+      suggestions: PromptSuggestion[];
+      stale: boolean;
+      /**
+       * Whether ChatGPT Business Hub's topics can be turned into suggestions
+       * here (BUSINESS_HUB_ENABLED, read on the server): the list's From
+       * ChatGPT Business Hub button.
+       */
+      businessHub: boolean;
+    }
   | ReadFailure;
 
 /**
@@ -112,6 +127,7 @@ export async function getPromptSuggestions(brandId: string): Promise<PromptSugge
       ok: true,
       suggestions: data.suggestions.map(mapRow),
       stale: data.stale,
+      businessHub: businessHubEnabled(),
     };
   } catch {
     // No answer, or one cut off: a dropped connection or the timeout.
@@ -159,6 +175,71 @@ export async function refreshPromptSuggestions(
     return { ok: true, suggestions: data.suggestions.map(mapRow) };
   } catch {
     // No answer, or one cut off: a dropped connection.
+    return NO_ANSWER;
+  }
+}
+
+/** What Business Hub's topics gave: the suggestions written, and what was left out. */
+export interface BusinessHubTopicsResult {
+  added: number;
+  /** Prompts the brand tracks already, or that a tracked prompt covers. */
+  alreadyTracked: number;
+  /** Prompts suggested already, or dismissed in the last 30 days. */
+  alreadySuggested: number;
+  /** Each topic as kept, how many it gave, and the brand's topic they went under. */
+  topics: { topic: string; added: number; matchedTopic: string | null }[];
+  suggestions: PromptSuggestion[];
+}
+
+export type SuggestFromBusinessHubResult =
+  | { ok: true; result: BusinessHubTopicsResult }
+  | { ok: false; failure: typeof NO_TOPICS }
+  | ReadFailure;
+
+/**
+ * Prompts from ChatGPT Business Hub's discovery topics (Business Hub plan,
+ * PR 6): two or three for each of up to five topics, written by the API as
+ * suggestions kept 30 days. Every failure comes back as a value, as
+ * refreshPromptSuggestions' do; a brand with no topic yet gets `no_topics`.
+ * Not found while BUSINESS_HUB_ENABLED is off.
+ */
+export async function suggestPromptsFromBusinessHub(
+  brandId: string,
+  topics: string[],
+  periodEnd?: string,
+): Promise<SuggestFromBusinessHubResult> {
+  if (!businessHubEnabled()) return { ok: false, failure: 'not_found', retryable: false };
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, failure: 'session', retryable: false };
+  try {
+    const res = await fetch(
+      `${AEO_SERVER_URL}/api/prompts/suggestions/${encodeURIComponent(brandId)}/business-hub`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ topics, ...(periodEnd ? { periodEnd } : {}) }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      if (body.code === NO_TOPICS) return { ok: false, failure: NO_TOPICS };
+      return {
+        ok: false,
+        failure: apiFailure(res.status, body),
+        retryable: isTransientStatus(res.status),
+      };
+    }
+    const data = (await res.json()) as Omit<BusinessHubTopicsResult, 'suggestions'> & {
+      suggestions: SuggestionRow[];
+    };
+    return { ok: true, result: { ...data, suggestions: (data.suggestions ?? []).map(mapRow) } };
+  } catch {
     return NO_ANSWER;
   }
 }
@@ -219,7 +300,11 @@ export async function dismissSuggestions(
 }
 
 export type AcceptSuggestionResult =
-  | { promptId: string }
+  | {
+      promptId: string;
+      /** Saved waiting for a spot, not tracked (the plan was full). */
+      waiting?: true;
+    }
   | { error: string; code?: PromptAddFailureCode };
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -263,6 +348,72 @@ async function promptTarget(
   return { promptSetId: ps.id, platforms, models };
 }
 
+/** The columns an accepted suggestion is read with: its prompt, topic and where it came from. */
+const ACCEPT_COLUMNS =
+  'id, brand_id, suggested_text, topic_name, source, source_data, generated_at';
+
+/**
+ * Where a prompt accepted from this row came from (prompts.source_data,
+ * 00525): its catalog category or product; null for any other suggestion.
+ */
+function sourceOfRow(row: {
+  source: unknown;
+  source_data: unknown;
+  generated_at: unknown;
+}): ReturnType<typeof promptSourceData> {
+  return promptSourceData({
+    source: row.source as PromptSuggestionSource,
+    sourceData: (row.source_data ?? null) as SuggestionSourceData | null,
+    generatedAt: String(row.generated_at ?? ''),
+  });
+}
+
+type TopicNames = Map<string, string>;
+
+const topicKey = (name: string) => name.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** The brand's topics by name, case and spacing aside; null when they can't be read. */
+async function readTopicNames(supabase: ServerClient, brandId: string): Promise<TopicNames | null> {
+  const { data, error } = await supabase
+    .from('topics')
+    .select('name')
+    .eq('brand_id', brandId)
+    .eq('is_active', true);
+  if (error) return null;
+  return new Map((data ?? []).map((t) => [topicKey(t.name as string), t.name as string]));
+}
+
+/**
+ * The topic a suggestion's prompt goes under. A ChatGPT Business Hub
+ * suggestion (00527) whose discovery topic fit none of the brand's names
+ * that topic, and it is made only now, as a page's prompts make theirs
+ * (trackPagePrompts): addPromptToSet finds topics by name only, so it would
+ * save the prompt under none. `madeTopicId` is the topic made here, to take
+ * back if the prompt isn't added. Any other suggestion keeps its topic name.
+ */
+async function topicForRow(
+  supabase: ServerClient,
+  brandId: string,
+  row: { source: unknown; topic_name: unknown },
+  topics: TopicNames | null,
+): Promise<{ category: string | undefined; madeTopicId: string | null }> {
+  const named = typeof row.topic_name === 'string' ? row.topic_name.trim() : '';
+  // A brand with no topic gets no_topics from addPromptToSet, with nothing made.
+  if (row.source !== 'business_hub' || !named || !topics || topics.size === 0) {
+    return { category: named || undefined, madeTopicId: null };
+  }
+  const existing = topics.get(topicKey(named));
+  if (existing) return { category: existing, madeTopicId: null };
+  const { data: made } = await supabase
+    .from('topics')
+    .insert({ brand_id: brandId, name: named.slice(0, 60), is_active: true })
+    .select('id, name')
+    .single();
+  if (!made) return { category: named, madeTopicId: null };
+  topics.set(topicKey(made.name as string), made.name as string);
+  return { category: made.name as string, madeTopicId: made.id as string };
+}
+
 /** Marks the suggestion added on the server; a failure is logged, not returned. */
 async function ackAccepted(accessToken: string, suggestionId: string, promptId: string) {
   const ack = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${suggestionId}/accept`, {
@@ -282,12 +433,14 @@ export async function acceptSuggestion(
   suggestionId: string,
   options?: { platforms?: string[]; models?: string[] },
 ): Promise<AcceptSuggestionResult> {
+  // First: a Business Hub suggestion's topic may be made here, before the add checks too.
+  await assertWritable();
   const session = await getSession();
   const supabase = await createClient();
 
   const { data: row, error: rowErr } = await supabase
     .from('prompt_suggestions')
-    .select('id, brand_id, suggested_text, topic_name')
+    .select(ACCEPT_COLUMNS)
     .eq('id', suggestionId)
     .eq('status', 'new')
     .single();
@@ -298,23 +451,37 @@ export async function acceptSuggestion(
   const target = await promptTarget(supabase, row.brand_id, options);
   if ('error' in target) return target;
 
+  const topics =
+    row.source === 'business_hub' ? await readTopicNames(supabase, row.brand_id) : null;
+  const { category, madeTopicId } = await topicForRow(supabase, row.brand_id, row, topics);
   const result = await addPromptToSet({
     ...target,
     text: row.suggested_text,
-    category: row.topic_name ?? undefined,
+    category,
+    sourceData: sourceOfRow(row),
   });
   if ('error' in result) {
+    // A topic made for a prompt that wasn't added would sit empty.
+    if (madeTopicId) await supabase.from('topics').delete().eq('id', madeTopicId);
     return { error: result.error, code: result.code };
   }
 
+  // A prompt saved waiting for a spot is still the suggestion's: it is added.
   await ackAccepted(session.access_token, suggestionId, result.prompt.id);
   revalidatePath('/dashboard/prompts');
-  return { promptId: result.prompt.id };
+  return result.waiting
+    ? { promptId: result.prompt.id, waiting: true }
+    : { promptId: result.prompt.id };
 }
 
 export interface TrackSuggestionsResult {
-  /** Tracked, in the order given. */
+  /** Added, in the order given: tracked, or waiting for a spot (waitingIds). */
   trackedIds: string[];
+  /**
+   * The ones among trackedIds saved waiting for a spot, not tracked: the
+   * plan's prompt locations were full. Absent when none waits.
+   */
+  waitingIds?: string[];
   /** Already accepted or dismissed elsewhere: skipped, nothing to track. */
   skippedIds: string[];
   /**
@@ -334,7 +501,9 @@ const MAX_TRACK_AT_ONCE = 25;
  * on its own through addPromptToSet, so each passes the same plan check as a
  * single Track, and the run stops at the first one that fails: the plan's
  * prompt locations are full, or the rest can't be added either. Suggestions
- * already accepted or dismissed elsewhere are skipped, not a failure.
+ * already accepted or dismissed elsewhere are skipped, not a failure. A full
+ * plan isn't a failure: the rest are saved waiting for a
+ * spot (waitingIds).
  */
 export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSuggestionsResult> {
   const ids = Array.isArray(suggestionIds)
@@ -344,11 +513,13 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
     return { trackedIds: [], skippedIds: [], error: 'Pick between 1 and 25 suggestions.' };
   }
 
+  // First: a Business Hub suggestion's topic may be made here, before each add checks too.
+  await assertWritable();
   const session = await getSession();
   const supabase = await createClient();
   const { data: rows, error: rowsErr } = await supabase
     .from('prompt_suggestions')
-    .select('id, brand_id, suggested_text, topic_name')
+    .select(ACCEPT_COLUMNS)
     .in('id', ids)
     .eq('status', 'new');
   if (rowsErr) return { trackedIds: [], skippedIds: [], error: rowsErr.message };
@@ -361,34 +532,53 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
     return { trackedIds: [], skippedIds, error: 'Track suggestions of one brand at a time.' };
   }
 
-  const target = await promptTarget(supabase, [...brandIds][0]);
+  const brandId = [...brandIds][0];
+  const target = await promptTarget(supabase, brandId);
   if ('error' in target) return { trackedIds: [], skippedIds, error: target.error };
 
-  const added: { id: string; promptId: string }[] = [];
+  // Read once, for ChatGPT Business Hub suggestions whose topic may need making.
+  const topics = (rows ?? []).some((r) => r.source === 'business_hub')
+    ? await readTopicNames(supabase, brandId)
+    : null;
+  const added: { id: string; promptId: string; waiting?: true }[] = [];
   let failure: { error: string; code?: PromptAddFailureCode } | undefined;
   for (const id of ids) {
     const row = byId.get(id);
     if (!row) continue;
+    const { category, madeTopicId } = await topicForRow(supabase, brandId, row, topics);
     const result = await addPromptToSet({
       ...target,
       text: row.suggested_text as string,
-      category: (row.topic_name as string | null) ?? undefined,
+      category,
+      sourceData: sourceOfRow(row),
     });
     if ('error' in result) {
+      if (madeTopicId) await supabase.from('topics').delete().eq('id', madeTopicId);
       failure = { error: result.error, code: result.code };
       break;
     }
-    added.push({ id, promptId: result.prompt.id });
+    added.push({ id, promptId: result.prompt.id, waiting: result.waiting });
   }
 
   await Promise.all(added.map((a) => ackAccepted(session.access_token, a.id, a.promptId)));
   if (added.length > 0) revalidatePath('/dashboard/prompts');
-  return { trackedIds: added.map((a) => a.id), skippedIds, ...failure };
+  const waitingIds = added.filter((a) => a.waiting).map((a) => a.id);
+  return {
+    trackedIds: added.map((a) => a.id),
+    ...(waitingIds.length > 0 && { waitingIds }),
+    skippedIds,
+    ...failure,
+  };
 }
 
 export interface TrackPagePromptsResult {
-  /** The prompts added, in the order given. */
+  /** The prompts added, in the order given: tracked, or waiting for a spot (waitingIds). */
   promptIds: string[];
+  /**
+   * The ones among promptIds saved waiting for a spot, not tracked
+   * (the plan's prompt locations were full). Absent when none.
+   */
+  waitingIds?: string[];
   /**
    * Why the rest weren't; `code` 'plan_limit' when the plan's prompt
    * locations ran out, 'no_topics' when the brand has no topic yet.
@@ -410,6 +600,8 @@ const MAX_PAGE_PROMPTS = 10;
  * cites the page; a target that can't be saved leaves the prompt tracked.
  * Their first answers come with the next tracking run. A brand with no topic
  * yet gets `no_topics` before any topic is made for it: the person adds one.
+ * The prompts past the plan's limit are saved waiting for a
+ * spot (waitingIds), their page target kept for when they are tracked.
  */
 export async function trackPagePrompts(
   brandId: string,
@@ -439,6 +631,7 @@ export async function trackPagePrompts(
   const topics = new Map((topicRows ?? []).map((t) => [keyOf(t.name as string), t.name as string]));
 
   const promptIds: string[] = [];
+  const waitingIds: string[] = [];
   let failure: { error: string; code?: PromptAddFailureCode } | undefined;
   for (const p of wanted) {
     const named = typeof p.topic === 'string' ? p.topic.trim().slice(0, 60) : '';
@@ -469,6 +662,7 @@ export async function trackPagePrompts(
       break;
     }
     promptIds.push(result.prompt.id);
+    if (result.waiting) waitingIds.push(result.prompt.id);
     if (pageUrl) {
       const targeted = await addPromptTargetUrl(result.prompt.id, pageUrl);
       if ('error' in targeted) console.error('Page target URL not saved:', targeted.error);
@@ -476,5 +670,5 @@ export async function trackPagePrompts(
   }
 
   if (promptIds.length > 0) revalidatePath('/dashboard/prompts');
-  return { promptIds, ...failure };
+  return { promptIds, ...(waitingIds.length > 0 && { waitingIds }), ...failure };
 }

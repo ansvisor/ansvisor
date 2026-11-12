@@ -27,11 +27,11 @@ describe('routeRegistry', () => {
       section: 'Action Center',
     });
     expect(routeById('competitors')).toMatchObject({ requiredFeature: 'competitor_tracking' });
-    // Chat doesn't open itself; Agent Center, gated as Chat is, it does.
+    // Chat doesn't open itself; Action Center › Agents, gated as Chat is, it does.
     expect(routeById('agent')).toBeUndefined();
     expect(routeById('agents')).toMatchObject({
-      name: 'Agent Center',
-      section: null,
+      name: 'Agents',
+      section: 'Action Center',
       requiredFeature: 'ai_agent',
     });
   });
@@ -78,6 +78,62 @@ describe('routeRegistry', () => {
     expect(routes.filter((r) => !pageExists(r.href)).map((r) => r.href)).toEqual([]);
     const hrefs = routes.map((r) => r.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
+  });
+
+  // Ads (ADS-01), in development: Chat opens it only where its page is there.
+  it('opens Ads only with Ads on (ADS_ENABLED), after AI Referral Traffic', () => {
+    expect(routeById('ads', routes)).toBeUndefined();
+    expect(routeRequest('open ads', routes)).toBeNull();
+    const withAds = routeRegistry({ cloud: true, ads: true });
+    expect(routeById('ads', withAds)).toMatchObject({
+      href: '/dashboard/ads',
+      name: 'Ads',
+      section: null,
+    });
+    expect(routeById('ads', withAds)?.requiredFeature).toBeUndefined();
+    expect(routeRequest('open ads', withAds)?.route.href).toBe('/dashboard/ads');
+    const ids = withAds.map((r) => r.id);
+    expect(ids.indexOf('ads')).toBe(ids.indexOf('traffic') + 1);
+    expect(withAds.filter((r) => !pageExists(r.href))).toEqual([]);
+    // The rest of the registry is the same either way.
+    expect(withAds.filter((r) => r.id !== 'ads')).toEqual(routes);
+  });
+
+  it('opens Action Center › Today, first of the Action Center’s pages', () => {
+    expect(routeById('action-center/today', routes)).toMatchObject({
+      href: '/dashboard/action-center/today',
+      name: 'Today',
+      section: 'Action Center',
+    });
+    expect(routeRequest('open today', routes)?.route.href).toBe('/dashboard/action-center/today');
+    expect(routeRequest('take me to action center › today', routes)?.route.href).toBe(
+      '/dashboard/action-center/today',
+    );
+    // A page's filters still win over "today" as a range word.
+    expect(routeRequest('open citations for today', routes)).toMatchObject({
+      route: { href: '/dashboard/citations' },
+      filters: { range: '24h' },
+    });
+  });
+
+  // The menu's pages in its order, the Action Center's tabs under it, Agents among them.
+  it('reads the menu: the tabs under the Action Center, Prompts before Visibility', () => {
+    for (const id of ['action-center/actions', 'action-center/signals', 'action-center/history']) {
+      expect(routeById(id, routes)).toMatchObject({ section: 'Action Center' });
+    }
+    // KPIs, no tab, is still a page Chat opens.
+    expect(routeById('action-center/kpis', routes)).toMatchObject({ name: 'KPIs' });
+    // Its old name still opens it, as "my agents" does.
+    expect(routeRequest('open agent center', routes)?.route.href).toBe('/dashboard/agents');
+    expect(routeRequest('open my agents', routes)?.route.href).toBe('/dashboard/agents');
+    const ids = routes.map((r) => r.id);
+    expect(ids.indexOf('prompts')).toBeLessThan(ids.indexOf('insights'));
+    expect(ids.indexOf('action-center/today')).toBe(ids.indexOf('action-center') + 1);
+    // "Actions" opens the Actions tab, not the Action Center.
+    expect(routeRequest('open actions', routes)?.route.href).toBe(
+      '/dashboard/action-center/actions',
+    );
+    expect(routeRequest('open action center', routes)?.route.href).toBe('/dashboard/action-center');
   });
 
   it('sets only the filters a page keeps, with the values it takes', () => {
