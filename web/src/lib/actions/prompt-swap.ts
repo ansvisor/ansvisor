@@ -338,11 +338,9 @@ export async function swapPrompts(waitingId: string, pauseIds: string[]): Promis
  */
 async function trackAgain(ids: string[]): Promise<{ restored: boolean; stillPaused?: string[] }> {
   for (let i = 0; i < ids.length; i++) {
-    const result = await setPromptActive(ids[i], true).catch(
-      (err: unknown): { error: string } => ({
-        error: err instanceof Error ? err.message : 'Failed to track the prompt',
-      }),
-    );
+    const result = await setPromptActive(ids[i], true).catch((err: unknown): { error: string } => ({
+      error: err instanceof Error ? err.message : 'Failed to track the prompt',
+    }));
     if ('error' in result) {
       console.error('[prompt-swap] could not track the picked prompts again:', result.error);
       return { restored: false, stillPaused: ids.slice(i) };
