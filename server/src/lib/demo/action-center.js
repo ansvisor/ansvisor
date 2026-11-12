@@ -654,7 +654,11 @@ export async function actionCenterRows({ brandId, now, env = process.env }) {
     );
 
     // Its tasks, as planTasks lays them out for what the brand has.
-    const plannedTasks = planTasks(definition, { sources: DEMO_SOURCES, payload });
+    const plannedTasks = planTasks(definition, {
+      sources: DEMO_SOURCES,
+      payload,
+      signals: signalRows,
+    });
     const done =
       plan.status === 'completed'
         ? plannedTasks.length
@@ -683,6 +687,7 @@ export async function actionCenterRows({ brandId, now, env = process.env }) {
         mode: item.mode,
         permission: item.permission,
         depends_on: item.dependsOn,
+        title: item.title,
         title_params: item.titleParams,
         details: item.details,
         status,
@@ -882,6 +887,7 @@ function sentOpportunityAction(ctx, { demand, scoredAt }) {
     mode: item.mode,
     permission: item.permission,
     depends_on: item.dependsOn,
+    title: item.title,
     title_params: item.titleParams,
     details: item.details,
     status: progress[item.taskKey] ?? initialTaskStatus(item.taskKey, opportunity),

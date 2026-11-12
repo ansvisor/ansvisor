@@ -112,3 +112,22 @@ export function competitorNames(byKind) {
   }
   return [...names].slice(0, 3);
 }
+
+/**
+ * The prompt a competitor's lead is widest on, from its signals' positions
+ * (signals/record.js): `{ id, text }`, or null when none names one.
+ */
+export function leadPrompt(byKind) {
+  let best = null;
+  for (const signals of byKind.values()) {
+    for (const signal of signals) {
+      for (const pos of Array.isArray(signal.payload?.positions) ? signal.payload.positions : []) {
+        const text = typeof pos?.promptText === 'string' ? pos.promptText.trim() : '';
+        if (!text) continue;
+        const gap = Number(pos.competitor?.now ?? 0) - Number(pos.you?.now ?? 0);
+        if (!best || gap > best.gap) best = { id: pos.promptId ?? null, text, gap };
+      }
+    }
+  }
+  return best ? { id: best.id, text: best.text } : null;
+}

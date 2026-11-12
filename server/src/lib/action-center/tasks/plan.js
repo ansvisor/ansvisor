@@ -26,6 +26,7 @@
 
 import { getTask } from './registry.js';
 import { templateDetails } from './templates.js';
+import { actionFacts, concreteTask } from './concrete.js';
 
 /**
  * Payload values a task's text may name, normalised.
@@ -70,13 +71,16 @@ function expand(entry, payload) {
  * The tasks one action should be given.
  *
  * @param {{ id: string, tasks: readonly (string|object)[] }} definition
- * @param {{ sources: Set<string>, payload?: Record<string, unknown> }} context
+ * @param {{ sources: Set<string>, payload?: Record<string, unknown>, signals?: object[] }} context
+ *   `signals`: the action's signals, whose evidence names its prompts, pages
+ *   and competitors (concrete.js)
  * @returns {Array<{ taskKey: string, version: number, mode: string, permission: string,
  *   dependsOn: string[], titleParams: Record<string, unknown>, position: number,
- *   details: object|null }>} `details`: the template's Done when, How we check
+ *   title: string|null, details: object|null }>} `title`: the task named after
+ *   what the action is about, null when it names nothing (concrete.js); `details`: the template's Done when, How we check
  *   and page (AC-010, templates.js), null without one
  */
-export function planTasks(definition, { sources, payload = {} }) {
+export function planTasks(definition, { sources, payload = {}, signals = [] }) {
   const values = titleValues(payload);
 
   const chosen = [];
@@ -94,10 +98,16 @@ export function planTasks(definition, { sources, payload = {} }) {
 
   const planned = new Set(chosen.map((primitive) => primitive.id));
 
+  const facts = actionFacts(payload, signals);
+
   return chosen.map((primitive, index) => {
     const named = primitive.titleKeys.every(
       (key) => values[key] !== undefined && values[key] !== null,
     );
+    // Its title and spec from what the action names (concrete.js): marked as
+    // the template's, so the night's task writer still reads it as untouched.
+    const concrete = concreteTask(primitive.id, facts);
+    const template = templateDetails(primitive.id, payload);
     return {
       taskKey: primitive.id,
       version: primitive.version,
@@ -108,7 +118,15 @@ export function planTasks(definition, { sources, payload = {} }) {
         ? Object.fromEntries(primitive.titleKeys.map((key) => [key, values[key]]))
         : {},
       position: index + 1,
-      details: templateDetails(primitive.id, payload),
+      title: concrete?.title ?? null,
+      details: concrete
+        ? {
+            ...(template ?? { source: 'template' }),
+            where: concrete.where,
+            how: concrete.how,
+            doneWhen: concrete.doneWhen,
+          }
+        : template,
     };
   });
 }
