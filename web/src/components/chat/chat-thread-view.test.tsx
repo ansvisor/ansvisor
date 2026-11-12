@@ -455,7 +455,7 @@ describe('ChatThreadView', () => {
     const bar = container.querySelector('[role="toolbar"][aria-label="Answer actions"]')!;
     expect(
       [...bar.querySelectorAll('[aria-label]')].map((b) => b.getAttribute('aria-label')),
-    ).toEqual(['Copy', 'Download', 'In Files', 'Open in Content Editor', 'Send to Action Center']);
+    ).toEqual(['Copy', 'Download', 'In Files', 'Open in Editor', 'Send to Actions']);
     // What the run made shows as its card, its page open in the editor.
     const card = container.querySelector('[data-slot="deliverable-card"]')!;
     expect(card.getAttribute('aria-label')).toBe('Pricing FAQ');
