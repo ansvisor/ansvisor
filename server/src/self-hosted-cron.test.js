@@ -41,7 +41,7 @@ function makeCronLib() {
 }
 
 describe('registerSelfHostedCron', () => {
-  it("cleanup mode: the callback runs cleanupOldJobs once and never runs tracking", async () => {
+  it('cleanup mode: the callback runs cleanupOldJobs once and never runs tracking', async () => {
     const cronLib = makeCronLib();
     const runTracking = vi.fn();
     const cleanup = vi.fn();
@@ -66,7 +66,7 @@ describe('registerSelfHostedCron', () => {
     expect(log.info).not.toHaveBeenCalledWith('self-hosted daily tracking triggered');
   });
 
-  it("tracking mode: the callback runs both, tracking first, then cleanup", async () => {
+  it('tracking mode: the callback runs both, tracking first, then cleanup', async () => {
     const cronLib = makeCronLib();
     const runTracking = vi.fn();
     const cleanup = vi.fn();
@@ -86,11 +86,13 @@ describe('registerSelfHostedCron', () => {
 
     expect(runTracking).toHaveBeenCalledTimes(1);
     expect(cleanup).toHaveBeenCalledTimes(1);
-    expect(runTracking.mock.invocationCallOrder[0]).toBeLessThan(cleanup.mock.invocationCallOrder[0]);
+    expect(runTracking.mock.invocationCallOrder[0]).toBeLessThan(
+      cleanup.mock.invocationCallOrder[0],
+    );
     expect(log.info).toHaveBeenCalledWith('self-hosted daily tracking triggered');
   });
 
-  it("off mode (IS_CLOUD=true): no cron is registered at all", () => {
+  it('off mode (IS_CLOUD=true): no cron is registered at all', () => {
     const cronLib = makeCronLib();
     const runTracking = vi.fn();
     const cleanup = vi.fn();
@@ -126,6 +128,9 @@ describe('registerSelfHostedCron', () => {
 
     await cronLib.fire();
 
-    expect(log.error).toHaveBeenCalledWith({ err: expect.any(Error) }, 'self-hosted daily cron failed');
+    expect(log.error).toHaveBeenCalledWith(
+      { err: expect.any(Error) },
+      'self-hosted daily cron failed',
+    );
   });
 });

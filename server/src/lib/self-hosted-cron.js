@@ -12,7 +12,14 @@ export function selfHostedCronMode(env = process.env) {
 // registers nothing. Dependencies are injected so the registration itself is
 // testable offline: cronLib is node-cron, runTracking and cleanup are the
 // real handlers, log is the logger. Log strings are part of the contract.
-export function registerSelfHostedCron({ cronLib, schedule, runTracking, cleanup, log, env = process.env }) {
+export function registerSelfHostedCron({
+  cronLib,
+  schedule,
+  runTracking,
+  cleanup,
+  log,
+  env = process.env,
+}) {
   const mode = selfHostedCronMode(env);
   if (mode === 'off') return 'off';
   cronLib.schedule(schedule, async () => {
