@@ -512,6 +512,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
       <ActionsHeader />
       <ActionCenterTabs />
       {body}
+      {startNow.confirm}
     </div>
   );
 

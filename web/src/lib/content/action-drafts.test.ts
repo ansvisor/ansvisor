@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   MAX_ACTION_PROMPTS,
   MAX_START_DRAFTS,
+  actionDraftTitle,
   actionLinkTable,
   actionPages,
   actionPromptIds,
@@ -457,5 +458,39 @@ describe('unpublishDraftWork', () => {
     rows.actions = [];
     await expect(unpublishDraftWork(db, published, 'u1')).resolves.toBe(0);
     expect(ops).toHaveLength(1);
+  });
+});
+
+describe('actionDraftTitle', () => {
+  const actionTitle = 'Close the visibility gap with 1 competitor';
+
+  it("names a new page by its brief's title, else its main prompt, never the action", () => {
+    expect(
+      actionDraftTitle({
+        page: null,
+        suggestedTitle: 'Coffee subscriptions, worth it?',
+        prompt: 'Is a coffee subscription worth it?',
+        actionTitle,
+      }),
+    ).toBe('Coffee subscriptions, worth it?');
+    expect(
+      actionDraftTitle({
+        page: null,
+        suggestedTitle: ' ',
+        prompt: ' Is a coffee subscription worth it? ',
+        actionTitle,
+      }),
+    ).toBe('Is a coffee subscription worth it?');
+    expect(actionDraftTitle({ page: null, actionTitle })).toBe(actionTitle);
+  });
+
+  it('names a page to update by its live title, else its path, whatever the prompts', () => {
+    const page = 'https://shop.example/coffee/subscription/';
+    expect(
+      actionDraftTitle({ page, pageTitle: 'Coffee subscription', prompt: 'x', actionTitle }),
+    ).toBe('Coffee subscription');
+    expect(actionDraftTitle({ page, pageTitle: null, prompt: 'x', actionTitle })).toBe(
+      '/coffee/subscription',
+    );
   });
 });
