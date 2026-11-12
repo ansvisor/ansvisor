@@ -161,6 +161,14 @@ describe('ChatMadeAgents', () => {
     expect(rows()[2].querySelector('[data-slot="chat-made-status"]')?.textContent).toBe(
       'Last run Mon 2 Nov, 08:00 · Done',
     );
+    // The menu's dots: grey while it runs, yellow while it needs you, none once done.
+    expect(
+      rows().map(
+        (row) =>
+          row.querySelector<HTMLElement>('[data-slot="chat-made-status"] [data-menu-dot]')?.dataset
+            .menuDot ?? null,
+      ),
+    ).toEqual(['grey', 'yellow', null]);
     buttons[1]!.addEventListener('click', (e) => e.preventDefault());
     await act(async () => buttons[1]!.click());
     expect(track).toHaveBeenCalledWith('agents_open_in_chat', { state: 'needsYou', made: 'chat' });

@@ -396,6 +396,45 @@ describe('ChatMenuView', () => {
     expect(text()).toContain('Needs your OK · step 4 of 6');
   });
 
+  it("shows the menu's dots on its chats: grey working, yellow waiting, green new, red broken", async () => {
+    const chats = [
+      chat('a', { state: 'needsYou' }),
+      chat('b', { state: 'running' }),
+      chat('d', { state: 'done', unread: true, finishedAt: '2026-10-30T08:02:00' }),
+      chat('f', { state: 'failed', finishedAt: '2026-10-30T08:00:00' }),
+      chat('p', { state: 'paused' }),
+      chat('e'),
+    ];
+    await render(menu(chats));
+    await act(async () => action('chatMenu.seeAllRuns')[0].click());
+    const dotOf = (id: string) => {
+      const row = [...action('chatMenu.openChat')].find(
+        (link) => link.getAttribute('href') === `/dashboard/chat/${id}`,
+      )!;
+      return row.querySelector<HTMLElement>('[data-slot="chat-dot"] [data-menu-dot]');
+    };
+    expect(['a', 'b', 'd', 'f', 'p', 'e'].map((id) => dotOf(id)?.dataset.menuDot ?? null)).toEqual([
+      'yellow',
+      'grey',
+      'green',
+      'red',
+      null,
+      null,
+    ]);
+    expect(dotOf('a')?.getAttribute('aria-label')).toBe(
+      'Needs you: Chat is waiting for your answer or OK',
+    );
+    expect(dotOf('b')?.getAttribute('title')).toBe('Working on it: Chat is working in this chat');
+    expect(dotOf('b')?.className).toContain('motion-reduce:animate-none');
+    expect(dotOf('d')?.getAttribute('aria-label')).toBe(
+      'New results: Chat finished since you last opened it',
+    );
+    expect(dotOf('f')?.getAttribute('role')).toBe('img');
+    expect(dotOf('f')?.textContent).toBe('!');
+    // No constant grey dot: an idle chat keeps the dot's spot, empty.
+    expect(host.querySelector('[data-slot="list-dot"]')).toBeNull();
+  });
+
   it("leaves a teammate's shared chat out of the Inbox: it waits on its author", async () => {
     await render(
       menu([

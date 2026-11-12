@@ -1137,11 +1137,11 @@
         },
         {
           "heading": "What each card shows",
-          "text": "In **Your agents**, each agent has a card with:\n\n- A dot and its state: green for **Active**, amber for **Paused** with the reason, grey for **Draft** and **Archived**.\n- Its skills, its mode and the person who owns it.\n- **Trigger**: what starts it, for example \"Every Mon 09:00 · New Recover signal\", and **Next run**.\n- **Scope**: the brand it works on, or how many brands.\n- **Last run** with its state, and **Outcomes · 30 days**.\n- **AI use · 30 days**: its share of your monthly AI limit, with a thin bar. Hover over it to see its runs, the average share a run and its cap a run.\n\nUsage is always shown as a share of your monthly AI limit."
+          "text": "In **Your agents**, each agent has a card with:\n\n- Its state: **Active**, **Paused** with the reason, **Draft** or **Archived**. While it is on, a dot as in the main menu shows beside it: grey and pulsing while it runs, yellow while it waits for your OK, and red with a **!** when its last run failed. A paused agent has no dot.\n- Its skills, its mode and the person who owns it.\n- **Trigger**: what starts it, for example \"Every Mon 09:00 · New Recover signal\", and **Next run**.\n- **Scope**: the brand it works on, or how many brands.\n- **Last run**: when it last ran, and **Outcomes · 30 days**.\n- **AI use · 30 days**: its share of your monthly AI limit, with a thin bar. Hover over it to see its runs, the average share a run and its cap a run.\n\nUsage is always shown as a share of your monthly AI limit."
         },
         {
           "heading": "Runs open in Chat",
-          "text": "Each card's first button opens its run in Chat: **Open the run in Chat** while it runs, **Review in Chat** when it waits for your OK, and **Open the last run** otherwise. Recurring work you set up in Chat is listed under your agents too, marked as made in Chat."
+          "text": "Each card's first button opens its run in Chat: **Open the run in Chat** while it runs, **Review in Chat** when it waits for your OK, and **Open the last run** otherwise. Recurring work you set up in Chat is listed under your agents too, marked as made in Chat, with the same dots."
         },
         {
           "heading": "An agent's page",
@@ -1664,6 +1664,10 @@
         {
           "heading": "The chat menu",
           "text": "The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Governance**, closed until you click it, holds the **Activity** log, **What Chat can do** and the **Tool policy**.\n\n**Agents at work** lists the chats that need your OK, the ones still working, and finished results you haven't opened yet, with the step each one is on. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.\n\n**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat."
+        },
+        {
+          "heading": "Dots on chats",
+          "text": "Chats have the same dots as the main menu. A grey dot that pulses means Chat is working in that chat. Yellow means it waits for your answer or OK. Green means it finished while you were away, until you open the chat. Red with a **!** means its last run stopped with an error, and it stays until the next run. A chat you have seen, with nothing running, has no dot. Point at a dot to read what it means."
         },
         {
           "heading": "Open and close Governance",
@@ -3781,6 +3785,10 @@
         {
           "heading": "When a menu is folded",
           "text": "When a submenu, a group such as **Analytics** or the whole menu is folded, the dot shows on the item's icon or the group's name. Red wins over yellow, yellow over green and green over grey. Point at a dot to read what it means, such as **Needs attention: Search Console disconnected**; screen readers say it too."
+        },
+        {
+          "heading": "In Chat and on agent cards",
+          "text": "Chat's chats and the agent cards in **Action Center › Agents** use the same dots. A chat is grey while Chat works in it, yellow while it waits for you, green when it finished while you were away, and red when its last run stopped with an error. An agent's card is grey while it runs, yellow while it waits for your OK, and red when its last run failed."
         },
         {
           "heading": "The Action Center's number",

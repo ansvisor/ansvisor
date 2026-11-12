@@ -17,6 +17,7 @@ import {
 import { track } from '@/lib/analytics';
 import type { ScheduleListItem } from '@/lib/chat/schedule/views';
 import { cn } from '@/lib/utils';
+import { AgentDot, jobDotOf } from './agent-dot';
 
 /** The person's own recurring jobs made in Chat: the rest stay on Chat › Scheduled only. */
 export function madeInChat(list: ScheduleListRead | null): ScheduleListItem[] {
@@ -146,10 +147,11 @@ export function ChatMadeAgents({
                   <span
                     data-slot="chat-made-status"
                     className={cn(
-                      'text-[13px]',
+                      'flex items-center gap-1.5 text-[13px]',
                       waiting ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
                     )}
                   >
+                    <AgentDot dot={jobDotOf(job)} />
                     {status}
                   </span>
                 )}

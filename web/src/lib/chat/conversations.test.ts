@@ -559,3 +559,25 @@ describe('searchTermsOf', () => {
     expect(chats.searchTermsOf('a b c d e f g h i j')?.split(' & ')).toHaveLength(8);
   });
 });
+
+describe('chatState', () => {
+  const run = (status: string) => ({
+    id: 'run-1',
+    conversation_id: 'chat-1',
+    status,
+    created_at: '2026-10-30T08:00:00Z',
+    finished_at: '2026-10-30T08:02:00Z',
+  });
+
+  it('keeps an errored chat red once it is read; a done or stopped one goes once read', () => {
+    expect(chats.chatState(run('error'), false)).toBe('failed');
+    expect(chats.chatState(run('error'), true)).toBe('failed');
+    expect(chats.chatState(run('stopped'), true)).toBe('failed');
+    expect(chats.chatState(run('stopped'), false)).toBe('idle');
+    expect(chats.chatState(run('done'), true)).toBe('done');
+    expect(chats.chatState(run('done'), false)).toBe('idle');
+    expect(chats.chatState(run('waiting'), false)).toBe('needsYou');
+    expect(chats.chatState(run('running'), false)).toBe('running');
+    expect(chats.chatState(null, false)).toBe('idle');
+  });
+});

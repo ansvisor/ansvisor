@@ -136,13 +136,15 @@ export function initialsOf(name: string | null | undefined): string | null {
 
 /**
  * A chat's dot from its newest run: working, waiting on the person or paused
- * while the run is open; done or failed while that result is unread; idle
- * once it is read, or with no run.
+ * while the run is open; failed while it errored, read or not, until the
+ * next run (the menu's red stays until fixed); done or stopped while that
+ * result is unread; idle once it is read, or with no run.
  */
 export function chatState(run: RunRow | null, unread: boolean): ListDotState {
   if (!run) return 'idle';
   const state = chatTrayState(run.status);
   if (state === 'running' || state === 'needsYou' || state === 'paused') return state;
+  if (run.status === 'error') return 'failed';
   if (unread && (state === 'done' || state === 'failed')) return state;
   return 'idle';
 }

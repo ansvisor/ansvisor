@@ -3,10 +3,11 @@
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
-import { ListDot, ListProgress } from '@/components/agentic/list-dot';
+import { ListProgress } from '@/components/agentic/list-dot';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { cn } from '@/lib/utils';
 import { useChatActions } from './chat-actions';
+import { ChatDot, chatDotOf } from './chat-dot';
 import { RenameField } from './chat-menus';
 
 /** A time as the row says it: the clock today ("08:02"), else the day ("Oct 28"). */
@@ -72,7 +73,8 @@ export function chatLineOf(
 }
 
 /**
- * A chat in the chat menu (CHAT-01 agentic update, "Chat rows"): its dot,
+ * A chat in the chat menu (CHAT-01 agentic update, "Chat rows"): its dot
+ * (the menu's: chat-dot.tsx),
  * its title — "New chat" shimmering until Chat names it, bold while a result
  * is unread — and one line: the step it is on while it works or waits, the
  * result's time once done, else its brand. A teammate's shared chat shows
@@ -100,9 +102,9 @@ export function ChatRow({
   const { line, tone: lineTone } = chatLineOf(chat, t, now);
   const title = chat.title ?? t('untitled');
   const chatActions = useChatActions();
-  // A pinned chat shows the pin where the dot is, unless it works or waits (CHAT-01 row menu).
+  // A pinned chat shows the pin where the dot is, unless it has a dot (CHAT-01 row menu).
   const dot =
-    chat.pinned && chat.state === 'idle' ? (
+    chat.pinned && !chatDotOf(chat) ? (
       <span
         aria-hidden
         className="mt-px flex size-4 shrink-0 items-center justify-center text-[10px] text-muted-foreground"
@@ -110,7 +112,7 @@ export function ChatRow({
         ⌖
       </span>
     ) : (
-      <ListDot state={chat.state} className="mt-px" />
+      <ChatDot chat={chat} className="mt-px" />
     );
 
   if (chatActions?.renaming?.id === chat.id && chatActions.renaming.where === 'row') {
