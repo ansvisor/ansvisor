@@ -137,7 +137,7 @@ describe('RunsTrayView', () => {
       ['/dashboard/content/editor/c', 'done'],
       ['/dashboard/chat/d', 'failed'],
     ]);
-    expect(rows[0].textContent).toBe('Action Center tasksNeeds your OK · step 4 of 6Review');
+    expect(rows[0].textContent).toBe('Action Center tasksWaiting for your OK · step 4 of 6Review');
     expect(rows[1].textContent).toBe('New chatStep 2 of 5 · Comparing cited pages');
     expect(rows[1].querySelector('[role="progressbar"]')!.getAttribute('aria-valuenow')).toBe('20');
     expect(rows[2].textContent).toMatch(/^Pricing FAQDone \d\d:\d\dOpen$/);

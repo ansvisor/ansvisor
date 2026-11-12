@@ -373,6 +373,21 @@ describe('RunSteps', () => {
     step(2, 'running', 'Read Citations', { detail: 'Last 30 days' }),
   ];
 
+  it('says "Waiting for your OK" by a yellow dot while it waits on the person, never "Working on it"', async () => {
+    await render(
+      <RunSteps
+        status="waiting"
+        steps={[step(1, 'done', 'Read Action Center'), step(2, 'waiting', 'Approve the change')]}
+        workingMs={63_000}
+      />,
+    );
+    const header = $('button')!;
+    expect(header.textContent).toContain('Waiting for your OK');
+    expect(container.textContent).not.toContain('Working on it');
+    expect($('[data-slot="list-dot"]')!.getAttribute('data-state')).toBe('needsYou');
+    expect($('[aria-live]')!.textContent).toBe('Step 2: Approve the change');
+  });
+
   it('is open while it runs, with the step count and the clock, and says each new step', async () => {
     expect(runClock(41_000)).toBe('0:41');
     expect(runClock(72_000)).toBe('1:12');

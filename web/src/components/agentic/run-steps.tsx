@@ -27,7 +27,9 @@ export function runClock(ms: number): string {
 
 /**
  * A run's steps under its header (CHAT-03 "Step list" and "Header"). While
- * it runs: "Working on it", "{N} steps · m:ss", open. Once done, it folds to
+ * it runs: "Working on it", "{N} steps · m:ss", open; while it waits on the
+ * person (a question, an approval), "Waiting for your OK" by a yellow dot,
+ * never "Working on it". Once done, it folds to
  * "Worked for 1m 12s" and "{N} steps · {M} sources"; a run of one step (not
  * counting thinking) shows that step's own line and its rows instead. Stopped:
  * "Stopped after 41s"; failed: "Stopped: something went wrong"; while its
@@ -79,7 +81,7 @@ export function RunSteps({
   let title: string;
   let end: string;
   if (active) {
-    title = reconnecting ? t('reconnecting') : t('working');
+    title = reconnecting ? t('reconnecting') : status === 'waiting' ? t('waiting') : t('working');
     end = t('stepsClock', { steps: count, clock: runClock(workingMs) });
   } else if (single) {
     title = single.detail ? `${single.label} · ${single.detail}` : single.label;
@@ -120,7 +122,15 @@ export function RunSteps({
           <DoneTick size="sm" decorative />
         ) : (
           <ListDot
-            state={active ? 'running' : status === 'stopped' ? 'paused' : 'failed'}
+            state={
+              status === 'waiting'
+                ? 'needsYou'
+                : active
+                  ? 'running'
+                  : status === 'stopped'
+                    ? 'paused'
+                    : 'failed'
+            }
             decorative
           />
         )}

@@ -162,13 +162,13 @@ In **Run history**, its run shows **Called by** and the first agent. The first r
 
 ## When a run asks before a change
 
-A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions, **Send to Action Center** and setting an Action Center task **Ready for review**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
+A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions, **Send to Action Center** and setting an Action Center task **Ready for review**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Waiting for your OK** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
 
 ## Agent work: who starts agent work
 
 Your workspace's **Agent work** setting decides whether an agent's mode counts. An Admin sets it from the gear on Action Center's **Today** card or in **Settings › Chat**.
 
-- **I approve first**, where every workspace starts: every change an agent's run makes asks first, in any mode, even a change **Full auto** or a tool set to **Always** would make on its own. The run shows **Needs you** and waits.
+- **I approve first**, where every workspace starts: every change an agent's run makes asks first, in any mode, even a change **Full auto** or a tool set to **Always** would make on its own. The run shows **Waiting for your OK** and waits.
 - **Agent starts on its own**: each agent's mode applies, as above.
 
 Going live isn't affected: **Let an agent publish on its own** below works the same with either choice.

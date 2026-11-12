@@ -156,7 +156,7 @@ describe('ChatAllChats', () => {
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
     expect(tabs[1].textContent).toBe('Archived1');
     expect(rows()).toEqual(['Chat a', 'Chat b', 'Chat c', 'Chat d']);
-    expect(text()).toContain('Needs your OK · step 4 of 6');
+    expect(text()).toContain('Waiting for your OK · step 4 of 6');
     expect(text()).toContain('SL');
     expect(text()).toContain('JP');
     // Only the person's own chats can be selected.

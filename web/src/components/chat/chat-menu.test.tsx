@@ -368,7 +368,7 @@ describe('ChatMenuView', () => {
     expect(inbox.textContent).toBe('Inbox4');
     expect(inbox.getAttribute('aria-label')).toBe('Inbox · 4 items · 1 needs you');
     expect(text()).toContain('Agents at work4');
-    expect(text()).toContain('Needs your OK · step 4 of 6');
+    expect(text()).toContain('Waiting for your OK · step 4 of 6');
     expect(text()).toContain('Step 2 of 5 · Comparing cited pages');
     expect(text()).not.toContain('Chat d');
     await act(async () => action('chatMenu.seeAllRuns')[0].click());
@@ -393,7 +393,7 @@ describe('ChatMenuView', () => {
     expect(agents.getAttribute('aria-label')).toBe('Agents · in Action Center');
     expect(agents.querySelector('[data-slot="agents-where"] svg')).not.toBeNull();
     expect(text()).toContain('Agents at work2');
-    expect(text()).toContain('Needs your OK · step 4 of 6');
+    expect(text()).toContain('Waiting for your OK · step 4 of 6');
   });
 
   it("shows the menu's dots on its chats: grey working, yellow waiting, green new, red broken", async () => {
