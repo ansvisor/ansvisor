@@ -34,6 +34,17 @@ Neither changes going live: an agent publishes or sends only with a person's cli
 - **Fix**: issues on your own site, such as low audit scores, blocked crawlers or broken links AI sends people to.
 - **Compete**: places where competitors lead you.
 
+## Dots on actions
+
+A dot beside an action's title, in the list and in its drawer, says what changed. It sits next to the status, which stays as it was.
+
+- **Red, with a !**: a task failed, the agent's last run on it failed, or its page didn't reach your CMS.
+- **Yellow**: a task waits for approval, a draft is in review, or the action is due today or overdue.
+- **Green**: its outcome was measured (Improved or No change) since you last opened it. Opening it clears the dot.
+- **Grey, pulsing**: an agent is working on it, its tasks are being written, or its draft is being written.
+
+Red and yellow are for admins and managers. Point at a dot to read why.
+
 ## Cards and filters
 
 The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.

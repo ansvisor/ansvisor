@@ -641,6 +641,35 @@
     },
     "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
   },
+  "pageDots": {
+    "reasons": {
+      "taskFailed": "a task failed",
+      "agentFailed": "the agent’s last run on it failed",
+      "publishFailed": "the page didn’t reach your CMS",
+      "waitingApproval": "a task waits for approval",
+      "inReview": "in review",
+      "dueToday": "due today",
+      "overdue": "overdue",
+      "outcomeMeasured": "its outcome was measured",
+      "agentRunning": "an agent is working on it",
+      "writingTasks": "its tasks are being written",
+      "writing": "the Content Agent is writing it",
+      "plannedThisWeek": "due this week and not started",
+      "auditRunning": "a scheduled audit is running",
+      "auditFinished": "{scores, select, none {{fixed, plural, =0 {a scheduled audit finished} one {# issue fixed} other {# issues fixed}}} other {Score {scores}{fixed, plural, =0 {} one { · # issue fixed} other { · # issues fixed}}}}",
+      "newCritical": "{count, plural, one {a new critical issue} other {# new critical issues}}: {issues}",
+      "auditUnreachable": "the audit couldn’t reach your site, or the site blocks crawling",
+      "autoAuditOff": "auto-audit is off",
+      "autoAuditPaused": "auto-audit is paused by your plan",
+      "newOpportunities": "{count, plural, one {# new page to fix} other {# new pages to fix}}",
+      "fixesConfirmed": "{count, plural, one {# fix confirmed} other {# fixes confirmed}}"
+    },
+    "critical": {
+      "ai-bot-access": "AI crawlers blocked",
+      "json-ld-validity": "structured data broken",
+      "canonical": "canonical or noindex problem"
+    }
+  },
   "brandVisibility": {
     "title": "Visibility",
     "loading": "Loading…",
@@ -8735,6 +8764,7 @@
       "nextRunSoon": "next run within a day",
       "failed": "{count, plural, one {# page} other {# pages}} couldn't be audited",
       "viewPages": "View pages",
+      "setUp": "Set up",
       "dismiss": "Dismiss"
     },
     "bulk": {

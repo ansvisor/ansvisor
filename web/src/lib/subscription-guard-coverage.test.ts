@@ -71,6 +71,8 @@ const OPEN_ACTIONS: Record<string, string> = {
     "the person's own Today focus: which open actions they keep in view, nothing that costs",
   'user-brand-state.ts:hideCard':
     "the person's own hidden or snoozed Today cards, nothing that costs",
+  'user-brand-state.ts:markPageSeen':
+    "the person's own record of opening an action or an Audit tab (a page dot clears), nothing that costs",
   'menu-access.ts:setMyWorkAreas':
     "the person's own profile: their work areas only narrow their own menu",
   'chat-uploads.ts:prepareChatUpload':

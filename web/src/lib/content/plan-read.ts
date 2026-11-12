@@ -2,7 +2,12 @@ import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { readAssignees } from '@/lib/action-center/assignees';
 import { memberLabel } from '@/lib/action-center/display';
-import type { DraftMethod } from '@/lib/content/drafts';
+import {
+  DRAFT_STATUSES,
+  agentStateOf,
+  type DraftMethod,
+  type DraftStatus,
+} from '@/lib/content/drafts';
 import type {
   PlanAnswers,
   PlanDraft,
@@ -76,12 +81,17 @@ export async function readContentPlan(
       .limit(OPPORTUNITY_LIMIT),
     supabase
       .from('content_drafts')
-      .select('id, author, created_by, method, opportunity_id, source_url, action_id')
+      .select(
+        'id, author, created_by, method, opportunity_id, source_url, action_id, status, agent_state, agent_state_at, content_draft_deliveries(status)',
+      )
       .eq('brand_id', brandId)
       .in('status', ['draft', 'in_review', 'ready'])
       // An archived draft (00233) is set aside: the row starts afresh.
       .is('archived_at', null)
       .order('updated_at', { ascending: false })
+      // Each draft's latest send to the CMS, for the row's red dot.
+      .order('created_at', { referencedTable: 'content_draft_deliveries', ascending: false })
+      .limit(1, { referencedTable: 'content_draft_deliveries' })
       .limit(DRAFT_LIMIT),
     supabase
       .from('content_plan_marks')
@@ -174,11 +184,14 @@ export async function readContentPlan(
     ...new Set((draftsRes.data ?? []).map((d) => d.action_id).filter(Boolean)),
   ] as string[];
   const actionsRes = actionIds.length
-    ? await supabase.from('actions').select('id, assignee_id').in('id', actionIds)
+    ? await supabase.from('actions').select('id, assignee_id, due_date').in('id', actionIds)
     : { data: [], error: null };
   if (actionsRes.error) throw new Error(actionsRes.error.message);
   const assigneeOf = new Map(
     (actionsRes.data ?? []).map((a) => [a.id as string, a.assignee_id as string | null]),
+  );
+  const dueOf = new Map(
+    (actionsRes.data ?? []).map((a) => [a.id as string, (a.due_date as string | null) ?? null]),
   );
   const people = await readAssignees(
     supabase,
@@ -197,6 +210,13 @@ export async function readContentPlan(
       opportunityId: d.opportunity_id,
       sourceUrl: d.source_url,
       actionId: d.action_id ?? null,
+      status: (DRAFT_STATUSES as readonly string[]).includes(d.status)
+        ? (d.status as DraftStatus)
+        : 'draft',
+      writing: agentStateOf(d.agent_state, d.agent_state_at) === 'writing',
+      sendFailed:
+        (d.content_draft_deliveries as { status: string }[] | null)?.[0]?.status === 'failed',
+      dueDate: d.action_id ? (dueOf.get(d.action_id) ?? null) : null,
       assignee: person
         ? {
             id: person.id,

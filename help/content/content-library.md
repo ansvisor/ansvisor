@@ -4,8 +4,8 @@ route: /dashboard/content/library
 keywords: [content library, drafts, draft status, archive, export drafts, made in, open chat, from chat, first ai crawl, ai bot visit after publish]
 synonyms: [content list, my articles, saved pages, draft list]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -23,6 +23,16 @@ Each tab shows its count:
 - **Ready**: drafts marked ready.
 - **Published**: drafts marked published, by you or your CMS.
 - **Archived**: drafts sent to the archive. They keep their status for when they're restored.
+
+## Dots on pages
+
+A dot beside a page's title says what needs a look. Its status stays as it was.
+
+- **Red, with a !**: the page's last send to your CMS failed. It stays until a send goes through.
+- **Yellow**: the page is in review.
+- **Grey, pulsing**: the Content Agent is writing it.
+
+Red and yellow are for admins and managers. Point at a dot to read why.
 
 ## Columns and filters
 

@@ -68,6 +68,12 @@ import { canAccessBrand } from '@/lib/brand-access';
 import { logEvent, touchAction, writeTaskStatus } from '@/lib/action-center/task-status';
 import { readTaskAttachments, type TaskAttachment } from '@/lib/action-center/chat-attachments';
 import { startNowWork } from '@/lib/content/action-drafts';
+import {
+  NO_DOT_SOURCES,
+  actionDotFactsOf,
+  readActionDotSources,
+} from '@/lib/action-center/action-dot-reads';
+import type { ActionDotFacts } from '@/lib/page-dots';
 import type { DraftMethod } from '@/lib/content/drafts';
 
 export interface ActionAssignee {
@@ -114,23 +120,25 @@ export interface ActionItem {
    * isn't writing. Read with the list only.
    */
   startNow?: DraftMethod | null;
+  /** What lights its dot (lib/page-dots.ts); read with the list only. */
+  dotFacts?: ActionDotFacts;
 }
 
 export async function getActions(brandId: string): Promise<ActionItem[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('actions')
-    .select(ACTION_COLUMNS)
+    .select(`${ACTION_COLUMNS}, tasks_writing_since`)
     .eq('brand_id', brandId)
     .limit(1000);
   if (error) throw new Error(error.message);
-  const rows = (data ?? []) as ActionRow[];
+  const rows = (data ?? []) as (ActionRow & { tasks_writing_since?: string | null })[];
   if (rows.length === 0) return [];
 
   const actionIds = rows.map((row) => row.id);
   const assigneeIds = [...new Set(rows.map((row) => row.assignee_id).filter(Boolean))] as string[];
 
-  const [tasksRes, signalsRes, profiles, entityCounts] = await Promise.all([
+  const [tasksRes, signalsRes, profiles, entityCounts, dotSources] = await Promise.all([
     supabase
       .from('action_tasks')
       .select('id, action_id, status, task_key')
@@ -146,6 +154,11 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     readAssignees(supabase, brandId, assigneeIds),
     // Each action's list (AC-009): its count less what was removed since.
     readEntityCounts(supabase, actionIds),
+    // What lights each row's dot (lib/page-dots.ts); a failed read lights nothing.
+    readActionDotSources(supabase, brandId).catch((err) => {
+      console.error('[actions] could not read the dots:', err);
+      return NO_DOT_SOURCES;
+    }),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
@@ -160,6 +173,14 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     rows.push({ id: task.id, taskKey: task.task_key, status: task.status });
     taskRows.set(task.action_id, rows);
   }
+  const dotFacts = actionDotFactsOf(
+    dotSources,
+    rows.map((row) => ({
+      id: row.id,
+      tasksWritingSince: row.tasks_writing_since ?? null,
+      taskStatuses: taskStatuses.get(row.id) ?? [],
+    })),
+  );
   const signalCounts = new Map<string, number>();
   for (const signal of signalsRes.data ?? []) {
     if (!signal.action_id) continue;
@@ -177,6 +198,7 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     return {
       ...item,
       startNow: startNowWork(taskRows.get(row.id) ?? [], item.payload)?.method ?? null,
+      dotFacts: dotFacts.get(row.id),
     };
   });
 }

@@ -4,8 +4,8 @@ route: /dashboard/content/plan
 keywords: [content plan, priority list, priority score, create optimize protect, losing ground]
 synonyms: [what to write next, content roadmap, content priorities, editorial plan]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-31
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -31,6 +31,16 @@ A page is losing ground when it is cited at least 20% less per tracked answer th
 Each row shows the **Priority Score**; the **Page**, with its title, page type and path, or **New page**; the **Action**: Create, Optimize or Protect; **Why** it's listed, tagged with where that comes from (**Opportunity**, **Citations** or **Protect**); and **Who** is on it: you, the Agent, a teammate or the person it's assigned to.
 
 The row's button, **Create**, **Optimize** or **View**, opens New content on that row, and **Open draft** opens the draft already being written. Rows marked as a priority come first, the rest by score. The list shows up to 50 rows.
+
+## Dots on rows
+
+Once a row has a draft, a dot beside its title can say what needs a look:
+
+- **Red, with a !**: the draft's last send to your CMS failed.
+- **Yellow**: the draft is in review, or its task is due this week and the draft isn't started.
+- **Grey, pulsing**: the Content Agent is writing it.
+
+Red and yellow are for admins and managers. Point at a dot to read why.
 
 ## How the Priority Score works
 

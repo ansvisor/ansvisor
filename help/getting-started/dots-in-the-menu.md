@@ -41,6 +41,10 @@ Chat's chats and the agent cards in **Action Center › Agents** use the same do
 
 Admins and managers also see dots for **Settings**: on the account menu under your name, on the matching Settings tabs, and the strongest one on your avatar and the gear. **Members & invites** is green when people joined since you last opened it, with their names at the top of the tab, and yellow when an invite expired without being accepted or every seat is taken. **Integrations** is red while a Google sign-in, CMS site or Slack is disconnected, and green when a teammate connected one. **API & MCP** is green when an MCP client such as Claude connected. **Plans & billing** is yellow in a trial's last 3 days and red when a payment failed. Green goes once you open the tab; yellow and red stay until they're dealt with.
 
+## Dots on pages
+
+The same dots show inside some pages, beside a title: on actions in **Actions**, on rows in **Content Plan** and **Library**, and on the **Auto-audit** line and **Opportunities** tab in **Audit**. They follow the same colours and rules, and never replace a row's status.
+
 ## The Action Center's number
 
 The number beside **Action Center** is how many open actions are unassigned or yours. It is hidden once your plan or trial has ended. The demo brand shows green and grey dots only, a workspace whose plan ended shows no yellow, and a section off your menu shows none.

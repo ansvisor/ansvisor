@@ -1,5 +1,9 @@
 'use client';
 
+import { useDotViewer } from '@/components/layout/menu-dot';
+import { PageDot } from '@/components/layout/page-dot';
+import type { DotViewer } from '@/lib/menu-dots';
+import { draftDots, pickDot, weekEnd } from '@/lib/page-dots';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Bot, EyeOff, MoreHorizontal, Star, User, UserPlus } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -53,6 +57,25 @@ export const PLAN_ACTION_BADGE: Record<PlanAction, string> = {
  * menu: assign it to a teammate, and for admins and managers, mark it as a
  * priority or hide it.
  */
+/**
+ * A row's dot, from its draft: grey while the Content Agent writes it; yellow
+ * in review, or due by the end of this week and not started; red when its
+ * latest send to the CMS failed. None for a row with no draft yet.
+ */
+function planRowDot(row: PlanRow, week: string, viewer: DotViewer) {
+  const draft = row.draft;
+  if (!draft?.status) return null;
+  return pickDot(
+    draftDots({
+      status: draft.status,
+      writing: draft.writing ?? false,
+      sendFailed: draft.sendFailed ?? false,
+      dueThisWeek: !!draft.dueDate && draft.dueDate <= week,
+    }),
+    viewer,
+  );
+}
+
 export function PlanTable({
   rows,
   days,
@@ -72,6 +95,9 @@ export function PlanTable({
 }) {
   const t = useTranslations('contentEditor.plan');
   const tTypes = useTranslations('contentEditor.pageTypes');
+  const viewer = useDotViewer();
+  const now = new Date();
+  const week = weekEnd(now);
 
   return (
     <Table>
@@ -108,6 +134,7 @@ export function PlanTable({
                 <span className="truncate" title={row.title}>
                   {row.title}
                 </span>
+                <PageDot dot={planRowDot(row, week, viewer)} className="shrink-0" />
                 {row.priority && (
                   <Badge variant="outline" className="shrink-0 gap-1 font-normal">
                     <Star aria-hidden className="h-3 w-3" />

@@ -17,8 +17,13 @@ import {
   readNavSeen,
   skipKey,
   topicKey,
+  ITEM_SEEN_MAX,
+  actionSeenKey,
+  isSeenKey,
+  readSeenKeys,
   withHidden,
   withSeen,
+  withSeenKey,
 } from './user-brand-state';
 
 /**
@@ -157,6 +162,57 @@ describe('changing one key', () => {
       insights: NOW.toISOString(),
     });
     expect(withSeen(null, 'today', NOW)).toEqual({ today: NOW.toISOString() });
+  });
+
+  it("keeps the pages' own keys beside the areas: the Audit page's parts and each action opened", () => {
+    expect(isSeenKey('audit/auto')).toBe(true);
+    expect(isSeenKey('audit/opportunities')).toBe(true);
+    expect(isSeenKey(actionSeenKey(A1.toUpperCase()))).toBe(true);
+    expect(isSeenKey('action:nope')).toBe(false);
+    expect(isSeenKey('insights')).toBe(false);
+    const current = {
+      today: '2026-11-10T08:00:00Z',
+      'audit/auto': '2026-11-09T08:00:00Z',
+      [actionSeenKey(A1)]: '2026-11-08T08:00:00Z',
+      other: '2026-11-08T08:00:00Z',
+    };
+    expect(readSeenKeys(current)).toEqual({
+      'audit/auto': '2026-11-09T08:00:00.000Z',
+      [actionSeenKey(A1)]: '2026-11-08T08:00:00.000Z',
+    });
+    // An area's visit keeps them, and a page key's keeps the areas.
+    expect(withSeen(current, 'insights', NOW)).toEqual({
+      today: '2026-11-10T08:00:00.000Z',
+      insights: NOW.toISOString(),
+      'audit/auto': '2026-11-09T08:00:00.000Z',
+      [actionSeenKey(A1)]: '2026-11-08T08:00:00.000Z',
+    });
+    expect(withSeenKey(current, 'audit/opportunities', NOW)).toEqual({
+      today: '2026-11-10T08:00:00.000Z',
+      'audit/auto': '2026-11-09T08:00:00.000Z',
+      'audit/opportunities': NOW.toISOString(),
+      [actionSeenKey(A1)]: '2026-11-08T08:00:00.000Z',
+    });
+  });
+
+  it('keeps actions opened within 30 days, the newest 60, well under the cap', () => {
+    const key = (i: number) =>
+      actionSeenKey(`00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+    const current: Record<string, string> = { [key(999)]: '2026-10-01T00:00:00.000Z' };
+    for (let i = 0; i < 80; i++)
+      current[key(i)] = new Date(NOW.getTime() - (i + 1) * 60_000).toISOString();
+    const kept = withSeenKey(current, actionSeenKey(A1), NOW);
+    expect(kept[actionSeenKey(A1)]).toBe(NOW.toISOString());
+    expect(kept[key(999)]).toBeUndefined();
+    expect(Object.keys(kept)).toHaveLength(ITEM_SEEN_MAX);
+    expect(kept[key(0)]).toBeDefined();
+    expect(kept[key(79)]).toBeUndefined();
+    expect(
+      jsonbTextBytes({
+        ...kept,
+        ...Object.fromEntries(NAV_AREAS.map((a) => [a, NOW.toISOString()])),
+      }),
+    ).toBeLessThan(STATE_MAX_BYTES);
   });
 
   it('writes the focus as the database keeps it', () => {

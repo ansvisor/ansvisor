@@ -120,4 +120,72 @@ describe('AutoRunNotice', () => {
     render(null);
     expect(container.textContent).toBe('');
   });
+
+  it('says what the new run found beside its green dot', () => {
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <AutoRunNotice
+            brandId={BRAND}
+            run={run()}
+            nextRun={null}
+            dot={{
+              colour: 'green',
+              reason: 'auditFinished',
+              values: { scores: '72 → 78', fixed: 3 },
+            }}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    const dot = container.querySelector('[data-menu-dot="green"]')!;
+    expect(dot.getAttribute('role')).toBe('img');
+    expect(dot.getAttribute('aria-label')).toBe('New results: Score 72 → 78 · 3 issues fixed');
+    expect(container.textContent).toContain('Score 72 → 78 · 3 issues fixed');
+  });
+
+  it('names the new critical checks, and keeps red and yellow with no run, with Set up', () => {
+    const onSetUp = vi.fn();
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <AutoRunNotice
+            brandId={BRAND}
+            run={null}
+            nextRun={null}
+            dot={{ colour: 'yellow', reason: 'autoAuditOff' }}
+            onSetUp={onSetUp}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(container.querySelector('[data-menu-dot="yellow"]')?.getAttribute('title')).toBe(
+      'Needs you: auto-audit is off',
+    );
+    const setUp = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Set up',
+    )!;
+    act(() => setUp.click());
+    expect(onSetUp).toHaveBeenCalled();
+
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <AutoRunNotice
+            brandId={BRAND}
+            run={null}
+            nextRun={null}
+            dot={{
+              colour: 'red',
+              reason: 'newCritical',
+              values: { count: 2, issues: 'ai-bot-access,json-ld-validity' },
+            }}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(container.querySelector('[data-menu-dot="red"]')?.getAttribute('aria-label')).toBe(
+      'Needs attention: 2 new critical issues: AI crawlers blocked, structured data broken',
+    );
+  });
 });

@@ -167,9 +167,71 @@ export function isCardHidden(
   return until === null || Date.parse(until) > now.getTime();
 }
 
-/** nav_seen with `area` seen at `at`. */
+/**
+ * nav_seen's other keys (the pages' own dots, components/layout/page-dot.tsx):
+ * when the person last looked at a part of a page, or opened one action.
+ *   audit/auto           the Audit page, for its Auto-audit line
+ *   audit/opportunities  the Audit page's Opportunities tab
+ *   action:<id>          an action's drawer
+ */
+export const PAGE_SEEN_KEYS = ['audit/auto', 'audit/opportunities'] as const;
+export type PageSeenKey = (typeof PAGE_SEEN_KEYS)[number];
+
+const ACTION_SEEN_KEY = /^action:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** The key an action's drawer keeps its last opening under. */
+export const actionSeenKey = (actionId: string) => `action:${actionId.toLowerCase()}`;
+
+export function isSeenKey(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    ((PAGE_SEEN_KEYS as readonly string[]).includes(value) || ACTION_SEEN_KEY.test(value))
+  );
+}
+
+/**
+ * An action's opening is kept this long, and for this many actions at most,
+ * so nav_seen stays small (about 5 KB of its 8). An action's green dot only
+ * compares an outcome measured within as long (ITEM_SEEN_DAYS): one opened
+ * before that was opened before the outcome too.
+ */
+export const ITEM_SEEN_DAYS = 30;
+export const ITEM_SEEN_MAX = 60;
+
+/** The page keys the row names, with a readable time; anything else is left out. */
+export function readSeenKeys(value: unknown): Record<string, string> {
+  if (!isObject(value)) return {};
+  const seen: Record<string, string> = {};
+  for (const [key, at] of Object.entries(value)) {
+    const time = isoTime(at);
+    if (isSeenKey(key) && time) seen[key] = time;
+  }
+  return seen;
+}
+
+/** The page keys, less actions opened over ITEM_SEEN_DAYS ago or beyond the newest ITEM_SEEN_MAX. */
+function prunedSeenKeys(seen: Record<string, string>, now: Date): Record<string, string> {
+  const since = now.getTime() - ITEM_SEEN_DAYS * 24 * 60 * 60_000;
+  const actions = Object.keys(seen)
+    .filter((key) => key.startsWith('action:') && Date.parse(seen[key]) >= since)
+    .sort((a, b) => Date.parse(seen[b]) - Date.parse(seen[a]))
+    .slice(0, ITEM_SEEN_MAX);
+  const kept: Record<string, string> = {};
+  for (const key of Object.keys(seen)) {
+    if (!key.startsWith('action:') || actions.includes(key)) kept[key] = seen[key];
+  }
+  return kept;
+}
+
+/** nav_seen with `area` seen at `at`; the page keys stay. */
 export function withSeen(current: unknown, area: NavArea, at: Date): Record<string, string> {
-  return { ...readNavSeen(current), [area]: at.toISOString() };
+  return { ...readSeenKeys(current), ...readNavSeen(current), [area]: at.toISOString() };
+}
+
+/** nav_seen with the page key `key` seen at `at`; the menu areas stay. */
+export function withSeenKey(current: unknown, key: string, at: Date): Record<string, string> {
+  const seen = prunedSeenKeys({ ...readSeenKeys(current), [key]: at.toISOString() }, at);
+  return { ...readNavSeen(current), ...seen };
 }
 
 /** The focus as the database keeps it. */

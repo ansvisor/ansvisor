@@ -26,24 +26,22 @@ import {
   type DotColour,
   type MenuState,
 } from '@/lib/menu-dots';
-import { MenuDot } from './menu-dot';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAdsEnabled } from '@/components/providers/ads-provider';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
-import { useDemoBrand } from '@/components/providers/demo-brand-provider';
-import { usePlanContext } from '@/components/providers/plan-provider';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
-import { useUserRole } from '@/hooks/use-user-role';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useMenuStateStore } from '@/stores/use-menu-state-store';
+import { MenuDot, useDotLabel, useDotViewer } from './menu-dot';
+
+// The dot, its words and its viewer live in menu-dot.tsx; re-exported for the menu's callers.
+export { MenuDot, useDotLabel, useDotViewer };
 
 /** How old a read may be before a page change reads again. */
 export const MENU_STATE_MAX_AGE_MS = 5 * 60_000;
 
 /** A grey dot reads once more after this, so it goes out soon after its job ends. */
 export const GREY_RECHECK_MS = 60_000;
-
-export { MenuDot, useDotLabel } from './menu-dot';
 
 /** The dots on the menu, as the sidebar and the mobile menu show them. */
 export interface MenuDotsView {
@@ -102,14 +100,11 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
   const pathname = usePathname();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
-  const { canManage } = useUserRole();
-  const { isDemo } = useDemoBrand();
-  const { subscriptionActive } = usePlanContext();
   const { canUse, isCloud } = useFeatureGate();
   const hiddenSections = useHiddenMenuSections();
   const chatAgentic = useChatAgentic();
   const ads = useAdsEnabled();
-  const viewer = { canAct: canManage, demo: isDemo, ended: !subscriptionActive };
+  const viewer = useDotViewer();
 
   const onMenu = dotAreasOnMenu(nav, {
     brandPrefs: { ecommerce: isEcommerceBrand(activeBrand) },

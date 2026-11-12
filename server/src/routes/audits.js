@@ -1328,6 +1328,70 @@ router.put('/settings', async (req, res) => {
 /** Runs the latest-run summary looks back over, newest first. */
 const LATEST_RUNS_READ = 5;
 
+/**
+ * The checks whose new failure lights the Audit page's red dot: AI crawlers
+ * blocked in robots.txt, structured data that doesn't parse, and a canonical
+ * pointing at a page that is noindex, missing or elsewhere.
+ */
+const CRITICAL_SIGNALS = Object.freeze(['ai-bot-access', 'json-ld-validity', 'canonical']);
+
+/** Audits whose failed checks one read asks for: about 15 each, under the 1,000 a read returns. */
+const FAILS_CHUNK = 50;
+
+const averageScore = (audits) => {
+  const scores = audits.map((a) => Number(a.total_score)).filter((n) => Number.isFinite(n));
+  return scores.length ? Math.round(scores.reduce((sum, n) => sum + n, 0) / scores.length) : null;
+};
+
+/**
+ * The latest run against the run before it that audited the brand's pages
+ * (the Audit page's dots, web lib/page-dots.ts), from the two runs alone:
+ * each run's average score; the issues the run before found on a page this
+ * run audited again and found fixed; the critical checks failing now that
+ * didn't before (every one, with no run before); and whether none of this
+ * run's audits could be done (the site didn't answer, or blocks the crawler).
+ */
+async function compareRuns(own, prevOwn, auditById) {
+  const done = (ids) => ids.filter((id) => auditById.get(id)?.status === 'completed');
+  const latest = done(own);
+  const before = done(prevOwn ?? []);
+  const fails = await readByAuditIds([...latest, ...before], FAILS_CHUNK, (chunk) =>
+    supabaseAdmin
+      .from('audit_signal_results')
+      .select('audit_id, signal_key')
+      .in('audit_id', chunk)
+      .eq('status', 'fail'),
+  );
+  const failsOf = (ids) => {
+    const set = new Set(ids);
+    return fails.filter((f) => set.has(f.audit_id));
+  };
+  const urlOf = (id) => auditById.get(id)?.url ?? id;
+  const nowFailing = new Set(failsOf(latest).map((f) => `${urlOf(f.audit_id)}|${f.signal_key}`));
+  const auditedNow = new Set(latest.map(urlOf));
+  const fixed = new Set(
+    failsOf(before)
+      .map((f) => `${urlOf(f.audit_id)}|${f.signal_key}`)
+      .filter((key) => auditedNow.has(key.slice(0, key.lastIndexOf('|'))) && !nowFailing.has(key)),
+  ).size;
+  const criticalBefore = new Set(failsOf(before).map((f) => f.signal_key));
+  const newCritical = [
+    ...new Set(
+      failsOf(latest)
+        .map((f) => f.signal_key)
+        .filter((key) => CRITICAL_SIGNALS.includes(key) && !criticalBefore.has(key)),
+    ),
+  ];
+  return {
+    previous: prevOwn !== null,
+    scoreBefore: prevOwn ? averageScore(before.map((id) => auditById.get(id))) : null,
+    scoreAfter: averageScore(latest.map((id) => auditById.get(id))),
+    fixed,
+    newCritical,
+    unreachable: own.length > 0 && own.every((id) => auditById.get(id)?.status === 'failed'),
+  };
+}
+
 // GET /api/audits/auto-runs/latest?brandId=… — the org's latest auto-audit
 // run that audited pages of this brand, in the last 30 days, with what it
 // found there (SA-006's in-app notice). run is null when there's none.
@@ -1352,12 +1416,16 @@ router.get('/auto-runs/latest', async (req, res) => {
     const audits = await readByAuditIds(ids, 100, (chunk) =>
       supabaseAdmin
         .from('site_audits')
-        .select('id, status')
+        .select('id, status, url, total_score')
         .in('id', chunk)
         .eq('brand_id', brandId),
     );
     const statusById = new Map(audits.map((a) => [a.id, a.status]));
-    const run = (runs ?? []).find((r) => (r.audit_ids ?? []).some((id) => statusById.has(id)));
+    const auditById = new Map(audits.map((a) => [a.id, a]));
+    const ownRuns = (runs ?? []).filter((r) =>
+      (r.audit_ids ?? []).some((id) => statusById.has(id)),
+    );
+    const [run, prev] = ownRuns;
     if (!run) return res.json({ success: true, run: null });
 
     const own = run.audit_ids.filter((id) => statusById.has(id));
@@ -1372,6 +1440,11 @@ router.get('/auto-runs/latest', async (req, res) => {
       if (countErr) throw countErr;
       criticalIssues = count ?? 0;
     }
+    const compare = await compareRuns(
+      own,
+      prev ? prev.audit_ids.filter((id) => statusById.has(id)) : null,
+      auditById,
+    );
 
     return res.json({
       success: true,
@@ -1385,6 +1458,7 @@ router.get('/auto-runs/latest', async (req, res) => {
         completed: completed.length,
         running: own.filter((id) => statusById.get(id) === 'running').length,
         criticalIssues,
+        compare,
       },
     });
   } catch (err) {
