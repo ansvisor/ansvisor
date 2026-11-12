@@ -10,6 +10,7 @@ import cron from 'node-cron';
 
 import logger from './lib/logger.js';
 import { handleProcessErrors } from './lib/process-errors.js';
+import { selfHostedCronMode, registerSelfHostedCron } from './lib/self-hosted-cron.js';
 import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
@@ -960,19 +961,13 @@ server.listen(PORT, async () => {
   // due cards start within the day's cap and the month's budget.
   if (isCloud()) startReportCardQueue();
 
-  if (!isCloud()) {
-    const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';
-    cron.schedule(schedule, async () => {
-      logger.info('self-hosted daily tracking triggered');
-      try {
-        await runDailyTracking();
-        await cleanupOldJobs();
-      } catch (err) {
-        logger.error({ err }, 'self-hosted daily tracking failed');
-      }
-    });
-    logger.info({ schedule }, 'self-hosted daily cron active');
-  }
+  registerSelfHostedCron({
+    cronLib: cron,
+    schedule: process.env.DAILY_CRON_SCHEDULE || '0 6 * * *',
+    runTracking: runDailyTracking,
+    cleanup: cleanupOldJobs,
+    log: logger,
+  });
 });
 
-export { app, server, io };
+export { app, server, io, selfHostedCronMode };
