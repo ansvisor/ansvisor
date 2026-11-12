@@ -27,7 +27,10 @@ const plan = vi.hoisted(() => ({
   workspaceName: 'Brewline',
 }));
 vi.mock('@/components/providers/plan-provider', () => ({ usePlanContext: () => plan }));
-vi.mock('@/components/providers/chat-agentic-provider', () => ({ useChatAgentic: () => false }));
+const chat = vi.hoisted(() => ({ agentic: false }));
+vi.mock('@/components/providers/chat-agentic-provider', () => ({
+  useChatAgentic: () => chat.agentic,
+}));
 vi.mock('@/components/providers/upgrade-gate', () => ({
   useUpgradeGate: () => ({ isLocked: false, openUpgrade: vi.fn() }),
 }));
@@ -81,6 +84,7 @@ beforeEach(() => {
   plan.trialEndsAt = null;
   read.state = null;
   push.mockReset();
+  chat.agentic = false;
   getSettingsState.mockClear();
   useSettingsStateStore.setState({ read: null, pending: null, opened: {} });
   useBrandStore.setState({ activeBrandId: null });
@@ -176,6 +180,26 @@ describe('UserProfileNavItem', () => {
     expect(container.querySelector('a')).toBeNull();
     expect(trigger().textContent).toContain('Ayşe Kaya, account menu');
     expect((await openMenu()).length).toBe(9);
+  });
+
+  it("opens the chat What's new starts as soon as it has its id", async () => {
+    chat.agentic = true;
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: true, hasUnread: false })),
+    ) as unknown as typeof fetch;
+    const { startChatRun } = await import('@/lib/chat/start-chat');
+    vi.mocked(startChatRun).mockResolvedValueOnce({ ok: true, chatId: 'chat-9' });
+    try {
+      await render('analyst');
+      await openMenu();
+      const item = document.querySelector<HTMLElement>('[data-account-item="whats-new"]')!;
+      await act(async () => item.click());
+      expect(startChatRun).toHaveBeenCalledWith(expect.any(String), null);
+      expect(push).toHaveBeenCalledWith('/dashboard/chat/chat-9');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 
   it('signs out', async () => {

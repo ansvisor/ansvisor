@@ -158,7 +158,12 @@ export function sseFrame(event: ChatEvent): string {
 /** A keep-alive comment, every 15 s, so a proxy doesn't close a quiet stream. */
 const KEEP_ALIVE_MS = 15_000;
 
-/** A streamed response of a run's events (text/event-stream). */
+/**
+ * A streamed response of a run's events (text/event-stream). It opens with a
+ * comment: the server sends the headers (the chat and run ids) with the first
+ * bytes, so they go out at once, not with the run's first event, which can
+ * be seconds of reads and model work away.
+ */
 export function sseResponse(
   events: AsyncGenerator<ChatEvent>,
   headers: Record<string, string> = {},
@@ -166,6 +171,7 @@ export function sseResponse(
   let keepAlive: ReturnType<typeof setInterval> | null = null;
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
+      controller.enqueue(encoder.encode(': open\n\n'));
       keepAlive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(': keep-alive\n\n'));

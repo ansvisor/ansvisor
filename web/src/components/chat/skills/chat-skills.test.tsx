@@ -235,7 +235,11 @@ describe('ChatSkills', () => {
   it('runs a skill in a new chat, schedules it from Chat Home’s box, and starts an agent on it', async () => {
     answer = (url) =>
       url === '/api/chat/runs'
-        ? new Response('', { status: 200, headers: { 'x-chat-conversation': 'chat-1' } })
+        ? // The run's stream stays open: the chat opens on the headers, not at its end.
+          new Response(new ReadableStream(), {
+            status: 200,
+            headers: { 'x-chat-conversation': 'chat-1' },
+          })
         : null;
     await render();
     await click(inCard('winback', 'skills.run')!);
