@@ -55,14 +55,15 @@ describe('askToolInput', () => {
 });
 
 describe('askAnswerInput', () => {
-  it('fills in an answer from the card and refuses an option past the fourth', () => {
+  it('fills in an answer from the card and refuses an option past the fifth (the range card’s)', () => {
     expect(askAnswerInput.parse({ n: 2 })).toEqual({
       n: 2,
       selected: [],
       skipped: false,
       via: 'card',
     });
-    expect(askAnswerInput.safeParse({ n: 2, selected: [4] }).success).toBe(false);
+    expect(askAnswerInput.safeParse({ n: 2, selected: [4] }).success).toBe(true);
+    expect(askAnswerInput.safeParse({ n: 2, selected: [5] }).success).toBe(false);
     expect(askAnswerInput.safeParse({ n: 0 }).success).toBe(false);
   });
 });

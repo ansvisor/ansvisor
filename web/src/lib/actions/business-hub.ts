@@ -280,6 +280,27 @@ export async function saveBusinessHubSnapshot(
   return { saved: true, replaced: body.replaced === true };
 }
 
+/**
+ * Saves entries from Ansvisor's CSV template (lib/business-hub/csv.ts), all
+ * or none, each replacing the brand's of the same length and last day.
+ * Every member may.
+ */
+export async function importBusinessHubSnapshots(
+  brandId: string,
+  entries: EntryInput[],
+): Promise<{ saved: number; replaced: number } | BusinessHubWriteError> {
+  if (!id.safeParse(brandId).success || !entries.length || entries.length > 104) {
+    return { error: 'invalid' };
+  }
+  const res = await call(`/${brandId}/snapshots/import`, {
+    method: 'POST',
+    body: JSON.stringify({ rows: entries }),
+  });
+  if ('error' in res) return res;
+  const body = (await res.json().catch(() => ({}))) as { saved?: number; replaced?: number };
+  return { saved: Number(body.saved) || 0, replaced: Number(body.replaced) || 0 };
+}
+
 /** Deletes one entry. Admins and managers only (the API refuses anyone else). */
 export async function deleteBusinessHubSnapshot(
   entryId: string,

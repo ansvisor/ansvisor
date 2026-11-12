@@ -582,11 +582,12 @@ async function engineCoverage(
  * Promote an observed sub-query into a tracked prompt for the brand. Mirrors
  * the Insights "accept suggestion" flow: add to the brand's earliest prompt
  * set, deriving platforms/models from its most recent active prompt.
- * `addPromptToSet` enforces the plan's `maxPrompts` limit, and refuses a
- * brand with no topic yet (`no_topics`).
+ * `addPromptToSet` enforces the plan's `maxPrompts` limit (with SIMPLE_NAV,
+ * a full plan saves it waiting for a spot: `waiting`), and refuses a brand
+ * with no topic yet (`no_topics`).
  */
 export type TrackFanoutResult =
-  | { promptId: string }
+  | { promptId: string; waiting?: true }
   | { error: string; code?: PromptAddFailureCode };
 
 export async function trackFanoutQuery(brandId: string, query: string): Promise<TrackFanoutResult> {
@@ -624,7 +625,9 @@ export async function trackFanoutQuery(brandId: string, query: string): Promise<
   if ('error' in created) return { error: created.error, code: created.code };
 
   revalidatePath('/dashboard/prompts');
-  return { promptId: created.prompt.id };
+  return created.waiting
+    ? { promptId: created.prompt.id, waiting: true }
+    : { promptId: created.prompt.id };
 }
 
 /**

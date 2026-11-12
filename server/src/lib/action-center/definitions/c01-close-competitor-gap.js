@@ -7,7 +7,7 @@
  * payload names its targets.
  */
 
-import { competitorNames, targetPayload } from './_helpers.js';
+import { competitorNames, leadPrompt, targetPayload } from './_helpers.js';
 
 export default {
   id: 'close_competitor_gap',
@@ -31,6 +31,12 @@ export default {
   ],
 
   payload(byKind) {
-    return { ...targetPayload(byKind, 'competitors'), competitorNames: competitorNames(byKind) };
+    const lead = leadPrompt(byKind);
+    return {
+      ...targetPayload(byKind, 'competitors'),
+      competitorNames: competitorNames(byKind),
+      // The prompt its widest lead is on, so the title can name it.
+      ...(lead ? { leadPrompt: lead } : {}),
+    };
   },
 };

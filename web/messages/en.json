@@ -570,6 +570,12 @@
     "collapseRail": "Collapse the Ansvisor menu",
     "railTip": "Ansvisor · hover or click to expand"
   },
+  "menuDots": {
+    "newResults": "New results",
+    "needsYou": "Needs you",
+    "withDot": "{label}, {dot}",
+    "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
+  },
   "brandVisibility": {
     "title": "Visibility",
     "loading": "Loading…",
@@ -1852,6 +1858,7 @@
             "issue": "A site issue on {subject}",
             "opportunity": "Room to grow on {subject}",
             "gain": "A gain on {subject}",
+            "competitorGap": "{article, select, an {An} other {A}} {points}-pt gap with {competitor} on {subject}",
             "none": "Its findings have resolved"
           },
           "subject": {
@@ -1871,7 +1878,8 @@
             "gap": "A gap to close",
             "issue": "A site issue",
             "opportunity": "Room to grow",
-            "gain": "A gain"
+            "gain": "A gain",
+            "competitorGap": "{article, select, an {An} other {A}} {points}-pt gap with {competitor}"
           },
           "demand": {
             "high": "high-demand",
@@ -2571,9 +2579,9 @@
       "startNow": {
         "title": "Start now",
         "hint": {
-          "create": "Opens a new draft with this action's prompts, then builds its brief from your AI usage.",
-          "optimize": "Opens the page as a draft with this action's prompts, then builds its brief from your AI usage.",
-          "optimizePage": "Opens {page} as a draft with this action's prompts, then builds its brief from your AI usage.",
+          "create": "Opens a new draft with this action's prompts, and the Content Agent writes its brief and the page, from your AI usage.",
+          "optimize": "Opens the page as a draft with this action's prompts, and the Content Agent writes its brief and suggests changes, from your AI usage.",
+          "optimizePage": "Opens {page} as a draft with this action's prompts, and the Content Agent writes its brief and suggests changes, from your AI usage.",
           "optimizeSeveral": "Opens a draft for each of its {count, plural, one {# page} other {# pages}}, with this action's prompts. They wait for you in the Library.",
           "written": "Its draft is started. Open it where you left off.",
           "writtenSeveral": "Its {count, plural, one {# draft is} other {# drafts are}} started. They wait for you in the Library."
@@ -2925,12 +2933,14 @@
       },
       "close_competitor_gap": {
         "title": "Close the visibility gap with {targets}",
+        "promptTitle": "Close the gap with {competitor}, starting with “{prompt}”",
         "titleGeneric": "Close the visibility gap with competitors",
         "description": "A competitor is mentioned well more often than you.",
         "goal": "Close the gap."
       },
       "protect_visibility": {
         "title": "Protect visibility across {targets}",
+        "namedTitle": "Protect your visibility on {targets}",
         "titleGeneric": "Protect your visibility",
         "description": "A real visibility position is losing ground, before it becomes a collapse.",
         "goal": "Hold the position while it still exists to hold."
@@ -2953,6 +2963,7 @@
       },
       "expand_prompt_visibility": {
         "title": "Expand visibility across {targets}",
+        "namedTitle": "Get into AI answers on {targets}",
         "titleGeneric": "Expand prompt visibility",
         "description": "Your brand is absent from answers to these tracked prompts.",
         "goal": "Become visible in AI answers to these prompts."
@@ -2989,6 +3000,7 @@
       },
       "strengthen_emerging_content": {
         "title": "Strengthen momentum across {targets}",
+        "namedTitle": "Build on your gain on {targets}",
         "titleGeneric": "Strengthen emerging content",
         "description": "Visibility is improving on these prompts but has not reached its potential.",
         "goal": "Build on content that is starting to win."
@@ -3131,6 +3143,7 @@
       },
       "recover_lost_mentions": {
         "title": "Recover lost mentions across {targets}",
+        "namedTitle": "Win back mentions on {targets}",
         "titleGeneric": "Recover lost mentions",
         "description": "Your brand disappeared from prompts where it was mentioned.",
         "goal": "Be named again where you were."
@@ -3297,6 +3310,11 @@
         "description": "A competitor leads a topic you have no content for.",
         "goal": "Create the content to compete."
       },
+      "namedTargets": {
+        "prompts": "{more, plural, =0 {“{name}”} one {“{name}” and # more prompt} other {“{name}” and # more prompts}}",
+        "competitors": "{more, plural, =0 {{name}} one {{name} and # more competitor} other {{name} and # more competitors}}",
+        "topics": "{more, plural, =0 {“{name}”} one {“{name}” and # more topic} other {“{name}” and # more topics}}"
+      },
       "targets": {
         "prompts": "{count, plural, one {# prompt} other {# prompts}}",
         "pages": "{count, plural, one {# page} other {# pages}}",
@@ -3311,6 +3329,7 @@
         "title": "Act on a content opportunity for {targets}",
         "titleGeneric": "Act on a content opportunity",
         "description": "Sent from Content Optimization: a piece of content, or work on an existing page, that answers a group of related prompts.",
+        "why": "{page, select, none {A new page} other {An update to {page}}} that answers {prompts}.",
         "goal": "Get the brand into AI answers for these prompts with the content this opportunity calls for."
       },
       "prompt_improve": {
@@ -3876,6 +3895,39 @@
       "declined": "Declined",
       "not_measurable": "Not measurable"
     }
+  },
+  "topicCard": {
+    "eyebrow": "New area to track",
+    "why": {
+      "lead": "No topic you track covers it yet.",
+      "catalog": "You sell {count, plural, one {# product} other {# products}} in {category}.",
+      "search": "People look for it: {count} prompt ideas from your {source, select, gsc {Search Console} ga {Analytics} other {Search Console and Analytics}} are about it.",
+      "businessHub": "ChatGPT Business Hub shows people asking ChatGPT about it.",
+      "llm": "It is among your topic ideas too.",
+      "competitors": "AI answers name {names} here."
+    },
+    "spots": "Needs {count} prompt spots · {left} left on {plan}",
+    "spotsOpen": "Needs {count} prompt spots",
+    "suggest": "Suggest {count} prompts",
+    "opening": "Adding the topic…",
+    "notNow": "Not now",
+    "notNowFailed": "Couldn't hide it. Try again.",
+    "openFailed": "Couldn't add the topic. Try again.",
+    "writing": "Writing {count} prompts for this topic…",
+    "writeFailed": "Couldn't write prompts just now.",
+    "tryAgain": "Try again",
+    "stored": "Ideas you already have for this topic, the most searched first. Tick the ones to track.",
+    "written": "Written just now for this topic. Tick the ones to track.",
+    "noneNew": "You track every prompt we found for it already.",
+    "waits": "Waits for a spot",
+    "track": "{count, plural, =0 {Track prompts} one {Track # prompt} other {Track # prompts}}",
+    "trackFailed": "Couldn't track them. Try again.",
+    "done": {
+      "tracked": "{count, plural, one {# prompt} other {# prompts}} added to {topic}.",
+      "allWaiting": "{count, plural, one {# prompt} other {# prompts}} saved to {topic}, waiting for a spot.",
+      "some": "{added} added to {topic}, {waiting} waiting for a spot."
+    },
+    "openTopic": "Open the topic"
   },
   "agent": {
     "newChat": "New chat",
@@ -5074,7 +5126,15 @@
     "saveFailed": "Couldn't save that to Files. Try again.",
     "openEditor": "Open in Content Editor",
     "openEditorNoBrand": "Pick a brand first: the draft goes to its Content Library.",
-    "openEditorFailed": "Couldn't open that in the Content Editor. Try again."
+    "openEditorFailed": "Couldn't open that in the Content Editor. Try again.",
+    "short": {
+      "copy": "Copy",
+      "download": "Download",
+      "save": "Save",
+      "inFiles": "In Files",
+      "openEditor": "Open in Editor",
+      "sendToActionCenter": "Send to Actions"
+    }
   },
   "chatDeliverable": {
     "version": {
@@ -5296,6 +5356,36 @@
       "customOpen": "Custom range",
       "all": "All time"
     }
+  },
+  "chatRange": {
+    "day": "Last 24 hours",
+    "days": "Last {days} days",
+    "custom": "{from} – {to}",
+    "pageDay": "This page's range: last 24 hours",
+    "pageDays": "This page's range: last {days} days",
+    "pageCustom": "This page's range: {from} – {to}",
+    "question": "Which time range should I use?",
+    "then": "I'll keep it as your default for every analysis. You can change it any time.",
+    "customButton": "Custom",
+    "from": "From",
+    "to": "To",
+    "useDates": "Use these dates",
+    "datesInvalid": "Pick a first and a last day: the first not after the last, and neither after today.",
+    "kept": "{range} · your default from now on",
+    "pressToPick": "Click a range, or press 1–{max}",
+    "lineDay": "Range: last 24 hours",
+    "lineDays": "Range: last {days} days",
+    "lineCustom": "Range: {from} – {to}",
+    "lineNotSet": "Range: not set yet",
+    "lineTitle": "The period Chat reads when your message names none",
+    "change": "change",
+    "choose": "choose",
+    "menuLabel": "Chat's date range",
+    "save": "Save",
+    "saveFailed": "Couldn't save your date range. Try again.",
+    "settingLabel": "Date range",
+    "settingNote": "The period Chat reads when your message names none, in Chat and beside every page. Write \"last 7d\" in a message to change it there.",
+    "settingAsk": "Ask me before the first analysis"
   },
   "chatPagePane": {
     "label": "Page beside the chat",
@@ -7026,7 +7116,8 @@
       "audit-fix": "Site audit fixes",
       "setup": "Setup guide",
       "fanout": "Fan-out gaps",
-      "prompts": "Prompt portfolio"
+      "prompts": "Prompt portfolio",
+      "plan": "30-day plan"
     },
     "form": {
       "titleNew": "New agent",
@@ -9390,7 +9481,48 @@
       "saved": "Business Hub numbers saved",
       "saveFailed": "Couldn't save the numbers. Try again.",
       "demo": "This is the demo brand: its numbers are samples.",
-      "off": "Business Hub numbers aren't available here."
+      "off": "Business Hub numbers aren't available here.",
+      "import": {
+        "link": "Import CSV",
+        "title": "Import from a spreadsheet",
+        "noExport": "Business Hub has no export yet. This is Ansvisor's own template: copy the numbers from Business Hub into it.",
+        "columnsHint": "One row per entry: the last day (YYYY-MM-DD or DD.MM.YYYY), 7 or 28 days, Mentions, Website clicks, Profile views and up to five topics. Leave a number empty if Business Hub doesn't show it.",
+        "template": "Download template",
+        "choose": "Choose a CSV file",
+        "readFailed": "Couldn't read the file.",
+        "missingHeader": "This file has no period_end column. Start from the template.",
+        "truncated": "Only the first 104 rows are read; {count, plural, one {# more was} other {# more were}} left out.",
+        "summary": "{new} new · {replaces} replace an entry · {errors} can't be read",
+        "columns": {
+          "row": "Row",
+          "lastDay": "Last day",
+          "days": "Days",
+          "mentions": "Mentions",
+          "clicks": "Clicks",
+          "views": "Views",
+          "status": "Status"
+        },
+        "status": {
+          "new": "New",
+          "replaces": "Replaces an entry"
+        },
+        "reasons": {
+          "date": "The last day isn't a date (YYYY-MM-DD or DD.MM.YYYY).",
+          "future": "The last day is in the future.",
+          "too_old": "The last day is more than two years ago.",
+          "days": "Days must be 7 or 28.",
+          "count": "{column} isn't a whole number.",
+          "too_many_topics": "More than 5 topics.",
+          "topic_too_long": "A topic is over 120 characters.",
+          "empty": "No number and no topic.",
+          "duplicate": "The same days as row {row}."
+        },
+        "import": "Import {count, plural, one {# entry} other {# entries}}",
+        "importing": "Importing…",
+        "imported": "{count, plural, one {# entry} other {# entries}} imported",
+        "failed": "Couldn't import the file. Nothing was saved.",
+        "back": "Back"
+      }
     }
   },
   "topics": {
@@ -13574,6 +13706,15 @@
     }
   },
   "prompts": {
+    "waiting": {
+      "resultTitle": "{added} added, {waiting} waiting for a spot",
+      "savedTitle": "{count, plural, one {Saved, but not tracked yet} other {# prompts saved, but not tracked yet}}",
+      "body": "Your plan's prompt locations are all in use, so {count, plural, one {it waits} other {they wait}} for a spot. To track {count, plural, one {it} other {them}}, pause a prompt you need less in Tracked Prompts, or raise your plan's limit.",
+      "open": "Go to Tracked Prompts",
+      "full": "Your plan's prompt locations are all in use. Prompts you add now are saved as waiting for a spot and aren't tracked until you pause another or raise your limit.",
+      "overNote": "{count, plural, one {# prompt} other {# prompts}} past your plan's limit will be saved as waiting for a spot, not tracked until you pause another or raise your limit.",
+      "brandNote": "Your plan has room for {room} more prompts: the other {count} will be saved as waiting for a spot, not tracked until you pause another or raise your limit."
+    },
     "tags": {
       "label": "Tags",
       "removeTag": "Remove tag {tag}",

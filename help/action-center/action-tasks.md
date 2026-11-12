@@ -4,14 +4,14 @@ route: /dashboard/action-center/actions
 keywords: [tasks, task status, check now, regenerate tasks, done when, how we check, attached from chat, ready for review]
 synonyms: [steps, subtasks, to-do items, task checks]
 plan: all
-updated: 2026-11-07
-last_checked: 2026-11-07
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". You find them on the action's **Tasks** tab.
+Each action comes with tasks: concrete steps such as "Update /subscriptions to answer “Is a coffee subscription worth it?”" or "Add structured data to these pages". You find them on the action's **Tasks** tab. A new action's tasks name the prompt, page or competitor they are about, and come with **Where**, **How** and **Done when** already filled in from what the action found.
 
 ## What a task tells you
 

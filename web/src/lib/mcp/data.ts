@@ -58,7 +58,13 @@ import {
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
-import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
+import {
+  getOrgLocationUsage,
+  locationLimitMessage,
+  placeNewPrompt,
+  waitingPromptColumns,
+} from '@/lib/prompt-locations';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import { NO_TOPICS, brandHasTopics } from '@/lib/topics-required';
 import {
   promptSourceData,
@@ -786,6 +792,11 @@ export interface AcceptedPromptSuggestion {
   prompt_id: string;
   prompt_text: string;
   status: 'added';
+  /**
+   * The prompt was saved waiting for a spot, not tracked: the plan's prompt
+   * locations were full (SIMPLE_NAV). Absent when it is tracked.
+   */
+  waiting_for_spot?: true;
 }
 
 export type AcceptPromptSuggestionResult =
@@ -889,9 +900,13 @@ export async function acceptPromptSuggestionFor(
     return { error: 'At least one platform or model must be selected.' };
   }
 
+  // Counted across every brand of the organization. Full: refused, or with
+  // SIMPLE_NAV saved waiting for a spot, as on the dashboard.
   const usage = await getOrgLocationUsage(supabaseAdmin, auth.organizationId);
-  const limitError = locationLimitMessage(plan, usage.total, 1);
-  if (limitError) return { error: limitError, code: 'plan_limit' };
+  const waiting = placeNewPrompt(plan, usage.total, 1) === 'wait';
+  if (waiting && !simpleNavEnabled()) {
+    return { error: locationLimitMessage(plan, usage.total, 1) ?? '', code: 'plan_limit' };
+  }
 
   const country = (brand.region as string | null) ?? 'US';
   const candidateRegion = locationCode(country, brand.state as string | null);
@@ -942,7 +957,7 @@ export async function acceptPromptSuggestionFor(
     platforms,
     regions: [region],
     models: filtered.models,
-    is_active: true,
+    ...(waiting ? waitingPromptColumns() : { is_active: true }),
   };
   const insertPrompt = (withSource: boolean) =>
     supabaseAdmin
@@ -994,6 +1009,7 @@ export async function acceptPromptSuggestionFor(
     prompt_id: prompt.id,
     prompt_text: prompt.text,
     status: 'added',
+    ...(waiting && { waiting_for_spot: true as const }),
   };
 }
 

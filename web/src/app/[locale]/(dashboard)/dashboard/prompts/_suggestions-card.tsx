@@ -82,6 +82,11 @@ import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { SuggestionsLoadError } from './_suggestions-load-error';
 import { BusinessHubTopicsDialog } from './_business-hub-topics-dialog';
 import {
+  trackSavedWaiting,
+  useWaitingForSpotToast,
+  waitingTitle,
+} from '@/components/prompts/waiting-for-spot';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -414,7 +419,14 @@ export function SuggestionsCard({
   const [confirmClear, setConfirmClear] = useState(false);
   const [adding, setAdding] = useState(false);
   // What Add All left behind when the plan's prompt limit stopped it.
-  const [limitNote, setLimitNote] = useState<{ added: number; left: number } | null>(null);
+  // `waiting`: Add All saved some waiting for a spot (SIMPLE_NAV) rather than stopping.
+  const [limitNote, setLimitNote] = useState<{
+    added: number;
+    left: number;
+    waiting?: number;
+  } | null>(null);
+  const tWaiting = useTranslations('prompts.waiting');
+  const showWaiting = useWaitingForSpotToast();
   const [, startTransition] = useTransition();
   // A brand with no topic yet: generating or adding asks for one first.
   const topicFirst = useTopicFirstDialog({ onAddTopic });
@@ -575,11 +587,13 @@ export function SuggestionsCard({
     setLimitNote(null);
     const added: string[] = [];
     const gone: string[] = [];
+    let waiting = 0;
     let failure: { error: string; code?: PromptAddFailureCode } | null = null;
     try {
       for (let i = 0; i < ids.length && !failure; i += TRACK_BATCH) {
         const result = await trackSuggestions(ids.slice(i, i + TRACK_BATCH));
         added.push(...result.trackedIds);
+        waiting += result.waitingIds?.length ?? 0;
         // Accepted or dismissed elsewhere: they leave the list too.
         gone.push(...result.skippedIds);
         if (result.error) failure = { error: result.error, code: result.code };
@@ -590,8 +604,12 @@ export function SuggestionsCard({
 
     const leaving = new Set([...added, ...gone]);
     if (leaving.size > 0) setSuggestions((prev) => prev.filter((x) => !leaving.has(x.id)));
-    if (added.length > 0) {
-      onAccepted?.();
+    if (added.length > 0) onAccepted?.();
+    if (waiting > 0) {
+      // "N added, M waiting for a spot" in the note, in place of the success toast.
+      trackSavedWaiting('add_all', waiting);
+      setLimitNote({ added: added.length - waiting, left: 0, waiting });
+    } else if (added.length > 0) {
       toast.success(t('addAllDone', { count: added.length }));
     }
     if (failure?.code === 'plan_limit') {
@@ -618,7 +636,9 @@ export function SuggestionsCard({
         }
         setSuggestions((prev) => prev.filter((x) => x.id !== s.id));
         onAccepted?.();
-        toast.success('Prompt added to your tracked list');
+        if (!showWaiting('suggestion', 0, result.waiting ? 1 : 0)) {
+          toast.success('Prompt added to your tracked list');
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to add');
       } finally {
@@ -794,14 +814,18 @@ export function SuggestionsCard({
             <div className="min-w-0 flex-1 space-y-2.5 text-sm">
               <div>
                 <p className="font-medium text-amber-900 dark:text-amber-200">
-                  {t('limitTitle', { count: limitNote.left })}
+                  {limitNote.waiting
+                    ? waitingTitle(tWaiting, limitNote.added, limitNote.waiting)
+                    : t('limitTitle', { count: limitNote.left })}
                 </p>
                 <p className="text-amber-800/80 dark:text-amber-300/80">
-                  {t('limitBody', {
-                    added: limitNote.added,
-                    count: limitNote.left,
-                    plan: planId ?? 'unknown',
-                  })}
+                  {limitNote.waiting
+                    ? tWaiting('body', { count: limitNote.waiting })
+                    : t('limitBody', {
+                        added: limitNote.added,
+                        count: limitNote.left,
+                        plan: planId ?? 'unknown',
+                      })}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">

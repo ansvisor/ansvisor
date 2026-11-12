@@ -32,6 +32,7 @@ import { Check, ChevronRight, Info, Plus, Loader2, Search } from 'lucide-react';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
+import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 import { isNoTopics } from '@/lib/topics-required';
 import {
   FanoutEngineNotices,
@@ -115,6 +116,7 @@ export function QueryFanoutTab({
   const tActions = useTranslations('readOnly.actions');
   // A brand with no topic yet: Track asks for one first.
   const topicFirst = useTopicFirstDialog({ onAddTopic });
+  const showWaiting = useWaitingForSpotToast();
 
   // Mirror of `intents` for the async classification chain (avoids stale
   // closures), plus a run counter so a reload/brand switch/unmount cancels
@@ -297,7 +299,9 @@ export function QueryFanoutTab({
         else toast.error(result.error);
         return;
       }
-      toast.success('Added as a tracked prompt');
+      if (!showWaiting('fanout', 0, result.waiting ? 1 : 0)) {
+        toast.success('Added as a tracked prompt');
+      }
       setData((prev) => {
         if (!prev) return prev;
         return {

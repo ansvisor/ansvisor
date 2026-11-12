@@ -32,6 +32,13 @@ import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { menuSectionOf } from '@/lib/menu-access';
+import { ACTION_CENTER_ITEM, NEW_RESULTS_ITEM } from '@/lib/menu-dots';
+import {
+  MenuDot,
+  NewResultsWords,
+  OpenActionsCount,
+  useMenuDots,
+} from '@/components/layout/menu-dots';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { Crown, ExternalLink, Menu, MessageSquareHeart, MessageSquareText } from 'lucide-react';
 import Image from 'next/image';
@@ -58,6 +65,8 @@ export function MobileNav() {
   const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
   const childGates = { brandPrefs, canUse, chatAgentic };
   const hiddenSections = useHiddenMenuSections();
+  // The simplified menu's dots and Action Center count (SIMPLE_NAV), as the sidebar shows them.
+  const dots = useMenuDots(nav);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Hydration guard — see sidebar.tsx for the rationale; the two
@@ -175,8 +184,21 @@ export function MobileNav() {
                     ? children[0].href
                     : href;
 
+                // Every submenu shows here: an item's own dot is for one
+                // without (AI Referral Traffic), or Visibility's, in words too.
+                const itemDot = dots.itemDot(item);
+                const words = itemDot?.colour === 'green' && item.href === NEW_RESULTS_ITEM;
+                const dot = children.length === 0 || words ? itemDot : null;
+                const openActions = item.href === ACTION_CENTER_ITEM ? dots.openActions : null;
                 const link = (
-                  <Link key={item.href} href={linkHref} onClick={() => setOpen(false)}>
+                  <Link
+                    key={item.href}
+                    href={linkHref}
+                    onClick={() => {
+                      if (dot) dots.clicked(dot, false);
+                      setOpen(false);
+                    }}
+                  >
                     <span
                       className={cn(
                         'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -186,7 +208,10 @@ export function MobileNav() {
                       )}
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
-                      <span className="flex-1">{label}</span>
+                      <span className={dot ? undefined : 'flex-1'}>{label}</span>
+                      {dot && <MenuDot colour={dot.colour} className="mr-auto" />}
+                      {words && <NewResultsWords />}
+                      {openActions !== null && <OpenActionsCount count={openActions} />}
                       {effectiveBadge && (
                         <Badge
                           variant="secondary"
@@ -209,6 +234,11 @@ export function MobileNav() {
                     <div className="ml-7 border-l pl-2">
                       {children.map((child) => {
                         const tab = brandVisibilityTabOf(child.href);
+                        const childDot = dots.dotOf(child.href);
+                        const onChildClick = () => {
+                          if (childDot) dots.clicked(childDot, false);
+                          setOpen(false);
+                        };
                         const childBody = (
                           <span
                             className={cn(
@@ -219,6 +249,7 @@ export function MobileNav() {
                             )}
                           >
                             {getDashboardNavLabel(child.title, t)}
+                            {childDot && <MenuDot colour={childDot.colour} />}
                             {child.badge && (
                               <Badge
                                 variant="secondary"
@@ -232,18 +263,14 @@ export function MobileNav() {
                         // Brand Visibility's tabs keep the date range, engine,
                         // country and topic, as its tab bar does.
                         return tab ? (
-                          <BrandVisibilityTabLink
-                            key={child.href}
-                            tab={tab}
-                            onClick={() => setOpen(false)}
-                          >
+                          <BrandVisibilityTabLink key={child.href} tab={tab} onClick={onChildClick}>
                             {childBody}
                           </BrandVisibilityTabLink>
                         ) : (
                           <Link
                             key={child.href}
                             href={childLinkHref(child, pathname)}
-                            onClick={() => setOpen(false)}
+                            onClick={onChildClick}
                           >
                             {childBody}
                           </Link>

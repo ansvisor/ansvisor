@@ -922,3 +922,73 @@ describe('assigneeLabel and labelInitials', () => {
     expect(labelInitials('Grace Brewster Hopper')).toBe('GB');
   });
 });
+
+describe('actionTexts naming what the action is about', () => {
+  const tx = createTranslator({
+    locale: 'en',
+    messages,
+    namespace: 'actionCenter.actionTexts',
+  }) as unknown as (key: string, values?: Record<string, string | number>) => string;
+  const item = (kind: string, payload: Record<string, unknown>) =>
+    ({ kind, payload }) as Pick<ActionItem, 'kind' | 'payload'>;
+
+  it('names the competitor, and the prompt it leads most on', () => {
+    const payload = {
+      targetEntity: 'competitors',
+      targetCount: 1,
+      targets: [{ id: 'c1', label: 'Northbound Roasters' }],
+    };
+    expect(actionTexts(item('close_competitor_gap', payload), tx).title).toBe(
+      'Close the visibility gap with Northbound Roasters',
+    );
+    expect(
+      actionTexts(
+        item('close_competitor_gap', {
+          ...payload,
+          leadPrompt: { id: 'p1', text: 'best coffee subscription' },
+        }),
+        tx,
+      ).title,
+    ).toBe('Close the gap with Northbound Roasters, starting with “best coffee subscription”');
+  });
+
+  it('names the first prompt and how many more', () => {
+    const payload = {
+      targetEntity: 'prompts',
+      targetCount: 3,
+      targets: [{ id: 'p1', label: 'best decaf coffee beans' }, { id: 'p2' }],
+    };
+    expect(actionTexts(item('expand_prompt_visibility', payload), tx).title).toBe(
+      'Get into AI answers on “best decaf coffee beans” and 2 more prompts',
+    );
+    expect(
+      actionTexts(item('recover_lost_mentions', { ...payload, targetCount: 1 }), tx).title,
+    ).toBe('Win back mentions on “best decaf coffee beans”');
+    // Its first prompt removed since (AC-009): counted, not named.
+    expect(
+      actionTexts(item('protect_visibility', { ...payload, removedKeys: ['p1'] }), tx).title,
+    ).toBe('Protect visibility across 3 prompts');
+  });
+
+  it('says why a content opportunity matters instead of where it came from', () => {
+    const payload = {
+      title: 'Answer whether a subscription is worth it',
+      decision: 'optimize',
+      pages: ['https://brewline.example/subscriptions'],
+      targetEntity: 'prompts',
+      targetCount: 2,
+      targets: [{ id: 'p1', text: 'Is a coffee subscription worth it?' }],
+    };
+    expect(actionTexts(item('content_opportunity', payload), tx).description).toBe(
+      'An update to /subscriptions that answers “Is a coffee subscription worth it?” and 1 more prompt.',
+    );
+    expect(
+      actionTexts(item('content_opportunity', { ...payload, decision: 'create', pages: [] }), tx)
+        .description,
+    ).toBe('A new page that answers “Is a coffee subscription worth it?” and 1 more prompt.');
+    // Sent without prompts: its kind's sentence.
+    expect(
+      actionTexts(item('content_opportunity', { title: 'X', targetCount: 0 }), tx).description,
+    ).toBe(messages.actionCenter.actionTexts.content_opportunity.description);
+  });
+});

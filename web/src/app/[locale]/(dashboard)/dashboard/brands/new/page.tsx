@@ -15,6 +15,8 @@ import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
+import { trackSavedWaiting } from '@/components/prompts/waiting-for-spot';
 import { getFaviconUrl } from '@/lib/favicon';
 import { frictionFlow } from '@/lib/friction-events';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -244,6 +246,9 @@ export default function NewBrandPage() {
   // directly: the brand isn't created, the upgrade dialog opens instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // SIMPLE_NAV: prompts past the plan's limit are saved waiting for a spot, not held back.
+  const waitOverLimit = useSimpleNav();
+  const tWaiting = useTranslations('prompts.waiting');
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -598,6 +603,7 @@ export default function NewBrandPage() {
         );
         return;
       }
+      trackSavedWaiting('new_brand', result.waiting ?? 0);
 
       setStep(5);
       fetchCompetitorSuggestions();
@@ -785,7 +791,9 @@ export default function NewBrandPage() {
     promptCapacity && promptCapacity.maxPrompts !== -1
       ? Math.max(0, promptCapacity.maxPrompts - promptCapacity.used)
       : null;
-  const excessPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
+  const overPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
+  // Held back from Continue; with SIMPLE_NAV they wait for a spot instead (overPrompts).
+  const excessPrompts = waitOverLimit ? 0 : overPrompts;
 
   // ── Step 1: Brand Info ──
 
@@ -1166,6 +1174,12 @@ export default function NewBrandPage() {
             <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
               Your plan includes up to {promptLimit} prompts for this brand — remove {excessPrompts}{' '}
               to continue.
+            </div>
+          )}
+
+          {waitOverLimit && overPrompts > 0 && (
+            <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+              {tWaiting('brandNote', { room: promptLimit ?? 0, count: overPrompts })}
             </div>
           )}
 

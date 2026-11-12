@@ -9,7 +9,12 @@ import { dayIn, nextDay } from '@/lib/time-zone';
 import { signalTexts } from '@/lib/signals/display';
 import type { Signal } from '@/lib/signals/map';
 import type { TodayStanding } from '@/lib/action-center/focus';
-import { changeDirection, largestRivalMove, type ChangeDirection } from '@/lib/action-center/since';
+import {
+  asSentence,
+  changeDirection,
+  largestRivalMove,
+  type ChangeDirection,
+} from '@/lib/action-center/since';
 import { getTodayChanges } from '@/lib/actions/today-changes';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { actionHref } from './focus-section';
@@ -117,6 +122,7 @@ export function SinceSection({
         <ul>
           {load.data.items.map((signal) => {
             const direction = changeDirection(signal);
+            const line = signalTexts(signal, tTexts).title;
             return (
               <li
                 key={signal.id}
@@ -132,7 +138,7 @@ export function SinceSection({
                   {t(`direction.${direction}`)}
                 </span>
                 <span>
-                  {signalTexts(signal, tTexts).title}
+                  {signal.actionId ? asSentence(line) : line}
                   {signal.actionId && (
                     <>
                       {' '}

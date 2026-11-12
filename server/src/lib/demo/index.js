@@ -42,8 +42,11 @@ import { demoWriter } from './write.js';
  * 6: Copilot and Perplexity out, ChatGPT's sampled searches in (engines after Cloro, 00487).
  * 7: Prompt tags on the Brewline prompts (prompt-tags).
  * 8: Four weeks of ChatGPT Business Hub numbers (00526).
+ * 9: Action Center › Today (SIMPLE_NAV): the build night's Up, Down and Rival, a topic
+ *    gap and a product sent this week, a result in last week, the weekly Business Hub
+ *    reminder (with BUSINESS_HUB_ENABLED).
  */
-export const DEMO_VERSION = 8;
+export const DEMO_VERSION = 10;
 
 /** Data older than this is rebuilt, so the demo's latest run stays recent. */
 export const DEMO_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;

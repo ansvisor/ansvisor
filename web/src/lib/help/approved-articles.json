@@ -338,11 +338,11 @@
         "task checks"
       ],
       "plan": "all",
-      "updated": "2026-11-07",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "Each action comes with tasks: concrete steps such as \"Refresh content for these prompts\" or \"Add structured data to these pages\". You find them on the action's **Tasks** tab."
+          "text": "Each action comes with tasks: concrete steps such as \"Update /subscriptions to answer “Is a coffee subscription worth it?”\" or \"Add structured data to these pages\". You find them on the action's **Tasks** tab. A new action's tasks name the prompt, page or competitor they are about, and come with **Where**, **How** and **Done when** already filled in from what the action found."
         },
         {
           "heading": "What a task tells you",
@@ -539,7 +539,7 @@
         "playbook"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -559,7 +559,7 @@
         },
         {
           "heading": "What Content Editor opens",
-          "text": "Click **Content Editor**. A draft is written for the action's writing task and opens in the Content Editor:\n\n- the action's prompts, so its sources and brief answer them;\n- the page it works on, read from your site, for an existing page;\n- the page type, from the page's address, or from the kind of page the action picked;\n- on an online shop, the products the action is about, locked into the page's shopping path.\n\nA new draft builds its brief as it opens, from your AI usage. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it."
+          "text": "Click **Content Editor**. A draft is written for the action's writing task and opens in the Content Editor:\n\n- a page title, not the action's: the existing page's, or the main prompt a new page answers;\n- the action's prompts, so its sources and brief answer them;\n- the page it works on, read from your site, for an existing page;\n- the page type, from the page's address, or the kind of page the action or its opportunity picked;\n- on an online shop, the products the action is about, locked into the page's shopping path.\n\nAs in **Write this**, once you confirm its AI usage, the Content Agent builds the brief and writes the page, or suggests changes. If the page can't be read, only the brief is built. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it."
         },
         {
           "heading": "Several pages",
@@ -1225,6 +1225,16 @@
       "keywords": [
         "chat",
         "ask chat",
+        "date range",
+        "time range",
+        "which time range",
+        "default range",
+        "last 7d",
+        "last 30d",
+        "last 24h",
+        "custom range",
+        "range under the box",
+        "change range",
         "welcome card",
         "preparing your data",
         "quick tour",
@@ -1430,7 +1440,7 @@
         },
         {
           "heading": "What the panel looks at",
-          "text": "The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as the scope of your question. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.\n\nAn empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.\n\nThe speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center."
+          "text": "The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as your question's scope, but reads your own date range. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.\n\nAn empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.\n\nThe speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center."
         },
         {
           "heading": "Chats in the panel",
@@ -1447,6 +1457,14 @@
         {
           "heading": "Answer in the box",
           "text": "While Chat asks, you can also answer in the box below. It shows the Recommended option dim; Tab puts it in, and Enter sends it. A message that isn't one of the options answers every question Chat asked with it. An answer is text only, up to 500 characters.\n\n**Stop** beside the arrow, or Esc, ends the run and leaves its question skipped."
+        },
+        {
+          "heading": "The date range Chat reads",
+          "text": "The first time you ask for an analysis that reads your data, Chat asks **Which time range should I use?** Click **Last 24 hours**, **Last 7 days**, **Last 30 days** or **Last 90 days**, or **Custom** to pick a first and a last day. In the panel, on a page with its own date range, the first button is that page's range, so Chat's numbers match the screen.\n\nChat keeps your pick as your default, in Chat and in the panel, for every brand, says so and answers. It doesn't ask again. **Skip** reads **Last 30 days**, or in the panel the page's range, for that answer only, and Chat asks next time.\n\nEach range covers the same days as on the app's pages: **Last 30 days** is today and the 29 days before. A question that reads no data never asks."
+        },
+        {
+          "heading": "Change the date range",
+          "text": "Under the box, **Range** shows the one Chat reads, such as **Range: last 30 days**. Click **change** to pick another; it is kept at once. **Settings** in the chat menu has it too.\n\nOr send a short range as your message, such as \"last 7d\", \"last 24h\" or \"use 90 days by default\". Chat changes your default at once, says so, and answers your last question again over the new range.\n\nA period inside a question, such as \"How was last week?\", is used for that answer only: your default stays as it is."
         },
         {
           "heading": "Change what you track",
@@ -1530,7 +1548,7 @@
         },
         {
           "heading": "Shortcuts",
-          "text": "Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/start** (Get started), **/analyze**, **/new-report** (Reports), **/create**, **/optimize**, **/opportunities**, **/audit** (Improve with audit) and **/image** (Create image). A shortcut puts its first words in the box, such as \"Analyze\", for you to finish. Chat then reads only the data that job needs, by default your brand's last 30 days, and says in one line when your plan leaves part of it out. Change the first words and Chat treats the message as your own question. Some **For you now** chips on Chat Home work the same way.\n\nUnder the shortcuts are the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**)."
+          "text": "Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/start** (Get started), **/analyze**, **/new-report** (Reports), **/create**, **/optimize**, **/opportunities**, **/audit** (Improve with audit) and **/image** (Create image). A shortcut puts its first words in the box, such as \"Analyze\", for you to finish. Chat then reads only the data that job needs, over your date range, and says in one line when your plan leaves part of it out. Change the first words and Chat treats the message as your own question. Some **For you now** chips on Chat Home work the same way.\n\nUnder the shortcuts are the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**)."
         },
         {
           "heading": "Reference your data",
@@ -1602,7 +1620,7 @@
         },
         {
           "heading": "Copy, download or save an answer",
-          "text": "Under every finished answer, three small buttons show their names when you point at them:\n\n- **Copy** copies the answer, with its formatting where you paste it.\n- **Download** gives the answer as **Markdown**, **Word** or **PDF**, and as **CSV** or **Excel** when it has a table (one sheet per table). The file is named after your question and the day, and it carries when the answer was made and how fresh its data was. Downloads aren't kept and use no AI.\n- **Save to Files** keeps the answer for your whole workspace; it then reads **In Files**. Saved answers count toward your workspace's storage: 1 GB in the free trial, 5 GB on Starter, 25 GB on Growth, and what your contract says on Enterprise. When storage is full, the answer isn't saved, and the button says so.\n\nEvery role can copy, download and save answers it can open."
+          "text": "Under every finished answer, buttons show their names; in the narrow side panel, point at them:\n\n- **Copy** copies the answer, with its formatting where you paste it.\n- **Download** gives the answer as **Markdown**, **Word** or **PDF**, and as **CSV** or **Excel** when it has a table (one sheet per table). The file is named after your question and the day, and it carries when the answer was made and how fresh its data was. Downloads aren't kept and use no AI.\n- **Save to Files** keeps the answer for your whole workspace; it then reads **In Files**. Saved answers count toward your workspace's storage: 1 GB in the free trial, 5 GB on Starter, 25 GB on Growth, and what your contract says on Enterprise. When storage is full, the answer isn't saved, and the button says so.\n\nEvery role can copy, download and save answers it can open."
         },
         {
           "heading": "What Chat makes",
@@ -1628,6 +1646,10 @@
       "route": "/dashboard/chat/settings",
       "keywords": [
         "chat settings",
+        "date range",
+        "default date range",
+        "time range",
+        "ask me before the first analysis",
         "default mode",
         "product tour",
         "take the tour",
@@ -1649,7 +1671,7 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -1666,6 +1688,10 @@
         {
           "heading": "Answer language",
           "text": "**Answer language** sets the language Chat answers in. **Same as my question**, the default, answers in the language you write in. Pick a language, such as English, and Chat answers in it whatever language you write in: useful for agencies and teams that write in several languages. Asking for a language in a message, such as \"answer in German\", always wins for that answer. The app itself stays in English."
+        },
+        {
+          "heading": "Date range",
+          "text": "**Date range** is the period Chat reads when your message names none, in Chat and in the panel beside every page, for every brand. Pick **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days**, or **Custom** with a first and a last day: it is kept at once. **Ask me before the first analysis** clears it, so Chat asks again on the next analysis that reads data. The line under the message box shows the same range, with **change**."
         },
         {
           "heading": "Notify me when an agent needs me",
@@ -2365,7 +2391,12 @@
         "sub-questions ai searches",
         "prompt portfolio",
         "prompts to add",
-        "prompts to pause"
+        "prompts to pause",
+        "30-day plan",
+        "/plan",
+        "monthly plan",
+        "task list",
+        "plan actions"
       ],
       "synonyms": [
         "slash commands",
@@ -2376,11 +2407,11 @@
         "skills directory"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-four Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-five Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -2424,7 +2455,7 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps and Prompt portfolio.\n\n**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio and 30-day plan.\n\n**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
         },
         {
           "heading": "Fan-out gaps",
@@ -2433,6 +2464,10 @@
         {
           "heading": "Prompt portfolio",
           "text": "**Prompt portfolio** (**/prompts**) proposes prompts to track, from your prompt suggestions, the sub-questions AI engines search and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each change is a card you approve, and the **Activity** log can undo it."
+        },
+        {
+          "heading": "30-day plan",
+          "text": "**30-day plan** (**/plan**) reads your brand's visibility, prompts, competitors, content opportunities and open actions over your date range, and proposes a plan for four weeks: 8 to 12 actions, each with why, its effort and the prompts and pages it covers. Chat asks you once before it adds them to the **Action Center**, then links each one (AC-n) and says what to do first. Where an open action already covers something, the plan links that action instead of adding another."
         }
       ]
     },
