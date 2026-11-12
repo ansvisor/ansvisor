@@ -186,6 +186,7 @@ describe('the dots after a nightly run (SIMPLE_NAV)', () => {
         'content',
       ],
       count: true,
+      waiting: true,
     });
   });
 
@@ -201,6 +202,15 @@ describe('the dots after a nightly run (SIMPLE_NAV)', () => {
       '/dashboard/traffic': 'yellow',
       '/dashboard/content': 'yellow',
     });
+  });
+
+  it('turns Tracked Prompts yellow while prompts wait for a spot (PR 16)', async () => {
+    menu.state = { ...afterNight(), waitingPrompts: 2 };
+    await render();
+    expect(dotted()['/dashboard/prompts/tracked']).toBe('yellow');
+    expect(
+      link('/dashboard/prompts/tracked')!.querySelector('[data-menu-dot]')!.getAttribute('title'),
+    ).toBe('Needs you');
   });
 
   it('says each in words on hover and to screen readers, never colour alone', async () => {
@@ -319,6 +329,7 @@ describe('who sees which dot', () => {
     expect(getMenuState).toHaveBeenCalledWith(BRAND, {
       areas: ['insights', 'mentions', 'citations', 'prompts/tracked', 'traffic'],
       count: true,
+      waiting: false,
     });
   });
 

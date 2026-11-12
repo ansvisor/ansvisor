@@ -28,8 +28,15 @@ import { cn } from '@/lib/utils';
 /** How long a tracked prompt reads as New after it is added. */
 export const NEW_PROMPT_MS = 24 * 60 * 60 * 1000;
 
-/** A row's Status: paused, new (tracked and added within the last day) or active. */
-export type PromptStatus = 'active' | 'new' | 'paused';
+/**
+ * A row's Status: paused, new (tracked and added within the last day),
+ * active, or waiting for a spot (saved past the plan's limit, not tracked;
+ * SIMPLE_NAV, 00535).
+ */
+export type PromptStatus = 'active' | 'new' | 'paused' | 'waiting';
+
+/** What a row's Status is read from. `waitingSince` is set only with SIMPLE_NAV on. */
+type StatusFields = { isActive: boolean; createdAt: string; waitingSince?: string | null };
 
 /**
  * Which rows the table shows; set by the This brand cards or the Status
@@ -37,22 +44,19 @@ export type PromptStatus = 'active' | 'new' | 'paused';
  */
 export type PromptStatusFilter = 'tracked' | PromptStatus | 'all';
 
-export function promptStatus(
-  prompt: { isActive: boolean; createdAt: string },
-  now: number,
-): PromptStatus {
-  if (!prompt.isActive) return 'paused';
+export function promptStatus(prompt: StatusFields, now: number): PromptStatus {
+  if (!prompt.isActive) return prompt.waitingSince ? 'waiting' : 'paused';
   return now - Date.parse(prompt.createdAt) < NEW_PROMPT_MS ? 'new' : 'active';
 }
 
 export function matchesStatusFilter(
-  prompt: { isActive: boolean; createdAt: string },
+  prompt: StatusFields,
   filter: PromptStatusFilter,
   now: number,
 ): boolean {
   if (filter === 'all') return true;
   const status = promptStatus(prompt, now);
-  return filter === 'tracked' ? status !== 'paused' : status === filter;
+  return filter === 'tracked' ? status === 'active' || status === 'new' : status === filter;
 }
 
 /**
@@ -74,7 +78,7 @@ export function newFirst<T extends { isActive: boolean; createdAt: string }>(
 
 /** How many rows each filter shows, for the table's title. */
 export function countByStatus(
-  prompts: { isActive: boolean; createdAt: string }[],
+  prompts: StatusFields[],
   now: number,
 ): Record<PromptStatusFilter, number> {
   const counts: Record<PromptStatusFilter, number> = {
@@ -82,6 +86,7 @@ export function countByStatus(
     active: 0,
     new: 0,
     paused: 0,
+    waiting: 0,
     all: prompts.length,
   };
   for (const p of prompts) counts[promptStatus(p, now)] += 1;
@@ -190,7 +195,7 @@ export function PromptUsageCards({
   /** Member role: the subtitle says the table is read-only. */
   readOnly: boolean;
   /** The brand's prompts, for the New ones the Active card also counts. */
-  prompts: { isActive: boolean; createdAt: string }[];
+  prompts: StatusFields[];
   filter: PromptStatusFilter;
   onFilter: (filter: PromptStatusFilter) => void;
   onRetry: () => void;
@@ -201,7 +206,8 @@ export function PromptUsageCards({
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
   const n = (value: number) => format.number(value);
-  const newCount = countByStatus(prompts, now.getTime()).new;
+  const statusCounts = countByStatus(prompts, now.getTime());
+  const newCount = statusCounts.new;
 
   const usage = state.status === 'ready' ? state.usage : null;
   const plan = usage?.plan;
@@ -380,7 +386,10 @@ export function PromptUsageCards({
                         filter === 'paused' && 'font-medium text-foreground underline',
                       )}
                     >
-                      {t('paused', { count: n(usage.brand.paused) })}
+                      {/* Prompts waiting for a spot are inactive too, with a filter of their own. */}
+                      {t('paused', {
+                        count: n(Math.max(0, usage.brand.paused - statusCounts.waiting)),
+                      })}
                     </button>{' '}
                     · {t('beingTracked')}
                   </>

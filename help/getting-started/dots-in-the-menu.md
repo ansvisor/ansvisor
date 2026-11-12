@@ -19,7 +19,7 @@ A green dot means new results since you last opened the page. After each nightly
 
 ## Yellow: Needs you
 
-A yellow dot means something waits for you. It shows on **Actions** in the **Action Center** when new actions arrive, on **Opportunities** in **Content** when new opportunities arrive, and on **Prompt Suggestions** when there are new suggestions. On **AI Referral Traffic**, it stays until the snippet or Google Analytics is connected. Only admins and managers see yellow dots.
+A yellow dot means something waits for you. It shows on **Actions** in the **Action Center** when new actions arrive, on **Opportunities** in **Content** when new opportunities arrive, on **Prompt Suggestions** when there are new suggestions, and on **Tracked Prompts** while prompts wait for a spot on your plan. On **AI Referral Traffic**, it stays until the snippet or Google Analytics is connected. Only admins and managers see yellow dots.
 
 ## When a menu is folded
 

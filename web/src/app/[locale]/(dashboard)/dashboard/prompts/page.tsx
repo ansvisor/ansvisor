@@ -210,6 +210,9 @@ import {
 import { BulkActionBar } from './_bulk-action-bar';
 import { ColumnsPanel } from './_columns-panel';
 import { PromptLimitActions } from './_prompt-limit-actions';
+import { PlanLimitButtons } from './_plan-limit-buttons';
+import { PromptLimitDialog } from './_prompt-limit-dialog';
+import { WaitingBanner, oldestWaiting } from './_waiting-banner';
 import {
   LocationMatrix,
   LocationPending,
@@ -1020,7 +1023,11 @@ function AddPromptDialog({
                 defaultRegion={defaultRegion}
                 quota={locationQuota}
                 limitActions={
-                  locationQuota ? <PromptLimitActions planId={locationQuota.planId} /> : null
+                  !locationQuota ? null : waitOverLimit ? (
+                    <PlanLimitButtons planId={locationQuota.planId} source="import" size="sm" />
+                  ) : (
+                    <PromptLimitActions planId={locationQuota.planId} />
+                  )
                 }
                 onImported={() => {
                   PROMPT_ADD.completed();
@@ -1439,8 +1446,16 @@ export default function PromptsPage() {
   const { state: usageState, retry: retryUsage } = usePromptUsage(activeBrandId, usageVersion);
   const usage = usageState.status === 'ready' ? usageState.usage : null;
   const locationQuota = useMemo(() => (usage ? locationQuotaFromUsage(usage) : null), [usage]);
-  const [statusFilter, setStatusFilter] = useState<PromptStatusFilter>('tracked');
   const searchParams = useSearchParams();
+  // SIMPLE_NAV: prompts saved past the plan's limit wait for a spot (00535),
+  // with their own Status, a banner, and the swap dialog (Simplify PR 16).
+  const simpleNav = useSimpleNav();
+  // Today's "Free up a spot" opens the waiting prompts, and the dialog for the oldest.
+  const [statusFilter, setStatusFilter] = useState<PromptStatusFilter>(() =>
+    simpleNav && searchParams.get('status') === 'waiting' ? 'waiting' : 'tracked',
+  );
+  const swapAsked = useRef(simpleNav && searchParams.get('swap') === '1');
+  const [swapFor, setSwapFor] = useState<string | null>(null);
   // On /dashboard/prompts/{tracked,suggestions,topics,fan-outs,insights} the route
   // names the view (PROMPT-001); ?tab= / ?view= are the older links' shape.
   const section = sectionFromPath(usePathname());
@@ -1642,7 +1657,12 @@ export default function PromptsPage() {
         setVolumes(page.volumes);
         if (page.quota) setQuota(page.quota);
         const prompts = page.promptSets.flatMap((ps) => ps.prompts);
-        setAllPrompts(prompts);
+        // Without SIMPLE_NAV a prompt waiting for a spot reads as paused, as before.
+        setAllPrompts(
+          simpleNav
+            ? prompts
+            : prompts.map((p) => (p.waitingSince ? { ...p, waitingSince: null } : p)),
+        );
         setVisibility(page.visibility);
         setPositions(page.positions);
         // A read-only workspace's volumes are refused (402): their columns
@@ -1660,7 +1680,7 @@ export default function PromptsPage() {
         if (!isCancelled?.()) setLoading(false);
       }
     },
-    [activeBrandId, range, regionFilter, tPrompts, isLocked],
+    [activeBrandId, range, regionFilter, tPrompts, isLocked, simpleNav],
   );
 
   useEffect(() => {
@@ -1680,6 +1700,26 @@ export default function PromptsPage() {
     setUsageVersion((v) => v + 1);
     return loadData();
   }, [loadData]);
+
+  // The swap dialog is for those who can act, on a plan that hasn't ended.
+  const canSwap = simpleNav && canManage && !isLocked;
+  const waitingFirst = useMemo(() => oldestWaiting(allPrompts), [allPrompts]);
+  // Opened with ?swap=1 (Today's "Free up a spot"): once the prompts are in,
+  // the dialog for the prompt waiting longest. The link's words then leave the URL.
+  useEffect(() => {
+    if (!swapAsked.current || loading) return;
+    swapAsked.current = false;
+    const params = new URLSearchParams(window.location.search);
+    params.delete('swap');
+    params.delete('status');
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+    );
+    if (canSwap && waitingFirst) setSwapFor(waitingFirst.id);
+  }, [loading, canSwap, waitingFirst]);
 
   // Locations the brand has actually produced results in — the same
   // whole-brand list the Visibility page offers, so the two pages never
@@ -2231,7 +2271,15 @@ export default function PromptsPage() {
                   onAddTopic={addTopicInPlace}
                   planId={locationQuota?.planId}
                   limitActions={
-                    locationQuota ? <PromptLimitActions planId={locationQuota.planId} /> : null
+                    !locationQuota ? null : simpleNav ? (
+                      <PlanLimitButtons
+                        planId={locationQuota.planId}
+                        source="suggestions"
+                        size="sm"
+                      />
+                    ) : (
+                      <PromptLimitActions planId={locationQuota.planId} />
+                    )
                   }
                 />
               </>
@@ -2247,6 +2295,14 @@ export default function PromptsPage() {
                   filter={statusFilter}
                   onFilter={setStatusFilter}
                   onRetry={retryUsage}
+                />
+              )}
+              {simpleNav && !loading && waitingFirst && (
+                <WaitingBanner
+                  prompts={allPrompts}
+                  quota={locationQuota}
+                  onShow={() => setStatusFilter('waiting')}
+                  onFreeUp={canSwap ? () => setSwapFor(waitingFirst.id) : undefined}
                 />
               )}
               {!loading && unanalyzedCount > 0 && (
@@ -2304,6 +2360,7 @@ export default function PromptsPage() {
                 regionFilter={regionFilter}
                 statusFilter={statusFilter}
                 onStatusFilterChange={setStatusFilter}
+                onSwap={canSwap ? (p: Prompt) => setSwapFor(p.id) : undefined}
                 onAddPrompt={canManage ? openAddPrompt : undefined}
                 onEditPrompt={
                   canManage
@@ -2739,6 +2796,14 @@ export default function PromptsPage() {
           onChanged={reloadAfterChange}
         />
       )}
+
+      {canSwap && (
+        <PromptLimitDialog
+          promptId={swapFor}
+          onClose={() => setSwapFor(null)}
+          onDone={reloadAfterChange}
+        />
+      )}
     </div>
   );
 }
@@ -2857,6 +2922,7 @@ function RowActionsMenu({
   onDelete: () => void;
 }) {
   const t = useTranslations('prompts.content');
+  const tWaiting = useTranslations('prompts.waiting');
   const router = useRouter();
   // With the month's quota used up, or without an active plan, a prompt that
   // already has a suggestion can still open it, which costs nothing; the menu
@@ -2891,7 +2957,11 @@ function RowActionsMenu({
         </DropdownMenuItem>
         <DropdownMenuItem className="gap-2" onClick={onToggleActive}>
           {prompt.isActive ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          {prompt.isActive ? 'Pause tracking' : 'Resume tracking'}
+          {prompt.isActive
+            ? 'Pause tracking'
+            : prompt.waitingSince
+              ? tWaiting('track')
+              : 'Resume tracking'}
         </DropdownMenuItem>
         <DropdownMenuItem className="gap-2" onClick={onImprove}>
           <TrendingUp className="h-3.5 w-3.5" />
@@ -2963,9 +3033,20 @@ const STATUS_BADGE: Record<PromptStatus, string> = {
   active: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   new: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
   paused: 'border-muted-foreground/20 text-muted-foreground',
+  waiting: 'border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300',
 };
 
 const STATUS_FILTERS: PromptStatusFilter[] = ['tracked', 'active', 'new', 'paused', 'all'];
+
+/** With SIMPLE_NAV, the prompts waiting for a spot have a filter of their own. */
+const STATUS_FILTERS_WAITING: PromptStatusFilter[] = [
+  'tracked',
+  'active',
+  'new',
+  'paused',
+  'waiting',
+  'all',
+];
 
 type PerformanceFilter = 'all' | PromptPerformance;
 
@@ -2998,6 +3079,7 @@ function AllPromptsTab({
   regionFilter,
   statusFilter,
   onStatusFilterChange,
+  onSwap,
   onAddPrompt,
   onEditPrompt,
   onChanged,
@@ -3024,6 +3106,12 @@ function AllPromptsTab({
   /** Which rows show, set by the usage cards above (PROMPT-012) or the Status filter. */
   statusFilter: PromptStatusFilter;
   onStatusFilterChange: (filter: PromptStatusFilter) => void;
+  /**
+   * Opens the swap dialog for a prompt that doesn't fit the plan (SIMPLE_NAV):
+   * tracking a waiting one or resuming a paused one past the limit. Undefined
+   * keeps the refusal's toast (flag off, members, a plan that ended).
+   */
+  onSwap?: (prompt: Prompt) => void;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
   /** Opens the Edit Prompt dialog for a row; undefined hides the row menu (member role). */
@@ -3043,6 +3131,11 @@ function AllPromptsTab({
   const tDelete = useTranslations('prompts.bulkDelete');
   const tPerformance = useTranslations('prompts.performance');
   const tStatus = useTranslations('prompts.status');
+  const tWaiting = useTranslations('prompts.waiting');
+  const simpleNav = useSimpleNav();
+  const statusFilters = simpleNav ? STATUS_FILTERS_WAITING : STATUS_FILTERS;
+  const statusLabel = (value: PromptStatusFilter) =>
+    value === 'waiting' ? tWaiting('status') : tStatus(value);
   const tColumns = useTranslations('prompts.columns');
   const tTips = useTranslations('prompts.columns.tips');
   const now = useNow({ updateInterval: 60_000 }).getTime();
@@ -3255,6 +3348,11 @@ function AllPromptsTab({
       try {
         const result = await setPromptActive(prompt.id, !prompt.isActive);
         if ('error' in result) {
+          // SIMPLE_NAV: past the limit, the swap dialog offers what to pause for it.
+          if (result.code === 'plan_limit' && onSwap) {
+            onSwap(prompt);
+            return;
+          }
           // Resuming needs a free slot on the plan; the message says how many.
           toast.error(
             result.code === 'plan_limit'
@@ -3264,15 +3362,20 @@ function AllPromptsTab({
           );
           return;
         }
-        toast.success(prompt.isActive ? 'Tracking paused' : 'Tracking resumed', {
-          description: prompt.text,
-        });
+        toast.success(
+          prompt.isActive
+            ? 'Tracking paused'
+            : prompt.waitingSince
+              ? tWaiting('tracked')
+              : 'Tracking resumed',
+          { description: prompt.text },
+        );
         onChanged();
       } catch {
         toast.error('Failed to update the prompt.');
       }
     },
-    [onChanged],
+    [onChanged, onSwap, tWaiting],
   );
 
   // Bulk Pause / Resume: one write for the selected prompts that change.
@@ -3973,9 +4076,11 @@ function AllPromptsTab({
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
             <CardTitle className="text-sm font-medium">
-              {tUsage(`table.${statusFilter}`, {
-                count: format.number(statusCounts[statusFilter]),
-              })}
+              {statusFilter === 'waiting'
+                ? tWaiting('table', { count: format.number(statusCounts.waiting) })
+                : tUsage(`table.${statusFilter}`, {
+                    count: format.number(statusCounts[statusFilter]),
+                  })}
             </CardTitle>
             {statusFilter !== 'all' && (
               <span className="text-xs text-muted-foreground">
@@ -4019,15 +4124,19 @@ function AllPromptsTab({
             <Select
               value={statusFilter}
               onValueChange={(v) => onStatusFilterChange((v as PromptStatusFilter | null) ?? 'all')}
-              items={STATUS_FILTERS.map((value) => ({ value, label: tStatus(value) }))}
+              items={statusFilters.map((value) => ({ value, label: statusLabel(value) }))}
             >
-              <SelectTrigger className="h-8 w-32 text-xs" aria-label={tStatus('label')}>
+              <SelectTrigger
+                // "Waiting for a spot" needs the room (SIMPLE_NAV).
+                className={cn('h-8 text-xs', simpleNav ? 'w-40' : 'w-32')}
+                aria-label={tStatus('label')}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {STATUS_FILTERS.map((value) => (
+                {statusFilters.map((value) => (
                   <SelectItem key={value} value={value}>
-                    {tStatus(value)}
+                    {statusLabel(value)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -4287,9 +4396,15 @@ function AllPromptsTab({
                       <Badge
                         variant="outline"
                         className={cn('text-xs', STATUS_BADGE[status])}
-                        title={status === 'new' ? tStatus('newHint') : undefined}
+                        title={
+                          status === 'new'
+                            ? tStatus('newHint')
+                            : status === 'waiting'
+                              ? tWaiting('statusHint')
+                              : undefined
+                        }
                       >
-                        {tStatus(status)}
+                        {statusLabel(status)}
                       </Badge>
                     </TableCell>
                   ),
@@ -4588,7 +4703,7 @@ function AllPromptsTab({
             // The table opens on Tracked: a brand whose prompts are all paused
             // must not look empty with no way back.
             <div className="py-10 text-center text-sm text-muted-foreground">
-              {tUsage(`table.none.${statusFilter}`)}{' '}
+              {statusFilter === 'waiting' ? tWaiting('none') : tUsage(`table.none.${statusFilter}`)}{' '}
               <button
                 type="button"
                 onClick={() => onStatusFilterChange('all')}

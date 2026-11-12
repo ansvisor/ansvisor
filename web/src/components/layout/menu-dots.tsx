@@ -15,6 +15,7 @@ import {
   groupDot,
   itemDot,
   menuDots,
+  needsYouShown,
   openActionCount,
   withOpened,
   type Dot,
@@ -66,10 +67,10 @@ const NO_AREAS: ReadonlySet<DotArea> = new Set();
  * same read is on its way or under 5 minutes old. One read serves every
  * menu on the page; a reply for a read since replaced is dropped.
  */
-function readMenuState(brandId: string, areasKey: string, count: boolean) {
+function readMenuState(brandId: string, areasKey: string, count: boolean, waiting: boolean) {
   const areas = areasKey ? (areasKey.split(',') as DotArea[]) : [];
   if (areas.length === 0 && !count) return;
-  const key = `${brandId}|${areasKey}|${count ? 'count' : ''}`;
+  const key = `${brandId}|${areasKey}|${count ? 'count' : ''}|${waiting ? 'waiting' : ''}`;
   const { read, pending } = useMenuStateStore.getState();
   if (pending === key) return;
   if (read?.key === key && Date.now() - read.at < MENU_STATE_MAX_AGE_MS) return;
@@ -78,7 +79,7 @@ function readMenuState(brandId: string, areasKey: string, count: boolean) {
     if (useMenuStateStore.getState().pending !== key) return;
     useMenuStateStore.setState({ read: { key, brandId, at: Date.now(), state }, pending: null });
   };
-  getMenuState(brandId, { areas, count }).then(done, () => done(null));
+  getMenuState(brandId, { areas, count, waiting }).then(done, () => done(null));
 }
 
 /**
@@ -117,10 +118,12 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
   // What to read, as text: the read waits for a change in it, not in a list.
   const areasKey = areasToRead(onMenu, viewer).join(',');
   const count = simpleNav && !viewer.ended;
+  // Prompts waiting for a spot light Tracked Prompts yellow: counted only for those who see yellow.
+  const waiting = needsYouShown(viewer) && onMenu.has('prompts/tracked');
 
   useEffect(() => {
-    if (simpleNav && brandId) readMenuState(brandId, areasKey, count);
-  }, [simpleNav, brandId, areasKey, count, pathname]);
+    if (simpleNav && brandId) readMenuState(brandId, areasKey, count, waiting);
+  }, [simpleNav, brandId, areasKey, count, waiting, pathname]);
 
   const read = useMenuStateStore((s) => s.read);
   const opened = useMenuStateStore((s) => (brandId ? s.opened[brandId] : undefined));
