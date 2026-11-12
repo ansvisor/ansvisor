@@ -52,6 +52,8 @@ const SERVER_ONLY = [
   'cited_page_features',
   'cloro_pending_tasks',
   'competitor_timeline_scans',
+  // The brands whose Topics and Perception reads use the summed rollups (00536).
+  'fast_rollups_ready',
   'insights_rollup_rebuilds',
   'jobs',
   'mentions_entities_daily',

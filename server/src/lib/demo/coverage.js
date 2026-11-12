@@ -19,6 +19,8 @@ export const SKIPPED = {
   ai_traffic_digests: 'Weekly AI traffic e-mails sent: never for a demo brand.',
   suggestion_relevance_usage:
     'AI spend on suggestion relevance: nothing is spent for a demo brand.',
+  fast_rollups_ready:
+    'The brands whose Topics and Perception reads use the summed rollups (00536), listed by the backfill script (src/scripts/backfill-fast-rollups.js), which leaves demo brands out: a demo brand is small, and reads the rollups it always has.',
   webhook_configs: 'Outgoing webhooks: a demo brand never calls out.',
   prompt_table_views:
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",

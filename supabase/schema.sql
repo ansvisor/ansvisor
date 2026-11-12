@@ -63114,42 +63114,50 @@ notify pgrst, 'reload schema';
 -- (insights_prompt_daily, insights_competitor_prompt_daily), and one per
 -- term, entity, platform, region and day (mentions_terms_daily). A day of
 -- those is about a day of answers, so 90 days (and the 90 before, for the
--- change) read about as many index entries as the answers themselves, and the
--- time grew with the window.
+-- change) read about as many index entries as the answers themselves.
 --
 -- Neither read uses the engine or the region when none is picked: the Topics
 -- tab has no such filter, and Perception's unfiltered view sums them all. So
--- three small rollups hold the same figures with those summed, rewritten by
--- the same nightly refreshes, for the same days, in the same transaction:
+-- three small rollups hold the same figures with those summed:
 --   * topics_prompt_daily: insights_prompt_daily per (brand, day, prompt);
 --   * topics_competitor_daily: insights_competitor_prompt_daily's mention
 --     counts per (brand, day, prompt, competitor);
 --   * mentions_terms_daily_all: mentions_terms_daily per (brand, entity, day,
---     term), keyed for the read by entity and day, and by term and day for
---     the 15 brand terms' window before.
+--     term).
+-- The nightly refreshes rewrite them with their sources, for the same days
+-- and in the same transaction, for every brand from the moment this applies.
 -- The prompts' topics are still joined at read time, so moving a prompt to
 -- another topic moves its history as before.
 --
--- The reads return the same results:
---   * topics_overview_window: windows of two days or more read
---     topics_prompt_daily instead of insights_prompt_daily, and the window's
---     competitor mentions summed per (prompt, competitor) from
---     topics_competitor_daily before the topics and names are joined. The
---     24-hour window still reads the answers. Sums of sums, a max of maxes,
---     and a prompt counted once when any of its rows counted it.
---   * mentions_perception_live: with no platform, country, topic or search,
---     the shown entities' terms and the brand's 15 terms' window before come
---     from mentions_terms_daily_all. A filtered view reads as before.
---     It also runs without JIT: the phrase check's row estimate is far off,
+-- This file is the second version of 00536. The first also filled the new
+-- tables from every brand's rollups in one statement each, and production
+-- ran out of memory part-way and restarted; it was rolled back whole. This
+-- one fills nothing, so it applies in seconds:
+--   * backfill_fast_rollups (below) fills one brand's days at a time, and is
+--     safe to re-run; server/src/scripts/backfill-fast-rollups.js calls it in
+--     chunks, brand by brand;
+--   * a brand reads the new tables only once that script has filled its
+--     whole history and listed it in fast_rollups_ready; every other brand
+--     reads exactly as before 00536, so no read comes back short;
+--   * the Perception term index is 00537, built after the backfill.
+-- The order (apply, backfill, 00537, re-run the last days, vacuum) is in the
+-- PR that brought this file. Everything here is idempotent, so it also
+-- applies over the first version where that one applied.
+--
+-- The reads return the same results either way:
+--   * topics_overview_window: a ready brand's windows of two days or more read
+--     topics_prompt_daily, and the window's competitor mentions summed per
+--     (prompt, competitor) from topics_competitor_daily, before the topics and
+--     names are joined. The 24-hour window still reads the answers. Sums of
+--     sums, a max of maxes, and a prompt counted once when any of its rows
+--     counted it.
+--   * mentions_perception_live: for a ready brand with no platform, country,
+--     topic or search, the shown entities' terms and the brand's 15 terms'
+--     window before come from mentions_terms_daily_all. It also runs without
+--     JIT now, for every brand: the phrase check's row estimate is far off,
 --     so the planner compiled the query, which took longer than reading it.
 -- Signatures, results, grants and the brand access check (00434) are
 -- unchanged.
---
--- The new tables are backfilled from the rollups at the end. On production
--- the backfill reads each source rollup once; apply this outside the nightly
--- refresh. A refresh already running when it applies finishes with the
--- definitions it started with, so re-run refresh_insights_daily and
--- refresh_mention_terms_daily for those brands' days if one did.
 
 -- ── Topics: the prompt's day, every engine and region summed ───────────────
 
@@ -63192,21 +63200,28 @@ create table if not exists public.mentions_terms_daily_all (
   term     text not null,
   answers  integer not null,
   -- The entity first, as mentions_terms_daily: the read joins the shown
-  -- entities to it.
+  -- entities to it. The brand terms' index by term is 00537's.
   constraint mentions_terms_daily_all_pkey primary key (brand_id, entity, day, term)
     include (answers)
 );
 
--- The brand's 15 terms shown, over the window before: each term's days.
-create index if not exists mentions_terms_daily_all_term
-  on public.mentions_terms_daily_all (brand_id, entity, term, day)
-  include (answers);
+-- ── The brands whose whole history is in them ──────────────────────────────
 
--- Read by the security definer functions and written by the refreshes only,
--- as their sources (00066, 00231).
+-- A brand is listed here by backfill_fast_rollups at the end of its last
+-- chunk, once the script has filled every day it has rollups for. The reads
+-- above use the new tables for a listed brand only. To send a brand back to
+-- the old reads, delete its row.
+create table if not exists public.fast_rollups_ready (
+  brand_id uuid primary key references public.brands(id) on delete cascade,
+  ready_at timestamptz not null default now()
+);
+
+-- Read by the security definer functions and written by the refreshes and
+-- the backfill only, as the rollups they come from (00066, 00231).
 alter table public.topics_prompt_daily enable row level security;
 alter table public.topics_competitor_daily enable row level security;
 alter table public.mentions_terms_daily_all enable row level security;
+alter table public.fast_rollups_ready enable row level security;
 
 -- Each refresh deletes and rewrites a range of days; vacuumed about daily,
 -- as 00236 and 00290 have their sources, so the reads stay index-only.
@@ -63227,11 +63242,13 @@ alter table public.mentions_terms_daily_all set (
 );
 
 comment on table public.topics_prompt_daily is
-  'insights_prompt_daily per (brand, day, prompt), every engine and region summed: the Topics tab''s windows of two days or more (topics_overview_window, 00536). Rewritten with it by refresh_insights_daily.';
+  'insights_prompt_daily per (brand, day, prompt), every engine and region summed: the Topics tab''s windows of two days or more for a brand in fast_rollups_ready (topics_overview_window, 00536). Rewritten with it by refresh_insights_daily; filled by backfill_fast_rollups.';
 comment on table public.topics_competitor_daily is
-  'insights_competitor_prompt_daily''s mention counts per (brand, day, prompt, competitor), every engine and region summed: the Topics tab''s competitor share (topics_overview_window, 00536). Rewritten with it by refresh_insights_daily.';
+  'insights_competitor_prompt_daily''s mention counts per (brand, day, prompt, competitor), every engine and region summed: the Topics tab''s competitor share for a brand in fast_rollups_ready (topics_overview_window, 00536). Rewritten with it by refresh_insights_daily; filled by backfill_fast_rollups.';
 comment on table public.mentions_terms_daily_all is
-  'mentions_terms_daily per (brand, entity, day, term), every platform and region summed: the Perception tab''s unfiltered live read (mentions_perception_live, 00536). Rewritten with it by refresh_mention_terms_daily.';
+  'mentions_terms_daily per (brand, entity, day, term), every platform and region summed: the Perception tab''s unfiltered live read for a brand in fast_rollups_ready (mentions_perception_live, 00536). Rewritten with it by refresh_mention_terms_daily; filled by backfill_fast_rollups.';
+comment on table public.fast_rollups_ready is
+  'Brands whose topics_prompt_daily, topics_competitor_daily and mentions_terms_daily_all hold their whole history (00536): topics_overview_window and mentions_perception_live read those for them, and the older rollups for every other brand. Listed by backfill_fast_rollups.';
 
 -- ── refresh_insights_daily (00164), the Topics rollups appended ──────────
 
@@ -63390,6 +63407,7 @@ begin
 
   -- 00536: the same days at each prompt's grain, every engine and region
   -- summed, for the Topics tab's longer windows (topics_overview_window).
+  -- Written for every brand, ready or not (fast_rollups_ready).
   delete from public.topics_prompt_daily
     where brand_id = p_brand_id and day between p_day_from and p_day_to;
   delete from public.topics_competitor_daily
@@ -63502,6 +63520,7 @@ begin
 
   -- 00536: the same terms summed over every platform and region, which the
   -- Perception tab's unfiltered live read sums (mentions_perception_live).
+  -- Written for every brand, ready or not (fast_rollups_ready).
   insert into public.mentions_terms_daily_all (brand_id, entity, day, term, answers)
   select d.brand_id, d.entity, d.day, d.term, sum(d.answers)
   from public.mentions_terms_daily d
@@ -63526,7 +63545,7 @@ begin
 end;
 $$;
 
--- ── topics_overview_window (00434), the longer windows from the Topics rollups
+-- ── topics_overview_window (00434), a ready brand's longer windows from the Topics rollups
 
 create or replace function public.topics_overview_window(
   p_brand_id  uuid,
@@ -63573,6 +63592,8 @@ declare
   v_day_to    date;
   v_day_from  date;
   v_prev_from date;
+  -- The brand's summed rollups hold its whole history (00536).
+  v_fast      boolean;
 begin
   if auth.role() is distinct from 'service_role'
      and not public.can_access_brand(p_brand_id) then
@@ -63682,6 +63703,7 @@ begin
   v_day_to := (v_to at time zone 'UTC')::date;
   v_day_from := v_day_to - (v_days - 1);
   v_prev_from := v_day_from - v_days;
+  v_fast := exists (select 1 from public.fast_rollups_ready r where r.brand_id = p_brand_id);
 
   return query
   with
@@ -63692,9 +63714,8 @@ begin
     where ps.brand_id = p_brand_id
       and p.topic_id is not null
   ),
-  -- The brand's prompts' days of both windows, every engine and region
-  -- already summed (00536), read by (brand_id, day) and only then matched to
-  -- the topics' prompts.
+  -- The brand's rows of both windows, read by (brand_id, day) and only then
+  -- matched to the topics' prompts (see the header).
   prompt_rows as materialized (
     select d.prompt_id,
            d.day,
@@ -63707,8 +63728,27 @@ begin
            d.sum_inv_position,
            d.position_count,
            d.max_created_at
+    from public.insights_prompt_daily d
+    where not v_fast
+      and d.brand_id = p_brand_id
+      and d.day between v_prev_from and v_day_to
+    union all
+    -- A ready brand's (fast_rollups_ready): the same columns, every engine
+    -- and region already summed per prompt and day (00536).
+    select d.prompt_id,
+           d.day,
+           d.answer_count,
+           d.mention_answers,
+           d.citation_answers,
+           d.mentioning_answers,
+           d.total_mentions,
+           d.total_citations,
+           d.sum_inv_position,
+           d.position_count,
+           d.max_created_at
     from public.topics_prompt_daily d
-    where d.brand_id = p_brand_id
+    where v_fast
+      and d.brand_id = p_brand_id
       and d.day between v_prev_from and v_day_to
   ),
   days as (
@@ -63728,12 +63768,19 @@ begin
     from prompt_rows r
     join topic_prompts tp on tp.prompt_id = r.prompt_id
   ),
-  -- Each prompt's competitor mentions over the window, summed before the
-  -- topics and names are joined (00536).
   sightings as materialized (
-    select cpd.prompt_id, cpd.competitor_id, sum(cpd.mention_count)::bigint as mention_count
+    select cpd.prompt_id, cpd.competitor_id, cpd.mention_count
+    from public.insights_competitor_prompt_daily cpd
+    where not v_fast
+      and cpd.brand_id = p_brand_id
+      and cpd.day between v_day_from and v_day_to
+    union all
+    -- A ready brand's: each prompt's competitor mentions over the window,
+    -- summed before the topics and names are joined (00536).
+    select cpd.prompt_id, cpd.competitor_id, sum(cpd.mention_count)::integer
     from public.topics_competitor_daily cpd
-    where cpd.brand_id = p_brand_id
+    where v_fast
+      and cpd.brand_id = p_brand_id
       and cpd.day between v_day_from and v_day_to
     group by cpd.prompt_id, cpd.competitor_id
   ),
@@ -63819,7 +63866,7 @@ begin
 end;
 $$;
 
--- ── mentions_perception_live (00290), unfiltered whole days from the summed terms
+-- ── mentions_perception_live (00290), a ready brand's unfiltered days from the summed terms
 
 create or replace function public.mentions_perception_live(
   p_brand_id  uuid,
@@ -63851,7 +63898,8 @@ declare
   v_prev_start timestamptz;
   v_search     text := nullif(btrim(lower(coalesce(p_search, ''))), '');
   v_rollup     boolean;
-  -- The rollups with no platform or region: the every-platform terms (00536).
+  -- No platform or region, and the brand's summed terms hold its whole
+  -- history (00536): the every-platform terms.
   v_all        boolean;
   v_start_day  date;
   v_end_day    date;
@@ -63872,7 +63920,8 @@ begin
   -- a window under two days, or a filter on the prompts, reads the answers'
   -- terms as before. The branch not taken is pruned (plan_cache_mode).
   v_rollup    := v_days >= 2 and p_topic_id is null and v_search is null;
-  v_all       := v_rollup and p_platform is null and p_region is null;
+  v_all       := v_rollup and p_platform is null and p_region is null
+                 and exists (select 1 from public.fast_rollups_ready r where r.brand_id = p_brand_id);
   v_start_day := (v_start at time zone 'utc')::date;
   v_end_day   := (v_end at time zone 'utc')::date;
   v_prev_day  := (v_prev_start at time zone 'utc')::date;
@@ -64012,7 +64061,8 @@ begin
       and (p_region is null or d.region = p_region)
     group by d.term
     union all
-    -- Each of the 15 terms' own days (mentions_terms_daily_all_term).
+    -- Each of the 15 terms' own days, by mentions_terms_daily_all_term (00537)
+    -- once it is built, by the key's day range before.
     select d.term, sum(d.answers)
     from public.mentions_terms_daily_all d
     where v_all
@@ -64117,43 +64167,230 @@ begin
 end;
 $$;
 
+-- ── The backfill: one brand's days at a time ───────────────────────────────
+
+-- Makes the three tables hold, for one brand's days, what their sources
+-- hold: the missing rows inserted, the changed ones updated (an unchanged
+-- row is left alone, so a re-run writes nothing), and rows whose source row
+-- is gone deleted. Safe to re-run over any days, for a brand ready or not.
+-- With p_mark_ready, it then lists the brand in fast_rollups_ready, in the
+-- same transaction: the script passes it on the brand's last chunk only.
+--
+-- It takes both refreshes' locks first, insights' then terms' (no function
+-- takes them the other way round), so a refresh of the brand runs before or
+-- after a chunk, never across it: a chunk can't write a source row the
+-- refresh has just replaced. Each statement reads one brand's days by its
+-- index; a chunk's memory is bounded by its days, not the table.
+create or replace function public.backfill_fast_rollups(
+  p_brand_id   uuid,
+  p_day_from   date,
+  p_day_to     date,
+  p_mark_ready boolean default false
+) returns jsonb
+language plpgsql
+set search_path to 'public'
+as $$
+declare
+  v_prompts     bigint;
+  v_competitors bigint;
+  v_terms       bigint;
+begin
+  if p_brand_id is null or p_day_from is null or p_day_to is null or p_day_from > p_day_to then
+    raise exception 'backfill_fast_rollups: a brand and a day range from <= to are required';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended('refresh_insights_daily:' || p_brand_id::text, 0));
+  perform pg_advisory_xact_lock(
+    hashtextextended('refresh_mention_terms_daily:' || p_brand_id::text, 0));
+
+  with src as materialized (
+    select d.day, d.prompt_id,
+           sum(d.answer_count)       as answer_count,
+           sum(d.mention_answers)    as mention_answers,
+           sum(d.citation_answers)   as citation_answers,
+           sum(d.mentioning_answers) as mentioning_answers,
+           sum(d.total_mentions)     as total_mentions,
+           sum(d.total_citations)    as total_citations,
+           sum(d.sum_inv_position)   as sum_inv_position,
+           sum(d.position_count)     as position_count,
+           max(d.max_created_at)     as max_created_at
+    from public.insights_prompt_daily d
+    where d.brand_id = p_brand_id and d.day between p_day_from and p_day_to
+    group by d.day, d.prompt_id
+  ),
+  gone as (
+    delete from public.topics_prompt_daily t
+    where t.brand_id = p_brand_id
+      and t.day between p_day_from and p_day_to
+      and not exists (select 1 from src s where s.day = t.day and s.prompt_id = t.prompt_id)
+  )
+  insert into public.topics_prompt_daily as t (
+    brand_id, day, prompt_id, answer_count, mention_answers, citation_answers,
+    mentioning_answers, total_mentions, total_citations, sum_inv_position,
+    position_count, max_created_at)
+  select p_brand_id, s.day, s.prompt_id, s.answer_count, s.mention_answers,
+         s.citation_answers, s.mentioning_answers, s.total_mentions,
+         s.total_citations, s.sum_inv_position, s.position_count, s.max_created_at
+  from src s
+  on conflict (brand_id, day, prompt_id) do update set
+    answer_count       = excluded.answer_count,
+    mention_answers    = excluded.mention_answers,
+    citation_answers   = excluded.citation_answers,
+    mentioning_answers = excluded.mentioning_answers,
+    total_mentions     = excluded.total_mentions,
+    total_citations    = excluded.total_citations,
+    sum_inv_position   = excluded.sum_inv_position,
+    position_count     = excluded.position_count,
+    max_created_at     = excluded.max_created_at
+  where (t.answer_count, t.mention_answers, t.citation_answers, t.mentioning_answers,
+         t.total_mentions, t.total_citations, t.sum_inv_position, t.position_count,
+         t.max_created_at)
+        is distinct from
+        (excluded.answer_count, excluded.mention_answers, excluded.citation_answers,
+         excluded.mentioning_answers, excluded.total_mentions, excluded.total_citations,
+         excluded.sum_inv_position, excluded.position_count, excluded.max_created_at);
+  get diagnostics v_prompts = row_count;
+
+  with src as materialized (
+    select d.day, d.prompt_id, d.competitor_id, sum(d.mention_count) as mention_count
+    from public.insights_competitor_prompt_daily d
+    where d.brand_id = p_brand_id and d.day between p_day_from and p_day_to
+    group by d.day, d.prompt_id, d.competitor_id
+  ),
+  gone as (
+    delete from public.topics_competitor_daily t
+    where t.brand_id = p_brand_id
+      and t.day between p_day_from and p_day_to
+      and not exists (
+        select 1 from src s
+        where s.day = t.day and s.prompt_id = t.prompt_id and s.competitor_id = t.competitor_id)
+  )
+  insert into public.topics_competitor_daily as t (
+    brand_id, day, prompt_id, competitor_id, mention_count)
+  select p_brand_id, s.day, s.prompt_id, s.competitor_id, s.mention_count
+  from src s
+  on conflict (brand_id, day, prompt_id, competitor_id) do update set
+    mention_count = excluded.mention_count
+  where t.mention_count is distinct from excluded.mention_count;
+  get diagnostics v_competitors = row_count;
+
+  -- The terms' key leads with the entity: read by the entities those days
+  -- name, as refresh_mention_terms_daily rewrites them.
+  with entities as (
+    select distinct e.entity
+    from public.mentions_entities_daily e
+    where e.brand_id = p_brand_id and e.day between p_day_from and p_day_to
+  ),
+  src as materialized (
+    select d.entity, d.day, d.term, sum(d.answers) as answers
+    from public.mentions_terms_daily d
+    where d.brand_id = p_brand_id
+      and d.entity in (select x.entity from entities x)
+      and d.day between p_day_from and p_day_to
+    group by d.entity, d.day, d.term
+  ),
+  gone as (
+    delete from public.mentions_terms_daily_all t
+    where t.brand_id = p_brand_id
+      and t.entity in (select x.entity from entities x)
+      and t.day between p_day_from and p_day_to
+      and not exists (
+        select 1 from src s
+        where s.entity = t.entity and s.day = t.day and s.term = t.term)
+  )
+  insert into public.mentions_terms_daily_all as t (brand_id, entity, day, term, answers)
+  select p_brand_id, s.entity, s.day, s.term, s.answers
+  from src s
+  on conflict (brand_id, entity, day, term) do update set
+    answers = excluded.answers
+  where t.answers is distinct from excluded.answers;
+  get diagnostics v_terms = row_count;
+
+  if p_mark_ready then
+    insert into public.fast_rollups_ready (brand_id) values (p_brand_id)
+    on conflict (brand_id) do nothing;
+  end if;
+
+  return jsonb_build_object(
+    'prompt_rows', v_prompts, 'competitor_rows', v_competitors, 'term_rows', v_terms);
+end;
+$$;
+
+-- What the backfill script walks: every brand with rollups but a demo one
+-- (a demo brand is small, and reads the older rollups), by id, with the
+-- first and last day its sources hold, each found by a (brand_id, day)
+-- index. A day with terms has its entities' row, so mentions_entities_daily
+-- stands for mentions_terms_daily, whose key leads with the entity. One
+-- jsonb value, not rows: an API call's rows are capped (PostgREST max-rows).
+create or replace function public.fast_rollups_backfill_ranges()
+returns jsonb
+language sql
+stable
+set search_path to 'public'
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'brand_id', x.brand_id,
+           'day_from', x.day_from,
+           'day_to',   x.day_to,
+           'ready',    x.ready)
+         order by x.brand_id), '[]'::jsonb)
+  from (
+    select b.id as brand_id,
+           least(
+             (select min(d.day) from public.insights_prompt_daily d where d.brand_id = b.id),
+             (select min(d.day) from public.insights_competitor_prompt_daily d where d.brand_id = b.id),
+             (select min(d.day) from public.mentions_entities_daily d where d.brand_id = b.id)
+           ) as day_from,
+           greatest(
+             (select max(d.day) from public.insights_prompt_daily d where d.brand_id = b.id),
+             (select max(d.day) from public.insights_competitor_prompt_daily d where d.brand_id = b.id),
+             (select max(d.day) from public.mentions_entities_daily d where d.brand_id = b.id)
+           ) as day_to,
+           exists (select 1 from public.fast_rollups_ready r where r.brand_id = b.id) as ready
+    from public.brands b
+    where not b.is_demo
+  ) x
+  where x.day_from is not null;
+$$;
+
 revoke execute on function public.refresh_insights_daily(uuid, date, date)
   from public, anon, authenticated;
 revoke execute on function public.refresh_mention_terms_daily(uuid, date, date)
+  from public, anon, authenticated;
+revoke execute on function public.backfill_fast_rollups(uuid, date, date, boolean)
+  from public, anon, authenticated;
+revoke execute on function public.fast_rollups_backfill_ranges()
   from public, anon, authenticated;
 revoke all on function public.mentions_perception_live(uuid, timestamptz, timestamptz, text, text, uuid, text)
   from public, anon, authenticated;
 grant execute on function public.mentions_perception_live(uuid, timestamptz, timestamptz, text, text, uuid, text)
   to service_role;
 
--- ── Backfill, from the rollups as they stand ───────────────────────────────
-
-insert into public.topics_prompt_daily (
-  brand_id, day, prompt_id, answer_count, mention_answers, citation_answers,
-  mentioning_answers, total_mentions, total_citations, sum_inv_position,
-  position_count, max_created_at)
-select d.brand_id, d.day, d.prompt_id,
-       sum(d.answer_count), sum(d.mention_answers), sum(d.citation_answers),
-       sum(d.mentioning_answers), sum(d.total_mentions), sum(d.total_citations),
-       sum(d.sum_inv_position), sum(d.position_count), max(d.max_created_at)
-from public.insights_prompt_daily d
-group by d.brand_id, d.day, d.prompt_id
-on conflict do nothing;
-
-insert into public.topics_competitor_daily (
-  brand_id, day, prompt_id, competitor_id, mention_count)
-select d.brand_id, d.day, d.prompt_id, d.competitor_id, sum(d.mention_count)
-from public.insights_competitor_prompt_daily d
-group by d.brand_id, d.day, d.prompt_id, d.competitor_id
-on conflict do nothing;
-
-insert into public.mentions_terms_daily_all (brand_id, entity, day, term, answers)
-select d.brand_id, d.entity, d.day, d.term, sum(d.answers)
-from public.mentions_terms_daily d
-group by d.brand_id, d.entity, d.day, d.term
-on conflict do nothing;
-
-analyze public.topics_prompt_daily;
-analyze public.topics_competitor_daily;
-analyze public.mentions_terms_daily_all;
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00537_perception_term_index.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00537: the Perception terms' index by term, after the 00536 backfill
+-- ============================================================================
+-- mentions_perception_live (00536) reads, for a ready brand, the window
+-- before of the 15 brand terms it shows from mentions_terms_daily_all. With
+-- this index that is 15 short ranges, each term's days; without it, the
+-- brand entity's days of every term, filtered to the 15. The read is right
+-- either way, just slower without it.
+--
+-- Its own migration, applied after server/src/scripts/backfill-fast-rollups.js
+-- has filled the table, so the backfill doesn't keep a second index up to
+-- date row by row and the index is built once, from the filled table.
+--
+-- On production this may instead be built by hand, without blocking the
+-- table's writes, before this file applies (it then does nothing):
+--   create index concurrently if not exists mentions_terms_daily_all_term
+--     on public.mentions_terms_daily_all (brand_id, entity, term, day)
+--     include (answers);
+-- A concurrent build that fails leaves an invalid index of that name, which
+-- "if not exists" would keep: drop it and build it again.
+create index if not exists mentions_terms_daily_all_term
+  on public.mentions_terms_daily_all (brand_id, entity, term, day)
+  include (answers);
 
