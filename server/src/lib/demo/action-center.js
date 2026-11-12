@@ -12,6 +12,13 @@
  * from its signals, planTasks for its tasks, scorePriority for its priority;
  * a closed one is measured as validate.js measures it, on the same windows,
  * with basketValues and deriveOutcome.
+ *
+ * Action Center › Today (SIMPLE_NAV) reads it as it reads any brand's: the
+ * build night's signals are "Since yesterday", the open actions its focus
+ * (the work a person sent from a page is named after what it is about), an
+ * action closed and one measured in the days before the build are Monday's
+ * "Last week", and with BUSINESS_HUB_ENABLED the weekly Business Hub
+ * reminder waits for the person (today.test.js pins those windows).
  */
 
 import supabaseAdmin from '../../config/supabase.js';
@@ -26,13 +33,27 @@ import {
   opportunityAssets,
   WHOLE,
 } from '../action-center/from-opportunity.js';
+import {
+  PRODUCT_ACTION_KIND,
+  productActionDedupKey,
+  productTasks,
+} from '../action-center/from-products.js';
+import {
+  TOPIC_GAP_ACTION_KIND,
+  TOPIC_GAP_TASKS,
+  topicGapImpact,
+} from '../action-center/from-topic-gap.js';
 import { priorityColumns, scorePriority } from '../action-center/priority.js';
 import { planTasks } from '../action-center/tasks/plan.js';
 import { deriveOutcome, MEASUREMENT_WINDOW_DAYS } from '../action-center/validate.js';
+import { businessHubEnabled } from '../business-hub/flag.js';
 import { KIND_META } from '../signals/record.js';
 import { classifyRateFall, classifySource } from '../signals/library/classify.js';
 import { group, promptTarget, single } from '../signals/library/detect.js';
+import { targetKeys } from '../target-ids.js';
 import { BRAND, SOURCES } from './brewline.js';
+import { businessHubRows } from './business-hub.js';
+import { catalogRows } from './catalog.js';
 import { contentRows, SENT_OPPORTUNITY } from './content.js';
 import { demoId } from './random.js';
 import { allSettledOrThrow, demoWriter } from './write.js';
@@ -285,6 +306,35 @@ export function signalCandidates(ctx) {
         changeValue: rateAt(run) - rateAt(run - 1),
       },
     };
+
+    // The build night's good news: the prompt (another one) whose answers
+    // name Brewline most more often than on the run before.
+    const [best] = ctx.rows.prompts
+      .filter((p) => p.id !== id)
+      .map((p) => {
+        const rate = (r) => {
+          const rows = S.runResults(ctx.rows.results, [r]).filter((x) => x.prompt_id === p.id);
+          return Math.round((S.brandStats(rows).mentionAnswers / rows.length) * 100);
+        };
+        return { id: p.id, gain: rate(latest) - rate(latest - 1) };
+      })
+      .filter((p) => p.gain > 0)
+      .sort((a, b) => b.gain - a.gain);
+    if (best) {
+      found.nightGain = {
+        run: latest,
+        seen: latest,
+        candidate: {
+          kind: 'prompt_gain',
+          dedupKey: `prompt_gain:${best.id}`,
+          source: AI,
+          payload: { promptText: ctx.promptText(best.id), promptId: best.id },
+          previousValue: null,
+          currentValue: null,
+          changeValue: best.gain,
+        },
+      };
+    }
   }
 
   return Object.fromEntries(Object.entries(found).filter(([, s]) => s));
@@ -294,7 +344,10 @@ export function signalCandidates(ctx) {
  * The actions, as the nights raised them. `created`, `started` and `closed`
  * are [run, hours after that run started]; `done` is how many of its tasks
  * are completed while it is in progress; `review` adds a task waiting for
- * review (AC-010).
+ * review (AC-010). The visibility slip closes on the run three before the
+ * latest, so its result is measured the day before the build, and the
+ * emerging content the run after: Monday's "Last week" has a result in and
+ * an action done (on any Monday before the next rebuild).
  */
 export const ACTION_PLAN = [
   {
@@ -309,8 +362,8 @@ export const ACTION_PLAN = [
     key: 'visibility-slip',
     signals: ['visibilitySlip'],
     created: [1, 1],
-    started: [2, 3],
-    closed: [3, 6],
+    started: [4, 3],
+    closed: [6, 6],
     status: 'completed',
   },
   {
@@ -348,6 +401,14 @@ export const ACTION_PLAN = [
   { key: 'platform-slip', signals: ['platformSlip'], created: [8, 1], status: 'new' },
   { key: 'source', signals: ['source'], created: [9, 1], status: 'new' },
 ];
+
+/**
+ * Signals no action was raised from: the build night's prompt gain, Today's
+ * good news in "Since yesterday". Its definition (strengthen emerging
+ * content) closed a cycle three days before and rests (restAfterCloseDays),
+ * so the finding waits in the candidate queue.
+ */
+export const LONE_SIGNALS = ['nightGain'];
 
 const IMPACT_RANK = { high: 3, medium: 2, low: 1 };
 
@@ -452,12 +513,48 @@ function measure(ctx, action, signalRows, closedAt) {
 }
 
 /**
- * Every Action Center row of the demo brand, built in memory. Deterministic
- * but for the dates, which follow core's runs.
- *
- * @param {{ brandId: string, now: Date }} args
+ * A signal row as the recorder writes one, found at run `run` (the night
+ * after it) and last seen at `seen`, standing as `status` now.
  */
-export async function actionCenterRows({ brandId, now }) {
+function signalRow(
+  ctx,
+  { key, run, seen, candidate },
+  { status, actionId = null, resolvedAt = null, updatedAt = null },
+) {
+  const meta = KIND_META[candidate.kind];
+  const detectedAt = S.afterRun(ctx.starts, run, 0.5);
+  const lastAt = S.afterRun(ctx.starts, seen, 0.5);
+  return {
+    id: demoId(ctx.brandId, `signal:${key}`),
+    brand_id: ctx.brandId,
+    category: meta.category,
+    kind: candidate.kind,
+    impact: meta.impact,
+    status,
+    source: candidate.source,
+    dedup_key: candidate.dedupKey,
+    detected_at: detectedAt.toISOString(),
+    last_detected_at: lastAt.toISOString(),
+    resolved_at: resolvedAt?.toISOString() ?? null,
+    previous_value: candidate.previousValue,
+    current_value: candidate.currentValue,
+    change_value: candidate.changeValue,
+    payload: candidate.payload,
+    kpi_keys: meta.kpiKeys,
+    action_id: actionId,
+    created_at: detectedAt.toISOString(),
+    updated_at: (updatedAt ?? lastAt).toISOString(),
+  };
+}
+
+/**
+ * Every Action Center row of the demo brand, built in memory. Deterministic
+ * but for the dates, which follow core's runs. `env` decides whether the
+ * Business Hub reminder is there (BUSINESS_HUB_ENABLED).
+ *
+ * @param {{ brandId: string, now: Date, env?: NodeJS.ProcessEnv }} args
+ */
+export async function actionCenterRows({ brandId, now, env = process.env }) {
   const ctx = S.demoContext(brandId, now);
   const id = (key) => demoId(brandId, key);
   const at = ([run, hours]) => S.afterRun(ctx.starts, run, hours);
@@ -485,10 +582,7 @@ export async function actionCenterRows({ brandId, now }) {
     const open = plan.status === 'new' || plan.status === 'in_progress';
 
     // The signals behind it, as the recorder wrote them and as they stand now.
-    const signalRows = picked.map(({ key, run, seen, candidate }) => {
-      const meta = KIND_META[candidate.kind];
-      const detectedAt = S.afterRun(ctx.starts, run, 0.5);
-      const lastAt = S.afterRun(ctx.starts, seen, 0.5);
+    const signalRows = picked.map((found) => {
       // A closed cycle's findings ended once the work landed; a dismissed one's were set aside.
       const status = open
         ? plan.status === 'new'
@@ -499,27 +593,12 @@ export async function actionCenterRows({ brandId, now }) {
           : 'resolved';
       const resolvedAt =
         status === 'resolved' ? S.afterRun(ctx.starts, plan.closed[0] + 1, 0.5) : null;
-      return {
-        id: id(`signal:${key}`),
-        brand_id: brandId,
-        category: meta.category,
-        kind: candidate.kind,
-        impact: meta.impact,
+      return signalRow(ctx, found, {
         status,
-        source: candidate.source,
-        dedup_key: candidate.dedupKey,
-        detected_at: detectedAt.toISOString(),
-        last_detected_at: lastAt.toISOString(),
-        resolved_at: resolvedAt?.toISOString() ?? null,
-        previous_value: candidate.previousValue,
-        current_value: candidate.currentValue,
-        change_value: candidate.changeValue,
-        payload: candidate.payload,
-        kpi_keys: meta.kpiKeys,
-        action_id: actionId,
-        created_at: detectedAt.toISOString(),
-        updated_at: (resolvedAt ?? (plan.status === 'dismissed' ? closedAt : lastAt)).toISOString(),
-      };
+        actionId,
+        resolvedAt,
+        updatedAt: resolvedAt ?? (plan.status === 'dismissed' ? closedAt : null),
+      });
     });
     signals.push(...signalRows);
 
@@ -575,7 +654,11 @@ export async function actionCenterRows({ brandId, now }) {
     );
 
     // Its tasks, as planTasks lays them out for what the brand has.
-    const plannedTasks = planTasks(definition, { sources: DEMO_SOURCES, payload });
+    const plannedTasks = planTasks(definition, {
+      sources: DEMO_SOURCES,
+      payload,
+      signals: signalRows,
+    });
     const done =
       plan.status === 'completed'
         ? plannedTasks.length
@@ -604,6 +687,7 @@ export async function actionCenterRows({ brandId, now }) {
         mode: item.mode,
         permission: item.permission,
         depends_on: item.dependsOn,
+        title: item.title,
         title_params: item.titleParams,
         details: item.details,
         status,
@@ -688,11 +772,26 @@ export async function actionCenterRows({ brandId, now }) {
     actions.push(action);
   }
 
-  // An opportunity someone sent over from Content, now being written in the Editor.
-  const sent = sentOpportunityAction(ctx, { demand, scoredAt: latestScore });
-  actions.push(sent.action);
-  tasks.push(...sent.tasks);
-  events.push(...sent.events);
+  // Findings no action was raised from, as the recorder left them.
+  for (const key of LONE_SIGNALS) {
+    if (found[key]) signals.push(signalRow(ctx, { key, ...found[key] }, { status: 'new' }));
+  }
+
+  // An opportunity someone sent over from Content, now being written in the
+  // Editor; a topic gap sent from Visibility and a product from Product
+  // Visibility this week; with BUSINESS_HUB_ENABLED, tonight's weekly
+  // reminder to enter the Business Hub numbers.
+  const sent = [
+    sentOpportunityAction(ctx, { demand, scoredAt: latestScore }),
+    topicGapAction(ctx, { demand, scoredAt: latestScore }),
+    productAction(ctx, { demand, scoredAt: latestScore }),
+    ...(businessHubEnabled(env) ? [numbersReminder(ctx, { demand, scoredAt: latestScore })] : []),
+  ];
+  for (const one of sent) {
+    actions.push(one.action);
+    tasks.push(...one.tasks);
+    events.push(...one.events);
+  }
 
   return {
     signals,
@@ -788,6 +887,7 @@ function sentOpportunityAction(ctx, { demand, scoredAt }) {
     mode: item.mode,
     permission: item.permission,
     depends_on: item.dependsOn,
+    title: item.title,
     title_params: item.titleParams,
     details: item.details,
     status: progress[item.taskKey] ?? initialTaskStatus(item.taskKey, opportunity),
@@ -819,6 +919,253 @@ function sentOpportunityAction(ctx, { demand, scoredAt }) {
       })),
   ];
   return { action, tasks, events };
+}
+
+/**
+ * A new action a person sent from a page, or a check of its own raised,
+ * with no signal behind it: its planned tasks all to do, scored as the night
+ * keeps an open one current (priorityOnCreate's scorePriority, no signals),
+ * and the first line of its History.
+ */
+function sentAction(
+  ctx,
+  { key, kind, category, impact, payload, kpiKeys, baseline = {}, dedupKey, createdAt },
+  { plan, eventData, demand, scoredAt },
+) {
+  const id = (k) => demoId(ctx.brandId, k);
+  const actionId = id(`action:${key}`);
+  const at = createdAt.toISOString();
+  const base = { kind, category, impact, payload, created_at: at };
+  const action = {
+    id: actionId,
+    brand_id: ctx.brandId,
+    ...base,
+    definition_version: 1,
+    status: 'new',
+    kpi_keys: kpiKeys,
+    baseline,
+    dedup_key: dedupKey,
+    updated_at: at,
+    completed_at: null,
+    outcome: 'pending_measurement',
+    ...priorityColumns(
+      scorePriority({ action: base, signals: [], prompts: demand }, scoredAt),
+      scoredAt,
+    ),
+  };
+  const tasks = plan.map((item) => ({
+    id: id(`task:${key}:${item.taskKey ?? item.details.step}`),
+    action_id: actionId,
+    position: item.position,
+    task_key: item.taskKey,
+    task_version: item.version,
+    mode: item.mode,
+    permission: item.permission,
+    depends_on: item.dependsOn,
+    title_params: item.titleParams,
+    title: item.title ?? null,
+    details: item.details,
+    status: 'todo',
+    created_at: at,
+    updated_at: at,
+  }));
+  const events = [
+    {
+      id: id(`event:${key}:created`),
+      action_id: actionId,
+      event: 'created',
+      data: { ...eventData, taskCount: plan.length },
+      actor_id: null,
+      created_at: at,
+    },
+  ];
+  return { action, tasks, events };
+}
+
+/**
+ * "Send biggest gap to Actions" (from-topic-gap.js) three days ago: the
+ * topic where a rival led Brewline most over the week before, scored as the
+ * heat map scores a topic, with C04's work.
+ */
+function topicGapAction(ctx, { demand, scoredAt }) {
+  const createdAt = S.afterRun(ctx.starts, ctx.starts.length - 2, 5);
+  const week = weekTo(ctx, ctx.starts.length - 2);
+  const [biggest] = ctx.rows.topics
+    .map((topic) => {
+      const prompts = ctx.rows.prompts.filter((p) => p.topic_id === topic.id);
+      const ids = new Set(prompts.map((p) => p.id));
+      const answers = week.filter((r) => ids.has(r.prompt_id));
+      const you = S.brandStats(answers).score;
+      const leader = [...S.competitorStats(answers).values()].sort((a, b) => b.score - a.score)[0];
+      return { topic, prompts, you, leader, gap: Math.round((leader.score - you) * 10) / 10 };
+    })
+    .sort((a, b) => b.gap - a.gap);
+  const { topic, prompts, you, leader, gap } = biggest;
+  const promptIds = prompts.map((p) => p.id);
+  const payload = {
+    source: TOPIC_GAP_ACTION_KIND,
+    topicId: topic.id,
+    topicName: topic.name,
+    competitorId: leader.id,
+    competitorName: leader.name,
+    competitorNames: [leader.name],
+    yourScore: you,
+    competitorScore: leader.score,
+    gap,
+    // The heat map's own window, its last 7 days.
+    window: { dayFrom: null, dayTo: null },
+    promptIds,
+    targetEntity: 'prompts',
+    targetCount: targetKeys(promptIds).length,
+    targets: prompts.map((p) => p.text),
+  };
+  return sentAction(
+    ctx,
+    {
+      key: 'topic-gap',
+      kind: TOPIC_GAP_ACTION_KIND,
+      category: 'compete',
+      impact: topicGapImpact(gap),
+      payload,
+      // from-topic-gap.js KPI_KEYS
+      kpiKeys: ['ai_visibility', 'share_of_voice'],
+      baseline: { yourScore: you, competitorScore: leader.score, gap },
+      dedupKey: `topic_gap:${topic.id}`,
+      createdAt,
+    },
+    {
+      plan: planTasks(
+        { id: TOPIC_GAP_ACTION_KIND, tasks: TOPIC_GAP_TASKS },
+        { sources: DEMO_SOURCES, payload },
+      ),
+      eventData: { source: TOPIC_GAP_ACTION_KIND, topicId: topic.id, competitorId: leader.id, gap },
+      demand,
+      scoredAt,
+    },
+  );
+}
+
+/** The product sent from Product Visibility: a subscription AI answers leave off the shelf. */
+export const SENT_PRODUCT = { path: '/subscriptions/single-origin-club' };
+const SENT_PRODUCT_PROMPTS = ['best-subscriptions', 'single-origin'];
+
+/**
+ * A product sent from Product Visibility (from-products.js) two days ago:
+ * Brewline's Single Origin Club, which the subscription answers' product
+ * cards leave out while Northbound's single-origin subscription is on them.
+ */
+function productAction(ctx, { demand, scoredAt }) {
+  const createdAt = S.afterRun(ctx.starts, ctx.starts.length - 2, 27);
+  const product = catalogRows({ brandId: ctx.brandId, now: ctx.now }).products.find((p) =>
+    p.url.endsWith(SENT_PRODUCT.path),
+  );
+  const target = { type: 'product', id: product.id };
+  const prompts = SENT_PRODUCT_PROMPTS.map((key) => ctx.promptId(key));
+  const work = [
+    {
+      type: 'optimize_page',
+      who: 'agent',
+      why: 'Name the origins, how often they change and what a bag costs, as the shelf compares them.',
+    },
+    { type: 'create_content', who: 'me' },
+  ];
+  const payload = {
+    source: 'shopping',
+    target: { ...target, name: product.title },
+    title: product.title,
+    workTypes: [...new Set(work.map((w) => w.type))],
+    pages: [product.url],
+    promptIds: prompts,
+    targetEntity: 'prompts',
+    targetCount: prompts.length,
+    targets: prompts.map((id) => ({ id, label: ctx.promptText(id) })),
+  };
+  return sentAction(
+    ctx,
+    {
+      key: 'product',
+      kind: PRODUCT_ACTION_KIND,
+      category: 'growth',
+      impact: 'medium',
+      payload,
+      // from-products.js KPI_KEYS
+      kpiKeys: ['ai_visibility', 'mentions'],
+      dedupKey: productActionDedupKey(target),
+      createdAt,
+    },
+    {
+      plan: productTasks(work, { sources: DEMO_SOURCES, payload }),
+      eventData: { source: 'shopping', target: payload.target },
+      demand,
+      scoredAt,
+    },
+  );
+}
+
+/** The weekly Business Hub reminder's kind and its one task's page (#2305, from-business-hub.js). */
+export const NUMBERS_REMINDER_KIND = 'business_hub_numbers';
+const NUMBERS_PATH = '/dashboard/insights?businessHub=enter';
+
+/**
+ * The weekly reminder to enter the Business Hub numbers, as the nightly pass
+ * raises it once the newest entry (business-hub.js) is a week old: raised
+ * tonight, with its one task, worded as from-business-hub.js words it. The
+ * real pass never raises it for a demo brand; the demo shows it so Today's
+ * "Waiting for you" has its weekly row.
+ */
+function numbersReminder(ctx, { demand, scoredAt }) {
+  const lastEnd = businessHubRows({ brandId: ctx.brandId, now: ctx.now }).at(-1).period_end;
+  const createdAt = S.afterRun(ctx.starts, ctx.starts.length - 1, 1);
+  const payload = {
+    source: 'business_hub',
+    lastEnd,
+    lastDays: 7,
+    targetEntity: 'platforms',
+    targetCount: 1,
+    targets: [{ id: 'chatgpt-web', label: 'ChatGPT' }],
+  };
+  const task = {
+    taskKey: null,
+    title: "Enter this week's ChatGPT Business Hub numbers",
+    version: 1,
+    mode: 'human',
+    permission: 'read',
+    dependsOn: [],
+    titleParams: {},
+    position: 1,
+    details: {
+      source: 'business_hub',
+      step: 'reminder',
+      url: NUMBERS_PATH,
+      where: 'Visibility › Overview',
+      check: 'auto',
+      why: `Your last Business Hub numbers end ${lastEnd}. Business Hub shows only the last 7 or 28 days, so a week that isn't entered is gone from it.`,
+      how: [
+        'In Business Hub, open Insights and pick 7 days.',
+        'In Visibility, choose Enter numbers on the ChatGPT Business Hub card.',
+        "Copy Mentions, Website clicks, Profile views and the top discovery topics, and save. Leave a number empty if Business Hub doesn't show it.",
+      ],
+      doneWhen: "This week's numbers are saved. Checked automatically when they are.",
+      type: 'technical',
+      effort: '~10m',
+      role: 'Marketing lead',
+    },
+  };
+  return sentAction(
+    ctx,
+    {
+      key: 'business-hub-numbers',
+      kind: NUMBERS_REMINDER_KIND,
+      category: 'growth',
+      impact: 'low',
+      payload,
+      kpiKeys: [],
+      baseline: { capturedAt: createdAt.toISOString(), lastEnd },
+      dedupKey: `${NUMBERS_REMINDER_KIND}:${ctx.brandId}`,
+      createdAt,
+    },
+    { plan: [task], eventData: { source: 'business_hub', lastEnd }, demand, scoredAt },
+  );
 }
 
 /**
@@ -943,7 +1290,8 @@ export const actionCenter = {
    * Each step's independent tables side by side, through the build's
    * writer (a writer over `db` for a first build without one).
    *
-   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function }} ctx
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function,
+   *   env?: NodeJS.ProcessEnv }} ctx
    */
   async build({
     brandId,
@@ -951,8 +1299,9 @@ export const actionCenter = {
     db = supabaseAdmin,
     rebuild = false,
     write = demoWriter({ db, brandId, rebuild, keys: KEYS, scopes: SCOPES }).write,
+    env = process.env,
   }) {
-    const rows = await actionCenterRows({ brandId, now });
+    const rows = await actionCenterRows({ brandId, now, env });
     // Set up when its KPIs were: the KPI tab reads the brand as set up and
     // Getting started its KPI step as done, without writing either.
     const { error } = await db

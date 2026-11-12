@@ -6,6 +6,7 @@ import type { ActionItem } from '@/lib/actions/action-center';
 import type { FocusCard } from '@/lib/actions/today-focus';
 import type { TodayOverview } from '@/lib/actions/today';
 import type { TodayStanding } from '@/lib/action-center/focus';
+import { actionItemFromRow } from '@/lib/action-center/rows';
 import type { Signal } from '@/lib/signals/map';
 import { buildGettingStarted, type GettingStartedFacts } from '@/lib/getting-started/steps';
 import { UpgradeDialogContext, type UpgradeDialogState } from '@/components/providers/upgrade-gate';
@@ -458,6 +459,61 @@ describe('Action Center › Today', () => {
     ).not.toBeNull();
   });
 
+  /** A topic gap sent from Visibility (VIS-010), as the server stores its priority. */
+  it('says why a topic gap sent from Visibility is in focus: its gap and rival', async () => {
+    const gap = actionItemFromRow(
+      {
+        id: 'a1',
+        action_no: 7,
+        category: 'compete',
+        kind: 'topic_competitor_gap',
+        impact: 'high',
+        status: 'new',
+        payload: {
+          source: 'topic_competitor_gap',
+          topicName: 'Coffee subscriptions',
+          competitorName: 'Northbound Roasters',
+          gap: 23.4,
+          targetEntity: 'prompts',
+          targetCount: 12,
+        },
+        kpi_keys: ['ai_visibility', 'share_of_voice'],
+        assignee_id: null,
+        due_date: null,
+        created_at: '2026-11-10T09:05:31Z',
+        updated_at: '2026-11-10T09:05:31Z',
+        priority_score: 77,
+        priority_level: 'high',
+        priority_reason: {
+          version: 1,
+          change: 'gap',
+          subject: { entity: 'prompts', count: 12 },
+          competitorGap: { points: 23.4, competitor: 'Northbound Roasters' },
+          demand: 'medium',
+          realDemand: null,
+          searches: 380,
+          commercial: true,
+          heldBefore: false,
+          days: null,
+          kinds: 0,
+          sources: 0,
+          pastSuccess: null,
+          factors: { severity: 0.53, confidence: 0.6 },
+        },
+        priority_updated_at: '2026-11-10T09:05:31Z',
+      },
+      { assignee: null, taskTotal: 9, taskCompleted: 0, signalCount: 0 },
+    );
+    reads.getTodayFocus.mockResolvedValue([card('a1', { action: gap })]);
+    await draw();
+    const row = container.querySelector('[data-focus-id="a1"]')?.textContent ?? '';
+    expect(row).toContain('Close the 23.4-pt gap with Northbound Roasters in Coffee subscriptions');
+    expect(row).toContain(
+      'A 23.4-pt gap with Northbound Roasters on 12 prompts — commercial intent.',
+    );
+    expect(row).not.toContain('Its findings have resolved');
+  });
+
   it('reads the focus with the last visit, then keeps this one and counts it viewed', async () => {
     await draw();
     expect(reads.getTodayFocus).toHaveBeenCalledWith('b1', '2026-11-10T08:00:00.000Z');
@@ -562,6 +618,33 @@ describe('Action Center › Today', () => {
     expect(text('header')).toContain('Since yesterday: 3 changes · 5 things waiting for you');
   });
 
+  it("lists the agent runs of the brand on screen, never another brand's", async () => {
+    const byBrand: Record<string, Record<string, unknown>[]> = {
+      b1: [chats[0]],
+      b2: [
+        {
+          id: 'c9',
+          mine: true,
+          state: 'needsYou',
+          title: 'Another brand’s page',
+          lastMessageAt: '2026-11-11T09:00:00Z',
+        },
+      ],
+    };
+    // As the chats API answers: one brand's chats when asked, every brand's otherwise.
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const brand = new URL(String(input), 'https://app.example.com').searchParams.get('brandId');
+      const list = brand ? (byBrand[brand] ?? []) : Object.values(byBrand).flat();
+      return { ok: true, json: async () => ({ ok: true, chats: list }) } as unknown as Response;
+    });
+    await draw();
+    expect(fetch).toHaveBeenCalledWith('/api/chat/conversations?brandId=b1', { cache: 'no-store' });
+    const agent = container.querySelector('[data-waiting="agent"]');
+    expect(agent?.textContent).toContain('An agent is waiting for your OK on “Comparison page”.');
+    expect(agent?.textContent).not.toContain('Another brand');
+    expect(agent?.querySelector('a')?.getAttribute('href')).toBe('/dashboard/chat/c1');
+  });
+
   it("leaves out agent runs without Chat, and rows off the person's menu", async () => {
     chatOn = false;
     hidden = new Set(['content', 'prompts']);
@@ -639,6 +722,13 @@ describe('Action Center › Today', () => {
       'Rival',
     ]);
     expect(rows[2].textContent).toContain('Morning Ritual Co.');
+    // The change and its action read as two sentences, not one run-on line.
+    expect(rows[1].textContent).toBe(
+      'UpFirst citation for beanbulletin.example. An action was added.',
+    );
+    expect(rows[0].textContent).toBe(
+      'UpVisibility gained for “best whole bean coffee for espresso”',
+    );
     const added = rows[1].querySelector('a');
     expect(added?.textContent).toBe('An action was added');
     expect(added?.getAttribute('href')).toBe('/dashboard/action-center/actions?action=a9');

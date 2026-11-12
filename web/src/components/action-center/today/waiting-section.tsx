@@ -18,9 +18,14 @@ import { actionHref } from './focus-section';
 import { TodaySection, TodaySkeleton } from './today-parts';
 import { useTodayRead, type TodayVisit } from './use-today';
 
-/** The person's own chats whose agent run waits for them, as Chat's menu reads them. */
-async function readAgentsWaiting(): Promise<{ id: string; title: string | null }[]> {
-  const res = await fetch('/api/chat/conversations', { cache: 'no-store' });
+/**
+ * The person's own chats on this brand whose agent run waits for them, from
+ * Chat's list: another brand's chats are that brand's Today.
+ */
+async function readAgentsWaiting(brandId: string): Promise<{ id: string; title: string | null }[]> {
+  const res = await fetch(`/api/chat/conversations?brandId=${encodeURIComponent(brandId)}`, {
+    cache: 'no-store',
+  });
   const body = (res.ok ? await res.json() : null) as {
     ok?: boolean;
     chats?: ChatListItem[];
@@ -33,12 +38,12 @@ async function readAgentsWaiting(): Promise<{ id: string; title: string | null }
 }
 
 /**
- * Waiting for you on Action Center › Today (SIMPLE_NAV): agent runs and
- * drafts waiting for an OK, tasks due, weekly reminders, Needs review,
- * prompts waiting for a spot and new prompt ideas, each for a role that can act on it and only while its
- * section is on the person's menu (lib/action-center/waiting.ts). With
- * nothing waiting, the action in their focus furthest along. Stays away
- * when its read fails.
+ * Waiting for you on Action Center › Today (SIMPLE_NAV): the brand's agent
+ * runs and drafts waiting for an OK, tasks due, weekly reminders, Needs
+ * review, prompts waiting for a spot and new prompt ideas, each for a role
+ * that can act on it and only while its section is on the person's menu
+ * (lib/action-center/waiting.ts). With nothing waiting, the action in their
+ * focus furthest along. Stays away when its read fails.
  */
 export function WaitingSection({
   brandId,
@@ -57,7 +62,7 @@ export function WaitingSection({
   const hidden = useHiddenMenuSections();
   const readAgents = chatOn && !hidden.has('agent');
   const load = useTodayRead(brandId, () => getTodayWaiting(brandId, viewerTimeZone()));
-  const agents = useTodayRead(readAgents ? brandId : null, readAgentsWaiting);
+  const agents = useTodayRead(readAgents ? brandId : null, () => readAgentsWaiting(brandId));
 
   const agentsDone = !readAgents || agents.status !== 'loading';
   const rows = useMemo(

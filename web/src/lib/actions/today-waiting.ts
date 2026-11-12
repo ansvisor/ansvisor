@@ -40,8 +40,8 @@ const settled = <T>(result: PromiseSettledResult<T>): T | null =>
  * and the new prompt ideas from Search Console or Analytics. Nothing is
  * stored. The rows are ordered and
  * filtered for the person's menu by lib/action-center/waiting.ts; agent
- * runs are read in the browser, as Chat's menu reads them. Throws only when
- * no one is signed in.
+ * runs are read in the browser from Chat's list, for this brand only.
+ * Throws only when no one is signed in.
  */
 export async function getTodayWaiting(
   brandId: string,

@@ -1858,6 +1858,7 @@
             "issue": "A site issue on {subject}",
             "opportunity": "Room to grow on {subject}",
             "gain": "A gain on {subject}",
+            "competitorGap": "{article, select, an {An} other {A}} {points}-pt gap with {competitor} on {subject}",
             "none": "Its findings have resolved"
           },
           "subject": {
@@ -1877,7 +1878,8 @@
             "gap": "A gap to close",
             "issue": "A site issue",
             "opportunity": "Room to grow",
-            "gain": "A gain"
+            "gain": "A gain",
+            "competitorGap": "{article, select, an {An} other {A}} {points}-pt gap with {competitor}"
           },
           "demand": {
             "high": "high-demand",
@@ -2508,6 +2510,7 @@
           "checkText": "Check what ChatGPT says about our business, and prepare our Business Hub corrections and site fixes.",
           "title": "ChatGPT Business Hub",
           "open": "Open Business Hub",
+          "enterNumbers": "Enter numbers",
           "noApi": "There's no Business Hub API: mark each task done when its Done when is true.",
           "usOnlyAgent": "Business Agents are for US businesses only."
         },
@@ -2574,9 +2577,9 @@
       "startNow": {
         "title": "Start now",
         "hint": {
-          "create": "Opens a new draft with this action's prompts, then builds its brief from your AI usage.",
-          "optimize": "Opens the page as a draft with this action's prompts, then builds its brief from your AI usage.",
-          "optimizePage": "Opens {page} as a draft with this action's prompts, then builds its brief from your AI usage.",
+          "create": "Opens a new draft with this action's prompts, and the Content Agent writes its brief and the page, from your AI usage.",
+          "optimize": "Opens the page as a draft with this action's prompts, and the Content Agent writes its brief and suggests changes, from your AI usage.",
+          "optimizePage": "Opens {page} as a draft with this action's prompts, and the Content Agent writes its brief and suggests changes, from your AI usage.",
           "optimizeSeveral": "Opens a draft for each of its {count, plural, one {# page} other {# pages}}, with this action's prompts. They wait for you in the Library.",
           "written": "Its draft is started. Open it where you left off.",
           "writtenSeveral": "Its {count, plural, one {# draft is} other {# drafts are}} started. They wait for you in the Library."
@@ -2928,12 +2931,14 @@
       },
       "close_competitor_gap": {
         "title": "Close the visibility gap with {targets}",
+        "promptTitle": "Close the gap with {competitor}, starting with “{prompt}”",
         "titleGeneric": "Close the visibility gap with competitors",
         "description": "A competitor is mentioned well more often than you.",
         "goal": "Close the gap."
       },
       "protect_visibility": {
         "title": "Protect visibility across {targets}",
+        "namedTitle": "Protect your visibility on {targets}",
         "titleGeneric": "Protect your visibility",
         "description": "A real visibility position is losing ground, before it becomes a collapse.",
         "goal": "Hold the position while it still exists to hold."
@@ -2956,6 +2961,7 @@
       },
       "expand_prompt_visibility": {
         "title": "Expand visibility across {targets}",
+        "namedTitle": "Get into AI answers on {targets}",
         "titleGeneric": "Expand prompt visibility",
         "description": "Your brand is absent from answers to these tracked prompts.",
         "goal": "Become visible in AI answers to these prompts."
@@ -2992,6 +2998,7 @@
       },
       "strengthen_emerging_content": {
         "title": "Strengthen momentum across {targets}",
+        "namedTitle": "Build on your gain on {targets}",
         "titleGeneric": "Strengthen emerging content",
         "description": "Visibility is improving on these prompts but has not reached its potential.",
         "goal": "Build on content that is starting to win."
@@ -3134,6 +3141,7 @@
       },
       "recover_lost_mentions": {
         "title": "Recover lost mentions across {targets}",
+        "namedTitle": "Win back mentions on {targets}",
         "titleGeneric": "Recover lost mentions",
         "description": "Your brand disappeared from prompts where it was mentioned.",
         "goal": "Be named again where you were."
@@ -3300,6 +3308,11 @@
         "description": "A competitor leads a topic you have no content for.",
         "goal": "Create the content to compete."
       },
+      "namedTargets": {
+        "prompts": "{more, plural, =0 {“{name}”} one {“{name}” and # more prompt} other {“{name}” and # more prompts}}",
+        "competitors": "{more, plural, =0 {{name}} one {{name} and # more competitor} other {{name} and # more competitors}}",
+        "topics": "{more, plural, =0 {“{name}”} one {“{name}” and # more topic} other {“{name}” and # more topics}}"
+      },
       "targets": {
         "prompts": "{count, plural, one {# prompt} other {# prompts}}",
         "pages": "{count, plural, one {# page} other {# pages}}",
@@ -3314,6 +3327,7 @@
         "title": "Act on a content opportunity for {targets}",
         "titleGeneric": "Act on a content opportunity",
         "description": "Sent from Content Optimization: a piece of content, or work on an existing page, that answers a group of related prompts.",
+        "why": "{page, select, none {A new page} other {An update to {page}}} that answers {prompts}.",
         "goal": "Get the brand into AI answers for these prompts with the content this opportunity calls for."
       },
       "prompt_improve": {
@@ -5103,7 +5117,15 @@
     "saveFailed": "Couldn't save that to Files. Try again.",
     "openEditor": "Open in Content Editor",
     "openEditorNoBrand": "Pick a brand first: the draft goes to its Content Library.",
-    "openEditorFailed": "Couldn't open that in the Content Editor. Try again."
+    "openEditorFailed": "Couldn't open that in the Content Editor. Try again.",
+    "short": {
+      "copy": "Copy",
+      "download": "Download",
+      "save": "Save",
+      "inFiles": "In Files",
+      "openEditor": "Open in Editor",
+      "sendToActionCenter": "Send to Actions"
+    }
   },
   "chatDeliverable": {
     "version": {
@@ -7085,7 +7107,8 @@
       "audit-fix": "Site audit fixes",
       "setup": "Setup guide",
       "fanout": "Fan-out gaps",
-      "prompts": "Prompt portfolio"
+      "prompts": "Prompt portfolio",
+      "plan": "30-day plan"
     },
     "form": {
       "titleNew": "New agent",
@@ -9369,6 +9392,128 @@
       "writeFailed": "Couldn't write a content suggestion",
       "stillWriting": "Still writing the content suggestion",
       "stillWritingWhy": "It will appear in Content when it's done."
+    },
+    "businessHub": {
+      "title": "ChatGPT Business Hub",
+      "period": "{days} days to {end}",
+      "enter": "Enter numbers",
+      "allEntries": "All entries",
+      "hub": "Business Hub",
+      "hubHint": "From Insights in Business Hub",
+      "ours": "Ansvisor",
+      "oursHint": "Your tracked prompts, ChatGPT",
+      "metrics": {
+        "mentions": "Mentions",
+        "mentionsHint": "Your site referenced",
+        "websiteClicks": "Website clicks",
+        "profileViews": "Profile views",
+        "visibility": "ChatGPT visibility",
+        "named": "Answers naming you",
+        "cited": "Answers citing your site",
+        "visits": "Visits from ChatGPT"
+      },
+      "notShown": "Not shown",
+      "notRead": "Couldn't read",
+      "of": "of {count}",
+      "changeTitle": "Against the {days} days to {end}",
+      "topics": "Top discovery topics",
+      "tracked": "Tracked",
+      "suggestPrompts": "Suggest prompts",
+      "note": "Business Hub and Ansvisor count different things: compare their direction, not their size.",
+      "howTheyDiffer": "How these differ",
+      "definitions": "Business Hub counts real ChatGPT conversations that referenced your website. Ansvisor counts how often your brand is named, or your site cited, in answers to the prompts you track. Compare their direction, not their size.",
+      "clicksNote": "Business Hub counts clicks on links in ChatGPT; Ansvisor counts visits that arrived from ChatGPT. Some clicks arrive without a referrer.",
+      "empty": "No numbers yet. Copy them from Insights in Business Hub: it keeps only the last 7 or 28 days, and Ansvisor keeps them week by week.",
+      "partial": "Business Hub showed no numbers for these days.",
+      "noAnswers": "No ChatGPT answers tracked on these days.",
+      "entries": {
+        "title": "All entries",
+        "days": "{days} days",
+        "edit": "Edit",
+        "delete": "Delete",
+        "deleteLabel": "Delete the {days} days to {end}",
+        "deleted": "Entry deleted",
+        "deleteFailed": "Couldn't delete the entry. Try again.",
+        "managersDelete": "Admins and managers can delete entries.",
+        "source": {
+          "manual": "By hand",
+          "csv": "From CSV"
+        }
+      },
+      "dialog": {
+        "title": "Enter Business Hub numbers",
+        "editTitle": "Edit Business Hub numbers",
+        "description": "Copy them from Insights in Business Hub. Leave a number empty if Business Hub doesn't show it.",
+        "days": "Days",
+        "days7": "7 days",
+        "days28": "28 days",
+        "lastDay": "Last day",
+        "lastDayHint": "The last day Business Hub's numbers cover, usually yesterday.",
+        "mentions": "Mentions",
+        "websiteClicks": "Website clicks",
+        "profileViews": "Profile views",
+        "emptyPlaceholder": "Not shown",
+        "topics": "Top discovery topics",
+        "topicPlaceholder": "Topic {n}",
+        "replaces": "This replaces your entry for the same days.",
+        "save": "Save",
+        "saving": "Saving…",
+        "cancel": "Cancel",
+        "errors": {
+          "count": "Enter a whole number, or leave it empty.",
+          "date": "Enter the last day as a date.",
+          "future": "The last day can't be in the future.",
+          "tooOld": "The last day can't be more than two years ago.",
+          "topicTooLong": "Each topic can be 120 characters at most.",
+          "topics": "Enter up to 5 topics.",
+          "empty": "Enter at least one number or topic."
+        }
+      },
+      "saved": "Business Hub numbers saved",
+      "saveFailed": "Couldn't save the numbers. Try again.",
+      "demo": "This is the demo brand: its numbers are samples.",
+      "off": "Business Hub numbers aren't available here.",
+      "import": {
+        "link": "Import CSV",
+        "title": "Import from a spreadsheet",
+        "noExport": "Business Hub has no export yet. This is Ansvisor's own template: copy the numbers from Business Hub into it.",
+        "columnsHint": "One row per entry: the last day (YYYY-MM-DD or DD.MM.YYYY), 7 or 28 days, Mentions, Website clicks, Profile views and up to five topics. Leave a number empty if Business Hub doesn't show it.",
+        "template": "Download template",
+        "choose": "Choose a CSV file",
+        "readFailed": "Couldn't read the file.",
+        "missingHeader": "This file has no period_end column. Start from the template.",
+        "truncated": "Only the first 104 rows are read; {count, plural, one {# more was} other {# more were}} left out.",
+        "summary": "{new} new · {replaces} replace an entry · {errors} can't be read",
+        "columns": {
+          "row": "Row",
+          "lastDay": "Last day",
+          "days": "Days",
+          "mentions": "Mentions",
+          "clicks": "Clicks",
+          "views": "Views",
+          "status": "Status"
+        },
+        "status": {
+          "new": "New",
+          "replaces": "Replaces an entry"
+        },
+        "reasons": {
+          "date": "The last day isn't a date (YYYY-MM-DD or DD.MM.YYYY).",
+          "future": "The last day is in the future.",
+          "too_old": "The last day is more than two years ago.",
+          "days": "Days must be 7 or 28.",
+          "count": "{column} isn't a whole number.",
+          "too_many_topics": "More than 5 topics.",
+          "topic_too_long": "A topic is over 120 characters.",
+          "empty": "No number and no topic.",
+          "duplicate": "The same days as row {row}."
+        },
+        "import": "Import {count, plural, one {# entry} other {# entries}}",
+        "importing": "Importing…",
+        "imported": "{count, plural, one {# entry} other {# entries}} imported",
+        "failed": "Couldn't import the file. Nothing was saved.",
+        "back": "Back"
+      }
     }
   },
   "topics": {

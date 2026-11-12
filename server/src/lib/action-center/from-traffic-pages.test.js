@@ -215,11 +215,12 @@ describe('sendTrafficPagesToActionCenter', () => {
     expect(keys.length).toBeGreaterThan(0);
     expect(keys.every((k) => captureAiTraffic.tasks.includes(k))).toBe(true);
     expect(keys).toEqual(captureAiTraffic.tasks.filter((k) => keys.includes(k)));
-    // One page: each change on it carries the page's full URL, and how it's checked (AC-010).
+    // One page: each change on it carries the page's full URL, and how it's checked (AC-010),
+    // with the spec named after that page where its task has one (tasks/concrete.js).
     const onPage = tasks.filter((t) => t.details?.check === 'auto');
     expect(onPage.length).toBeGreaterThan(0);
     for (const task of onPage) {
-      expect(task.details, task.task_key).toEqual({
+      expect(task.details, task.task_key).toMatchObject({
         check: 'auto',
         url: 'https://www.acme-coffee.example.com',
         source: 'template',

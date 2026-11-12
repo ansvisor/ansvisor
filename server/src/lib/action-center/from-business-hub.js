@@ -43,6 +43,10 @@ export const CHATGPT_PLATFORM = 'chatgpt-web';
 export const EVIDENCE_DAYS = 30;
 
 const DAY_MS = 86_400_000;
+const ACTIVE = ['new', 'in_progress', 'on_hold'];
+const OPEN_TASKS = ['todo', 'in_progress'];
+/** Where the numbers are entered: Visibility's card, its dialog open. */
+export const NUMBERS_PATH = '/dashboard/insights?businessHub=enter';
 /** Where every task is done. */
 const WHERE = 'ChatGPT Business Hub';
 /** A brand's name, or its domain, in a task's text. */
@@ -70,8 +74,8 @@ const task = (step, title, details) => ({
 
 /**
  * The setup action's tasks, in order: claim, verify, correct the facts,
- * the product feed (an online shop only) and the Business Agent (open
- * regions only). English, as the drawer, Chat, exports and MCP read them.
+ * the product feed (an online shop only), the Business Agent (open
+ * regions only) and the first numbers, entered in Visibility. English, as the drawer, Chat, exports and MCP read them.
  * A brand that already sends OpenAI a direct feed (`directFeed`) gets the
  * feed task as completed.
  *
@@ -168,10 +172,95 @@ export function businessHubSetupTasks({ brandName, domain, open, ecommerce, dire
       }),
     );
   }
+  // Last: the numbers Business Hub shows, once the profile is there.
+  // Checked automatically: the first save completes it (completeFirstNumbersTask).
+  tasks.push(
+    task('numbers', 'Enter your first Business Hub numbers', {
+      url: NUMBERS_PATH,
+      where: 'Visibility › Overview',
+      why: 'Business Hub shows only the last 7 or 28 days and has no export. Entered in Ansvisor, its numbers are kept week by week, beside what Ansvisor measures in ChatGPT for the same days.',
+      how: [
+        'In Business Hub, open Insights and pick 7 days.',
+        'In Visibility, choose Enter numbers on the ChatGPT Business Hub card.',
+        "Copy Mentions, Website clicks, Profile views and the top discovery topics, and save. Leave a number empty if Business Hub doesn't show it.",
+      ],
+      doneWhen: 'Your first entry is saved. Checked automatically when it is.',
+      check: 'auto',
+      type: 'technical',
+      effort: '~10m',
+      role: 'Marketing lead',
+    }),
+  );
   return tasks.map((t) => ({
     ...t,
     status: t.details.step === 'feed' && directFeed ? 'completed' : 'todo',
   }));
+}
+
+/**
+ * Completes the setup action's Enter your first Business Hub numbers task
+ * once the brand's numbers are saved (business-hub/snapshots.js
+ * afterBusinessHubSave), as checked automatically: its card's last check
+ * and a task_checked line in its History, as the shopping check's
+ * (from-shopping-check.js). The action itself stays as it is: the person
+ * closes it, as any action. Returns whether a task was completed.
+ *
+ * @param {string} brandId
+ * @param {{ db?: object, now?: Date }} [opts]
+ */
+export async function completeFirstNumbersTask(
+  brandId,
+  { db = supabaseAdmin, now = new Date() } = {},
+) {
+  const { data: actions, error } = await db
+    .from('actions')
+    .select('id, status')
+    .eq('brand_id', brandId)
+    .eq('dedup_key', businessHubSetupDedupKey(brandId))
+    .in('status', ACTIVE)
+    .limit(1);
+  if (error) throw new Error(`actions read: ${error.message}`);
+  const action = actions?.[0];
+  if (!action) return false;
+
+  const { data: tasks, error: tasksErr } = await db
+    .from('action_tasks')
+    .select('id, title, status, details')
+    .eq('action_id', action.id)
+    .in('status', OPEN_TASKS);
+  if (tasksErr) throw new Error(`action_tasks read: ${tasksErr.message}`);
+  const own = (tasks ?? []).filter(
+    (t) => t.details?.source === BUSINESS_HUB_SOURCE && t.details?.step === 'numbers',
+  );
+  const at = now.toISOString();
+  let completed = 0;
+  for (const t of own) {
+    const autoCheck = { at, triedAt: at, passed: true, missing: [] };
+    const { data: changed, error: taskErr } = await db
+      .from('action_tasks')
+      .update({
+        status: 'completed',
+        skip_reason: null,
+        details: { ...t.details, autoCheck },
+        updated_at: at,
+      })
+      .eq('id', t.id)
+      .eq('status', t.status)
+      .select('id');
+    if (taskErr) throw new Error(`action_tasks write: ${taskErr.message}`);
+    if (!changed?.length) continue;
+    completed += 1;
+    // Best effort, as the drawer's: a missing History line doesn't undo the change.
+    await db.from('action_events').insert({
+      action_id: action.id,
+      event: 'task_checked',
+      data: { taskId: t.id, task: null, title: t.title ?? null },
+      actor_id: null,
+    });
+  }
+  // The action moves up its list.
+  if (completed) await db.from('actions').update({ updated_at: at }).eq('id', action.id);
+  return completed > 0;
 }
 
 /**

@@ -89,3 +89,13 @@ export function pickChanges(
 export function largestRivalMove(competitors: readonly { change: number | null }[]): number {
   return competitors.reduce((max, c) => Math.max(max, Math.abs(c.change ?? 0)), 0);
 }
+
+/**
+ * A change's line as a sentence, so "An action was added." reads as the
+ * next one: a period after it unless it already ends with one, "!" or "?".
+ * Signal titles are headlines and mostly have none.
+ */
+export function asSentence(text: string): string {
+  const line = text.trimEnd();
+  return /[.!?]$/.test(line) ? line : `${line}.`;
+}
