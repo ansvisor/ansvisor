@@ -9,14 +9,18 @@ import { track } from '@/lib/analytics';
 import { isEcommerceBrand } from '@/lib/brand-visibility';
 import { formatNumber } from '@/lib/format';
 import {
+  BROKEN_AREAS,
+  DOT_STYLE,
   areasToRead,
   dotAreasOnMenu,
+  dotReason,
   dotOf,
   groupDot,
   itemDot,
   menuDots,
   needsYouShown,
   openActionCount,
+  redShown,
   withOpened,
   type Dot,
   type DotArea,
@@ -37,6 +41,9 @@ import { useMenuStateStore } from '@/stores/use-menu-state-store';
 /** How old a read may be before a page change reads again. */
 export const MENU_STATE_MAX_AGE_MS = 5 * 60_000;
 
+/** A grey dot reads once more after this, so it goes out soon after its job ends. */
+export const GREY_RECHECK_MS = 60_000;
+
 /** The dots on the menu, as the sidebar and the mobile menu show them. */
 export interface MenuDotsView {
   /** A submenu entry's, or an item's without one, by its route. */
@@ -53,22 +60,33 @@ export interface MenuDotsView {
 
 /**
  * Reads the brand's menu state for these areas (comma-separated) unless the
- * same read is on its way or under 5 minutes old. One read serves every
- * menu on the page; a reply for a read since replaced is dropped.
+ * same read is on its way or under 5 minutes old; a grey dot's `recheck`
+ * reads whatever the age. One read serves every menu on the page; a reply
+ * for a read since replaced is dropped.
  */
-function readMenuState(brandId: string, areasKey: string, count: boolean, waiting: boolean) {
+function readMenuState(
+  brandId: string,
+  areasKey: string,
+  count: boolean,
+  waiting: boolean,
+  red: boolean,
+  recheck = false,
+) {
   const areas = areasKey ? (areasKey.split(',') as DotArea[]) : [];
   if (areas.length === 0 && !count) return;
-  const key = `${brandId}|${areasKey}|${count ? 'count' : ''}|${waiting ? 'waiting' : ''}`;
+  const key = `${brandId}|${areasKey}|${count ? 'count' : ''}|${waiting ? 'waiting' : ''}|${red ? 'red' : ''}`;
   const { read, pending } = useMenuStateStore.getState();
   if (pending === key) return;
-  if (read?.key === key && Date.now() - read.at < MENU_STATE_MAX_AGE_MS) return;
+  if (!recheck && read?.key === key && Date.now() - read.at < MENU_STATE_MAX_AGE_MS) return;
   useMenuStateStore.setState({ pending: key });
   const done = (state: MenuState | null) => {
     if (useMenuStateStore.getState().pending !== key) return;
-    useMenuStateStore.setState({ read: { key, brandId, at: Date.now(), state }, pending: null });
+    useMenuStateStore.setState({
+      read: { key, brandId, at: Date.now(), state, recheck },
+      pending: null,
+    });
   };
-  getMenuState(brandId, { areas, count, waiting }).then(done, () => done(null));
+  getMenuState(brandId, { areas, count, waiting, red }).then(done, () => done(null));
 }
 
 /**
@@ -105,15 +123,35 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
   const count = !viewer.ended;
   // Prompts waiting for a spot light Tracked Prompts yellow: counted only for those who see yellow.
   const waiting = needsYouShown(viewer) && onMenu.has('prompts/tracked');
+  // What broke is read only for those who see red, and only with a red entry on their menu.
+  const red = redShown(viewer) && BROKEN_AREAS.some((area) => onMenu.has(area));
 
   useEffect(() => {
-    if (brandId) readMenuState(brandId, areasKey, count, waiting);
-  }, [brandId, areasKey, count, waiting, pathname]);
+    if (brandId) readMenuState(brandId, areasKey, count, waiting, red);
+  }, [brandId, areasKey, count, waiting, red, pathname]);
 
   const read = useMenuStateStore((s) => s.read);
   const opened = useMenuStateStore((s) => (brandId ? s.opened[brandId] : undefined));
   const state = read && read.brandId === brandId ? read.state : null;
   const dots = menuDots(withOpened(state, opened), viewer, onMenu);
+
+  // Something grey: read once more in about a minute, so the dot goes out
+  // soon after its job ends. Only after a read of the usual cadence; the
+  // re-read asks for no other.
+  const recheckAfter =
+    read && state?.working && Object.keys(state.working).length > 0 && !read.recheck
+      ? read.at
+      : null;
+  useEffect(() => {
+    if (recheckAfter === null || !brandId) return;
+    const timer = setTimeout(
+      () => readMenuState(brandId, areasKey, count, waiting, red, true),
+      GREY_RECHECK_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [recheckAfter, brandId, areasKey, count, waiting, red]);
+  const why = (dot: Dot | null): Dot | null =>
+    dot && { ...dot, reason: dotReason(state, dot) ?? undefined };
 
   // menu_dot_shown: once per area each session.
   const shownKey = Object.entries(dots)
@@ -130,9 +168,9 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
   }, [shownKey, collapsed]);
 
   return {
-    dotOf: (href) => dotOf(dots, href),
-    itemDot: (item) => itemDot(dots, item),
-    groupDot: (group) => groupDot(dots, group),
+    dotOf: (href) => why(dotOf(dots, href)),
+    itemDot: (item) => why(itemDot(dots, item)),
+    groupDot: (group) => why(groupDot(dots, group)),
     openActions: openActionCount(state, viewer),
     clicked: (dot, isCollapsed) => {
       if (dot)
@@ -141,37 +179,61 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
   };
 }
 
+/** Each colour's words. */
+const DOT_WORDS = {
+  red: 'needsAttention',
+  yellow: 'needsYou',
+  green: 'newResults',
+  grey: 'workingOnIt',
+} as const satisfies Record<DotColour, string>;
+
 /**
- * What a dot says, on hover and to screen readers: "New results" or "Needs
- * you"; after an item's name where only its icon shows ("Visibility, New
- * results").
+ * What a dot says, on hover and to screen readers: "New results", "Needs
+ * you", and for red and grey why ("Needs attention: Search Console
+ * disconnected", "Working on it: an agent is running"); after an item's
+ * name where only its icon shows ("Audit, Needs attention").
  */
-export function useDotLabel(): (colour: DotColour, name?: string) => string {
+export function useDotLabel(): (dot: Pick<Dot, 'colour' | 'reason'>, name?: string) => string {
   const t = useTranslations('menuDots');
-  return (colour, name) => {
-    const dot = t(colour === 'green' ? 'newResults' : 'needsYou');
-    return name ? t('withDot', { label: name, dot }) : dot;
+  return ({ colour, reason }, name) => {
+    const words = t(DOT_WORDS[colour]);
+    if (name) return t('withDot', { label: name, dot: words });
+    return reason ? t('withReason', { dot: words, reason: t(`reasons.${reason}`) }) : words;
   };
 }
 
 /**
- * A menu dot: green, "New results"; yellow, "Needs you". Never colour alone:
+ * A menu dot: green, "New results"; yellow, "Needs you"; red with a "!",
+ * "Needs attention"; grey and pulsing, "Working on it". Never colour alone:
  * it is an image named by its words, which show on hover.
  */
-export function MenuDot({ colour, className }: { colour: DotColour; className?: string }) {
-  const label = useDotLabel()(colour);
+export function MenuDot({
+  dot,
+  className,
+}: {
+  dot: Pick<Dot, 'colour' | 'reason'>;
+  className?: string;
+}) {
+  const label = useDotLabel()(dot);
   return (
     <span
       role="img"
       aria-label={label}
       title={label}
-      data-menu-dot={colour}
+      data-menu-dot={dot.colour}
+      data-dot-reason={dot.reason}
       className={cn(
-        'inline-block size-2 shrink-0 rounded-full',
-        colour === 'green' ? 'bg-green-600 dark:bg-green-400' : 'bg-yellow-600 dark:bg-yellow-400',
+        'inline-flex shrink-0 items-center justify-center rounded-full',
+        DOT_STYLE[dot.colour],
         className,
       )}
-    />
+    >
+      {dot.colour === 'red' && (
+        <span aria-hidden className="text-[9px] font-bold leading-none">
+          !
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -216,7 +278,7 @@ export function FoldedGroupLabel({ label, dot }: { label: string; dot: Dot | nul
   return (
     <span className="flex items-center gap-2">
       {label}
-      <MenuDot colour={dot.colour} />
+      <MenuDot dot={dot} />
     </span>
   );
 }

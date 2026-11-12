@@ -42,6 +42,16 @@ const types = (rows: ReturnType<typeof waitingRows>) =>
   rows.map((row) => (row.type === 'due' ? `due:${row.item.id}` : row.type));
 
 describe('Waiting for you', () => {
+  it('puts what broke first, as "Fix this", for admins and managers', () => {
+    const rows = waitingRows(input({ broken: ['searchConsole', 'agentFailed'] }));
+    expect(types(rows).slice(0, 3)).toEqual(['fix', 'fix', 'agent']);
+    expect(rows[0]).toEqual({ type: 'fix', reason: 'searchConsole' });
+    expect(
+      types(waitingRows(input({ broken: ['searchConsole'], canManage: false }))),
+    ).not.toContain('fix');
+    expect(types(waitingRows(input({ broken: null })))).not.toContain('fix');
+  });
+
   it('lists agent runs, drafts, due tasks (overdue first), reminders, reviews and ideas', () => {
     const rows = waitingRows(input());
     expect(types(rows)).toEqual([

@@ -8,12 +8,14 @@ import { actionTexts, taskText } from '@/lib/action-center/display';
 import { isReminderKind } from '@/lib/action-center/focus';
 import { ACTION_CENTER_REVIEW } from '@/lib/action-center/tabs';
 import { waitingRows, type WaitingAction, type WaitingRow } from '@/lib/action-center/waiting';
+import { brokenReasons, type BrokenReason } from '@/lib/menu-dots';
 import { getTodayWaiting } from '@/lib/actions/today-waiting';
 import type { FocusCard } from '@/lib/actions/today-focus';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
+import { useMenuStateStore } from '@/stores/use-menu-state-store';
 import { actionHref } from './focus-section';
 import { TodaySection, TodaySkeleton } from './today-parts';
 import { useTodayRead, type TodayVisit } from './use-today';
@@ -63,6 +65,9 @@ export function WaitingSection({
   const readAgents = chatOn && !hidden.has('agent');
   const load = useTodayRead(brandId, () => getTodayWaiting(brandId, viewerTimeZone()));
   const agents = useTodayRead(readAgents ? brandId : null, () => readAgentsWaiting(brandId));
+  // What broke: the menu's own read, shared, never read again here.
+  const menuRead = useMenuStateStore((s) => s.read);
+  const brokenKey = brokenReasons(menuRead?.brandId === brandId ? menuRead.state : null).join(',');
 
   const agentsDone = !readAgents || agents.status !== 'loading';
   const rows = useMemo(
@@ -74,9 +79,10 @@ export function WaitingSection({
             hidden,
             agents: agents.status === 'ready' ? agents.data : null,
             isReminder: isReminderKind,
+            broken: brokenKey ? (brokenKey.split(',') as BrokenReason[]) : null,
           })
         : null,
-    [load, agents, agentsDone, readAgents, hidden],
+    [load, agents, agentsDone, readAgents, hidden, brokenKey],
   );
 
   const { settle } = visit;
@@ -159,6 +165,15 @@ function WaitingPromptsLine({ row }: { row: Extract<WaitingRow, { type: 'prompts
   );
 }
 
+/** Where each "Fix this" row's link fixes it. */
+export const FIX_HREF: Record<BrokenReason, string> = {
+  searchConsole: '/dashboard/settings?tab=integrations',
+  analytics: '/dashboard/settings?tab=integrations',
+  aiBotsBlocked: '/dashboard/audit',
+  publishFailed: '/dashboard/content/library',
+  agentFailed: '/dashboard/agents',
+};
+
 /** A row's line and its link. */
 function WaitingLine({ row }: { row: WaitingRow }) {
   if (row.type === 'prompts') return <WaitingPromptsLine row={row} />;
@@ -175,6 +190,13 @@ function WaitingActionLine({ row }: { row: Exclude<WaitingRow, { type: 'prompts'
 
   const [line, link, href, action] = ((): [string, string, string, string | undefined] => {
     switch (row.type) {
+      case 'fix':
+        return [
+          t(`fix.${row.reason}`),
+          t(`fix.open.${row.reason}`),
+          FIX_HREF[row.reason],
+          undefined,
+        ];
       case 'agent':
         return [
           row.count === 1

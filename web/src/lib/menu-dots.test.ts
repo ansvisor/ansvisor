@@ -3,8 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { dashboardNav } from '@/config/dashboard';
 import type { Feature } from '@/config/plans';
 import {
+  BROKEN_AREAS,
   DOT_AREAS,
+  DOT_STYLE,
+  SEEN_AREAS,
+  WORKING_AREAS,
   areasToRead,
+  brokenReasons,
+  dotReason,
   dotAreaOfHref,
   dotAreaOfPath,
   dotAreasOnMenu,
@@ -50,8 +56,15 @@ function night(over: Partial<MenuState> = {}): MenuState {
 }
 
 describe('the areas', () => {
-  it('are nav_seen keys, each a page of the simplified menu', () => {
-    for (const area of DOT_AREAS) expect(NAV_AREAS).toContain(area);
+  it('are nav_seen keys where opening clears them, each a page of the simplified menu', () => {
+    for (const area of SEEN_AREAS) expect(NAV_AREAS).toContain(area);
+    // Red and grey stay however often the page is opened: no visit kept.
+    expect(DOT_AREAS.filter((area) => !SEEN_AREAS.includes(area as never))).toEqual([
+      'content/editor',
+      'content/library',
+      'agents',
+      'audit',
+    ]);
     // Today keeps its own visit and has no dot.
     expect(DOT_AREAS).not.toContain('today');
     const hrefs = dashboardNav.flatMap((group) =>
@@ -71,6 +84,8 @@ describe('the areas', () => {
     expect(dotAreaOfPath('/dashboard/insights/abc')).toBeNull();
     expect(dotAreaOfPath('/dashboard/content')).toBe('content');
     expect(dotAreaOfPath('/dashboard/content/library')).toBeNull();
+    expect(dotAreaOfPath('/dashboard/audit')).toBeNull();
+    expect(dotAreaOfHref('/dashboard/agents')).toBe('agents');
     expect(dotAreaOfPath('/dashboard/action-center/today')).toBeNull();
     expect(dotAreaOfPath('/dashboard/prompts-tracked')).toBeNull();
   });
@@ -204,6 +219,21 @@ describe('where a dot shows', () => {
     expect(itemDot(dots, item('/dashboard/insights'))?.colour).toBe('green');
     expect(itemDot(dots, item('/dashboard/traffic'))?.colour).toBe('yellow');
     expect(itemDot(dots, item('/dashboard/audit'))).toBeNull();
+    // The Action Center's icon: red beats yellow, yellow beats grey.
+    const agents = (broken: boolean) =>
+      menuDots(
+        night({
+          working: { agents: 'agentRunning' },
+          ...(broken ? { broken: { agents: 'agentFailed' } } : {}),
+        }),
+        manager,
+        ALL,
+      );
+    expect(itemDot(agents(false), item('/dashboard/action-center'))?.colour).toBe('yellow');
+    expect(itemDot(agents(true), item('/dashboard/action-center'))).toEqual({
+      area: 'agents',
+      colour: 'red',
+    });
     expect(itemDot(menuDots(night(), analyst, ALL), item('/dashboard/prompts'))?.colour).toBe(
       'green',
     );
@@ -215,6 +245,115 @@ describe('where a dot shows', () => {
     expect(groupDot(dots, analytics)?.colour).toBe('yellow');
     expect(groupDot(dots, more)).toEqual({ area: 'content', colour: 'yellow' });
     expect(groupDot(menuDots(night(), analyst, ALL), more)).toBeNull();
+    // A folded group with only work going on shows grey; anything else wins.
+    const working = menuDots(night({ working: { audit: 'auditRunning' } }), analyst, ALL);
+    expect(groupDot(working, more)).toEqual({ area: 'audit', colour: 'grey' });
+    expect(
+      groupDot(menuDots(night({ working: { audit: 'auditRunning' } }), manager, ALL), more),
+    ).toEqual({ area: 'content', colour: 'yellow' });
+  });
+});
+
+describe('red and grey', () => {
+  const broken = {
+    traffic: 'searchConsole',
+    audit: 'aiBotsBlocked',
+    'content/library': 'publishFailed',
+    agents: 'agentFailed',
+  } as const;
+  const working = {
+    agents: 'agentRunning',
+    'content/editor': 'writing',
+    insights: 'trackingRunning',
+    'prompts/tracked': 'trackingRunning',
+    audit: 'auditRunning',
+  } as const;
+  const quiet = (over: Partial<MenuState> = {}) =>
+    night({
+      nightlyRunAt: null,
+      newSuggestionAt: null,
+      newActionAt: null,
+      newOpportunityAt: null,
+      traffic: undefined,
+      ...over,
+    });
+
+  it('lights each red source on its entry, with its reason, until it is fixed', () => {
+    const state = quiet({ broken });
+    const dots = menuDots(state, manager, ALL);
+    for (const area of BROKEN_AREAS) {
+      expect(dots[area]).toBe('red');
+      expect(dotReason(state, { area, colour: 'red' })).toBe(broken[area as keyof typeof broken]);
+    }
+    // Opening the page doesn't clear it.
+    const opened = withOpened(state, { traffic: AFTER });
+    expect(menuDots(opened, manager, ALL).traffic).toBe('red');
+    expect(menuDots(quiet({ broken: {} }), manager, ALL)).toEqual({});
+  });
+
+  it('lights each grey source on its entry, with its reason, for everyone', () => {
+    const state = quiet({ working });
+    for (const viewer of [
+      manager,
+      analyst,
+      { ...manager, demo: true },
+      { ...analyst, ended: true },
+    ]) {
+      const dots = menuDots(state, viewer, ALL);
+      for (const area of WORKING_AREAS) {
+        expect(dots[area]).toBe('grey');
+        expect(dotReason(state, { area, colour: 'grey' })).toBe(
+          working[area as keyof typeof working],
+        );
+      }
+    }
+    expect(dotReason(state, { area: 'insights', colour: 'green' })).toBeNull();
+  });
+
+  it('gives red to admins and managers only, not on the demo brand, still once the plan ended', () => {
+    const state = quiet({ broken });
+    expect(menuDots(state, analyst, ALL)).toEqual({});
+    expect(menuDots(state, { ...manager, demo: true }, ALL)).toEqual({});
+    expect(menuDots(state, { ...manager, ended: true }, ALL).traffic).toBe('red');
+    expect(menuDots(state, manager, new Set<DotArea>(['traffic']))).toEqual({ traffic: 'red' });
+  });
+
+  it('ranks red over yellow over green over grey, on one entry and on a shared spot', () => {
+    // AI Referral Traffic not connected (yellow) and Google disconnected (red).
+    expect(menuDots(night({ broken: { traffic: 'analytics' } }), manager, ALL).traffic).toBe('red');
+    // The audit running (grey) and its last finding (red).
+    expect(menuDots(quiet({ broken, working }), manager, ALL).audit).toBe('red');
+    // Overview's new results (green) over today's run (grey).
+    expect(
+      menuDots(night({ working: { insights: 'trackingRunning' } }), manager, ALL).insights,
+    ).toBe('green');
+    expect(
+      strongest([
+        { area: 'audit', colour: 'grey' },
+        { area: 'insights', colour: 'green' },
+        { area: 'content', colour: 'yellow' },
+        { area: 'agents', colour: 'red' },
+      ]),
+    ).toEqual({ area: 'agents', colour: 'red' });
+    expect(strongest([{ area: 'audit', colour: 'grey' }, null])?.colour).toBe('grey');
+  });
+
+  it('lists what broke in menu order, for Today', () => {
+    expect(brokenReasons(quiet({ broken }))).toEqual([
+      'searchConsole',
+      'aiBotsBlocked',
+      'publishFailed',
+      'agentFailed',
+    ]);
+    expect(brokenReasons(null)).toEqual([]);
+  });
+
+  it('draws red bigger, and grey pulsing but still for less motion', () => {
+    expect(DOT_STYLE.red).toContain('size-3');
+    expect(DOT_STYLE.green).toContain('size-2');
+    expect(DOT_STYLE.grey).toContain('animate-menu-dot-pulse');
+    expect(DOT_STYLE.grey).toContain('motion-reduce:animate-none');
+    expect(DOT_STYLE.red).not.toContain('animate');
   });
 });
 
@@ -264,7 +403,13 @@ describe('the menu’s areas', () => {
       'citations',
       'prompts/tracked',
       'traffic',
+      'content/editor',
+      'agents',
+      'audit',
     ]);
+    // The Library is only ever red: not read on the demo brand.
+    expect(areasToRead(ALL, { ...manager, demo: true })).not.toContain('content/library');
+    expect(areasToRead(ALL, { ...manager, ended: true })).toContain('content/library');
     expect(areasToRead(new Set<DotArea>(['content', 'insights']), manager)).toEqual([
       'insights',
       'content',
