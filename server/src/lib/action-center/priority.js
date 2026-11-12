@@ -154,6 +154,14 @@ const SESSION_KINDS = new Set([
 /** Severity when an action has no open evidence left: its findings resolved. */
 const NO_EVIDENCE_SEVERITY = 0.3;
 
+/**
+ * A topic gap sent from Visibility (from-topic-gap.js): the rival's lead,
+ * in Visibility points, at which its severity is full. A gap of half this
+ * (20 points, where its impact turns high) is as severe as any gap; one of
+ * three quarters as a slip.
+ */
+const TOPIC_GAP_FULL_AT = 40;
+
 /** Kinds that report losing ground the brand held: nearer to hand than new ground. */
 const HELD_BEFORE = new Set([
   'lost_citations',
@@ -459,6 +467,24 @@ function sentByHand(action) {
       subject: { entity: p.targetEntity ?? 'prompts', count: p.targetCount ?? null },
     };
   }
+  // A topic gap sent from Visibility (VIS-010, from-topic-gap.js): a rival
+  // leads one of the brand's topics by `gap` Visibility points, as Ansvisor
+  // measured it on 20 answers or more. The wider the lead, the more severe:
+  // from a resolved finding's at no gap to past a slip's at
+  // TOPIC_GAP_FULL_AT. Its prompts bring the demand and intent, as a
+  // content opportunity's do; "Why this priority?" names the gap and rival.
+  if (action.kind === 'topic_competitor_gap') {
+    const gap = Number.isFinite(p.gap) && p.gap > 0 ? p.gap : 0;
+    const competitor = typeof p.competitorName === 'string' ? p.competitorName.trim() : '';
+    return {
+      change: 'gap',
+      severity: NO_EVIDENCE_SEVERITY + 0.4 * clamp(gap / TOPIC_GAP_FULL_AT),
+      confidence: 0.6,
+      recoverability: CATEGORY_RECOVERABILITY.compete,
+      subject: { entity: p.targetEntity ?? 'prompts', count: p.targetCount ?? null },
+      competitorGap: gap > 0 && competitor ? { points: round(gap, 1), competitor } : null,
+    };
+  }
   // A page sent from a Site Audit report (learning D2): a fix on the site,
   // as urgent as the checks it fails are many, near to hand.
   if (action.kind === 'audit_page') {
@@ -602,6 +628,9 @@ export function scorePriority(
       version: 1,
       change,
       subject,
+      // A topic gap's lead and rival ("A 23.4-pt gap with Northbound Roasters
+      // on 12 prompts"); only a topic gap sent from Visibility carries one.
+      ...(byHand?.competitorGap ? { competitorGap: byHand.competitorGap } : {}),
       // Measured demand only: an unmeasured one is not called low.
       demand: demand === null ? null : demand >= 0.67 ? 'high' : demand >= 0.4 ? 'medium' : 'low',
       // The prompts' measured demand level (PROMPT-014), the highest, when it
