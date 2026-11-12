@@ -57,11 +57,16 @@ const SERVER_ONLY = [
   'mentions_entities_daily',
   'mentions_perception_snapshots',
   'mentions_terms_daily',
+  // Perception's terms over every platform (00536), as mentions_terms_daily.
+  'mentions_terms_daily_all',
   'prompt_improve_suggestions',
   'signal_runs',
   // What was posted to a brand's Slack channel (00515, #2139): its dedupe and error codes.
   'slack_posts',
   'suggestion_relevance_usage',
+  // The Topics tab's summed rollups (00536), as their sources.
+  'topics_competitor_daily',
+  'topics_prompt_daily',
 ];
 
 /**

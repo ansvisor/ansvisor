@@ -537,6 +537,8 @@ export const core = {
     'insights_prompt_daily',
     'insights_competitor_daily',
     'insights_competitor_prompt_daily',
+    'topics_prompt_daily', // 00536, with insights_prompt_daily
+    'topics_competitor_daily', // 00536, with insights_competitor_prompt_daily
     'citation_result_daily',
     'citation_url_daily',
     'citation_domain_daily',
@@ -547,6 +549,7 @@ export const core = {
     'mentions_entities_daily',
     'mentions_answer_terms',
     'mentions_terms_daily',
+    'mentions_terms_daily_all', // 00536, with mentions_terms_daily
     'mentions_perception_snapshots',
     // Queued by the prompt and domain triggers while the demo is rewritten;
     // cleared once the rollups above are rebuilt.
