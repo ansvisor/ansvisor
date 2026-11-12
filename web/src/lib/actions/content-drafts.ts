@@ -36,6 +36,7 @@ import type { ContentConversions } from '@/lib/content/conversions';
 import { MAX_TITLE_LENGTH, type SaveDraftResult } from '@/lib/content/editor';
 import { BRAND_SITE, brandSiteType, followRestoredPageType } from '@/lib/content/draft-page-type';
 import { detectPageType } from '@/lib/content/page-types';
+import { startPageType } from '@/lib/content/start';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import type { CatalogMatch } from '@/lib/content/feed-match';
 import { catalogMatchFor } from '@/lib/content/catalog-match';
@@ -61,6 +62,7 @@ import {
   ruleSetFits,
   savedRuleSetSchema,
   startingRules,
+  type DraftRules,
   type DraftRulesInput,
   type LastRewrite,
   type SavedRuleSet,
@@ -104,6 +106,7 @@ import type { AgentRule, AgentWriteRequest } from '@/lib/content/agent-write';
 import {
   MAX_ACTION_PROMPTS,
   actionLinkTable,
+  actionDraftTitle,
   actionPages,
   actionPromptIds,
   actionTopicIds,
@@ -905,13 +908,27 @@ const actionStartInput = z.object({
     .optional(),
 });
 
+/** A draft startDraftFromAction just wrote, as the Content Agent's request is built from it. */
+export interface ActionStartedDraft {
+  method: DraftMethod;
+  title: string;
+  pageType: PageType;
+  sourceUrl: string | null;
+  bodyHtml: string;
+  rules: DraftRules;
+  /** How many prompts its brief is built from (Write this's ask says). */
+  prompts: number;
+}
+
 /**
  * "Create content" or "Optimize page" on an action's writing task (CE-022,
  * spec §15): the draft for that work, linked to the action, or the one
  * already written for it. A new draft takes what the action knows: its
- * title, the page it names (brought in from the live site, as Start does),
- * its prompts and its opportunity; the page type is detected and follows the
- * page. The task moves to In progress.
+ * page's title (never the action's, actionDraftTitle), the page it names
+ * (brought in from the live site, as Start does), its prompts and its
+ * opportunity; the page type is detected and follows the page, else the
+ * play's or opportunity's, else Start's default. The task moves to In
+ * progress.
  *
  * The action and task are read through the member's session, so only their
  * organization's can start one; the draft is then written by the server, as
@@ -925,7 +942,13 @@ export async function startDraftFromAction(
   taskId: string,
   options: { page: string | null; title: string; linkLabels?: LinkTableLabels },
 ): Promise<
-  | { draftId: string; created: boolean; importFailed: boolean }
+  | {
+      draftId: string;
+      created: boolean;
+      importFailed: boolean;
+      /** A new draft as written, for the Content Agent's run on it (Write this's). */
+      draft?: ActionStartedDraft;
+    }
   | { error: 'invalid' | 'not_found' | 'failed' }
 > {
   await assertWritable({ brandId });
@@ -972,26 +995,18 @@ export async function startDraftFromAction(
     const existing = findActionDraft(linked, method, page);
     if (existing) return { draftId: existing.id, created: false, importFailed: false };
 
-    let title = typeof payload.title === 'string' ? payload.title.trim() : '';
+    let pageTitle: string | null = null;
     let bodyHtml: string | undefined;
     let importFailed = false;
     if (page) {
       const imported = await importContentPage(brandId, page);
       if ('page' in imported) {
         bodyHtml = imported.page.html;
-        title ||= imported.page.title.trim();
+        pageTitle = imported.page.title;
       } else {
         importFailed = true;
       }
     }
-    title = (title || parsed.data.title.trim()).slice(0, MAX_TITLE_LENGTH).trim();
-    const body =
-      bodyHtml !== undefined
-        ? sanitizeDraftHtml(bodyHtml)
-        : title
-          ? `<h1>${escapeHtml(title)}</h1>`
-          : '';
-    const rules = startingRules(method, bodyHtml !== undefined ? body : undefined);
 
     // The prompts it lists, or those it targets; a topic's for one opened
     // before it kept them (the API's work scope, AC plan P-3).
@@ -1011,23 +1026,23 @@ export async function startDraftFromAction(
       wantedPrompts.length
         ? supabase
             .from('prompts')
-            .select('id, prompt_sets!inner(brand_id)')
+            .select('id, text, prompt_sets!inner(brand_id)')
             .eq('prompt_sets.brand_id', brandId)
             .in('id', wantedPrompts)
         : topics.length
           ? supabase
               .from('prompts')
-              .select('id, prompt_sets!inner(brand_id)')
+              .select('id, text, prompt_sets!inner(brand_id)')
               .eq('prompt_sets.brand_id', brandId)
               .in('topic_id', topics)
               .order('is_active', { ascending: false })
               .order('created_at', { ascending: true })
               .limit(Math.min(MAX_ACTION_PROMPTS, MAX_DRAFT_PROMPTS))
-          : Promise.resolve({ data: [] as { id: string }[], error: null }),
+          : Promise.resolve({ data: [] as { id: string; text: string | null }[], error: null }),
       opportunity
         ? supabase
             .from('content_opportunities')
-            .select('id')
+            .select('id, brief, assetType:source_data->assets->0->>type')
             .eq('brand_id', brandId)
             .eq('id', opportunity)
             .maybeSingle()
@@ -1037,12 +1052,49 @@ export async function startDraftFromAction(
     if (promptsRes.error) throw new Error(promptsRes.error.message);
     if (opportunityRes.error) throw new Error(opportunityRes.error.message);
 
+    // A page's title, not the action's: the page's own, else its brief's,
+    // else the main prompt it answers (the first the action lists).
+    const prompts = (promptsRes.data ?? []) as { id: string; text?: string | null }[];
+    const order = (id: string) => {
+      const at = wantedPrompts.indexOf(id);
+      return at < 0 ? wantedPrompts.length : at;
+    };
+    const mainPrompt = [...prompts].sort((a, b) => order(a.id) - order(b.id))[0];
+    const opportunityRow = opportunityRes.data as {
+      id: string;
+      brief?: { suggestedTitle?: unknown } | null;
+      assetType?: string | null;
+    } | null;
+    const suggestedTitle = opportunityRow?.brief?.suggestedTitle;
+    const title = actionDraftTitle({
+      page,
+      pageTitle,
+      suggestedTitle: typeof suggestedTitle === 'string' ? suggestedTitle : null,
+      prompt: mainPrompt?.text ?? null,
+      actionTitle: (typeof payload.title === 'string' && payload.title.trim()) || parsed.data.title,
+    })
+      .slice(0, MAX_TITLE_LENGTH)
+      .trim();
+    const body =
+      bodyHtml !== undefined
+        ? sanitizeDraftHtml(bodyHtml)
+        : title
+          ? `<h1>${escapeHtml(title)}</h1>`
+          : '';
+    const rules = startingRules(method, bodyHtml !== undefined ? body : undefined);
+
     const siteType = brandSiteType(brandRes.data);
     // The page's address is the strongest sign of its type, as in Start; a
-    // new page takes the asset its play picked (payload.play, AC plan §5).
+    // new page takes the asset its play picked (payload.play, AC plan §5),
+    // else its opportunity's. Never none, as Write this: the editor's rules
+    // are the type's own defaults, not every rule at once.
     const detected = detectPageType({ title, html: body, url: page }, siteType);
-    const played = opportunityPageType(playAssetType(payload), siteType);
-    const pageType = method === 'create' ? (played ?? detected) : (detected ?? played);
+    const played =
+      opportunityPageType(playAssetType(payload), siteType) ??
+      opportunityPageType(opportunityRow?.assetType, siteType);
+    const pageType =
+      (method === 'create' ? (played ?? detected) : (detected ?? played)) ??
+      startPageType({ title }, siteType).pageType;
     // On a shop, the action's products locked into the page's shopping path.
     const shoppingSeed = actionShoppingSeed(payload, siteType, pageType, new Date());
 
@@ -1058,9 +1110,9 @@ export async function startDraftFromAction(
         page_type_source: 'detected',
         ...(shoppingSeed ? { shopping_path: shoppingSeed } : {}),
         body_html: body,
-        opportunity_id: opportunityRes.data?.id ?? null,
+        opportunity_id: opportunityRow?.id ?? null,
         source_url: page,
-        prompt_ids: [...new Set((promptsRes.data ?? []).map((p) => p.id))],
+        prompt_ids: [...new Set(prompts.map((p) => p.id))],
         action_id: actionId,
         // A page brought in to optimize aims at its own length, not a new page's.
         ...(rules.importLength ? { rules } : {}),
@@ -1112,7 +1164,20 @@ export async function startDraftFromAction(
         user.id,
       ).catch((err) => console.error("Failed to start the action's task:", err));
     }
-    return { draftId: inserted.id, created: true, importFailed };
+    return {
+      draftId: inserted.id,
+      created: true,
+      importFailed,
+      draft: {
+        method,
+        title,
+        pageType,
+        sourceUrl: page,
+        bodyHtml: body,
+        rules,
+        prompts: new Set(prompts.map((p) => p.id)).size,
+      },
+    };
   } catch (err) {
     console.error('Failed to start a draft from an action:', err);
     return { error: 'failed' };

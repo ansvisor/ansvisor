@@ -2577,9 +2577,9 @@
       "startNow": {
         "title": "Start now",
         "hint": {
-          "create": "Opens a new draft with this action's prompts, then builds its brief from your AI usage.",
-          "optimize": "Opens the page as a draft with this action's prompts, then builds its brief from your AI usage.",
-          "optimizePage": "Opens {page} as a draft with this action's prompts, then builds its brief from your AI usage.",
+          "create": "Opens a new draft with this action's prompts, and the Content Agent writes its brief and the page, from your AI usage.",
+          "optimize": "Opens the page as a draft with this action's prompts, and the Content Agent writes its brief and suggests changes, from your AI usage.",
+          "optimizePage": "Opens {page} as a draft with this action's prompts, and the Content Agent writes its brief and suggests changes, from your AI usage.",
           "optimizeSeveral": "Opens a draft for each of its {count, plural, one {# page} other {# pages}}, with this action's prompts. They wait for you in the Library.",
           "written": "Its draft is started. Open it where you left off.",
           "writtenSeveral": "Its {count, plural, one {# draft is} other {# drafts are}} started. They wait for you in the Library."
