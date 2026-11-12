@@ -5117,7 +5117,15 @@
     "saveFailed": "Couldn't save that to Files. Try again.",
     "openEditor": "Open in Content Editor",
     "openEditorNoBrand": "Pick a brand first: the draft goes to its Content Library.",
-    "openEditorFailed": "Couldn't open that in the Content Editor. Try again."
+    "openEditorFailed": "Couldn't open that in the Content Editor. Try again.",
+    "short": {
+      "copy": "Copy",
+      "download": "Download",
+      "save": "Save",
+      "inFiles": "In Files",
+      "openEditor": "Open in Editor",
+      "sendToActionCenter": "Send to Actions"
+    }
   },
   "chatDeliverable": {
     "version": {

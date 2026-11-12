@@ -98,22 +98,40 @@ afterEach(() => {
 });
 
 describe('AnswerActions', () => {
-  it('names each icon button: Copy, Download, Save to Files', async () => {
+  it('names each button by its short label: Copy, Download, Save, Open in Editor', async () => {
     await render();
     expect(
       [...container.querySelectorAll('[role="toolbar"] [aria-label]')].map((b) =>
         b.getAttribute('aria-label'),
       ),
-    ).toEqual(['Copy', 'Download', 'Save to Files', 'Open in Content Editor']);
+    ).toEqual(['Copy', 'Download', 'Save', 'Open in Editor']);
+  });
+
+  /** Each button carries a short label; a narrow row (the side panel) hides it behind the tooltip. */
+  it('labels each button, shown only where the row is wide enough', async () => {
+    await render(undefined, false, vi.fn());
+    const toolbar = container.querySelector('[role="toolbar"]')!;
+    expect(toolbar.className).toContain('@container');
+    const labels = [...toolbar.querySelectorAll('button > span')];
+    expect(labels.map((label) => label.textContent)).toEqual([
+      'Copy',
+      'Download',
+      'Save',
+      'Open in Editor',
+      'Send to Actions',
+    ]);
+    for (const label of labels) {
+      expect(label.className).toMatch(/\bhidden\b.*@lg:inline/);
+      // The name it reads is the label it shows (WCAG 2.5.3); the full name is in its tooltip.
+      expect(label.parentElement!.getAttribute('aria-label')).toBe(label.textContent);
+    }
   });
 
   /** CHAT-09 item 18: on the latest answer, for Admins and Managers (the thread decides). */
   it('offers Send to Action Center where the thread gives it, and asks Chat on a click', async () => {
     const send = vi.fn();
     await render(undefined, false, send);
-    expect(button('answer.sendToActionCenter').getAttribute('aria-label')).toBe(
-      'Send to Action Center',
-    );
+    expect(button('answer.sendToActionCenter').getAttribute('aria-label')).toBe('Send to Actions');
     await click(button('answer.sendToActionCenter'));
     expect(send).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -171,6 +189,7 @@ describe('AnswerActions', () => {
     fetchMock.mockClear();
     await render('Two pages lost most of it.', true);
     expect(button('answer.saveToFiles').getAttribute('aria-label')).toBe('In Files');
+    expect(button('answer.saveToFiles').textContent).toBe('In Files');
     await click(button('answer.saveToFiles'));
     expect(fetchMock).not.toHaveBeenCalled();
   });
