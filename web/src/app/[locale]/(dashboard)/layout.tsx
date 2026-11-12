@@ -11,6 +11,10 @@ import { RoleProvider, type TeamRole } from '@/components/providers/role-provide
 import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { AdsProvider } from '@/components/providers/ads-provider';
+import { adsEnabled } from '@/lib/ads/flag';
+import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import { isTourTopic } from '@/lib/chat/tour';
 import { readTourPrefs } from '@/lib/chat/tour-prefs';
 import { firstNameOf } from '@/lib/chat/home';
@@ -28,6 +32,7 @@ import { ChatSidePanelSlot } from '@/components/chat/panel/chat-side-panel-slot'
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
+import { NavSeen } from '@/components/layout/nav-seen';
 import { getBrands } from '@/lib/actions/brand';
 import { menuOfProfile, menuSectionsFor, readRoleHidden } from '@/lib/menu-access';
 import { getPlan, isCloud, toPlanId } from '@/config/plans';
@@ -64,6 +69,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const role = (profile.role ?? 'analyst') as TeamRole;
   const chatOn = chatAgenticEnabled(profile.organization_id);
+  // Ads (ADS_ENABLED): in development, off in production; the same for every workspace.
+  const adsOn = adsEnabled();
+  // The simplified layout (SIMPLE_NAV): built in steps, off in production; the same for every workspace.
+  const simpleNavOn = simpleNavEnabled();
 
   const [
     { data: org, error: orgError },
@@ -120,8 +129,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
       organizationId: profile.organization_id,
     });
   }
-  // Of the sections the workspace has: Agent Center only with the new Chat on.
-  const menu = menuOfProfile({ ...profile, role }, roleHidden, menuSectionsFor(chatOn));
+  // Of the sections the workspace has: Agent Center only with the new Chat
+  // on, Ads only with Ads on.
+  const menu = menuOfProfile({ ...profile, role }, roleHidden, menuSectionsFor(chatOn, adsOn));
 
   // The organization's demo brand (sample data, 00380), shown or hidden: the
   // dialog's offer reads whether the organization ever subscribed. Hidden
@@ -157,12 +167,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
       subscriptionActive = false;
       adminName = access.adminName;
     }
-  }
-
-  // "What do you work on?", asked once (menu access): an invited person on
-  // their first visit, a self-hosted admin after onboarding.
-  if (!menu.workAreasAsked) {
-    redirect('/dashboard/welcome');
   }
 
   const planId = toPlanId(org?.plan);
@@ -218,8 +222,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const tourTopic = tour?.tour_topic;
 
   return (
-    <>
-      <AuthProvider user={user} />
+    <SimpleNavProvider enabled={simpleNavOn}>
+      <AuthProvider
+        user={user}
+        person={{
+          organizationId: profile.organization_id,
+          plan: planId,
+          subscriptionStatus,
+          cancelAtPeriodEnd: Boolean(org?.cancel_at_period_end),
+          role,
+        }}
+      />
       <BrandLoader brands={listedBrands} />
       <PlanProvider
         planId={planId}
@@ -230,60 +243,67 @@ export default async function DashboardLayout({ children }: { children: React.Re
       >
         <RoleProvider role={role}>
           <ChatAgenticProvider enabled={chatOn}>
-            <DemoBrandProvider
-              demoBrand={
-                demoBrand ? { id: demoBrand.id, hidden: Boolean(demoBrand.demoHiddenAt) } : null
-              }
-              everSubscribed={Boolean(org?.stripe_subscription_id)}
-            >
-              <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
-                {/* Inside the provider: it records nothing while the workspace is read-only. */}
-                <GettingStartedPageOpened />
-                <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
-                  <AiUsageProvider>
-                    {/* The Get more window, for every limit on the page (CHAT-18 §B item 6). */}
-                    <GetMoreProvider>
-                      <ChatPanelProvider
-                        setup={chatPanel}
-                        tour={{
-                          chatId: tour?.tour_chat_id ?? null,
-                          topic: isTourTopic(tourTopic) ? tourTopic : null,
-                          finished: Boolean(tour?.tour_finished_at),
-                        }}
-                      >
-                        <div className="flex h-screen overflow-hidden">
-                          {/* Desktop sidebar */}
-                          <div className="relative hidden md:flex md:flex-shrink-0">
-                            <SidebarErrorBoundary>
-                              <Sidebar />
-                            </SidebarErrorBoundary>
-                          </div>
-
-                          {/* Main area, beside Chat's side panel when it is open */}
-                          <ChatPanelPage className="flex flex-1 flex-col overflow-hidden">
-                            <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                              <MobileNav />
+            <AdsProvider enabled={adsOn}>
+              <DemoBrandProvider
+                demoBrand={
+                  demoBrand ? { id: demoBrand.id, hidden: Boolean(demoBrand.demoHiddenAt) } : null
+                }
+                everSubscribed={Boolean(org?.stripe_subscription_id)}
+              >
+                <UpgradeDialogProvider
+                  adminName={adminName}
+                  organizationId={profile.organization_id}
+                >
+                  {/* Inside the provider: it records nothing while the workspace is read-only. */}
+                  <GettingStartedPageOpened />
+                  {/* A menu dot's page opened (SIMPLE_NAV): its dot clears. */}
+                  <NavSeen />
+                  <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
+                    <AiUsageProvider>
+                      {/* The Get more window, for every limit on the page (CHAT-18 §B item 6). */}
+                      <GetMoreProvider>
+                        <ChatPanelProvider
+                          setup={chatPanel}
+                          tour={{
+                            chatId: tour?.tour_chat_id ?? null,
+                            topic: isTourTopic(tourTopic) ? tourTopic : null,
+                            finished: Boolean(tour?.tour_finished_at),
+                          }}
+                        >
+                          <div className="flex h-screen overflow-hidden">
+                            {/* Desktop sidebar */}
+                            <div className="relative hidden md:flex md:flex-shrink-0">
+                              <SidebarErrorBoundary>
+                                <Sidebar />
+                              </SidebarErrorBoundary>
                             </div>
-                            <ReadOnlyBanner />
-                            <PlanEndsBanner />
-                            <DemoBanner />
-                            <main className="flex-1 overflow-y-auto bg-background p-6">
-                              <BrandGuard>{children}</BrandGuard>
-                            </main>
-                            <TrackingJobHandoff />
-                            <FirstRunReady />
-                          </ChatPanelPage>
-                        </div>
-                        {chatPanel.enabled && <ChatSidePanelSlot />}
-                      </ChatPanelProvider>
-                    </GetMoreProvider>
-                  </AiUsageProvider>
-                </MenuAccessProvider>
-              </UpgradeDialogProvider>
-            </DemoBrandProvider>
+
+                            {/* Main area, beside Chat's side panel when it is open */}
+                            <ChatPanelPage className="flex flex-1 flex-col overflow-hidden">
+                              <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                                <MobileNav />
+                              </div>
+                              <ReadOnlyBanner />
+                              <PlanEndsBanner />
+                              <DemoBanner />
+                              <main className="flex-1 overflow-y-auto bg-background p-6">
+                                <BrandGuard>{children}</BrandGuard>
+                              </main>
+                              <TrackingJobHandoff />
+                              <FirstRunReady />
+                            </ChatPanelPage>
+                          </div>
+                          {chatPanel.enabled && <ChatSidePanelSlot />}
+                        </ChatPanelProvider>
+                      </GetMoreProvider>
+                    </AiUsageProvider>
+                  </MenuAccessProvider>
+                </UpgradeDialogProvider>
+              </DemoBrandProvider>
+            </AdsProvider>
           </ChatAgenticProvider>
         </RoleProvider>
       </PlanProvider>
-    </>
+    </SimpleNavProvider>
   );
 }

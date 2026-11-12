@@ -16,14 +16,18 @@ import actionCenterRoutes from './action-center.js';
 import botRoutes from './bots.js';
 import billingRoutes from './billing.js';
 import brandFactRoutes from './brand-facts.js';
+import businessHubRoutes from './business-hub.js';
 import catalogRoutes from './catalog.js';
 import cmsRoutes from './cms.js';
 import cmsWordPressRoutes from './cms-wordpress.js';
 import cmsFramerRoutes from './cms-framer.js';
 import cmsWixRoutes from './cms-wix.js';
 import cmsIndexNowRoutes from './cms-indexnow.js';
+import hubspotRoutes from './hubspot.js';
 import demoRoutes from './demo.js';
 import chatOutboundRoutes from './chat-outbound.js';
+import slackRoutes from './slack.js';
+import adsRoutes from './ads.js';
 
 const router = Router();
 
@@ -44,14 +48,20 @@ router.use('/action-center', actionCenterRoutes);
 router.use('/bots', botRoutes);
 router.use('/billing', billingRoutes);
 router.use('/brand-facts', brandFactRoutes);
+// ChatGPT Business Hub numbers: not found unless the server's BUSINESS_HUB_ENABLED is on.
+router.use('/business-hub', businessHubRoutes);
 router.use('/catalog', catalogRoutes);
 router.use('/cms', cmsRoutes);
 router.use('/cms', cmsWordPressRoutes);
 router.use('/cms', cmsFramerRoutes);
 router.use('/cms', cmsWixRoutes);
 router.use('/cms', cmsIndexNowRoutes);
+router.use('/hubspot', hubspotRoutes);
 router.use('/demo', demoRoutes);
 router.use('/chat-outbound', chatOutboundRoutes);
+router.use('/slack', slackRoutes);
+// Ads (ADS-01), in development: not found unless the server's ADS_ENABLED is on.
+router.use('/ads', adsRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });

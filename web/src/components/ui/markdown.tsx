@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import { marked } from 'marked';
 import { memo, useId, useMemo } from 'react';
-import ReactMarkdown, { Components } from 'react-markdown';
+import ReactMarkdown, { Components, type Options } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock, CodeBlockCode } from './code-block';
@@ -11,7 +11,11 @@ export type MarkdownProps = {
   id?: string;
   className?: string;
   components?: Partial<Components>;
+  /** More remark plugins, run after GFM and line breaks. */
+  remarkPlugins?: Options['remarkPlugins'];
 };
+
+const REMARK_PLUGINS = [remarkGfm, remarkBreaks];
 
 function parseMarkdownIntoBlocks(markdown: string): string[] {
   const tokens = marked.lexer(markdown);
@@ -58,12 +62,14 @@ const MemoizedMarkdownBlock = memo(
   function MarkdownBlock({
     content,
     components = INITIAL_COMPONENTS,
+    remarkPlugins = REMARK_PLUGINS,
   }: {
     content: string;
     components?: Partial<Components>;
+    remarkPlugins?: Options['remarkPlugins'];
   }) {
     return (
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
         {content}
       </ReactMarkdown>
     );
@@ -80,10 +86,15 @@ function MarkdownComponent({
   id,
   className,
   components = INITIAL_COMPONENTS,
+  remarkPlugins,
 }: MarkdownProps) {
   const generatedId = useId();
   const blockId = id ?? generatedId;
   const blocks = useMemo(() => parseMarkdownIntoBlocks(children), [children]);
+  const plugins = useMemo(
+    () => (remarkPlugins?.length ? [...REMARK_PLUGINS, ...remarkPlugins] : REMARK_PLUGINS),
+    [remarkPlugins],
+  );
 
   return (
     <div className={className}>
@@ -92,6 +103,7 @@ function MarkdownComponent({
           key={`${blockId}-block-${index}`}
           content={block}
           components={components}
+          remarkPlugins={plugins}
         />
       ))}
     </div>

@@ -1,4 +1,4 @@
-import { act, type ReactNode } from 'react';
+import { act, useEffect, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -797,7 +797,7 @@ describe('Home by focus (CHAT-24 §4)', () => {
   });
 });
 
-const { HomeDraftProvider, useHomeDraft } = await import('./home-draft');
+const { HomeDraftProvider, useHomeChat, useHomeDraft } = await import('./home-draft');
 
 describe('What’s new on Home (CHAT-11 §B, item 19)', () => {
   const line = { feature: 'Agent Center', homeLine: 'Agent Center runs your routine work.' };
@@ -881,6 +881,70 @@ describe('What’s new in ChatHome', () => {
       'What’s new: how can Agent Center help me?',
     );
     expect(urls.some((url) => url === '/api/chat/runs')).toBe(false);
+  });
+});
+
+/** A chat started from Home is its own page at once (owner, 2026-11-09). */
+describe('a chat started from ChatHome', () => {
+  const sent: { message: string; shortcutId?: string }[] = [];
+  /** Home's chat below, as the thread view registers it. */
+  function Chat({ register = true }: { register?: boolean }) {
+    const home = useHomeChat();
+    useEffect(() => {
+      if (!register) return;
+      home?.registerSend((message, shortcutId) => {
+        sent.push({ message, ...(shortcutId ? { shortcutId } : {}) });
+        home.setStarted(true);
+      });
+    }, [register, home]);
+    return <output data-slot="started">{String(home?.started)}</output>;
+  }
+
+  beforeEach(() => {
+    sent.length = 0;
+    globalThis.fetch = vi.fn(async (url: string) =>
+      Response.json(
+        url.startsWith('/api/chat/whats-new')
+          ? { ok: true, hasUnread: true, entries: [{ feature: 'Agent Center', homeLine: 'x' }] }
+          : { ok: false },
+      ),
+    ) as unknown as typeof fetch;
+  });
+
+  it('sends a pick into the chat below at once, and gives way to it', async () => {
+    await render(
+      <HomeDraftProvider>
+        <ChatHome firstName="Alex" />
+        <Chat />
+      </HomeDraftProvider>,
+    );
+    await act(async () => undefined);
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="home.whatsNew"]')!.click(),
+    );
+    expect(sent).toEqual([{ message: 'What’s new in Ansvisor and how can it help me?' }]);
+    // No run is started from the page, and no page is waited for.
+    const urls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
+    expect(urls).not.toContain('/api/chat/runs');
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(host.querySelector('h1')).toBeNull();
+    expect(host.querySelector('[data-slot="started"]')?.textContent).toBe('true');
+  });
+
+  it('starts the chat itself, as before, while nothing below took it', async () => {
+    await render(
+      <HomeDraftProvider>
+        <ChatHome firstName="Alex" />
+        <Chat register={false} />
+      </HomeDraftProvider>,
+    );
+    await act(async () => undefined);
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="home.whatsNew"]')!.click(),
+    );
+    const urls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
+    expect(urls).toContain('/api/chat/runs');
+    expect(host.querySelector('h1')).not.toBeNull();
   });
 });
 

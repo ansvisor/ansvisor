@@ -61,7 +61,7 @@ export function GoLiveSection({
         <h3 className="text-sm font-semibold">{t('title')}</h3>
         <p className="text-xs text-muted-foreground">{t('lead')}</p>
       </div>
-      <ul className="divide-y rounded-xl border">
+      <ul className="divide-y rounded-xl border bg-card">
         <li className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
           <span className="min-w-0 flex-1">
             <span className="font-medium">{t('switch')}</span>

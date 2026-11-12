@@ -187,6 +187,39 @@ describe('checkFigures', () => {
     ).toEqual(['19', '22', '87']);
   });
 
+  it('reads a lone dot or comma group as a thousand or a decimal, as the language writes it', () => {
+    // A topic's two days (get_visibility_trend), totalled in a Turkish answer:
+    // 526 + 635 is written "1.161", the column's total.
+    const days = knownFigures([
+      {
+        buckets: [
+          { date: '2026-11-09', result_count: 118, total_mentions: 526, total_citations: 325 },
+          { date: '2026-11-08', result_count: 120, total_mentions: 635, total_citations: 341 },
+        ],
+      },
+    ]);
+    for (const text of [
+      '| Mention | 526 | 635 | 1.161 |',
+      '| Mention | 526 | 635 | 1,161 |',
+      '| Mention | 526 | 635 | 1161 |',
+    ]) {
+      expect(checkFigures(text, days).replaced).toEqual([]);
+    }
+    // A decimal read, written with a Turkish comma or an English point.
+    const ratio = knownFigures([{ ratio: 1.161 }]);
+    expect(checkFigures('Oran 1,161 oldu.', ratio).replaced).toEqual([]);
+    expect(checkFigures('The ratio is 1.161.', ratio).replaced).toEqual([]);
+    // Neither reading known: still taken out.
+    expect(checkFigures('Toplam 1.162 mention.', days)).toMatchObject({
+      text: `Toplam ${PLACEHOLDER.metric} mention.`,
+      replaced: ['1.162'],
+    });
+    // Only a lone group of three reads both ways: "1.5" is a decimal, "1.234.567" a million.
+    const visits = knownFigures([{ visits: 1234567, share: 1.5 }]);
+    expect(checkFigures('Up 1.5 points to 1.234.567 visits.', visits).replaced).toEqual([]);
+    expect(checkFigures('Up 15 points to 1.234 visits.', visits).replaced).toEqual(['15', '1.234']);
+  });
+
   it('stays linear on a long text', () => {
     const known = knownFigures([]);
     const text = `${'A-'.repeat(100_000)}${' 12'.repeat(30_000)}`;

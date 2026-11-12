@@ -7,7 +7,7 @@ import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
 import { landingPageFor } from '@/config/home';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
-import { chatStartAudience } from '@/lib/chat/start-audience';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -65,17 +65,12 @@ export async function GET(req: NextRequest) {
           console.error('[stripe/success] DB update error:', updateError);
         } else {
           console.log('[stripe/success] DB updated for org:', orgId);
+          // The buyer, on the workspace they just paid for: Chat Home while
+          // the new Chat is on (each person's own menu is read on /dashboard);
+          // Action Center › Today with the simplified layout on (SIMPLE_NAV).
           landing = landingPageFor({
             chatOn: chatAgenticEnabled(orgId),
-            audience: chatStartAudience({
-              org: {
-                plan: planId || 'starter',
-                subscription_status: subscription?.status ?? 'trialing',
-                stripe_subscription_id: subscriptionId,
-              },
-              // The demo brand steps aside with the plan (below).
-              demoShown: false,
-            }),
+            simpleNav: simpleNavEnabled(),
           });
 
           // Align onboarding-created prompts to the just-confirmed plan's

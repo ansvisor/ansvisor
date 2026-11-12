@@ -1,0 +1,171 @@
+{
+  "_note": "Slack Web API answers as Composio's proxy returns them ({ status, headers, data }), in the shapes Slack documents, with ids, names and addresses replaced. Re-record in the live test with the Ansvisor Slack app.",
+  "auth.test": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": true,
+      "url": "https://acme-test.slack.com/",
+      "team": "Acme Test",
+      "user": "ansvisor",
+      "team_id": "T00000001",
+      "user_id": "U00000BOT",
+      "bot_id": "B00000BOT",
+      "is_enterprise_install": false
+    }
+  },
+  "conversations.list:1": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": true,
+      "channels": [
+        {
+          "id": "C00000002",
+          "name": "seo-team",
+          "is_channel": true,
+          "is_private": false,
+          "is_archived": false,
+          "is_member": false,
+          "num_members": 5
+        },
+        {
+          "id": "C00000001",
+          "name": "seo-alerts",
+          "is_channel": true,
+          "is_private": false,
+          "is_archived": false,
+          "is_member": true,
+          "num_members": 12
+        }
+      ],
+      "response_metadata": {
+        "next_cursor": "dGVhbTpDMDAwMDAwMDM="
+      }
+    }
+  },
+  "conversations.list:2": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": true,
+      "channels": [
+        {
+          "id": "G00000003",
+          "name": "northwind-seo",
+          "is_group": true,
+          "is_private": true,
+          "is_archived": false,
+          "is_member": true,
+          "num_members": 3
+        },
+        {
+          "id": "C00000004",
+          "name": "old-launch",
+          "is_channel": true,
+          "is_private": false,
+          "is_archived": true,
+          "num_members": 0
+        }
+      ],
+      "response_metadata": {
+        "next_cursor": ""
+      }
+    }
+  },
+  "conversations.info": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": true,
+      "channel": {
+        "id": "C00000001",
+        "name": "seo-alerts",
+        "is_channel": true,
+        "is_private": false,
+        "is_archived": false,
+        "is_member": true
+      }
+    }
+  },
+  "chat.postMessage": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": true,
+      "channel": "C00000001",
+      "ts": "1762770000.000100",
+      "message": {
+        "type": "message",
+        "subtype": "bot_message",
+        "bot_id": "B00000BOT",
+        "ts": "1762770000.000100"
+      }
+    }
+  },
+  "users.lookupByEmail": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": true,
+      "user": {
+        "id": "U00000SAM",
+        "team_id": "T00000001",
+        "name": "sam.lee",
+        "deleted": false,
+        "is_bot": false,
+        "profile": {
+          "real_name": "Sam Lee",
+          "display_name": "sam.lee"
+        }
+      }
+    }
+  },
+  "error:users_not_found": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": false,
+      "error": "users_not_found"
+    }
+  },
+  "error:not_in_channel": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": false,
+      "error": "not_in_channel"
+    }
+  },
+  "error:channel_not_found": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": false,
+      "error": "channel_not_found"
+    }
+  },
+  "error:token_revoked": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": false,
+      "error": "token_revoked"
+    }
+  },
+  "error:ratelimited": {
+    "status": 429,
+    "headers": {
+      "retry-after": "30"
+    },
+    "data": {
+      "ok": false,
+      "error": "ratelimited"
+    }
+  },
+  "error:unavailable": {
+    "status": 503,
+    "headers": {},
+    "data": null
+  }
+}

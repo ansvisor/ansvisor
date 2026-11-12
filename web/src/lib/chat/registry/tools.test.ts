@@ -714,6 +714,43 @@ describe('the Chat tool registry', () => {
     ).toMatchObject({ kind: 'action_added', actionNo: 1258 });
   });
 
+  it('gives recurring work create_schedule set up its card, with the simplified layout on (SIMPLE_NAV)', () => {
+    const schedule = chatTool_('create_schedule');
+    const input = schedule.inputSchema.parse(schedule.fixture.input);
+    const made = {
+      ok: true,
+      schedule_id: FIXTURE_IDS.item,
+      title: 'Weekly visibility report',
+      when: 'Every Monday, 09:00 · Europe/Istanbul',
+      next_run_at: '2026-11-16T06:00:00.000Z',
+      deliver: 'Chat',
+      ready_by: false,
+      recurring: true,
+    };
+    try {
+      // Off: no card, the step line only, as before.
+      vi.stubEnv('SIMPLE_NAV', '');
+      expect(schedule.scheduleCard!(input, made)).toBeNull();
+      vi.stubEnv('SIMPLE_NAV', 'true');
+      const card = schedule.scheduleCard!(input, made);
+      expect(card).toEqual({
+        title: 'Weekly visibility report',
+        when: 'Every Monday, 09:00 · Europe/Istanbul',
+        href: `/dashboard/chat/scheduled/${FIXTURE_IDS.item}`,
+      });
+      // Safe for the browser as an event: no id field, a link in the app.
+      expect(
+        clientEventProblems({ type: 'schedule.made', seq: 1, data: card! } as ChatEvent),
+      ).toEqual([]);
+      // Work done once, or a job that wasn't made: no card.
+      expect(schedule.scheduleCard!(input, { ...made, recurring: false })).toBeNull();
+      expect(schedule.scheduleCard!(input, { ok: false, reason: 'quota_exceeded' })).toBeNull();
+      expect(schedule.scheduleCard!(input, null)).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('never offers a tool that marks a task done (CHAT-09 item 15)', () => {
     const names = CHAT_TOOLS.map((tool) => tool.name).join(' ');
     expect(names).not.toMatch(/complete|mark_done|dismiss_action|delete_action|close_task/);
@@ -1265,5 +1302,43 @@ describe("save_skill's draft card (W3-08)", () => {
       detail: 'Private to you · Skills › My skills',
     });
     expect(tool().doneStep!(input as never, { ok: false })).toBeNull();
+  });
+});
+
+/** The query fan-out reads run only within a skill that names them (owner decision 2026-11-09). */
+describe('the reads that run only within a skill', () => {
+  it('are both fan-out reads, and nothing else', () => {
+    expect(CHAT_TOOLS.filter((tool) => tool.withSkill).map((tool) => tool.name)).toEqual([
+      'get_fanouts',
+      'get_fanout_gaps',
+    ]);
+    expect(chatTool('get_fanouts')?.class).toBe('read');
+    expect(chatTool('get_fanout_gaps')?.class).toBe('read');
+  });
+});
+
+describe('add_prompts over the plan limit (Simplify PR 15)', () => {
+  /** add_prompts' description as the registry reads it when its module loads. */
+  const description = async (simpleNav: boolean) => {
+    vi.resetModules();
+    if (simpleNav) vi.stubEnv('SIMPLE_NAV', 'true');
+    try {
+      const { PROMPT_TOOLS } = await import('./prompt-tools');
+      return PROMPT_TOOLS.find((tool) => tool.name === 'add_prompts')!.description;
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  };
+
+  it('says the prompts past the limit wait for a spot, apart from the added ones, with SIMPLE_NAV', async () => {
+    expect(await description(true)).toContain(
+      "When the plan's prompt locations run out, the rest are saved waiting for a spot: listed in `waiting`, not in `added`",
+    );
+  });
+
+  it('keeps today’s description without it', async () => {
+    const text = await description(false);
+    expect(text).toContain("the plan's prompt locations may stop the rest (partial)");
+    expect(text).not.toContain('waiting');
   });
 });

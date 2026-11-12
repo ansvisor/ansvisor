@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { CHOOSE_PLAN_HREF, useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { ChatHref } from '@/lib/chat/events';
+import { useUpgradeWallShown, type UpgradeWallReason } from '@/lib/friction-events';
 import { cn } from '@/lib/utils';
 import { AgentCard, AgentHead } from './agent-card';
 import { TICK_CIRCLE, TickIcon } from './done-tick';
@@ -58,13 +59,24 @@ const DEFAULT_HREFS: Partial<Record<DenialLink, ChatHref>> = {
 type AskState = 'idle' | 'sending' | 'sent' | 'error';
 
 /**
+ * The wall a denial is, by what it offers (denial.ts): a plan gate offers
+ * Compare plans (and Upgrade or Choose a plan to an admin); a read-only
+ * workspace, Choose a plan alone. Any other denial is no upgrade wall.
+ */
+function wallOf(nextActions: DenialNextAction[]): UpgradeWallReason | null {
+  if (nextActions.includes('compare_plans') || nextActions.includes('upgrade')) return 'plan';
+  return nextActions.includes('choose_plan') ? 'read_only' : null;
+}
+
+/**
  * The out-of-permission answer (CHAT-mockup-v2 `#s-denied`, CHAT-20 §4c): no
  * silent failure, never a bare error, in four parts — what was asked, why not
  * (the exact rule and where it is set), who can (by role, never a person), and
  * what to do next as buttons. The parts come from the server's denial (A3's
  * buildDenial), never from the model. For a plan gate, what the next plan
  * adds (`extra`). Ask your Admin sends the request through `onAskAdmin`
- * (B2's access.request), through the read-only gate, then says Sent.
+ * (B2's access.request), through the read-only gate, then says Sent. A plan
+ * gate or a read-only refusal counts as an upgrade wall shown.
  */
 export function DenialCard({
   title,
@@ -109,6 +121,8 @@ export function DenialCard({
   const [ask, setAsk] = useState<AskState>('idle');
   const links = { ...DEFAULT_HREFS, ...hrefs };
   const shown = nextActions.filter((a) => a === 'ask_admin' || links[a]);
+  const wall = wallOf(nextActions);
+  useUpgradeWallShown(wall && { reason: wall, source: 'chat' });
 
   const askAdmin = guard(
     async () => {

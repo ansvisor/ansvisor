@@ -257,6 +257,20 @@ export const cmsLimiter = rateLimit({
   },
 });
 
+// A brand's Slack (#2139): connecting, listing channels and test messages
+// each reach Slack through Composio, so a member's are few.
+export const slackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // The Library's checks whether pages sent to a CMS were published there:
 // four each time it opens, answered from a two-minute memory per brand. A
 // bucket of their own, so opening the Library never uses up a member's
@@ -304,6 +318,30 @@ export const brandFactsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
   keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
+/** A brand's bucket for prompts from Business Hub's discovery topics. */
+export function businessHubTopicsKey(req) {
+  return 'business-hub-topics:' + req.params.brandId;
+}
+
+// Prompts from ChatGPT Business Hub's discovery topics (Business Hub plan,
+// PR 6): one model call each, not charged to the AI budget, so 10 an hour
+// per brand, whoever asks. A refusal (off, a role, a brand without topics,
+// a bad body) isn't counted, so nobody can use up a brand's bucket without
+// generating anything; a failed generation is, since its model calls ran.
+export const businessHubTopicsLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  keyGenerator: businessHubTopicsKey,
+  skipFailedRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode < 400 || res.statusCode >= 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

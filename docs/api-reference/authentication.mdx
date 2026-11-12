@@ -14,6 +14,18 @@ curl "https://app.ansvisor.com/api/v1/brands" \
 
 This is the right choice for external integrations — Looker Studio, Sheets, scripts, and the [MCP server](/guides/mcp-server). See the [Metrics API reference](/api-reference/metrics) for the endpoint list.
 
+## App sign-in (OAuth) for the MCP server
+
+AI apps such as Claude and ChatGPT can connect to the MCP endpoint, `https://app.ansvisor.com/api/mcp`, by signing the person in instead of with an API key. The web app is the authorization server (OAuth 2.1 with PKCE `S256`, as the MCP authorization spec 2025-11-25 has it), with the issuer `https://app.ansvisor.com`:
+
+- An app finds it from the endpoint's `401` (`WWW-Authenticate: Bearer resource_metadata="https://app.ansvisor.com/.well-known/oauth-protected-resource/api/mcp", scope="mcp:read mcp:write"`), then `/.well-known/oauth-authorization-server`.
+- It registers with a Client ID Metadata Document or by dynamic client registration (`POST /api/oauth/register`), sends the person to `/api/oauth/authorize`, and redeems the code at `/api/oauth/token`.
+- Scopes: `mcp:read` (every `list_` and `get_` tool) and `mcp:write` (every other tool), which the person can leave out on the consent page.
+- Access tokens (`ans_oat_…`) last an hour. Refresh tokens (`ans_ort_…`) last 30 days and rotate on every use. Both are bound to the MCP endpoint (RFC 8707 `resource`).
+- A token acts as the person who allowed it, with their role and brand access. They see and disconnect it in **Settings → MCP & API Keys → Connected apps**; an app revokes its own at `/api/oauth/revoke` (RFC 7009).
+
+These tokens work at `/api/mcp` only. The Metrics API (`/api/v1/*`), the REST routes under `/api/mcp/…` and the server's `/api/*` refuse them with `401`. On Ansvisor Cloud, app sign-in needs a paid plan; API keys work on every plan. The [MCP server guide](/guides/mcp-server#app-sign-in-oauth) has the full flow, lifetimes and errors.
+
 ## Bearer token
 
 All `/api/*` endpoints on the Ansvisor server require a Supabase JWT bearer token in the `Authorization` header:

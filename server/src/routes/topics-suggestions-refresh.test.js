@@ -4,10 +4,12 @@ import express from 'express';
 /**
  * POST /api/topics/suggestions/:brandId/refresh puts the new batch in before
  * it removes the undecided one, so a failed insert leaves the list as it was
- * rather than empty. The model is a stub.
+ * rather than empty. An online store's catalog adds its categories no topic
+ * covers (AC plan P-8), first. The model is a stub.
  */
 
 const generateObject = vi.fn();
+const getCatalogTopicCandidates = vi.fn();
 let db;
 
 function table(name) {
@@ -17,7 +19,8 @@ function table(name) {
   const result = () => {
     if (op === 'insert') {
       db.inserts.push(row);
-      if (db.insertError) return { data: null, error: db.insertError };
+      const error = db.insertErrors.shift() ?? db.insertError;
+      if (error) return { data: null, error };
       return { data: row.map((r, i) => ({ id: `new-${i}`, ...r })), error: null };
     }
     if (op === 'delete') {
@@ -25,6 +28,8 @@ function table(name) {
       return { data: null, error: null };
     }
     if (name === 'brands') return { data: { name: 'Acme', language: 'en' }, error: null };
+    // The brand's topics, which are never suggested again.
+    if (name === 'topics') return { data: db.topics, error: null };
     return { data: null, error: null };
   };
   const chain = new Proxy(
@@ -67,7 +72,9 @@ let baseUrl;
 beforeEach(async () => {
   vi.clearAllMocks();
   vi.resetModules();
-  db = { inserts: [], deletes: [], insertError: null };
+  db = { inserts: [], deletes: [], insertError: null, insertErrors: [], topics: [] };
+  getCatalogTopicCandidates.mockResolvedValue([]);
+  vi.doMock('../lib/catalog-suggestions.js', () => ({ getCatalogTopicCandidates }));
   generateObject.mockResolvedValue({
     object: { topics: [{ name: 'Coffee subscriptions' }, { name: 'Office coffee' }] },
   });
@@ -138,5 +145,79 @@ describe('POST /api/topics/suggestions/:brandId/refresh', () => {
 
     expect((await refresh()).status).toBe(500);
     expect(db.deletes).toEqual([]);
+  });
+});
+
+describe('topic suggestions from the catalog (AC plan P-8)', () => {
+  const tents = {
+    name: 'Tents',
+    category: 'Camping > Tents',
+    categoryId: 'c-tents',
+    products: 9,
+    inStock: 7,
+  };
+
+  it('puts the categories no topic covers first, each with its category', async () => {
+    getCatalogTopicCandidates.mockResolvedValue([tents]);
+
+    expect((await refresh()).status).toBe(200);
+    expect(getCatalogTopicCandidates).toHaveBeenCalledWith('b1');
+    // No model call of their own: the one research call, as before.
+    expect(generateObject).toHaveBeenCalledTimes(1);
+    expect(db.inserts[0]).toEqual([
+      {
+        brand_id: 'b1',
+        name: 'Tents',
+        source: 'catalog',
+        source_data: {
+          category: 'Camping > Tents',
+          categoryId: 'c-tents',
+          products: 9,
+          inStock: 7,
+        },
+        status: 'new',
+      },
+      { brand_id: 'b1', name: 'Coffee subscriptions', source: 'llm', status: 'new' },
+      { brand_id: 'b1', name: 'Office coffee', source: 'llm', status: 'new' },
+    ]);
+  });
+
+  it('still adds them, without their category, on a database without 00525', async () => {
+    getCatalogTopicCandidates.mockResolvedValue([tents]);
+    db.insertErrors = [
+      {
+        code: 'PGRST204',
+        message:
+          "Could not find the 'source_data' column of 'topic_suggestions' in the schema cache",
+      },
+    ];
+
+    expect((await refresh()).status).toBe(200);
+    expect(db.inserts).toHaveLength(2);
+    expect(db.inserts[1][0]).toEqual({
+      brand_id: 'b1',
+      name: 'Tents',
+      source: 'catalog',
+      status: 'new',
+    });
+  });
+
+  it('writes no source data for a brand without a catalog', async () => {
+    expect((await refresh()).status).toBe(200);
+    expect(db.inserts[0].some((row) => 'source_data' in row)).toBe(false);
+  });
+
+  it('never suggests a topic the brand has, or the same name twice', async () => {
+    db.topics = [{ name: 'tents' }];
+    getCatalogTopicCandidates.mockResolvedValue([
+      tents,
+      { ...tents, name: 'Office Coffee', category: 'Office Coffee', categoryId: 'c-office' },
+    ]);
+
+    expect((await refresh()).status).toBe(200);
+    expect(db.inserts[0].map((row) => [row.name, row.source])).toEqual([
+      ['Office Coffee', 'catalog'],
+      ['Coffee subscriptions', 'llm'],
+    ]);
   });
 });

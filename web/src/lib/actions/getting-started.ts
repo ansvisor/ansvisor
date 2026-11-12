@@ -5,6 +5,8 @@
  * Actions page. Reads the brand's facts in one call (getting_started_facts,
  * 00196) and turns them into steps in lib/getting-started/steps.ts; stores
  * only what the data can't show — a page opened, an optional step skipped.
+ * With the simplified layout on (SIMPLE_NAV), the 7 set-up steps only, as
+ * Today's "Finish setting up" and Chat's onboarding read list them.
  */
 
 import { createClient } from '@/lib/supabase/server';
@@ -17,6 +19,7 @@ import {
   type GettingStartedStatus,
 } from '@/lib/getting-started/steps';
 import { assertWritable } from '@/lib/subscription-guard';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 
 /** What the database says when a write would change the demo brand (00381). */
 const DEMO_BRAND = 'demo_brand';
@@ -27,7 +30,7 @@ export async function getGettingStarted(brandId: string): Promise<GettingStarted
   const { data, error } = await supabase.rpc('getting_started_facts', { p_brand_id: brandId });
   if (error) throw new Error(error.message);
   const facts = parseGettingStartedFacts(data);
-  return facts ? buildGettingStarted(facts) : null;
+  return facts ? buildGettingStarted(facts, { setupOnly: simpleNavEnabled() }) : null;
 }
 
 /** A page opened, as recorded: whether it counts now (or did before), or why it couldn't be. */
@@ -103,15 +106,20 @@ export async function startGettingStarted(brandId: string): Promise<void> {
 
 /**
  * Skip Getting started: the actions list goes back to normal, the steps
- * already done stay done, and Start brings it back.
+ * already done stay done, and Start brings it back. An upsert, as Start is:
+ * a brand from before 00196 has no row until now, and Today's Hide skips it
+ * for the brand all the same. Admins and managers only (00197's insert and
+ * update policies); anyone else's write is refused.
  */
 export async function skipGettingStarted(brandId: string): Promise<void> {
   await assertWritable({ brandId });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('getting_started')
-    .update({ dismissed_at: new Date().toISOString() })
-    .eq('brand_id', brandId)
+    .upsert(
+      { brand_id: brandId, dismissed_at: new Date().toISOString() },
+      { onConflict: 'brand_id' },
+    )
     .select('brand_id');
   if (error) throw new Error(error.message);
   // RLS lets only admins and managers write: nothing changed otherwise.

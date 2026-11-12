@@ -1152,6 +1152,66 @@ export type Database = {
           },
         ]
       }
+      business_hub_snapshots: {
+        Row: {
+          brand_id: string
+          created_at: string
+          discovery_topics: string[]
+          entered_by: string | null
+          id: string
+          mentions: number | null
+          period_days: number
+          period_end: string
+          profile_views: number | null
+          source: string
+          updated_at: string
+          website_clicks: number | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          discovery_topics?: string[]
+          entered_by?: string | null
+          id?: string
+          mentions?: number | null
+          period_days: number
+          period_end: string
+          profile_views?: number | null
+          source?: string
+          updated_at?: string
+          website_clicks?: number | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          discovery_topics?: string[]
+          entered_by?: string | null
+          id?: string
+          mentions?: number | null
+          period_days?: number
+          period_end?: string
+          profile_views?: number | null
+          source?: string
+          updated_at?: string
+          website_clicks?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_hub_snapshots_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_hub_snapshots_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cancellation_feedback: {
         Row: {
           choice: string
@@ -4068,6 +4128,7 @@ export type Database = {
         Row: {
           agents_for_you_dismissed_at: string | null
           answer_language: string | null
+          date_range: string | null
           default_mode: string
           effort: string | null
           focus: string[] | null
@@ -4095,6 +4156,7 @@ export type Database = {
         Insert: {
           agents_for_you_dismissed_at?: string | null
           answer_language?: string | null
+          date_range?: string | null
           default_mode?: string
           effort?: string | null
           focus?: string[] | null
@@ -4122,6 +4184,7 @@ export type Database = {
         Update: {
           agents_for_you_dismissed_at?: string | null
           answer_language?: string | null
+          date_range?: string | null
           default_mode?: string
           effort?: string | null
           focus?: string[] | null
@@ -5874,6 +5937,108 @@ export type Database = {
         }
         Relationships: []
       }
+      hubspot_ai_contacts: {
+        Row: {
+          ai_source: string
+          brand_id: string
+          contact_id: string
+          converted_at: string | null
+          first_at: string | null
+          hs_created_at: string | null
+          landing_key: string | null
+          landing_url: string | null
+          origin: string
+          synced_at: string
+        }
+        Insert: {
+          ai_source: string
+          brand_id: string
+          contact_id: string
+          converted_at?: string | null
+          first_at?: string | null
+          hs_created_at?: string | null
+          landing_url?: string | null
+          origin: string
+          synced_at?: string
+        }
+        Update: {
+          ai_source?: string
+          brand_id?: string
+          contact_id?: string
+          converted_at?: string | null
+          first_at?: string | null
+          hs_created_at?: string | null
+          landing_url?: string | null
+          origin?: string
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubspot_ai_contacts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubspot_ai_deals: {
+        Row: {
+          ai_source: string
+          amount: number | null
+          brand_id: string
+          close_date: string | null
+          contact_id: string
+          currency: string | null
+          deal_id: string
+          hs_created_at: string | null
+          is_closed: boolean
+          is_won: boolean
+          landing_key: string | null
+          landing_url: string | null
+          origin: string
+          synced_at: string
+        }
+        Insert: {
+          ai_source: string
+          amount?: number | null
+          brand_id: string
+          close_date?: string | null
+          contact_id: string
+          currency?: string | null
+          deal_id: string
+          hs_created_at?: string | null
+          is_closed?: boolean
+          is_won?: boolean
+          landing_url?: string | null
+          origin: string
+          synced_at?: string
+        }
+        Update: {
+          ai_source?: string
+          amount?: number | null
+          brand_id?: string
+          close_date?: string | null
+          contact_id?: string
+          currency?: string | null
+          deal_id?: string
+          hs_created_at?: string | null
+          is_closed?: boolean
+          is_won?: boolean
+          landing_url?: string | null
+          origin?: string
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubspot_ai_deals_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       impact_control_sets: {
         Row: {
           cell_count: number
@@ -7362,8 +7527,11 @@ export type Database = {
           platforms: string[]
           prompt_set_id: string
           regions: string[]
+          source_data: Json | null
           text: string
+          tags: string[]
           topic_id: string | null
+          waiting_since: string | null
           work_status: string | null
         }
         Insert: {
@@ -7375,8 +7543,11 @@ export type Database = {
           platforms?: string[]
           prompt_set_id: string
           regions?: string[]
+          source_data?: Json | null
           text: string
+          tags?: string[]
           topic_id?: string | null
+          waiting_since?: string | null
           work_status?: string | null
         }
         Update: {
@@ -7388,8 +7559,11 @@ export type Database = {
           platforms?: string[]
           prompt_set_id?: string
           regions?: string[]
+          source_data?: Json | null
           text?: string
+          tags?: string[]
           topic_id?: string | null
+          waiting_since?: string | null
           work_status?: string | null
         }
         Relationships: [
@@ -8132,6 +8306,7 @@ export type Database = {
           name: string
           reason: string | null
           source: string
+          source_data: Json | null
           status: string
           updated_at: string
         }
@@ -8144,6 +8319,7 @@ export type Database = {
           name: string
           reason?: string | null
           source?: string
+          source_data?: Json | null
           status?: string
           updated_at?: string
         }
@@ -8156,6 +8332,7 @@ export type Database = {
           name?: string
           reason?: string | null
           source?: string
+          source_data?: Json | null
           status?: string
           updated_at?: string
         }
@@ -8239,6 +8416,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tracking_runs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_brand_state: {
+        Row: {
+          brand_id: string
+          focus: Json
+          hidden: Json
+          nav_seen: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          focus?: Json
+          hidden?: Json
+          nav_seen?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          focus?: Json
+          hidden?: Json
+          nav_seen?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_brand_state_brand_id_fkey"
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
@@ -8512,6 +8724,14 @@ export type Database = {
       }
       brand_ai_conversions: {
         Args: { p_brand_id: string; p_days?: number }
+        Returns: Json
+      }
+      brand_ai_pipeline: {
+        Args: {
+          p_brand_id: string
+          p_since: string | null
+          p_until: string | null
+        }
         Returns: Json
       }
       can_access_brand: {
@@ -9301,12 +9521,14 @@ export type Database = {
         Args: {
           p_max_locations: number
           p_organization_id: string
+          p_over_limit?: string
           p_prompt_set_id: string
           p_rows: Json
         }
         Returns: {
           id: string
           idx: number
+          waiting: boolean
         }[]
       }
       org_brand_count: { Args: { p_organization_id: string }; Returns: number }

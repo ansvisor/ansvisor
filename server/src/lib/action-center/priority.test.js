@@ -437,6 +437,209 @@ describe('scorePriority', () => {
     expect(linked.reason.factors).toMatchObject({ severity: 0.6, confidence: 0.9 });
   });
 
+  it('scores the ChatGPT Business Hub setup as room to grow on one platform', () => {
+    const setup = scorePriority(
+      {
+        action: action({
+          kind: 'business_hub_setup',
+          category: 'growth',
+          impact: 'medium',
+          created_at: daysAgo(0),
+          payload: { source: 'business_hub', targetEntity: 'platforms', targetCount: 1 },
+        }),
+      },
+      NOW,
+    );
+    expect(setup.reason).toMatchObject({
+      change: 'opportunity',
+      subject: { entity: 'platforms', count: 1 },
+    });
+    expect(setup.reason.factors).toMatchObject({ confidence: 0.6, recoverability: 0.8 });
+  });
+
+  /** A topic gap sent from Visibility (VIS-010): scored by its gap, not as resolved findings. */
+  describe('a topic gap sent from Visibility', () => {
+    const topicGap = (gap, over = {}) =>
+      action({
+        kind: 'topic_competitor_gap',
+        category: 'compete',
+        impact: 'high',
+        created_at: daysAgo(0),
+        payload: {
+          source: 'topic_competitor_gap',
+          topicName: 'Coffee subscriptions',
+          competitorName: 'Northbound Roasters',
+          gap,
+          promptIds: ['p1', 'p2'],
+          targetEntity: 'prompts',
+          targetCount: 12,
+        },
+        ...over,
+      });
+    const scored = (gap, { prompts = demand([['p1', 300, 'how-to']]), ...over } = {}) =>
+      scorePriority({ action: topicGap(gap, over), signals: [], prompts }, NOW);
+
+    it('grows with the gap', () => {
+      const scores = [5, 15, 25, 35, 45].map((gap) => scored(gap).score);
+      for (let i = 1; i < scores.length; i++) expect(scores[i]).toBeGreaterThan(scores[i - 1]);
+      // From a resolved finding's severity at no gap, a gap's at 20 points, a
+      // slip's at 30, and no further past 40.
+      expect([0, 20, 30, 40, 60].map((gap) => scored(gap).reason.factors.severity)).toEqual([
+        0.3, 0.5, 0.6, 0.7, 0.7,
+      ]);
+      // With the impact its send gives it (20+ points high, 10+ medium), the more so.
+      expect(scored(23.4).score).toBeGreaterThan(scored(12, { impact: 'medium' }).score);
+      expect(scored(12, { impact: 'medium' }).score).toBeGreaterThan(
+        scored(6, { impact: 'low' }).score,
+      );
+    });
+
+    it('names the gap, the rival and its prompts in "Why this priority?"', () => {
+      const { reason } = scored(23.4);
+      expect(reason).toMatchObject({
+        change: 'gap',
+        subject: { entity: 'prompts', count: 12 },
+        competitorGap: { points: 23.4, competitor: 'Northbound Roasters' },
+        days: null,
+        kinds: 0,
+      });
+      expect(reason.factors).toMatchObject({ confidence: 0.6, recoverability: 0.6 });
+      // Without a gap or a rival to name, a plain gap on its prompts.
+      for (const payload of [{ gap: 0 }, { gap: null }, { competitorName: ' ' }]) {
+        const plain = scorePriority(
+          { action: topicGap(23.4, { payload: { ...topicGap(23.4).payload, ...payload } }) },
+          NOW,
+        );
+        expect(plain.reason.change).toBe('gap');
+        expect(plain.reason).not.toHaveProperty('competitorGap');
+      }
+    });
+
+    it("weighs its prompts' demand and commercial intent, as other kinds do", () => {
+      const quiet = scored(23.4, { prompts: demand([['p1', 20, 'what-is']]) });
+      const searched = scored(23.4, { prompts: demand([['p1', 5000, 'what-is']]) });
+      const buying = scored(23.4, { prompts: demand([['p1', 20, 'comparison']]) });
+      expect(searched.score).toBeGreaterThan(quiet.score);
+      expect(searched.reason).toMatchObject({ demand: 'high', searches: 5000 });
+      expect(buying.score).toBeGreaterThan(quiet.score);
+      expect(buying.reason.commercial).toBe(true);
+      expect(quiet.reason.commercial).toBe(false);
+    });
+  });
+
+  /** Scores as they were before topic gaps had a case of their own: nothing else moved. */
+  it('leaves every other kind as it was', () => {
+    const prompts = demand([
+      ['p1', 300, 'recommendation'],
+      ['p2', 1200, 'how-to'],
+    ]);
+    const sent = (kind, category, payload, impact = 'medium') =>
+      action({ kind, category, impact, created_at: daysAgo(1), payload });
+    const cases = [
+      [
+        sent('prompt_improve', 'compete', {
+          promptIds: ['p1'],
+          platforms: [
+            { id: 'gemini-web', state: 'not_mentioned' },
+            { id: 'chatgpt-web', state: 'not_cited' },
+          ],
+        }),
+        69,
+        'gap',
+      ],
+      [
+        sent(
+          'content_opportunity',
+          'growth',
+          { promptIds: ['p1', 'p2'], targetEntity: 'prompts', targetCount: 4 },
+          'high',
+        ),
+        72,
+        'gap',
+      ],
+      [
+        sent('content_draft', 'growth', {
+          promptIds: ['p2'],
+          targetEntity: 'prompts',
+          targetCount: 3,
+        }),
+        63,
+        'gap',
+      ],
+      [
+        sent('shopping_product', 'compete', {
+          promptIds: ['p1'],
+          targetEntity: 'prompts',
+          targetCount: 2,
+        }),
+        63,
+        'gap',
+      ],
+      [sent('shopping_links', 'fix', { targetEntity: 'pages', targetCount: 1 }), 62, 'issue'],
+      [
+        sent('business_hub_setup', 'growth', { targetEntity: 'platforms', targetCount: 1 }),
+        53,
+        'opportunity',
+      ],
+      [
+        sent('traffic_pages', 'fix', {
+          source: 'traffic_pages',
+          reason: 'cited_not_clicked',
+          targetEntity: 'pages',
+          targetCount: 2,
+          targets: [{ id: '/a', sessions: 240 }],
+        }),
+        60,
+        'gap',
+      ],
+      [
+        sent('chat_finding', 'recover', {
+          source: 'chat',
+          targetEntity: 'prompts',
+          targetCount: 2,
+          promptIds: ['p2'],
+        }),
+        66,
+        'slipping',
+      ],
+      [sent('audit_page', 'fix', { checks: [{ key: 'a' }, { key: 'b' }] }), 57, 'issue'],
+      // A kind with no case of its own still reads as having nothing open.
+      [
+        sent('topic_opportunity', 'growth', {
+          promptIds: ['p1'],
+          targetEntity: 'prompts',
+          targetCount: 5,
+        }),
+        56,
+        null,
+      ],
+      [sent('recover_lost_citations', 'recover', {}, 'high'), 59, null],
+    ];
+    for (const [sentAction, score, change] of cases) {
+      const { score: now, reason } = scorePriority(
+        { action: sentAction, signals: [], prompts },
+        NOW,
+      );
+      expect({ kind: sentAction.kind, score: now, change: reason.change }).toEqual({
+        kind: sentAction.kind,
+        score,
+        change,
+      });
+      expect(reason).not.toHaveProperty('competitorGap');
+    }
+    const backed = scorePriority(
+      {
+        action: action({ payload: { targetEntity: 'prompts', targetCount: 7 } }),
+        signals: [signal({ payload: { promptId: 'p1' } })],
+        prompts,
+      },
+      NOW,
+    );
+    expect(backed.score).toBe(83);
+    expect(backed.reason.change).toBe('lost');
+    expect(backed.reason).not.toHaveProperty('competitorGap');
+  });
+
   it('stays within 0–100 and returns whole numbers', () => {
     for (const impact of ['high', 'medium', 'low', 'unknown']) {
       const { score } = scorePriority({ action: action({ impact }), signals: [] }, NOW);

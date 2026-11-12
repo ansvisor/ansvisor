@@ -6,12 +6,14 @@ import { logger } from './logger.js';
 import { PageFetchError } from './safe-fetch.js';
 import { brandSiteType, rulesLanguage, untouchedRules } from './content-language.js';
 import { postJson } from './safe-post.js';
-import { isWebflowConfigured } from './composio.js';
+import { isHubspotConfigured, isWebflowConfigured } from './composio.js';
 import { credentialsConfigured } from './catalog/credentials.js';
 import { sendToWebflow } from './cms/webflow-delivery.js';
 import { sendToWordPress } from './cms/wordpress-delivery.js';
 import { sendToFramer } from './cms/framer-delivery.js';
 import { sendToWix } from './cms/wix-delivery.js';
+import { brandPlanHasHubspot, sendToHubspot } from './cms/hubspot-delivery.js';
+import { hubspotConnection } from './hubspot/connection.js';
 
 /**
  * Send to CMS, phase 1 (#1331): an admin or manager sends Content Editor
@@ -72,7 +74,7 @@ export const deliveryPage = z.object({
  * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
  * WordPress site, its Framer collection or its Wix site's Blog (phase 2).
  */
-const DELIVERY_TARGETS = ['webhook', 'webflow', 'wordpress', 'framer', 'wix'];
+const DELIVERY_TARGETS = ['webhook', 'webflow', 'wordpress', 'framer', 'wix', 'hubspot'];
 
 export const sendInput = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).
@@ -90,7 +92,9 @@ export class DeliveryError extends Error {
    *   'webflow_refused'|'webflow_not_ready'|'wordpress_not_configured'|'no_wordpress'|
    *   'wordpress_refused'|'framer_not_configured'|'no_framer'|'framer_refused'|
    *   'framer_not_ready'|'wix_not_configured'|'no_wix'|'wix_refused'|'in_progress'|
-   *   'not_found'|'daily_limit'|'framer_site_publish'|'live_item'|'publish_refused'} code
+   *   'not_found'|'daily_limit'|'framer_site_publish'|'live_item'|'publish_refused'|
+   *   'hubspot_not_configured'|'no_hubspot'|'hubspot_plan'|'hubspot_refused'|'hubspot_no_consent'|
+   *   'hubspot_not_ready'} code
    */
   constructor(code, message, status) {
     super(message);
@@ -366,12 +370,58 @@ async function wixFor(brandId) {
   return data;
 }
 
+/**
+ * The brand's HubSpot (#2140; 00522), ready to take pages as draft blog
+ * posts: connected (per brand, brand_integrations), the plan's
+ * crm_integrations, consent to send pages as drafts, and a blog picked.
+ */
+async function hubspotFor(brandId) {
+  if (!isHubspotConfigured()) {
+    throw new DeliveryError('hubspot_not_configured', 'HubSpot is not set up on this server.', 503);
+  }
+  const connection = await hubspotConnection(brandId);
+  if (!connection) {
+    throw new DeliveryError('no_hubspot', 'Connect HubSpot in Settings › Integrations.', 409);
+  }
+  if (!(await brandPlanHasHubspot(brandId))) {
+    throw new DeliveryError('hubspot_plan', 'HubSpot comes with the Growth plan.', 403);
+  }
+  if (!connection.connected) {
+    throw new DeliveryError(
+      'hubspot_refused',
+      'HubSpot refused the sign-in. Connect it again in Settings › Integrations.',
+      409,
+    );
+  }
+  const { consent, blog } = connection.settings;
+  if (!consent.pages) {
+    throw new DeliveryError(
+      'hubspot_no_consent',
+      'Allow sending pages as drafts on the HubSpot card in Settings › Integrations.',
+      409,
+    );
+  }
+  if (!blog?.id) {
+    throw new DeliveryError(
+      'hubspot_not_ready',
+      'Pick the HubSpot blog pages go to in Settings › Integrations.',
+      409,
+    );
+  }
+  return {
+    accountId: connection.accountId,
+    composioAccountId: connection.composioAccountId,
+    blogId: blog.id,
+  };
+}
+
 /** A CMS a page goes to itself, not through the webhook: its connection, and how a page is sent. */
 const NATIVE = {
   webflow: { label: 'Webflow', connect: webflowFor, send: sendToWebflow },
   wordpress: { label: 'WordPress', connect: wordpressFor, send: sendToWordPress },
   framer: { label: 'Framer', connect: framerFor, send: sendToFramer },
   wix: { label: 'Wix', connect: wixFor, send: sendToWix },
+  hubspot: { label: 'HubSpot', connect: hubspotFor, send: sendToHubspot },
 };
 
 /**

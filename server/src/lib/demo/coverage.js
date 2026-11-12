@@ -12,6 +12,8 @@ export const SKIPPED = {
   cloro_pending_tasks: "Tracking's queue of scraper tasks: a demo brand is never tracked.",
   jobs: 'The tracking and content job queue: no job runs for a demo brand.',
   sent_pulses: 'Pulse e-mails sent: nobody is mailed about a demo brand.',
+  slack_posts:
+    "Messages posted to a brand's Slack channel (00515): a demo brand never posts to Slack; its card shows sample data from the web's own list (web lib/demo/integrations.ts).",
   pulse_settings:
     'Pulse e-mail settings: a demo brand is never mailed; its settings show the defaults.',
   ai_traffic_digests: 'Weekly AI traffic e-mails sent: never for a demo brand.',
@@ -22,6 +24,8 @@ export const SKIPPED = {
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
     "A person's sentiment corrections on Mentions: the demo's answers carry their own.",
+  user_brand_state:
+    "A person's own Today and menu state on a brand (00529): their visits, focus and hidden cards, made by their own clicks, never sample data; on the demo brand everyone starts with none.",
 
   // demo-site
   brand_cms_connections:
@@ -36,6 +40,10 @@ export const SKIPPED = {
     'The demo catalog is built from a public product feed and has no order history; order line items must not imply a merchant’s real purchases.',
   catalog_item_issues:
     "Merchant Center's item issues: the demo's catalog comes from a product feed, and Merchant Center shows as Soon in the demo.",
+  hubspot_ai_contacts:
+    "HubSpot's AI-sourced contacts (00520), read from a connected HubSpot account: the demo brand connects none, so AI Traffic's pipeline section says HubSpot isn't connected.",
+  hubspot_ai_deals:
+    "The deals of HubSpot's AI-sourced contacts (00520): the demo brand connects no HubSpot account, so it has none.",
   catalog_item_matches:
     "GA items matched to the catalog after a GA sync (00493): the demo's Analytics is sample data that is never synced, so nothing is matched.",
   topic_catalog_categories:

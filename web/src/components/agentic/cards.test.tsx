@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { track } from '@/lib/analytics';
 import type { ChatStep } from '@/lib/chat/events';
 import { PlanCard, planStepPill, type PlanStep } from './plan-card';
 import { ApprovalCard, APPROVAL_CARD_STATUSES } from './approval-card';
@@ -32,6 +33,7 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -46,6 +48,7 @@ beforeEach(() => {
   root = createRoot(container);
   openUpgrade.mockReset();
   toast.success.mockReset();
+  vi.mocked(track).mockClear();
 });
 
 afterEach(() => {
@@ -611,6 +614,36 @@ describe('DenialCard', () => {
     expect(action('plan.compare')!.getAttribute('href')).toBe('/dashboard/settings/billing');
   });
 
+  it('counts a plan gate as an upgrade wall shown, once, and a read-only refusal too', async () => {
+    const gate = {
+      title: 'Full auto needs Growth',
+      asked: 'Run /winback in Full auto.',
+      why: 'Full auto needs Growth. Your plan: Starter.',
+      whoCan: 'Admins can change the plan.',
+    };
+    await render(<DenialCard {...gate} nextActions={['ask_admin', 'compare_plans']} />);
+    // Drawn again as the run goes on: the same wall.
+    await render(<DenialCard {...gate} nextActions={['ask_admin', 'compare_plans']} />);
+    expect(vi.mocked(track).mock.calls).toEqual([
+      ['upgrade_wall_shown', { feature: null, reason: 'plan', source: 'chat' }],
+    ]);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    vi.mocked(track).mockClear();
+    await render(<DenialCard {...gate} nextActions={['choose_plan']} />);
+    expect(vi.mocked(track).mock.calls).toEqual([
+      ['upgrade_wall_shown', { feature: null, reason: 'read_only', source: 'chat' }],
+    ]);
+  });
+
+  it('counts no wall for a denial that offers no plan', async () => {
+    await render(
+      <DenialCard {...role} nextActions={[...role.nextActions]} onAskAdmin={() => {}} />,
+    );
+    expect(track).not.toHaveBeenCalled();
+  });
+
   it('shows See tool policy only once its page has an address', async () => {
     const policy = {
       title: 'Your Admin set this tool to Never',
@@ -892,6 +925,116 @@ describe('QuestionCard', () => {
     await render(<QuestionAnswered question="Which page?" answer="Skipped · used /pricing" />);
     const line = $('[data-slot="question-answered"]')!;
     expect(line.textContent).toBe('Which page?Skipped · used /pricing');
+  });
+});
+
+describe('QuestionCard as the range card (owner request 2026-11-11)', () => {
+  const RANGE = {
+    n: 1,
+    question: 'Which time range should I use?',
+    options: [
+      { label: "This page's range: last 7 days", recommended: true },
+      { label: 'Last 24 hours', recommended: false },
+      { label: 'Last 30 days', recommended: false },
+      { label: 'Last 90 days', recommended: false },
+    ],
+    allowOther: true,
+    multi: false,
+    then: "I'll keep it as your default for every analysis. You can change it any time.",
+    dateRange: true as const,
+  };
+  const day = (offset: number) =>
+    new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const setDate = async (input: HTMLInputElement, value: string) => {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+  const ranges = () => $$('[data-action="question.pickRange"]') as HTMLButtonElement[];
+  const press = async (k: string) => {
+    await act(async () => {
+      $('[data-slot="question-card"]')!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: k, bubbles: true }),
+      );
+    });
+  };
+
+  it("shows a button a range, the page's first, then Custom, and no Next", async () => {
+    await render(<QuestionCard ask={RANGE} onAnswer={() => {}} />);
+    const card = $('[data-slot="question-card"]')!;
+    expect(card.dataset.kind).toBe('range');
+    expect(document.activeElement).toBe(card);
+    expect(card.querySelector('h3')!.textContent).toBe('Which time range should I use?');
+    expect(card.textContent).toContain("I'll keep it as your default");
+    expect(ranges().map((b) => b.textContent)).toEqual([
+      "This page's range: last 7 days",
+      'Last 24 hours',
+      'Last 30 days',
+      'Last 90 days',
+    ]);
+    expect(action('question.customRange')!.textContent).toBe('Custom');
+    expect(action('question.next')).toBeNull();
+    expect(card.textContent).toContain('Click a range, or press 1–5');
+    // No radio rows, no Recommended pill: one click answers.
+    expect($('[role="radiogroup"]')).toBeNull();
+    expect(card.textContent).not.toContain('Recommended');
+  });
+
+  it('answers with one click or its number key, without typing', async () => {
+    const onAnswer = vi.fn();
+    await render(<QuestionCard ask={RANGE} onAnswer={onAnswer} />);
+    await click(ranges()[2]);
+    expect(onAnswer).toHaveBeenLastCalledWith({ selected: [2], other: null, skipped: false });
+    await press('1');
+    expect(onAnswer).toHaveBeenLastCalledWith({ selected: [0], other: null, skipped: false });
+    // The last number opens Custom.
+    await press('5');
+    expect($('[data-slot="range-custom"]')).not.toBeNull();
+    expect(onAnswer).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends two days under Custom, once they make a range up to today', async () => {
+    const onAnswer = vi.fn();
+    await render(<QuestionCard ask={RANGE} onAnswer={onAnswer} />);
+    await click(action('question.customRange'));
+    const [from, to] = $$('[data-slot="range-custom"] input') as HTMLInputElement[];
+    expect(to.max).toBe(day(0));
+    expect(action('question.useDates')!.disabled).toBe(true);
+    await setDate(from, day(-5));
+    await setDate(to, day(-10));
+    expect(action('question.useDates')!.disabled).toBe(true);
+    expect($('[data-slot="range-custom"] [role="alert"]')!.textContent).toContain(
+      'the first not after the last',
+    );
+    await setDate(to, day(-1));
+    await click(action('question.useDates'));
+    expect(onAnswer).toHaveBeenCalledWith({
+      selected: [],
+      other: `${day(-5)}/${day(-1)}`,
+      skipped: false,
+    });
+  });
+
+  it('skips with the Recommended range, and answers nothing while read-only', async () => {
+    const onAnswer = vi.fn();
+    await render(<QuestionCard ask={RANGE} onAnswer={onAnswer} />);
+    await click(action('question.skip'));
+    expect(onAnswer).toHaveBeenCalledWith({ selected: [], other: null, skipped: true });
+    onAnswer.mockClear();
+    await render(<QuestionCard key="locked" ask={RANGE} onAnswer={onAnswer} />, {
+      isLocked: true,
+    });
+    await click(ranges()[0]);
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(openUpgrade).toHaveBeenCalledWith('Answering needs a plan');
+  });
+
+  it('is busy while it saves', async () => {
+    await render(<QuestionCard ask={RANGE} status="saving" onAnswer={() => {}} />);
+    expect(ranges().every((b) => b.disabled)).toBe(true);
+    expect(action('question.customRange')!.disabled).toBe(true);
+    expect(action('question.skip')!.disabled).toBe(true);
   });
 });
 

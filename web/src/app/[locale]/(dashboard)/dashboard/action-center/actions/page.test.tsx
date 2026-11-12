@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Brand } from '@/types';
 import type { ActionItem } from '@/lib/actions/action-center';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 import type { FirstRun } from '@/hooks/use-first-run';
 import {
   buildGettingStarted,
@@ -200,14 +201,16 @@ const exportButton = () =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === 'exportCsv')!;
 
 const openUpgrade = vi.fn();
-async function render(isLocked = false) {
+async function render(isLocked = false, simpleNav = false) {
   await act(async () =>
     root.render(
-      <UpgradeDialogContext.Provider
-        value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-      >
-        <ActionCenterActionsPage />
-      </UpgradeDialogContext.Provider>,
+      <SimpleNavProvider enabled={simpleNav}>
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ActionCenterActionsPage />
+        </UpgradeDialogContext.Provider>
+      </SimpleNavProvider>,
     ),
   );
 }
@@ -291,6 +294,20 @@ describe('Today (AC-011)', () => {
     getToday.mockRejectedValue(new Error('down'));
     await render();
     expect(today()).toBeNull();
+    expect(exportButton()).toBeDefined();
+  });
+});
+
+describe('with the simplified layout on (SIMPLE_NAV)', () => {
+  it("shows no Today card and no Getting started rows, and reads neither: they are Today's", async () => {
+    getGettingStarted.mockResolvedValue(started());
+    await render(false, true);
+    expect(getToday).not.toHaveBeenCalled();
+    expect(getGettingStarted).not.toHaveBeenCalled();
+    expect(container.querySelector('section[aria-label="title"]')).toBeNull();
+    expect(steps()).toBeNull();
+    expect(text()).not.toContain('card.title');
+    expect(text()).toContain('cards.priority');
     expect(exportButton()).toBeDefined();
   });
 });
@@ -557,6 +574,20 @@ describe('Getting started in the actions list', () => {
     window.history.replaceState(null, '', '/?action=a1&brand=not-theirs');
     await render();
     expect(setActiveBrand).not.toHaveBeenCalled();
+  });
+
+  /** Where actions/[id] sends a Chat answer's "AC-1497": its drawer, or none for an action not here. */
+  it('opens the drawer of the action a link names, and none for one it doesn’t hold', async () => {
+    const opened = () => drawer.props?.action?.id ?? null;
+    window.history.replaceState(null, '', '/?action=a1&brand=brand-id');
+    await render();
+    expect(opened()).toBe('a1');
+    act(() => root.unmount());
+    root = createRoot(container);
+    drawer.props = null;
+    window.history.replaceState(null, '', '/?action=not-here&brand=brand-id');
+    await render();
+    expect(opened()).toBeNull();
   });
 
   it('keeps a category the URL names, and lists the actions', async () => {

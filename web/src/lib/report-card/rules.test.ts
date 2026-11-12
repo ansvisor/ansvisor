@@ -21,6 +21,10 @@ import {
   mainEngineRows,
   mainTotals,
   money,
+  planAiMultiple,
+  planBrands,
+  planPrompts,
+  planSiteAudits,
   planYearly,
   productLabel,
   questionDemand,
@@ -30,6 +34,9 @@ import {
   quickWins,
   quotedQuestion,
   revenueRows,
+  roughly,
+  searchesLabel,
+  signUpUrlFor,
   siteBrandKey,
   startingPoint,
   targetGroups,
@@ -580,6 +587,89 @@ describe('formats', () => {
     expect(money(1_850)).toBe('$1,850');
     expect(money(380, 'EUR')).toBe('€380');
     expect(money(380, 'TRY')).toBe('TRY\u00a0380');
+  });
+
+  it('rounds the questions’ searches to two figures: about 6,900, not 6,860', () => {
+    expect(roughly(6_860)).toBe(6_900);
+    expect(roughly(18_580)).toBe(19_000);
+    expect(roughly(45)).toBe(45);
+    // The value table still prices the real figure.
+    expect(valueRows(SAMPLE_REPORT_CARD)?.[0].visits).toBe(372);
+  });
+});
+
+describe('searchesLabel', () => {
+  const at = [null, 0, 10, 99, 100, 999, 1_000, 9_999, 10_000, 99_999, 100_000, 2_500_000];
+
+  it('shows a question’s searches as Google Keyword Planner’s range, Low for 0 or none', () => {
+    expect(at.map((volume) => searchesLabel(volume, en))).toEqual([
+      'Low',
+      'Low',
+      '10–100',
+      '10–100',
+      '100–1K',
+      '100–1K',
+      '1K–10K',
+      '1K–10K',
+      '10K–100K',
+      '10K–100K',
+      '100K+',
+      '100K+',
+    ]);
+    expect(searchesLabel(1, en)).toBe('10–100');
+  });
+
+  it('writes the ranges the Turkish way, with bin as B', () => {
+    expect(at.map((volume) => searchesLabel(volume, tr))).toEqual([
+      'Düşük',
+      'Düşük',
+      '10–100',
+      '10–100',
+      '100–1\u00a0B',
+      '100–1\u00a0B',
+      '1\u00a0B–10\u00a0B',
+      '1\u00a0B–10\u00a0B',
+      '10\u00a0B–100\u00a0B',
+      '10\u00a0B–100\u00a0B',
+      '100\u00a0B+',
+      '100\u00a0B+',
+    ]);
+  });
+
+  it('leaves the questions in the order of their real searches', () => {
+    const lines = questionLines(SAMPLE_REPORT_CARD);
+    expect(lines[0].volume).toBe(2_900);
+    expect(lines[24].volume).toBeNull();
+  });
+});
+
+describe('page 4: plans and links', () => {
+  it('reads the plans’ facts from the plan config', () => {
+    expect([planPrompts('starter'), planBrands('starter')]).toEqual([
+      PLANS.starter.limits.maxPrompts,
+      PLANS.starter.limits.maxBrands,
+    ]);
+    expect([planPrompts('growth'), planBrands('growth')]).toEqual([
+      PLANS.growth.limits.maxPrompts,
+      PLANS.growth.limits.maxBrands,
+    ]);
+    expect(planSiteAudits('growth')).toBe(PLANS.growth.limits.maxSiteAudits);
+  });
+
+  it('gives AI usage as a multiple of Starter’s, as the Billing cards do', () => {
+    expect(planAiMultiple('starter')).toBe(1);
+    expect(planAiMultiple('growth')).toBe(
+      Math.round(
+        PLANS.growth.limits.improveMonthlyBudgetUsd / PLANS.starter.limits.improveMonthlyBudgetUsd,
+      ),
+    );
+  });
+
+  it('marks each trial button with its page', () => {
+    expect(signUpUrlFor(1)).toBe(
+      'https://app.ansvisor.com/en/sign-up?utm_source=report-card&utm_medium=pdf&utm_content=page1',
+    );
+    expect(signUpUrlFor(4)).toMatch(/&utm_content=page4$/);
   });
 });
 

@@ -164,6 +164,12 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
       title: 'Win back pricing citations on /pricing',
       href: `/dashboard/action-center/actions/${UUID}`,
     }),
+  'schedule.made': () =>
+    chatEvent('schedule.made', 21, {
+      title: 'Espresso watch',
+      when: 'Every Monday, 08:00 · Europe/Istanbul',
+      href: `/dashboard/chat/scheduled/${UUID}`,
+    }),
   'tasks.updated': () =>
     chatEvent('tasks.updated', 20, {
       tasks: [

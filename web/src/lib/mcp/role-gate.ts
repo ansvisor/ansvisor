@@ -3,13 +3,13 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { UserRole } from '@/types';
 
 /**
- * Who may do what over an API key. The key acts as its user, with that
- * user's role, and the MCP layer writes with the service role, so the row
- * rules the dashboard relies on don't apply: the tools check the role
- * themselves. The split follows the dashboard: day-to-day work (drafts,
- * tasks, audits, briefs, reports) is open to every member; adding prompts or
- * topics, dismissing what the team decides on, and settings are for admins
- * and managers.
+ * Who may do what over an API key or an app's sign-in. The connection acts
+ * as its user, with that user's role, and the MCP layer writes with the
+ * service role, so the row rules the dashboard relies on don't apply: the
+ * tools check the role themselves. The split follows the dashboard:
+ * day-to-day work (drafts, tasks, audits, briefs, reports) is open to every
+ * member; adding prompts or topics, dismissing what the team decides on, and
+ * settings are for admins and managers.
  */
 export const MANAGER_ROLES = ['admin', 'manager'] as const satisfies readonly UserRole[];
 
@@ -30,7 +30,7 @@ function roleList(roles: readonly UserRole[]): string {
 }
 
 /**
- * A call the key's user may not make with their role. An MCP tool that throws
+ * A call the connection's user may not make with their role. An MCP tool that throws
  * it answers as a tool error with the message (the SDK turns a thrown error
  * into one); a REST route answers 403 (roleRequiredResponse).
  */
@@ -40,7 +40,7 @@ export class RoleRequiredError extends Error {
 
   constructor(roles: readonly UserRole[], role: UserRole | null) {
     super(
-      `Only ${roleList(roles)} can do this. This API key acts as ${
+      `Only ${roleList(roles)} can do this. This connection acts as ${
         role ? ROLE_NAMES[role] : 'a user without a role'
       }: ask an admin or a manager of the organization to do it.`,
     );
@@ -48,12 +48,12 @@ export class RoleRequiredError extends Error {
   }
 }
 
-/** Refuse the call unless the key's user has one of `roles`. */
+/** Refuse the call unless the connection's user has one of `roles`. */
 export function requireRole(auth: Pick<McpAuthContext, 'role'>, roles: readonly UserRole[]): void {
   if (!auth.role || !roles.includes(auth.role)) throw new RoleRequiredError(roles, auth.role);
 }
 
-/** Refuse the call unless the key's user is an admin or a manager. */
+/** Refuse the call unless the connection's user is an admin or a manager. */
 export function requireManager(auth: Pick<McpAuthContext, 'role'>): void {
   requireRole(auth, MANAGER_ROLES);
 }

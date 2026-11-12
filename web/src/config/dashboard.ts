@@ -6,6 +6,7 @@ import {
   Gauge,
   Globe,
   LineChart,
+  Megaphone,
   MessageCircleMore,
   Quote,
   ShoppingBag,
@@ -54,6 +55,17 @@ export interface NavChild {
    */
   requiredFeature?: Feature;
   requiresBrandPref?: BrandPrefKey;
+  /**
+   * Only with the new Chat on for the workspace (CHAT_AGENTIC), as an item's
+   * flag of that name: off, the entry is on no menu and in no list of the
+   * menu's sections. Action Center › Agents in the simplified menu.
+   */
+  requiresChatAgentic?: boolean;
+  /**
+   * Pages of another address it is also the current entry on: History on
+   * KPIs, one of its views, in the simplified menu (SIMPLE_NAV).
+   */
+  currentOn?: string[];
 }
 
 export interface NavItem {
@@ -72,6 +84,14 @@ export interface NavItem {
    * there either. Agent Center.
    */
   requiresChatAgentic?: boolean;
+  /**
+   * Only with Ads on (ADS_ENABLED, lib/ads/flag.ts): off, the item is on no
+   * menu and in no list of the menu's sections, as its page isn't there
+   * either. Ads, while it is in development.
+   */
+  requiresAds?: boolean;
+  /** An outlined "New" pill after the label (NewPill), for a new area: Ads. */
+  newPill?: boolean;
 }
 
 export interface NavGroup {
@@ -112,45 +132,13 @@ export const dashboardNav: NavGroup[] = [
     ],
   },
   /**
-   * New Ansvisor: the groups name the two things the product does. Execution
-   * does the work (actions, content, page fixes); Analytics shows where the
-   * brand stands in AI search.
+   * New Ansvisor: the groups name the two things the product does. Analytics
+   * shows where the brand stands in AI search; Execution does the work
+   * (actions, content, page fixes). Analytics first (owner, 2026-11-09): you
+   * see the data before you act on it. A new brand's answers come in about an
+   * hour, its actions about a day later, as Getting started's stages go; and
+   * Chat, above both, is where most work now starts.
    */
-  {
-    title: 'Execution',
-    items: [
-      {
-        title: 'Action Center',
-        href: '/dashboard/action-center',
-        icon: Target,
-      },
-      // Content Editor (CE-001): a group, like Prompts, and new as a whole.
-      // Its pages in the order the work goes: Opportunities (today's page,
-      // keeping /dashboard/content) finds what to write, the Plan says what
-      // to do next (CE-014), the Editor goes back to the draft last opened,
-      // else starts a new page, and the Library lists every page written or
-      // changed in Ansvisor.
-      {
-        title: 'Content',
-        href: '/dashboard/content',
-        icon: FileText,
-        requiredFeature: 'content_optimization',
-        children: [
-          { title: 'Opportunities', href: '/dashboard/content' },
-          { title: 'Plan', href: '/dashboard/content/plan' },
-          // A draft open in the editor (CE-004) is under it.
-          { title: 'Editor', href: '/dashboard/content/editor', keepsPage: true },
-          { title: 'Library', href: '/dashboard/content/library' },
-        ],
-      },
-      {
-        title: 'Site Audit',
-        href: '/dashboard/audit',
-        icon: Gauge,
-        requiredFeature: 'content_optimization',
-      },
-    ],
-  },
   {
     title: 'Analytics',
     items: [
@@ -201,6 +189,53 @@ export const dashboardNav: NavGroup[] = [
         icon: LineChart,
         requiredFeature: 'advanced_analytics',
       },
+      // Ads (ADS-01): earn the AI answer, pay for it, or both. Last of
+      // Analytics, after AI Referral Traffic and before Reports, new. Only
+      // with ADS_ENABLED on, while it is in development (owner, 2026-11-10).
+      // No requiredFeature: Starter opens the page and sees what Growth adds
+      // there (DECISIONS J), so the item isn't locked here.
+      {
+        title: 'Ads',
+        href: '/dashboard/ads',
+        icon: Megaphone,
+        requiresAds: true,
+        newPill: true,
+      },
+    ],
+  },
+  {
+    title: 'Execution',
+    items: [
+      {
+        title: 'Action Center',
+        href: '/dashboard/action-center',
+        icon: Target,
+      },
+      // Content Editor (CE-001): a group, like Prompts, and new as a whole.
+      // Its pages in the order the work goes: Opportunities (today's page,
+      // keeping /dashboard/content) finds what to write, the Plan says what
+      // to do next (CE-014), the Editor goes back to the draft last opened,
+      // else starts a new page, and the Library lists every page written or
+      // changed in Ansvisor.
+      {
+        title: 'Content',
+        href: '/dashboard/content',
+        icon: FileText,
+        requiredFeature: 'content_optimization',
+        children: [
+          { title: 'Opportunities', href: '/dashboard/content' },
+          { title: 'Plan', href: '/dashboard/content/plan' },
+          // A draft open in the editor (CE-004) is under it.
+          { title: 'Editor', href: '/dashboard/content/editor', keepsPage: true },
+          { title: 'Library', href: '/dashboard/content/library' },
+        ],
+      },
+      {
+        title: 'Site Audit',
+        href: '/dashboard/audit',
+        icon: Gauge,
+        requiredFeature: 'content_optimization',
+      },
     ],
   },
   /**
@@ -233,3 +268,77 @@ export const dashboardNav: NavGroup[] = [
     ],
   },
 ];
+
+/** An item of dashboardNav by its route: the simplified menu reuses them as they are. */
+function menuItem(href: string): NavItem {
+  const item = dashboardNav.flatMap((group) => group.items).find((entry) => entry.href === href);
+  if (!item) throw new Error(`No menu item at ${href}`);
+  return item;
+}
+
+/**
+ * The simplified menu (SIMPLE_NAV, lib/simple-nav/flag.ts; the owner's
+ * decisions of 2026-11-11), while it is built: dashboardNav stays the menu
+ * until the launch. Chat, then the Action Center, where everyone lands, as
+ * a group of its own tabs: Today, Actions, Signals, Agents (Agent Center at
+ * its own address, so its menu section, links and Chat's routes stay; only
+ * with the new Chat on and a plan with agents) and History. ANALYTICS, with
+ * Prompts first (adding prompts is the way in), then Visibility, AI Referral
+ * Traffic and Ads, still last and only with ADS_ENABLED. MORE: Content, Site
+ * Audit, Reports and Competitors. Every item keeps its route, gates and
+ * submenu; Agent Center is no item of its own.
+ */
+export const simpleDashboardNav: NavGroup[] = [
+  {
+    items: [
+      menuItem('/dashboard/agent'),
+      {
+        title: 'Action Center',
+        href: '/dashboard/action-center',
+        icon: Target,
+        children: [
+          { title: 'Today', href: '/dashboard/action-center/today' },
+          { title: 'Actions', href: '/dashboard/action-center/actions' },
+          { title: 'Signals', href: '/dashboard/action-center/signals' },
+          {
+            title: 'Agents',
+            href: '/dashboard/agents',
+            icon: Bot,
+            // Where menu access lists the sections: under the Action Center's row.
+            sectionTitle: 'Agents · in Action Center',
+            requiredFeature: 'ai_agent',
+            requiresChatAgentic: true,
+          },
+          {
+            title: 'History',
+            href: '/dashboard/action-center/history',
+            currentOn: ['/dashboard/action-center/kpis'],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    title: 'Analytics',
+    items: [
+      menuItem('/dashboard/prompts'),
+      menuItem('/dashboard/insights'),
+      menuItem('/dashboard/traffic'),
+      menuItem('/dashboard/ads'),
+    ],
+  },
+  {
+    title: 'More',
+    items: [
+      menuItem('/dashboard/content'),
+      menuItem('/dashboard/audit'),
+      menuItem('/dashboard/reports'),
+      menuItem('/dashboard/competitors'),
+    ],
+  },
+];
+
+/** The menu shown: the simplified one with SIMPLE_NAV on, dashboardNav otherwise. */
+export function navFor(simpleNav: boolean): NavGroup[] {
+  return simpleNav ? simpleDashboardNav : dashboardNav;
+}

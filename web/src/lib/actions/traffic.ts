@@ -981,6 +981,110 @@ export async function getTrafficConversions(
   return { ...last30, widened: true };
 }
 
+/**
+ * AI Traffic's "AI-sourced pipeline" (#2140, 00520): the brand's AI-sourced
+ * HubSpot contacts, deals and revenue by AI engine and landing page, as
+ * brand_ai_pipeline reads them from the daily HubSpot sync. `connected` and
+ * `contactsConsent` say whether there is anything to read; amounts are in
+ * the HubSpot account's currency.
+ */
+export interface TrafficAiPipelineTotals {
+  contacts: number;
+  /** The period before, as long; null for a range without both ends. */
+  contactsPrev: number | null;
+  deals: number;
+  wonDeals: number;
+  wonRevenue: number;
+  wonRevenuePrev: number | null;
+  openDeals: number;
+  openPipeline: number;
+}
+
+export interface TrafficAiPipeline {
+  connected: boolean;
+  contactsConsent: boolean;
+  currency: string | null;
+  syncedAt: string | null;
+  syncError: string | null;
+  totals: TrafficAiPipelineTotals;
+  byEngine: {
+    source: string;
+    contacts: number;
+    deals: number;
+    wonDeals: number;
+    wonRevenue: number;
+    openPipeline: number;
+  }[];
+  byPage: {
+    page: string;
+    contacts: number;
+    deals: number;
+    wonRevenue: number;
+    topSource: string | null;
+  }[];
+  /** HubSpot's own AI Referrals contacts on the brand's domains, Ansvisor didn't mark. */
+  hubspotNative: { contacts: number; deals: number; wonRevenue: number };
+}
+
+export async function getTrafficAiPipeline(
+  brandId: string,
+  window: TrafficDateWindow | undefined,
+): Promise<TrafficAiPipeline | null> {
+  const supabase = await createClient();
+  const { from, to } = resolveTrafficWindow(window);
+  const { data, error } = await supabase.rpc('brand_ai_pipeline', {
+    p_brand_id: brandId,
+    p_since: utcDay(from) ?? null,
+    p_until: utcDay(to) ?? null,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const raw = data as Record<string, unknown>;
+  const n = (v: unknown) => Number(v) || 0;
+  const maybe = (v: unknown) => (v === null || v === undefined ? null : n(v));
+  const text = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+  const totals = (raw.totals ?? {}) as Record<string, unknown>;
+  const native = (raw.hubspotNative ?? {}) as Record<string, unknown>;
+  return {
+    connected: raw.connected === true,
+    contactsConsent: raw.contactsConsent === true,
+    currency: text(raw.currency),
+    syncedAt: text(raw.syncedAt),
+    syncError: text(raw.syncError),
+    totals: {
+      contacts: n(totals.contacts),
+      contactsPrev: maybe(totals.contactsPrev),
+      deals: n(totals.deals),
+      wonDeals: n(totals.wonDeals),
+      wonRevenue: n(totals.wonRevenue),
+      wonRevenuePrev: maybe(totals.wonRevenuePrev),
+      openDeals: n(totals.openDeals),
+      openPipeline: n(totals.openPipeline),
+    },
+    byEngine: list(raw.byEngine).map((r) => ({
+      source: String(r.source ?? 'unknown'),
+      contacts: n(r.contacts),
+      deals: n(r.deals),
+      wonDeals: n(r.wonDeals),
+      wonRevenue: n(r.wonRevenue),
+      openPipeline: n(r.openPipeline),
+    })),
+    byPage: list(raw.byPage).map((r) => ({
+      page: String(r.page ?? ''),
+      contacts: n(r.contacts),
+      deals: n(r.deals),
+      wonRevenue: n(r.wonRevenue),
+      topSource: text(r.topSource),
+    })),
+    hubspotNative: {
+      contacts: n(native.contacts),
+      deals: n(native.deals),
+      wonRevenue: n(native.wonRevenue),
+    },
+  };
+}
+
 /** Analytics' engagement figures for one group of sessions (AT-005). */
 export interface TrafficEngagement {
   sessions: number;

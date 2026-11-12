@@ -11,7 +11,9 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
 /**
  * Chat's Prompts reads (CHAT-20 §9 rows 14, 16, 18; Chat Wave 1 W1-16), and
  * the fan-out gaps the /fanout skill works from (AGENTS plan §3 #9): row 18's
- * read, kept to the sub-queries whose answers never named the brand.
+ * read, kept to the sub-queries whose answers never named the brand. Both
+ * fan-out reads run only within a skill that names them (withSkill, owner
+ * decision 2026-11-09): heavy, they timed out on general questions.
  */
 
 const brandId = contentUuid.describe('Brand id, from list_brands.');
@@ -22,12 +24,13 @@ export const PROMPTS_READS = [
     class: 'read',
     area: 'prompts',
     description:
-      'The searches AI engines ran behind the brand\'s tracked answers (query fan-out): each sub-query, the engines that ran it, how often, and whether it is tracked as a prompt. For "what do the engines search for" questions.',
+      "The searches AI engines ran behind the brand's tracked answers (query fan-out): each sub-query, the engines that ran it, how often, and whether it is tracked as a prompt. Only within a loaded skill that names this read; never for a general question.",
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
     costClass: 'C1',
     labelKey: 'fanouts',
+    withSkill: true,
     route: '/dashboard/prompts/fan-outs',
     mcpTool: null,
     specRow: '18',
@@ -43,12 +46,13 @@ export const PROMPTS_READS = [
     class: 'read',
     area: 'prompts',
     description:
-      'The fan-out gaps: the searches AI engines ran behind the brand\'s tracked answers where none of those answers named the brand or cited its site, the most searched first. Each with the engines that ran it, how often, whether it is tracked as a prompt, the tracked prompts whose answers ran it (their ids, to draft from) and the competitors those answers named instead. For "where are we missing" and drafting answers to those exact sub-questions.',
+      "The fan-out gaps: the searches AI engines ran behind the brand's tracked answers where none of those answers named the brand or cited its site, the most searched first. Each with the engines that ran it, how often, whether it is tracked as a prompt, the tracked prompts whose answers ran it (their ids, to draft from) and the competitors those answers named instead. For drafting answers to those exact sub-questions, only within a loaded skill that names this read (/fanout); never for a general question.",
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
     costClass: 'C1',
     labelKey: 'fanoutGaps',
+    withSkill: true,
     route: '/dashboard/prompts/fan-outs',
     mcpTool: null,
     specRow: '18',

@@ -2,7 +2,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { brandReaders } from '../access.js';
 import { deliverEmail } from '../email.js';
 import logger from '../logger.js';
-import { appOrigin, emailOf, escapeHtml } from './own-key.js';
+import { appOrigin, emailOf, escapeHtml, wantsEmail } from './own-key.js';
 
 /**
  * Telling people an agent went live on its own (AUTONOMOUS-GO-LIVE §6.4,
@@ -63,9 +63,23 @@ export async function membersOf(orgId, ids) {
 
 /**
  * Writes one notice per person (unique by person and `dedupe`), then sends
- * the e-mail to those it was new for who want e-mail. What went out.
+ * the e-mail to those it was new for who want e-mail. With `slack` (an
+ * agent's "needs you", #2139), the people it was new for who chose Inbox +
+ * Slack are handed to it first: those it posted for get no e-mail, the
+ * others (a brand without Slack, a post that failed) get the e-mail
+ * instead. Every other notice comes by e-mail with Inbox + Slack too, as
+ * Slack doesn't carry it. What went out.
  */
-export async function tell({ orgId, people, kind, payload, dedupe, brandId = null, email }) {
+export async function tell({
+  orgId,
+  people,
+  kind,
+  payload,
+  dedupe,
+  brandId = null,
+  email,
+  slack = null,
+}) {
   if (people.length === 0) return { notices: 0, emails: 0 };
   const { data: written, error } = await supabaseAdmin
     .from('chat_notices')
@@ -84,10 +98,12 @@ export async function tell({ orgId, people, kind, payload, dedupe, brandId = nul
   if (error) throw new Error(error.message);
   const told = new Set((written ?? []).map((row) => row.user_id));
   const via = await notifyViaOf([...told]);
+  const toSlack = [...told].filter((id) => via.get(id) === 'inbox_slack');
+  const posted = slack && toSlack.length ? await slack(toSlack) : new Set();
   let emails = 0;
   for (const id of told) {
-    // Inbox only, and Inbox only until Slack exists, send no e-mail.
-    if ((via.get(id) ?? 'inbox_email') !== 'inbox_email') continue;
+    // Inbox only sends no e-mail; nor does Inbox + Slack once Slack carried it.
+    if (!wantsEmail(via.get(id)) || posted.has(id)) continue;
     const to = await emailOf(id);
     if (!to) continue;
     const outcome = await deliverEmail({ to: [to], ...email });
@@ -95,7 +111,7 @@ export async function tell({ orgId, people, kind, payload, dedupe, brandId = nul
     else if (outcome !== 'skipped')
       logger.warn({ orgId, kind, outcome }, 'go-live e-mail not sent');
   }
-  return { notices: told.size, emails };
+  return { notices: told.size, emails, ...(posted.size ? { slack: posted.size } : {}) };
 }
 
 export const BUTTON =

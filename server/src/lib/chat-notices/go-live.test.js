@@ -158,6 +158,15 @@ describe('tellWentLive', () => {
     expect(db.tables.chat_notices).toHaveLength(2);
   });
 
+  it('e-mails a person who chose Inbox + Slack: Slack doesn’t carry this notice (#2139)', async () => {
+    db.tables.chat_user_prefs = [{ user_id: 'notify-1', notify_via: 'inbox_slack' }];
+    expect(await tellWentLive({ eventId: EVENT })).toMatchObject({ notices: 2, emails: 2 });
+    expect(deliverEmail.mock.calls.map(([mail]) => mail.to[0]).sort()).toEqual([
+      'notify-1@acme.test',
+      'owner-1@acme.test',
+    ]);
+  });
+
   it('writes the action’s History once when the page works on one', async () => {
     db.tables.content_drafts[0].action_id = 'action-1';
     expect((await tellWentLive({ eventId: EVENT })).history).toBe(true);

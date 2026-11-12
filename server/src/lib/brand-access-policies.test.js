@@ -59,6 +59,8 @@ const SERVER_ONLY = [
   'mentions_terms_daily',
   'prompt_improve_suggestions',
   'signal_runs',
+  // What was posted to a brand's Slack channel (00515, #2139): its dedupe and error codes.
+  'slack_posts',
   'suggestion_relevance_usage',
 ];
 
@@ -603,6 +605,8 @@ describe('every brand table answers to the brand’s access', () => {
       'chat_schedules',
       'chat_memory_items',
       'brand_integrations',
+      // A person's own Today and menu state (00529): their rows, on brands they access.
+      'user_brand_state',
     ]) {
       expect(reaching, table).toContain(table);
     }

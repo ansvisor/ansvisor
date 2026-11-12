@@ -4,11 +4,11 @@ route: /dashboard/action-center/actions
 keywords: [start now, content editor, start in content editor, write page, open draft, chat, what to do, play, also worth doing]
 synonyms: [one click to editor, start writing, draft from action, work on action, which page to write, playbook]
 plan: all
-updated: 2026-11-07
+updated: 2026-11-09
 last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 When an action's work is writing, a new page or a better existing one, its drawer opens with a **Start now** block at the top of **Overview**. It takes you straight to the writing, with what the action knows already filled in.
@@ -26,6 +26,12 @@ When an action asks for new content for prompts or a topic, Ansvisor reads what 
 On an online store, a topic action whose topic is linked to a catalog category with a live page (**Settings › Integrations**, **Topics and categories**) reads **Optimize the category page** instead of a new page. Its draft opens that page, with the category's best sellers in stock picked for its shopping path.
 
 When the category has products in stock but no live page, it reads **Write a buying guide**: a new page for the topic, its shopping path starting with the category's best sellers.
+
+## A buying guide next to the category page
+
+When the category page is live but the category has no buying guide yet, **Also worth doing here** starts with **Write a buying guide next to** that page: a guide for the topic that links the category page and its best sellers.
+
+A draft or a published page counts as the category's guide when its title names the category or its shopping path links it, as in the Content plan's **Shopping opportunities**. The category needs at least three products in stock.
 
 ## What Content Editor opens
 

@@ -85,11 +85,11 @@ const ids = (max: number) => z.array(uuid).max(max).refine(distinct, 'No repeats
 const httpUrl = z.url({ protocol: /^https?$/ }).max(2048);
 const words = (max: number) => z.string().trim().min(1).max(max);
 /**
- * Engines no longer tracked (Copilot, Perplexity) that a saved scope may
- * still name. Not offered, but a scope that names one still parses, so the
- * agent keeps running.
+ * Engines no longer tracked (Perplexity) that a saved scope may still name.
+ * Not offered, but a scope that names one still parses, so the agent keeps
+ * running.
  */
-const RETIRED_ENGINES: readonly string[] = ['copilot-web', 'perplexity-web'];
+const RETIRED_ENGINES: readonly string[] = ['perplexity-web'];
 const engine = z
   .string()
   .refine((e) => AGENT_ENGINES.includes(e) || RETIRED_ENGINES.includes(e), 'Unknown engine');

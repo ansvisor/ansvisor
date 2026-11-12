@@ -120,6 +120,49 @@ export function locationLimitMessage(plan: Plan, used: number, adding: number): 
   );
 }
 
+// ─── Waiting for a spot (00535) ──────────────────────────────────────────────
+
+/**
+ * How many of these new prompts, taken in order, the plan has room to track,
+ * each costing its locations (`costs`, promptLocationCount). The rest are
+ * saved waiting for a spot instead of being refused (Simplify PR 15, behind
+ * SIMPLE_NAV). As import_prompts does with p_over_limit 'wait' (00535): once
+ * one doesn't fit, it and every one after it wait, so a smaller prompt
+ * further down never jumps the order the person gave. Same rules as
+ * locationLimitMessage: unlimited plans fit everything, landing exactly on
+ * the cap fits, and `used` counts the whole organization's active
+ * locations, across its brands (getOrgLocationUsage).
+ */
+export function promptsThatFit(plan: Plan, used: number, costs: readonly number[]): number {
+  let total = used;
+  for (let i = 0; i < costs.length; i++) {
+    total += costs[i];
+    if (locationLimitMessage(plan, used, total - used) !== null) return i;
+  }
+  return costs.length;
+}
+
+/**
+ * Where one new prompt goes: tracked when the plan has room for its
+ * locations, otherwise kept waiting for a spot.
+ */
+export function placeNewPrompt(plan: Plan, used: number, locations: number): 'track' | 'wait' {
+  return promptsThatFit(plan, used, [locations]) === 1 ? 'track' : 'wait';
+}
+
+/**
+ * The columns a prompt saved waiting for a spot gets: not active (so not
+ * tracked and not counted), with the time it started waiting. The database
+ * refuses a waiting prompt that is active (prompts_waiting_not_active_check),
+ * so whatever makes one active clears waiting_since in the same write.
+ */
+export function waitingPromptColumns(now: Date = new Date()): {
+  is_active: false;
+  waiting_since: string;
+} {
+  return { is_active: false, waiting_since: now.toISOString() };
+}
+
 // ─── Bulk retargeting ────────────────────────────────────────────────────────
 
 export interface PromptLocations {

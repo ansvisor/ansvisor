@@ -8,9 +8,11 @@ import { RoleProvider } from '@/components/providers/role-provider';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { sendCancelFeedback } from '@/lib/actions/cancel-feedback';
+import { track } from '@/lib/analytics';
 import { PlanSwitcher } from './plan-switcher';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
+vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 vi.mock('@/lib/actions/cancel-feedback', () => ({
   sendCancelFeedback: vi.fn(async () => ({ ok: true })),
 }));
@@ -555,6 +557,12 @@ describe('choosing a plan once the old one has ended', () => {
     expect(cardText().Starter).toContain('$24.50first monththen $49/mo');
     expect(dueToday('Starter')).toBe('$24.50');
     expect(cardText().Starter).toContain('Secure checkout with Stripe · Cancel any time');
+    // The offer is on the cards, not by Monthly; and no demo, which is onboarding's.
+    expect([...container.querySelectorAll('[data-choice]')].map((b) => b.textContent)).toEqual([
+      'Monthly',
+      'YearlySave 20%',
+    ]);
+    expect(container.textContent).not.toContain('Demo · no card');
     expect(container.querySelector('[data-choice="trial"]')).toBeNull();
     expect(startButton('Starter', 'trial')).toBeNull();
     expect(container.textContent).not.toContain('free trial');
@@ -608,8 +616,9 @@ describe('choosing a plan once the old one has ended', () => {
         .filter((b) => b.classList.contains('bg-primary'))
         .map((b) => b.dataset.choice);
 
-    // Monthly at first, where the first-month offer is.
+    // Monthly at first, where the first-month offer is; no demo, which is onboarding's.
     expect(choices().map((b) => b.dataset.choice)).toEqual(['trial', 'month', 'year']);
+    expect(container.querySelector('[data-slot="start-choice-divider"]')).toBeNull();
     expect(chosen()).toEqual(['month']);
     expect(filled()).toEqual(['month']);
     expect(container.querySelector('[data-choice="month"]')!.className).toContain(
@@ -699,5 +708,31 @@ describe('cancelling', () => {
       }),
     );
     expect(sendCancelFeedback).toHaveBeenCalledWith({ reasons: [], message: '', choice: 'cancel' });
+    expect(vi.mocked(track).mock.calls).toEqual([
+      ['cancel_dialog_opened', { plan: 'growth', interval: 'month', days_left: null }],
+      [
+        'subscription_canceled',
+        { reasons: [], reason_count: 0, has_message: false, wait_offered: false },
+      ],
+    ]);
+  });
+
+  it('counts a cancelled plan set to renew again', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ status: 'active', currentPeriodEnd: '2026-11-20T00:00:00Z' }),
+      ),
+    );
+    await render('growth', { cancelAtPeriodEnd: true, interval: 'year' });
+    await click('Reactivate Subscription');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/stripe/subscription',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ reactivate: true }) }),
+    );
+    expect(track).toHaveBeenCalledWith('subscription_reactivated', {
+      plan: 'growth',
+      interval: 'year',
+    });
   });
 });

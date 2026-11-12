@@ -13,6 +13,7 @@ import {
   connectedAccountStatus,
   listGscSites,
   listGaProperties,
+  isSlackConfigured,
 } from '../lib/composio.js';
 import {
   BRAND_GOOGLE_PROVIDERS,
@@ -20,7 +21,6 @@ import {
   brandConnection,
   composioTarget,
   removeBrandAccount,
-  signInBrandIds,
   startBrandAccount,
   usableAccounts,
   useAccountForBrand,
@@ -28,12 +28,8 @@ import {
 import { runGscSync } from '../lib/gsc-sync.js';
 import { runGaSync } from '../lib/ga-sync.js';
 import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
-import {
-  assertBrandAccess,
-  assertAllBrands,
-  assertEveryBrand,
-  brandAccessOf,
-} from '../lib/access.js';
+import { assertBrandAccess, assertAllBrands } from '../lib/access.js';
+import { assertSignInReach, reachableBrandIds } from '../lib/brand-integration-reach.js';
 
 const router = Router();
 
@@ -141,6 +137,8 @@ export function integrationsConfig() {
     googleSearchConsole: isComposioConfigured(GSC),
     googleAnalytics: isComposioConfigured(GA),
     googleMerchantCenter: isComposioConfigured(GMC),
+    // A brand's Slack (#2139): the API key and the Slack auth config.
+    slack: isSlackConfigured(),
     dataForSeo: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
   };
 }
@@ -303,19 +301,6 @@ router.delete('/:provider', async (req, res) => {
 // equivalent yet, so these stay on explicit paths rather than under :provider.
 
 const propertiesQuery = z.object({ brandId: z.guid().optional() });
-
-/**
- * Assert that the caller may read through a brand's Google sign-in. A sign-in
- * lists the properties of every brand that uses it, and every brand uses the
- * Account's until the Brand settings cards (PR 15) let one use its own, so
- * the caller needs each of those brands (BRAND-ACCESS §5.2); before 00470,
- * when the sign-in is the Account's row, All brands.
- */
-async function assertSignInReach(userId, connection) {
-  const brandIds = await signInBrandIds(connection);
-  if (brandIds === null) return assertAllBrands(userId);
-  return assertEveryBrand(brandIds, userId);
-}
 
 /**
  * The live Composio target of the brand's sign-in for `provider`, or null
@@ -646,18 +631,6 @@ async function brandFor(req, { write = false, columns } = {}) {
     throw Object.assign(new Error('The sample brand connects nothing.'), { status: 409 });
   }
   return brand;
-}
-
-/** The ids of the organization's brands the person can access. */
-async function reachableBrandIds(userId, organizationId) {
-  const access = await brandAccessOf(userId);
-  if (!access.all) return [...access.brandIds];
-  const { data, error } = await supabaseAdmin
-    .from('brands')
-    .select('id')
-    .eq('organization_id', organizationId);
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((b) => b.id);
 }
 
 /** A Google product the brand may connect on its own, or null (404). */

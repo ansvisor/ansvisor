@@ -1,11 +1,11 @@
 ---
 title: Prompt Suggestions and Add All
 route: /dashboard/prompts/suggestions
-keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter]
+keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter, product prompts, catalog suggestions]
 synonyms: [prompt ideas, recommended prompts, new prompt ideas, suggest queries]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-09
+last_checked: 2026-11-09
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -20,9 +20,18 @@ Suggestions come from four sources. The sources filter (**All sources**) shows o
 - **Ansvisor Agents**: written by AI from your brand and tracking data. Each shows an estimated monthly AI volume as a grey range.
 - **Google Search Console**: queries people already search, with their impressions over the last 28 days.
 - **Google Analytics (GA4)**: pages that earn revenue or conversions, or already get AI visits, with that evidence on the row.
-- **Your catalog**: for an online shop with a product catalog, the questions a shopper asks before buying in its categories, using their price bands. Hover the badge for the category; the **Shopping** filter lists them.
+- **Your catalog**: for an online shop with a product catalog, shopping questions about its categories and its top products. The **Shopping** filter lists them.
 
 When Search Console or Analytics is connected, a share of each refresh is drawn from their data.
+
+## Shopping suggestions from your catalog
+
+For an online shop with a product catalog, each refresh adds two kinds of shopping suggestions, marked **Your catalog**:
+
+- the questions a shopper asks before buying in a category, using its price band;
+- buyer questions about the products that sell most, or that AI shopping answers show most.
+
+Each row names the category or the product it's about; hover **Your catalog** for more. A product one of your prompts already names isn't asked about again.
 
 ## A brand without topics
 

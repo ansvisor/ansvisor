@@ -6,7 +6,8 @@ import messages from '../../../messages/en.json';
 
 /**
  * The dashboard drawn behind the onboarding wizard: its menu is the one the
- * wizard leads to, Agent Center in it only with the new Chat on.
+ * wizard leads to, Agent Center in it only with the new Chat on, Ads only
+ * with Ads on.
  */
 
 vi.mock('next/image', () => ({
@@ -16,6 +17,8 @@ vi.mock('next-themes', () => ({ useTheme: () => ({ resolvedTheme: 'light' }) }))
 
 const { DashboardPreview } = await import('./dashboard-preview');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
+const { AdsProvider } = await import('@/components/providers/ads-provider');
+const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -34,19 +37,23 @@ afterEach(() => {
   container.remove();
 });
 
-async function render(chatAgentic: boolean) {
+async function render(chatAgentic: boolean, ads = false, simpleNav = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ChatAgenticProvider enabled={chatAgentic}>
-          <DashboardPreview
-            brandName="Acme Coffee"
-            domain=""
-            topics={[]}
-            promptCount={0}
-            competitors={[]}
-          />
-        </ChatAgenticProvider>
+        <SimpleNavProvider enabled={simpleNav}>
+          <ChatAgenticProvider enabled={chatAgentic}>
+            <AdsProvider enabled={ads}>
+              <DashboardPreview
+                brandName="Acme Coffee"
+                domain=""
+                topics={[]}
+                promptCount={0}
+                competitors={[]}
+              />
+            </AdsProvider>
+          </ChatAgenticProvider>
+        </SimpleNavProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -66,5 +73,47 @@ describe('DashboardPreview', () => {
     await render(false);
     expect(menu()).toContain('Chat');
     expect(menu()).not.toContain('Agent Center');
+  });
+
+  it('has Ads after AI Referral Traffic only with Ads on (ADS_ENABLED)', async () => {
+    await render(true);
+    expect(menu()).not.toContain('Ads');
+    await render(true, true);
+    const items = menu();
+    expect(items.indexOf('Ads')).toBe(items.indexOf('AI Referral Traffic') + 1);
+  });
+});
+
+describe('DashboardPreview with the simplified menu (SIMPLE_NAV)', () => {
+  it('shows the menu the wizard leads to: Chat, Action Center, ANALYTICS, MORE', async () => {
+    await render(true, true, true);
+    expect(menu()).toEqual([
+      'Ansvisor',
+      'Acme Coffee',
+      'Chat',
+      'Action Center',
+      'Prompts',
+      'Visibility',
+      'AI Referral Traffic',
+      'Ads',
+      'Content',
+      'Audit',
+      'Reports',
+      'Competitors',
+    ]);
+    const titles = [...container.querySelectorAll('aside p')].map((p) => p.textContent);
+    expect(titles).toEqual(['Analytics', 'More']);
+    expect(menu()).not.toContain('Agent Center');
+  });
+});
+
+describe('DashboardPreview’s home with SIMPLE_NAV', () => {
+  it('marks the Action Center, where Today is, as the page the wizard leads to', async () => {
+    const marked = () =>
+      [...container.querySelectorAll('aside div.bg-accent')].map((item) => item.textContent);
+    await render(true, false, true);
+    expect(marked()).toEqual(['Action Center']);
+    await render(true, false, false);
+    expect(marked()).toEqual(['Action Center']);
   });
 });

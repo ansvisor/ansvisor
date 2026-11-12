@@ -18,6 +18,7 @@ const reads = vi.hoisted(() => ({
   getBotConnections: vi.fn(),
 }));
 vi.mock('@/lib/actions/traffic', () => ({
+  getTrafficAiPipeline: vi.fn(),
   getTrafficBots: vi.fn(),
   getTrafficConversions: vi.fn(),
   getTrafficGooglePages: vi.fn(),

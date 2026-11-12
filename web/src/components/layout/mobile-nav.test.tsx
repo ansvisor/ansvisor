@@ -35,7 +35,7 @@ vi.mock('@/components/layout/user-profile-nav-item', () => ({ UserProfileNavItem
 vi.mock('@/components/layout/theme-toggle', () => ({ ThemeToggle: () => null }));
 vi.mock('@/config/dashboard', () => {
   const Icon = () => <svg />;
-  return {
+  const config = {
     dashboardNav: [
       {
         items: [
@@ -54,10 +54,19 @@ vi.mock('@/config/dashboard', () => {
           { title: 'Action Center', href: '/dashboard/action-center', icon: Icon },
           { title: 'Prompts', href: '/dashboard/prompts', icon: Icon },
           { title: 'Mentions', href: '/dashboard/mentions', icon: Icon },
+          {
+            title: 'Ads',
+            href: '/dashboard/ads',
+            icon: Icon,
+            requiresAds: true,
+            newPill: true,
+          },
         ],
       },
     ],
   };
+  // The simplified menu (SIMPLE_NAV) has tests of its own, on the real menus.
+  return { ...config, simpleDashboardNav: [], navFor: () => config.dashboardNav };
 });
 
 // The brand store keeps its state in localStorage, which this jsdom lacks.
@@ -71,6 +80,7 @@ vi.stubGlobal('localStorage', {
 const { MobileNav } = await import('./mobile-nav');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
+const { AdsProvider } = await import('@/components/providers/ads-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
 
@@ -100,7 +110,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function open(hidden: string[], chatOn = false, isDemo = false) {
+async function open(hidden: string[], chatOn = false, isDemo = false, adsOn = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -109,7 +119,9 @@ async function open(hidden: string[], chatOn = false, isDemo = false) {
         >
           <MenuAccessProvider hidden={hidden} canManageMenus={false}>
             <ChatAgenticProvider enabled={chatOn}>
-              <MobileNav />
+              <AdsProvider enabled={adsOn}>
+                <MobileNav />
+              </AdsProvider>
             </ChatAgenticProvider>
           </MenuAccessProvider>
         </DemoBrandContext.Provider>
@@ -160,6 +172,25 @@ describe('MobileNav', () => {
     await open(['agents'], true);
     expect(link('/dashboard/chat')).not.toBeNull();
     expect(link('/dashboard/agents')).toBeNull();
+  });
+
+  it('leaves Ads off with Ads off', async () => {
+    await open([]);
+    expect(link('/dashboard/ads')).toBeNull();
+    expect(link('/dashboard/mentions')).not.toBeNull();
+  });
+
+  it('lists Ads, with its New pill, with Ads on', async () => {
+    await open([], false, false, true);
+    const ads = link('/dashboard/ads');
+    expect(ads?.textContent).toBe('AdsNew');
+    expect(ads?.querySelector('[data-slot="new-pill"]')).not.toBeNull();
+  });
+
+  it('leaves Ads off when the viewer’s menu hides it', async () => {
+    await open(['ads'], false, false, true);
+    expect(link('/dashboard/ads')).toBeNull();
+    expect(link('/dashboard/mentions')).not.toBeNull();
   });
 
   it('says Chat needs setting up without a key, with the new Chat off', async () => {

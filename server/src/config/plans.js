@@ -40,6 +40,14 @@ export const PLANS = {
         'shopping_analytics',
         'prompt_improve',
         'white_label',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
+        // HubSpot (#2140), with the server's own Composio keys.
+        'crm_integrations',
+        // Ads (ADS-01), reading: Growth and above. No route reads it yet.
+        'ads_read',
       ],
     },
   },
@@ -94,6 +102,8 @@ export const PLANS = {
         'api_access',
         'ai_agent',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
       ],
     },
   },
@@ -103,10 +113,11 @@ export const PLANS = {
     limits: {
       maxBrands: 4,
       maxPrompts: 200,
-      // The engines Growth tracks: ChatGPT, Gemini, Google AI Overviews and
-      // Google AI Mode, since Copilot and Perplexity went (2026-11-06).
-      // ChatGPT Shopping feeds Product Visibility and isn't counted.
-      maxPlatforms: 4,
+      // The engines Growth tracks: ChatGPT, Gemini, Google AI Overviews,
+      // Google AI Mode and Microsoft Copilot (through Bing AI Mode since
+      // Perplexity went, 2026-11-06). ChatGPT Shopping feeds Product
+      // Visibility and isn't counted.
+      maxPlatforms: 5,
       maxTeamMembers: -1,
       maxDomainsPerBrand: 10,
       maxVolumeAnalyses: 10,
@@ -141,6 +152,14 @@ export const PLANS = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
+        // Ads (ADS-01), reading: Growth and above (owner A2, 2026-11-06).
+        'ads_read',
       ],
     },
   },
@@ -150,8 +169,8 @@ export const PLANS = {
     limits: {
       maxBrands: -1,
       maxPrompts: -1,
-      // Growth's four engines plus Claude, set per contract.
-      maxPlatforms: 5,
+      // Growth's five engines plus Claude, set per contract.
+      maxPlatforms: 6,
       maxTeamMembers: -1,
       maxDomainsPerBrand: -1,
       maxVolumeAnalyses: -1,
@@ -192,6 +211,14 @@ export const PLANS = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
+        // Ads (ADS-01), reading: Growth and above (owner A2, 2026-11-06).
+        'ads_read',
       ],
     },
   },

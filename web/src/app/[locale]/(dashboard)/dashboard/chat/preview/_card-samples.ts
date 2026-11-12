@@ -193,7 +193,7 @@ const FAQ_PAGE: Omit<ChatDeliverable, 'version'> = {
 const FAQ_SECTIONS = [
   {
     heading: 'Which AI platforms does it track?',
-    text: 'Starter: ChatGPT and Gemini. Growth: four platforms. Enterprise adds Claude.',
+    text: 'Starter: ChatGPT and Gemini. Growth: five platforms. Enterprise adds Claude.',
   },
   { heading: 'Can I change plans?', text: 'Yes, any time from Billing.' },
   { heading: 'Is there a free trial?', text: 'Yes, every plan starts with a free trial.' },
@@ -382,7 +382,7 @@ export const DENIALS = {
       label: 'Growth adds',
       items: [
         { title: 'Full auto', detail: 'agents apply changes for you, logged and undoable' },
-        { title: '2 more AI platforms', detail: 'AI Overviews, AI Mode' },
+        { title: '3 more AI platforms', detail: 'AI Overviews, AI Mode, Copilot' },
         {
           title: 'Open pull request and MCP write',
           detail: 'ship fixes as PRs, act from Claude, ChatGPT, Cursor',

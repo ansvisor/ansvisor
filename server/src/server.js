@@ -61,6 +61,7 @@ import { sweepFramerPublished } from './lib/cms/framer-status.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
 import { sweepWixPublished } from './lib/cms/wix-status.js';
+import { sweepHubspotPublished } from './lib/cms/hubspot-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
@@ -80,6 +81,7 @@ import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/pla
 import { runGscSync } from './lib/gsc-sync.js';
 import { scheduleDemandCollect, sweepPromptDemand } from './lib/prompt-demand.js';
 import { runGaSync } from './lib/ga-sync.js';
+import { runHubspotPipelineSync } from './lib/hubspot/pipeline-sync.js';
 import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
@@ -433,9 +435,20 @@ async function runDailyTracking() {
   sweepFramerPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[framer-status] daily sweep failed');
   });
+  // And to HubSpot's blog (#2140, 00522), once a day too.
+  sweepHubspotPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[hubspot-status] daily sweep failed');
+  });
   // And to Wix (00372), once a day too.
   sweepWixPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[wix-status] daily sweep failed');
+  });
+
+  // The AI-sourced pipeline from HubSpot (#2140, 00520): each brand's
+  // AI-sourced contacts and deals, read once a day. No-ops without HubSpot's
+  // Composio auth config; never blocks or fails the tracking run.
+  runHubspotPipelineSync().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[hubspot] daily pipeline sync failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync

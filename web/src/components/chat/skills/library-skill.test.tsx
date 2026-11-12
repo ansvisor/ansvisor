@@ -146,7 +146,35 @@ describe('LibrarySkill', () => {
     );
   });
 
-  it('adds it for an Admin and opens its review', async () => {
+  it('adds it, on for the person at once, and says Added (owner, 2026-11-09)', async () => {
+    answer = (url, init) =>
+      init?.method === 'POST'
+        ? Response.json({
+            ok: true,
+            skill: {
+              id: 'skill-9',
+              name: 'geo-brand-mentions',
+              status: 'approved',
+              requested: false,
+            },
+          })
+        : null;
+    await render();
+    expect(slot('library-note')!.textContent).toBe(
+      'Adding it scans it again and turns it on for you. Share it from My skills to give it to your team.',
+    );
+    await click(container.querySelector<HTMLElement>('[data-action="skills.library.add"]')!);
+    const [url, init] = fetchMock.mock.calls.find(([, i]) => i?.method === 'POST')!;
+    expect(url).toBe('/api/chat/skills/marketplace/skill');
+    expect(JSON.parse(String(init!.body))).toEqual({ id: ID });
+    expect(toast.success).toHaveBeenCalledWith(
+      "Added. /geo-brand-mentions is on for you; share it from My skills when it's ready for everyone.",
+    );
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Added');
+  });
+
+  it('opens the review when an Add still waits for one', async () => {
     answer = (url, init) =>
       init?.method === 'POST'
         ? Response.json({
@@ -155,11 +183,7 @@ describe('LibrarySkill', () => {
           })
         : null;
     await render();
-    expect(slot('library-note')!.textContent).toContain('an Admin reviews it');
     await click(container.querySelector<HTMLElement>('[data-action="skills.library.add"]')!);
-    const [url, init] = fetchMock.mock.calls.find(([, i]) => i?.method === 'POST')!;
-    expect(url).toBe('/api/chat/skills/marketplace/skill');
-    expect(JSON.parse(String(init!.body))).toEqual({ id: ID });
     expect(toast.success).toHaveBeenCalledWith('Scanned · instructions only · admin review');
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/skills/skill-9');
   });

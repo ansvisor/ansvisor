@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
@@ -27,6 +27,7 @@ import {
 } from '@/lib/billing/subscription-access';
 import { openBillingPortal } from '@/lib/billing/portal-client';
 import { demoActionName, type DemoOffer } from '@/lib/demo/demo-brand';
+import { trackUpgradeWall, upgradeWallReason } from '@/lib/friction-events';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { ChoosePlanDialog } from '@/components/billing/choose-plan-dialog';
 import { CHOOSE_PLAN_HREF, UpgradeDialogContext } from './upgrade-gate';
@@ -53,6 +54,9 @@ export { CHOOSE_PLAN_HREF, useUpgradeDialog, useUpgradeGate } from './upgrade-ga
  * A server action the server refused (assertWritable: read-only, or the demo
  * brand) that no caller caught opens the dialog too: the plan can end while
  * a page is open, before its buttons know.
+ *
+ * Each opening that offers a plan is counted once (upgrade_wall_shown,
+ * lib/friction-events.ts), with why and what opened it, never its label.
  */
 export function UpgradeDialogProvider({
   adminName = null,
@@ -69,39 +73,51 @@ export function UpgradeDialogProvider({
   const [open, setOpen] = useState(false);
   // What was clicked, for the dialog's label; none when it wasn't said.
   const [action, setAction] = useState<string | null>(null);
-  const openUpgrade = useCallback((label?: string) => {
+  // What opened it, for upgrade_wall_shown: an action gated here, or the server's refusal.
+  const openedBy = useRef<'action' | 'server'>('action');
+  const show = useCallback((label: string | undefined, by: 'action' | 'server') => {
     // Only a label given: a handler passing its click event gives none.
     setAction(typeof label === 'string' && label ? label : null);
+    openedBy.current = by;
     setOpen(true);
   }, []);
+  const openUpgrade = useCallback((label?: string) => show(label, 'action'), [show]);
   useEffect(() => {
     const onRejection = (event: PromiseRejectionEvent) => {
       if (!isSubscriptionInactive(event.reason)) return;
       event.preventDefault();
-      openUpgrade();
+      show(undefined, 'server');
     };
     window.addEventListener('unhandledrejection', onRejection);
     return () => window.removeEventListener('unhandledrejection', onRejection);
-  }, [openUpgrade]);
-  const value = useMemo(() => {
-    const lapsed = readOnlyReason(subscriptionStatus);
-    // A payment being retried is fixed in Billing, demo brand or not: a plan
-    // bought from the demo's offer would be a second subscription. A
-    // workspace that never subscribed is offered its free trial.
-    const reason: UpgradeReason =
-      isDemo && (subscriptionActive || lapsed !== 'payment_failed')
-        ? 'demo'
-        : lapsed === 'ended' && neverSubscribed
-          ? 'trial'
-          : lapsed;
-    return {
+  }, [show]);
+  const lapsed = readOnlyReason(subscriptionStatus);
+  // A payment being retried is fixed in Billing, demo brand or not: a plan
+  // bought from the demo's offer would be a second subscription. A
+  // workspace that never subscribed is offered its free trial.
+  const reason: UpgradeReason =
+    isDemo && (subscriptionActive || lapsed !== 'payment_failed')
+      ? 'demo'
+      : lapsed === 'ended' && neverSubscribed
+        ? 'trial'
+        : lapsed;
+  const value = useMemo(
+    () => ({
       isLocked: !subscriptionActive || isDemo,
       isDemo,
       reason,
       adminName,
       openUpgrade,
-    };
-  }, [subscriptionActive, subscriptionStatus, isDemo, neverSubscribed, adminName, openUpgrade]);
+    }),
+    [subscriptionActive, isDemo, reason, adminName, openUpgrade],
+  );
+  // Counted once each time it opens. The demo brand with a plan active offers
+  // no plan, only the way back to the workspace's own brand: no wall.
+  const wall = reason === 'demo' && subscriptionActive ? null : reason;
+  useEffect(() => {
+    if (open && wall)
+      trackUpgradeWall({ reason: upgradeWallReason(wall), source: openedBy.current });
+  }, [open, wall]);
 
   return (
     <UpgradeDialogContext.Provider value={value}>

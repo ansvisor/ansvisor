@@ -65,6 +65,20 @@ describe('/api/chat/conversations', () => {
     expect(await bad.json()).toMatchObject({ ok: false, failure: 'failed' });
   });
 
+  it("lists one brand's chats, and refuses a brand that isn't an id", async () => {
+    const brandId = '22222222-2222-4222-8222-222222222222';
+    const url = 'https://app.example.com/api/chat/conversations';
+    const ok = await list.GET(new Request(`${url}?brandId=${brandId}`));
+    expect(ok.status).toBe(200);
+    expect(listChats).toHaveBeenLastCalledWith({}, ACTOR, {
+      view: 'active',
+      limit: 100,
+      brandId,
+    });
+    const bad = await list.GET(new Request(`${url}?brandId=nope`));
+    expect(bad.status).toBe(400);
+  });
+
   it('refuses a bad body when starting a chat', async () => {
     const res = await list.POST(
       new Request('https://app.example.com/api/chat/conversations', {

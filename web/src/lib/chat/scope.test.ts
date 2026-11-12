@@ -6,8 +6,9 @@ import type { Json } from '@/types/supabase';
 
 /**
  * Chat's scope decisions (W1-17; CHAT-04 items 2–6, Rule 1; CHAT-20 §7): the
- * default 30 days and the all-time ask, the plan's platforms (refused when
- * asked for, held to when not), the row limits and what a cut list says.
+ * person's date range or the app's 30 days, as the app's pages cut them, and
+ * the all-time ask, the plan's platforms (refused when asked for, held to
+ * when not), the row limits and what a cut list says.
  */
 
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { rpc: vi.fn() } }));
@@ -18,11 +19,14 @@ const {
   ROW_LIMITS,
   asksAllTime,
   capRows,
+  givesDates,
   planPlatforms,
   resolveDates,
   scopeRead,
+  takesDates,
 } = await import('./scope');
 const { CHAT_TOOLS } = await import('./registry/tools');
+const { getDateRange } = await import('@/lib/date-range');
 
 const NOW = new Date('2026-10-30T12:00:00.000Z');
 const BRAND = '11111111-1111-4111-8111-111111111111';
@@ -42,14 +46,50 @@ const facts = (over: Partial<Parameters<typeof scopeRead>[2]> = {}) => ({
 });
 
 describe('dates', () => {
-  it('reads the last 30 days when none are given', () => {
+  it("reads the app's last 30 days when none are given: today and the 29 days before", () => {
     expect(resolveDates(undefined, undefined, false, NOW)).toEqual({
-      dateFrom: '2026-09-30',
+      dateFrom: '2026-10-01',
       dateTo: '2026-10-30',
       dates: 'default',
-      values: { date_from: '2026-09-30', date_to: '2026-10-30' },
+      range: '30d',
+      values: { date_from: '2026-10-01', date_to: '2026-10-30' },
     });
     expect(DEFAULT_RANGE_DAYS).toBe(30);
+  });
+
+  it("reads the person's range as the app's pages cut the same preset", () => {
+    for (const preset of ['7d', '30d', '90d'] as const) {
+      const page = getDateRange(preset, { from: '', to: '' }, NOW).days!;
+      expect(resolveDates(undefined, undefined, false, NOW, preset)).toMatchObject({
+        dates: 'default',
+        range: preset,
+        values: { date_from: page.dayFrom, date_to: page.dayTo },
+      });
+    }
+    // The last 24 hours roll, as the pages' own: from this hour yesterday.
+    expect(resolveDates(undefined, undefined, false, NOW, '24h').values).toEqual({
+      date_from: getDateRange('24h', { from: '', to: '' }, NOW).dateFrom,
+      date_to: '2026-10-30',
+    });
+    expect(resolveDates(null, null, false, NOW, '2026-10-01/2026-10-15').values).toEqual({
+      date_from: '2026-10-01',
+      date_to: '2026-10-15',
+    });
+    // The model's own dates, from a period the person named, still win.
+    expect(resolveDates('2026-10-20', '2026-10-25', false, NOW, '7d').values).toEqual({
+      date_from: '2026-10-20',
+      date_to: '2026-10-25',
+    });
+  });
+
+  it('knows which reads cover a period, and which inputs give their own', () => {
+    expect(takesDates(readTool({ date_from: z.string().optional() }))).toBe(true);
+    expect(takesDates(readTool({ days: z.number().optional() }))).toBe(true);
+    expect(takesDates(readTool({ limit: z.number().optional() }))).toBe(false);
+    expect(givesDates({ brand_id: BRAND })).toBe(false);
+    expect(givesDates({ brand_id: BRAND, date_from: ' ' })).toBe(false);
+    expect(givesDates({ brand_id: BRAND, date_to: '2026-10-01' })).toBe(true);
+    expect(givesDates({ brand_id: BRAND, days: 7 })).toBe(true);
   });
 
   it('reads all time only on an all-time ask', () => {
@@ -116,6 +156,45 @@ describe('dates', () => {
     expect(google).toMatchObject({ input: { days: 28 } });
     const all = await scopeRead(tool, { brand_id: BRAND }, facts({ question: 'all time please' }));
     expect(all).toMatchObject({ input: { days: 90 }, used: { dates: 'all_time', days: 90 } });
+  });
+
+  it("gives a `days` read the person's range in days back, Google's reads too", async () => {
+    const tool = { ...readTool({ days: z.number().int().min(1).max(90).optional() }) };
+    expect(await scopeRead(tool, { brand_id: BRAND }, facts({ range: '7d' }))).toMatchObject({
+      input: { days: 7 },
+      used: { dates: 'days', days: 7, range: '7d' },
+    });
+    expect(
+      await scopeRead(
+        { ...tool, name: 'get_gsc_summary' },
+        { brand_id: BRAND },
+        facts({ range: '90d' }),
+      ),
+    ).toMatchObject({ input: { days: 90 }, used: { range: '90d' } });
+    expect(await scopeRead(tool, { brand_id: BRAND }, facts({ range: '24h' }))).toMatchObject({
+      input: { days: 1 },
+    });
+    // A custom range: from its first day to today.
+    expect(
+      await scopeRead(tool, { brand_id: BRAND }, facts({ range: '2026-10-21/2026-10-25' })),
+    ).toMatchObject({ input: { days: 10 } });
+    // Days the model gave stay, with no range.
+    const asked = await scopeRead(tool, { brand_id: BRAND, days: 14 }, facts({ range: '7d' }));
+    expect(asked).toMatchObject({ input: { days: 14 } });
+    expect(asked.kind === 'read' && asked.used.range).toBeUndefined();
+  });
+
+  it("reads a date read's window from the person's range", async () => {
+    const tool = readTool({ date_from: z.string().optional(), date_to: z.string().optional() });
+    expect(await scopeRead(tool, { brand_id: BRAND }, facts({ range: '7d' }))).toMatchObject({
+      input: { date_from: '2026-10-24', date_to: '2026-10-30' },
+      used: { dates: 'default', range: '7d', dateFrom: '2026-10-24', dateTo: '2026-10-30' },
+    });
+    // None set: the app's 30 days.
+    expect(await scopeRead(tool, { brand_id: BRAND }, facts({ range: null }))).toMatchObject({
+      input: { date_from: '2026-10-01', date_to: '2026-10-30' },
+      used: { range: '30d' },
+    });
   });
 });
 

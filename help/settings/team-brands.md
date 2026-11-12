@@ -4,14 +4,14 @@ route: /dashboard/settings/team
 keywords: [brand access, selected brands, all brands, edit brands, invite to brands, agency access]
 synonyms: [limit a teammate to one brand, hide a brand from someone, give a client access to their brand, per brand access]
 plan: growth
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-09
+last_checked: 2026-11-09
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json]
 ---
-When several teams or agencies work in one workspace, each person can see every brand or only the brands they work on. Admins choose it in **Settings › Team**, when they invite someone and later with **Edit brands**. The plan, billing and the AI limit stay the workspace's.
+When several teams or agencies work in one workspace, each person can see every brand or only the brands they work on. Admins choose it in **Settings › Team, roles & access** (**Team** where Chat is off), when they invite someone and later with **Edit brands**. The plan, billing and the AI limit stay the workspace's.
 
 ## All brands or Selected brands
 
@@ -22,14 +22,14 @@ Admins always have **All brands**. The sample brand stays visible to everyone. S
 
 ## Invite someone to some brands
 
-In **Settings › Team**, click **Invite member**, enter their e-mail and role, then choose **All brands** or **Selected brands** and tick their brands. Pick at least one. The invitation keeps the choice until it's accepted; a brand deleted in the meantime is left out.
+In **Settings › Team, roles & access**, click **Invite member**, enter their e-mail and role, then choose **All brands** or **Selected brands** and tick their brands. Pick at least one. The invitation keeps the choice until it's accepted; a brand deleted in the meantime is left out.
 
 ## Change someone's brands
 
-Each person's row in **Settings › Team** shows **All brands** or how many brands they see, for admins. Click it to open **Edit brands**, change the choice and click **Save**. They see the change on their next page.
+Each person's row in **Settings › Team, roles & access** shows **All brands** or how many brands they see, for admins. Click it to open **Edit brands**, change the choice and click **Save**. They see the change on their next page.
 
-Only admins change brand access, a manager's included. **Roles & access** and **Your access** show each person's brands too.
+Only admins change brand access, a manager's included. The roles table under it and **Your access** show each person's brands too.
 
 ## See who can see a brand
 
-A brand's **Settings › People** lists everyone who can see it, with their role. Admins also see why: **All brands**, or **Shared with them**. To change it, use **Edit brands** in **Settings › Team**.
+A brand's **Settings › People** lists everyone who can see it, with their role. Admins also see why: **All brands**, or **Shared with them**. To change it, use **Edit brands** in **Settings › Team, roles & access**.

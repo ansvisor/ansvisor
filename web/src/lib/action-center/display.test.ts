@@ -54,8 +54,42 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it("holds copy for all sixty-two definitions and the AC plan's, the eleven person-sent kinds and the catalog check's", () => {
-    expect(ACTION_KINDS).toHaveLength(77);
+  it("holds copy for all sixty-two definitions and the AC plan's, the eleven person-sent kinds, the catalog check's and Business Hub's", () => {
+    expect(ACTION_KINDS).toHaveLength(78);
+  });
+
+  it('names the ChatGPT Business Hub setup for where claiming is open, or the waitlist, with its evidence', () => {
+    const evidence = { answers: 120, named: 34, cited: 9, since: '2026-10-13T03:00:00.000Z' };
+    const open = actionTexts(
+      action({ kind: 'business_hub_setup', payload: { variant: 'open', evidence } }),
+      t,
+    );
+    expect(open).toEqual({
+      title: 'Set up your ChatGPT Business Hub profile',
+      // Plurals read as their `other` branch here (see `t` above).
+      description:
+        'ChatGPT named you in 34 of 120 tracked answers in the last 30 days; your site was cited in 9.',
+    });
+    const waitlist = actionTexts(
+      action({ kind: 'business_hub_setup', payload: { variant: 'waitlist', evidence } }),
+      t,
+    );
+    expect(waitlist.title).toBe('Get your business into ChatGPT Business Hub');
+    // No evidence on it: no "0 of 0".
+    expect(actionTexts(action({ kind: 'business_hub_setup', payload: {} }), t).description).toBe(
+      messages.actionCenter.actionTexts.business_hub_setup.descriptionGeneric,
+    );
+    // Raised once from its answers, not from signals: no "0 signals".
+    expect(
+      actionContextTags(
+        action({
+          kind: 'business_hub_setup',
+          signalCount: 0,
+          payload: { targetEntity: 'platforms', targetCount: 1 },
+        }),
+        (key, values) => `${key}:${values?.count ?? ''}`,
+      ),
+    ).toEqual(['tags.platforms:1']);
   });
 
   it('says a store’s topic action optimizes its category page when that is its play (AC plan P-7)', () => {
@@ -864,5 +898,75 @@ describe('assigneeLabel and labelInitials', () => {
     expect(labelInitials('ada.lovelace@acme.example')).toBe('AL');
     expect(labelInitials('cg@acme.example')).toBe('C');
     expect(labelInitials('Grace Brewster Hopper')).toBe('GB');
+  });
+});
+
+describe('actionTexts naming what the action is about', () => {
+  const tx = createTranslator({
+    locale: 'en',
+    messages,
+    namespace: 'actionCenter.actionTexts',
+  }) as unknown as (key: string, values?: Record<string, string | number>) => string;
+  const item = (kind: string, payload: Record<string, unknown>) =>
+    ({ kind, payload }) as Pick<ActionItem, 'kind' | 'payload'>;
+
+  it('names the competitor, and the prompt it leads most on', () => {
+    const payload = {
+      targetEntity: 'competitors',
+      targetCount: 1,
+      targets: [{ id: 'c1', label: 'Northbound Roasters' }],
+    };
+    expect(actionTexts(item('close_competitor_gap', payload), tx).title).toBe(
+      'Close the visibility gap with Northbound Roasters',
+    );
+    expect(
+      actionTexts(
+        item('close_competitor_gap', {
+          ...payload,
+          leadPrompt: { id: 'p1', text: 'best coffee subscription' },
+        }),
+        tx,
+      ).title,
+    ).toBe('Close the gap with Northbound Roasters, starting with “best coffee subscription”');
+  });
+
+  it('names the first prompt and how many more', () => {
+    const payload = {
+      targetEntity: 'prompts',
+      targetCount: 3,
+      targets: [{ id: 'p1', label: 'best decaf coffee beans' }, { id: 'p2' }],
+    };
+    expect(actionTexts(item('expand_prompt_visibility', payload), tx).title).toBe(
+      'Get into AI answers on “best decaf coffee beans” and 2 more prompts',
+    );
+    expect(
+      actionTexts(item('recover_lost_mentions', { ...payload, targetCount: 1 }), tx).title,
+    ).toBe('Win back mentions on “best decaf coffee beans”');
+    // Its first prompt removed since (AC-009): counted, not named.
+    expect(
+      actionTexts(item('protect_visibility', { ...payload, removedKeys: ['p1'] }), tx).title,
+    ).toBe('Protect visibility across 3 prompts');
+  });
+
+  it('says why a content opportunity matters instead of where it came from', () => {
+    const payload = {
+      title: 'Answer whether a subscription is worth it',
+      decision: 'optimize',
+      pages: ['https://brewline.example/subscriptions'],
+      targetEntity: 'prompts',
+      targetCount: 2,
+      targets: [{ id: 'p1', text: 'Is a coffee subscription worth it?' }],
+    };
+    expect(actionTexts(item('content_opportunity', payload), tx).description).toBe(
+      'An update to /subscriptions that answers “Is a coffee subscription worth it?” and 1 more prompt.',
+    );
+    expect(
+      actionTexts(item('content_opportunity', { ...payload, decision: 'create', pages: [] }), tx)
+        .description,
+    ).toBe('A new page that answers “Is a coffee subscription worth it?” and 1 more prompt.');
+    // Sent without prompts: its kind's sentence.
+    expect(
+      actionTexts(item('content_opportunity', { title: 'X', targetCount: 0 }), tx).description,
+    ).toBe(messages.actionCenter.actionTexts.content_opportunity.description);
   });
 });

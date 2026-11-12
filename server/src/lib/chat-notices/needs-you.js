@@ -1,7 +1,8 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { brandReaders } from '../access.js';
+import { postNeedsYou } from '../slack/needs-you.js';
 import { BUTTON, frame, membersOf, one, tell } from './go-live.js';
-import { appOrigin, escapeHtml } from './own-key.js';
+import { appOrigin, emailOf, escapeHtml } from './own-key.js';
 
 /**
  * Telling a person an agent's run waits for them: "Notify me when an agent
@@ -12,9 +13,15 @@ import { appOrigin, escapeHtml } from './own-key.js';
  * e-mail with "Inbox + email": once per run. A chat_notices row records it
  * (agent_needs_you:{run id}); the Inbox lists the run's chat under Needs
  * you already, so the web doesn't show the row. Through Resend (email.js), a
- * silent no-op where it isn't configured. Never on the run's way: the caller
- * logs what fails.
+ * silent no-op where it isn't configured. With "Inbox + Slack" (#2139), the
+ * run's brand's Slack channel gets a message that mentions them instead
+ * (lib/slack/needs-you.js); a brand that doesn't post them sends the e-mail.
+ * Never on the run's way: the caller logs what fails.
  */
+
+/** Where the run opens: its chat, else Chat. */
+const runUrlOf = (chatId) =>
+  chatId ? `${appOrigin()}/dashboard/chat/${chatId}` : `${appOrigin()}/dashboard/chat`;
 
 /**
  * The e-mail for an agent's run that waits for its person.
@@ -29,9 +36,7 @@ export function renderNeedsYouEmail({ agent, brand, chatId }) {
       `${escapeHtml(agent)} stopped${where} to ask you something or to wait for your OK on a change. It goes on once you answer.`,
       'Nothing was changed or sent while it waits.',
     ],
-    [
-      `<a href="${escapeHtml(chatId ? `${appOrigin()}/dashboard/chat/${chatId}` : `${appOrigin()}/dashboard/chat`)}" style="${BUTTON}">Open the run</a>`,
-    ],
+    [`<a href="${escapeHtml(runUrlOf(chatId))}" style="${BUTTON}">Open the run</a>`],
     "You get this as the person the agent runs for, by your Chat settings' Notify me when an agent needs me. Once per run.",
   );
   return { subject, html };
@@ -55,7 +60,14 @@ export async function tellNeedsYou({ orgId, agentRunId }) {
   }
   const [agent, brand, convo] = await Promise.all([
     one(supabaseAdmin.from('chat_agents').select('name, owner_id').eq('id', run.agent_id)),
-    run.brand_id ? one(supabaseAdmin.from('brands').select('name').eq('id', run.brand_id)) : null,
+    run.brand_id
+      ? one(
+          supabaseAdmin
+            .from('brands')
+            .select('id, name, organization_id, is_demo')
+            .eq('id', run.brand_id),
+        )
+      : null,
     one(supabaseAdmin.from('chat_conversations').select('id').eq('agent_run_id', run.id).limit(1)),
   ]);
   if (!agent) return { notices: 0, emails: 0 };
@@ -75,5 +87,13 @@ export async function tellNeedsYou({ orgId, agentRunId }) {
     dedupe: `agent_needs_you:${run.id}`,
     payload: { agent: agent.name, agentId: run.agent_id, runId: run.id, chatId },
     email: renderNeedsYouEmail({ agent: agent.name, brand: brand?.name ?? null, chatId }),
+    // Inbox + Slack: the brand's channel, mentioning them; the e-mail where it doesn't post.
+    slack: brand
+      ? (ids) =>
+          postNeedsYou(
+            { brand, runId: run.id, agent: agent.name, runUrl: runUrlOf(chatId), people: ids },
+            { emailOf },
+          )
+      : null,
   });
 }

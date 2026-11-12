@@ -4,7 +4,10 @@
  *
  * POST /api/billing/cancel-feedback — { reasons, message, choice } → kept and
  *                                     e-mailed to CANCEL_FEEDBACK_EMAILS, with
- *                                     replies going to the customer
+ *                                     replies going to the customer; then,
+ *                                     after the answer, an analysis of the
+ *                                     person's last 14 days in its thread
+ *                                     (lib/cancel-analysis)
  * GET  /api/billing/ai-usage        — this period's AI usage (getAiUsage), for
  *                                     the Billing page's meter, with what
  *                                     Write this typically takes
@@ -13,6 +16,7 @@
  *                                     (getDraftAiUsage), for the editor meter
  */
 
+import { setImmediate } from 'timers';
 import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
@@ -28,6 +32,11 @@ import {
   cancelFeedbackSchema,
   feedbackRecipients,
 } from '../lib/cancel-feedback.js';
+import {
+  cancelAnalysisConfigured,
+  sendCancelAnalysis,
+  threadMessageId,
+} from '../lib/cancel-analysis/index.js';
 
 const router = Router();
 
@@ -162,16 +171,22 @@ router.post('/cancel-feedback', async (req, res) => {
       .single();
     if (error) throw new Error(error.message);
 
+    const recipients = feedbackRecipients();
+    // With PostHog set up, an analysis follows this e-mail in its thread
+    // (below): this one gets a Message-ID for it to answer.
+    const messageId =
+      recipients.length > 0 && cancelAnalysisConfigured() ? threadMessageId(row.id) : null;
     const { subject, html } = buildCancelFeedbackEmail({
       org,
       user: { name: profile.full_name, email: req.user.email, role: profile.role },
       feedback,
     });
     const emailStatus = await deliverEmail({
-      to: feedbackRecipients(),
+      to: recipients,
       subject,
       html,
       replyTo: req.user.email || undefined,
+      ...(messageId ? { headers: { 'Message-ID': messageId } } : {}),
     });
     if (emailStatus !== 'sent') {
       req.log.warn({ emailStatus, feedbackId: row.id }, '[billing] cancel feedback not e-mailed');
@@ -189,7 +204,25 @@ router.post('/cancel-feedback', async (req, res) => {
         .json({ error: "Your message didn't reach the team", code: 'not_sent' });
     }
 
-    return res.status(201).json({ ok: true });
+    res.status(201).json({ ok: true });
+    // The analysis, once the customer has their answer: it reads PostHog and
+    // asks the AI, which takes seconds. Only after an e-mail that may have
+    // gone out; whatever fails in it is logged there, never here.
+    if (messageId && emailStatus !== 'skipped' && emailStatus !== 'refused') {
+      const input = {
+        orgId,
+        userId: req.user.id,
+        plan: { plan: org.plan ?? null, status: org.subscription_status ?? null },
+        feedback,
+        subject,
+        messageId,
+        recipients,
+      };
+      setImmediate(() => {
+        sendCancelAnalysis(input).catch(() => {});
+      });
+    }
+    return undefined;
   } catch (error) {
     req.log.error({ err: error }, '[billing] cancel feedback failed');
     return res.status(500).json({ error: 'Could not send your message' });

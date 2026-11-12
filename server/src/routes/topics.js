@@ -12,6 +12,7 @@ import logger from '../lib/logger.js';
 import { getLanguageName } from '../lib/languages.js';
 import { sendTopicGapToActionCenter } from '../lib/action-center/from-topic-gap.js';
 import { sendTopicOpportunityToActionCenter } from '../lib/action-center/from-topic-opportunity.js';
+import { getCatalogTopicCandidates } from '../lib/catalog-suggestions.js';
 
 const router = Router();
 
@@ -275,6 +276,12 @@ router.get('/suggestions/:brandId', async (req, res) => {
  * Generates a fresh batch with the same flow onboarding uses, then persists
  * it — excluding topics the brand already tracks and names it previously
  * dismissed or added, so decided suggestions never reappear (#463).
+ *
+ * An online store's catalog adds its own, first and with no model call (AC
+ * plan P-8, spec §6.3): a category with products in stock that no topic
+ * covers yet, named by its own name, with that category in source_data
+ * (00525). Accepting one is the same as any idea: a topic of that name,
+ * which the category is then linked to by its words (topic-categories.js).
  */
 router.post(
   '/suggestions/:brandId/refresh',
@@ -292,7 +299,7 @@ router.post(
         .single();
       if (!brand) return res.status(404).json({ error: 'Brand not found' });
 
-      const [{ data: primaryDomain }, signals] = await Promise.all([
+      const [{ data: primaryDomain }, signals, catalogTopics] = await Promise.all([
         supabaseAdmin
           .from('brand_domains')
           .select('domain')
@@ -301,6 +308,8 @@ router.post(
           .limit(1)
           .maybeSingle(),
         loadTopicSignals(brandId),
+        // [] without a catalog, or when every category has a topic.
+        getCatalogTopicCandidates(brandId),
       ]);
 
       const ideas = await generateTopicIdeas({
@@ -327,12 +336,14 @@ router.post(
       );
 
       const seen = new Set();
-      const fresh = ideas.filter((t) => {
-        const key = t.name.trim().toLowerCase();
-        if (!key || taken.has(key) || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      const fresh = [...catalogTopics.map((t) => ({ ...t, source: 'catalog' })), ...ideas].filter(
+        (t) => {
+          const key = t.name.trim().toLowerCase();
+          if (!key || taken.has(key) || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        },
+      );
 
       // Replace the undecided batch wholesale — same behavior as prompt
       // suggestions refresh. Dismissed/added rows are never touched. The new
@@ -340,17 +351,40 @@ router.post(
       // insert leaves the list as it was rather than empty.
       let inserted = [];
       if (fresh.length) {
-        const { data, error } = await supabaseAdmin
-          .from('topic_suggestions')
-          .insert(
-            fresh.map((t) => ({
-              brand_id: brandId,
-              name: t.name.trim(),
-              source: 'llm',
-              status: 'new',
-            })),
-          )
-          .select();
+        const insert = (withSource) =>
+          supabaseAdmin
+            .from('topic_suggestions')
+            .insert(
+              fresh.map((t) =>
+                t.source === 'catalog'
+                  ? {
+                      brand_id: brandId,
+                      name: t.name.trim(),
+                      source: 'catalog',
+                      ...(withSource && {
+                        source_data: {
+                          category: t.category,
+                          categoryId: t.categoryId,
+                          products: t.products,
+                          inStock: t.inStock,
+                        },
+                      }),
+                      status: 'new',
+                    }
+                  : { brand_id: brandId, name: t.name.trim(), source: 'llm', status: 'new' },
+              ),
+            )
+            .select();
+        let { data, error } = await insert(true);
+        // A database without 00525 has no topic_suggestions.source_data: the
+        // catalog's topics go in without their category rather than not at all.
+        if (
+          ['42703', 'PGRST204'].includes(error?.code) &&
+          String(error.message ?? '').includes('source_data')
+        ) {
+          req.log.warn({ err: error }, 'topic-suggestions refresh: no source_data column (00525)');
+          ({ data, error } = await insert(false));
+        }
         if (error) throw error;
         inserted = data ?? [];
       }

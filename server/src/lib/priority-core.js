@@ -52,6 +52,14 @@ export const INTENT_WEIGHTS = Object.freeze({
 });
 
 /**
+ * Commercial enough: an intent weighing this much or more is a buying search
+ * (comparison, best-top, vs-review, recommendation). The Action Center's "Why
+ * this priority?" says so from it (action-center/priority.js), and Ads counts
+ * a prompt as buying intent by it (ads/intent.js).
+ */
+export const COMMERCIAL = 0.85;
+
+/**
  * Factors times their weights, added up in the weights' order: the total and
  * what each factor gave. A factor's points are `value × weight / scale`:
  * scale 1 for factors read 0–1, 100 for ones read 0–100 against weights out

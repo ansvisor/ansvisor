@@ -12,6 +12,7 @@ export const ENGINE_LABELS: Record<string, string> = {
   gemini: 'Gemini',
   aimode: 'Google AI Mode',
   aioverview: 'Google AI Overview',
+  bing_aimode: 'Microsoft Copilot',
 };
 
 /** The provider's model for each scraper, as the API's CLORO_COUNTRY_MODELS. */
@@ -21,6 +22,8 @@ export const PLATFORM_MODELS: Record<string, string> = {
   'gemini-web': 'gemini',
   'google-aimode': 'aimode',
   'google-aio': 'aioverview',
+  // Copilot is asked through Bing AI Mode, whose list this is.
+  'copilot-web': 'bing_aimode',
 };
 
 /** Engines that answer from a city, by the provider's model name (PROMPT-015d). */

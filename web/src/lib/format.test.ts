@@ -11,8 +11,10 @@ import {
   formatCompactNumber,
   formatDate,
   formatDateTime,
+  formatMoney,
   formatMonthDay,
   formatNumber,
+  percentChange,
 } from './format.js';
 
 const toLocaleString = Number.prototype.toLocaleString;
@@ -77,4 +79,18 @@ test('dates read in English whatever the browser locale is', () => {
   expect(formatMonthDay(iso)).toBe('Oct 17');
   expect(formatDate(iso)).toBe('Oct 17, 2026');
   expect(formatDateTime(iso)).toMatch(/^Oct 17, 2026, \d{1,2}:05\s(AM|PM)$/);
+});
+
+test('formatMoney shows an amount whole in its currency, or as a number without one (#2140)', () => {
+  expect(formatMoney(12000.5, 'USD')).toBe('$12,001');
+  expect(formatMoney(900, 'EUR')).toBe('€900');
+  expect(formatMoney(1500, null)).toBe('1,500');
+  expect(formatMoney(900, 'ZZZZ')).toBe('900');
+});
+
+test('percentChange is the whole % change, or null with nothing before (#2140)', () => {
+  expect(percentChange(128, 100)).toBe(28);
+  expect(percentChange(50, 100)).toBe(-50);
+  expect(percentChange(5, 0)).toBeNull();
+  expect(percentChange(5, null)).toBeNull();
 });

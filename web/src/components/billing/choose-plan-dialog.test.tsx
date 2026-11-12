@@ -270,7 +270,8 @@ describe('ChoosePlanDialog', () => {
       'SAVE50 · 50% off your first month',
     );
     expect(codeInput()).toBeNull();
-    expect(choiceButton('month')?.textContent).toBe('Monthly50% off the first month');
+    // The offer is on the cards, not by Monthly.
+    expect(choiceButton('month')?.textContent).toBe('Monthly');
     expect(price('starter')).toBe(
       'SAVE50: first month 50% offRegular price $49$24.50first monththen $49/mo',
     );
@@ -485,7 +486,8 @@ describe('ChoosePlanDialog with the first-month offer on', () => {
     expect(dialog().querySelector('[data-slot="promo-applied"]')?.textContent).toBe(
       'SAVE50 · 50% off your first month',
     );
-    expect(choiceButton('month')?.textContent).toBe('Monthly50% off the first month');
+    // The offer is on the cards, not by Monthly.
+    expect(choiceButton('month')?.textContent).toBe('Monthly');
     expect(price('starter')).toContain('$24.50first month');
     expect(due('starter')).toBe('$24.50');
     expect(startButton('starter').textContent).toBe('Buy now');
@@ -573,7 +575,9 @@ describe('ChoosePlanDialog from the demo brand', () => {
     );
     expect(dialog().querySelector('h2')?.textContent).toBe('Use Ansvisor for your own brand');
     expect(dialog().textContent).toContain(demoBody);
-    expect(choices()).toEqual(['14-day trial', 'Monthly50% off the first month', 'YearlySave 20%']);
+    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%']);
+    // The demo is onboarding's way in, not a choice here.
+    expect(dialog().querySelector('[data-choice="demo"]')).toBeNull();
     expect(choiceButton('month')?.getAttribute('aria-pressed')).toBe('true');
     // Monthly: the first month at half price, the full plan today.
     expect(startButton('starter').textContent).toBe('Buy now');

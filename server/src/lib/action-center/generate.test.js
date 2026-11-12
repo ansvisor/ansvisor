@@ -711,6 +711,87 @@ describe('the task plan the action is created with', () => {
       expect(taskRows(writes)).not.toContain('create_content_brief');
     });
 
+    describe('a buying guide next to the live category page', () => {
+      const PAGE = 'https://shop.example/collections/cold-brew';
+      const found = (guideMissing) => ({
+        category: { id: 'c1', name: 'Coffee > Cold Brew', url: PAGE, inStock: 12 },
+        products: ['p1', 'p2'],
+        guideMissing,
+      });
+      const run = (over = {}) => {
+        const writes = mockDb({
+          signals: [topicSignal()],
+          brand: { site_type: 'ecommerce' },
+          ...over,
+        });
+        return generateActionsForBrand(BRAND, {
+          now: NOW,
+          sources: new Set([...ALL_SOURCES, 'topics']),
+        }).then((summary) => ({ summary, writes }));
+      };
+      const opened = (writes) => writes.inserted.find((w) => w.table === 'actions')?.rows[0];
+
+      it('is suggested when the topic has no guide yet, linking the page', async () => {
+        categoryPageFor.mockResolvedValue(found(true));
+        const { writes } = await run();
+        const action = opened(writes);
+        // The page is still optimized: its play, pages and plan as before.
+        expect(action.payload).toMatchObject({
+          contentExists: true,
+          pages: [PAGE],
+          products: ['p1', 'p2'],
+          play: { id: 'category_page', reasons: [{ kind: 'category', page: PAGE }] },
+        });
+        expect(action.payload.play.supporting).toEqual([
+          {
+            id: 'buying_guide',
+            assetType: 'buying_guide',
+            kind: 'category',
+            category: 'Coffee > Cold Brew',
+            linkTo: PAGE,
+          },
+        ]);
+        expect(taskRows(writes)).toContain('optimize_content');
+      });
+
+      it('is not when the topic has a guide, written or published', async () => {
+        categoryPageFor.mockResolvedValue(found(false));
+        const { writes } = await run();
+        expect(opened(writes).payload.play).toMatchObject({ id: 'category_page', supporting: [] });
+      });
+
+      it('comes only with an action the night opens: never beside an active one, nor while resting', async () => {
+        categoryPageFor.mockResolvedValue(found(true));
+        // The topic action is open already: its scope stays, nothing is suggested again.
+        const active = await run({
+          activeActions: [
+            {
+              id: 'a1',
+              dedup_key: 'create_content_for_topics',
+              status: 'in_progress',
+              kind: 'create_content_for_topics',
+              payload: {},
+            },
+          ],
+        });
+        expect(active.summary.created).toBe(0);
+        expect(opened(active.writes)).toBeUndefined();
+        // Its last cycle closed yesterday: it rests.
+        const resting = await run({
+          closedActions: [
+            {
+              dedup_key: 'create_content_for_topics',
+              completed_at: daysAgo(1),
+              updated_at: daysAgo(1),
+            },
+          ],
+        });
+        expect(resting.summary.resting).toBe(1);
+        expect(opened(resting.writes)).toBeUndefined();
+        expect(categoryPageFor).not.toHaveBeenCalled();
+      });
+    });
+
     it('writes a buying guide when the topic’s category has products but no page (EC-1)', async () => {
       categoryPageFor.mockResolvedValue({
         category: { id: 'c2', name: 'Gifts', url: null, inStock: 4 },

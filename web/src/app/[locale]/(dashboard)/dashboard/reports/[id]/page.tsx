@@ -32,7 +32,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ArrowLeft, FileDown, Loader2, RotateCw } from 'lucide-react';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney, formatNumber, percentChange } from '@/lib/format';
+import { getPlatformName } from '@/lib/traffic-platforms';
 import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { REPORT_TEMPLATES } from '@/lib/reports/templates';
@@ -781,6 +782,119 @@ export default function ReportDetailPage() {
                   ))
                 )}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {payload.aiPipeline && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-baseline gap-2 text-base">
+                {t('aiPipeline.title')}
+                <span className="text-xs font-normal text-muted-foreground">
+                  {t('aiPipeline.from')}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    label: t('aiPipeline.contacts'),
+                    value: formatNumber(payload.aiPipeline.totals.contacts),
+                    change: percentChange(
+                      payload.aiPipeline.totals.contacts,
+                      payload.aiPipeline.totals.contactsPrev,
+                    ),
+                  },
+                  {
+                    label: t('aiPipeline.deals'),
+                    value: formatNumber(payload.aiPipeline.totals.deals),
+                    change: null,
+                  },
+                  {
+                    label: t('aiPipeline.openPipeline'),
+                    value: formatMoney(
+                      payload.aiPipeline.totals.openPipeline,
+                      payload.aiPipeline.currency,
+                    ),
+                    change: null,
+                  },
+                  {
+                    label: t('aiPipeline.wonRevenue'),
+                    value: formatMoney(
+                      payload.aiPipeline.totals.wonRevenue,
+                      payload.aiPipeline.currency,
+                    ),
+                    change: percentChange(
+                      payload.aiPipeline.totals.wonRevenue,
+                      payload.aiPipeline.totals.wonRevenuePrev,
+                    ),
+                  },
+                ].map((kpi) => (
+                  <div key={kpi.label}>
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {kpi.label}
+                    </p>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tabular-nums">{kpi.value}</span>
+                      <Delta value={kpi.change} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {t('aiPipeline.byEngine')}
+                  </p>
+                  {payload.aiPipeline.byEngine.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{t('noData')}</p>
+                  ) : (
+                    payload.aiPipeline.byEngine.map((e) => (
+                      <div key={e.source} className="flex items-center justify-between text-sm">
+                        <span className="truncate">{getPlatformName(e.source)}</span>
+                        <span className="font-medium tabular-nums">
+                          {t('aiPipeline.engineLine', {
+                            contacts: e.contacts,
+                            revenue: formatMoney(e.wonRevenue, payload.aiPipeline!.currency),
+                          })}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {t('aiPipeline.topPages')}
+                  </p>
+                  {payload.aiPipeline.byPage.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{t('noData')}</p>
+                  ) : (
+                    payload.aiPipeline.byPage.map((p) => (
+                      <div key={p.page} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="min-w-0 truncate text-muted-foreground">{p.page}</span>
+                        <span className="shrink-0 font-medium tabular-nums">
+                          {formatMoney(p.wonRevenue, payload.aiPipeline!.currency)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              {payload.aiPipeline.hubspotNative.contacts > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t('aiPipeline.native', {
+                    contacts: payload.aiPipeline.hubspotNative.contacts,
+                    deals: payload.aiPipeline.hubspotNative.deals,
+                    revenue: formatMoney(
+                      payload.aiPipeline.hubspotNative.wonRevenue,
+                      payload.aiPipeline.currency,
+                    ),
+                  })}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">{t('aiPipeline.rule')}</p>
             </CardContent>
           </Card>
         )}
