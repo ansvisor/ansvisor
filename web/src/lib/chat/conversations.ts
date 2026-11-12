@@ -34,6 +34,8 @@ export interface ChatListItem {
   title: string | null;
   /** The chat's brand, by name: the row's brand tag. */
   brand: string | null;
+  /** The chat's brand, by id: the Inbox keeps the active brand's. */
+  brandId?: string | null;
   pinned: boolean;
   archived: boolean;
   /** Shared with the team (Share with team). */
@@ -252,6 +254,7 @@ async function itemsOf(reader: Reader, actor: ChatActor, chats: ChatRow[]) {
       id: chat.id,
       title: chat.title ? maskIds(chat.title) : null,
       brand: brand ? maskIds(brand) : null,
+      brandId: chat.brand_id,
       // Pin and read are the author's: a teammate's shared chat shows neither.
       pinned: mine && chat.pinned_at !== null,
       archived: chat.archived_at !== null,

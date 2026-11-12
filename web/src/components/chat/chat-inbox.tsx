@@ -35,6 +35,14 @@ export function inboxItems(chats: ChatListItem[], now = new Date()): ChatListIte
   return chatMenuLists(chats, now).atWork.filter((chat) => chat.mine);
 }
 
+/**
+ * The active brand's chats, and those of no brand: another brand's work
+ * stays on that brand's Inbox. No active brand yet, all of them.
+ */
+export function ofBrand(chats: ChatListItem[], brandId: string | null | undefined) {
+  return brandId ? chats.filter((chat) => !chat.brandId || chat.brandId === brandId) : chats;
+}
+
 /** The Inbox's counts: needs you, running, and results that came in today. */
 export function inboxCounts(items: ChatListItem[], now = new Date()) {
   const today = now.toDateString();

@@ -37,7 +37,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { NewPill } from '@/components/agentic/new-pill';
 import { useFillHomeDraft, useHomeChat } from './home-draft';
 import { useChatList } from './chat-list-provider';
-import { inboxItems, useNow } from './chat-inbox';
+import { inboxItems, ofBrand, useNow } from './chat-inbox';
 import { FocusPill, useChatFocus } from './focus-picker';
 import { AgentsForYou } from './agents-for-you';
 import { ForYouNow } from './for-you-now';
@@ -580,7 +580,7 @@ export function ChatHome({
   const plain = focusCtx !== null && focusCtx.focus.length === 0;
   const focusKey = plain ? DEFAULT_LINE.join(',') : (focusCtx?.focus.join(',') ?? '');
   const wordsKey = `${brandId}|${focusKey}`;
-  const items = useMemo(() => inboxItems(chats), [chats]);
+  const items = useMemo(() => inboxItems(ofBrand(chats, brandId)), [chats, brandId]);
   const needsYou = items.filter((c) => c.state === 'needsYou').length;
   const weekEnd = now ? endOfWeek(now) : null;
 

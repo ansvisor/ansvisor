@@ -30,7 +30,7 @@ import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
 import { ChatDebugProvider } from './chat-debug';
 import { ChatCrumbContext } from './chat-crumb';
-import { inboxItems } from './chat-inbox';
+import { inboxItems, ofBrand } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
 import { ChatMenu } from './chat-menu';
 import { ChatHeaderMenu, RenameField } from './chat-menus';
@@ -222,7 +222,7 @@ function ChatShellFrame({
   const isMac = useIsMac();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { chats, status } = useChatList();
-  const inbox = useMemo(() => inboxItems(chats).length, [chats]);
+  const inbox = useMemo(() => inboxItems(ofBrand(chats, brandId)).length, [chats, brandId]);
   const [open, setOpen] = useState(menuOpen);
   const [drawer, setDrawer] = useState(false);
   const [searching, setSearching] = useState(false);
