@@ -63099,3 +63099,4 @@ comment on function public.import_prompts(uuid, uuid, integer, jsonb, text) is
   'Bulk-inserts prompts [{idx, text, category, topic_id, platforms, models, regions}] in order under a per-organization advisory lock, up to p_max_locations tracked locations for the org (-1 = unlimited). Past the limit: p_over_limit ''skip'' (default) stops there, ''wait'' saves the rest waiting for a spot (inactive, waiting_since now; 00535). Returns (idx, id, waiting) for each saved row. PROMPT-005.';
 
 notify pgrst, 'reload schema';
+
