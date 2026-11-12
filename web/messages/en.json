@@ -582,6 +582,38 @@
     "collapseRail": "Collapse the Ansvisor menu",
     "railTip": "Ansvisor · hover or click to expand"
   },
+  "accountMenu": {
+    "open": "Account menu",
+    "openFor": "{name}, account menu",
+    "workspacePlan": "{workspace} · {plan}",
+    "trialLeft": "{days, plural, =0 {Trial · ends today} one {Trial · # day left} other {Trial · # days left}}",
+    "settings": "Settings",
+    "account": "Your account",
+    "members": "Members & invites",
+    "integrations": "Integrations",
+    "api": "API & MCP",
+    "billing": "Plans & billing",
+    "whatsNew": "What’s new",
+    "whatsNewUnread": "New updates",
+    "help": "Help",
+    "signOut": "Sign out"
+  },
+  "settingsDots": {
+    "people": "{count, plural, one {# person} other {# people}}",
+    "namesAndMore": "{names} and {count} more",
+    "joined": "{count, plural, one {# person joined: {names}} other {# people joined: {names}}}",
+    "inviteExpired": "{count, plural, one {an invite expired without being accepted} other {# invites expired without being accepted}}",
+    "seatsFull": "the seat limit is reached",
+    "integrationBroken": "{provider} disconnected",
+    "integrationNew": "{by} connected {provider}",
+    "integrationNewSomeone": "{provider} connected",
+    "clientNew": "{name} connected to this workspace",
+    "trialEnding": "{days, plural, =0 {the trial ends today} one {the trial ends in # day} other {the trial ends in # days}}",
+    "paymentFailed": "a payment failed",
+    "membersNote": "{names} joined since your last visit.",
+    "setRoles": "Set roles",
+    "menuAccess": "Menu access"
+  },
   "menuDots": {
     "newResults": "New results",
     "needsYou": "Needs you",

@@ -82,7 +82,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     supabase
       .from('organizations')
       .select(
-        'plan, subscription_status, plan_overrides, stripe_subscription_id, subscription_ends_at, cancel_at_period_end',
+        'name, plan, subscription_status, plan_overrides, stripe_subscription_id, subscription_ends_at, cancel_at_period_end',
       )
       .eq('id', profile.organization_id)
       .single(),
@@ -236,6 +236,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
         subscriptionActive={subscriptionActive}
         subscriptionStatus={subscriptionStatus}
         planEndsAt={org?.cancel_at_period_end ? (org.subscription_ends_at as string | null) : null}
+        trialEndsAt={
+          subscriptionStatus === 'trialing'
+            ? ((org?.subscription_ends_at as string | null) ?? null)
+            : null
+        }
+        workspaceName={(org?.name as string | null) ?? null}
       >
         <RoleProvider role={role}>
           <ChatAgenticProvider enabled={chatOn}>

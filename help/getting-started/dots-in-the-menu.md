@@ -1,7 +1,7 @@
 ---
 title: Dots in the menu
 route: /dashboard
-keywords: [menu dot, green dot, yellow dot, red dot, grey dot, new results, needs you, needs attention, working on it, action center count]
+keywords: [menu dot, green dot, yellow dot, red dot, grey dot, new results, needs you, needs attention, working on it, action center count, settings dot, account menu dot]
 synonyms: [what does the dot mean, colored dot, notification dot, badge in the menu, unread]
 plan: all
 updated: 2026-11-11
@@ -36,6 +36,10 @@ When a submenu, a group such as **Analytics** or the whole menu is folded, the d
 ## In Chat and on agent cards
 
 Chat's chats and the agent cards in **Action Center › Agents** use the same dots. A chat is grey while Chat works in it, yellow while it waits for you, green when it finished while you were away, and red when its last run stopped with an error. An agent's card is grey while it runs, yellow while it waits for your OK, and red when its last run failed.
+
+## In Settings
+
+Admins and managers also see dots for **Settings**: on the account menu under your name, on the matching Settings tabs, and the strongest one on your avatar and the gear. **Members & invites** is green when people joined since you last opened it, with their names at the top of the tab, and yellow when an invite expired without being accepted or every seat is taken. **Integrations** is red while a Google sign-in, CMS site or Slack is disconnected, and green when a teammate connected one. **API & MCP** is green when an MCP client such as Claude connected. **Plans & billing** is yellow in a trial's last 3 days and red when a payment failed. Green goes once you open the tab; yellow and red stay until they're dealt with.
 
 ## The Action Center's number
 
