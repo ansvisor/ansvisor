@@ -62,7 +62,14 @@ export function ChatMadeAgents({
   const [busy, setBusy] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    setList(await listChatSchedules().catch((): ScheduleListRead => ({ ok: false })));
+    // A failed (or, in a test, unmocked) read just shows no "Made in Chat" rows.
+    let read: ScheduleListRead | null | undefined;
+    try {
+      read = await listChatSchedules();
+    } catch {
+      read = null;
+    }
+    setList(read ?? { ok: false });
   }, []);
   useEffect(() => {
     if (!initial) void reload();
