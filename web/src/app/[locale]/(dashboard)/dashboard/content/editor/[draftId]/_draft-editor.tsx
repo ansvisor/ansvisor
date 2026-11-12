@@ -316,6 +316,8 @@ import { useDraftInputs } from './_use-draft-inputs';
 import { useDraftReads } from './_use-draft-reads';
 import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
+import { AskChatMenu } from './_ask-chat';
+import type { ComposerDraft } from '@/components/chat/composer/chat-composer';
 import { useShoppingCheck } from './_use-shopping-check';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
 
@@ -664,6 +666,12 @@ export function DraftEditor({
       n: (prev?.n ?? 0) + 1,
       ...(source ? { source: { kind: source.kind, ref: source.ref } } : {}),
     }));
+  };
+  // Ask Chat on a selection: the passage quoted in the Chat tab's box, not sent.
+  const [chatAsk, setChatAsk] = useState<ComposerDraft | null>(null);
+  const askChat = (quote: string) => {
+    setChatAsk((was) => ({ nonce: Math.max(Date.now(), (was?.nonce ?? 0) + 1), text: quote }));
+    openPanelTab('chat');
   };
   // Ctrl J (⌘J) opens Chat beside the page, as it opens Chat's side panel on other pages (W4-16).
   const openChatTab = useRef(() => {});
@@ -4476,6 +4484,7 @@ export function DraftEditor({
                 )}
               >
                 <EditorContent editor={editor} />
+                {chatTab && editor && <AskChatMenu editor={editor} onAsk={askChat} />}
               </div>
             </div>
             {dragging && <DropOverlay />}
@@ -4518,7 +4527,11 @@ export function DraftEditor({
             tabRequest={tabRequest}
             chat={
               chatTab
-                ? { conversation: draft.conversation, onSuggestions: readChatSuggestions }
+                ? {
+                    conversation: draft.conversation,
+                    onSuggestions: readChatSuggestions,
+                    draft: chatAsk,
+                  }
                 : undefined
             }
             agentFix={agentFix}
