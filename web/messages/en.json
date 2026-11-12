@@ -7099,7 +7099,8 @@
       "audit-fix": "Site audit fixes",
       "setup": "Setup guide",
       "fanout": "Fan-out gaps",
-      "prompts": "Prompt portfolio"
+      "prompts": "Prompt portfolio",
+      "plan": "30-day plan"
     },
     "form": {
       "titleNew": "New agent",
