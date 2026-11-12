@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
   run: null as { conversation_id: string } | null,
   /** The brand's row, as readBrandIsDemo reads it. */
   brand: { is_demo: false },
+  /** The run's first event is still far off (reads, planning, a model call). */
+  slow: false,
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -64,20 +66,23 @@ const engine = vi.hoisted(() => ({
 vi.mock('@/lib/chat/engine', () => engine);
 vi.mock('@/lib/chat/engine-store', () => ({
   STORED_EVENTS: {
-    readEvents: async () => [
-      { type: 'text.delta', seq: 1, data: { text: 'Hi' } },
-      {
-        type: 'run.finished',
-        seq: 2,
-        data: {
-          workingMs: 1,
-          stepCount: 0,
-          sources: [],
-          generatedAt: '2026-10-29T09:00:00.000Z',
-          dataAsOf: null,
-        },
-      },
-    ],
+    readEvents: async () =>
+      state.slow
+        ? new Promise<never>(() => {})
+        : [
+            { type: 'text.delta', seq: 1, data: { text: 'Hi' } },
+            {
+              type: 'run.finished',
+              seq: 2,
+              data: {
+                workingMs: 1,
+                stepCount: 0,
+                sources: [],
+                generatedAt: '2026-10-29T09:00:00.000Z',
+                dataAsOf: null,
+              },
+            },
+          ],
     isWorking: async () => false,
   },
 }));
@@ -106,6 +111,7 @@ beforeEach(() => {
   state.chat = null;
   state.run = null;
   state.brand = { is_demo: false };
+  state.slow = false;
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
 });
@@ -227,6 +233,25 @@ describe('the run routes', () => {
       RUN,
       undefined,
     );
+  });
+
+  it('answer with the chat at once, before the run’s slow work, its first bytes sent', async () => {
+    state.slow = true;
+    engine.driveRun.mockReturnValueOnce(new Promise<never>(() => {}));
+    engine.startChatRun.mockResolvedValue({
+      ok: true,
+      runId: RUN,
+      conversationId: ORG,
+      queued: false,
+    });
+    const res = await POST(post({ message: "What's new?" }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-chat-conversation')).toBe(ORG);
+    // The server sends the headers with the first bytes: they are there before any event.
+    const reader = res.body!.getReader();
+    const first = await reader.read();
+    expect(new TextDecoder().decode(first.value)).toBe(': open\n\n');
+    void reader.cancel();
   });
 
   it('refuse a message or a typed answer that holds an API key, unread and unlogged', async () => {

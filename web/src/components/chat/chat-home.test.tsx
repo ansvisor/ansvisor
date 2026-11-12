@@ -414,7 +414,8 @@ describe('ChatHome', () => {
     const calls: { url: string; body: unknown }[] = [];
     globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, body: JSON.parse(String(init?.body)) });
-      return new Response('', {
+      // The run's stream stays open: the chat opens on the headers, not at its end.
+      return new Response(new ReadableStream(), {
         status: 200,
         headers: { 'x-chat-conversation': 'cccccccc-0000-4000-8000-000000000001' },
       });
