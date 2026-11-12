@@ -826,6 +826,14 @@ describe('startDraftFromAction', () => {
       draftId: 'action-draft',
       created: true,
       importFailed: false,
+      // As written, for the Content Agent's run on it (Write this's).
+      draft: expect.objectContaining({
+        method: 'optimize',
+        title: 'Forecasting',
+        sourceUrl: PAGE,
+        bodyHtml: '<h1>Forecasting</h1><p>Forecast every deal.</p>',
+        rules: expect.objectContaining({ importLength: 100 }),
+      }),
     });
     expect(
       JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string),
@@ -933,9 +941,10 @@ describe('startDraftFromAction', () => {
       vi.fn(async () => new Response('{}', { status: 502 })),
     );
     await expect(start()).resolves.toMatchObject({ created: true, importFailed: true });
+    // A page to update is named by its path, not the action, when it can't be read.
     expect(admin.inserts[0].value).toMatchObject({
-      title: 'Pipeline forecasting',
-      body_html: '<h1>Pipeline forecasting</h1>',
+      title: '/forecasting',
+      body_html: '<h1>/forecasting</h1>',
       source_url: PAGE,
     });
 
@@ -1050,6 +1059,58 @@ describe('startDraftFromAction', () => {
     vi.unstubAllGlobals();
   });
 
+  it('titles a new page by its main prompt, with the type its opportunity carries, never none', async () => {
+    const SECOND = '12121212-1212-4212-8212-121212121212';
+    reads = {
+      actions: action({
+        title: 'Close the visibility gap with 1 competitor',
+        pages: [],
+        promptIds: [PROMPT, SECOND],
+      }),
+      action_tasks: { id: TASK, task_key: 'create_content_draft', status: 'todo' },
+      content_drafts: [],
+      brands: { site_type: 'ecommerce', industry: null, shopping_mode_enabled: false },
+      // Read back in any order: the first the action lists is the main prompt.
+      prompts: [
+        { id: SECOND, text: 'Best coffee subscriptions' },
+        { id: PROMPT, text: 'Is a coffee subscription worth it?' },
+      ],
+      content_opportunities: { id: OPPORTUNITY, brief: null, assetType: 'buying_guide' },
+    };
+    await expect(start(null)).resolves.toMatchObject({
+      created: true,
+      draft: {
+        method: 'create',
+        title: 'Is a coffee subscription worth it?',
+        pageType: 'buying_guide',
+        sourceUrl: null,
+        prompts: 2,
+      },
+    });
+    expect(admin.inserts[0].value).toMatchObject({
+      title: 'Is a coffee subscription worth it?',
+      body_html: '<h1>Is a coffee subscription worth it?</h1>',
+      page_type: 'buying_guide',
+      opportunity_id: OPPORTUNITY,
+      prompt_ids: [SECOND, PROMPT],
+    });
+    expect(calls.find((call) => call.table === 'content_opportunities')).toBeDefined();
+
+    // The opportunity's brief names the page first; with no type known, Start's default.
+    admin.inserts = [];
+    reads.brands = { site_type: 'b2b', industry: null, shopping_mode_enabled: false };
+    reads.content_opportunities = {
+      id: OPPORTUNITY,
+      brief: { suggestedTitle: 'Coffee subscriptions: are they worth it?' },
+      assetType: null,
+    };
+    await expect(start(null)).resolves.toMatchObject({ created: true });
+    expect(admin.inserts[0].value).toMatchObject({
+      title: 'Coffee subscriptions: are they worth it?',
+      page_type: expect.any(String),
+    });
+  });
+
   // The work's draft was archived: the read skips it (as the DB's filter
   // does) and the one-per-work key counts only drafts not archived (00233),
   // so Start writes a new one rather than fail on the archived one's key.
@@ -1062,7 +1123,7 @@ describe('startDraftFromAction', () => {
       prompts: [],
       content_opportunities: null,
     };
-    await expect(start(null)).resolves.toEqual({
+    await expect(start(null)).resolves.toMatchObject({
       draftId: 'action-draft',
       created: true,
       importFailed: false,
