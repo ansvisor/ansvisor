@@ -210,7 +210,7 @@ describe('Sidebar', () => {
     expect(container.textContent).not.toContain('off your menu');
   });
 
-  it('reads the tracked prompts’ count only while Prompts is on the menu', async () => {
+  it('reads no tracked prompts’ count, with Prompts on the menu or off it', async () => {
     useBrandStore.setState({ activeBrandId: 'brand-1' });
     await act(async () => {
       root.render(
@@ -230,7 +230,7 @@ describe('Sidebar', () => {
         </NextIntlClientProvider>,
       );
     });
-    expect(getTrackedPromptCount).toHaveBeenCalledWith('brand-1');
+    expect(getTrackedPromptCount).not.toHaveBeenCalled();
   });
 
   it("is the rail on Chat's screens until the logo expands it, kept on the person; elsewhere as pinned", async () => {

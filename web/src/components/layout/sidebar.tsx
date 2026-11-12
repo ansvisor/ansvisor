@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { usePathname, Link } from '@/i18n/navigation';
-import { getTrackedPromptCount } from '@/lib/actions/prompt';
 import { carriedParams, PROMPTS_BASE } from '@/lib/prompts-routes';
 import { dashboardNav, type NavGroup } from '@/config/dashboard';
 import { saveChatRailOpen } from '@/lib/actions/chat-prefs';
@@ -33,7 +32,6 @@ import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
-import { formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -185,8 +183,6 @@ export function Sidebar() {
   const underGroup =
     nav.find((group) => group.title && group.items.some((item) => isNavItemActive(item, pathname)))
       ?.title ?? null;
-  const [trackedCount, setTrackedCount] = useState<number | null>(null);
-  const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const t = useTranslations('nav');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
   // Probe once per session whether the org has a provider key for Chat.
@@ -283,21 +279,6 @@ export function Sidebar() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (underGroup) setOpenGroups((prev) => ({ ...prev, [underGroup]: true }));
   }, [underGroup]);
-
-  // The count beside Tracked Prompts, refreshed on brand switch and on every
-  // page change so adding or deleting prompts shows up. Not read while
-  // Prompts is off the viewer's menu.
-  const promptsOnMenu = !hiddenSections.has('prompts');
-  useEffect(() => {
-    if (!activeBrandId || !promptsOnMenu) return;
-    let cancelled = false;
-    getTrackedPromptCount(activeBrandId)
-      .then((n) => !cancelled && setTrackedCount(n))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [activeBrandId, pathname, promptsOnMenu]);
 
   const setSubmenuOpen = (href: string, open: boolean) => {
     setOpenMenus((prev) => ({ ...prev, [href]: open }));
@@ -667,11 +648,6 @@ export function Sidebar() {
                                         >
                                           {child.badge}
                                         </Badge>
-                                      )}
-                                      {child.href.endsWith('/tracked') && trackedCount !== null && (
-                                        <span className="text-[11px] tabular-nums text-muted-foreground">
-                                          {formatNumber(trackedCount)}
-                                        </span>
                                       )}
                                     </Link>
                                   </li>

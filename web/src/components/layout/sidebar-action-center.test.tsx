@@ -253,10 +253,10 @@ describe('the menu', () => {
     ).toEqual(['/dashboard/action-center/history']);
   });
 
-  it('shows the tracked prompts’ count beside Tracked Prompts', async () => {
+  it('shows no count beside Tracked Prompts, and reads none', async () => {
     await render();
-    expect(getTrackedPromptCount).toHaveBeenCalledWith('brand-1');
-    expect(link('/dashboard/prompts/tracked')?.textContent).toBe('Tracked Prompts12');
+    expect(getTrackedPromptCount).not.toHaveBeenCalled();
+    expect(link('/dashboard/prompts/tracked')?.textContent).toBe('Tracked Prompts');
   });
 
   it('folds the Action Center like any submenu, remembered in this browser', async () => {
