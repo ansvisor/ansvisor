@@ -198,7 +198,8 @@ describe('swapPrompts', () => {
   });
 
   it('tracks the picks again when tracking the waiting prompt fails', async () => {
-    fake.activate = () => ({ error: 'Failed to update the prompt' });
+    const metered = fake.activate!;
+    fake.activate = (id) => (id === 'w' ? { error: 'Failed to update the prompt' } : metered(id));
     const result = await swapPrompts('w', ['b', 'c']);
     expect(result).toEqual({
       ok: false,
@@ -209,7 +210,35 @@ describe('swapPrompts', () => {
     expect(row('b')).toMatchObject({ is_active: true, waiting_since: null });
     expect(row('c').is_active).toBe(true);
     expect(row('w').is_active).toBe(false);
-    expect(updates()).toHaveLength(2);
+    expect(updates()).toHaveLength(1);
+    expect(setPromptActive.mock.calls).toEqual([
+      ['w', true],
+      ['b', true],
+      ['c', true],
+    ]);
+  });
+
+  it('leaves the rest of the picks paused when a write meanwhile took their room', async () => {
+    // Something else takes the freed spots between the pause and the activation;
+    // tracking the picks again then goes through the metered activation.
+    const metered = fake.activate;
+    fake.activate = () => {
+      rows().push(prompt('x', 'b2'), prompt('y', 'b2'));
+      fake.activate = metered;
+      return { error: 'Failed to update the prompt' };
+    };
+    fake.maxPrompts = 5;
+    const result = await swapPrompts('w', ['b', 'c']);
+    expect(result).toEqual({
+      ok: false,
+      code: 'failed',
+      error: 'Failed to update the prompt',
+      restored: false,
+      stillPaused: ['c'],
+    });
+    expect(row('b').is_active).toBe(true);
+    expect(row('c').is_active).toBe(false);
+    expect(rows().filter((r) => r.is_active)).toHaveLength(5);
   });
 
   it('needs a spot for each location: refuses picks that free too few, before changing anything', async () => {

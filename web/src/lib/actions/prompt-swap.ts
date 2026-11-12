@@ -234,6 +234,8 @@ export type SwapResult =
        * tracked again.
        */
       restored?: boolean;
+      /** With restored false: the picks left paused, as the plan had no room for them. */
+      stillPaused?: string[];
     };
 
 /**
@@ -241,7 +243,9 @@ export type SwapResult =
  * waiting (or paused) one through the metered activation (setPromptActive,
  * which also clears waiting_since; 00535), so the plan's limit is checked
  * the way every resume checks it. If tracking it fails, the picked prompts
- * are tracked again. A prompt in several locations needs that many spots:
+ * are tracked again through that same metered path, so a write meanwhile
+ * can't push the plan past its limit: once one no longer fits, it and the
+ * rest stay paused and come back in stillPaused. A prompt in several locations needs that many spots:
  * picks that don't free enough are refused before anything changes. With
  * room already free, no pick is needed. Admins and managers only; errors
  * come back as values (#427).
@@ -300,12 +304,11 @@ export async function swapPrompts(waitingId: string, pauseIds: string[]): Promis
       .select('id');
     paused = (data ?? []).map((row) => row.id as string);
     if (error || paused.length !== ids.length) {
-      const restored = await trackAgain(supabase, paused);
       return {
         ok: false,
         code: 'failed',
         error: error?.message ?? 'Some prompts could not be paused',
-        restored,
+        ...(await trackAgain(paused)),
       };
     }
   }
@@ -316,26 +319,34 @@ export async function swapPrompts(waitingId: string, pauseIds: string[]): Promis
     }),
   );
   if ('error' in tracked) {
-    const restored = await trackAgain(supabase, paused);
     return {
       ok: false,
       code: tracked.code === 'plan_limit' ? 'not_enough' : 'failed',
       error: tracked.error,
-      restored: paused.length > 0 ? restored : undefined,
+      ...(paused.length > 0 ? await trackAgain(paused) : {}),
     };
   }
   revalidatePath('/dashboard/prompts');
   return { ok: true, prompt: tracked.prompt, paused: paused.length };
 }
 
-/** Tracks the paused picks again after the swap failed; whether that worked. */
-async function trackAgain(supabase: Client, ids: string[]): Promise<boolean> {
-  if (ids.length === 0) return true;
-  const { error } = await supabase
-    .from('prompts')
-    .update({ is_active: true, waiting_since: null })
-    .in('id', ids);
-  if (error)
-    console.error('[prompt-swap] could not track the picked prompts again:', error.message);
-  return !error;
+/**
+ * Tracks the paused picks again after the swap failed, one by one through
+ * the metered activation (setPromptActive), so the plan's room is checked
+ * again: something written meanwhile may have taken it. Once one is refused,
+ * it and the rest stay paused rather than going over the limit.
+ */
+async function trackAgain(ids: string[]): Promise<{ restored: boolean; stillPaused?: string[] }> {
+  for (let i = 0; i < ids.length; i++) {
+    const result = await setPromptActive(ids[i], true).catch(
+      (err: unknown): { error: string } => ({
+        error: err instanceof Error ? err.message : 'Failed to track the prompt',
+      }),
+    );
+    if ('error' in result) {
+      console.error('[prompt-swap] could not track the picked prompts again:', result.error);
+      return { restored: false, stillPaused: ids.slice(i) };
+    }
+  }
+  return { restored: true };
 }
