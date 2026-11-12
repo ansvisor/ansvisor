@@ -1059,6 +1059,20 @@ describe('a row', () => {
   });
 });
 
+describe('the active brand', () => {
+  it('lists its own chats and those of no brand, not another brand’s', async () => {
+    list.chats = [
+      chat('mine', { state: 'needsYou', brandId: 'brand-a' }),
+      chat('other', { state: 'needsYou', brandId: 'brand-b' }),
+      chat('none', { state: 'running', brandId: null }),
+    ];
+    await render(<ChatInbox suggestions={{ ok: false, failure: 'chat_off' }} />);
+    expect(text()).toContain('Chat mine');
+    expect(text()).toContain('Chat none');
+    expect(text()).not.toContain('Chat other');
+  });
+});
+
 describe('more than the read lists', () => {
   it('counts them all, and says how many the list shows', async () => {
     await render(<ChatInbox suggestions={ok({ total: 140 })} />);

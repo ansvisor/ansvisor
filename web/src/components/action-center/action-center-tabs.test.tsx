@@ -168,6 +168,19 @@ describe('ActionCenterTabs', () => {
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'Agents', 'History']);
   });
 
+  it('keep each count’s room from the first paint, so the row doesn’t move when they arrive', async () => {
+    getMyOpenActionCount.mockReturnValueOnce(new Promise(() => {}));
+    getNewSignalCount.mockReturnValueOnce(new Promise(() => {}));
+    stubAgents(0);
+    await render({ chatAgentic: true });
+    for (const key of ['actions', 'signals', 'agents']) {
+      const room = container.querySelector(`[data-count="${key}"]`)!;
+      expect(room.textContent).toBe('');
+      expect(room.className).toMatch(/inline-block min-w-\[2ch\]/);
+    }
+    expect(container.querySelector('[data-count="today"]')).toBeNull();
+  });
+
   it('mark the tab of the page shown: Today, Agents under its pages, and History on KPIs', async () => {
     stubAgents(0);
     for (const [path, tab] of [

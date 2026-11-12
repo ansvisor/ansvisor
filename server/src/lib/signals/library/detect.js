@@ -33,6 +33,7 @@ import { chooseBridgeLinks } from '../../action-center/bridge-links.js';
 import { chooseProductPages } from '../../action-center/product-page-groups.js';
 import { pageKey } from '../../audit/history.js';
 import { siteTypeOf } from '../../content-page-types.js';
+import { ownDomainMatcher } from '../../response-parser.js';
 
 const { library: t } = resolve();
 const DAY_MS = 86_400_000;
@@ -551,12 +552,25 @@ const FAMILIES = [
       'competitor_winning_source',
     ],
     async run(ctx) {
-      const domains = await rpc('ae_citation_sources', {
-        p_brand_id: ctx.brandId,
-        p_from: new Date(ctx.now.getTime() - t.windowDays * DAY_MS).toISOString(),
-      });
+      const [domains, competitors] = await Promise.all([
+        rpc('ae_citation_sources', {
+          p_brand_id: ctx.brandId,
+          p_from: new Date(ctx.now.getTime() - t.windowDays * DAY_MS).toISOString(),
+        }),
+        selectAll(() =>
+          supabaseAdmin
+            .from('competitors')
+            .select('domain')
+            .eq('brand_id', ctx.brandId)
+            .order('id'),
+        ),
+      ]);
+      // A tracked competitor's own site (its blog too) is never a source to
+      // earn a link or a citation from: same host rule as the brand's own.
+      const isCompetitor = ownDomainMatcher(competitors.map((row) => row.domain));
       const found = [];
       for (const d of domains) {
+        if (isCompetitor(d.domain)) continue;
         const kind = c.classifySource(d, t);
         if (!kind) continue;
         found.push(

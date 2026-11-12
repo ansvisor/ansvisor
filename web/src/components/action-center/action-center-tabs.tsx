@@ -96,6 +96,7 @@ export function ActionCenterTabs() {
       <nav className="flex gap-6 border-b" aria-label={t('label')}>
         {tabs.map((tab) => {
           const isActive = tab.key === current;
+          const counted = tab.key in counts;
           const count = counts[tab.key] ?? 0;
           return (
             <Link
@@ -110,12 +111,14 @@ export function ActionCenterTabs() {
               )}
             >
               {t(tab.key)}
-              {count > 0 && (
+              {/* The count's room is kept from the first paint, empty until it
+                  arrives, so the row doesn't move under an early click. */}
+              {counted && (
                 <span
                   data-count={tab.key}
-                  className="ml-1.5 font-normal tabular-nums text-muted-foreground"
+                  className="ml-1.5 inline-block min-w-[2ch] font-normal tabular-nums text-muted-foreground"
                 >
-                  {count}
+                  {count > 0 ? count : null}
                 </span>
               )}
             </Link>

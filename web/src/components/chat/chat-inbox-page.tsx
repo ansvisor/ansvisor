@@ -17,7 +17,7 @@ import type { ChatNoticesRead } from '@/lib/actions/chat-notices';
 import type { OutsideEmail } from '@/lib/actions/chat-outbound';
 import type { DailySuggestion, DailySuggestionsRead } from '@/lib/chat/daily-suggestions';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { ChatInboxView, inboxItems, inboxTabOf, useNow } from './chat-inbox';
+import { ChatInboxView, inboxItems, inboxTabOf, ofBrand, useNow } from './chat-inbox';
 import { useChatList } from './chat-list-provider';
 import type { InboxDaily, SuggestionBrand } from './inbox-suggestions';
 
@@ -165,7 +165,9 @@ export function ChatInbox({
 }) {
   const { status, chats, refresh } = useChatList();
   const now = useNow();
-  const items = useMemo(() => inboxItems(chats), [chats]);
+  // The active brand's work only: another brand's is on its own Inbox.
+  const brandId = useBrandStore((s) => s.activeBrandId);
+  const items = useMemo(() => inboxItems(ofBrand(chats, brandId)), [chats, brandId]);
   const daily = useInboxDaily(suggestions);
   const searchParams = useSearchParams();
   const tab = inboxTabOf(searchParams?.get('tab'));

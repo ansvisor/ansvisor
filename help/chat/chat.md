@@ -304,7 +304,7 @@ An agent's run, with no one there to ask, does the parts that fit, keeps what it
 
 ## Inbox
 
-**Inbox** in the chat menu lists what your agents did: chats waiting for your OK first, with **Review**, then chats still working, with their progress and **Watch**, then results you haven't opened yet, with **Open**. Click a row to open its chat. A result leaves the Inbox once you open it. The count next to **Inbox** shows how many items there are, with an amber dot when something needs you. Daily suggestions aren't in that count: the **Daily suggestions** tab shows theirs.
+**Inbox** in the chat menu lists what your agents did: chats waiting for your OK first, with **Review**, then chats still working, with their progress and **Watch**, then results you haven't opened yet, with **Open**. Click a row to open its chat. A result leaves the Inbox once you open it. The Inbox shows the brand you have selected: another brand's chats are on that brand's Inbox. The count next to **Inbox** shows how many items there are, with an amber dot when something needs you. Daily suggestions aren't in that count: the **Daily suggestions** tab shows theirs.
 
 Tabs on top, each with its count, show **All**, your **Daily suggestions**, what **Needs you** and your **Runs**.
 
