@@ -759,6 +759,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
       <ActionsHeader action={headerAction} />
       <ActionCenterTabs />
       {body}
+      {startNow.confirm}
 
       <Dialog open={confirmingSkip} onOpenChange={setConfirmingSkip}>
         <DialogContent className="sm:max-w-sm">
