@@ -6310,7 +6310,7 @@
             "scope": "Chat"
           },
           "execute": {
-            "name": "Publish, open a PR, send external email",
+            "name": "Publish and send external email",
             "scope": "Always after a click"
           },
           "billing": {
@@ -6626,7 +6626,7 @@
         "personal": "Personal memory and in-app watch rules",
         "workspace": "Actions, prompts, drafts, schedules",
         "agents": "Create triggered agents",
-        "execute": "Publish, open a PR, external email",
+        "execute": "Publish and send external email",
         "settings": "Billing, team, tool policy, connections, keys"
       },
       "values": {
