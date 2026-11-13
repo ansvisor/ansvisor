@@ -1,6 +1,63 @@
 {
   "entries": [
     {
+      "slug": "editor-ask-chat",
+      "feature": "Ask Chat in the Content Editor",
+      "homeLine": "Select a passage in the Content Editor and ask Chat about it.",
+      "route": "/dashboard/content/library",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-13",
+      "lines": [
+        "Asking Chat about one sentence of a page meant copying it into the chat by hand.",
+        "Select text in the Content Editor and click Ask Chat or press Ctrl/Cmd+Shift+K to put it in the Chat tab as a quote.",
+        "The quote waits in the Chat box and nothing is sent until you send it, so you can say what to change.",
+        "Select a passage in the page, click Ask Chat, then write your question in the Chat tab and send it."
+      ]
+    },
+    {
+      "slug": "menu-access",
+      "feature": "Menu access",
+      "homeLine": "Admins can choose which menu sections each role or person sees.",
+      "route": "/dashboard/settings/menu-access",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-13",
+      "lines": [
+        "A long menu is confusing for people who only use a few pages.",
+        "Admins choose which menu sections each role or person sees; hiding a section doesn't change what a role can do.",
+        "Each person sees a shorter menu, and Admins can let Managers change menus too.",
+        "Open Menu access in Settings and pick the sections for each role or person."
+      ]
+    },
+    {
+      "slug": "menu-dots",
+      "feature": "Dots in the menu",
+      "homeLine": "Coloured dots in the menu show what has new results, needs you or needs attention.",
+      "route": "/dashboard/action-center/today",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-13",
+      "lines": [
+        "It was hard to tell which part of Ansvisor needed a look without opening each page.",
+        "A dot in the menu shows the state: green is new results, yellow needs you, red needs attention, grey is working on it.",
+        "Chats and agent cards use the same dots, and a red dot stays until the problem is fixed.",
+        "Look for the dots in the menu and open the one that is yellow or red first."
+      ]
+    },
+    {
       "slug": "today",
       "feature": "Today",
       "homeLine": "Ansvisor now opens on Today: the night's biggest changes, your three actions and what waits for you.",
