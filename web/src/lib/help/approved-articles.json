@@ -4713,7 +4713,7 @@
         },
         {
           "heading": "Choose how often it comes",
-          "text": "Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily** (the default): after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable**: like Daily, but skipped when there are no highlights and no warnings.\n- **Off**: no email, no webhook and no Slack post."
+          "text": "Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily**: after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable** (the default for new brands): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings. A brand that already saved **Daily** keeps it.\n- **Off**: no email, no webhook and no Slack post."
         },
         {
           "heading": "Choose who gets it",
@@ -4725,7 +4725,7 @@
         },
         {
           "heading": "When it is sent",
-          "text": "A pulse follows a brand's scheduled daily tracking run; manual runs and single-prompt refreshes never trigger one. It waits up to 90 minutes for late answers, so its numbers match the dashboard. No pulse is sent when the frequency is **Off**, or **Weekly** and it isn't Monday; when the brand already had one that day; when there are no tracking results in the window; when the frequency is **Only when notable** and nothing is notable; or, on the cloud, when the subscription isn't active or trialing."
+          "text": "A pulse follows a brand's scheduled daily tracking run; manual runs and single-prompt refreshes never trigger one. It waits up to 90 minutes for late answers, so its numbers match the dashboard. No pulse is sent when the frequency is **Off**, or **Weekly** and it isn't Monday; when the brand already had one that day; when there are no tracking results in the window; when the frequency is **Only when notable**, it isn't the brand's first pulse and nothing is notable; or, on the cloud, when the subscription isn't active or trialing."
         },
         {
           "heading": "What's in a pulse",
@@ -5502,7 +5502,7 @@
         },
         {
           "heading": "When the Pulse is posted",
-          "text": "With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable**. Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.\n\nEach Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day."
+          "text": "With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable** (the default for new brands). Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.\n\nEach Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day."
         },
         {
           "heading": "Drop alerts",

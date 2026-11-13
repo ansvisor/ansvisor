@@ -132,3 +132,42 @@ describe('renderPulseEmail', () => {
     expect(html).not.toContain('Brand Visibility');
   });
 });
+
+describe('campaign tags', () => {
+  const links = {
+    insightsUrl: 'https://app.example.com/dashboard/insights',
+    settingsUrl: 'https://app.example.com/dashboard/settings?tab=notifications',
+  };
+
+  it('tags links into the app and keeps the existing query', async () => {
+    const { tagAppLink } = await import('./email.js');
+    const tagged = new URL(tagAppLink(links.settingsUrl, 'https://app.example.com'));
+    expect(tagged.searchParams.get('tab')).toBe('notifications');
+    expect(tagged.searchParams.get('utm_source')).toBe('pulse');
+    expect(tagged.searchParams.get('utm_medium')).toBe('email');
+    expect(tagged.searchParams.get('utm_campaign')).toBe('daily_pulse');
+  });
+
+  it('leaves other domains alone', async () => {
+    const { tagAppLink } = await import('./email.js');
+    const other = 'https://example.org/page?x=1';
+    expect(tagAppLink(other, 'https://app.example.com')).toBe(other);
+  });
+
+  it('tags the buttons in the email but not cited URLs', () => {
+    process.env.PUBLIC_APP_URL = 'https://app.example.com';
+    const { html } = renderPulseEmail({
+      brandName: 'Acme',
+      metrics: {
+        ...metrics,
+        highlights: [{ type: 'first_citation', url: 'https://cited.example.org/a' }],
+      },
+      ...links,
+    });
+    expect(html).toContain(
+      'insights?utm_source=pulse&amp;utm_medium=email&amp;utm_campaign=daily_pulse',
+    );
+    expect(html).toContain('tab=notifications&amp;utm_source=pulse');
+    expect(html).toContain('href="https://cited.example.org/a"');
+  });
+});
