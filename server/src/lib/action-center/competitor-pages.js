@@ -23,6 +23,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { resolve } from '../../config/action-engine.js';
 import { fetchPage } from '../safe-fetch.js';
+import { readWithRetry } from '../read-retry.js';
 import { extractHostname } from '../response-parser.js';
 import { opportunityKey } from '../audit/opportunities.js';
 import { robotsGroups } from '../audit/signals/trust.js';
@@ -45,6 +46,8 @@ export {
 const { competitorPages: C } = resolve();
 
 const DAY_MS = 86_400_000;
+/** A page that timed out twice (`incomplete`) is read again after this, not after `freshDays`. */
+const INCOMPLETE_FRESH_MS = 6 * 3_600_000;
 const READ_TIMEOUT_MS = 8_000;
 /** Answers read for the action's prompts, newest first. */
 const ANSWERS_READ = 300;
@@ -229,7 +232,13 @@ export async function readPages({
   const known = new Map((knownRes.data ?? []).map((row) => [row.page_key, row]));
   const fresh = new Map(
     (knownRes.data ?? [])
-      .filter((row) => Date.parse(row.read_at) >= freshSince)
+      .filter(
+        (row) =>
+          Date.parse(row.read_at) >=
+          (row.features?.incomplete
+            ? Math.max(freshSince, now.getTime() - INCOMPLETE_FRESH_MS)
+            : freshSince),
+      )
       .map((row) => [row.page_key, row.features ?? {}]),
   );
   // A run that read some would compare a part, and its task wouldn't run again.
@@ -250,15 +259,22 @@ export async function readPages({
     let features = null;
     let sketched = null;
     let disallowed = false;
+    let incomplete = false;
     try {
       const origin = new URL(page.url).origin;
       if (!allowed.has(origin)) allowed.set(origin, await robotsAllow(page.url, read));
       disallowed = !allowed.get(origin);
       if (!disallowed) {
-        const fetched = await read(page.url, { timeoutMs: READ_TIMEOUT_MS });
-        features = await pageFeatures(fetched.url, fetched.html, now.getTime());
-        // Its words as the page checks measure a change: what changes by itself left out.
-        if (features) sketched = wordSketch(visibleText(fetched.html, undefined, { steady: true }));
+        const got = await readWithRetry(() => read(page.url, { timeoutMs: READ_TIMEOUT_MS }));
+        if (got.incomplete) {
+          incomplete = true;
+        } else {
+          const fetched = got.value;
+          features = await pageFeatures(fetched.url, fetched.html, now.getTime());
+          // Its words as the page checks measure a change: what changes by itself left out.
+          if (features)
+            sketched = wordSketch(visibleText(fetched.html, undefined, { steady: true }));
+        }
       }
     } catch {
       // A page that blocks the reader, or isn't one: unreadable, not a failure.
@@ -274,7 +290,12 @@ export async function readPages({
         url: page.url,
         domain: page.domain,
         own: Boolean(page.own),
-        features: features ?? { unreadable: true, ...(disallowed ? { disallowed: true } : {}) },
+        features: features ?? {
+          unreadable: true,
+          ...(disallowed ? { disallowed: true } : {}),
+          // Timed out twice: not read, which isn't the same as empty.
+          ...(incomplete ? { incomplete: true } : {}),
+        },
         // An unreadable read keeps the last sketch, to compare the next one with.
         sketch: sketched ?? before?.sketch ?? null,
         read_at: now.toISOString(),
