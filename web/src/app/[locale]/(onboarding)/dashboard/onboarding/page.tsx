@@ -256,9 +256,6 @@ function TopicAccordion({
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// The state picker's own "no state" choice, ahead of the states themselves.
-const STATE_ITEMS = [{ value: 'nationwide', label: 'Nationwide (no state)' }, ...US_STATE_ITEMS];
-
 // Card width per step, matched to each step's content column; unlisted steps are forms.
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = {
   3: 'wide',
@@ -266,22 +263,22 @@ const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = {
   [PLAN_STEP]: 'medium',
 };
 
-const TOPIC_LOADING_MESSAGES = [
-  'Researching topics for your brand...',
-  'Analyzing your industry landscape...',
-  'Identifying key themes and trends...',
-  'Finding what your audience cares about...',
-  'Evaluating competitive topics...',
-  'Almost there, finalizing suggestions...',
-];
+const TOPIC_LOADING_KEYS = [
+  'topicLoading1',
+  'topicLoading2',
+  'topicLoading3',
+  'topicLoading4',
+  'topicLoading5',
+  'topicLoading6',
+] as const;
 
-const COMPETITOR_LOADING_MESSAGES = [
-  'Searching for competitors...',
-  'Analyzing your market...',
-  'Identifying key players...',
-  'Verifying company details...',
-  'Finalizing recommendations...',
-];
+const COMPETITOR_LOADING_KEYS = [
+  'competitorLoading1',
+  'competitorLoading2',
+  'competitorLoading3',
+  'competitorLoading4',
+  'competitorLoading5',
+] as const;
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
@@ -294,6 +291,10 @@ export default function OnboardingPage() {
   const tPrompts = useTranslations('onboarding.prompts');
   const tSetup = useTranslations('onboarding');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
+  const stateItems = [
+    { value: 'nationwide', label: tSetup('setup.nationwide') },
+    ...US_STATE_ITEMS,
+  ];
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -330,12 +331,12 @@ export default function OnboardingPage() {
       topicMsgIdx.current = 0;
       return;
     }
-    setTopicLoadingMsg(TOPIC_LOADING_MESSAGES[0]);
+    setTopicLoadingMsg(tSetup(`setup.${TOPIC_LOADING_KEYS[0]}`));
     topicMsgIdx.current = 0;
 
     const interval = setInterval(() => {
-      topicMsgIdx.current = (topicMsgIdx.current + 1) % TOPIC_LOADING_MESSAGES.length;
-      setTopicLoadingMsg(TOPIC_LOADING_MESSAGES[topicMsgIdx.current]);
+      topicMsgIdx.current = (topicMsgIdx.current + 1) % TOPIC_LOADING_KEYS.length;
+      setTopicLoadingMsg(tSetup(`setup.${TOPIC_LOADING_KEYS[topicMsgIdx.current]}`));
     }, 2500);
 
     return () => clearInterval(interval);
@@ -523,13 +524,12 @@ export default function OnboardingPage() {
       competitorMsgIdx.current = 0;
       return;
     }
-    setCompetitorLoadingMsg(COMPETITOR_LOADING_MESSAGES[0]);
+    setCompetitorLoadingMsg(tSetup(`setup.${COMPETITOR_LOADING_KEYS[0]}`));
     competitorMsgIdx.current = 0;
 
     const interval = setInterval(() => {
-      competitorMsgIdx.current =
-        (competitorMsgIdx.current + 1) % COMPETITOR_LOADING_MESSAGES.length;
-      setCompetitorLoadingMsg(COMPETITOR_LOADING_MESSAGES[competitorMsgIdx.current]);
+      competitorMsgIdx.current = (competitorMsgIdx.current + 1) % COMPETITOR_LOADING_KEYS.length;
+      setCompetitorLoadingMsg(tSetup(`setup.${COMPETITOR_LOADING_KEYS[competitorMsgIdx.current]}`));
     }, 2500);
 
     return () => clearInterval(interval);
@@ -725,7 +725,7 @@ export default function OnboardingPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      if (!user) throw new Error(tSetup('setup.notAuthenticated'));
 
       // Check if org already exists (resume case)
       const { data: profile } = await supabase
@@ -792,7 +792,7 @@ export default function OnboardingPage() {
         fetchTopicSuggestions();
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create brand');
+      toast.error(err instanceof Error ? err.message : tSetup('setup.createBrandFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -929,7 +929,7 @@ export default function OnboardingPage() {
       );
 
       if (allPrompts.length === 0) {
-        setSaveError('Add at least one prompt before continuing.');
+        setSaveError(tSetup('setup.addPrompt'));
         setIsLoading(false);
         return;
       }
@@ -943,9 +943,7 @@ export default function OnboardingPage() {
         // No technical toasts on this step: actionable failures (plan limit)
         // show verbatim inline, anything else gets a friendly retry message.
         setSaveError(
-          result.code === 'plan_limit'
-            ? result.error
-            : "We couldn't save your prompts — please try again.",
+          result.code === 'plan_limit' ? result.error : tSetup('setup.savePromptsFailed'),
         );
         return;
       }
@@ -960,7 +958,7 @@ export default function OnboardingPage() {
       setStep(5);
       fetchCompetitorSuggestions();
     } catch {
-      setSaveError("We couldn't save your prompts — please try again.");
+      setSaveError(tSetup('setup.savePromptsFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -1047,7 +1045,7 @@ export default function OnboardingPage() {
       competitorDomain,
     );
     if (list === suggestedCompetitors) return;
-    if (duplicate) toast.info(`${duplicate.name} is already in the list`);
+    if (duplicate) toast.info(tSetup('setup.alreadyInList', { name: duplicate.name }));
     setSuggestedCompetitors(list);
     setCompetitorName('');
     setCompetitorDomain('');
@@ -1074,7 +1072,7 @@ export default function OnboardingPage() {
     if (!createdBrand) return;
     const selected = takePendingCompetitor().filter((c) => c.selected);
     if (selected.length === 0) {
-      toast.error('Add at least one competitor to continue.');
+      toast.error(tSetup('setup.addCompetitor'));
       return;
     }
 
@@ -1137,7 +1135,7 @@ export default function OnboardingPage() {
       // from the Stripe success route once the plan is confirmed.
       await bootstrapBrandVolumes(createdBrand.id);
 
-      toast.success('Setup complete! Your first tracking is starting.');
+      toast.success(tSetup('setup.setupComplete'));
 
       // Full page navigation bypasses Next.js router cache, ensuring
       // the server-side layout reads the fresh onboarding_completed flag.
@@ -1371,7 +1369,7 @@ export default function OnboardingPage() {
                 <div className="space-y-2">
                   <Label>State (optional)</Label>
                   <Select
-                    items={STATE_ITEMS}
+                    items={stateItems}
                     value={usState || 'nationwide'}
                     onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
                   >
@@ -1379,7 +1377,7 @@ export default function OnboardingPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
+                      <SelectItem value="nationwide">{tSetup('setup.nationwide')}</SelectItem>
                       {US_STATES.map((s) => (
                         <SelectItem key={s.code} value={s.code}>
                           {s.label}
@@ -1739,7 +1737,7 @@ export default function OnboardingPage() {
               <p className="text-sm text-muted-foreground">Know your competitors? Add them here.</p>
               <div className="flex items-center gap-2">
                 <Input
-                  placeholder="Company name"
+                  placeholder={tSetup('setup.companyName')}
                   value={competitorName}
                   onChange={(e) => setCompetitorName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
@@ -1796,7 +1794,7 @@ export default function OnboardingPage() {
                 {suggestedCompetitors.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Competitors to track
+                      {tSetup('setup.competitorsToTrack')}
                     </p>
                     {suggestedCompetitors.map((c, idx) => (
                       <div
@@ -1858,7 +1856,7 @@ export default function OnboardingPage() {
                   {savingCompetitors ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Finishing setup...
+                      {tSetup('setup.finishingSetup')}
                     </>
                   ) : hasSelectedCompetitors ? (
                     // On the cloud, tracking starts with the plan step's

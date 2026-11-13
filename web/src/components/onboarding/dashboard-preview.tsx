@@ -54,6 +54,7 @@ export function DashboardPreview({
   competitors,
 }: DashboardPreviewProps) {
   const t = useTranslations('nav');
+  const tSetup = useTranslations('onboarding.setup');
   const chatAgentic = useChatAgentic();
   const ads = useAdsEnabled();
   const { resolvedTheme } = useTheme();
@@ -172,7 +173,7 @@ export function DashboardPreview({
             ))}
           </PreviewList>
 
-          <PreviewList title="Competitors" empty={!name}>
+          <PreviewList title={tSetup('competitorsTitle')} empty={!name}>
             {name && <Row label={name} icon={<BrandMark name={name} domain={domain} />} strong />}
             {shownCompetitors.map((c) => (
               <Row
