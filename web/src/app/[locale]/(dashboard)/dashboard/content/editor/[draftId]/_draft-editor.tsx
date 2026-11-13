@@ -2956,7 +2956,7 @@ export function DraftEditor({
     authorsRead && (pageAuthor || !authorConfirmed.real) ? teamName(language, brandName) : '';
   // Site Audit's estimate (customer priorities item 9): the page as Export's
   // HTML file has it, read again once typing pauses, whatever Quality's phase.
-  const estimateDoc = useMemo(() => {
+  const estimatePage = useMemo(() => {
     const html = publishableHtml(pageHtml);
     const fields = pageFields({
       title,
@@ -2966,7 +2966,7 @@ export function DraftEditor({
       reviewer: pageReviewer,
       teamByline,
     });
-    return estimateDocument({
+    return {
       title,
       html: withReviewerJsonLd(
         title,
@@ -2975,8 +2975,13 @@ export function DraftEditor({
       ),
       metaDescription: fields.metaDescription,
       author: fields.author,
-    });
+    };
   }, [pageHtml, title, draft.sourceUrl, pageAuthor, pageReviewer, teamByline, contentByline]);
+  // With the Article JSON-LD Export and Copy HTML add: the page that ships.
+  const estimateDoc = estimateDocument({
+    ...estimatePage,
+    html: withArticleSchema(estimatePage.html, addedSchema),
+  });
   const auditEstimate = useAuditEstimate(draft.id, draft.brandId, estimateDoc);
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
@@ -4568,7 +4573,6 @@ export function DraftEditor({
             onConfirmIntro={() => void confirmIntro()}
             onChangeType={() => setTypeMenuOpen(true)}
             handOff={handOffCard}
-            auditEstimate={<AuditEstimateCard state={auditEstimate} />}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
             onConfirmAuthor={confirmAuthor}
@@ -4704,6 +4708,7 @@ export function DraftEditor({
           pageType={pageType}
           image={firstImage(pageHtml)}
           articleSchema={addedSchema}
+          auditEstimate={<AuditEstimateCard state={auditEstimate} />}
           ownArticleSchema={hasArticleSchema(publishOpen.html)}
           onSchemaLeftOut={leaveOutSchema}
           linksPending={linksPending}

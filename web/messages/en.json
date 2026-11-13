@@ -10382,7 +10382,13 @@
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
       "auditEstimate": {
-        "title": "Site Audit estimate",
+        "title": "AI search readiness (Site Audit estimate)",
+        "intro": "Technical and site-wide checks, as Site Audit scores them. Different from Quality, which scores the writing.",
+        "reasons": {
+          "page": "This page",
+          "site": "Your site",
+          "siteLink": "Open Site Audit"
+        },
         "free": "free",
         "score": "≈{score}",
         "outOf": "{score}/100",
@@ -10396,7 +10402,7 @@
           "structure": "Structure",
           "content": "Content",
           "authority": "Authority",
-          "trust": "Trust",
+          "trust": "Site setup",
           "eeat": "E-E-A-T"
         },
         "estimateAi": "Estimate AI checks",

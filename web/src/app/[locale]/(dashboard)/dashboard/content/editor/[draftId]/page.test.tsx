@@ -513,7 +513,7 @@ describe('the content editor', () => {
         checks: { page: 18, site: 13, ai: 0 },
       },
     });
-    getContentDraft.mockResolvedValue(draft());
+    getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
     await renderPage();
     await act(() => new Promise((resolve) => setTimeout(resolve, 1_100)));
 
@@ -529,6 +529,9 @@ describe('the content editor', () => {
     expect(doc).toMatch(/^<!doctype html>/);
     expect(doc).toContain('<title>Pipeline forecasting</title>');
     expect(doc).toContain('<h1>Pipeline forecasting</h1>');
+    // The Article JSON-LD Export and Copy HTML add: the page that ships.
+    expect(doc).toContain('application/ld+json');
+    expect(doc).toContain('"@type": "Article"');
   });
 
   it('remembers the draft for Content › Editor, per brand', async () => {
