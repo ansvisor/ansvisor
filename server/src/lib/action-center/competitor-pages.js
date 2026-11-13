@@ -23,6 +23,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { resolve } from '../../config/action-engine.js';
 import { fetchPage } from '../safe-fetch.js';
+import { readWithRetry } from '../read-retry.js';
 import { extractHostname } from '../response-parser.js';
 import { opportunityKey } from '../audit/opportunities.js';
 import { robotsGroups } from '../audit/signals/trust.js';
@@ -250,15 +251,22 @@ export async function readPages({
     let features = null;
     let sketched = null;
     let disallowed = false;
+    let incomplete = false;
     try {
       const origin = new URL(page.url).origin;
       if (!allowed.has(origin)) allowed.set(origin, await robotsAllow(page.url, read));
       disallowed = !allowed.get(origin);
       if (!disallowed) {
-        const fetched = await read(page.url, { timeoutMs: READ_TIMEOUT_MS });
-        features = await pageFeatures(fetched.url, fetched.html, now.getTime());
-        // Its words as the page checks measure a change: what changes by itself left out.
-        if (features) sketched = wordSketch(visibleText(fetched.html, undefined, { steady: true }));
+        const got = await readWithRetry(() => read(page.url, { timeoutMs: READ_TIMEOUT_MS }));
+        if (got.incomplete) {
+          incomplete = true;
+        } else {
+          const fetched = got.value;
+          features = await pageFeatures(fetched.url, fetched.html, now.getTime());
+          // Its words as the page checks measure a change: what changes by itself left out.
+          if (features)
+            sketched = wordSketch(visibleText(fetched.html, undefined, { steady: true }));
+        }
       }
     } catch {
       // A page that blocks the reader, or isn't one: unreadable, not a failure.
@@ -274,7 +282,12 @@ export async function readPages({
         url: page.url,
         domain: page.domain,
         own: Boolean(page.own),
-        features: features ?? { unreadable: true, ...(disallowed ? { disallowed: true } : {}) },
+        features: features ?? {
+          unreadable: true,
+          ...(disallowed ? { disallowed: true } : {}),
+          // Timed out twice: not read, which isn't the same as empty.
+          ...(incomplete ? { incomplete: true } : {}),
+        },
         // An unreadable read keeps the last sketch, to compare the next one with.
         sketch: sketched ?? before?.sketch ?? null,
         read_at: now.toISOString(),
