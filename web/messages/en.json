@@ -17190,6 +17190,12 @@
         "duplicateCompetitor": "{name} is already in the list",
         "setupComplete": "Brand setup complete! Tracking is starting."
       },
+      "step4": {
+        "listTitle": "Your Prompt List",
+        "topicColumn": "Topic",
+        "noPrompts": "No prompts generated yet.",
+        "saving": "Saving prompts..."
+      },
       "step5": {
         "title": "Add your competitors",
         "subtitle": "We'll track how often competitors appear alongside your brand in AI responses.",

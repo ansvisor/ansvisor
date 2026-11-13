@@ -29,7 +29,7 @@ While you wait:
 
 ## Add another brand
 
-To add another brand, admins and managers pick **Add Brand** in the brand switcher. It walks through the same first five steps as your first brand: brand basics, region and language, topics, prompts and competitors. Its first run starts when you finish. Your plan sets how many brands you can have.
+To add another brand, admins and managers pick **Add Brand** in the brand switcher. It walks through the same first five steps as your first brand: brand basics, region and language, topics, prompts and competitors. In the prompts step, tick the prompts you want to track: only ticked ones are saved. Its first run starts when you finish. Your plan sets how many brands you can have.
 
 ## Add the tracking snippet
 
