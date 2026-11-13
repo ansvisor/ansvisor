@@ -99,7 +99,6 @@ describe('openPageFor', () => {
       [400, 'blocked', 'Not a public address'],
       [422, 'not_allowed', 'Goes to a site Chat may not open'],
       [422, 'not_html', 'Not a web page'],
-      [504, 'timeout', 'Timed out'],
       [429, 'busy', 'Other pages are opening. Try again in a moment.'],
     ] as const) {
       answer = { status, body: { code, message: `Server words for ${code}`, status: null } };
@@ -108,6 +107,22 @@ describe('openPageFor', () => {
         code,
         message: said,
       });
+    }
+    // A timeout is tried once more after a pause; timed out twice, the read says it's incomplete.
+    vi.useFakeTimers();
+    try {
+      answer = { status: 504, body: { code: 'timeout', message: 'Server words', status: null } };
+      const read = openPageFor(auth, 'https://acme.example/');
+      await vi.runAllTimersAsync();
+      expect(await read).toEqual({
+        ok: false,
+        code: 'timeout',
+        incomplete: true,
+        message:
+          "Couldn't read https://acme.example/: it timed out twice. Treat anything about this page as incomplete and say so in your answer.",
+      });
+    } finally {
+      vi.useRealTimers();
     }
     // The page's own answer, as a number only.
     answer = { status: 422, body: { code: 'http_error', message: 'x', status: 404 } };
