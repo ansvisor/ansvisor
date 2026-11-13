@@ -16,6 +16,9 @@ Read `CONTRIBUTING.md` first. These rules come from production incidents and app
    - Build big indexes after the backfill.
    - A one-statement backfill ran Postgres out of memory and caused a 4-minute outage on 12 Nov 2026 (#2352).
 
+3. **Never trust an id from a model's tool input with the admin client.** `supabaseAdmin` skips row-level security, so a read or write keyed by an id the model supplied (a draft, page, run or brand id) must also be limited to the run's organization (and brand), for example with an inner join on `brands.organization_id`. A read that finds nothing there behaves as "not found". Found in review of #2368.
+4. **New server actions pass the subscription guard.** Guard them like their neighbours; the guard coverage test fails otherwise.
+
 ## Every change
 
 - Every UI string goes in `web/messages/en.json`. Never hard-code copy.
