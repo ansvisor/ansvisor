@@ -200,7 +200,9 @@ export const suggestionsSchema = z.object({
         marks: marksField,
       }),
     )
-    .max(MAX_AGENT_SUGGESTIONS),
+    // Told, never checked: a ninth would throw the whole answer away
+    // (NoObjectGeneratedError), and keepSuggestions keeps the first eight.
+    .describe(`(at most ${MAX_AGENT_SUGGESTIONS} items)`),
 });
 
 export const SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimization (AEO). You improve one web page so it meets its writing rules, by suggesting small changes that a person reviews.

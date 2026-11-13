@@ -8,7 +8,7 @@ import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
 import { parseHtml } from '@/lib/content/dom';
 import { pageOffer } from '@/lib/content/page-schema';
 import { countWords, languageCode } from '@/lib/content/readability';
-import { wordsOf } from '@/lib/content/sources';
+import { carriesFanout } from '@/lib/content/fanout-match';
 import {
   shoppingLinks,
   type PageCard,
@@ -857,13 +857,8 @@ function linkHost(href: string): string | null {
   return normalizeDomain(href) || null;
 }
 
-/** Whether a fan-out's words are carried by a text, as the Sources tab reads it. */
-function carries(fanout: string, text: string): boolean {
-  const words = [...new Set(wordsOf(fanout))];
-  if (!words.length) return false;
-  const have = new Set(wordsOf(text));
-  return words.filter((w) => have.has(w)).length / words.length >= 0.75;
-}
+/** Whether a heading or an FAQ question carries a fan-out (fanoutH2, fanoutFaq). */
+const carries = carriesFanout;
 
 /**
  * An FAQ's heading, in the languages it's read in ("FAQ", "Häufig gestellte

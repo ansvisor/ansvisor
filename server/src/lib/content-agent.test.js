@@ -2152,6 +2152,27 @@ describe('fixDraftRules', () => {
     expect(usage.value.cost_usd).toBeCloseTo(0.0038, 6);
   });
 
+  it('keeps the first 8 of an answer with more, never failing the run over them', async () => {
+    const tips = 'kettle scale grinder filter dripper mug beans water timer'.split(' ');
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: tips.map((tip) =>
+          suggestion({
+            kind: 'insert',
+            before: '',
+            after: `<p>Warm the ${tip} first.</p>`,
+            rules: ['faq'],
+            sources: [],
+            marks: [],
+          }),
+        ),
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    const { count } = await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    expect(count).toBe(8);
+  });
+
   it('charges the budget, asks the model and keeps one batch for review', async () => {
     generateObject.mockResolvedValue({
       object: {
