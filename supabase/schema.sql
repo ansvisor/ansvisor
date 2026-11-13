@@ -64394,3 +64394,13 @@ create index if not exists mentions_terms_daily_all_term
   on public.mentions_terms_daily_all (brand_id, entity, term, day)
   include (answers);
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00538_brand_content_rules.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Brand content rules: banned phrases and source allow/deny lists, one jsonb
+-- value per brand: { bannedPhrases, blockedDomains, allowedDomains,
+-- onlyAllowedDomains }. Schema only, no backfill: null means no rules. The
+-- brands row policies already limit who reads and who changes it
+-- (member select, admin/manager update).
+alter table public.brands add column if not exists content_rules jsonb;
+

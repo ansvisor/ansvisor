@@ -194,6 +194,14 @@ Chat reads your brand's approved facts: the prices and plans, trial, founding ye
 
 Chat and its agents never make up a price, fee, date, rule or contact detail. When one is missing, they ask you for it, or leave that part out.
 
+## Content rules
+
+A brand's **Content rules** card, under **General** in the brand's settings, holds what Chat and the agents must follow when they write for it. Admins and Managers change it; others read it.
+
+**Banned phrases** are words or phrases the brand never uses, one per line. A draft that has one, as a whole word or phrase in any case, isn't saved: Chat is told which, rewrites those sentences and saves again. Reports and answers aren't checked; Chat is only told the list.
+
+**Blocked domains** are never suggested as link sources or cited. **Allowed domains** are preferred sources. Turn on **Only cite these domains** and link and source suggestions stay on the allowed domains and the brand's own site.
+
 ## Open a web page
 
 Chat can open a public web page you name, such as a page of your site, a competitor's, or one AI answers cite. It reads the page's title, description, headings, structured data and main text, and the step says "Opened acme.com/pricing", or why a page couldn't be opened.

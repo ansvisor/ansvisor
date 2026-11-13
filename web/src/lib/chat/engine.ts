@@ -283,6 +283,7 @@ import {
   type StepToSave,
 } from './skills/save-steps';
 import { placeholderWords } from '@/lib/content/page-version';
+import { contentRulesBlock, contentRulesOf, type ContentRules } from '@/lib/content/content-rules';
 import { openDraftOf } from './editor-page';
 import {
   decisionCount,
@@ -1053,7 +1054,7 @@ interface RunContext {
   signal: AbortSignal;
   segmentStart: number;
   models: ChatModels;
-  brand: { id: string; name: string } | null;
+  brand: { id: string; name: string; rules?: ContentRules } | null;
   scope: RunScope;
   role: PrecedenceContext['role'];
   planName: string;
@@ -1549,12 +1550,13 @@ async function runSkills(
 async function readBrand(brandId: string, organizationId: string) {
   const { data, error } = await supabaseAdmin
     .from('brands')
-    .select('id, name')
+    .select('id, name, content_rules')
     .eq('id', brandId)
     .eq('organization_id', organizationId)
     .maybeSingle();
   if (error) throw new Error(`Chat could not read the brand: ${error.message}`);
-  return (data as { id: string; name: string } | null) ?? null;
+  const row = data as { id: string; name: string; content_rules?: unknown } | null;
+  return row ? { id: row.id, name: row.name, rules: contentRulesOf(row.content_rules) } : null;
 }
 
 /**
@@ -2598,6 +2600,9 @@ function workspaceBlock(
       ? `This chat is about the brand "${rc.brand.name}" (brand_id ${rc.brand.id}). Use that brand_id unless the person names another brand.`
       : 'No brand is selected: call list_brands when you need one, and ask which brand when it is unclear.',
   ];
+  // The brand's banned phrases and source rules, for drafts, reports and answers alike.
+  const contentRules = contentRulesBlock(rc.brand?.rules);
+  if (contentRules) lines.push(contentRules);
   if (phase === 'write' && rc.refused.length > 0) {
     lines.push(
       `Not available to this person, with the reason the app gives (call ${EXPLAIN_TOOL} with the capability when they ask for one): ${rc.refused

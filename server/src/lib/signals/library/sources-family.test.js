@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * site, its subdomains (a blog) included.
  */
 
-const db = vi.hoisted(() => ({ rpc: vi.fn(), competitors: [], calls: [] }));
+const db = vi.hoisted(() => ({ rpc: vi.fn(), competitors: [], rules: null, own: [], calls: [] }));
 
 vi.mock('../../../config/supabase.js', () => ({
   default: {
@@ -16,7 +16,11 @@ vi.mock('../../../config/supabase.js', () => ({
         select: (columns) => (db.calls.push({ table, columns }), chain),
         eq: () => chain,
         order: () => chain,
-        range: async () => ({ data: db.competitors, error: null }),
+        maybeSingle: async () => ({ data: { content_rules: db.rules }, error: null }),
+        range: async () => ({
+          data: table === 'brand_domains' ? db.own : db.competitors,
+          error: null,
+        }),
       };
       return chain;
     },
@@ -40,6 +44,8 @@ const cited = (domain) => ({
 
 beforeEach(() => {
   db.calls = [];
+  db.rules = null;
+  db.own = [];
   db.competitors = [{ domain: 'https://www.Rival-Travel.example/' }, { domain: null }];
   db.rpc.mockReset().mockResolvedValue({
     data: [
@@ -61,5 +67,29 @@ describe('the sources family', () => {
     const found = await run();
     expect(found.map((x) => x.payload.domain)).toEqual(['guidebook.example']);
     expect(JSON.stringify(found)).not.toContain('rival-travel');
+  });
+
+  it('drops a blocked domain, its subdomains too', async () => {
+    db.rules = { blockedDomains: ['guidebook.example'] };
+    db.rpc.mockResolvedValue({
+      data: [cited('guidebook.example'), cited('blog.guidebook.example'), cited('other.example')],
+      error: null,
+    });
+    const found = await run();
+    expect(found.map((f) => f.payload.domain)).toEqual(['other.example']);
+  });
+
+  it('with only-allowed on, keeps the allowed domains and the brand’s own', async () => {
+    db.rules = { allowedDomains: ['guidebook.example'], onlyAllowedDomains: true };
+    db.own = [{ domain: 'acme.example' }];
+    db.rpc.mockResolvedValue({
+      data: [cited('guidebook.example'), cited('acme.example'), cited('other.example')],
+      error: null,
+    });
+    const found = await run();
+    expect(found.map((f) => f.payload.domain).sort()).toEqual([
+      'acme.example',
+      'guidebook.example',
+    ]);
   });
 });

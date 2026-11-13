@@ -21,6 +21,7 @@ vi.mock('../config/supabase.js', () => ({
         or: () => chain,
         order: () => chain,
         limit: async () => reads[table],
+        maybeSingle: async () => reads.brands ?? { data: null, error: null },
         then: (resolve) => resolve(reads[table]),
       };
       return chain;
@@ -117,6 +118,25 @@ describe('readLinkTargets', () => {
       'https://research.example/study',
       'https://standards.example/spec',
     ]);
+  });
+
+  it("drops the brand's blocked domains, and with only-allowed on keeps its allowed ones", async () => {
+    const ask = () =>
+      readLinkTargets({ brandId: 'b1', draftId: 'd1', sourceUrl: null, ruleKeys: LINK_RULES });
+    reads.brands = { data: { content_rules: { blockedDomains: ['research.example'] } } };
+    expect((await ask()).sources.map((s) => s.url)).toEqual(['https://standards.example/spec']);
+
+    reads.brands = {
+      data: { content_rules: { allowedDomains: ['research.example'], onlyAllowedDomains: true } },
+    };
+    expect((await ask()).sources.map((s) => s.url)).toEqual(['https://research.example/study']);
+
+    reads.brands = { data: { content_rules: { allowedDomains: ['research.example'] } } };
+    const prefer = await ask();
+    expect(prefer.sources).toHaveLength(2);
+    expect(linkTargetsPrompt(prefer, LINK_RULES)).toContain(
+      'Prefer sources on these domains when you choose: research.example',
+    );
   });
 
   it('reads only the list the rules asked for need', async () => {
