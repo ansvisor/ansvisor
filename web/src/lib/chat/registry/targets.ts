@@ -95,6 +95,25 @@ export async function draftPage(
 }
 
 /**
+ * The draft, only when its brand is in this organization: the admin client
+ * skips row-level security, so the draft id (a model's tool input) is never
+ * trusted alone.
+ */
+export async function draftPageOfOrganization(
+  draftId: string,
+  organizationId: string,
+): Promise<{ title: string; bodyHtml: string } | null> {
+  const { data, error } = await supabaseAdmin
+    .from('content_drafts')
+    .select('title, body_html, brands!inner(organization_id)')
+    .eq('id', draftId)
+    .eq('brands.organization_id', organizationId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the draft: ${error.message}`);
+  return data ? { title: String(data.title ?? ''), bodyHtml: String(data.body_html ?? '') } : null;
+}
+
+/**
  * Each `open` match with the text up to its `</name>` close, found by
  * searches that only go forward: a page full of unclosed tags stays linear
  * (a lazy `[\s\S]*?` up to a close that never comes is quadratic).
