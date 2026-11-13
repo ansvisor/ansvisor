@@ -84,6 +84,13 @@ export const DEMO_GUARDED = [
   guard('POST /action-center/chat-actions', brandIn('body')),
   guard('POST /action-center/chat-actions/check', brandIn('body')),
 
+  // Ads (ads.js): a person's decision on a prompt; the demo's are the rule's.
+  guard(
+    'PATCH /ads/opportunities/:promptId/decision',
+    brandIn('body'),
+    rowIn('prompts', 'path', 'promptId'),
+  ),
+
   // Site Audit (audits.js).
   guard('POST /audits', brandIn('body')),
   guard('POST /audits/bulk', brandIn('body')),
@@ -270,6 +277,10 @@ export const DEMO_GUARDED = [
 
 /** The write routes left open on a demo brand, and why. */
 export const DEMO_OPEN = [
+  open(
+    'PATCH /ads/settings',
+    "The organization's own Ads thresholds, changed by its Admins: names no brand, changes no sample data and costs nothing.",
+  ),
   open(
     'POST /content-drafts/:draftId/audit-estimate',
     "Site Audit's estimate of a draft: its page checks are free and write nothing; its AI checks, which spend, refuse the demo brand in the route itself, so its sample drafts still get an estimate.",

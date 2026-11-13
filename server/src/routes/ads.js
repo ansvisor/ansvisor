@@ -1,8 +1,18 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { assertBrandAccess, brandAccessOf } from '../lib/access.js';
+import { ADS_THRESHOLDS, adsThresholds } from '../config/ads.js';
+import { MANAGER_ROLES, assertBrandAccess, assertRole, brandAccessOf } from '../lib/access.js';
 import { adsEnabled } from '../lib/ads-flag.js';
 import { readAdsActivity } from '../lib/ads/activity.js';
+import {
+  SNAPSHOT_PERIOD,
+  readAdsSettings,
+  readOpportunities,
+  readsEveryOpportunity,
+  saveAdsSettings,
+  setDecision,
+} from '../lib/ads/opportunities.js';
+import { ADS_PERIODS } from '../lib/ads/standing.js';
 
 /**
  * Ads (the Drive Ads spec, ADS-01) under /api/ads, while it is built.
@@ -12,10 +22,11 @@ import { readAdsActivity } from '../lib/ads/activity.js';
  *     404 { code: 'off' }, as brand-facts.js answers below Quality's phase 2.
  *   - The person is signed in: /api's decodeToken (server.js) refuses a
  *     request without a session before it gets here, on or off.
- *   - Each route reads one brand, which the person must be able to reach
+ *   - A route that names a brand checks the person can reach it
  *     (assertBrandAccess), as every brand route does.
  *
- * Nothing here reaches an ad platform, and nothing writes.
+ * Nothing here reaches an ad platform. The writes are Ads' own rows (a
+ * decision, the thresholds), each logged (lib/ads/activity.js).
  */
 
 const router = Router();
@@ -76,6 +87,112 @@ router.get('/activity', async (req, res) => {
     return res.json(await readAdsActivity({ orgId, brandId, before, limit }));
   } catch (err) {
     return failed(req, res, err, 'ads activity read error');
+  }
+});
+
+// GET /api/ads/opportunities?brandId=…&period=7d|30d|90d — each buying-intent
+// prompt's standing and decision (lib/ads/opportunities.js). Starter and the
+// trial get the first rows and how many more are locked, decided here.
+router.get('/opportunities', async (req, res) => {
+  const parsed = z
+    .object({
+      brandId: z.guid(),
+      period: z.enum(Object.keys(ADS_PERIODS)).default(SNAPSHOT_PERIOD),
+    })
+    .safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    const { brand, orgId } = await assertBrandAccess(parsed.data.brandId, req.user.id);
+    return res.json(await readOpportunities({ brand, orgId, period: parsed.data.period }));
+  } catch (err) {
+    return failed(req, res, err, 'ads opportunities read error');
+  }
+});
+
+// PATCH /api/ads/opportunities/:promptId/decision { brandId, decision } — a
+// person's decision over the rule's (null takes it back): admins and
+// managers, on a plan that reads every opportunity. Logged.
+router.patch('/opportunities/:promptId/decision', async (req, res) => {
+  const promptId = z.guid().safeParse(req.params.promptId);
+  const body = z
+    .object({ brandId: z.guid(), decision: z.enum(['earn', 'pay', 'earn_pay']).nullable() })
+    .safeParse(req.body);
+  if (!promptId.success || !body.success) {
+    return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  }
+  try {
+    const { brand, orgId } = await assertBrandAccess(body.data.brandId, req.user.id);
+    await assertRole(
+      req.user.id,
+      MANAGER_ROLES,
+      'Only admins and managers can change an Ads decision.',
+    );
+    if (!(await readsEveryOpportunity(orgId, brand))) {
+      return res.status(403).json({ error: 'plan_limit', code: 'plan_limit', feature: 'ads_read' });
+    }
+    const override = await setDecision({
+      orgId,
+      brandId: brand.id,
+      promptId: promptId.data,
+      decision: body.data.decision,
+      userId: req.user.id,
+    });
+    return res.json({ promptId: promptId.data, override });
+  } catch (err) {
+    return failed(req, res, err, 'ads decision error');
+  }
+});
+
+/** The caller's workspace when they are its Admin; otherwise answered 403 here, and null. */
+async function adminWorkspace(req, res) {
+  const access = await brandAccessOf(req.user.id);
+  if (access.orgId && access.role === 'admin') return access.orgId;
+  res.status(403).json({ error: 'Only admins can see or change Ads settings.', code: 'forbidden' });
+  return null;
+}
+
+/** The settings as the API answers them: the workspace's own, what applies, the defaults. */
+const settingsOf = ({ thresholds, updatedBy, updatedAt }) => ({
+  saved: thresholds,
+  thresholds: adsThresholds(thresholds),
+  defaults: ADS_THRESHOLDS,
+  updatedBy,
+  updatedAt,
+});
+
+// GET /api/ads/settings — the workspace's earn-or-pay thresholds (Admins).
+router.get('/settings', async (req, res) => {
+  try {
+    const orgId = await adminWorkspace(req, res);
+    return orgId && res.json(settingsOf(await readAdsSettings(orgId)));
+  } catch (err) {
+    return failed(req, res, err, 'ads settings read error');
+  }
+});
+
+// PATCH /api/ads/settings { thresholds: { key: number | null } } — changes
+// them (null: back to the default), logged (Admins).
+router.patch('/settings', async (req, res) => {
+  const value = (schema) => schema.nullable().optional();
+  const body = z
+    .object({
+      thresholds: z
+        .strictObject({
+          minIntentWeight: value(z.number().min(0).max(1)),
+          leadPosition: value(z.number().min(1).max(20)),
+          minPaidVolume: value(z.number().int().min(0).max(100_000_000)),
+        })
+        .refine((t) => Object.keys(t).length > 0),
+    })
+    .safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    const orgId = await adminWorkspace(req, res);
+    return (
+      orgId && res.json(settingsOf(await saveAdsSettings(orgId, req.user.id, body.data.thresholds)))
+    );
+  } catch (err) {
+    return failed(req, res, err, 'ads settings write error');
   }
 });
 

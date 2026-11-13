@@ -211,6 +211,15 @@ describe('refuseDemoBrandWrites', () => {
     );
   });
 
+  it("refuses an Ads decision on a demo brand or its prompt; the thresholds aren't a brand's", async () => {
+    const decision = (promptId, brandId) =>
+      run({ method: 'PATCH', path: `/ads/opportunities/${promptId}/decision`, body: { brandId } });
+    expectRefused(await decision(MISSING, DEMO), 'demo brand');
+    expectRefused(await decision(DEMO_PROMPT, REAL), 'demo prompt');
+    expectPassed(await decision(MISSING, REAL), 'real brand');
+    expectPassed(await run({ method: 'PATCH', path: '/ads/settings' }), 'settings');
+  });
+
   it("lets a real brand's writes through", async () => {
     expectPassed(await run({ path: '/tracking/check', body: { brandId: REAL } }), 'body');
     expectPassed(await run({ path: `/content/${REAL_OPP}/brief` }), 'row');
