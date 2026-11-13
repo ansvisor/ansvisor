@@ -22,6 +22,7 @@ import { CITED_DAYS, passageKey, quotedPassages } from '@/lib/content/cited-pass
 import { agentStateOf, contentEditorPath, isPageType, type PageType } from '@/lib/content/drafts';
 import { IMPACT_PERIODS } from '@/lib/content/impact';
 import { detectPageType, siteTypeOf } from '@/lib/content/page-types';
+import { refuseBannedPhrases } from '@/lib/chat/banned-guard';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { SOURCES_DAYS } from '@/lib/content/sources';
 import {
@@ -349,7 +350,9 @@ export interface CreateDraftInput {
  * checked against the draft allow-list, as a save is; the page type is the
  * one given, or the one the page shows; prompts are kept to the brand's.
  * Null for a brand outside the organization; 'off_domain' for a source_url
- * that isn't on one of the brand's domains.
+ * that isn't on one of the brand's domains; { banned } (the message naming
+ * the phrases) when the title or page has one of the brand's banned phrases
+ * (Content rules), so the assistant rewrites and sends it again.
  */
 export async function createContentDraftFor(
   auth: McpAuthContext,
@@ -357,12 +360,18 @@ export async function createContentDraftFor(
 ): Promise<
   | { id: string; status: string; page_type: string | null; editor_path: string }
   | 'off_domain'
+  | { banned: string }
   | null
 > {
   if (!(await brandAllowed(auth, input.brandId))) return null;
   if (input.sourceUrl && !(await onBrandDomain(input.brandId, input.sourceUrl))) {
     return 'off_domain';
   }
+  const refused = await refuseBannedPhrases({ brandId: input.brandId }, [
+    input.title,
+    input.bodyHtml,
+  ]);
+  if (refused) return { banned: refused.message };
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
     .select('site_type, industry, shopping_mode_enabled')

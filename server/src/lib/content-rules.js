@@ -51,3 +51,21 @@ export function sourceAllowed(rules, ownDomains = []) {
 
 /** In "prefer" mode (the switch off): the allowed domains to name to the agent; none when "only" is on. */
 export const preferredDomains = (rules) => (rules.onlyAllowedDomains ? [] : rules.allowedDomains);
+
+/** The brand's banned phrases as stored, cleaned like the others; none when unreadable. Pure. */
+export const bannedPhrasesOf = (value) =>
+  value && typeof value === 'object' ? list(value.bannedPhrases).map((p) => p.trim()) : [];
+
+/** The brand's banned phrases for the writer's prompt; none when unset or unread (never blocks a run). */
+export async function readBannedPhrases(brandId) {
+  try {
+    const { data } = await supabaseAdmin
+      .from('brands')
+      .select('content_rules')
+      .eq('id', brandId)
+      .maybeSingle();
+    return bannedPhrasesOf(data?.content_rules);
+  } catch {
+    return [];
+  }
+}

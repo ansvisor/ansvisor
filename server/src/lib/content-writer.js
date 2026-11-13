@@ -4,6 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { brandRulesSection } from './brand-rules.js';
 import { readBrandRules } from './brand-rules-read.js';
+import { readBannedPhrases } from './content-rules.js';
 import { resolveModel } from './ai-provider.js';
 import {
   ATTRIBUTION_RULE,
@@ -468,6 +469,11 @@ export function buildWritePrompt({
   const own = input.textRules.map((text) => `- ${text}`);
   // The brand's rules (Settings › Content, 00450): before the writer's own, which they outrank.
   const brandRules = brandRulesSection(brand.rules, "The brand's rules, which come first:");
+  // Settings › Content's banned phrases (brands.content_rules): never in the page, nor its title.
+  const banned = brand?.bannedPhrases ?? [];
+  const bannedLine = banned.length
+    ? `Never use these phrases, in the page or its title: ${banned.map((p) => `"${p}"`).join(', ')}. Say it in other words.`
+    : '';
   // Brief › Your input, the person's own (CE-048): with what to do with it.
   const given = of('input').map(
     (s) => `${s.id} "${s.label}" (${s.detail})${s.note ? ` — ${s.note}` : ''}`,
@@ -510,7 +516,7 @@ ${list(of('cited_page').map((s) => `${s.id} ${s.label}`))}
 ${given.length ? `\nYour input, the person's own for this page:\n${given.join('\n')}\n${INPUT_RULE}\n` : ''}
 Rules (key: rule — what it asks):
 ${list(rules)}
-${brandRules ? `\n${brandRules}\n` : ''}${own.length ? `\nThe writer's own rules:\n${own.join('\n')}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${brandRules ? `\n${brandRules}\n` : ''}${bannedLine ? `\n${bannedLine}\n` : ''}${own.length ? `\nThe writer's own rules:\n${own.join('\n')}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 ${page}
 
 Write in ${current ? "the page's own language" : getLanguageName(brand?.language)}.`;
@@ -638,6 +644,7 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
   if (brandError) throw brandError;
   // The brand's rules (00450), read here: the prompts put them first.
   brand.rules = await readBrandRules(brandId);
+  brand.bannedPhrases = await readBannedPhrases(brandId);
   const modelId = contentWriteModelId();
   // Held on the budget now, for the run below: starts at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {

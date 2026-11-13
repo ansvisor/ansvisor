@@ -1589,6 +1589,21 @@ describe('the write prompt', () => {
     expect(prompt(undefined)).not.toContain("The brand's rules");
   });
 
+  it('tells the model the brand’s banned phrases, and nothing without any', () => {
+    const prompt = (bannedPhrases) =>
+      buildWritePrompt({
+        brand: { ...brand, bannedPhrases },
+        draft: draftRow(),
+        brief: 'No brief.',
+        input: { sources: { length: 3000 }, rules: [], textRules: [] },
+      });
+    expect(prompt(['cheapest', 'best price'])).toContain(
+      'Never use these phrases, in the page or its title: "cheapest", "best price".',
+    );
+    expect(prompt([])).not.toContain('Never use these phrases');
+    expect(prompt(undefined)).not.toContain('Never use these phrases');
+  });
+
   it('names the brand’s site type once Quality’s phase 2 is live (CE-056)', () => {
     const write = (phase) => {
       vi.stubEnv('CONTENT_QUALITY_PHASE', phase);

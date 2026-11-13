@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../config/supabase.js', () => ({ default: {} }));
-const { NO_RULES, preferredDomains, sourceAllowed, sourceRulesOf } =
+const { NO_RULES, bannedPhrasesOf, preferredDomains, sourceAllowed, sourceRulesOf } =
   await import('./content-rules.js');
 
 describe('content rules for sources', () => {
@@ -31,5 +31,16 @@ describe('content rules for sources', () => {
     expect(
       preferredDomains(sourceRulesOf({ allowedDomains: ['a.example'], onlyAllowedDomains: true })),
     ).toEqual([]);
+  });
+});
+
+describe('banned phrases', () => {
+  it('reads the stored list, trimmed; anything odd is none', () => {
+    expect(bannedPhrasesOf({ bannedPhrases: [' cheapest ', '', 3, 'best price'] })).toEqual([
+      'cheapest',
+      'best price',
+    ]);
+    expect(bannedPhrasesOf(null)).toEqual([]);
+    expect(bannedPhrasesOf({ bannedPhrases: 'x' })).toEqual([]);
   });
 });
