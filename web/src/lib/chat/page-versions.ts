@@ -58,12 +58,14 @@ export async function readPageVersion(input: {
   run?: VersionRun;
 }): Promise<PageVersionRead | null> {
   const { draftId, conversationId, beforeVersionId, run } = input;
+  // A draft id can come from a model's tool input and this client skips row-level
+  // security: with a run, the draft is read only when its brand is in the run's organization.
+  const draftRead = supabaseAdmin
+    .from('content_drafts')
+    .select('title, body_html, status, brands!inner(organization_id)')
+    .eq('id', draftId);
   const [draft, filed, before, rules, quality] = await Promise.all([
-    supabaseAdmin
-      .from('content_drafts')
-      .select('title, body_html, status')
-      .eq('id', draftId)
-      .maybeSingle(),
+    (run ? draftRead.eq('brands.organization_id', run.organizationId) : draftRead).maybeSingle(),
     supabaseAdmin
       .from('chat_files')
       .select('id', { count: 'exact', head: true })

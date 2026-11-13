@@ -16,7 +16,7 @@ import { OPTIMIZE_TOOL, optimizeDraftHere, type OptimizeResult } from '../page-o
 import { refuseMissingFacts } from '../placeholders';
 import { readPageVersion } from '../page-versions';
 import { FIXTURE_IDS, defineTool, type ChatToolContext } from './define-tool';
-import { draftPage, draftTitle, pageChanges } from './targets';
+import { draftPageOfOrganization, draftTitleOfOrganization, pageChanges } from './targets';
 
 /**
  * Chat's Content Library rows beyond create_draft (CHAT-20 §9 rows 55, 57, 58):
@@ -129,8 +129,8 @@ export const CONTENT_TOOLS = [
             run: place.run,
           })
         : Promise.resolve(null),
-    target: async (input) => {
-      const now = await draftPage(input.draft_id);
+    target: async (input, run) => {
+      const now = await draftPageOfOrganization(input.draft_id, run.organizationId);
       if (!now) return input.title ? `“${input.title}”` : null;
       const title =
         input.title && input.title !== now.title
@@ -172,8 +172,8 @@ export const CONTENT_TOOLS = [
         .describe('What the person asked to change, in their words.'),
     }),
     run: (_ctx, input) => suggestDraftChanges(input.draft_id, input.request),
-    target: async (input) => {
-      const title = await draftTitle(input.draft_id);
+    target: async (input, run) => {
+      const title = await draftTitleOfOrganization(input.draft_id, run.organizationId);
       return title ? `“${title}”` : null;
     },
     fixture: { input: { draft_id: ITEM, request: 'Make answer 3 shorter' } },
@@ -224,8 +224,8 @@ export const CONTENT_TOOLS = [
             run: place.run,
           })
         : Promise.resolve(null),
-    target: async (input) => {
-      const title = await draftTitle(input.draft_id);
+    target: async (input, run) => {
+      const title = await draftTitleOfOrganization(input.draft_id, run.organizationId);
       return title ? `“${title}”` : null;
     },
     fixture: { input: { draft_id: ITEM } },
@@ -251,8 +251,8 @@ export const CONTENT_TOOLS = [
       draft_id: contentUuid.describe('The draft, from list_content_drafts.'),
     }),
     run: (_ctx, input) => setContentDraftReady(input.draft_id),
-    target: async (input) => {
-      const title = await draftTitle(input.draft_id);
+    target: async (input, run) => {
+      const title = await draftTitleOfOrganization(input.draft_id, run.organizationId);
       return title ? `“${title}”` : null;
     },
     fixture: { input: { draft_id: ITEM } },
@@ -285,8 +285,8 @@ export const CONTENT_TOOLS = [
     }),
     run: (ctx, input) => sendDraftToCms(input.draft_id, input.destination, viaAgentRun(ctx)),
     goLive: (input) => ({ kind: 'cms_draft', draftId: input.draft_id, target: input.destination }),
-    target: async (input) => {
-      const title = await draftTitle(input.draft_id);
+    target: async (input, run) => {
+      const title = await draftTitleOfOrganization(input.draft_id, run.organizationId);
       return [title ? `“${title}”` : null, `→ ${CMS_NAMES[input.destination]}`]
         .filter(Boolean)
         .join(' ');
@@ -318,8 +318,8 @@ export const CONTENT_TOOLS = [
     }),
     run: (ctx, input) => publishDraftToCms(input.draft_id, input.destination, viaAgentRun(ctx)),
     goLive: (input) => ({ kind: 'publish', draftId: input.draft_id, target: input.destination }),
-    target: async (input) => {
-      const title = await draftTitle(input.draft_id);
+    target: async (input, run) => {
+      const title = await draftTitleOfOrganization(input.draft_id, run.organizationId);
       return [title ? `“${title}”` : null, `→ ${CMS_NAMES[input.destination]}`]
         .filter(Boolean)
         .join(' ');
@@ -350,8 +350,8 @@ export const CONTENT_TOOLS = [
     }),
     run: (ctx, input) => sendDraftToWebhook(input.draft_id, viaAgentRun(ctx)),
     goLive: (input) => ({ kind: 'webhook', draftId: input.draft_id, target: 'webhook' }),
-    target: async (input) => {
-      const title = await draftTitle(input.draft_id);
+    target: async (input, run) => {
+      const title = await draftTitleOfOrganization(input.draft_id, run.organizationId);
       return [title ? `“${title}”` : null, `→ ${CMS_NAMES.webhook}`].filter(Boolean).join(' ');
     },
     fixture: { input: { draft_id: ITEM } },
@@ -377,8 +377,8 @@ export const CONTENT_TOOLS = [
       draft_id: contentUuid.describe('The published draft, from list_content_drafts.'),
     }),
     run: (_ctx, input) => takeDownDraft(input.draft_id),
-    target: async (input) => {
-      const title = await draftTitle(input.draft_id);
+    target: async (input, run) => {
+      const title = await draftTitleOfOrganization(input.draft_id, run.organizationId);
       return title ? `“${title}”` : null;
     },
     fixture: { input: { draft_id: ITEM } },
