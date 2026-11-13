@@ -32,9 +32,9 @@ describe('ads_activity_log', () => {
         ),
       );
     }
-    // The only way past the raise: a delete, with the purge's flag, of a row past a year.
+    // The only way past the raise: a delete, with the purge's flag, of a row past 18 months.
     expect(body('ads_activity_log_append_only').replace(/ /g, '')).toMatch(
-      /^beginiftg_op='DELETE'thenifcurrent_setting\('ads\.activity_log_purge',true\)='on'andold\.created_at<now\(\)-interval'1year'thenreturnold;endif;endif;raiseexception/,
+      /^beginiftg_op='DELETE'thenifcurrent_setting\('ads\.activity_log_purge',true\)='on'andold\.created_at<now\(\)-interval'18months'thenreturnold;endif;endif;raiseexception/,
     );
     // The service role reads and inserts, nothing more; people read; no policy writes.
     expect(sql).toMatch(
@@ -48,9 +48,9 @@ describe('ads_activity_log', () => {
     expect(sql.match(/create table [^;]*/)[0]).not.toMatch(/references/);
   });
 
-  it('has one purge path: rows past a year, for the service role, which nothing calls', () => {
+  it('has one purge path: rows past 18 months, for the service role, which nothing calls', () => {
     expect(body('purge_ads_activity_log')).toMatch(
-      /^declare v_deleted integer; begin if p_before is null or p_before > now\(\) - interval '1 year' then raise exception .*set_config\('ads\.activity_log_purge', 'on', true\)/,
+      /^declare v_deleted integer; begin if p_before is null or p_before > now\(\) - interval '18 months' then raise exception .*set_config\('ads\.activity_log_purge', 'on', true\)/,
     );
     expect(sql).toMatch(
       /returns integer language plpgsql security definer set search_path = public/,

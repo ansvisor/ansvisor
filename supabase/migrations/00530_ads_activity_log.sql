@@ -9,7 +9,7 @@
 --   * Append-only (§7a acceptance 7), Admins and the service role included:
 --     the trigger refuses every update, delete and truncate (00124's pattern).
 --     The one way out is purge_ads_activity_log(), for a retention job: rows
---     older than a year, run by the service role only; no route calls it.
+--     older than 18 months, run by the service role only; no route calls it.
 --   * No foreign keys: a row outlives its brand, person and run, and deleting
 --     one must not fail on the log (a cascade or set null would be refused).
 --   * A person reads their own rows, an Admin the workspace's (00402, with
@@ -57,7 +57,7 @@ create index if not exists ads_activity_log_actor_created_idx
   on public.ads_activity_log (actor_user_id, created_at desc);
 
 comment on table public.ads_activity_log is
-  'Ads (00530, ADS-01 §7a rule 17): one row per Ads event: who (a person, or an agent run and its chat run), event, target, before and after, and an export''s row count and file name. Append-only: the trigger refuses every update, delete and truncate; purge_ads_activity_log() alone removes rows older than a year. A person reads their own rows, an Admin the workspace''s; the server inserts.';
+  'Ads (00530, ADS-01 §7a rule 17): one row per Ads event: who (a person, or an agent run and its chat run), event, target, before and after, and an export''s row count and file name. Append-only: the trigger refuses every update, delete and truncate; purge_ads_activity_log() alone removes rows older than 18 months. A person reads their own rows, an Admin the workspace''s; the server inserts.';
 
 -- ─── Append-only ────────────────────────────────────────────────────────────
 
@@ -67,10 +67,10 @@ language plpgsql
 set search_path = public
 as $$
 begin
-  -- The retention purge, and nothing else: a row past a year, inside purge_ads_activity_log().
+  -- The retention purge, and nothing else: a row past 18 months, inside purge_ads_activity_log().
   if tg_op = 'DELETE' then
     if current_setting('ads.activity_log_purge', true) = 'on'
-      and old.created_at < now() - interval '1 year' then
+      and old.created_at < now() - interval '18 months' then
       return old;
     end if;
   end if;
@@ -90,7 +90,7 @@ create trigger ads_activity_log_no_truncate
   for each statement execute function public.ads_activity_log_append_only();
 
 -- The one purge path, for a retention job (Retention follows CHAT-20): rows
--- older than p_before, which must be at least a year ago, oldest first,
+-- older than p_before, which must be at least 18 months ago, oldest first,
 -- p_limit at a time. Answers how many it deleted.
 create or replace function public.purge_ads_activity_log(p_before timestamptz, p_limit integer default 5000)
 returns integer
@@ -101,8 +101,8 @@ as $$
 declare
   v_deleted integer;
 begin
-  if p_before is null or p_before > now() - interval '1 year' then
-    raise exception 'Ads activity log rows are kept for at least a year';
+  if p_before is null or p_before > now() - interval '18 months' then
+    raise exception 'Ads activity log rows are kept for at least 18 months';
   end if;
   perform set_config('ads.activity_log_purge', 'on', true);
   delete from public.ads_activity_log
