@@ -1,0 +1,13 @@
+{
+  "event": "daily_pulse.created",
+  "brand": { "id": "brand-123", "name": "Acme" },
+  "pulse": {
+    "date": "2026-11-08",
+    "frequency": "daily",
+    "kpis": { "visibilityRate": 42.5, "visiblePrompts": 17, "promptCount": 40, "citations": 12 },
+    "highlights": [],
+    "warnings": [],
+    "degraded_platforms": [],
+    "insights_url": "https://app.ansvisor.com/dashboard/insights"
+  }
+}

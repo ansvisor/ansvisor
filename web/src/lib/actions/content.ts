@@ -679,6 +679,7 @@ export async function getWebhookConfig(brandId: string): Promise<WebhookConfig |
     .from('webhook_configs')
     .select('*')
     .eq('brand_id', brandId)
+    .eq('name', 'Default')
     .limit(1)
     .single();
 
