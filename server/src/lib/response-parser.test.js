@@ -241,6 +241,25 @@ describe('response-parser', () => {
         expect(initechResult.citation_count).toBe(0);
         expect(initechResult.visibility_score).toBe(27);
       });
+
+      it('counts competitor citations by hostname, not substring', () => {
+        const comps = [{ id: '1', name: 'Globex', domain: 'globex.com' }];
+        const response = {
+          text: 'Globex compared.',
+          citations: [
+            // exact host, subdomain and www all count, like the brand rule
+            { url: 'https://globex.com/about', title: 'a' },
+            { url: 'https://blog.globex.com/post', title: 'b' },
+            { url: 'https://www.globex.com/pricing', title: 'c' },
+            // domain inside another site's host, path or query does not
+            { url: 'https://notglobex.com/', title: 'd' },
+            { url: 'https://news.com/story?src=globex.com', title: 'e' },
+            { url: 'https://news.com/globex.com-review', title: 'f' },
+          ],
+        };
+        const result = parseResponse(response, brand, 'neutral', comps);
+        expect(result.competitorMentions[0].citation_count).toBe(3);
+      });
     });
 
     describe('edge cases', () => {

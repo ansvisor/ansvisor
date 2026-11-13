@@ -285,13 +285,14 @@ export function parseResponse(response, brand, sentiment = 'neutral', competitor
       compMentions += countOccurrences(cleanText, comp.domain);
     }
 
+    // Same hostname rule as own citations and the Citations page: the old
+    // substring check (url.includes(domain)) also matched the competitor's
+    // domain inside another site's host, path or query string.
     let compCitations = 0;
     if (comp.domain) {
+      const isCompetitorCitation = ownDomainMatcher([comp.domain]);
       for (const cite of citations) {
-        const url = (cite.url || '').toLowerCase();
-        if (url.includes(comp.domain.toLowerCase())) {
-          compCitations++;
-        }
+        if (isCompetitorCitation(cite?.url)) compCitations++;
       }
     }
 
