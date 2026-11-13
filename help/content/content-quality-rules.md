@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab, brand rules]
 synonyms: [writing rules, style guide rules, apply rules with agent, rewrite page, let the agent fix the page]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-13
+last_checked: 2026-11-13
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -16,6 +16,8 @@ Every page in the Content Editor is written to a set of rules for its page type.
 ## The Rules tab
 
 In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet.
+
+**Use top fan-outs as H2s** and **Use fan-outs in FAQ questions** list the first fan-outs the page doesn't use yet. A heading or question uses a fan-out when it has most of its words, in any form: "Measuring AI Overviews" uses "how to measure ai overviews".
 
 ## Save or reset your rules
 
@@ -46,6 +48,7 @@ Your Length has the last word: a rewrite merges or drops the least useful sectio
 - Accept or reject the open suggestions before you run the agent again or edit the page as HTML.
 - The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.
 - The agent only changes drafts, not published pages.
+- When the agent's answer is slow to come back, its card says **Still finishing…** for up to three minutes. It says the agent couldn't finish only when its run failed; otherwise open the page again later to see what it wrote.
 
 ## How your choices teach the agent
 

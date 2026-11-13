@@ -3411,7 +3411,7 @@
         "let the agent fix the page"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-13",
       "sections": [
         {
           "heading": null,
@@ -3419,7 +3419,7 @@
         },
         {
           "heading": "The Rules tab",
-          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
+          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet.\n\n**Use top fan-outs as H2s** and **Use fan-outs in FAQ questions** list the first fan-outs the page doesn't use yet. A heading or question uses a fan-out when it has most of its words, in any form: \"Measuring AI Overviews\" uses \"how to measure ai overviews\"."
         },
         {
           "heading": "Save or reset your rules",
@@ -3439,7 +3439,7 @@
         },
         {
           "heading": "Before you run it again",
-          "text": "- Accept or reject the open suggestions before you run the agent again or edit the page as HTML.\n- The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.\n- The agent only changes drafts, not published pages."
+          "text": "- Accept or reject the open suggestions before you run the agent again or edit the page as HTML.\n- The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.\n- The agent only changes drafts, not published pages.\n- When the agent's answer is slow to come back, its card says **Still finishing…** for up to three minutes. It says the agent couldn't finish only when its run failed; otherwise open the page again later to see what it wrote."
         },
         {
           "heading": "How your choices teach the agent",

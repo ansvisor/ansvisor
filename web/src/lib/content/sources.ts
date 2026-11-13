@@ -81,7 +81,7 @@ export function normalizeQuery(query: string): string {
   return query.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-const STOP_WORDS = new Set(
+export const STOP_WORDS = new Set(
   (
     'the and for with what which how are is was were you your our from that this does do did can ' +
     'vs not but has have had who why when where will would should could into about than then there ' +
