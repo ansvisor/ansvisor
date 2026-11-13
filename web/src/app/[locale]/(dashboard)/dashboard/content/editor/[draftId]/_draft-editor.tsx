@@ -3942,7 +3942,7 @@ export function DraftEditor({
       {/* Two lines: the title and what you do with the page on top, which
           stays light (the title shortens, the save state and Mark ready never
           move), and the page's tags under the title, all of them at any width. */}
-      <header className="border-b px-4 pt-2.5 pb-2">
+      <header className="border-b px-4 pt-3 pb-3.5">
         {/* Embedded, in a pane beside Chat (CHAT-25 §4): the buttons move under the
             title when the row can't hold both, so nothing overflows at 600px. */}
         <div className={cn('flex items-center gap-2.5', embedded && 'flex-wrap gap-y-1.5')}>
@@ -4164,7 +4164,7 @@ export function DraftEditor({
           </div>
         </div>
         {/* Lined up under the title (the back button's 28px and the 10px gap). */}
-        <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-[38px]">
+        <div className="mt-3 flex flex-wrap items-center gap-2 pl-[38px]">
           <PageTypeMenu
             brandId={draft.brandId}
             siteType={siteType}
