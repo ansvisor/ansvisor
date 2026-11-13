@@ -211,17 +211,15 @@ function TopicAccordion({
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// The state picker's own "no state" choice, ahead of the states themselves.
-const STATE_ITEMS = [{ value: 'nationwide', label: 'Nationwide (no state)' }, ...US_STATE_ITEMS];
-
+// Keys under brands.new, resolved when the loading effect runs.
 const TOPIC_LOADING_MESSAGES = [
-  'Researching topics for your brand...',
-  'Analyzing your industry landscape...',
-  'Identifying key themes and trends...',
-  'Finding what your audience cares about...',
-  'Evaluating competitive topics...',
-  'Almost there, finalizing suggestions...',
-];
+  'loading.topics.researching',
+  'loading.topics.industry',
+  'loading.topics.themes',
+  'loading.topics.audience',
+  'loading.topics.competitive',
+  'loading.topics.almost',
+] as const;
 
 const COMPETITOR_LOADING_MESSAGES = [
   'Searching for competitors...',
@@ -247,6 +245,9 @@ export default function NewBrandPage() {
   const tActions = useTranslations('readOnly.actions');
   // Prompts past the plan's limit are saved waiting for a spot, not held back.
   const tWaiting = useTranslations('prompts.waiting');
+  const t = useTranslations('brands.new');
+  // The state picker's own "no state" choice, ahead of the states themselves.
+  const stateItems = [{ value: 'nationwide', label: t('step2.nationwide') }, ...US_STATE_ITEMS];
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -280,16 +281,16 @@ export default function NewBrandPage() {
       topicMsgIdx.current = 0;
       return;
     }
-    setTopicLoadingMsg(TOPIC_LOADING_MESSAGES[0]);
+    setTopicLoadingMsg(t(TOPIC_LOADING_MESSAGES[0]));
     topicMsgIdx.current = 0;
 
     const interval = setInterval(() => {
       topicMsgIdx.current = (topicMsgIdx.current + 1) % TOPIC_LOADING_MESSAGES.length;
-      setTopicLoadingMsg(TOPIC_LOADING_MESSAGES[topicMsgIdx.current]);
+      setTopicLoadingMsg(t(TOPIC_LOADING_MESSAGES[topicMsgIdx.current]));
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [loadingTopics]);
+  }, [loadingTopics, t]);
 
   // Step 4
   const [topicPrompts, setTopicPrompts] = useState<TopicPromptsData[]>([]);
@@ -436,7 +437,7 @@ export default function NewBrandPage() {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (!user) throw new Error('Not authenticated');
+        if (!user) throw new Error(t('errors.notAuthenticated'));
 
         const { data: profile } = await supabase
           .from('profiles')
@@ -444,7 +445,7 @@ export default function NewBrandPage() {
           .eq('id', user.id)
           .single();
 
-        if (!profile?.organization_id) throw new Error('No organization found');
+        if (!profile?.organization_id) throw new Error(t('errors.noOrganization'));
 
         const result = await createBrand({
           organizationId: profile.organization_id,
@@ -475,7 +476,7 @@ export default function NewBrandPage() {
       }
     } catch (err) {
       BRAND_ADD.failed();
-      toast.error(err instanceof Error ? err.message : 'Failed to save brand');
+      toast.error(err instanceof Error ? err.message : t('errors.saveBrand'));
     } finally {
       setIsLoading(false);
     }
@@ -556,7 +557,7 @@ export default function NewBrandPage() {
     } catch (err) {
       console.error('Prompt generation error:', err);
       BRAND_ADD.failed();
-      toast.error('Failed to generate prompts from topics');
+      toast.error(t('errors.generatePrompts'));
     } finally {
       setLoadingPrompts(false);
     }
@@ -801,18 +802,16 @@ export default function NewBrandPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Globe className="h-6 w-6" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">Add a new brand</h1>
-            <p className="text-sm text-muted-foreground">
-              See how AI platforms talk about your brand. Fill in the basics to get started.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{t('step1.title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('step1.subtitle')}</p>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="brandName">Brand name</Label>
+              <Label htmlFor="brandName">{t('step1.brandName')}</Label>
               <Input
                 id="brandName"
-                placeholder="e.g. Acme Corp"
+                placeholder={t('step1.brandNamePlaceholder')}
                 value={brandName}
                 onChange={(e) => setBrandName(e.target.value)}
                 autoFocus
@@ -820,14 +819,14 @@ export default function NewBrandPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="website">Website</Label>
+              <Label htmlFor="website">{t('step1.website')}</Label>
               <div className="flex">
                 <span className="inline-flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-sm text-muted-foreground">
-                  https://
+                  {t('step1.protocol')}
                 </span>
                 <Input
                   id="website"
-                  placeholder="example.com"
+                  placeholder={t('step1.websitePlaceholder')}
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                   className="rounded-l-none"
@@ -837,18 +836,20 @@ export default function NewBrandPage() {
 
             <div className="space-y-2">
               <Label htmlFor="description">
-                Describe your brand <span className="text-muted-foreground">(optional)</span>
+                {t.rich('step1.describe', {
+                  optional: (chunks) => <span className="text-muted-foreground">{chunks}</span>,
+                })}
               </Label>
               <Textarea
                 id="description"
-                placeholder="A brief description helps us generate better suggestions."
+                placeholder={t('step1.descriptionPlaceholder')}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
               />
               <ul className="text-xs text-muted-foreground space-y-1 list-disc ml-4">
-                <li>What industry are you in?</li>
-                <li>Who is your target audience?</li>
+                <li>{t('step1.hintIndustry')}</li>
+                <li>{t('step1.hintAudience')}</li>
               </ul>
             </div>
 
@@ -857,7 +858,7 @@ export default function NewBrandPage() {
               disabled={!brandName.trim() || !website.trim()}
               onClick={() => setStep(2)}
             >
-              Continue
+              {t('continue')}
             </Button>
           </div>
         </div>
@@ -876,16 +877,13 @@ export default function NewBrandPage() {
           <BrandHeader name={brandName} domain={domain} />
 
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Select your target market</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Pick the region and language your audience uses. This helps us deliver more accurate
-              AI visibility data.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{t('step2.title')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t('step2.subtitle')}</p>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Region</Label>
+              <Label>{t('step2.region')}</Label>
               <Select
                 items={REGION_ITEMS}
                 value={region}
@@ -910,9 +908,9 @@ export default function NewBrandPage() {
 
             {region === 'US' && (
               <div className="space-y-2">
-                <Label>State (optional)</Label>
+                <Label>{t('step2.state')}</Label>
                 <Select
-                  items={STATE_ITEMS}
+                  items={stateItems}
                   value={usState || 'nationwide'}
                   onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
                 >
@@ -920,7 +918,7 @@ export default function NewBrandPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
+                    <SelectItem value="nationwide">{t('step2.nationwide')}</SelectItem>
                     {US_STATES.map((s) => (
                       <SelectItem key={s.code} value={s.code}>
                         {s.label}
@@ -928,14 +926,12 @@ export default function NewBrandPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  Localizes AI answers to this state. Leave empty for nationwide results.
-                </p>
+                <p className="text-xs text-muted-foreground">{t('step2.stateHint')}</p>
               </div>
             )}
 
             <div className="space-y-2">
-              <Label>Language</Label>
+              <Label>{t('step2.language')}</Label>
               <Select
                 items={LANGUAGE_ITEMS}
                 value={language}
@@ -962,10 +958,10 @@ export default function NewBrandPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Setting up...
+                  {t('step2.settingUp')}
                 </>
               ) : (
-                'Continue'
+                t('continue')
               )}
             </Button>
           </div>
@@ -977,7 +973,7 @@ export default function NewBrandPage() {
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            {t('back')}
           </button>
           <StepDots current={2} total={TOTAL_STEPS} />
           <div className="w-12" />
@@ -997,9 +993,9 @@ export default function NewBrandPage() {
           <div className="grid grid-cols-1 gap-10 lg:grid-cols-5">
             <div className="lg:col-span-3 space-y-6">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">Choose topics to monitor</h1>
+                <h1 className="text-2xl font-bold tracking-tight">{t('step3.title')}</h1>
                 <div className="flex items-center gap-2 mt-3">
-                  <span className="text-sm text-muted-foreground">Select up to 10 topics</span>
+                  <span className="text-sm text-muted-foreground">{t('step3.selectUpTo')}</span>
                   <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full bg-primary rounded-full transition-all"
@@ -1022,11 +1018,9 @@ export default function NewBrandPage() {
                 <div className="space-y-2">
                   {topicSuggestError && (
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                      <span>
-                        Couldn&apos;t fetch topic suggestions right now — add your own above.
-                      </span>
+                      <span>{t('step3.suggestError')}</span>
                       <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
-                        Try again
+                        {t('tryAgain')}
                       </Button>
                     </div>
                   )}
@@ -1060,7 +1054,7 @@ export default function NewBrandPage() {
 
                   <div className="flex items-center gap-2 pt-2">
                     <Input
-                      placeholder="Add custom topic..."
+                      placeholder={t('step3.customPlaceholder')}
                       maxLength={BRAND_SETUP_LIMITS.topic}
                       value={customTopic}
                       onChange={(e) => setCustomTopic(e.target.value)}
@@ -1087,46 +1081,37 @@ export default function NewBrandPage() {
                 {loadingPrompts ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating prompts...
+                    {t('step3.generating')}
                   </>
                 ) : (
-                  'Looks good'
+                  t('step3.looksGood')
                 )}
               </Button>
             </div>
 
             <div className="lg:col-span-2">
               <div className="rounded-xl border bg-card p-5 sticky top-10">
-                <h3 className="text-sm font-semibold mb-4">Topic Selection Tips</h3>
+                <h3 className="text-sm font-semibold mb-4">{t('step3.tipsTitle')}</h3>
                 <div className="space-y-4">
                   <div className="flex gap-3">
                     <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium">5 prompts are created per topic</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        You can select up to 10 topics for a total of 50 prompts. More can be added
-                        anytime from the dashboard.
-                      </p>
+                      <p className="text-sm font-medium">{t('step3.tip1Title')}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t('step3.tip1Body')}</p>
                     </div>
                   </div>
                   <div className="flex gap-3">
                     <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium">Think like your customers</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Use terms your audience would search for when looking for products or
-                        services like yours.
-                      </p>
+                      <p className="text-sm font-medium">{t('step3.tip2Title')}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t('step3.tip2Body')}</p>
                     </div>
                   </div>
                   <div className="flex gap-3">
                     <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium">Keep it short</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Topics should be concise — we&apos;ll turn them into detailed prompts in the
-                        next step.
-                      </p>
+                      <p className="text-sm font-medium">{t('step3.tip3Title')}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t('step3.tip3Body')}</p>
                     </div>
                   </div>
                 </div>
@@ -1141,7 +1126,7 @@ export default function NewBrandPage() {
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            {t('back')}
           </button>
           <StepDots current={3} total={TOTAL_STEPS} />
           <div className="w-12" />
