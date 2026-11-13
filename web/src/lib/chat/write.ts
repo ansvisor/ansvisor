@@ -212,7 +212,7 @@ async function activityOf(
   };
   if (rule) {
     try {
-      record = await rule.record(req.input, output, before);
+      record = await rule.record(req.input, output, before, req.organizationId);
     } catch (err) {
       // Logged without an Undo rather than not at all.
       console.error('Chat could not read what Undo needs:', err);
