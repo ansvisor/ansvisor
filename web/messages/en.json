@@ -4882,7 +4882,10 @@
       "aiUse": "AI use",
       "newText": "New text",
       "showAll": "Show all",
-      "showLess": "Show less"
+      "showLess": "Show less",
+      "showFullText": "Show full text",
+      "hideFullText": "Hide full text",
+      "fullText": "Full text of the draft"
     },
     "actionSent": {
       "created": "Sent to Action Center · AC-{no}",

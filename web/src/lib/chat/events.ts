@@ -188,6 +188,8 @@ export interface ChatConfirm {
    * (CHAT-09 item 18), each with its new text in full (`body`).
    */
   items?: { title: string; detail?: string; body?: string }[];
+  /** The full text of the content draft this approval puts live, read-only, behind Show full text. */
+  fullText?: string;
   /** Why the change: the finding. */
   why?: string;
   /** What it aims at. */

@@ -1208,6 +1208,10 @@
           "text": "A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions, **Send to Action Center** and setting an Action Center task **Ready for review**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Waiting for your OK** and waits. After 7 days without an answer it stops with **No answer in 7 days**."
         },
         {
+          "heading": "See a draft before you approve it",
+          "text": "On a card that asks you to publish a draft, send it to your CMS or send it to your webhook, **Show full text** opens the draft's whole text, read-only, so you can read it before you approve. Click it again to close it. Approving works as before."
+        },
+        {
           "heading": "Agent work: who starts agent work",
           "text": "Your workspace's **Agent work** setting decides whether an agent's mode counts. An Admin sets it from the gear on Action Center's **Today** card or in **Settings › Chat**.\n\n- **I approve first**, where every workspace starts: every change an agent's run makes asks first, in any mode, even a change **Full auto** or a tool set to **Always** would make on its own. The run shows **Waiting for your OK** and waits.\n- **Agent starts on its own**: each agent's mode applies, as above.\n\nGoing live isn't affected: **Let an agent publish on its own** below works the same with either choice."
         },

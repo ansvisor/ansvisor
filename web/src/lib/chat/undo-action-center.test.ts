@@ -56,13 +56,15 @@ describe('create_action', () => {
 
   it('keeps Undo for an action it made, not for the same approval again', async () => {
     const input = { title: 'Win back pricing citations' };
-    await expect(rule.record(input, sent, null)).resolves.toEqual({
+    await expect(rule.record(input, sent, null, ORG)).resolves.toEqual({
       target: { type: 'action', id: ACTION },
       summaryParams: { title: 'Win back pricing citations', no: 'AC-1258' },
       undo: { after: { status: 'new' } },
     });
-    expect((await rule.record(input, { ...sent, created: false }, null)).undo).toBeNull();
-    expect((await rule.record(input, { ok: false, reason: 'duplicate' }, null)).undo).toBeNull();
+    expect((await rule.record(input, { ...sent, created: false }, null, ORG)).undo).toBeNull();
+    expect(
+      (await rule.record(input, { ok: false, reason: 'duplicate' }, null, ORG)).undo,
+    ).toBeNull();
     expect(rule.windowMs).toBe(24 * 60 * 60 * 1000);
   });
 
@@ -119,6 +121,7 @@ describe('attach_to_action', () => {
       { finding: 'Lost 6 citations.' },
       { ok: true, action_id: ACTION, action_no: 1258, event_id: 'ev-1' },
       null,
+      ORG,
     );
     expect(recorded).toEqual({
       target: { type: 'action', id: ACTION },
@@ -152,17 +155,17 @@ describe('attach_file_to_task', () => {
   });
 
   it('names the file and the task, and keeps no Undo when it was attached already', async () => {
-    const recorded = await rule.record({ task_id: TASK }, attached, null);
+    const recorded = await rule.record({ task_id: TASK }, attached, null, ORG);
     expect(recorded).toMatchObject({
       target: { type: 'action_task', id: TASK },
       summaryParams: { file: 'Pricing FAQ', task: 'AC-1258 “Add a pricing FAQ block to /pricing”' },
       undo: { after: { fileId: FILE, actionId: ACTION } },
     });
-    expect((await rule.record({}, { ...attached, already: true }, null)).undo).toBeNull();
+    expect((await rule.record({}, { ...attached, already: true }, null, ORG)).undo).toBeNull();
   });
 
   it('takes it off the task, back to a draft, in History', async () => {
-    const { undo } = await rule.record({ task_id: TASK }, attached, null);
+    const { undo } = await rule.record({ task_id: TASK }, attached, null, ORG);
     await expect(rule.inverse({ id: TASK, brandId: BRAND, data: undo!, userId: ME })).resolves.toBe(
       'ok',
     );
@@ -178,7 +181,7 @@ describe('attach_file_to_task', () => {
   });
 
   it('keeps it attached where another task has it, and leaves a task done with it', async () => {
-    const { undo } = await rule.record({ task_id: TASK }, attached, null);
+    const { undo } = await rule.record({ task_id: TASK }, attached, null, ORG);
     db.tables.chat_file_task_links.push({ file_id: FILE, action_task_id: 'other-task' });
     await expect(rule.inverse({ id: TASK, brandId: BRAND, data: undo!, userId: ME })).resolves.toBe(
       'ok',
@@ -193,7 +196,7 @@ describe('attach_file_to_task', () => {
   });
 
   it("takes nothing off a task that isn't the logged brand's", async () => {
-    const { undo } = await rule.record({ task_id: TASK }, attached, null);
+    const { undo } = await rule.record({ task_id: TASK }, attached, null, ORG);
     const other = '44444444-4444-4444-8444-444444444444';
     await expect(rule.inverse({ id: TASK, brandId: other, data: undo!, userId: ME })).resolves.toBe(
       'gone',
@@ -223,7 +226,7 @@ describe('set_task_ready_for_review', () => {
 
   it("takes a task the strip didn't have off it again", async () => {
     state('ready_for_review');
-    const { undo } = await rule.record({ task_id: TASK }, set(null), null);
+    const { undo } = await rule.record({ task_id: TASK }, set(null), null, ORG);
     await expect(rule.inverse({ id: TASK, brandId: BRAND, data: undo!, userId: ME })).resolves.toBe(
       'ok',
     );
@@ -233,7 +236,7 @@ describe('set_task_ready_for_review', () => {
 
   it('puts back what the chat had, and leaves a task that moved on since', async () => {
     state('ready_for_review');
-    const { undo } = await rule.record({ task_id: TASK }, set('writing'), null);
+    const { undo } = await rule.record({ task_id: TASK }, set('writing'), null, ORG);
     await expect(rule.inverse({ id: TASK, brandId: BRAND, data: undo!, userId: ME })).resolves.toBe(
       'ok',
     );
@@ -246,7 +249,9 @@ describe('set_task_ready_for_review', () => {
   });
 
   it('keeps no Undo when the task was ready for review already', async () => {
-    expect((await rule.record({ task_id: TASK }, set('ready_for_review'), null)).undo).toBeNull();
+    expect(
+      (await rule.record({ task_id: TASK }, set('ready_for_review'), null, ORG)).undo,
+    ).toBeNull();
   });
 });
 

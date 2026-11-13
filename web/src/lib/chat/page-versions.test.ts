@@ -38,6 +38,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
 const { pillsOf, readPageVersion, undoPageVersion } = await import('./page-versions');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
+const OTHER_ORG = '77777777-7777-4777-8777-777777777777';
 const USER = '22222222-2222-4222-8222-222222222222';
 const CHAT = '33333333-3333-4333-8333-333333333333';
 const DRAFT = '44444444-4444-4444-8444-444444444444';
@@ -53,7 +54,10 @@ beforeEach(() => {
   fake.db = createFakeSupabase();
   fake.restored = [];
   fake.restoreError = null;
-  fake.db.tables.content_drafts = [{ id: DRAFT, title: 'FAQ: Pricing', body_html: V2 }];
+  // The fake has no joins: the draft's brand's organization is a column of its own.
+  fake.db.tables.content_drafts = [
+    { id: DRAFT, title: 'FAQ: Pricing', body_html: V2, 'brands.organization_id': ORG },
+  ];
   fake.db.tables.content_draft_versions = [{ id: BEFORE, draft_id: DRAFT, body_html: V1 }];
   fake.db.tables.chat_files = [];
   fake.rules.mockReset().mockResolvedValue(null);
@@ -107,6 +111,15 @@ describe('a page version in chat (W4-12a)', () => {
       beforeVersionId: BEFORE,
     });
     expect(read?.version.n).toBe(2);
+  });
+
+  it('reads nothing for a draft of another organization (a model names the id)', async () => {
+    const run = { organizationId: OTHER_ORG, runId: RUN, userId: USER, role: 'manager' };
+    expect(await readPageVersion({ draftId: DRAFT, conversationId: CHAT, run })).toBeNull();
+    const own = { ...run, organizationId: ORG };
+    expect((await readPageVersion({ draftId: DRAFT, conversationId: CHAT, run: own }))?.title).toBe(
+      'FAQ: Pricing',
+    );
   });
 
   it('reads nothing for a page that is gone', async () => {

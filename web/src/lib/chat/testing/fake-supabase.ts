@@ -266,7 +266,15 @@ export function createFakeSupabase(): FakeSupabase {
           return builder;
         },
         eq(column, value) {
-          filters.push((row) => cellOf(row, column) === value);
+          filters.push((row) => {
+            // An inner join on the row's brand (`brands!inner(...)`): its organization,
+            // unless the row names one in a column of its own.
+            if (column === 'brands.organization_id' && !(column in row)) {
+              const brand = (fake.tables.brands ?? []).find((b) => b.id === row.brand_id);
+              return brand?.organization_id === value;
+            }
+            return cellOf(row, column) === value;
+          });
           return builder;
         },
         neq(column, value) {

@@ -74,7 +74,12 @@ export interface UndoRule {
   /** Read just before the change: the state Undo restores. */
   before(input: unknown): Promise<Snapshot | null>;
   /** Read just after it: what the row records. */
-  record(input: unknown, output: unknown, before: Snapshot | null): Promise<WriteRecord>;
+  record(
+    input: unknown,
+    output: unknown,
+    before: Snapshot | null,
+    organizationId: string,
+  ): Promise<WriteRecord>;
   /**
    * The inverse, once the target is as the change left it. userId: who
    * clicked Undo, for a target whose own trail names who (Action History).

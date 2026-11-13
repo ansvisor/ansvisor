@@ -168,6 +168,8 @@ import {
   type ChatToolContext,
 } from './registry/define-tool';
 import { CHAT_TOOLS, chatTool, chatToolByKey } from './registry/tools';
+import { draftPageOfOrganization } from './registry/targets';
+import { draftCardText } from './draft-card-text';
 import {
   callAsTextAt,
   fenceOpen,
@@ -3627,6 +3629,27 @@ const cardText = (text: string, max: number) => {
  * read: the card still shows its target.
  */
 async function cardDetailsOf(
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  place: { timezone: string; organizationId: string; userId: string },
+) {
+  // A go-live of a content draft (publish, CMS, webhook): the card can show its full text.
+  // Read only within the run's organization; what can't be read leaves the card as it was.
+  const draftId = tool.goLive?.(input as never)?.draftId;
+  let page: { title: string; bodyHtml: string } | null = null;
+  try {
+    page = draftId ? await draftPageOfOrganization(draftId, place.organizationId) : null;
+  } catch {
+    page = null;
+  }
+  const fullText = page ? maskIds(draftCardText(page.bodyHtml)) : '';
+  return {
+    ...(await cardBodyOf(tool, input, place)),
+    ...(fullText ? { fullText } : {}),
+  };
+}
+
+async function cardBodyOf(
   tool: ChatTool,
   input: Record<string, unknown>,
   place: { timezone: string; organizationId: string; userId: string },

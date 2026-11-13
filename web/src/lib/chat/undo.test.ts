@@ -498,13 +498,18 @@ describe('request_access: withdraw it while it waits', () => {
   const REQUEST = '66666666-6666-4666-8666-666666666666';
 
   it('records the request it sent, and nothing to undo for one it refused', async () => {
-    const sent = await rule.record({ asked: 'Change my role' }, { ok: true, id: REQUEST }, null);
+    const sent = await rule.record(
+      { asked: 'Change my role' },
+      { ok: true, id: REQUEST },
+      null,
+      ORG,
+    );
     expect(sent).toMatchObject({
       target: { type: 'access_request', id: REQUEST },
       summaryParams: { asked: 'Change my role' },
     });
     expect(sent.undo).not.toBeNull();
-    const refused = await rule.record({ asked: 'x' }, { ok: false, reason: 'too_many' }, null);
+    const refused = await rule.record({ asked: 'x' }, { ok: false, reason: 'too_many' }, null, ORG);
     expect(refused).toMatchObject({ target: { id: null }, undo: null });
   });
 
@@ -849,6 +854,19 @@ describe('content, reports and Site Audit (W2-07)', () => {
       destination: 'wordpress',
     });
     expect(row.summary_params).toEqual({ title: 'Pricing FAQ', cms: 'WordPress' });
+  });
+
+  it.each([
+    ['push_cms_draft', { draft_id: DRAFT, destination: 'webflow' }],
+    ['suggest_draft_changes', { draft_id: DRAFT, request: 'Shorter' }],
+  ])('%s: a draft from another organization records no title', async (name, input) => {
+    const rule = UNDO_RULES[name];
+    const own = await rule.record(input, {}, null, ORG);
+    expect(own.summaryParams).toMatchObject({ title: 'Pricing FAQ' });
+    db.tables.brands.push({ id: 'brand-elsewhere', organization_id: OTHER_ORG });
+    draft().brand_id = 'brand-elsewhere';
+    const other = await rule.record(input, {}, null, ORG);
+    expect(other.summaryParams.title).not.toBe('Pricing FAQ');
   });
 
   it.each([

@@ -1,8 +1,52 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { pageChanges } from './targets';
 
-vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
+const ORG = 'org-1';
+const DRAFT = 'draft-1';
+
+/** A draft of ORG, read as the admin client does: filters applied, no row-level security. */
+vi.mock('@/lib/supabase/admin', () => ({
+  supabaseAdmin: {
+    from: () => {
+      const filters: [string, unknown][] = [];
+      const row = { id: DRAFT, title: 'Pricing FAQ', body_html: '<p>Hi</p>', org: ORG };
+      const builder = {
+        select: () => builder,
+        eq: (column: string, value: unknown) => {
+          filters.push([column, value]);
+          return builder;
+        },
+        maybeSingle: async () => ({
+          data: filters.every(
+            ([c, v]) => (c === 'brands.organization_id' ? row.org : row[c as 'id']) === v,
+          )
+            ? row
+            : null,
+          error: null,
+        }),
+      };
+      return builder;
+    },
+  },
+}));
+
+const { draftPageOfOrganization, draftTitleOfOrganization, pageChanges } =
+  await import('./targets');
+
+describe('a draft named by a tool call', () => {
+  it('gives its title and text within its organization', async () => {
+    expect(await draftTitleOfOrganization(DRAFT, ORG)).toBe('Pricing FAQ');
+    expect(await draftPageOfOrganization(DRAFT, ORG)).toEqual({
+      title: 'Pricing FAQ',
+      bodyHtml: '<p>Hi</p>',
+    });
+  });
+
+  it('gives no title or text for a draft of another organization', async () => {
+    expect(await draftTitleOfOrganization(DRAFT, 'org-2')).toBeNull();
+    expect(await draftPageOfOrganization(DRAFT, 'org-2')).toBeNull();
+  });
+});
 
 /** update_draft's card summary (W2-07): what a change does to a page, in short. */
 describe('pageChanges', () => {

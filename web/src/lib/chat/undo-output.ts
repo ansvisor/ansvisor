@@ -2,7 +2,7 @@ import { CMS_NAMES } from '@/lib/content/cms-names';
 import type { CmsTarget } from '@/lib/content/cms-send-client';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { summaryValue } from './activity';
-import { draftTitle, listWords } from './registry/targets';
+import { draftTitleOfOrganization, listWords } from './registry/targets';
 import type { UndoRule, WriteRecord } from './undo';
 import { DAY_MS, asObject, check, textOf } from './undo-parts';
 
@@ -71,9 +71,12 @@ const cmsName = (key: string | null) =>
 const pushCmsDraft: UndoRule = {
   ...NO_UNDO,
   targetType: 'content_draft',
-  async record(input, output): Promise<WriteRecord> {
+  async record(input, output, _before, organizationId): Promise<WriteRecord> {
     const { draft_id: id, destination } = asObject(input);
-    const title = typeof id === 'string' ? await draftTitle(id).catch(() => null) : null;
+    const title =
+      typeof id === 'string'
+        ? await draftTitleOfOrganization(id, organizationId).catch(() => null)
+        : null;
     return {
       target: { type: 'content_draft', id: textOf(id) },
       summaryParams: {
@@ -91,9 +94,12 @@ const pushCmsDraft: UndoRule = {
 const suggestDraftChanges: UndoRule = {
   ...NO_UNDO,
   targetType: 'content_draft',
-  async record(input): Promise<WriteRecord> {
+  async record(input, _output, _before, organizationId): Promise<WriteRecord> {
     const { draft_id: id } = asObject(input);
-    const title = typeof id === 'string' ? await draftTitle(id).catch(() => null) : null;
+    const title =
+      typeof id === 'string'
+        ? await draftTitleOfOrganization(id, organizationId).catch(() => null)
+        : null;
     return {
       target: { type: 'content_draft', id: textOf(id) },
       summaryParams: { title: summaryValue(title) },
