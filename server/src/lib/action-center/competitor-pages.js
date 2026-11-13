@@ -46,6 +46,8 @@ export {
 const { competitorPages: C } = resolve();
 
 const DAY_MS = 86_400_000;
+/** A page that timed out twice (`incomplete`) is read again after this, not after `freshDays`. */
+const INCOMPLETE_FRESH_MS = 6 * 3_600_000;
 const READ_TIMEOUT_MS = 8_000;
 /** Answers read for the action's prompts, newest first. */
 const ANSWERS_READ = 300;
@@ -230,7 +232,13 @@ export async function readPages({
   const known = new Map((knownRes.data ?? []).map((row) => [row.page_key, row]));
   const fresh = new Map(
     (knownRes.data ?? [])
-      .filter((row) => Date.parse(row.read_at) >= freshSince)
+      .filter(
+        (row) =>
+          Date.parse(row.read_at) >=
+          (row.features?.incomplete
+            ? Math.max(freshSince, now.getTime() - INCOMPLETE_FRESH_MS)
+            : freshSince),
+      )
       .map((row) => [row.page_key, row.features ?? {}]),
   );
   // A run that read some would compare a part, and its task wouldn't run again.

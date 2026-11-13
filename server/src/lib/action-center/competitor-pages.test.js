@@ -282,6 +282,41 @@ describe('analyzeCompetitorPages', () => {
     expect(result.competitorPages[0]).toMatchObject({ words: 900, passes: ['faq-schema'] });
   });
 
+  it('reads a page that timed out again after six hours, and a plain unreadable one only after the normal window', async () => {
+    const hoursAgo = (h) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
+    const stored = (page_key, hours, features) => ({
+      page_key,
+      read_at: hoursAgo(hours),
+      features,
+    });
+    const keep = { words: 900, checks: {} };
+
+    // Timed out 7 hours ago: read again. Unreadable 7 hours ago: not.
+    tables.cited_page_features = [
+      stored('rival.com/kettles', 7, { unreadable: true, incomplete: true }),
+      stored('acme.com/kettles', 7, keep),
+    ];
+    await run();
+    expect(pagesRead()).toContain('https://rival.com/kettles');
+
+    tables.cited_page_features = [
+      stored('rival.com/kettles', 7, { unreadable: true }),
+      stored('acme.com/kettles', 7, keep),
+    ];
+    read.mockClear();
+    await run();
+    expect(pagesRead()).not.toContain('https://rival.com/kettles');
+
+    // Timed out 5 hours ago: not read again.
+    tables.cited_page_features = [
+      stored('rival.com/kettles', 5, { unreadable: true, incomplete: true }),
+      stored('acme.com/kettles', 7, keep),
+    ];
+    read.mockClear();
+    await run();
+    expect(pagesRead()).not.toContain('https://rival.com/kettles');
+  });
+
   it("reads all of an action's pages the same night or none, and waits for the next", async () => {
     // Three pages to read, two reads left: none is read.
     todayReads = 10;
