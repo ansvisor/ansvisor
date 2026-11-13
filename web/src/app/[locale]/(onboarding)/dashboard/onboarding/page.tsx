@@ -207,7 +207,7 @@ function TopicAccordion({
               className="text-destructive focus:text-destructive"
               onClick={onRemoveTopic}
             >
-              Remove topic
+              {t('removeTopic')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -229,7 +229,7 @@ function TopicAccordion({
           ))}
           <div className="flex items-center gap-2 mt-2">
             <Input
-              placeholder="Enter new prompt..."
+              placeholder={t('newPromptPlaceholder')}
               value={newPrompt}
               onChange={(e) => setNewPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
@@ -256,9 +256,6 @@ function TopicAccordion({
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// The state picker's own "no state" choice, ahead of the states themselves.
-const STATE_ITEMS = [{ value: 'nationwide', label: 'Nationwide (no state)' }, ...US_STATE_ITEMS];
-
 // Card width per step, matched to each step's content column; unlisted steps are forms.
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = {
   3: 'wide',
@@ -266,22 +263,22 @@ const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = {
   [PLAN_STEP]: 'medium',
 };
 
-const TOPIC_LOADING_MESSAGES = [
-  'Researching topics for your brand...',
-  'Analyzing your industry landscape...',
-  'Identifying key themes and trends...',
-  'Finding what your audience cares about...',
-  'Evaluating competitive topics...',
-  'Almost there, finalizing suggestions...',
-];
+const TOPIC_LOADING_KEYS = [
+  'topicLoading1',
+  'topicLoading2',
+  'topicLoading3',
+  'topicLoading4',
+  'topicLoading5',
+  'topicLoading6',
+] as const;
 
-const COMPETITOR_LOADING_MESSAGES = [
-  'Searching for competitors...',
-  'Analyzing your market...',
-  'Identifying key players...',
-  'Verifying company details...',
-  'Finalizing recommendations...',
-];
+const COMPETITOR_LOADING_KEYS = [
+  'competitorLoading1',
+  'competitorLoading2',
+  'competitorLoading3',
+  'competitorLoading4',
+  'competitorLoading5',
+] as const;
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
@@ -294,6 +291,10 @@ export default function OnboardingPage() {
   const tPrompts = useTranslations('onboarding.prompts');
   const tSetup = useTranslations('onboarding');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
+  const stateItems = [
+    { value: 'nationwide', label: tSetup('setup.nationwide') },
+    ...US_STATE_ITEMS,
+  ];
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -330,16 +331,16 @@ export default function OnboardingPage() {
       topicMsgIdx.current = 0;
       return;
     }
-    setTopicLoadingMsg(TOPIC_LOADING_MESSAGES[0]);
+    setTopicLoadingMsg(tSetup(`setup.${TOPIC_LOADING_KEYS[0]}`));
     topicMsgIdx.current = 0;
 
     const interval = setInterval(() => {
-      topicMsgIdx.current = (topicMsgIdx.current + 1) % TOPIC_LOADING_MESSAGES.length;
-      setTopicLoadingMsg(TOPIC_LOADING_MESSAGES[topicMsgIdx.current]);
+      topicMsgIdx.current = (topicMsgIdx.current + 1) % TOPIC_LOADING_KEYS.length;
+      setTopicLoadingMsg(tSetup(`setup.${TOPIC_LOADING_KEYS[topicMsgIdx.current]}`));
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [loadingTopics]);
+  }, [loadingTopics, tSetup]);
 
   // Step 4
   const [topicPrompts, setTopicPrompts] = useState<TopicPromptsData[]>([]);
@@ -523,17 +524,16 @@ export default function OnboardingPage() {
       competitorMsgIdx.current = 0;
       return;
     }
-    setCompetitorLoadingMsg(COMPETITOR_LOADING_MESSAGES[0]);
+    setCompetitorLoadingMsg(tSetup(`setup.${COMPETITOR_LOADING_KEYS[0]}`));
     competitorMsgIdx.current = 0;
 
     const interval = setInterval(() => {
-      competitorMsgIdx.current =
-        (competitorMsgIdx.current + 1) % COMPETITOR_LOADING_MESSAGES.length;
-      setCompetitorLoadingMsg(COMPETITOR_LOADING_MESSAGES[competitorMsgIdx.current]);
+      competitorMsgIdx.current = (competitorMsgIdx.current + 1) % COMPETITOR_LOADING_KEYS.length;
+      setCompetitorLoadingMsg(tSetup(`setup.${COMPETITOR_LOADING_KEYS[competitorMsgIdx.current]}`));
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [loadingCompetitors]);
+  }, [loadingCompetitors, tSetup]);
 
   // Auto-fetch topic suggestions when arriving at step 3 with none loaded:
   // coming back to setup with the brand saved but no topics yet. Saved topics
@@ -725,7 +725,7 @@ export default function OnboardingPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      if (!user) throw new Error(tSetup('setup.notAuthenticated'));
 
       // Check if org already exists (resume case)
       const { data: profile } = await supabase
@@ -792,7 +792,7 @@ export default function OnboardingPage() {
         fetchTopicSuggestions();
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create brand');
+      toast.error(err instanceof Error ? err.message : tSetup('setup.createBrandFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -929,7 +929,7 @@ export default function OnboardingPage() {
       );
 
       if (allPrompts.length === 0) {
-        setSaveError('Add at least one prompt before continuing.');
+        setSaveError(tSetup('setup.addPrompt'));
         setIsLoading(false);
         return;
       }
@@ -943,9 +943,7 @@ export default function OnboardingPage() {
         // No technical toasts on this step: actionable failures (plan limit)
         // show verbatim inline, anything else gets a friendly retry message.
         setSaveError(
-          result.code === 'plan_limit'
-            ? result.error
-            : "We couldn't save your prompts — please try again.",
+          result.code === 'plan_limit' ? result.error : tSetup('setup.savePromptsFailed'),
         );
         return;
       }
@@ -960,7 +958,7 @@ export default function OnboardingPage() {
       setStep(5);
       fetchCompetitorSuggestions();
     } catch {
-      setSaveError("We couldn't save your prompts — please try again.");
+      setSaveError(tSetup('setup.savePromptsFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -1047,7 +1045,7 @@ export default function OnboardingPage() {
       competitorDomain,
     );
     if (list === suggestedCompetitors) return;
-    if (duplicate) toast.info(`${duplicate.name} is already in the list`);
+    if (duplicate) toast.info(tSetup('setup.alreadyInList', { name: duplicate.name }));
     setSuggestedCompetitors(list);
     setCompetitorName('');
     setCompetitorDomain('');
@@ -1074,7 +1072,7 @@ export default function OnboardingPage() {
     if (!createdBrand) return;
     const selected = takePendingCompetitor().filter((c) => c.selected);
     if (selected.length === 0) {
-      toast.error('Add at least one competitor to continue.');
+      toast.error(tSetup('setup.addCompetitor'));
       return;
     }
 
@@ -1137,7 +1135,7 @@ export default function OnboardingPage() {
       // from the Stripe success route once the plan is confirmed.
       await bootstrapBrandVolumes(createdBrand.id);
 
-      toast.success('Setup complete! Your first tracking is starting.');
+      toast.success(tSetup('setup.setupComplete'));
 
       // Full page navigation bypasses Next.js router cache, ensuring
       // the server-side layout reads the fresh onboarding_completed flag.
@@ -1253,10 +1251,8 @@ export default function OnboardingPage() {
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                 <Globe className="h-6 w-6" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight">Set up your brand</h1>
-              <p className="text-sm text-muted-foreground">
-                See how AI platforms talk about you. Add your first brand to get started.
-              </p>
+              <h1 className="text-2xl font-bold tracking-tight">{tSetup('setup.brandTitle')}</h1>
+              <p className="text-sm text-muted-foreground">{tSetup('setup.brandIntro')}</p>
             </div>
 
             <div className="space-y-4">
@@ -1293,7 +1289,7 @@ export default function OnboardingPage() {
                 </Label>
                 <Textarea
                   id="description"
-                  placeholder="A brief description helps us generate better suggestions."
+                  placeholder={tSetup('setup.descriptionPlaceholder')}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
@@ -1321,7 +1317,7 @@ export default function OnboardingPage() {
                   setStep(2);
                 }}
               >
-                Continue
+                {tSetup('setup.continue')}
               </Button>
             </div>
           </div>
@@ -1340,11 +1336,8 @@ export default function OnboardingPage() {
             <BrandHeader name={brandName} domain={domain} />
 
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Select your target market</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Pick the region and language your audience uses. This helps us deliver more accurate
-                AI visibility data.
-              </p>
+              <h1 className="text-2xl font-bold tracking-tight">{tSetup('setup.marketTitle')}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{tSetup('setup.marketIntro')}</p>
             </div>
 
             <div className="space-y-4">
@@ -1376,7 +1369,7 @@ export default function OnboardingPage() {
                 <div className="space-y-2">
                   <Label>State (optional)</Label>
                   <Select
-                    items={STATE_ITEMS}
+                    items={stateItems}
                     value={usState || 'nationwide'}
                     onValueChange={(v) => setUsState(!v || v === 'nationwide' ? '' : v)}
                   >
@@ -1384,7 +1377,7 @@ export default function OnboardingPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="nationwide">Nationwide (no state)</SelectItem>
+                      <SelectItem value="nationwide">{tSetup('setup.nationwide')}</SelectItem>
                       {US_STATES.map((s) => (
                         <SelectItem key={s.code} value={s.code}>
                           {s.label}
@@ -1392,9 +1385,7 @@ export default function OnboardingPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Localizes AI answers to this state. Leave empty for nationwide results.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tSetup('setup.stateHelp')}</p>
                 </div>
               )}
 
@@ -1422,10 +1413,10 @@ export default function OnboardingPage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Setting up...
+                    {tSetup('setup.settingUp')}
                   </>
                 ) : (
-                  'Continue'
+                  tSetup('setup.continue')
                 )}
               </Button>
             </div>
@@ -1437,7 +1428,7 @@ export default function OnboardingPage() {
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
+              {tSetup('setup.back')}
             </button>
             <StepDots current={2} total={totalSteps} />
             <div className="w-12" />
@@ -1486,14 +1477,12 @@ export default function OnboardingPage() {
                           {topicSuggestError === 'dailyLimit' ? (
                             tWizard('suggestionsUsedUp')
                           ) : (
-                            <>
-                              Couldn&apos;t fetch topic suggestions right now — add your own above.
-                            </>
+                            <>{tSetup('setup.topicSuggestFailed')}</>
                           )}
                         </span>
                         {topicSuggestError !== 'dailyLimit' && (
                           <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
-                            Try again
+                            {tSetup('setup.tryAgain')}
                           </Button>
                         )}
                       </div>
@@ -1528,7 +1517,7 @@ export default function OnboardingPage() {
 
                     <div className="flex items-center gap-2 pt-2">
                       <Input
-                        placeholder="Add custom topic..."
+                        placeholder={tSetup('setup.customTopicPlaceholder')}
                         maxLength={BRAND_SETUP_LIMITS.topic}
                         value={customTopic}
                         onChange={(e) => setCustomTopic(e.target.value)}
@@ -1561,45 +1550,42 @@ export default function OnboardingPage() {
                   {loadingPrompts ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating prompts...
+                      {tSetup('setup.generatingPrompts')}
                     </>
                   ) : (
-                    'Looks good'
+                    tSetup('setup.looksGood')
                   )}
                 </Button>
               </div>
 
               <div className="lg:col-span-2">
                 <div className="rounded-xl border bg-card p-5 sticky top-10">
-                  <h3 className="text-sm font-semibold mb-4">Topic Selection Tips</h3>
+                  <h3 className="text-sm font-semibold mb-4">{tSetup('setup.tipsTitle')}</h3>
                   <div className="space-y-4">
                     <div className="flex gap-3">
                       <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-medium">5 prompts are created per topic</p>
+                        <p className="text-sm font-medium">{tSetup('setup.tip1Title')}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          You can select up to 10 topics for a total of 50 prompts. More can be
-                          added anytime from the dashboard.
+                          {tSetup('setup.tip1Body')}
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-3">
                       <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-medium">Think like your customers</p>
+                        <p className="text-sm font-medium">{tSetup('setup.tip2Title')}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Use terms your audience would search for when looking for products or
-                          services like yours.
+                          {tSetup('setup.tip2Body')}
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-3">
                       <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-medium">Keep it short</p>
+                        <p className="text-sm font-medium">{tSetup('setup.tip3Title')}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Topics should be concise — we&apos;ll turn them into detailed prompts in
-                          the next step.
+                          {tSetup('setup.tip3Body')}
                         </p>
                       </div>
                     </div>
@@ -1615,7 +1601,7 @@ export default function OnboardingPage() {
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
+              {tSetup('setup.back')}
             </button>
             <StepDots current={3} total={totalSteps} />
             <div className="w-12" />
@@ -1642,10 +1628,7 @@ export default function OnboardingPage() {
                 {promptGenError === 'dailyLimit' ? (
                   tWizard('promptSuggestionsUsedUp')
                 ) : (
-                  <>
-                    Couldn&apos;t generate prompt suggestions right now — add your own to each topic
-                    below to continue.
-                  </>
+                  <>{tSetup('setup.promptSuggestFailed')}</>
                 )}
               </div>
             )}
@@ -1685,7 +1668,7 @@ export default function OnboardingPage() {
               ))}
               {topicPrompts.length === 0 && (
                 <div className="py-8 text-center text-sm text-muted-foreground">
-                  No prompts generated yet.
+                  {tSetup('setup.noPrompts')}
                 </div>
               )}
             </div>
@@ -1698,10 +1681,10 @@ export default function OnboardingPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving prompts...
+                  {tSetup('setup.savingPrompts')}
                 </>
               ) : (
-                'Continue'
+                tSetup('setup.continue')
               )}
             </Button>
           </div>
@@ -1712,7 +1695,7 @@ export default function OnboardingPage() {
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
+              {tSetup('setup.back')}
             </button>
             <StepDots current={4} total={totalSteps} />
             <div className="w-12" />
@@ -1754,7 +1737,7 @@ export default function OnboardingPage() {
               <p className="text-sm text-muted-foreground">Know your competitors? Add them here.</p>
               <div className="flex items-center gap-2">
                 <Input
-                  placeholder="Company name"
+                  placeholder={tSetup('setup.companyName')}
                   value={competitorName}
                   onChange={(e) => setCompetitorName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
@@ -1803,7 +1786,7 @@ export default function OnboardingPage() {
                     </span>
                     {competitorSuggestError !== 'dailyLimit' && (
                       <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
-                        Try again
+                        {tSetup('setup.tryAgain')}
                       </Button>
                     )}
                   </div>
@@ -1811,7 +1794,7 @@ export default function OnboardingPage() {
                 {suggestedCompetitors.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Competitors to track
+                      {tSetup('setup.competitorsToTrack')}
                     </p>
                     {suggestedCompetitors.map((c, idx) => (
                       <div
@@ -1873,7 +1856,7 @@ export default function OnboardingPage() {
                   {savingCompetitors ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Finishing setup...
+                      {tSetup('setup.finishingSetup')}
                     </>
                   ) : hasSelectedCompetitors ? (
                     // On the cloud, tracking starts with the plan step's
@@ -1903,7 +1886,7 @@ export default function OnboardingPage() {
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
+              {tSetup('setup.back')}
             </button>
             <StepDots current={5} total={totalSteps} />
             <div className="w-12" />
@@ -2027,7 +2010,7 @@ export default function OnboardingPage() {
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            {tSetup('setup.back')}
           </button>
           <StepDots current={PLAN_STEP} total={totalSteps} />
           <div className="w-12" />
