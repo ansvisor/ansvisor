@@ -4,7 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { brandRulesSection } from './brand-rules.js';
 import { readBrandRules } from './brand-rules-read.js';
-import { readBannedPhrases } from './content-rules.js';
+import { bannedPhrasesIn, readBannedPhrases } from './content-rules.js';
 import { resolveModel } from './ai-provider.js';
 import {
   ATTRIBUTION_RULE,
@@ -1016,6 +1016,72 @@ async function cutToLength({ answer, page, length, band, brand, draft, model, mo
   }
 }
 
+const bannedIn = (brand, page, title) =>
+  bannedPhrasesIn([title, renderPage(page)], brand.bannedPhrases ?? []);
+
+/**
+ * The new page without the brand's banned phrases (Settings › Content): the
+ * prompt asks, this checks. Found one, the model rewrites only the
+ * sentences that have it, once, on its own hold on the budget; the page is
+ * checked again. A failed rewrite, or a phrase left, keeps the page as
+ * written and logs the count (never the phrases). A stop goes through.
+ */
+async function withoutBanned({
+  written,
+  title,
+  brand,
+  draft,
+  language,
+  model,
+  modelId,
+  run,
+  known,
+  people,
+}) {
+  const same = { written, title };
+  const found = bannedIn(brand, written, title);
+  if (!found.length) return same;
+  let result = same;
+  const budget = await reserveAiBudget(brand.organization_id, {
+    feature: 'content',
+    modelId,
+    draftId: draft.id,
+  }).catch(() => null);
+  if (budget) {
+    try {
+      const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+        generateObject({
+          model,
+          ...objectOptions(modelId, pageSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
+          system: writeSystemPrompt(),
+          prompt: `The page below uses phrases the brand never uses: ${found.map((p) => `"${p}"`).join(', ')}. Rewrite only the sentences (and the title or headings) that contain them, in other words. Keep everything else exactly as it is: the facts, links, placeholders in square brackets, {{find: …}} and {{ask: …}} markers. Return the whole page.\n\n${JSON.stringify(written)}\n\nWrite in the page's own language.`,
+          abortSignal,
+        }),
+      );
+      await budget.charge(usage);
+      const next = sourcedPage(object, known, people);
+      result = {
+        written: next,
+        title: headingCase(clean(next.title).slice(0, 300), language) || title,
+      };
+    } catch (err) {
+      if (isStop(err, run)) throw err;
+      if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
+      else await budget.release();
+    } finally {
+      await budget.release();
+    }
+  }
+  const left = bannedIn(brand, result.written, result.title);
+  if (left.length) {
+    logger.warn(
+      { brandId: draft.brand_id, count: left.length },
+      '[content-writer] banned phrases left in the page, saved anyway',
+    );
+  }
+  return result;
+}
+
 /** What the cut pass is told: its own page, how long it is and the Length to cut it to. */
 function cutPrompt({ html, page, total, length, max }) {
   return `Your rewrite below is about ${total} characters of text, ${page.keptChars} of them in kept blocks, which count toward Length. Its Length is ${length} characters, up to ${max}. Cut it to about ${length}.
@@ -1282,6 +1348,20 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     );
     // The title column as the H1 reads it: a capital first (headingCase).
     const title = headingCase(clean(written.title).slice(0, 300), language) || draft.title;
+    // A banned phrase that slipped through: one rewrite of those sentences,
+    // checked again; a phrase left is saved anyway, with a warning.
+    const page = await withoutBanned({
+      written,
+      title,
+      brand,
+      draft,
+      language,
+      model,
+      modelId,
+      run,
+      known: knownInPage,
+      people,
+    });
     // Stopped meanwhile: the page stays as it was, and History with it.
     await stopIfStopped(run);
     // Try again over a page the person has written in: History keeps it
@@ -1296,12 +1376,15 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     const saved = await finish(
       draft,
       {
-        title,
+        title: page.title,
         // The shopping path's names it wrote, linked (shopping-links.js), and
         // its products as a grid where the page names them most (shopping-blocks.js).
         body_html: insertProductGrid(
           linkShoppingPath(
-            linkFacts(renderPage({ ...written, title }, { language }), looked.links),
+            linkFacts(
+              renderPage({ ...page.written, title: page.title }, { language }),
+              looked.links,
+            ),
             shoppingPath,
           ).html,
           shoppingPath && { ...shoppingPath, pageType: draft.page_type },

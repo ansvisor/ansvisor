@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../config/supabase.js', () => ({ default: {} }));
-const { NO_RULES, bannedPhrasesOf, preferredDomains, sourceAllowed, sourceRulesOf } =
-  await import('./content-rules.js');
+const {
+  NO_RULES,
+  bannedPhrasesIn,
+  bannedPhrasesOf,
+  preferredDomains,
+  sourceAllowed,
+  sourceRulesOf,
+} = await import('./content-rules.js');
 
 describe('content rules for sources', () => {
   it('reads an unset or odd value as no rules', () => {
@@ -42,5 +48,34 @@ describe('banned phrases', () => {
     ]);
     expect(bannedPhrasesOf(null)).toEqual([]);
     expect(bannedPhrasesOf({ bannedPhrases: 'x' })).toEqual([]);
+  });
+});
+
+describe('bannedPhrasesIn', () => {
+  it('matches a word or a phrase in any case, once each', () => {
+    expect(
+      bannedPhrasesIn(
+        ['The CHEAPEST fares. Cheapest!', '<p>Best  <b>price</b> yet</p>'],
+        ['cheapest', 'best price', 'guaranteed'],
+      ),
+    ).toEqual(['cheapest', 'best price']);
+  });
+
+  it('ignores a phrase inside another word', () => {
+    expect(
+      bannedPhrasesIn(['A cheaper, uncheapest-ish deal; guaranteeds'], ['cheap', 'guaranteed']),
+    ).toEqual([]);
+    expect(bannedPhrasesIn(['Only cheap-ish'], ['cheap'])).toEqual(['cheap']);
+  });
+
+  it('treats regex characters in a phrase as text', () => {
+    expect(bannedPhrasesIn(['Book now (limited)!'], ['now (limited)', '.*'])).toEqual([
+      'now (limited)',
+    ]);
+  });
+
+  it('finds nothing without phrases or text', () => {
+    expect(bannedPhrasesIn([undefined, ''], ['x'])).toEqual([]);
+    expect(bannedPhrasesIn(['x'], [])).toEqual([]);
   });
 });

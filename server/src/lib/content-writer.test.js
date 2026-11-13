@@ -2045,3 +2045,41 @@ describe('a health brand’s page (owner’s safety rule, 2026-11-03)', () => {
     );
   });
 });
+
+describe('banned phrases in a new page', () => {
+  const banned = { ...brand, bannedPhrases: ['cheapest'] };
+  const run = () =>
+    runDraftWriting({ draft: draftRow(), brand: banned, model: 'model:m', input: input(), budget });
+  const withText = (text) => ({ object: { ...page, intro: [text] }, usage: { inputTokens: 1 } });
+  const savedBody = () => draftUpdates().find((v) => v.body_html)?.body_html ?? '';
+
+  it('rewrites once when a phrase slips through, and saves the rewrite', async () => {
+    generateObject
+      .mockResolvedValueOnce(withText('The cheapest way to brew.'))
+      .mockResolvedValueOnce(withText('An affordable way to brew.'));
+    await expect(run()).resolves.toEqual({ written: true });
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    expect(generateObject.mock.calls[1][0].prompt).toContain('"cheapest"');
+    expect(savedBody()).toContain('An affordable way to brew.');
+    expect(savedBody()).not.toContain('cheapest');
+  });
+
+  it('makes no extra call for a clean page', async () => {
+    generateObject.mockResolvedValue(withText('A good way to brew.'));
+    await run();
+    expect(generateObject).toHaveBeenCalledTimes(1);
+    expect(savedBody()).toContain('A good way to brew.');
+  });
+
+  it('saves the page and warns, with the count, when the phrase is still there', async () => {
+    const { logger } = await import('./logger.js');
+    generateObject.mockResolvedValue(withText('The cheapest way to brew.'));
+    await expect(run()).resolves.toEqual({ written: true });
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    expect(savedBody()).toContain('The cheapest way to brew.');
+    expect(logger.warn).toHaveBeenCalledWith(
+      { brandId: BRAND, count: 1 },
+      expect.stringContaining('banned phrases left'),
+    );
+  });
+});

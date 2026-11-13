@@ -69,3 +69,31 @@ export async function readBannedPhrases(brandId) {
     return [];
   }
 }
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const textOf = (html) =>
+  html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&');
+
+/**
+ * The banned phrases found in the texts (html is fine), each once, as the
+ * brand wrote it. A whole word or phrase, in any case: "cheap" isn't in
+ * "cheaper". Same as web/src/lib/chat/banned-phrases.ts. Pure.
+ */
+export function bannedPhrasesIn(texts, phrases) {
+  const text = texts
+    .filter(Boolean)
+    .map((t) => textOf(t))
+    .join('\n');
+  const found = [];
+  for (const phrase of phrases) {
+    const words = phrase.trim().split(/\s+/).filter(Boolean).map(escapeRe);
+    if (words.length === 0 || found.includes(phrase)) continue;
+    const re = new RegExp(`(?<![\\p{L}\\p{N}])${words.join('\\s+')}(?![\\p{L}\\p{N}])`, 'iu');
+    if (re.test(text)) found.push(phrase);
+  }
+  return found;
+}
