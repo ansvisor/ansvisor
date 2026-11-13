@@ -182,3 +182,80 @@ describe('decide with DECIDER_PROVIDER=google', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('isDeciderConfigured with DECIDER_PROVIDER variants', () => {
+  const ORIGINAL_PROVIDER = process.env.DECIDER_PROVIDER;
+  const ORIGINAL_GOOGLE_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+  beforeEach(() => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    delete process.env.DECIDER_PROVIDER;
+    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  });
+
+  afterEach(() => {
+    if (ORIGINAL_PROVIDER === undefined) delete process.env.DECIDER_PROVIDER;
+    else process.env.DECIDER_PROVIDER = ORIGINAL_PROVIDER;
+    if (ORIGINAL_GOOGLE_KEY === undefined) delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    else process.env.GOOGLE_GENERATIVE_AI_API_KEY = ORIGINAL_GOOGLE_KEY;
+    if (ORIGINAL_KEY === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = ORIGINAL_KEY;
+  });
+
+  it('returns false for an unknown provider, even with an OpenRouter key set', async () => {
+    fetchMock.mockReset();
+    process.env.DECIDER_PROVIDER = 'gemini';
+
+    expect(isDeciderConfigured()).toBe(false);
+    await expect(decide({ state: 'text', questions: QUESTIONS })).rejects.toThrow(
+      'Unknown DECIDER_PROVIDER',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('normalises the value, so "Google" selects the Google provider', () => {
+    process.env.DECIDER_PROVIDER = 'Google';
+
+    expect(isDeciderConfigured()).toBe(false);
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'google-test-key';
+    expect(isDeciderConfigured()).toBe(true);
+  });
+
+  it('trims surrounding whitespace, so " google " selects the Google provider', () => {
+    process.env.DECIDER_PROVIDER = ' google ';
+
+    expect(isDeciderConfigured()).toBe(false);
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'google-test-key';
+    expect(isDeciderConfigured()).toBe(true);
+  });
+
+  it('defaults to OpenRouter when DECIDER_PROVIDER is absent', () => {
+    expect(isDeciderConfigured()).toBe(true);
+
+    delete process.env.OPENROUTER_API_KEY;
+
+    expect(isDeciderConfigured()).toBe(false);
+  });
+
+  it('returns false for an unknown provider with neither key set', () => {
+    process.env.DECIDER_PROVIDER = 'gemini';
+    delete process.env.OPENROUTER_API_KEY;
+
+    expect(isDeciderConfigured()).toBe(false);
+  });
+
+  it('logs an unknown provider once, not per call', async () => {
+    vi.resetModules();
+    const fresh = await import('./decider.js');
+    const { logger } = await import('./logger.js');
+    process.env.DECIDER_PROVIDER = 'gemini';
+
+    const baseline = logger.warn.mock.calls.length;
+
+    expect(fresh.isDeciderConfigured()).toBe(false);
+    expect(fresh.isDeciderConfigured()).toBe(false);
+
+    expect(logger.warn.mock.calls.length).toBe(baseline + 1);
+    expect(logger.warn.mock.calls.at(-1)[0]).toMatchObject({ provider: 'gemini' });
+  });
+});

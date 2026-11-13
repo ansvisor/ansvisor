@@ -41,14 +41,29 @@ const RETRYABLE = new Set([429, 502, 503, 524, 529]);
 
 const PROVIDERS = ['openrouter', 'google'];
 
-/** Which Decisions API serves decide(): DECIDER_PROVIDER, defaulting to OpenRouter. */
+/**
+ * Which Decisions API serves decide(): DECIDER_PROVIDER, defaulting to
+ * OpenRouter. Normalised (trimmed, lower-cased); an unknown value is not a
+ * provider, and isDeciderConfigured() says so instead of falling through to
+ * the OpenRouter key check.
+ */
 export function deciderProvider(env = process.env) {
-  return env.DECIDER_PROVIDER || 'openrouter';
+  return (env.DECIDER_PROVIDER || 'openrouter').trim().toLowerCase();
 }
 
-/** True when the selected provider has its key, so decisions can run at all. */
+let unknownProviderLogged = false;
+
+/** True when the selected provider is known and has its key, so decisions can run at all. */
 export function isDeciderConfigured() {
-  if (deciderProvider() === 'google') return Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+  const provider = deciderProvider();
+  if (!PROVIDERS.includes(provider)) {
+    if (!unknownProviderLogged) {
+      unknownProviderLogged = true;
+      logger.warn({ provider }, '[decider] unknown DECIDER_PROVIDER, decisions disabled');
+    }
+    return false;
+  }
+  if (provider === 'google') return Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
   return Boolean(process.env.OPENROUTER_API_KEY);
 }
 
