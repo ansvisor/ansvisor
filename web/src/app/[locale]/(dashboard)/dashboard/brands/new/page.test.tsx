@@ -167,6 +167,50 @@ describe('the new brand page', () => {
   });
 });
 
+describe("the new brand page's prompts step", () => {
+  async function reachPrompts() {
+    suggestTopics.mockResolvedValue({ topics: ['Coffee'] });
+    generatePromptsFromTopics.mockResolvedValue({
+      topicPrompts: [
+        { topic: 'Coffee', prompts: ['best coffee beans', 'cheapest coffee grinder'] },
+      ],
+    });
+    promptActions.getPromptCapacity.mockResolvedValue({ maxPrompts: 50, used: 0 });
+    promptActions.savePromptSet.mockResolvedValue({ promptSet: { id: 'ps1' } });
+    suggestCompetitors.mockResolvedValue({ competitors: [], isEcommerce: false });
+    await render(false);
+    await reachCreate();
+    await clickContinue();
+    await clickButton('Looks good');
+  }
+  const boxes = () => container.querySelectorAll<HTMLButtonElement>('[role="checkbox"]');
+
+  it('offers the prompts as a checklist, all ticked within the plan', async () => {
+    await reachPrompts();
+    expect(container.textContent).toContain('2 of 2 prompts ticked');
+    expect([...boxes()].map((b) => b.getAttribute('aria-checked'))).toEqual(['true', 'true']);
+  });
+
+  it('saves only the ticked prompts', async () => {
+    await reachPrompts();
+    await act(async () => boxes()[1].click());
+    expect(container.textContent).toContain('1 of 2 prompts ticked');
+    await clickContinue();
+    const { prompts } = promptActions.savePromptSet.mock.calls[0][0];
+    expect(prompts.map((p: { text: string }) => p.text)).toEqual(['best coffee beans']);
+  });
+
+  it('cannot continue with nothing ticked', async () => {
+    await reachPrompts();
+    await act(async () => boxes()[0].click());
+    await act(async () => boxes()[1].click());
+    const next = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Continue',
+    );
+    expect(next!.disabled).toBe(true);
+  });
+});
+
 describe("the new brand page's brand_add flow", () => {
   const flows = () =>
     analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
