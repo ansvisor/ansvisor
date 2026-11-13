@@ -275,6 +275,7 @@ export function ChatThreadView({
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
+  const tRun = useTranslations('agentic.runSteps');
   // A page open beside the chat on its own page (Open here, W4-15c): its chip
   // is the box's, sent from the page's editor as the Content Editor's Chat
   // sends "This draft", so a request comes back as suggestions there (W4-14).
@@ -983,13 +984,16 @@ export function ChatThreadView({
             <ChatUsageNotice seenPeriod={usageNoticeSeen} onOwnKey={onOwnKey} />
           </>
         )}
+        {working && !asking && last?.run?.status === 'waiting' && (
+          <p className="text-muted-foreground px-3 pb-1 text-xs">{tRun('waiting')}</p>
+        )}
         <ChatComposer
           variant={layout}
           mode={mode}
           onModeChange={setMode}
           fullAutoOpen={fullAutoOpen}
           fullAutoOffByAdmin={fullAutoOffByAdmin}
-          running={working && !asking}
+          running={working && !asking && last?.run?.status !== 'waiting'}
           answering={!!asking}
           maxLength={asking ? ANSWER_MAX : undefined}
           ghost={asking ? recommendedLabel(asking) : ghostOf(nextMoves)}

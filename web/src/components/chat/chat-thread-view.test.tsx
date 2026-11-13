@@ -959,6 +959,30 @@ describe('ChatThreadView', () => {
     root = createRoot(container);
   });
 
+  it('says Waiting for your OK, not Answering, while the last run waits on an approval', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Draft',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Fix it', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: '',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: { runId: RUN, status: 'waiting', steps: [], fileId: null, deliverables: [] },
+        },
+      ],
+    } as unknown as ChatThread;
+    fetchMock.mockImplementationOnce(async () => new Response(stream([]), { status: 200 }));
+    await render({ thread, variant: 'dock' });
+    expect(container.textContent).toContain('Waiting for your OK');
+    expect(container.textContent).not.toContain('Answering');
+  });
+
   it('cancels a stream still open once the view goes', async () => {
     const thread = {
       conversationId: CHAT,
