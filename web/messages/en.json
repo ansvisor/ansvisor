@@ -17062,6 +17062,72 @@
   },
   "brands": {
     "title": "Brands",
+    "new": {
+      "loading": {
+        "topics": {
+          "researching": "Researching topics for your brand...",
+          "industry": "Analyzing your industry landscape...",
+          "themes": "Identifying key themes and trends...",
+          "audience": "Finding what your audience cares about...",
+          "competitive": "Evaluating competitive topics...",
+          "almost": "Almost there, finalizing suggestions..."
+        },
+        "competitors": {
+          "searching": "Searching for competitors...",
+          "market": "Analyzing your market...",
+          "players": "Identifying key players...",
+          "verifying": "Verifying company details...",
+          "finalizing": "Finalizing recommendations..."
+        }
+      },
+      "step2": {
+        "nationwide": "Nationwide (no state)",
+        "title": "Select your target market",
+        "subtitle": "Pick the region and language your audience uses. This helps us deliver more accurate AI visibility data.",
+        "region": "Region",
+        "state": "State (optional)",
+        "stateHint": "Localizes AI answers to this state. Leave empty for nationwide results.",
+        "language": "Language",
+        "settingUp": "Setting up..."
+      },
+      "errors": {
+        "notAuthenticated": "Not authenticated",
+        "noOrganization": "No organization found",
+        "saveBrand": "Failed to save brand",
+        "generatePrompts": "Failed to generate prompts from topics"
+      },
+      "step1": {
+        "title": "Add a new brand",
+        "subtitle": "See how AI platforms talk about your brand. Fill in the basics to get started.",
+        "brandName": "Brand name",
+        "brandNamePlaceholder": "e.g. Acme Corp",
+        "website": "Website",
+        "protocol": "https://",
+        "websitePlaceholder": "example.com",
+        "describe": "Describe your brand <optional>(optional)</optional>",
+        "descriptionPlaceholder": "A brief description helps us generate better suggestions.",
+        "hintIndustry": "What industry are you in?",
+        "hintAudience": "Who is your target audience?"
+      },
+      "continue": "Continue",
+      "back": "Back",
+      "step3": {
+        "title": "Choose topics to monitor",
+        "selectUpTo": "Select up to 10 topics",
+        "suggestError": "Couldn't fetch topic suggestions right now — add your own above.",
+        "customPlaceholder": "Add custom topic...",
+        "generating": "Generating prompts...",
+        "looksGood": "Looks good",
+        "tipsTitle": "Topic Selection Tips",
+        "tip1Title": "5 prompts are created per topic",
+        "tip1Body": "You can select up to 10 topics for a total of 50 prompts. More can be added anytime from the dashboard.",
+        "tip2Title": "Think like your customers",
+        "tip2Body": "Use terms your audience would search for when looking for products or services like yours.",
+        "tip3Title": "Keep it short",
+        "tip3Body": "Topics should be concise — we'll turn them into detailed prompts in the next step."
+      },
+      "tryAgain": "Try again"
+    },
     "description": "Manage all the brands you track across AI platforms.",
     "addBrand": "Add Brand",
     "showAllBrands": "Show My All Brands",
