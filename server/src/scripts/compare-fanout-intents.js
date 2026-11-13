@@ -2,7 +2,8 @@
  * Compare the decision model's fan-out intents with the cached ones (#988),
  * before FANOUT_INTENTS_DECIDER switches the Query Fan-out tab over to it.
  *
- * Run from server/, with OPENROUTER_API_KEY and the Supabase keys in .env:
+ * Run from server/, with a decision provider configured (DECIDER_PROVIDER
+ * and its key) and the Supabase keys in .env:
  *   node src/scripts/compare-fanout-intents.js [count]
  *   count defaults to 256: the newest cached queries, two decision requests
  *
@@ -19,7 +20,7 @@ import { classifyIntentsByDecider } from '../lib/intent-extraction.js';
 const count = Math.max(1, Math.min(1024, Number.parseInt(process.argv[2] ?? '256', 10) || 256));
 
 if (!isDeciderConfigured()) {
-  console.error('OPENROUTER_API_KEY is not set (server/.env).');
+  console.error('No decision provider configured: set DECIDER_PROVIDER and its key (server/.env).');
   process.exit(1);
 }
 
