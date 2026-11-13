@@ -560,6 +560,17 @@ describe('the Rules tab', () => {
     expect(changeTextRule).toHaveBeenCalledWith('b', { on: true });
   });
 
+  it('puts the box for your own rule before the first rule group', async () => {
+    await render(state());
+    const box = container.querySelector('textarea[aria-label="Write a rule"]')!;
+    const firstGroup = container.querySelector('section')!;
+    expect(box.compareDocumentPosition(firstGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const save = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Reset')!;
+    expect(
+      firstGroup.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('adds a rule written in the box, one per line', async () => {
     await render(state());
     const box = container.querySelector<HTMLTextAreaElement>(
