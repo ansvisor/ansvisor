@@ -222,12 +222,12 @@ const TOPIC_LOADING_MESSAGES = [
 ] as const;
 
 const COMPETITOR_LOADING_MESSAGES = [
-  'Searching for competitors...',
-  'Analyzing your market...',
-  'Identifying key players...',
-  'Verifying company details...',
-  'Finalizing recommendations...',
-];
+  'loading.competitors.searching',
+  'loading.competitors.market',
+  'loading.competitors.players',
+  'loading.competitors.verifying',
+  'loading.competitors.finalizing',
+] as const;
 
 const TOTAL_STEPS = 5;
 
@@ -335,17 +335,17 @@ export default function NewBrandPage() {
       competitorMsgIdx.current = 0;
       return;
     }
-    setCompetitorLoadingMsg(COMPETITOR_LOADING_MESSAGES[0]);
+    setCompetitorLoadingMsg(t(COMPETITOR_LOADING_MESSAGES[0]));
     competitorMsgIdx.current = 0;
 
     const interval = setInterval(() => {
       competitorMsgIdx.current =
         (competitorMsgIdx.current + 1) % COMPETITOR_LOADING_MESSAGES.length;
-      setCompetitorLoadingMsg(COMPETITOR_LOADING_MESSAGES[competitorMsgIdx.current]);
+      setCompetitorLoadingMsg(t(COMPETITOR_LOADING_MESSAGES[competitorMsgIdx.current]));
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [loadingCompetitors]);
+  }, [loadingCompetitors, t]);
 
   // Auto-fetch competitor suggestions when arriving at step 5 with none loaded
   useEffect(() => {
@@ -581,7 +581,7 @@ export default function NewBrandPage() {
       );
 
       if (allPrompts.length === 0) {
-        setSaveError('Add at least one prompt before continuing.');
+        setSaveError(t('errors.noPrompts'));
         setIsLoading(false);
         return;
       }
@@ -595,11 +595,7 @@ export default function NewBrandPage() {
         BRAND_ADD.failed(result.code);
         // No technical toasts on this step: actionable failures (plan limit)
         // show verbatim inline, anything else gets a friendly retry message.
-        setSaveError(
-          result.code === 'plan_limit'
-            ? result.error
-            : "We couldn't save your prompts — please try again.",
-        );
+        setSaveError(result.code === 'plan_limit' ? result.error : t('errors.savePrompts'));
         return;
       }
       trackSavedWaiting('new_brand', result.waiting ?? 0);
@@ -608,7 +604,7 @@ export default function NewBrandPage() {
       fetchCompetitorSuggestions();
     } catch {
       BRAND_ADD.failed();
-      setSaveError("We couldn't save your prompts — please try again.");
+      setSaveError(t('errors.savePrompts'));
     } finally {
       setIsLoading(false);
     }
@@ -693,7 +689,7 @@ export default function NewBrandPage() {
       competitorDomain,
     );
     if (list === suggestedCompetitors) return;
-    if (duplicate) toast.info(`${duplicate.name} is already in the list`);
+    if (duplicate) toast.info(t('toasts.duplicateCompetitor', { name: duplicate.name }));
     setSuggestedCompetitors(list);
     setCompetitorName('');
     setCompetitorDomain('');
@@ -751,12 +747,12 @@ export default function NewBrandPage() {
       await bootstrapBrandVolumes(createdBrand.id);
 
       BRAND_ADD.completed();
-      toast.success('Brand setup complete! Tracking is starting.');
+      toast.success(t('toasts.setupComplete'));
       // The person's start page: Insights on a paid plan, Chat Home in the free trial.
       router.push('/dashboard');
     } catch (err) {
       BRAND_ADD.failed();
-      toast.error(err instanceof Error ? err.message : 'Failed to save competitors');
+      toast.error(err instanceof Error ? err.message : t('errors.saveCompetitors'));
       setSavingCompetitors(false);
     }
   };
@@ -1231,10 +1227,8 @@ export default function NewBrandPage() {
           <BrandHeader name={brandName} domain={domain} />
 
           <div className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight">Add your competitors</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              We&apos;ll track how often competitors appear alongside your brand in AI responses.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{t('step5.title')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t('step5.subtitle')}</p>
           </div>
 
           {ecommerceDetected && <EcommerceNote brandName={brandName.trim()} />}
@@ -1242,17 +1236,17 @@ export default function NewBrandPage() {
           {/* First, and outside the loading state: people arrive knowing their
               rivals and should not have to wait for, or scroll past, ours. */}
           <div className="mb-6 space-y-2">
-            <p className="text-sm text-muted-foreground">Know your competitors? Add them here.</p>
+            <p className="text-sm text-muted-foreground">{t('step5.manualPrompt')}</p>
             <div className="flex items-center gap-2">
               <Input
-                placeholder="Company name"
+                placeholder={t('step5.namePlaceholder')}
                 value={competitorName}
                 onChange={(e) => setCompetitorName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
                 className="text-sm"
               />
               <Input
-                placeholder="domain.com"
+                placeholder={t('step5.domainPlaceholder')}
                 value={competitorDomain}
                 onChange={(e) => setCompetitorDomain(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addManualCompetitor()}
@@ -1280,18 +1274,16 @@ export default function NewBrandPage() {
             <div className="space-y-4">
               {competitorSuggestError && (
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                  <span>
-                    Couldn&apos;t fetch competitor suggestions right now — add them manually above.
-                  </span>
+                  <span>{t('step5.suggestError')}</span>
                   <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
-                    Try again
+                    {t('tryAgain')}
                   </Button>
                 </div>
               )}
               {suggestedCompetitors.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Competitors to track
+                    {t('step5.toTrack')}
                   </p>
                   {suggestedCompetitors.map((c, idx) => (
                     <div
@@ -1349,12 +1341,12 @@ export default function NewBrandPage() {
                 {savingCompetitors ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Finishing setup...
+                    {t('step5.finishing')}
                   </>
                 ) : selectedCompetitorCount > 0 ? (
-                  `Start tracking with ${selectedCompetitorCount} competitor${selectedCompetitorCount !== 1 ? 's' : ''}`
+                  t('step5.start', { count: selectedCompetitorCount })
                 ) : (
-                  'Skip & start tracking'
+                  t('step5.skip')
                 )}
               </Button>
             </div>
@@ -1367,7 +1359,7 @@ export default function NewBrandPage() {
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            {t('back')}
           </button>
           <StepDots current={5} total={TOTAL_STEPS} />
           <div className="w-12" />
