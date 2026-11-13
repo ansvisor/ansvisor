@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { ChevronDown, Info, Sparkles } from 'lucide-react';
+import { ChevronDown, Database, Info, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -354,23 +354,40 @@ export function RulesTab({
           info={t.rich(pageRewrite ? 'run.info' : 'run.infoFix', {
             b: (chunks) => <b>{chunks}</b>,
           })}
-          data={dataLine}
+          data={
+            (dataLine || advice) && (
+              <div className="space-y-2 rounded-xl border bg-muted/30 px-3 py-2.5">
+                {dataLine && (
+                  <div className="flex gap-2">
+                    <Database
+                      aria-hidden
+                      className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground"
+                    />
+                    <div className="min-w-0 flex-1">{dataLine}</div>
+                  </div>
+                )}
+                {advice && (
+                  <p className="flex gap-2 text-xs" role="note">
+                    <Sparkles
+                      aria-hidden
+                      className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0 flex-1">
+                      {advice.reason === 'length'
+                        ? t('rewriteAdvice.length', {
+                            count: advice.count,
+                            target: advice.target,
+                            percent: advice.percent,
+                          })
+                        : t('rewriteAdvice.open', { count: advice.count })}
+                    </span>
+                  </p>
+                )}
+              </div>
+            )
+          }
           blocked={open.length > 0 ? blocked : null}
         >
-          {advice && (
-            <p className="flex gap-1.5 text-xs" role="note">
-              <Sparkles aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-              <span>
-                {advice.reason === 'length'
-                  ? t('rewriteAdvice.length', {
-                      count: advice.count,
-                      target: advice.target,
-                      percent: advice.percent,
-                    })
-                  : t('rewriteAdvice.open', { count: advice.count })}
-              </span>
-            </p>
-          )}
           {outOfReach && (
             <div className="flex gap-1.5 text-xs" role="note">
               <Info aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
@@ -453,6 +470,24 @@ export function RulesTab({
         </p>
       </div>
 
+      <AddTextRules onAdd={state.addTextRules} />
+
+      {state.textRules.length > 0 && (
+        <section className="space-y-1.5">
+          <h4 className="text-xs font-medium text-muted-foreground">{t('text.title')}</h4>
+          <ul className="divide-y rounded-lg border">
+            {state.textRules.map(({ rule, check }) => (
+              <TextRuleRow
+                key={rule.id}
+                rule={rule}
+                check={check}
+                onChange={(change) => state.changeTextRule(rule.id, change)}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
+
       {RULE_GROUPS.map((group) => {
         const rows = state.rules.filter((r) => r.rule.group === group);
         if (!rows.length) return null;
@@ -495,24 +530,6 @@ export function RulesTab({
           </section>
         );
       })}
-
-      {state.textRules.length > 0 && (
-        <section className="space-y-1.5">
-          <h4 className="text-xs font-medium text-muted-foreground">{t('text.title')}</h4>
-          <ul className="divide-y rounded-lg border">
-            {state.textRules.map(({ rule, check }) => (
-              <TextRuleRow
-                key={rule.id}
-                rule={rule}
-                check={check}
-                onChange={(change) => state.changeTextRule(rule.id, change)}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <AddTextRules onAdd={state.addTextRules} />
 
       <div className="flex flex-wrap gap-2">
         {canManage && (
