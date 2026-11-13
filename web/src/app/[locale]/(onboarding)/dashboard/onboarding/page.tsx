@@ -207,7 +207,7 @@ function TopicAccordion({
               className="text-destructive focus:text-destructive"
               onClick={onRemoveTopic}
             >
-              Remove topic
+              {t('removeTopic')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -229,7 +229,7 @@ function TopicAccordion({
           ))}
           <div className="flex items-center gap-2 mt-2">
             <Input
-              placeholder="Enter new prompt..."
+              placeholder={t('newPromptPlaceholder')}
               value={newPrompt}
               onChange={(e) => setNewPrompt(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
@@ -1253,10 +1253,8 @@ export default function OnboardingPage() {
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                 <Globe className="h-6 w-6" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight">Set up your brand</h1>
-              <p className="text-sm text-muted-foreground">
-                See how AI platforms talk about you. Add your first brand to get started.
-              </p>
+              <h1 className="text-2xl font-bold tracking-tight">{tSetup('setup.brandTitle')}</h1>
+              <p className="text-sm text-muted-foreground">{tSetup('setup.brandIntro')}</p>
             </div>
 
             <div className="space-y-4">
@@ -1293,7 +1291,7 @@ export default function OnboardingPage() {
                 </Label>
                 <Textarea
                   id="description"
-                  placeholder="A brief description helps us generate better suggestions."
+                  placeholder={tSetup('setup.descriptionPlaceholder')}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
@@ -1321,7 +1319,7 @@ export default function OnboardingPage() {
                   setStep(2);
                 }}
               >
-                Continue
+                {tSetup('setup.continue')}
               </Button>
             </div>
           </div>
@@ -1340,11 +1338,8 @@ export default function OnboardingPage() {
             <BrandHeader name={brandName} domain={domain} />
 
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Select your target market</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Pick the region and language your audience uses. This helps us deliver more accurate
-                AI visibility data.
-              </p>
+              <h1 className="text-2xl font-bold tracking-tight">{tSetup('setup.marketTitle')}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{tSetup('setup.marketIntro')}</p>
             </div>
 
             <div className="space-y-4">
@@ -1392,9 +1387,7 @@ export default function OnboardingPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Localizes AI answers to this state. Leave empty for nationwide results.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{tSetup('setup.stateHelp')}</p>
                 </div>
               )}
 
@@ -1422,10 +1415,10 @@ export default function OnboardingPage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Setting up...
+                    {tSetup('setup.settingUp')}
                   </>
                 ) : (
-                  'Continue'
+                  tSetup('setup.continue')
                 )}
               </Button>
             </div>
@@ -1437,7 +1430,7 @@ export default function OnboardingPage() {
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
+              {tSetup('setup.back')}
             </button>
             <StepDots current={2} total={totalSteps} />
             <div className="w-12" />
@@ -1486,14 +1479,12 @@ export default function OnboardingPage() {
                           {topicSuggestError === 'dailyLimit' ? (
                             tWizard('suggestionsUsedUp')
                           ) : (
-                            <>
-                              Couldn&apos;t fetch topic suggestions right now — add your own above.
-                            </>
+                            <>{tSetup('setup.topicSuggestFailed')}</>
                           )}
                         </span>
                         {topicSuggestError !== 'dailyLimit' && (
                           <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
-                            Try again
+                            {tSetup('setup.tryAgain')}
                           </Button>
                         )}
                       </div>
@@ -1528,7 +1519,7 @@ export default function OnboardingPage() {
 
                     <div className="flex items-center gap-2 pt-2">
                       <Input
-                        placeholder="Add custom topic..."
+                        placeholder={tSetup('setup.customTopicPlaceholder')}
                         maxLength={BRAND_SETUP_LIMITS.topic}
                         value={customTopic}
                         onChange={(e) => setCustomTopic(e.target.value)}
@@ -1561,45 +1552,42 @@ export default function OnboardingPage() {
                   {loadingPrompts ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating prompts...
+                      {tSetup('setup.generatingPrompts')}
                     </>
                   ) : (
-                    'Looks good'
+                    tSetup('setup.looksGood')
                   )}
                 </Button>
               </div>
 
               <div className="lg:col-span-2">
                 <div className="rounded-xl border bg-card p-5 sticky top-10">
-                  <h3 className="text-sm font-semibold mb-4">Topic Selection Tips</h3>
+                  <h3 className="text-sm font-semibold mb-4">{tSetup('setup.tipsTitle')}</h3>
                   <div className="space-y-4">
                     <div className="flex gap-3">
                       <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-medium">5 prompts are created per topic</p>
+                        <p className="text-sm font-medium">{tSetup('setup.tip1Title')}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          You can select up to 10 topics for a total of 50 prompts. More can be
-                          added anytime from the dashboard.
+                          {tSetup('setup.tip1Body')}
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-3">
                       <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-medium">Think like your customers</p>
+                        <p className="text-sm font-medium">{tSetup('setup.tip2Title')}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Use terms your audience would search for when looking for products or
-                          services like yours.
+                          {tSetup('setup.tip2Body')}
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-3">
                       <Check className="h-4 w-4 text-foreground shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-medium">Keep it short</p>
+                        <p className="text-sm font-medium">{tSetup('setup.tip3Title')}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Topics should be concise — we&apos;ll turn them into detailed prompts in
-                          the next step.
+                          {tSetup('setup.tip3Body')}
                         </p>
                       </div>
                     </div>
@@ -1615,7 +1603,7 @@ export default function OnboardingPage() {
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
+              {tSetup('setup.back')}
             </button>
             <StepDots current={3} total={totalSteps} />
             <div className="w-12" />
@@ -1642,10 +1630,7 @@ export default function OnboardingPage() {
                 {promptGenError === 'dailyLimit' ? (
                   tWizard('promptSuggestionsUsedUp')
                 ) : (
-                  <>
-                    Couldn&apos;t generate prompt suggestions right now — add your own to each topic
-                    below to continue.
-                  </>
+                  <>{tSetup('setup.promptSuggestFailed')}</>
                 )}
               </div>
             )}
@@ -1685,7 +1670,7 @@ export default function OnboardingPage() {
               ))}
               {topicPrompts.length === 0 && (
                 <div className="py-8 text-center text-sm text-muted-foreground">
-                  No prompts generated yet.
+                  {tSetup('setup.noPrompts')}
                 </div>
               )}
             </div>
@@ -1698,10 +1683,10 @@ export default function OnboardingPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving prompts...
+                  {tSetup('setup.savingPrompts')}
                 </>
               ) : (
-                'Continue'
+                tSetup('setup.continue')
               )}
             </Button>
           </div>
@@ -1712,7 +1697,7 @@ export default function OnboardingPage() {
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
+              {tSetup('setup.back')}
             </button>
             <StepDots current={4} total={totalSteps} />
             <div className="w-12" />
@@ -1803,7 +1788,7 @@ export default function OnboardingPage() {
                     </span>
                     {competitorSuggestError !== 'dailyLimit' && (
                       <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
-                        Try again
+                        {tSetup('setup.tryAgain')}
                       </Button>
                     )}
                   </div>
@@ -1903,7 +1888,7 @@ export default function OnboardingPage() {
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
+              {tSetup('setup.back')}
             </button>
             <StepDots current={5} total={totalSteps} />
             <div className="w-12" />
@@ -2027,7 +2012,7 @@ export default function OnboardingPage() {
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            {tSetup('setup.back')}
           </button>
           <StepDots current={PLAN_STEP} total={totalSteps} />
           <div className="w-12" />
