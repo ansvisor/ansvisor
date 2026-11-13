@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { ChevronDown, Database, Info, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ import {
   type TextRule,
 } from '@/lib/content/rules';
 import { listed } from '@/lib/content/shopping-check';
+import { agentFixable } from '@/lib/content/tried-rules';
 import { ruleStatusDetail, ruleStatusText } from '@/lib/content/rule-words';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -64,6 +65,10 @@ interface RuleWhy {
   text: string;
   action?: { label: string; run: () => void };
 }
+
+/** A rule's action in the list of rules that are the person's: a link-like button. */
+const YOURS =
+  'shrink-0 font-medium underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50';
 
 /** Rules with an explanation on hover (spec §10). */
 const HINTED = new Set([
@@ -103,6 +108,10 @@ export interface AgentFix {
   held?: ReadonlySet<string>;
   /** Open rules a Fix was sent and couldn't close (tried-rules.ts): the person's to decide. */
   tried?: ReadonlySet<string>;
+  /** Ask again: a tried rule's mark cleared, and Fix run for it alone. */
+  askAgain?: (key: string) => void;
+  /** Change the page: the page focused, at the rule's spot where it has one. */
+  showInPage?: (key: string) => void;
 }
 
 /** Rewrite the whole page to these rules, as the editor runs it: one suggestion. */
@@ -241,6 +250,7 @@ export function RulesTab({
   onOpenSources,
   brandRules,
   onChangeType,
+  focusRequest,
 }: {
   state: DraftRulesState;
   siteType: SiteType;
@@ -258,6 +268,8 @@ export function RulesTab({
   brandRules?: { rules: string[]; brandName: string };
   /** Opens the header's page type menu: Set page type, on another type's rule. */
   onChangeType?: () => void;
+  /** A rule whose value to focus, from Next's Ask for fewer: each new `n` once. */
+  focusRequest?: { key: string; n: number } | null;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const tSuggestions = useTranslations('contentEditor.editor.suggestions');
@@ -296,22 +308,45 @@ export function RulesTab({
     !!cited &&
     cited.count > 0 &&
     (pageRewrite?.reach ?? NO_REACH).floor - cited.chars <= outOfReach.max;
-  // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
+  // The rules the page doesn't meet now, in the tab's order; those the agent
+  // can still fix (agentFixable, as Next counts them), and the person's.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
-  const { forAgent, notForAgent, held: heldOpen } = openRulesForAgent(state.rules, undefined, held);
+  const { notForAgent, held: heldOpen } = openRulesForAgent(state.rules, undefined, held);
+  const { fixable: forAgent, yours } = agentFixable(state.rules, { held, tried });
   const fixable = forAgent.length;
   // Run Agent's choice: the safe default, or the whole page (▾) while it is offered.
   const [picked, setPicked] = useState<RunMode>('fix');
   const mode: RunMode = picked === 'rewrite' && pageRewrite ? 'rewrite' : 'fix';
-  const runner = mode === 'rewrite' ? pageRewrite : agentFix;
+  const runner = fixable === 0 ? agentFix : mode === 'rewrite' ? pageRewrite : agentFix;
   // Why Run Agent can't run its choice now, said under the card.
   const blocked =
     runner?.blocked ??
-    (mode === 'fix' && fixable === 0
+    (fixable === 0
       ? notForAgent.length === 0 && heldOpen.length > 0
         ? t(heldMessage(heldOpen))
-        : tSuggestions(notForAgentMessage(notForAgent))
+        : notForAgent.length > 0
+          ? tSuggestions(notForAgentMessage(notForAgent))
+          : null
       : null);
+  // Change the rule: its value focused where it is (its switch, for one with none).
+  const fields = useRef<HTMLFieldSetElement>(null);
+  const focusRule = (key: string) => {
+    const name = t(`names.${key}`);
+    const all = [...(fields.current?.querySelectorAll<HTMLElement>('[aria-label]') ?? [])];
+    const field = [t('value', { name }), t('lengthMin', { name }), t('toggle', { name })]
+      .map((label) => all.find((el) => el.getAttribute('aria-label') === label))
+      .find(Boolean);
+    field?.scrollIntoView?.({ block: 'center' });
+    field?.focus();
+  };
+  useEffect(() => {
+    if (!focusRequest) return;
+    // Once the panel shows Rules: its tab opens after this.
+    const timer = setTimeout(() => focusRule(focusRequest.key));
+    return () => clearTimeout(timer);
+    // Each new request once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest?.n]);
 
   // A draft on My rules for a type the workspace has none for (its type
   // changed, or My rules couldn't be read) shows Ansvisor's set for it.
@@ -336,6 +371,7 @@ export function RulesTab({
   return (
     // Nothing changes before My rules are read: a change would leave them out.
     <fieldset
+      ref={fields}
       disabled={!state.ready}
       aria-busy={!state.ready}
       className="m-0 min-w-0 space-y-4 border-0 p-0 text-sm"
@@ -358,7 +394,8 @@ export function RulesTab({
               : undefined
           }
           action={
-            open.length > 0 &&
+            // Nothing left the agent can fix: what's open is the person's, listed below.
+            fixable > 0 &&
             runner && (
               <RunAgentButton
                 mode={mode}
@@ -412,6 +449,46 @@ export function RulesTab({
           }
           blocked={open.length > 0 ? blocked : null}
         >
+          {open.length > 0 && fixable === 0 && (
+            <div className="space-y-1.5 text-xs" data-slot="rules-yours">
+              <p className="font-medium">{t('yours.line', { count: yours.length })}</p>
+              <div role="list" className="divide-y rounded-lg border">
+                {yours.map(({ rule, status }) => (
+                  <div
+                    key={rule.key}
+                    role="listitem"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5"
+                  >
+                    <span className="min-w-0 flex-1">{t(`names.${rule.key}`)}</span>
+                    {/* A setting has no spot in the page. */}
+                    {agentFix?.showInPage &&
+                      !(status.state === 'bad' && status.code === 'notSet') && (
+                        <button
+                          type="button"
+                          className={YOURS}
+                          onClick={() => agentFix.showInPage!(rule.key)}
+                        >
+                          {t('yours.page')}
+                        </button>
+                      )}
+                    <button type="button" className={YOURS} onClick={() => focusRule(rule.key)}>
+                      {t('yours.rule')}
+                    </button>
+                    {agentFix?.askAgain && tried.has(rule.key) && (
+                      <button
+                        type="button"
+                        className={YOURS}
+                        disabled={agentFix.running || agentFix.blocked !== null}
+                        onClick={() => agentFix.askAgain!(rule.key)}
+                      >
+                        {t('yours.again')}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {outOfReach && (
             <div className="flex gap-1.5 text-xs" role="note">
               <Info aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />

@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by, trusted sources]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist, content reviewer, regulated page review]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-13
+last_checked: 2026-11-13
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -46,11 +46,15 @@ In **Settings › Content**, admins and managers can have each brand's new pages
 
 With Quality on, the header's **Next step** opens a window: every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.
 
-Once you've decided the agent's **Fix open rules** suggestions, the step is ticked. Rules its later suggestions leave open don't bring it back; your edits can.
-
 **Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.
 
 Marked ready with steps skipped, it says how many are still open. **Next step** then offers **Export** and **Mark published**.
+
+## The order of the steps
+
+With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then a rewrite for a page far off its Length.
+
+Once you've decided the agent's **Fix open rules** suggestions, the step is ticked, as the **Rules** tab counts the rules left yours. Rules its later suggestions leave open don't bring it back; your edits can.
 
 ## The page's author
 

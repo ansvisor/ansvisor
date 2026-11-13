@@ -7256,13 +7256,15 @@ describe('the side panel', () => {
         expect(basket()!.textContent).toContain(
           'Fix open rulesdone by Content Agent, the rest is in Rules',
         );
-        // Passed with what the page read then: the rule left open, and its batch.
+        // Passed with what the page read then, and its batch: the rule it
+        // left open is tried, the person's, as the Rules tab says (F1).
         expect(JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1')!)).toEqual({
           attempt: null,
-          passes: {
-            fixRules: { rules: expect.arrayContaining(['fanoutH2']), length: '', batch: 'b9' },
-          },
+          passes: { fixRules: { rules: [], length: '', batch: 'b9' } },
         });
+        expect(JSON.parse(localStorage.getItem('aeo:agent-tried-rules:d1')!).tried).toContain(
+          'fanoutH2',
+        );
       });
 
       it("stays passed when the agent's own later batch opens a rule, and not when the person's edits do (editor test 2026-11-03)", async () => {
@@ -7353,9 +7355,9 @@ describe('the side panel', () => {
         expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
       });
 
-      it('asks the agent to shorten a long page of many sections, the Length being the person’s (editor UX review 2026-11-03, decision b)', async () => {
-        // Ten sections far past a Length of 400: a rewrite merges or drops
-        // sections to fit, so the Length is the agent's, not held.
+      it('asks to raise a Length the rules can’t fit in first, in one click (editor test 2026-11-12)', async () => {
+        // Ten sections far past a Length of 400, which can't hold the
+        // fan-out section, FAQ and summary the rules ask for.
         const sections = Array.from(
           { length: 10 },
           (_, i) =>
@@ -7366,16 +7368,27 @@ describe('the side panel', () => {
         );
         getDraftSuggestions.mockResolvedValue([]);
         await renderPage();
-        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Raise Length to ~1,050');
+        await act(async () => nextButton()!.click());
+        expect(inBasket('Ask for fewer')).toBeDefined();
+        await act(async () => inBasket('Raise Length')!.click());
+        expect(saveDraftRules).toHaveBeenLastCalledWith(
+          'd1',
+          expect.objectContaining({
+            overrides: expect.objectContaining({ length: { value: '1050' } }),
+          }),
+        );
       });
 
       it('on the Length step, isn’t passed by a Fix, and is by a rewrite once decided', async () => {
-        getContentDraft.mockResolvedValue(draft(LONG));
+        // No FAQ asked for: the rules fit in the Length.
+        const rules = { ...LONG.rules, overrides: { ...LONG.rules.overrides, faq: { on: false } } };
+        getContentDraft.mockResolvedValue(draft({ ...LONG, rules }));
         getDraftSuggestions.mockResolvedValue([]);
         fixDraftRules.mockResolvedValue({ count: 0 });
         await renderPage();
-        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
-        // The step's other button, Fix open rules: it takes Fix open rules, not the Length.
+        // Fix first: it takes Fix open rules, not the Length (editor test 2026-11-12).
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
         await act(async () => nextButton()!.click());
         await act(async () => inBasket('Fix open rules')!.click());
         await settle();
@@ -7710,6 +7723,8 @@ describe('the side panel', () => {
           (rule: string) => rule !== 'fanoutH2',
         );
         localStorage.setItem(key, JSON.stringify(stored));
+        // Never tried: met since the run, and open again.
+        localStorage.removeItem('aeo:agent-tried-rules:d1');
         await act(async () => root.unmount());
         root = createRoot(container);
         await renderPage();

@@ -3427,7 +3427,11 @@
         },
         {
           "heading": "Fix open rules",
-          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage.\n\nAn open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule."
+          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage."
+        },
+        {
+          "heading": "Rules that are yours",
+          "text": "An open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide, and Fix leaves it out from then on. With nothing left it can fix, the button gives way to \"Content Agent did what it could\" and the rules that are yours, each with **Change the page**, **Change the rule** and, for a rule it tried, **Ask again**."
         },
         {
           "heading": "Rewrite the whole page",
@@ -3537,7 +3541,7 @@
         "regulated page review"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-13",
       "sections": [
         {
           "heading": null,
@@ -3561,7 +3565,11 @@
         },
         {
           "heading": "Next step",
-          "text": "With Quality on, the header's **Next step** opens a window: every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.\n\nOnce you've decided the agent's **Fix open rules** suggestions, the step is ticked. Rules its later suggestions leave open don't bring it back; your edits can.\n\n**Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.\n\nMarked ready with steps skipped, it says how many are still open. **Next step** then offers **Export** and **Mark published**."
+          "text": "With Quality on, the header's **Next step** opens a window: every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.\n\n**Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.\n\nMarked ready with steps skipped, it says how many are still open. **Next step** then offers **Export** and **Mark published**."
+        },
+        {
+          "heading": "The order of the steps",
+          "text": "With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then a rewrite for a page far off its Length.\n\nOnce you've decided the agent's **Fix open rules** suggestions, the step is ticked, as the **Rules** tab counts the rules left yours. Rules its later suggestions leave open don't bring it back; your edits can."
         },
         {
           "heading": "The page's author",

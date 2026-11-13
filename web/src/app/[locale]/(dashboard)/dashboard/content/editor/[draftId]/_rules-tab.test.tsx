@@ -193,7 +193,8 @@ describe('the Rules tab', () => {
       // ▾ offers both, Fix checked and the rewrite recommended here.
       await act(async () => trigger().click());
       expect(items().map((item) => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
-        [`Fix open rules${open.length} rules · small, reviewable changesLess AI usage`, 'true'],
+        // Not Who it's for, unset: a setting only the person fills.
+        [`Fix open rules${open.length - 1} rules · small, reviewable changesLess AI usage`, 'true'],
         [
           'Rewrite the whole pageRecommended · Every rule in “Feature page · Ansvisor default” · one new version, cited passages keptMore AI usage',
           'false',
@@ -372,7 +373,7 @@ describe('the Rules tab', () => {
       expect(trigger().disabled).toBe(true);
     });
 
-    it('offers only the rewrite when the agent can fix none of the open rules', async () => {
+    it('turns the button into the rules that are yours when the agent can fix none (F1)', async () => {
       // Only One H1 is open: Content Agent doesn't change heading levels.
       const s = state();
       const onlyH1 = {
@@ -391,18 +392,41 @@ describe('the Rules tab', () => {
       } as DraftRulesState;
       await show({ agentFix: fix(), pageRewrite: fix() }, onlyH1);
       expect(container.textContent).toContain('1 rule is not met');
-      expect(main().disabled).toBe(true);
+      expect(main()).toBeUndefined();
+      expect(trigger()).toBeNull();
       expect(reason().textContent).toBe(
         "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
       );
-      await act(async () => trigger().click());
-      expect(items()[0].getAttribute('aria-disabled')).toBe('true');
-      // Nothing turned off is recommended, and the page is near Length: no rewrite advice.
-      expect(
-        items()
-          .map((item) => item.textContent)
-          .join(' '),
-      ).not.toContain('Recommended');
+      const yours = () => container.querySelector('[data-slot="rules-yours"]')!;
+      expect(yours().textContent).toBe(
+        'Content Agent did what it could. 1 rule is yours to decide.One H1 per pageChange the rule',
+      );
+
+      // Every open rule tried: each the person's, to change on the page, in the rule or ask again.
+      const agentFix = {
+        ...fix(),
+        tried: new Set(openRules().map(({ rule }) => rule.key)),
+        askAgain: vi.fn(),
+        showInPage: vi.fn(),
+      };
+      await show({ agentFix, pageRewrite: fix() });
+      expect(main()).toBeUndefined();
+      expect(yours().textContent).toContain(
+        `Content Agent did what it could. ${openRules().length} rules are yours to decide.`,
+      );
+      const item = [...yours().querySelectorAll('[role="listitem"]')].find((li) =>
+        li.textContent?.startsWith('Banned words'),
+      )!;
+      const act_ = (label: string) =>
+        act(async () =>
+          [...item.querySelectorAll('button')].find((b) => b.textContent === label)!.click(),
+        );
+      await act_('Change the page');
+      expect(agentFix.showInPage).toHaveBeenCalledWith('bannedWords');
+      await act_('Change the rule');
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Banned words: value');
+      await act_('Ask again');
+      expect(agentFix.askAgain).toHaveBeenCalledWith('bannedWords');
     });
 
     it('says all rules are met, with nothing to run', async () => {
