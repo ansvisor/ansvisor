@@ -61,6 +61,7 @@ import { getPublicApiBaseUrl } from '@/config/api';
 import { SITE_TYPES, guessSiteType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { qualityPhase } from '@/lib/content/quality';
 import { BrandFactsTab } from './_brand-facts-tab';
+import { ContentRulesCard } from './_content-rules-card';
 import { ConversionsCard } from './_conversions-card';
 import { ClientLogoCard } from './_client-logo-card';
 import { PeopleTab } from './_people-tab';
@@ -138,6 +139,7 @@ export default function BrandSettingsPage({ params, searchParams }: PageProps) {
             brand={brand}
             onUpdate={(updated) => updateBrandStore(brand.id, updated)}
           />
+          <ContentRulesCard brandId={brand.id} />
           <PauseBrandCard
             brand={brand}
             onUpdate={(updated) => updateBrandStore(brand.id, updated)}

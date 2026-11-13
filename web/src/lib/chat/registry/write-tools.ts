@@ -9,6 +9,7 @@ import { dismissSuggestion } from '@/lib/actions/prompt-suggestions';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { ACCESS_REQUEST_RULES } from '@/lib/chat/access-requests';
 import { escapeHtml } from '@/lib/content/attachments';
+import { refuseBannedPhrases } from '../banned-guard';
 import { refuseMissingFacts } from '../placeholders';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { PAGE_TYPES, type DraftMethod, type DraftStart, type PageType } from '@/lib/content/drafts';
@@ -110,10 +111,12 @@ export const WRITE_TOOLS = [
           .describe('For optimize: the live page.'),
       })
       .superRefine(refuseMissingFacts),
-    run: (ctx, input) =>
+    run: async (ctx, input) =>
+      (await refuseBannedPhrases({ brandId: input.brand_id }, [input.title, input.body_html])) ??
       createContentDraft(input.brand_id, draftStart(input, ctx.chat, { asRun: false })),
     sessionFree: true,
     runFor: async (ctx, input) =>
+      (await refuseBannedPhrases({ brandId: input.brand_id }, [input.title, input.body_html])) ??
       createContentDraftFor(
         actorOf(ctx),
         input.brand_id,

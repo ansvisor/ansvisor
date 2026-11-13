@@ -973,6 +973,7 @@ export type Database = {
           client_logo_path: string | null
           content_byline: boolean
           content_quality_handoff: boolean
+          content_rules: Json | null
           conversions_consent: string
           conversions_enabled: boolean
           created_at: string
@@ -1018,6 +1019,7 @@ export type Database = {
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
+          content_rules?: Json | null
           conversions_consent?: string
           conversions_enabled?: boolean
           created_at?: string
@@ -1063,6 +1065,7 @@ export type Database = {
           client_logo_path?: string | null
           content_byline?: boolean
           content_quality_handoff?: boolean
+          content_rules?: Json | null
           conversions_consent?: string
           conversions_enabled?: boolean
           created_at?: string

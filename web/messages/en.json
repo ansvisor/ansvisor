@@ -317,6 +317,7 @@
       "pauseBrands": "Pausing a brand needs a plan",
       "resumeBrands": "Resuming a brand needs a plan",
       "changeConversions": "Changing conversion tracking needs a plan",
+      "changeContentRules": "Changing content rules needs a plan",
       "reviewBrandFacts": "Reviewing brand facts needs a plan",
       "readBrandFacts": "Reading brand facts again needs a plan",
       "renameOrganization": "Renaming the organization needs a plan",
@@ -17370,6 +17371,38 @@
         "saved": "Client logo saved.",
         "removed": "Client logo removed.",
         "loadFailed": "Couldn't load the client logo."
+      },
+      "contentRules": {
+        "title": "Content rules",
+        "description": "What agents and Chat must follow when they write for this brand.",
+        "bannedPhrases": {
+          "label": "Banned phrases",
+          "placeholder": "cheapest\nguaranteed",
+          "hint": "One word or phrase per line, up to {max}. A draft that has one is not saved; the agent rewrites it."
+        },
+        "blockedDomains": {
+          "label": "Blocked domains",
+          "placeholder": "rival.example",
+          "hint": "One per line, up to {max}. Never suggested as link sources and never cited."
+        },
+        "allowedDomains": {
+          "label": "Allowed domains",
+          "placeholder": "tourism-board.example",
+          "hint": "One per line, up to {max}. Preferred sources, or the only ones with the switch on."
+        },
+        "only": {
+          "label": "Only cite these domains",
+          "hint": "Link and source suggestions stay on the allowed domains and this brand's own site."
+        },
+        "save": "Save content rules",
+        "saved": "Content rules saved.",
+        "readOnly": "Only an admin or a manager can change content rules.",
+        "error": {
+          "invalid": "Check the lists: a domain looks wrong, or a phrase is too long.",
+          "too_many": "Each list holds up to {max} items.",
+          "forbidden": "Only an admin or a manager can change content rules.",
+          "failed": "Couldn't save the content rules. Try again."
+        }
       },
       "conversions": {
         "title": "Conversions from AI visits",

@@ -1,6 +1,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { ownDomainMatcher } from './response-parser.js';
+import { preferredDomains, readSourceRules, sourceAllowed } from './content-rules.js';
 
 /**
  * Where the Content Agent may link (Content Agent rule gaps, A): the brand's
@@ -74,6 +75,7 @@ export async function readLinkTargets({ brandId, draftId, sourceUrl, ruleKeys })
   const wantsSources = ruleKeys.has('outboundLinks') || ruleKeys.has('citeInline');
   if (!wantsOwn && !wantsSources) return NO_LINK_TARGETS;
   const none = { data: null, error: null };
+  const rulesRead = wantsSources ? readSourceRules(brandId) : null;
   const [pagesRead, sourcesRead, choicesRead] = await Promise.all([
     wantsOwn
       ? supabaseAdmin
@@ -131,6 +133,9 @@ export async function readLinkTargets({ brandId, draftId, sourceUrl, ruleKeys })
     ...(data.brandDomains ?? []),
     ...(data.competitorDomains ?? []),
   ]);
+  // The brand's own blocked and allowed domains (Content rules) narrow the sources further.
+  const rules = await rulesRead;
+  const permitted = sourceAllowed(rules, data.brandDomains ?? []);
   const sources = [];
   const candidates = [
     ...(data.citedPages ?? []),
@@ -138,10 +143,10 @@ export async function readLinkTargets({ brandId, draftId, sourceUrl, ruleKeys })
     ...choices.filter((c) => c.added && c.included).map((c) => ({ url: c.ref, title: '' })),
   ];
   for (const page of candidates) {
-    if (leftOut.has(linkKey(page.url)) || closed(page.url)) continue;
+    if (leftOut.has(linkKey(page.url)) || closed(page.url) || !permitted(page.url)) continue;
     take(sources, MAX_SOURCE_PAGES, page);
   }
-  return { own, sources };
+  return { own, sources, prefer: preferredDomains(rules) };
 }
 
 /**
@@ -166,6 +171,9 @@ export function linkTargetsPrompt(targets, ruleKeys) {
     parts.push(
       `Sources you may link to and cite (outbound links, inline citations):\n${lines(targets.sources)}`,
     );
+  }
+  if (targets.prefer?.length && targets.sources.length) {
+    parts.push(`Prefer sources on these domains when you choose: ${targets.prefer.join(', ')}.`);
   }
   return parts.join('\n\n');
 }

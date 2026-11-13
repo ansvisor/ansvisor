@@ -34,6 +34,7 @@ import { chooseProductPages } from '../../action-center/product-page-groups.js';
 import { pageKey } from '../../audit/history.js';
 import { siteTypeOf } from '../../content-page-types.js';
 import { ownDomainMatcher } from '../../response-parser.js';
+import { readSourceRules, sourceAllowed } from '../../content-rules.js';
 
 const { library: t } = resolve();
 const DAY_MS = 86_400_000;
@@ -568,9 +569,24 @@ const FAMILIES = [
       // A tracked competitor's own site (its blog too) is never a source to
       // earn a link or a citation from: same host rule as the brand's own.
       const isCompetitor = ownDomainMatcher(competitors.map((row) => row.domain));
+      // The brand's Content rules: never a blocked domain; "only these" keeps its allowed ones
+      // and its own site.
+      const rules = await readSourceRules(ctx.brandId);
+      const own = rules.onlyAllowedDomains
+        ? (
+            await selectAll(() =>
+              supabaseAdmin
+                .from('brand_domains')
+                .select('domain')
+                .eq('brand_id', ctx.brandId)
+                .order('id'),
+            )
+          ).map((row) => row.domain)
+        : [];
+      const permitted = sourceAllowed(rules, own);
       const found = [];
       for (const d of domains) {
-        if (isCompetitor(d.domain)) continue;
+        if (isCompetitor(d.domain) || !permitted(d.domain)) continue;
         const kind = c.classifySource(d, t);
         if (!kind) continue;
         found.push(

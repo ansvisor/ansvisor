@@ -214,6 +214,24 @@ describe('createContentDraftFor', () => {
     });
   });
 
+  it('refuses a draft with a banned phrase, naming it, and writes nothing', async () => {
+    db.rows.brands = {
+      site_type: 'b2b',
+      industry: 'Software',
+      shopping_mode_enabled: false,
+      content_rules: { bannedPhrases: ['best price', 'guaranteed'] },
+    };
+    const refused = await createContentDraftFor(auth, {
+      brandId: 'b1',
+      title: 'Pricing',
+      bodyHtml: '<h1>Pricing</h1><p>The BEST <b>price</b> around.</p>',
+      method: 'create',
+    });
+    expect(refused).toEqual({ banned: expect.stringContaining('"best price"') });
+    expect(refused).not.toEqual({ banned: expect.stringContaining('guaranteed') });
+    expect(db.writes).toEqual([]);
+  });
+
   it('writes nothing for a brand outside the organization', async () => {
     brandAllowed.mockResolvedValue(false);
     await expect(

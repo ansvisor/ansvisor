@@ -13,6 +13,7 @@ import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { OPTIMIZE_TOOL, optimizeDraftHere, type OptimizeResult } from '../page-optimize';
+import { refuseBannedPhrases } from '../banned-guard';
 import { refuseMissingFacts } from '../placeholders';
 import { readPageVersion } from '../page-versions';
 import { FIXTURE_IDS, defineTool, type ChatToolContext } from './define-tool';
@@ -97,10 +98,12 @@ export const CONTENT_TOOLS = [
         message: 'Change the title, the page, or both.',
       })
       .superRefine(refuseMissingFacts),
-    run: (_ctx, input) =>
+    run: async (_ctx, input) =>
+      (await refuseBannedPhrases({ draftId: input.draft_id }, [input.title, input.body_html])) ??
       updateContentDraft(input.draft_id, { title: input.title, bodyHtml: input.body_html }),
     sessionFree: true,
     runFor: async (ctx, input) =>
+      (await refuseBannedPhrases({ draftId: input.draft_id }, [input.title, input.body_html])) ??
       updateContentDraftFor(actorOf(ctx), input.draft_id, {
         title: input.title,
         bodyHtml: input.body_html,

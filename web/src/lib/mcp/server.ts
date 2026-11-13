@@ -1835,6 +1835,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           isError: true,
         };
       }
+      if (created && 'banned' in created) {
+        return { content: [{ type: 'text' as const, text: created.banned }], isError: true };
+      }
       return created ? json(created) : notFound('Brand');
     },
   );

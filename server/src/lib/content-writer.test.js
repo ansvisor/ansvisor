@@ -1589,6 +1589,21 @@ describe('the write prompt', () => {
     expect(prompt(undefined)).not.toContain("The brand's rules");
   });
 
+  it('tells the model the brand’s banned phrases, and nothing without any', () => {
+    const prompt = (bannedPhrases) =>
+      buildWritePrompt({
+        brand: { ...brand, bannedPhrases },
+        draft: draftRow(),
+        brief: 'No brief.',
+        input: { sources: { length: 3000 }, rules: [], textRules: [] },
+      });
+    expect(prompt(['cheapest', 'best price'])).toContain(
+      'Never use these phrases, in the page or its title: "cheapest", "best price".',
+    );
+    expect(prompt([])).not.toContain('Never use these phrases');
+    expect(prompt(undefined)).not.toContain('Never use these phrases');
+  });
+
   it('names the brand’s site type once Quality’s phase 2 is live (CE-056)', () => {
     const write = (phase) => {
       vi.stubEnv('CONTENT_QUALITY_PHASE', phase);
@@ -2027,6 +2042,44 @@ describe('a health brand’s page (owner’s safety rule, 2026-11-03)', () => {
     expect(generateObject.mock.calls[0][0].system).toContain('- Health: never write');
     expect(draftUpdates().find((u) => u.body_html).body_html).toContain(
       '<p>A warm cup helps you relax.</p>',
+    );
+  });
+});
+
+describe('banned phrases in a new page', () => {
+  const banned = { ...brand, bannedPhrases: ['cheapest'] };
+  const run = () =>
+    runDraftWriting({ draft: draftRow(), brand: banned, model: 'model:m', input: input(), budget });
+  const withText = (text) => ({ object: { ...page, intro: [text] }, usage: { inputTokens: 1 } });
+  const savedBody = () => draftUpdates().find((v) => v.body_html)?.body_html ?? '';
+
+  it('rewrites once when a phrase slips through, and saves the rewrite', async () => {
+    generateObject
+      .mockResolvedValueOnce(withText('The cheapest way to brew.'))
+      .mockResolvedValueOnce(withText('An affordable way to brew.'));
+    await expect(run()).resolves.toEqual({ written: true });
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    expect(generateObject.mock.calls[1][0].prompt).toContain('"cheapest"');
+    expect(savedBody()).toContain('An affordable way to brew.');
+    expect(savedBody()).not.toContain('cheapest');
+  });
+
+  it('makes no extra call for a clean page', async () => {
+    generateObject.mockResolvedValue(withText('A good way to brew.'));
+    await run();
+    expect(generateObject).toHaveBeenCalledTimes(1);
+    expect(savedBody()).toContain('A good way to brew.');
+  });
+
+  it('saves the page and warns, with the count, when the phrase is still there', async () => {
+    const { logger } = await import('./logger.js');
+    generateObject.mockResolvedValue(withText('The cheapest way to brew.'));
+    await expect(run()).resolves.toEqual({ written: true });
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    expect(savedBody()).toContain('The cheapest way to brew.');
+    expect(logger.warn).toHaveBeenCalledWith(
+      { brandId: BRAND, count: 1 },
+      expect.stringContaining('banned phrases left'),
     );
   });
 });
