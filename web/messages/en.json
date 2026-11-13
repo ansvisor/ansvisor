@@ -17150,7 +17150,10 @@
         "notAuthenticated": "Not authenticated",
         "noOrganization": "No organization found",
         "saveBrand": "Failed to save brand",
-        "generatePrompts": "Failed to generate prompts from topics"
+        "generatePrompts": "Failed to generate prompts from topics",
+        "noPrompts": "Add at least one prompt before continuing.",
+        "savePrompts": "We couldn't save your prompts — please try again.",
+        "saveCompetitors": "Failed to save competitors"
       },
       "step1": {
         "title": "Add a new brand",
@@ -17182,7 +17185,23 @@
         "tip3Title": "Keep it short",
         "tip3Body": "Topics should be concise — we'll turn them into detailed prompts in the next step."
       },
-      "tryAgain": "Try again"
+      "tryAgain": "Try again",
+      "toasts": {
+        "duplicateCompetitor": "{name} is already in the list",
+        "setupComplete": "Brand setup complete! Tracking is starting."
+      },
+      "step5": {
+        "title": "Add your competitors",
+        "subtitle": "We'll track how often competitors appear alongside your brand in AI responses.",
+        "manualPrompt": "Know your competitors? Add them here.",
+        "namePlaceholder": "Company name",
+        "domainPlaceholder": "domain.com",
+        "suggestError": "Couldn't fetch competitor suggestions right now — add them manually above.",
+        "toTrack": "Competitors to track",
+        "finishing": "Finishing setup...",
+        "start": "Start tracking with {count, plural, one {# competitor} other {# competitors}}",
+        "skip": "Skip & start tracking"
+      }
     },
     "description": "Manage all the brands you track across AI platforms.",
     "addBrand": "Add Brand",
