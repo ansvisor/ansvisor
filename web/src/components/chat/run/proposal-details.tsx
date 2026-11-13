@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { ChatConfirm } from '@/lib/chat/events';
 
@@ -38,6 +38,37 @@ function ProposalTask({ item }: { item: NonNullable<ChatConfirm['items']>[number
   );
 }
 
+/** A content draft's full text, read-only, behind a button (collapsed first). */
+function DraftFullText({ text }: { text: string }) {
+  const t = useTranslations('chatRun.proposal');
+  const regionId = useId();
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-slot="draft-full-text">
+      <button
+        type="button"
+        data-action="approval.showFullText"
+        aria-expanded={open}
+        aria-controls={regionId}
+        onClick={() => setOpen((was) => !was)}
+        className="rounded text-xs font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {open ? t('hideFullText') : t('showFullText')}
+      </button>
+      <div
+        id={regionId}
+        hidden={!open}
+        tabIndex={0}
+        role="region"
+        aria-label={t('fullText')}
+        className="mt-1.5 max-h-[60vh] overflow-y-auto rounded-lg border bg-muted/40 px-2.5 py-2 text-xs whitespace-pre-wrap"
+      >
+        {open ? text : null}
+      </div>
+    </div>
+  );
+}
+
 /**
  * What Send to Action Center freezes once it's made (CHAT-09 items 18,
  * 18b), on its approval card: the tasks with their new text (shortened,
@@ -48,9 +79,10 @@ export function ProposalDetails({ confirm }: { confirm: ChatConfirm }) {
   const t = useTranslations('chatRun.proposal');
   const items = confirm.items ?? [];
   const targets = confirm.targets ?? [];
-  if (items.length === 0 && targets.length === 0 && !confirm.goal) return null;
+  if (items.length === 0 && targets.length === 0 && !confirm.goal && !confirm.fullText) return null;
   return (
     <div data-slot="proposal-details" className="my-2 grid gap-2">
+      {confirm.fullText && <DraftFullText text={confirm.fullText} />}
       {items.length > 0 && (
         <ul className="m-0 grid list-none gap-1.5 p-0">
           {items.map((item, i) => (

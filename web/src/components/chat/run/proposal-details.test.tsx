@@ -1,8 +1,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
+import { ApprovalCard } from '@/components/agentic/approval-card';
 import { ProposalDetails } from './proposal-details';
 
 /** What Send to Action Center freezes, on its card (CHAT-09 items 18, 18b). */
@@ -101,5 +102,42 @@ describe('ProposalDetails', () => {
       ),
     );
     expect(container.querySelector('[data-slot="proposal-details"]')).toBeNull();
+  });
+
+  it('shows a draft’s full text only after Show full text, and Approve still works', () => {
+    const onApprove = vi.fn();
+    act(() =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <ApprovalCard step={{ n: 1, total: 1 }} title="Publish" onApprove={onApprove}>
+            <ProposalDetails
+              confirm={{
+                n: 1,
+                action: 'Publish',
+                target: 'Pricing FAQ',
+                digest: 'd'.repeat(32),
+                canDontAskAgain: false,
+                fullText: 'Plans\nEvery plan ships fresh.',
+              }}
+            />
+          </ApprovalCard>
+        </NextIntlClientProvider>,
+      ),
+    );
+    const button = container.querySelector<HTMLButtonElement>(
+      '[data-action="approval.showFullText"]',
+    )!;
+    expect(button.textContent).toBe('Show full text');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(container.textContent).not.toContain('Every plan ships fresh.');
+    act(() => button.click());
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(container.textContent).toContain('Every plan ships fresh.');
+    act(() => button.click());
+    expect(container.textContent).not.toContain('Every plan ships fresh.');
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[data-action="approval.approve"]')!.click(),
+    );
+    expect(onApprove).toHaveBeenCalledWith({ dontAskAgain: false });
   });
 });
