@@ -340,7 +340,7 @@ export default function OnboardingPage() {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [loadingTopics]);
+  }, [loadingTopics, tSetup]);
 
   // Step 4
   const [topicPrompts, setTopicPrompts] = useState<TopicPromptsData[]>([]);
@@ -533,7 +533,7 @@ export default function OnboardingPage() {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [loadingCompetitors]);
+  }, [loadingCompetitors, tSetup]);
 
   // Auto-fetch topic suggestions when arriving at step 3 with none loaded:
   // coming back to setup with the brand saved but no topics yet. Saved topics
