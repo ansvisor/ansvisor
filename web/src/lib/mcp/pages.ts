@@ -2,6 +2,7 @@ import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { API_BASE_URL } from '@/config/api';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import { readWithRetry } from './page-retry';
 
 /**
  * A public web page, opened for Chat's fetch_page (CHAT-10 §B). The API
@@ -43,6 +44,8 @@ export interface McpPageRefusal {
   ok: false;
   code: string;
   message: string;
+  /** The read timed out twice: whatever is said of this page is incomplete. */
+  incomplete?: true;
 }
 
 /** The codes the API answers with, each worded here (never in the page's words). */
@@ -77,6 +80,17 @@ export async function openPageFor(
   auth: McpAuthContext,
   url: string,
   sites: { hosts: readonly string[]; domains: readonly string[] } = { hosts: [], domains: [] },
+): Promise<McpOpenedPage | McpPageRefusal> {
+  return readWithRetry(
+    () => openPageOnce(auth, url, sites),
+    () => t('timed_out_twice', { url }),
+  );
+}
+
+async function openPageOnce(
+  auth: McpAuthContext,
+  url: string,
+  sites: { hosts: readonly string[]; domains: readonly string[] },
 ): Promise<McpOpenedPage | McpPageRefusal> {
   if (!auth.organizationId) {
     return { ok: false, code: 'no_access', message: t('no_access') };

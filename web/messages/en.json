@@ -4723,6 +4723,7 @@
       "http_error": "The page answered with an error",
       "http_status": "The page answered {status}",
       "timeout": "Timed out",
+      "timed_out_twice": "Couldn't read {url}: it timed out twice. Treat anything about this page as incomplete and say so in your answer.",
       "unreachable": "Couldn't be reached",
       "busy": "Other pages are opening. Try again in a moment."
     },
