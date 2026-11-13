@@ -276,7 +276,7 @@ export function EditorSidePanel({
   onConfirmCase?: (key: string) => void;
   /** Quality's Confirm on a category intro's facts (CE-054). */
   onConfirmIntro?: () => void;
-  /** Quality's Change: the header's page type menu (CE-052). */
+  /** Quality's Change and the Rules tab's Set page type: the header's page type menu (CE-052). */
   onChangeType?: () => void;
   /** Hand it off to Content Agent, Quality's (CE-051). */
   handOff?: HandOff | null;
@@ -692,6 +692,7 @@ export function EditorSidePanel({
                 siteType={siteType}
                 draftPageType={isPageType(pageType) ? pageType : null}
                 brandRules={brandRules}
+                onChangeType={onChangeType}
               />
             </div>
           )}

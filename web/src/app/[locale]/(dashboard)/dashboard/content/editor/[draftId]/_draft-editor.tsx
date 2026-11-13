@@ -203,6 +203,7 @@ import {
   heldMessage,
   keptOutOfReach,
   lengthOutOfReach,
+  notCheckedHere,
   readPage,
   pageTextLength,
   ruleNumber,
@@ -829,6 +830,7 @@ export function DraftEditor({
     reads,
     catalog: feedOn ? (catalog === undefined ? 'reading' : catalog) : null,
     shopping: shoppingCheck.check,
+    pickPageType: (type) => void pickPageType(type),
   });
   // What a page rewrite keeps as it is (the passages AI answers quote, tables,
   // images…), read as the characters are: a Length under that is out of
@@ -3119,7 +3121,8 @@ export function DraftEditor({
     setRewriting(true);
     try {
       await autosave.settle();
-      const inEffect = rules.rules.filter(({ rule }) => rule.on);
+      // Not the rules this page can't meet: the agent can't meet them either.
+      const inEffect = rules.rules.filter(({ rule, status }) => rule.on && !notCheckedHere(status));
       const locks = citedLocks(editor.state);
       const request = await agentWriteRequest(
         {

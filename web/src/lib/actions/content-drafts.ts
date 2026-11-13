@@ -26,7 +26,6 @@ import {
   type LibraryTab,
   type PageImportError,
   type PageType,
-  isPageType,
   missingSchemaLeftOut,
   PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
@@ -60,6 +59,7 @@ import {
   ruleLength,
   ruleSet,
   ruleSetFits,
+  ruleSetType,
   savedRuleSetSchema,
   startingRules,
   type DraftRules,
@@ -2463,7 +2463,7 @@ export async function suggestDraftChanges(
     if (!draft) {
       return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
     }
-    const setType = draft.rules.set ?? (isPageType(draft.pageType) ? draft.pageType : null);
+    const setType = ruleSetType(draft.rules, draft.pageType);
     // Without the workspace's rules, the page type's defaults still apply.
     const mine = await getMyRuleSets(draft.brandId).catch(
       (): Awaited<ReturnType<typeof getMyRuleSets>> => ({}),

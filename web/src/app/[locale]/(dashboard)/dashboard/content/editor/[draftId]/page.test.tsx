@@ -3802,6 +3802,8 @@ describe('the side panel', () => {
       });
       getContentDraft.mockResolvedValue({
         ...readable,
+        // Specs the page gives, not in a table yet: a page with none isn't asked for one.
+        bodyHtml: `${readable.bodyHtml}<p>Weight: 1.2 kg</p><p>Volume: 28 l</p>`,
         pageType: 'product_page',
         siteType: 'ecommerce',
       });

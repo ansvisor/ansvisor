@@ -25,6 +25,7 @@ import {
   pageTextLength,
   readPage,
   ruleSet,
+  ruleSetType,
   savedRuleSetSchema,
   type SavedRuleSet,
 } from './rules';
@@ -264,7 +265,7 @@ function typeRulesOf(
 ): QualityReads['typeRules'] {
   const choices = draftRulesSchema.safeParse(draftRules).data ?? NO_DRAFT_RULES;
   const draftType = isPageType(pageType) ? pageType : null;
-  const setType = choices.set ?? draftType;
+  const setType = ruleSetType(choices, draftType);
   const effective = effectiveRules(choices, setType ? mine[setType] : undefined);
   const rules = activeRules(
     ruleSet(setType, { language, length: effective.importLength, shopping: false }),
@@ -278,6 +279,7 @@ function typeRulesOf(
     language,
     catalog: catalog ?? null,
     shopping: null,
+    pageType: draftType,
   };
   return rules.flatMap((rule) => {
     if (rule.group !== 'type' || rule.check !== 'page' || !rule.on) return [];

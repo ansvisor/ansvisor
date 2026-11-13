@@ -40,6 +40,7 @@ import {
   lengthRangeValue,
   lengthSpan,
   lengthOutOfReach,
+  notCheckedHere,
   rewriteAdvice,
   splitRules,
   type ActiveRule,
@@ -54,6 +55,15 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { RunCard } from './_run-card';
 import type { DraftRulesState } from './_use-draft-rules';
 import { BrandRulesBox } from './_brand-rules-box';
+
+/** Rules set apart whose reason is said under them, beyond their badge. */
+const NOT_CHECKED_WORDS = new Set(['needsFeed', 'noSizes', 'needsSpecs']);
+
+/** Why a rule isn't checked on this page, and what would change that. */
+interface RuleWhy {
+  text: string;
+  action?: { label: string; run: () => void };
+}
 
 /** Rules with an explanation on hover (spec §10). */
 const HINTED = new Set([
@@ -230,6 +240,7 @@ export function RulesTab({
   dataLine,
   onOpenSources,
   brandRules,
+  onChangeType,
 }: {
   state: DraftRulesState;
   siteType: SiteType;
@@ -245,6 +256,8 @@ export function RulesTab({
   onOpenSources?: () => void;
   /** The brand's rules from Settings › Content (00450), shown read-only above the page's own. */
   brandRules?: { rules: string[]; brandName: string };
+  /** Opens the header's page type menu: Set page type, on another type's rule. */
+  onChangeType?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const tSuggestions = useTranslations('contentEditor.editor.suggestions');
@@ -308,6 +321,17 @@ export function RulesTab({
       : 'default';
   const setName =
     items.find((item) => item.value === `${source}:${state.setType}`)?.label ?? t('pickSet');
+  // Another type's rule says so and offers the page type menu; a few others say why.
+  const notCheckedWhy = (status: RuleStatus): RuleWhy | undefined => {
+    const code = status.state === 'info' ? status.code : '';
+    if (code === 'otherType' && state.setType) {
+      return {
+        text: t('notChecked.otherType', { set: state.setType, type: tTypes(state.setType) }),
+        action: onChangeType && { label: t('notChecked.setPageType'), run: onChangeType },
+      };
+    }
+    return NOT_CHECKED_WORDS.has(code) ? { text: t(`notChecked.${code}`) } : undefined;
+  };
 
   return (
     // Nothing changes before My rules are read: a change would leave them out.
@@ -488,8 +512,13 @@ export function RulesTab({
         </section>
       )}
 
-      {RULE_GROUPS.map((group) => {
-        const rows = state.rules.filter((r) => r.rule.group === group);
+      {/* Rules this page can't meet go last, apart: never counted, never sent to the agent. */}
+      {[...RULE_GROUPS, 'notChecked' as const].map((group) => {
+        const rows = state.rules.filter(
+          ({ rule, status }) =>
+            (rule.on && notCheckedHere(status)) === (group === 'notChecked') &&
+            (group === 'notChecked' || rule.group === group),
+        );
         if (!rows.length) return null;
         return (
           <section key={group} className="space-y-1.5">
@@ -509,6 +538,7 @@ export function RulesTab({
                   agentFix={rule.key === 'aiTraces' ? agentFix : undefined}
                   onOpenSources={onOpenSources}
                   merchantCenter={state.merchantCenter ?? false}
+                  why={group === 'notChecked' ? notCheckedWhy(status) : undefined}
                   note={
                     rule.key === 'length' && state.lengthConflict
                       ? t('lengthConflict', state.lengthConflict)
@@ -703,6 +733,7 @@ function RuleRow({
   onOpenSources,
   merchantCenter,
   note,
+  why,
 }: {
   rule: ActiveRule;
   status: RuleStatus;
@@ -719,6 +750,8 @@ function RuleRow({
   merchantCenter: boolean;
   /** A warning under the rule: Length, when the other rules can't fit in it. */
   note?: string;
+  /** Set apart, "Not checked on this page": why, said under it. */
+  why?: RuleWhy;
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const name = t(`names.${rule.key}`);
@@ -769,6 +802,23 @@ function RuleRow({
       )}
       {note && rule.on && (
         <p className="mt-1 pl-9 text-[11px] text-amber-700 dark:text-amber-400">{note}</p>
+      )}
+      {why && (
+        <p className="mt-1 pl-9 text-[11px] text-muted-foreground">
+          {why.text}
+          {why.action && (
+            <>
+              {' '}
+              <button
+                type="button"
+                onClick={why.action.run}
+                className="font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                {why.action.label}
+              </button>
+            </>
+          )}
+        </p>
       )}
     </li>
   );

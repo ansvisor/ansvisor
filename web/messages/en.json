@@ -12294,7 +12294,15 @@
           "structure": "Length and structure",
           "fanouts": "Fan-outs and keywords",
           "links": "Links and sources",
-          "style": "Style"
+          "style": "Style",
+          "notChecked": "Not checked on this page"
+        },
+        "notChecked": {
+          "otherType": "{set, select, product_page {Product page rule. This page isn't a product page.} other {{type} rule. This page isn't one.}}",
+          "setPageType": "Set page type",
+          "needsFeed": "Needs your product feed. Connect a catalog, or turn this rule off.",
+          "noSizes": "No sizes on this page, so not checked.",
+          "needsSpecs": "Needs your product's specs. Content Agent won't invent them."
         },
         "names": {
           "sentence": "Max sentence length",
@@ -12400,6 +12408,8 @@
           "notHowTo": "Not a how-to",
           "englishOnly": "English only",
           "noSizes": "No sizes",
+          "otherType": "Other type",
+          "needsSpecs": "Needs specs",
           "noShoppingPath": "Pick in Brief",
           "shoppingReading": "Reading catalog",
           "shoppingFailed": "Couldn't read",

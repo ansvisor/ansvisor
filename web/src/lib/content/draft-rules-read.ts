@@ -14,6 +14,7 @@ import {
   pageTextLength,
   readPage,
   ruleSet,
+  ruleSetType,
   rulesMet,
   savedRuleSetSchema,
   type ActiveRule,
@@ -100,7 +101,7 @@ export async function readDraftRules(input: {
   }
 
   const choices = draftRulesSchema.safeParse(draft.rules).data ?? NO_DRAFT_RULES;
-  const setType = choices.set ?? pageType;
+  const setType = ruleSetType(choices, pageType);
   const effective = effectiveRules(choices, setType ? mine[setType] : undefined);
   const language = brand.language;
   const rules = activeRules(
@@ -128,6 +129,7 @@ export async function readDraftRules(input: {
     language,
     catalog,
     shopping: null,
+    pageType,
   };
   // The page is read with the content DOM, as the editor's helpers read it on the server.
   await withContentDom();

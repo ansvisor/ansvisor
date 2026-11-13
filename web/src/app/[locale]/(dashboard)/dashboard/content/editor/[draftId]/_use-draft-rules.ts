@@ -21,6 +21,7 @@ import {
   ruleLengthBand,
   ruleSet,
   ruleSetFits,
+  ruleSetType,
   rulesMet,
   setToSave,
   textRuleCheck,
@@ -73,7 +74,10 @@ export interface DraftRulesState {
   checkHtml: (html: string, characters: number) => { rule: ActiveRule; status: RuleStatus }[];
   /** Turns a rule on or off, or gives it a value, for this draft. */
   change: (key: string, change: { on?: boolean; value?: string }) => void;
-  /** Loads a set into the draft: a type's Ansvisor default, or the workspace's My rules for it. */
+  /**
+   * Loads a set into the draft: a type's Ansvisor default, or the workspace's
+   * My rules for it. On a page with no type, the page takes that type too.
+   */
   pickSet: (type: PageType, source: 'default' | 'mine') => void;
   /** Adds rules in the person's own words, one per line. */
   addTextRules: (lines: string[]) => void;
@@ -113,6 +117,7 @@ export function useDraftRules({
   reads,
   catalog = null,
   shopping = null,
+  pickPageType,
 }: {
   draft: ContentDraft;
   /** The brand's business type as the editor holds it: My rules are kept per type (00227). */
@@ -130,6 +135,8 @@ export function useDraftRules({
    * path never shows them.
    */
   shopping?: ShoppingCheck | 'reading' | 'failed' | null;
+  /** Sets the page's type, as the header's page type menu does. */
+  pickPageType: (type: PageType) => void;
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -169,10 +176,19 @@ export function useDraftRules({
     };
   }, [draft.brandId, siteType]);
 
+  const draftType = isPageType(pageType) ? pageType : null;
   const sources = reads.sources;
   const ctx = useMemo<RuleContext>(() => {
     if (!sources || sources.failed) {
-      return { brandDomains: [], competitorDomains: [], fanouts: [], language, catalog, shopping };
+      return {
+        brandDomains: [],
+        competitorDomains: [],
+        fanouts: [],
+        language,
+        catalog,
+        shopping,
+        pageType: draftType,
+      };
     }
     const fanouts = buildSourceGroups(sources.data, sources.choices, {
       title: draft.title,
@@ -188,16 +204,21 @@ export function useDraftRules({
       language,
       catalog,
       shopping,
+      pageType: draftType,
     };
-  }, [sources, draft.title, draft.sourceUrl, language, catalog, shopping]);
+  }, [sources, draft.title, draft.sourceUrl, language, catalog, shopping, draftType]);
   const brief = reads.brief;
   const keywords = useMemo(
     () => (brief.status === 'ready' ? (brief.brief?.keywords ?? []) : []),
     [brief],
   );
 
-  const draftType = isPageType(pageType) ? pageType : null;
-  const setType = choices.set ?? draftType;
+  const setType = ruleSetType(choices, draftType);
+  // What a save keeps of the set: one picked for another page type than the page's now goes.
+  const pin: Pick<DraftRules, 'set' | 'setFor'> =
+    draftType && setType !== draftType
+      ? { set: setType, setFor: draftType }
+      : { set: null, setFor: undefined };
   const effective = useMemo(
     () => effectiveRules(choices, setType ? mine[setType] : undefined),
     [choices, setType, mine],
@@ -282,7 +303,7 @@ export function useDraftRules({
   };
   // A change keeps the set the draft's rules come from.
   const edited = (change: Partial<DraftRules>, message = t('updated')) =>
-    save({ ...effective, source: effective.source ?? 'default', ...change }, message);
+    save({ ...effective, ...pin, source: effective.source ?? 'default', ...change }, message);
   const typeName = (type: PageType | null) => (type ? tTypes(type) : '');
 
   return {
@@ -304,10 +325,14 @@ export function useDraftRules({
         overrides: { ...effective.overrides, [key]: { ...effective.overrides[key], ...change } },
       }),
     pickSet: (type, source) => {
+      if (locked()) return;
+      // No page type yet: the set picked is the page's type, and the rules follow it.
+      if (!draftType) pickPageType(type);
       const set = source === 'mine' ? mine[type] : undefined;
       save(
         {
-          set: type === draftType ? null : type,
+          // Another type's set holds while the page keeps the type it was picked on.
+          ...(draftType && type !== draftType ? { set: type, setFor: draftType } : { set: null }),
           source,
           // The page's own length stays the Length rule's starting point.
           overrides: overridesForImport(set?.overrides ?? {}, effective.importLength),
@@ -368,7 +393,7 @@ export function useDraftRules({
     reset: () =>
       save(
         {
-          set: choices.set,
+          ...pin,
           source: 'default',
           overrides: {},
           textRules: [],
