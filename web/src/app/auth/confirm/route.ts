@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { safeRedirectUrl } from '@/lib/auth-next';
 import { sendSignedUpEvent } from '@/lib/resend-event';
+import { capturePostHog } from '@/lib/posthog-server';
 
 /**
  * GET /auth/confirm — server-side OTP verification for email-driven auth flows.
@@ -51,7 +52,10 @@ export async function GET(request: Request) {
 
   // The sign-up link works once, so this is the one time a person who signed
   // up with an e-mail is confirmed: tell Resend, for the welcome e-mail.
-  if (type === 'signup' && data?.user) await sendSignedUpEvent(data.user);
+  if (type === 'signup' && data?.user) {
+    await sendSignedUpEvent(data.user);
+    await capturePostHog('signed_up', data.user.id, { source: 'email' });
+  }
 
   return NextResponse.redirect(redirectTarget);
 }

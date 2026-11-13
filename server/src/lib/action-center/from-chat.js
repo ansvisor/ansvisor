@@ -37,6 +37,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { selectInChunks } from '../chunked-in.js';
 import { resolve } from '../../config/action-engine.js';
 import { logger } from '../logger.js';
+import { captureWorkspaceEvent } from '../core-loop-events.js';
 import { measureBasket } from './basket-metrics.js';
 import { readPlatformStates } from './improve-outcome.js';
 import { priorityOnCreate } from './priority-data.js';
@@ -750,6 +751,12 @@ export async function sendChatAction(
     },
   });
   if (eventError) logger.warn({ err: eventError.message }, '[chat-action] created event not kept');
+  void captureWorkspaceEvent(
+    brandId,
+    'action_created',
+    { source: 'chat', kind: CHAT_ACTION_KIND, task_count: proposal.tasks.length },
+    { userId },
+  );
 
   // Counted with the day's new actions, as every send is: said once they are reached.
   const used = await actionsToday(brandId, now);

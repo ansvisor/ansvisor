@@ -44,6 +44,7 @@ import {
 import { assertWritable } from '@/lib/subscription-guard';
 import { isManager } from '@/lib/session-role';
 import { NO_TOPICS, NO_TOPICS_MESSAGE, brandHasTopics } from '@/lib/topics-required';
+import { captureForSessionUser } from '@/lib/posthog-server';
 import {
   sourceDataRefused,
   validPromptSourceData,
@@ -338,6 +339,15 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
   }
 
   revalidatePath('/dashboard/brands');
+
+  // The core-loop funnel's second step: one event per save, with how many.
+  if (insertedPrompts.length > 0) {
+    await captureForSessionUser(supabase, 'prompt_tracked', {
+      brand_id: input.brandId,
+      count: insertedPrompts.length,
+      source: 'prompt_set',
+    });
+  }
 
   const promptSet = mapPromptSetRow(set as Record<string, unknown>, insertedPrompts);
   const waiting = adding - fitting;
@@ -760,6 +770,11 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
   }
 
   revalidatePath('/dashboard/brands');
+  await captureForSessionUser(supabase, 'prompt_tracked', {
+    brand_id: ps.brand_id,
+    count: 1,
+    source: 'single',
+  });
   const prompt = mapPromptRow(data as Record<string, unknown>);
   return waiting ? { prompt, waiting: true } : { prompt };
 }

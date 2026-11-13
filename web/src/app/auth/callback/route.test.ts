@@ -15,6 +15,11 @@ vi.mock('@/lib/supabase/server', () => ({
 const sendSignedUp = vi.fn();
 vi.mock('@/lib/resend-event', () => ({ sendSignedUpEvent: (u: unknown) => sendSignedUp(u) }));
 
+const capturePostHog = vi.fn();
+vi.mock('@/lib/posthog-server', () => ({
+  capturePostHog: (...args: unknown[]) => capturePostHog(...args),
+}));
+
 const { GET } = await import('./route');
 
 const callback = (query: string, cookie?: string) =>
@@ -27,6 +32,7 @@ const callback = (query: string, cookie?: string) =>
 beforeEach(() => {
   exchange.mockReset().mockResolvedValue({ error: null });
   sendSignedUp.mockReset();
+  capturePostHog.mockReset().mockResolvedValue(undefined);
 });
 
 describe('GET /auth/callback', () => {
@@ -63,6 +69,8 @@ describe('GET /auth/callback', () => {
 
   it('tells Resend once for a first sign-in, not for a later one', async () => {
     const user = (signedInAt: string) => ({
+      id: 'u1',
+      app_metadata: { provider: 'google' },
       email: 'a@b.co',
       created_at: '2026-11-13T10:00:00Z',
       last_sign_in_at: signedInAt,
@@ -70,10 +78,16 @@ describe('GET /auth/callback', () => {
     exchange.mockResolvedValue({ data: { user: user('2026-11-13T10:00:01Z') }, error: null });
     await callback('code=c1');
     expect(sendSignedUp).toHaveBeenCalledTimes(1);
+    expect(capturePostHog).toHaveBeenCalledWith('signed_up', 'u1', {
+      source: 'oauth',
+      provider: 'google',
+    });
 
     sendSignedUp.mockClear();
+    capturePostHog.mockClear();
     exchange.mockResolvedValue({ data: { user: user('2026-11-20T09:00:00Z') }, error: null });
     await callback('code=c1');
     expect(sendSignedUp).not.toHaveBeenCalled();
+    expect(capturePostHog).not.toHaveBeenCalled();
   });
 });

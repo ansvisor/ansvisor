@@ -47,6 +47,7 @@
 
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
+import { captureWorkspaceEvent } from '../core-loop-events.js';
 import { resolve } from '../../config/action-engine.js';
 import { isEligible, loadDefinitions } from './definitions/index.js';
 import { resolveBrandSources } from './sources.js';
@@ -283,6 +284,11 @@ async function openCycle({
     signalCount: signals.length,
     definitionVersion: definition.version,
     taskCount: plan.length,
+  });
+  void captureWorkspaceEvent(brandId, 'action_created', {
+    source: 'signals',
+    kind: definition.id,
+    task_count: plan.length,
   });
   await linkSignals(inserted.id, signals, now.toISOString());
   return inserted.id;
