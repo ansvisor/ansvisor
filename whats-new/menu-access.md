@@ -5,7 +5,7 @@ route: /dashboard/settings/menu-access
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-13
-approved: false
+approved: true
 ---
 A long menu is confusing for people who only use a few pages.
 Admins choose which menu sections each role or person sees; hiding a section doesn't change what a role can do.

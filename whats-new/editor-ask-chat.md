@@ -5,7 +5,7 @@ route: /dashboard/content/library
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-13
-approved: false
+approved: true
 ---
 Asking Chat about one sentence of a page meant copying it into the chat by hand.
 Select text in the Content Editor and click Ask Chat or press Ctrl/Cmd+Shift+K to put it in the Chat tab as a quote.

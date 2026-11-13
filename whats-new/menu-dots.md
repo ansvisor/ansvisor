@@ -1,11 +1,11 @@
 ---
 feature: Dots in the menu
-home_line: Colored dots in the menu show what has new results, needs you or needs attention.
+home_line: Coloured dots in the menu show what has new results, needs you or needs attention.
 route: /dashboard/action-center/today
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-13
-approved: false
+approved: true
 ---
 It was hard to tell which part of Ansvisor needed a look without opening each page.
 A dot in the menu shows the state: green is new results, yellow needs you, red needs attention, grey is working on it.
