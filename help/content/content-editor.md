@@ -19,11 +19,15 @@ The header shows the title, which you can click to rename the page, and whether 
 
 On the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel.
 
-## Site Audit estimate
+## AI search readiness (Site Audit estimate)
 
-In the side panel's **Quality**, **Site Audit estimate** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.
+In **Before you publish**, which opens on **Mark ready**, **Export** and **Send to CMS**, **AI search readiness (Site Audit estimate)** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Site setup and E-E-A-T. It's free, and it's read again each time you pause typing.
 
-It runs Site Audit's checks on the page as it would go out. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.
+It's different from Quality, which scores the writing. Under the score, the top reasons it's low are split: **This page** for what you can fix in the draft, and **Your site** for what to fix in Site Audit, with a link there.
+
+## What the estimate reads
+
+It runs Site Audit's checks on the page as it would go out, with its Article schema. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.
 
 The 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew.
 
