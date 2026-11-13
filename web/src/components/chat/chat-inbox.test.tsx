@@ -81,6 +81,10 @@ const notices = vi.hoisted(() => ({
   read: vi.fn(async () => true),
   close: vi.fn(async () => true),
 }));
+vi.mock('@/lib/actions/chat-approve-all', () => ({
+  listDraftApprovalGroups: async () => ({ ok: true, groups: [] }),
+  approveGroup: async () => ({ ok: false, reason: 'not_found' }),
+}));
 vi.mock('@/lib/actions/chat-notices', () => ({
   markChatNoticesRead: notices.read,
   closeChatNotice: notices.close,

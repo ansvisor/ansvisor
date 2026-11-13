@@ -5974,6 +5974,22 @@
           "failed": "That didn’t work. Try again."
         }
       },
+      "drafts": {
+        "chatAgent": "Chat",
+        "changeFallback": "Changed the draft",
+        "summary": "{changes, plural, one {# change} other {# changes}} from {agents, plural, one {# agent} other {# agents}}",
+        "approveAll": "Approve all",
+        "approving": "Approving…",
+        "started": "{started, plural, one {# change approved} other {# changes approved}} for “{title}”. They go on in the background.",
+        "failedTitle": "{failed, plural, one {# change wasn’t approved} other {# changes weren’t approved}}",
+        "failedLine": "{agent} · {summary}: {error}",
+        "failedGeneric": "That didn’t work. Approve it from its own chat.",
+        "changed": "These changes moved on. Review the list and approve again.",
+        "notFound": "Those changes are gone.",
+        "signedOut": "Your session ended. Sign in again.",
+        "readOnly": "Your workspace is read-only. Choose a plan to approve changes.",
+        "failed": "That didn’t work. Try again."
+      },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
       "nothingNeedsYou": "Nothing needs you.",
