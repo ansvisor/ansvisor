@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from 'react';
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { ScanText } from 'lucide-react';
 import {
   Tooltip,
@@ -64,15 +64,14 @@ export function ClampedText({
   text,
   render,
   children,
-  ref,
 }: {
   handle: ClampedTextHandle;
   text: string;
-  /** The element that cuts the text, e.g. a link with `line-clamp-2`. */
+  /** The element that cuts the text, e.g. a link with `line-clamp-2`. A caller
+      measuring the cut with useTextCut puts its ref on this element itself;
+      Base UI merges it with the trigger's own ref. */
   render: ReactElement;
   children?: ReactNode;
-  /** Forwards to the rendered element, e.g. to measure it with useTextCut. */
-  ref?: Ref<HTMLElement>;
 }) {
   const [cut, setCut] = useState(false);
   return (
@@ -82,7 +81,6 @@ export function ClampedText({
       delay={300}
       closeDelay={0}
       render={render}
-      ref={ref}
       // Measured as the tooltip is about to open, by pointer or keyboard focus.
       onPointerEnter={(e) => setCut(isTextCut(e.currentTarget))}
       onFocus={(e) => setCut(isTextCut(e.currentTarget))}
@@ -114,8 +112,8 @@ export function ClampedTextTooltip({ handle }: { handle: ClampedTextHandle }) {
  * readable and selectable without leaving the page. Unlike the ClampedText
  * tooltip it works on touch (tap), with the mouse (click) and with the
  * keyboard (it is a plain button), and it stays open while the person reads
- * or copies. Render it only when the text is actually cut (useTextCut or
- * ClampedTextWithPreview do this); next to full text it has nothing to add.
+ * or copies. Render it only when the text is actually cut (useTextCut says
+ * whether it is); next to full text it has nothing to add.
  */
 export function ClampedTextPreview({
   label,
@@ -158,59 +156,5 @@ export function ClampedTextPreview({
         ) : null}
       </PopoverContent>
     </Popover>
-  );
-}
-
-/**
- * ClampedText plus a ClampedTextPreview that appears when the text is cut:
- * hover and keyboard focus get the quick tooltip, and every input method
- * gets the preview button for reading or copying the full text in place.
- */
-export function ClampedTextWithPreview({
-  handle,
-  text,
-  render,
-  preview,
-  children,
-}: {
-  handle: ClampedTextHandle;
-  text: string;
-  /** The element that cuts the text, e.g. a link with `line-clamp-2`. */
-  render: ReactElement;
-  preview: {
-    /** The preview button's accessible name, e.g. "Show full text". */
-    label: string;
-    /** The popover's heading. Defaults to the full text itself. */
-    heading?: string;
-    /** Extra text under the heading, e.g. a description. */
-    body?: string;
-  };
-  children?: ReactNode;
-}) {
-  const [ref, cut] = useTextCut<HTMLElement>();
-  const [hoverCut, setHoverCut] = useState(false);
-  const shown = cut || hoverCut;
-  return (
-    <>
-      <TooltipTrigger
-        handle={handle}
-        payload={shown ? text : null}
-        delay={300}
-        closeDelay={0}
-        render={render}
-        ref={ref}
-        onPointerEnter={(e) => setHoverCut(isTextCut(e.currentTarget))}
-        onFocus={(e) => setHoverCut(isTextCut(e.currentTarget))}
-      >
-        {children ?? text}
-      </TooltipTrigger>
-      {cut ? (
-        <ClampedTextPreview
-          label={preview.label}
-          heading={preview.heading ?? text}
-          body={preview.body}
-        />
-      ) : null}
-    </>
   );
 }

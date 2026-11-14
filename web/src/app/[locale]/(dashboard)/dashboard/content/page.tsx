@@ -377,9 +377,11 @@ function OpportunityTextCell({
         <ClampedText
           handle={handle}
           text={opp.title}
-          ref={titleRef}
           render={
-            <p className="text-sm font-medium line-clamp-1 wrap-break-word whitespace-normal" />
+            <p
+              ref={titleRef}
+              className="text-sm font-medium line-clamp-1 wrap-break-word whitespace-normal"
+            />
           }
         >
           {opp.sourceData?.reopened && opp.status === 'new' && (
@@ -411,17 +413,22 @@ function OpportunityTextCell({
           )}
           {opp.title}
         </ClampedText>
-        <ClampedText
-          handle={handle}
-          text={opp.description}
-          ref={descriptionRef}
-          render={
-            <p className="text-xs text-muted-foreground line-clamp-1 wrap-break-word whitespace-normal mt-0.5" />
-          }
-        >
-          <OpportunityScope opp={opp} />
-          {opp.description}
-        </ClampedText>
+        {/* Some opportunities carry no description; then there is nothing to clamp. */}
+        {opp.description ? (
+          <ClampedText
+            handle={handle}
+            text={opp.description}
+            render={
+              <p
+                ref={descriptionRef}
+                className="text-xs text-muted-foreground line-clamp-1 wrap-break-word whitespace-normal mt-0.5"
+              />
+            }
+          >
+            <OpportunityScope opp={opp} />
+            {opp.description}
+          </ClampedText>
+        ) : null}
       </button>
       {titleCut || descriptionCut ? (
         <ClampedTextPreview label={t('showFullText')} heading={opp.title} body={opp.description} />

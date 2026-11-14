@@ -5,9 +5,10 @@ import {
   ClampedText,
   ClampedTextPreview,
   ClampedTextTooltip,
-  ClampedTextWithPreview,
   createClampedTextHandle,
   isTextCut,
+  useTextCut,
+  type ClampedTextHandle,
 } from './clamped-text';
 
 (
@@ -166,7 +167,7 @@ describe('ClampedText children', () => {
   });
 });
 
-describe('ClampedTextWithPreview', () => {
+describe('ClampedText with a measured preview (the call-site composition)', () => {
   let container: HTMLDivElement;
   let root: Root;
   const text = 'Which specialty coffee subscriptions ship internationally to Europe?';
@@ -189,6 +190,22 @@ describe('ClampedTextWithPreview', () => {
     }
   }
 
+  // Mirrors the call sites: the measuring ref goes on the rendered element
+  // itself, and Base UI merges it with the trigger's own ref.
+  function PreviewCell({ handle, text }: { handle: ClampedTextHandle; text: string }) {
+    const [ref, cut] = useTextCut<HTMLAnchorElement>();
+    return (
+      <>
+        <ClampedText
+          handle={handle}
+          text={text}
+          render={<a ref={ref} href="#prompt" data-testid="cell" />}
+        />
+        {cut ? <ClampedTextPreview label="Show full text" heading={text} /> : null}
+      </>
+    );
+  }
+
   beforeEach(() => {
     StubResizeObserver.instances = [];
     globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver;
@@ -203,17 +220,12 @@ describe('ClampedTextWithPreview', () => {
     globalThis.ResizeObserver = realResizeObserver;
   });
 
-  function renderPreview() {
+  function renderCell() {
     const handle = createClampedTextHandle();
     act(() => {
       root.render(
         <>
-          <ClampedTextWithPreview
-            handle={handle}
-            text={text}
-            preview={{ label: 'Show full text' }}
-            render={<a href="#prompt" data-testid="cell" />}
-          />
+          <PreviewCell handle={handle} text={text} />
           <ClampedTextTooltip handle={handle} />
         </>,
       );
@@ -228,14 +240,14 @@ describe('ClampedTextWithPreview', () => {
   }
 
   it('offers the preview button only once the element cuts the text', () => {
-    const cell = renderPreview();
+    const cell = renderCell();
     expect(container.querySelector('[aria-label="Show full text"]')).toBeNull();
     cut(cell);
     expect(container.querySelector('[aria-label="Show full text"]')).not.toBeNull();
   });
 
   it('shows the full text in the preview popover on click', () => {
-    const cell = renderPreview();
+    const cell = renderCell();
     cut(cell);
     const button = container.querySelector('[aria-label="Show full text"]') as HTMLButtonElement;
     act(() => button.click());
@@ -245,7 +257,7 @@ describe('ClampedTextWithPreview', () => {
 
   it('still shows the tooltip on keyboard focus when the text is cut', () => {
     vi.useFakeTimers();
-    const cell = renderPreview();
+    const cell = renderCell();
     cut(cell);
     act(() => cell.focus());
     act(() => vi.advanceTimersByTime(400));

@@ -252,9 +252,11 @@ import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
 import {
   ClampedText,
+  ClampedTextPreview,
   ClampedTextTooltip,
-  ClampedTextWithPreview,
   createClampedTextHandle,
+  useTextCut,
+  type ClampedTextHandle,
 } from '@/components/prompts/clamped-text';
 import {
   panelRangeFromTable,
@@ -3022,6 +3024,41 @@ const WORK_FILTER_LABELS: Record<string, string> = {
   none: 'No status',
 };
 
+/**
+ * The prompt cell's text: the link keeps its navigation, and when the cell
+ * cuts the text a "Show full text" preview button appears next to it (the
+ * hover/focus tooltip from ClampedText stays as a shortcut).
+ */
+function PromptCellText({
+  handle,
+  id,
+  text,
+  previewLabel,
+}: {
+  handle: ClampedTextHandle;
+  id: string;
+  text: string;
+  previewLabel: string;
+}) {
+  const [ref, cut] = useTextCut<HTMLAnchorElement>();
+  return (
+    <>
+      <ClampedText
+        handle={handle}
+        text={text}
+        render={
+          <Link
+            ref={ref}
+            href={`/dashboard/prompts/${id}`}
+            className="line-clamp-2 wrap-break-word whitespace-normal transition-colors hover:text-primary hover:underline"
+          />
+        }
+      />
+      {cut ? <ClampedTextPreview label={previewLabel} heading={text} /> : null}
+    </>
+  );
+}
+
 function AllPromptsTab({
   loading,
   failed,
@@ -4529,16 +4566,11 @@ function AllPromptsTab({
                             aria-label={`Select ${p.text}`}
                           />
                         )}
-                        <ClampedTextWithPreview
+                        <PromptCellText
                           handle={fullText}
+                          id={p.id}
                           text={p.text}
-                          preview={{ label: tPrompts('showFullText') }}
-                          render={
-                            <Link
-                              href={`/dashboard/prompts/${p.id}`}
-                              className="line-clamp-2 wrap-break-word whitespace-normal transition-colors hover:text-primary hover:underline"
-                            />
-                          }
+                          previewLabel={tPrompts('showFullText')}
                         />
                         <AskAboutThis
                           reference={{ type: 'prompt', id: p.id, label: p.text }}
