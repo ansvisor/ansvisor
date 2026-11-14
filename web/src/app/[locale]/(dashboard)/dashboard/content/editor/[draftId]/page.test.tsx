@@ -8281,9 +8281,25 @@ describe('the side panel', () => {
       expect(container.querySelector('.ProseMirror')!.textContent).toContain(
         'Would break Max sentence length',
       );
-      expect(
-        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('would break Max sentence length');
+      // On the card in the page: a line of its own under the label and the buttons,
+      // which keep their line (the owner, 2026-11-14).
+      const card = container.querySelector<HTMLElement>('.ProseMirror [data-suggestion]')!;
+      const [top, warning] = [...card.children];
+      expect(warning.hasAttribute('data-suggestion-breaks')).toBe(true);
+      expect(warning.textContent).toBe('Would break Max sentence length');
+      expect(top.textContent).not.toContain('Would break');
+      const label = top.firstElementChild!;
+      expect(label.textContent).toBe('Content Agent · remove an AI trace (rule)');
+      expect([...top.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+        'Reject',
+        'Accept',
+      ]);
+      // On the agent card: an icon and a count, the rule named on hover.
+      const breaks = container.querySelector(
+        '[role="region"][aria-label="Agent suggestions"] [data-slot="agent-card-breaks"]',
+      )!;
+      expect(breaks.textContent).toBe('1 rule');
+      expect(breaks.getAttribute('aria-label')).toBe('Would break Max sentence length');
     });
 
     it('sends the Length to Fix however far past it the page is, with the room it leaves (editor UX review 2026-11-03, decision b)', async () => {
