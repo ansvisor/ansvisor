@@ -126,7 +126,13 @@ export function BeforePublish({
   reviewerLd = null,
   openWork = null,
   auditEstimate = null,
+  bannedPhrases = [],
 }: {
+  /**
+   * The brand's banned phrases on the page (Rules' brandBanned, while it is
+   * on): to fix before it's published. None when the brand has none.
+   */
+  bannedPhrases?: readonly string[];
   /** Site Audit's estimate of the page, its AI search readiness (customer priorities item 9). */
   auditEstimate?: ReactNode;
   /**
@@ -467,6 +473,7 @@ export function BeforePublish({
     ...(typeof shopping === 'object' && shopping?.prices?.length
       ? [cardPricesRow(t, shopping.prices)]
       : []),
+    ...(bannedPhrases.length ? [bannedRow(t, bannedPhrases)] : []),
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
   const counts: Record<RowState, number> = { missing: 0, check: 0, ok: 0 };
@@ -794,6 +801,16 @@ function readyRow(t: T, paste: ReadyToPaste, linksPending: number): Row {
     };
   }
   return { state: 'ok', title: t('paste.title'), detail: t('paste.ok') };
+}
+
+/** The brand's banned phrases still on the page (Content rules): to say in other words first. */
+function bannedRow(t: T, phrases: readonly string[]): Row {
+  const { shown, more } = listed(phrases);
+  return {
+    state: 'missing',
+    title: t('banned.title', { count: phrases.length }),
+    detail: t('banned.detail', { list: shown.map((p) => `“${p}”`).join(', '), more }),
+  };
 }
 
 /**

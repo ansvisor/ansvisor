@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range under the box, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, open action from answer, action link]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -198,7 +198,7 @@ Chat and its agents never make up a price, fee, date, rule or contact detail. Wh
 
 A brand's **Content rules** card, under **General** in the brand's settings, holds what Chat and the agents must follow when they write for it. Admins and Managers change it; others read it.
 
-**Banned phrases** are words or phrases the brand never uses, one per line. A draft that has one, as a whole word or phrase in any case, isn't saved: Chat is told which, rewrites those sentences and saves again. Reports and answers aren't checked; Chat is only told the list.
+**Banned phrases** are words or phrases the brand never uses, one per line. A draft that has one, as a whole word or phrase in any case, isn't saved: Chat is told which, rewrites those sentences and saves again. Reports and answers aren't checked; Chat is only told the list. In the Content Editor, the **Rules** tab checks the page against them as you write, and the Content Agent's suggestions never add one.
 
 **Blocked domains** are never suggested as link sources or cited. **Allowed domains** are preferred sources. Turn on **Only cite these domains** and link and source suggestions stay on the allowed domains and the brand's own site.
 

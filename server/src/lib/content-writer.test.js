@@ -2109,3 +2109,56 @@ describe('banned phrases in a new page', () => {
     );
   });
 });
+
+describe('banned phrases in a rewrite', () => {
+  const banned = { ...brand, bannedPhrases: ['cheapest'] };
+  const run = () =>
+    runDraftWriting({
+      draft: draftRow({
+        method: 'optimize',
+        status: 'in_review',
+        body_html: '<h1>Pour-over</h1><p>Use good coffee.</p>',
+      }),
+      brand: banned,
+      model: 'model:m',
+      input: input(),
+      budget,
+      rewrite: true,
+    });
+  const html = (text) => ({
+    object: { html: `<h1>Pour-over</h1><h2>The ratio</h2><p>${text}</p>`, reason: 'rules' },
+    usage: { inputTokens: 1 },
+  });
+  const offered = () => writes.find((w) => w.table === 'content_draft_suggestions')?.value;
+
+  it('rewrites those sentences once when a phrase slips through, and offers that', async () => {
+    generateObject
+      .mockResolvedValueOnce(html('The cheapest way to brew.'))
+      .mockResolvedValueOnce(html('An affordable way to brew.'));
+    await expect(run()).resolves.toEqual({ rewritten: true });
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    expect(generateObject.mock.calls[1][0].prompt).toContain('"cheapest"');
+    expect(offered().after_text).toContain('An affordable way to brew.');
+    expect(offered().after_text).not.toContain('cheapest');
+  });
+
+  it('keeps the rewrite when the pass drops a section, and warns with the count', async () => {
+    const { logger } = await import('./logger.js');
+    generateObject.mockResolvedValueOnce(html('The cheapest way to brew.')).mockResolvedValueOnce({
+      object: { html: '<h1>Pour-over</h1><p>An affordable way to brew.</p>', reason: 'x' },
+      usage: { inputTokens: 1 },
+    });
+    await expect(run()).resolves.toEqual({ rewritten: true });
+    expect(offered().after_text).toContain('The cheapest way to brew.');
+    expect(logger.warn).toHaveBeenCalledWith(
+      { brandId: BRAND, count: 1 },
+      expect.stringContaining('banned phrases left in the rewrite'),
+    );
+  });
+
+  it('makes no extra call for a clean rewrite', async () => {
+    generateObject.mockResolvedValue(html('A good way to brew.'));
+    await expect(run()).resolves.toEqual({ rewritten: true });
+    expect(generateObject).toHaveBeenCalledTimes(1);
+  });
+});

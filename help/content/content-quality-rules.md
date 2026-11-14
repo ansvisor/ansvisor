@@ -1,11 +1,11 @@
 ---
 title: Write to the Content Editor rules
 route: /dashboard/content/editor
-keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab, brand rules]
+keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab, brand rules, banned phrases]
 synonyms: [writing rules, style guide rules, apply rules with agent, rewrite page, let the agent fix the page]
 plan: all
-updated: 2026-11-13
-last_checked: 2026-11-13
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -30,6 +30,10 @@ Changes to the rules apply to this draft only. **Save as my rules**, for admins 
 ## Brand rules
 
 Admins and managers keep a brand's rules in **Settings › Content › Brand rules**, one per line, up to 30, such as topics to stay away from. The Content Agent follows them on every page of the brand, before your text rules, and a brand rule wins when they disagree. They change what's written, not the **Rules** count.
+
+## Your brand's banned phrases
+
+When a brand has banned phrases in the **Content rules** of its settings, the **Style** group adds **Avoid your brand's banned phrases**, on unless you turn it off for a draft. It lists the ones on the page, as whole words in any case: **Fix** asks the Content Agent to say them in other words, its suggestions never add one, its rewrites are checked for them, and **Before you publish** asks you to fix them first.
 
 ## Fix open rules
 

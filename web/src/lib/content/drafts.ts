@@ -282,6 +282,12 @@ export interface ContentDraft {
    * sends and exports (00448): their CMS writes its own.
    */
   schemaLeftOut: boolean;
+  /**
+   * The brand's banned phrases (Brand settings › Content rules, 00538): the
+   * Rules tab checks the page against them. None when it has none, or they
+   * couldn't be read.
+   */
+  bannedPhrases?: string[];
 }
 
 /**

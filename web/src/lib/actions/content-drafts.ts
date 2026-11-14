@@ -30,6 +30,7 @@ import {
   PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
+import { contentRulesOf } from '@/lib/content/content-rules';
 import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/content/impact';
 import type { ContentConversions } from '@/lib/content/conversions';
 import { MAX_TITLE_LENGTH, type SaveDraftResult } from '@/lib/content/editor';
@@ -312,10 +313,21 @@ const DRAFT_COLUMNS = `${DRAFT_COLUMNS_BEFORE_00448}, schema_left_out` as const;
 export async function getContentDraft(id: string): Promise<ContentDraft | null> {
   if (!draftId.safeParse(id).success) return null;
   const supabase = await createClient();
-  // Who reads it: whether the chat that made it is theirs (W4-16).
-  const [userRes, read] = await Promise.all([
+  // Who reads it: whether the chat that made it is theirs (W4-16). The
+  // brand's banned phrases, through the draft (its brand, as the member may
+  // read it): a read that fails leaves the rule out, never the draft.
+  const [userRes, read, contentRules] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from('content_drafts').select(DRAFT_COLUMNS).eq('id', id).maybeSingle(),
+    supabase
+      .from('content_drafts')
+      .select('brands(content_rules)')
+      .eq('id', id)
+      .maybeSingle()
+      .then(
+        ({ data }) => contentRulesOf(data?.brands?.content_rules).bannedPhrases,
+        () => [],
+      ),
   ]);
   // The web ahead of 00448: the draft without it, as not left out.
   const { data, error } = missingSchemaLeftOut(read.error)
@@ -357,6 +369,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     archivedAt: data.archived_at,
     qualityHandoff: data.quality_handoff === true,
     schemaLeftOut: 'schema_left_out' in data && data.schema_left_out === true,
+    bannedPhrases: contentRules,
   };
 }
 

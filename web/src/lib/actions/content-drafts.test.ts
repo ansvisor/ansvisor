@@ -952,8 +952,12 @@ describe('getContentDraft', () => {
     };
     missingColumn = 'schema_left_out';
     await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ schemaLeftOut: false });
-    // Asked with the column, then again without it.
-    expect(calls.map((c) => c.columns?.includes('schema_left_out'))).toEqual([true, false]);
+    // Asked with the column, then again without it (the brand's rules aside).
+    expect(
+      calls
+        .filter((c) => c.columns !== 'brands(content_rules)')
+        .map((c) => c.columns?.includes('schema_left_out')),
+    ).toEqual([true, false]);
 
     missingColumn = null;
     row = { ...row, schema_left_out: true };
@@ -978,6 +982,18 @@ describe('getContentDraft', () => {
     await expect(getContentDraft(DRAFT)).resolves.toMatchObject({
       conversation: { id: 'c1', mine: false },
     });
+  });
+
+  it('reads its brand’s banned phrases through the draft, none when it has none', async () => {
+    const base = { id: DRAFT, brand_id: 'b1', title: '', method: 'create', body_html: '' };
+    row = { ...base, brands: { content_rules: { bannedPhrases: ['cheap', ' best  price '] } } };
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({
+      bannedPhrases: ['cheap', 'best price'],
+    });
+    const read = calls.find((c) => c.columns === 'brands(content_rules)');
+    expect(read?.filters).toEqual([['eq', 'id', DRAFT]]);
+    row = { ...base, brands: { content_rules: null } };
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ bannedPhrases: [] });
   });
 
   it('reads nothing for a malformed id', async () => {

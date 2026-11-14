@@ -4,6 +4,7 @@ import { PAGE_TYPES } from './drafts';
 import { htmlBlockElement } from './html-allowlist';
 import { productBlockHtml } from './product-block';
 import type { ShoppingCheck, ShoppingLinkState } from './shopping-check';
+import { agentFixable } from './tried-rules';
 import {
   NO_DRAFT_RULES,
   NOT_FOR_AGENT,
@@ -30,6 +31,7 @@ import {
   ruleSetType,
   rulesMet,
   notCheckedHere,
+  phrasesFound,
   type ActiveRule,
   type RuleContext,
   draftRulesFit,
@@ -719,6 +721,45 @@ describe('style', () => {
       count: 3,
     });
     expect(check('bannedWords', '<p>Seamlessly done.</p>')).toEqual({ state: 'ok' });
+  });
+
+  it('checks the brand’s banned phrases only when it has some, as Chat does', () => {
+    const keys = (bannedPhrases?: string[]) =>
+      ruleSet('guide', { bannedPhrases })
+        .filter((r) => r.group === 'style')
+        .map((r) => r.key);
+    expect(keys()).not.toContain('brandBanned');
+    expect(keys([])).not.toContain('brandBanned');
+    // On by default, after Banned words, and the person can turn it off.
+    expect(keys(['cheap']).slice(1, 3)).toEqual(['bannedWords', 'brandBanned']);
+    const [banned] = activeRules(ruleSet('guide', { bannedPhrases: ['x'] }), NO_DRAFT_RULES).filter(
+      (r) => r.key === 'brandBanned',
+    );
+    expect(banned).toMatchObject({ on: true, kind: 'switch', changed: false });
+    const off = activeRules(ruleSet('guide', { bannedPhrases: ['x'] }), {
+      overrides: { brandBanned: { on: false } },
+    }).find((r) => r.key === 'brandBanned');
+    expect(off?.on).toBe(false);
+
+    const read = (html: string, bannedPhrases?: string[]) =>
+      checkRule(banned, page(html), { ...ctx, bannedPhrases });
+    const phrases = ['cheap', 'Best Price', 'free'];
+    // Whole words in any case, across a line; each phrase once, as the brand wrote it.
+    expect(read('<h2>CHEAP flights</h2><p>The best\nprice, cheap.</p>', phrases)).toEqual({
+      state: 'bad',
+      code: 'found',
+      count: 2,
+      phrases: ['cheap', 'Best Price'],
+    });
+    expect(read('<p>Cheaper flights, freedom.</p>', phrases)).toEqual({ state: 'ok' });
+    expect(read('<p>Cheap.</p>')).toEqual({ state: 'ok' });
+    // Counted like the other rules.
+    const status = read('<p>Cheap.</p>', phrases);
+    expect(rulesMet([{ rule: banned, status }])).toEqual({ met: 0, total: 1 });
+    expect(phrasesFound(status)).toEqual(['cheap']);
+    expect(phrasesFound({ state: 'ok' })).toEqual([]);
+    // Content Agent's to fix (Fix open rules), as other open rules.
+    expect(agentFixable([{ rule: banned, status }]).fixable).toHaveLength(1);
   });
 
   it('leaves tone and language to AI', () => {

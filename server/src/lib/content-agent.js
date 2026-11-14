@@ -13,6 +13,7 @@ import {
   rebuildSources,
 } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { bannedPhrasesIn, readBannedPhrases } from './content-rules.js';
 import {
   RESEARCH_RULE,
   lookUpSuggestionFacts,
@@ -822,6 +823,17 @@ export function dropsName(passageText, before, words, rules = [], blocksText = '
 }
 
 /**
+ * The brand's banned phrases (Settings › Content rules) a change brings in:
+ * in its new text and not in its old, as the editor and Chat find them
+ * (whole words, any case). Pure.
+ */
+export function bannedAdded(phrases, before, after) {
+  if (!phrases.length) return [];
+  const had = bannedPhrasesIn([before], phrases);
+  return bannedPhrasesIn([after], phrases).filter((p) => !had.includes(p));
+}
+
+/**
  * Whether a replace makes a heading ask more than one question: an FAQ
  * question with a fan-out's question added to it ("What is X? What is an
  * AEO tracker?"). A new question goes in as its own heading and answer.
@@ -923,6 +935,9 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
   const banned = sourcing.banned ?? [];
   // A health brand's guard (content-health.js healthGuard): null for any other brand.
   const health = sourcing.health ?? null;
+  // The brand's banned phrases (Content rules): no change brings one in.
+  const bannedPhrases = sourcing.bannedPhrases ?? [];
+  let droppedBanned = 0;
   const kept = [];
   const seen = new Set();
   for (const answer of raw) {
@@ -937,6 +952,21 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
     // The card shows it: a source number the model wrote in ("(S2)") goes.
     const reason = stripSourceIds(s.reason).trim().slice(0, 300);
     if (!passage || !reason || passage.text.length > MAX_PASSAGE_CHARS) continue;
+    // One that brings in a banned phrase, in its words or the passage as
+    // changed, goes whole: never half a change.
+    const said = s.kind === 'replace' ? s.before.trim() : '';
+    if (
+      bannedAdded(bannedPhrases, said, s.after).length ||
+      (said &&
+        bannedAdded(
+          bannedPhrases,
+          passage.text,
+          passage.text.replace(said, () => s.after),
+        ).length)
+    ) {
+      droppedBanned += 1;
+      continue;
+    }
     const rules = [...new Set(s.rules.filter((key) => ruleKeys.has(key)))];
     // Blocks read line by line (htmlLines): compact HTML
     // ("<li>ChatGPT</li><li>Gemini</li>") never runs their words together,
@@ -1031,6 +1061,13 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       seen.add(c.id);
       kept.push(rows[i]);
     });
+  }
+  // Counted, never the phrases.
+  if (droppedBanned) {
+    logger.info(
+      { draftId: sourcing.draftId, banned: droppedBanned },
+      '[content-agent] suggestions adding a banned phrase dropped',
+    );
   }
   return kept;
 }
@@ -1214,6 +1251,11 @@ export function buildFixPrompt({
     brand.rules,
     "The brand's rules, to follow in every change, before the writer's own:",
   );
+  // Its banned phrases (Settings › Content rules): said only when it has some.
+  const banned = brand?.bannedPhrases ?? [];
+  const bannedLine = banned.length
+    ? `The brand never uses these phrases: ${banned.map((p) => `"${p}"`).join(', ')}. Never write one in a change.`
+    : '';
   // Said only when the Length isn't among the rules: the line says it isn't.
   // Else the room it leaves (lengthCap).
   const over =
@@ -1228,7 +1270,7 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${over ? `${over}\n` : ''}${careful ? `${careful}\n` : ''}${livePage ? `${livePage}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${brandRules ? `\n${brandRules}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${over ? `${over}\n` : ''}${careful ? `${careful}\n` : ''}${livePage ? `${livePage}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${brandRules ? `\n${brandRules}\n` : ''}${bannedLine ? `\n${bannedLine}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
@@ -1355,6 +1397,8 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
   if (brandError) throw brandError;
   // The brand's rules (00450), read here: the prompt puts them first.
   brand.rules = await readBrandRules(brandId);
+  // Its banned phrases: the prompt names them, and no suggestion brings one in.
+  brand.bannedPhrases = await readBannedPhrases(brandId);
   // Turned off since the draft was made: its automatic hand-off doesn't run.
   if (handoff?.origin === 'auto' && brand.content_quality_handoff !== true) {
     throw Object.assign(new Error('The brand hands off no quality fixes'), {
@@ -1671,6 +1715,8 @@ async function fixWithRun({
       keepPlaceholders: handoff,
       banned: bannedWordsOf(input.rules),
       health,
+      bannedPhrases: brand.bannedPhrases,
+      draftId,
     },
   );
   // Never past the Length the person set (decision b): what doesn't fit goes.
