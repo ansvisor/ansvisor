@@ -102,7 +102,10 @@ describe('the Site Audit estimate', () => {
       verdicts: undefined,
     });
     const text = card().textContent!;
-    expect(text).toContain('Site Audit estimate');
+    expect(text).toContain('AI search readiness (Site Audit estimate)');
+    expect(text).toContain(
+      'Technical and site-wide checks, as Site Audit scores them. Different from Quality, which scores the writing.',
+    );
     expect(text).toContain('≈62');
     expect(text).toContain(
       'From the 31 checks Site Audit runs on the page and your site, read again as you write.',
@@ -115,7 +118,7 @@ describe('the Site Audit estimate', () => {
       'Content55/100',
       'Authority40/100',
       'E-E-A-T48/100',
-      'Trust72/100',
+      'Site setup72/100',
     ]);
     // Red only for what blocks (editor UX review 2026-11-03): under 60 amber,
     // 60 to 79 neutral, as Quality's scores; nothing here is red.
@@ -134,6 +137,26 @@ describe('the Site Audit estimate', () => {
     const score = [...card().querySelectorAll('span')].find((span) => span.textContent === '≈62')!;
     expect(score.className).toContain('text-foreground');
     expect(text).toContain('Uses under 1% of your monthly AI usage');
+  });
+
+  it('names the top reasons it is low, the page’s to fix in the draft and the site’s in Site Audit', async () => {
+    readAuditEstimate.mockResolvedValue({
+      estimate: {
+        ...ESTIMATE,
+        issues: [
+          { key: 'lists', label: 'Lists', scope: 'page' },
+          { key: 'https', label: 'HTTPS', scope: 'site' },
+        ],
+      },
+    });
+    await render('<p>one</p>');
+    await settle();
+    const text = card().textContent!;
+    expect(text).toContain('This page');
+    expect(text).toContain('Your site');
+    expect(text).toContain('Lists');
+    expect(text).toContain('HTTPS');
+    expect(card().querySelector('a')!.getAttribute('href')).toBe('/dashboard/audit');
   });
 
   it('reads again only once typing pauses, and says when the site has no audit yet', async () => {

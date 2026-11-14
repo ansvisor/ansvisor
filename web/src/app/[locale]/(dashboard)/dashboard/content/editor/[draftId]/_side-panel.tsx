@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ChevronDown, X } from 'lucide-react';
@@ -184,7 +184,6 @@ export function EditorSidePanel({
   onConfirmIntro,
   onChangeType,
   handOff = null,
-  auditEstimate = null,
   onShoppingPathChange,
   chat,
   layout = 'side',
@@ -282,8 +281,6 @@ export function EditorSidePanel({
   onChangeType?: () => void;
   /** Hand it off to Content Agent, Quality's (CE-051). */
   handOff?: HandOff | null;
-  /** Quality's Site Audit estimate (customer priorities item 9). */
-  auditEstimate?: ReactNode;
   /** Brief › Shopping path changed: the Shopping rules read it again (shopping path, part 6). */
   onShoppingPathChange?: () => void;
   /**
@@ -674,7 +671,6 @@ export function EditorSidePanel({
                 onConfirmIntro={onConfirmIntro}
                 onChangeType={onChangeType}
                 handOff={handOff}
-                auditEstimate={auditEstimate}
               />
             </div>
           )}

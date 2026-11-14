@@ -364,6 +364,16 @@ describe('AgentCard', () => {
     expect(container.textContent).not.toContain('All suggestions reviewed');
   });
 
+  it('says a run whose answer was lost is still finishing, never that it failed', async () => {
+    await render([], true, { stillFinishing: true });
+    expect(container.textContent).toContain('Still finishing…');
+    expect(container.textContent).not.toContain('Content Agent is working');
+    await render([suggestion({ status: 'accepted' })], false, { stillFinishing: true });
+    expect(container.textContent).toContain('Still finishing…');
+    expect(container.textContent).toContain('may still land');
+    expect(container.textContent).not.toContain("couldn't finish");
+  });
+
   it('reads the gain from the page with the changes in, and names a rule they would break', async () => {
     await render([suggestion()], false, {
       rules: { ...rules, after: { now: 9, met: 8, breaks: 'Internal links' } },

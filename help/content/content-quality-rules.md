@@ -19,6 +19,10 @@ In the side panel, **Instructions** opens on **Rules**. The rules come in five g
 
 The rule set follows the page type; on a page with no type, picking a set sets it. Rules the page can't meet, such as another type's or one that needs your product feed, sit under **Not checked on this page**, never counted or sent to the Content Agent.
 
+## Fan-out rules
+
+**Use top fan-outs as H2s** and **Use fan-outs in FAQ questions** list the first fan-outs the page doesn't use yet. A heading or question uses a fan-out when it has most of its words, in any form: "Measuring AI Overviews" uses "how to measure ai overviews".
+
 ## Save or reset your rules
 
 Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or use **Paste many** to add several from a style guide.
@@ -54,6 +58,7 @@ A rewrite you accept that leaves open rules your page met says how many on its c
 - Accept or reject the open suggestions before you run the agent again or edit the page as HTML.
 - The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.
 - The agent only changes drafts, not published pages.
+- When the agent's answer is slow to come back, its card says **Still finishing…** for up to three minutes. It says the agent couldn't finish only when its run failed; otherwise open the page again later to see what it wrote.
 
 ## How your choices teach the agent
 

@@ -23,7 +23,7 @@ Quality scores the page from 0 to 100 on three things, each card saying what it 
 
 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.
 
-Under them, **Site Audit estimate** is about where the page would score in Site Audit. See the Content Editor article.
+In **Before you publish**, **AI search readiness (Site Audit estimate)** is about where the page would score in Site Audit. It's a different score from Quality. See the Content Editor article.
 
 At the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing.
 
@@ -62,14 +62,14 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 
 ## Before you publish
 
-**Mark ready** opens **Before you publish** first. A line sums up what to fix and to check; the checks show in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:
+**Mark ready** opens **Before you publish** first. A line sums up what to fix and check, in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:
 
 - placeholders, alt text and links (**Ready for your CMS**);
 - the author, and the qualified reviewer on pages that advise on health, money or the law;
 - visible dates;
 - the search engine details (Article schema) Ansvisor adds;
 - Trust under 60: AI answers may lean on the page less;
-- the rules and to-dos still open. You can still mark it ready.
+- open rules and to-dos. You can still mark it ready.
 
 Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data does too. On a shopping path page, it also names product cards whose catalog price changed since they went in. **Send to CMS** opens it only when it has something to ask about.
 

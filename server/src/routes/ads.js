@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { assertBrandAccess } from '../lib/access.js';
+import { assertBrandAccess, brandAccessOf } from '../lib/access.js';
 import { adsEnabled } from '../lib/ads-flag.js';
+import { readAdsActivity } from '../lib/ads/activity.js';
 
 /**
  * Ads (the Drive Ads spec, ADS-01) under /api/ads, while it is built.
@@ -46,6 +47,35 @@ router.get('/status', async (req, res) => {
     return res.json({ enabled: true });
   } catch (err) {
     return failed(req, res, err, 'ads status error');
+  }
+});
+
+// GET /api/ads/activity?brandId=…&before=…&limit=… — the workspace's Ads
+// activity log, newest first (00530), of one brand or all: Admins only.
+// Others read their own rows through the table's policy.
+router.get('/activity', async (req, res) => {
+  const parsed = z
+    .object({
+      brandId: z.guid().optional(),
+      before: z.iso.datetime({ offset: true }).optional(),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+    })
+    .safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  const { brandId, before, limit } = parsed.data;
+  try {
+    const { orgId, role } = brandId
+      ? await assertBrandAccess(brandId, req.user.id)
+      : await brandAccessOf(req.user.id);
+    if (!orgId || role !== 'admin') {
+      return res.status(403).json({
+        error: 'Only admins can read the Ads activity log.',
+        code: 'forbidden',
+      });
+    }
+    return res.json(await readAdsActivity({ orgId, brandId, before, limit }));
+  } catch (err) {
+    return failed(req, res, err, 'ads activity read error');
   }
 });
 
