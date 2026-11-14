@@ -6,10 +6,11 @@ import messages from '../../../../../../messages/en.json';
 import type { PlanId } from '@/config/plans';
 
 /**
- * Ads' page (ADS-01 §3, mockup), Phase 0's first step: the header every app
- * page has, the five tabs kept in the hash, the period and Export off until
- * there is data, and an honest empty state on each tab. Growth and above read
- * it; Starter and the free trial see the lock with what Growth adds.
+ * Ads' page (ADS-01 §3, mockup): the header every app page has, the five
+ * tabs kept in the hash, the Overview with its period, Export off until there
+ * is data, and an honest empty state on each other tab. Every plan sees the
+ * Overview (§8); Growth and above read the rest, and Starter and the free
+ * trial see the lock with what Growth adds.
  */
 
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
@@ -27,6 +28,16 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const analytics = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => analytics);
+// The Overview's read and figures are _overview.test.tsx's.
+vi.mock('./_overview', () => ({
+  AdsOverview: (props: { period: string; onOpenTab: (tab: string) => void }) => (
+    <button
+      data-slot="ads-overview"
+      data-period={props.period}
+      onClick={() => props.onOpenTab('op')}
+    />
+  ),
+}));
 
 // The brand store keeps its state in localStorage, which this jsdom lacks.
 const stored = new Map<string, string>();
@@ -39,15 +50,18 @@ vi.stubGlobal('localStorage', {
 const { AdsView } = await import('./_ads-view');
 const { PlanProvider } = await import('@/components/providers/plan-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
+const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
 let container: HTMLDivElement;
 let root: Root;
+const setPage = vi.fn();
 
 beforeEach(() => {
   analytics.track.mockClear();
+  setPage.mockClear();
   window.history.replaceState(null, '', '/dashboard/ads');
   useBrandStore.setState({ brands: [], activeBrandId: null });
   container = document.createElement('div');
@@ -72,7 +86,9 @@ async function render({
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <PlanProvider planId={plan} subscriptionStatus={status}>
-          <AdsView />
+          <ChatPageSetterContext.Provider value={setPage}>
+            <AdsView />
+          </ChatPageSetterContext.Provider>
         </PlanProvider>
       </NextIntlClientProvider>,
     );
@@ -84,6 +100,10 @@ const tab = (name: string) => tabs().find((t) => t.textContent === name)!;
 const panel = () => container.querySelector<HTMLElement>('[role="tabpanel"]')!;
 const empty = () => container.querySelector('[data-slot="ads-empty"]');
 const lock = () => container.querySelector('[data-slot="upgrade-card"]');
+const overview = () => container.querySelector<HTMLElement>('[data-slot="ads-overview"]');
+const periods = () => [
+  ...container.querySelectorAll<HTMLButtonElement>('[data-action="ads.period"]'),
+];
 
 describe('AdsView', () => {
   it('has the header every app page has: Ads, its line, the AI usage and Ask Chat', async () => {
@@ -170,26 +190,57 @@ describe('AdsView', () => {
     );
   });
 
-  it('keeps the period and Export off until Ads has data, 30 days shown', async () => {
+  it('reads the Overview over the period picked, 30 days first; Export stays off', async () => {
     await render();
-    const periods = [
-      ...container.querySelectorAll<HTMLButtonElement>('[data-action="ads.period"]'),
-    ];
-    expect(periods.map((b) => b.textContent)).toEqual(['7d', '30d', '90d']);
-    expect(periods.every((b) => b.disabled)).toBe(true);
-    expect(periods.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+    expect(periods().map((b) => b.textContent)).toEqual(['7d', '30d', '90d']);
+    expect(periods().some((b) => b.disabled)).toBe(false);
+    expect(periods().map((b) => b.getAttribute('aria-pressed'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ]);
+    expect(overview()?.dataset.period).toBe('30d');
     // The shared range control, named Period, with no label above it in the tab row.
-    const group = periods[0].closest('[role="group"]')!;
+    const group = periods()[0].closest('[role="group"]')!;
     expect(group.getAttribute('aria-label')).toBe('Period');
     expect(group.parentElement?.querySelector('label')).toBeNull();
+    await act(async () => periods()[0].click());
+    expect(overview()?.dataset.period).toBe('7d');
+    expect(periods()[0].getAttribute('aria-pressed')).toBe('true');
     const exportButton = container.querySelector<HTMLButtonElement>('[data-action="ads.export"]')!;
     expect(exportButton.textContent).toBe('Export');
     expect(exportButton.disabled).toBe(true);
+    // The other tabs have no data for a period yet.
+    await act(async () => tab('Campaigns').click());
+    expect(periods().every((b) => b.disabled)).toBe(true);
   });
 
-  it('shows an honest empty state on each tab: no numbers, no sample data', async () => {
+  it('tells Chat’s side panel the page, its period and three questions', async () => {
     await render();
-    for (const name of ['Overview', 'Opportunities', 'Paid SoV', 'Campaigns', 'Connections']) {
+    expect(setPage).toHaveBeenLastCalledWith({
+      pageName: 'Ads',
+      dateRange: { from: '30d', to: null, label: 'Last 30 days' },
+      suggestions: [
+        'Which buying-intent prompts should we pay for?',
+        'Where do competitors lead the AI answer on our buying-intent prompts?',
+        'Which open prompts can we win with content?',
+      ],
+    });
+    await act(async () => periods()[2].click());
+    expect(setPage.mock.lastCall?.[0].dateRange.label).toBe('Last 90 days');
+  });
+
+  it('opens the tab the Overview asks for', async () => {
+    await render();
+    await act(async () => overview()!.click());
+    expect(window.location.hash).toBe('#op');
+    expect(panel().dataset.tab).toBe('op');
+  });
+
+  it('shows an honest empty state on each other tab: no numbers, no sample data', async () => {
+    await render();
+    expect(overview()).not.toBeNull();
+    for (const name of ['Opportunities', 'Paid SoV', 'Campaigns', 'Connections']) {
       await act(async () => tab(name).click());
       expect(empty()?.querySelector('h2')?.textContent).toBe('Coming soon in this preview');
       expect(empty()?.textContent).not.toMatch(/\d/);
@@ -202,13 +253,19 @@ describe('AdsView', () => {
       for (const plan of ['growth', 'enterprise'] as const) {
         await render({ plan });
         expect(lock(), plan).toBeNull();
+        expect(overview(), plan).not.toBeNull();
+        await act(async () => tab('Opportunities').click());
         expect(empty(), plan).not.toBeNull();
+        await act(async () => tab('Overview').click());
       }
       expect(analytics.track).not.toHaveBeenCalled();
     });
 
-    it('locks each tab on Starter, with the one line Growth adds and Upgrade', async () => {
+    it('shows Starter the Overview, and locks each other tab with the one line Growth adds and Upgrade', async () => {
       await render({ plan: 'starter' });
+      expect(overview()).not.toBeNull();
+      expect(lock()).toBeNull();
+      await act(async () => tab('Paid SoV').click());
       expect(empty()).toBeNull();
       expect(lock()?.textContent).toContain('Ads is included from the Growth plan');
       expect(lock()?.textContent).toContain(
@@ -229,7 +286,8 @@ describe('AdsView', () => {
       });
     });
 
-    it('locks it in the free trial, whatever the plan; an Enterprise deal’s trial keeps its plan', async () => {
+    it('locks it but the Overview in the free trial, whatever the plan; an Enterprise deal’s trial keeps its plan', async () => {
+      window.history.replaceState(null, '', '/dashboard/ads#op');
       for (const plan of ['starter', 'growth'] as const) {
         await render({ plan, status: 'trialing' });
         expect(empty(), plan).toBeNull();
@@ -243,6 +301,7 @@ describe('AdsView', () => {
     });
 
     it('opens on the demo brand, shown as Growth has it, in the trial too', async () => {
+      window.history.replaceState(null, '', '/dashboard/ads#op');
       useBrandStore.setState({
         brands: [{ id: 'demo', isDemo: true } as never],
         activeBrandId: 'demo',
@@ -253,6 +312,7 @@ describe('AdsView', () => {
     });
 
     it('has no plan gate self-hosted', async () => {
+      window.history.replaceState(null, '', '/dashboard/ads#op');
       await render({ plan: 'starter', cloud: false });
       expect(lock()).toBeNull();
       expect(empty()).not.toBeNull();
