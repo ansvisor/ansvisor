@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createBrand, markBrandAsEcommerce, updateBrand } from '@/lib/actions/brand';
+import { TopicAccordion } from '@/components/onboarding/topic-accordion';
 import { EcommerceNote } from '@/components/onboarding/ecommerce-note';
 import { syncDomains } from '@/lib/actions/brand-domain';
 import { createTopics } from '@/lib/actions/topic';
@@ -16,6 +17,13 @@ import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { trackSavedWaiting } from '@/components/prompts/waiting-for-spot';
+import {
+  defaultPickCount,
+  pickedCount,
+  promptRoom,
+  withDefaultPicks,
+  type TopicPromptPicks,
+} from '@/lib/onboarding-prompt-picks';
 import { getFaviconUrl } from '@/lib/favicon';
 import { frictionFlow } from '@/lib/friction-events';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -41,25 +49,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Globe,
-  Loader2,
-  MoreHorizontal,
-  Plus,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, Check, Globe, Loader2, Plus, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   BRAND_SETUP_LIMITS,
@@ -106,109 +97,6 @@ function BrandHeader({ name, domain }: { name: string; domain: string }) {
   );
 }
 
-// ── Topic Prompt Accordion ─────────────────────────────────────────────────────
-
-interface TopicPromptsData {
-  topic: string;
-  prompts: string[];
-}
-
-function TopicAccordion({
-  data,
-  defaultOpen = false,
-  onRemoveTopic,
-  onAddPrompt,
-  onRemovePrompt,
-}: {
-  data: TopicPromptsData;
-  defaultOpen?: boolean;
-  onRemoveTopic: () => void;
-  onAddPrompt: (prompt: string) => void;
-  onRemovePrompt: (index: number) => void;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  const [newPrompt, setNewPrompt] = useState('');
-
-  const handleAdd = () => {
-    const trimmed = newPrompt.trim();
-    if (trimmed.length >= 10) {
-      onAddPrompt(trimmed);
-      setNewPrompt('');
-    }
-  };
-
-  return (
-    <div className="border-b last:border-b-0">
-      <div className="flex items-center gap-3 py-3 px-1">
-        <button
-          onClick={() => setOpen(!open)}
-          className="flex items-center gap-2 flex-1 text-left text-sm"
-        >
-          {open ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-          )}
-          <span className="font-medium">{data.topic}</span>
-          <span className="text-xs text-muted-foreground">{data.prompts.length} prompts</span>
-        </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger className="p-1 rounded hover:bg-muted text-muted-foreground">
-            <MoreHorizontal className="h-4 w-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={onRemoveTopic}
-            >
-              Remove topic
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      {open && (
-        <div className="pl-7 pb-3 space-y-1.5">
-          {data.prompts.map((p, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-2 group rounded-md border bg-muted/30 px-3 py-2"
-            >
-              <span className="text-sm flex-1">{p}</span>
-              <button
-                onClick={() => onRemovePrompt(idx)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-          <div className="flex items-center gap-2 mt-2">
-            <Input
-              placeholder="Enter new prompt..."
-              value={newPrompt}
-              onChange={(e) => setNewPrompt(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-              className="text-sm h-9"
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleAdd}
-              disabled={newPrompt.trim().length < 10}
-              className="h-9 px-2"
-            >
-              <Check className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setNewPrompt('')} className="h-9 px-2">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // Keys under brands.new, resolved when the loading effect runs.
@@ -246,6 +134,7 @@ export default function NewBrandPage() {
   // Prompts past the plan's limit are saved waiting for a spot, not held back.
   const tWaiting = useTranslations('prompts.waiting');
   const t = useTranslations('brands.new');
+  const tPrompts = useTranslations('onboarding.prompts');
   // The state picker's own "no state" choice, ahead of the states themselves.
   const stateItems = [{ value: 'nationwide', label: t('step2.nationwide') }, ...US_STATE_ITEMS];
 
@@ -293,7 +182,7 @@ export default function NewBrandPage() {
   }, [loadingTopics, t]);
 
   // Step 4
-  const [topicPrompts, setTopicPrompts] = useState<TopicPromptsData[]>([]);
+  const [topicPrompts, setTopicPrompts] = useState<TopicPromptPicks[]>([]);
   const [loadingPrompts, setLoadingPrompts] = useState(false);
   const [promptCapacity, setPromptCapacity] = useState<{
     maxPrompts: number;
@@ -543,16 +432,20 @@ export default function NewBrandPage() {
       const topicNames = Array.from(selectedTopics);
       await createTopics(createdBrand.id, topicNames);
 
-      const { topicPrompts: generated } = await generatePromptsFromTopics(
-        {
-          brandName: brandName.trim(),
-          description: description.trim(),
-          website: domain,
-          language,
-        },
-        topicNames,
-      );
-      setTopicPrompts(generated);
+      const [{ topicPrompts: generated }, capacity] = await Promise.all([
+        generatePromptsFromTopics(
+          {
+            brandName: brandName.trim(),
+            description: description.trim(),
+            website: domain,
+            language,
+          },
+          topicNames,
+        ),
+        getPromptCapacity(createdBrand.id).catch(() => null),
+      ]);
+      if (capacity) setPromptCapacity(capacity);
+      setTopicPrompts(withDefaultPicks(generated, defaultPickCount(promptRoom(capacity))));
       setStep(4);
     } catch (err) {
       console.error('Prompt generation error:', err);
@@ -571,13 +464,15 @@ export default function NewBrandPage() {
     setSaveError(null);
     try {
       const allPrompts = topicPrompts.flatMap((tp) =>
-        tp.prompts.map((text) => ({
-          text,
-          category: tp.topic,
-          platforms: activeScrapers.map((s) => s.id),
-          models: activeModels.map((m) => m.id),
-          isActive: true,
-        })),
+        tp.prompts
+          .filter((p) => p.picked)
+          .map(({ text }) => ({
+            text,
+            category: tp.topic,
+            platforms: activeScrapers.map((s) => s.id),
+            models: activeModels.map((m) => m.id),
+            isActive: true,
+          })),
       );
 
       if (allPrompts.length === 0) {
@@ -765,27 +660,34 @@ export default function NewBrandPage() {
 
   const addPromptToTopic = (topicIndex: number, prompt: string) => {
     setTopicPrompts((prev) =>
-      prev.map((tp, i) => (i === topicIndex ? { ...tp, prompts: [...tp.prompts, prompt] } : tp)),
+      prev.map((tp, i) =>
+        i === topicIndex ? { ...tp, prompts: [...tp.prompts, { text: prompt, picked: true }] } : tp,
+      ),
     );
   };
 
-  const removePromptFromTopic = (topicIndex: number, promptIndex: number) => {
+  const togglePrompt = (topicIndex: number, promptIndex: number) => {
     setTopicPrompts((prev) =>
       prev.map((tp, i) =>
         i === topicIndex
-          ? { ...tp, prompts: tp.prompts.filter((_, pi) => pi !== promptIndex) }
+          ? {
+              ...tp,
+              prompts: tp.prompts.map((p, pi) =>
+                pi === promptIndex ? { ...p, picked: !p.picked } : p,
+              ),
+            }
           : tp,
       ),
     );
   };
 
-  const totalPrompts = topicPrompts.reduce((sum, tp) => sum + tp.prompts.length, 0);
+  // The prompts offered, and the ticked ones: only those are saved and count
+  // toward the plan.
+  const offeredPrompts = topicPrompts.reduce((sum, tp) => sum + tp.prompts.length, 0);
+  const totalPrompts = pickedCount(topicPrompts);
   // Prompts this brand may save before hitting the org's plan cap (null =
   // unknown or unlimited); over that, Continue is disabled with an inline hint.
-  const promptLimit =
-    promptCapacity && promptCapacity.maxPrompts !== -1
-      ? Math.max(0, promptCapacity.maxPrompts - promptCapacity.used)
-      : null;
+  const promptLimit = promptRoom(promptCapacity);
   const overPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
 
   // ── Step 1: Brand Info ──
@@ -1140,11 +1042,8 @@ export default function NewBrandPage() {
           <BrandHeader name={brandName} domain={domain} />
 
           <div className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight">Review your prompts</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              These prompts will be sent to AI platforms daily. Feel free to edit, add, or remove
-              any before starting.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">{tPrompts('title')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{tPrompts('intro')}</p>
           </div>
 
           {overPrompts > 0 && (
@@ -1160,13 +1059,15 @@ export default function NewBrandPage() {
           )}
 
           <div className="mb-4">
-            <p className="text-sm font-medium">Your Prompt List</p>
-            <p className="text-xs text-muted-foreground">{totalPrompts} prompts total</p>
+            <p className="text-sm font-medium">{t('step4.listTitle')}</p>
+            <p data-slot="prompt-count" className="text-xs text-muted-foreground">
+              {tPrompts('count', { picked: totalPrompts, total: offeredPrompts })}
+            </p>
           </div>
 
           <div className="rounded-lg border">
             <div className="flex items-center gap-4 px-4 py-2.5 border-b bg-muted/50 text-xs font-medium text-muted-foreground">
-              <span className="flex-1">Topic</span>
+              <span className="flex-1">{t('step4.topicColumn')}</span>
             </div>
             {topicPrompts.map((tp, idx) => (
               <TopicAccordion
@@ -1175,12 +1076,12 @@ export default function NewBrandPage() {
                 defaultOpen={idx === 0}
                 onRemoveTopic={() => removeTopic(idx)}
                 onAddPrompt={(p) => addPromptToTopic(idx, p)}
-                onRemovePrompt={(pi) => removePromptFromTopic(idx, pi)}
+                onTogglePrompt={(pi) => togglePrompt(idx, pi)}
               />
             ))}
             {topicPrompts.length === 0 && (
               <div className="py-8 text-center text-sm text-muted-foreground">
-                No prompts generated yet.
+                {t('step4.noPrompts')}
               </div>
             )}
           </div>
@@ -1193,10 +1094,10 @@ export default function NewBrandPage() {
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving prompts...
+                {t('step4.saving')}
               </>
             ) : (
-              'Continue'
+              t('continue')
             )}
           </Button>
         </div>
@@ -1207,7 +1108,7 @@ export default function NewBrandPage() {
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            {t('back')}
           </button>
           <StepDots current={4} total={TOTAL_STEPS} />
           <div className="w-12" />

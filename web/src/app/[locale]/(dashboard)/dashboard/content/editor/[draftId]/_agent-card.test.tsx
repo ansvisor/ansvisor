@@ -6,7 +6,7 @@ import type { AgentRun } from '@/lib/content/agent-runs';
 import messages from '../../../../../../../../messages/en.json';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
-import { AgentCard, rulesAfter, type CardRules } from './_agent-card';
+import { AgentCard, AgentCardSkeleton, rulesAfter, type CardRules } from './_agent-card';
 
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -114,15 +114,34 @@ describe('AgentCard', () => {
       suggestion(),
       suggestion({ id: 's2', reason: 'add a summary', ruleKeys: ['summary'] }),
     ]);
-    expect(container.textContent).toContain('Content Agent has 2 suggestions for you');
-    expect(container.textContent).toContain(
-      'Remove an AI trace (rule) · +1 more · 9 → 11/14 rules',
+    // One line (the owner's layout, 2026-11-14): the count, then what they change, truncating.
+    const card = container.querySelector('[role="region"]')!;
+    const [count, line] = card.querySelectorAll<HTMLElement>('.min-w-0.flex-1 > div > span');
+    expect(count.textContent).toBe('2 suggestions');
+    expect(line.textContent).toBe('Remove an AI trace (rule), +1 more · 9 → 11/14 rules');
+    expect(line.querySelector('.truncate')!.getAttribute('title')).toBe(
+      'Remove an AI trace (rule)',
     );
+    expect(card.className).toContain('py-2');
     expect(buttons()).toEqual(['Review', 'Reject all', 'Accept all']);
     await click('Review');
     expect(handlers.onReview).toHaveBeenCalled();
     await click('Accept all');
     expect(handlers.onAcceptAll).toHaveBeenCalled();
+  });
+
+  it('keeps its place while the batch is read: its tile, two lines and its buttons, in grey', async () => {
+    await render([suggestion()]);
+    const card = container.querySelector('[role="region"]')!.className;
+    await act(async () => root.render(<AgentCardSkeleton />));
+    const skeleton = container.querySelector('[data-slot="agent-card-skeleton"]')!;
+    expect(skeleton.getAttribute('aria-hidden')).toBe('true');
+    // The card's own box, so it is as high: the 40 px tile in the same padding.
+    expect(skeleton.className).toBe(`${card} animate-pulse motion-reduce:animate-none`);
+    const [tile, lines, actions] = skeleton.children;
+    expect(tile.className).toContain('h-10 w-10');
+    expect(lines.children).toHaveLength(2);
+    expect(actions.children).toHaveLength(3);
   });
 
   it('once all are reviewed, says what was accepted and runs the agent again', async () => {
@@ -264,6 +283,18 @@ describe('AgentCard', () => {
     expect(container.textContent).not.toContain('You can leave this page');
   });
 
+  it('says a rewrite taken left rules open that were met, beside Undo (B2)', async () => {
+    const page = suggestion({ kind: 'page', status: 'accepted', beforeHtml: '<h1>Old</h1>' });
+    await render([page], false, { rewriteDropped: 2 });
+    expect(container.textContent).toContain('Rewrite left 2 rules open that were met');
+    await click('Undo');
+    expect(handlers.onDecidePage).toHaveBeenCalledWith('open');
+    // None dropped: the rules still open, as before.
+    await render([page], false);
+    expect(container.textContent).not.toContain('Rewrite left');
+    expect(container.textContent).toContain('5 rules still open');
+  });
+
   it('says how many placeholders the result leaves to fill', async () => {
     const page = suggestion({
       kind: 'page',
@@ -350,6 +381,16 @@ describe('AgentCard', () => {
     expect(container.textContent).toContain("Content Agent couldn't finish");
     expect(container.textContent).toContain('Nothing it wrote was kept.');
     expect(container.textContent).not.toContain('All suggestions reviewed');
+  });
+
+  it('says a run whose answer was lost is still finishing, never that it failed', async () => {
+    await render([], true, { stillFinishing: true });
+    expect(container.textContent).toContain('Still finishing…');
+    expect(container.textContent).not.toContain('Content Agent is working');
+    await render([suggestion({ status: 'accepted' })], false, { stillFinishing: true });
+    expect(container.textContent).toContain('Still finishing…');
+    expect(container.textContent).toContain('may still land');
+    expect(container.textContent).not.toContain("couldn't finish");
   });
 
   it('reads the gain from the page with the changes in, and names a rule they would break', async () => {

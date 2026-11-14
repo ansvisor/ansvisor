@@ -13,6 +13,8 @@ export interface AuditEstimate {
   /** By category key, as Site Audit's (CATEGORY_META). */
   categories: Record<string, number | null>;
   checks: { page: number; site: number; ai: number };
+  /** The checks that cost it most (up to 3): fixed in the draft ('page') or in Site Audit ('site'). */
+  issues?: { key: string; label: string; scope: 'page' | 'site' }[];
 }
 
 /** The AI checks' verdicts, sent back with each later reading so the score keeps them. */

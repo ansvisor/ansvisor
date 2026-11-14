@@ -27,6 +27,7 @@ const trend = (rate: number, change: number | null) =>
     points: [],
     summary: { rate, prevRate: null, change, prevFrom: '2026-08-14', prevTo: '2026-09-12' },
     pinned: [],
+    windowDays: null,
   }) as VisibilityRateTrendData;
 
 const leaderboard = (...brands: [string, number, boolean?][]) =>

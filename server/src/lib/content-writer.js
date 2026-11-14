@@ -836,10 +836,20 @@ async function rewritePage({
   );
   await budget.charge(usage);
   if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
-  // Well past its Length: one more pass that only cuts.
-  const answer = ruleKeys.has('length')
-    ? await cutToLength({ answer: object, page, length, band, brand, draft, model, modelId, run })
-    : object;
+  // Well past its Length: one more pass that only cuts, within the rules.
+  const cut = { page, length, band, brand, draft, model, modelId, run, rules: input.rules };
+  const within = ruleKeys.has('length') ? await cutToLength({ answer: object, ...cut }) : object;
+  // A banned phrase that slipped through: those sentences once more, before
+  // the guards below read it (as a new page's, withoutBanned).
+  const answer = await rewriteWithoutBanned({
+    answer: within,
+    page,
+    brand,
+    draft,
+    model,
+    modelId,
+    run,
+  });
   await advanceRun(run, 3);
 
   // No invented person or quote (CE-044): read in its words as written,
@@ -952,11 +962,24 @@ async function rewritePage({
  * Any way past it, not only well past (editor test 2026-11-03: a rewrite
  * left a little long was taken as the most a rewrite reaches, so the
  * Length set was never met). On its own hold on the budget, so a budget
- * the first pass used up skips it. The cut is taken only when it is
- * shorter and keeps every kept line; else, or when it fails, the first
- * rewrite stands (logged). A stop goes through.
+ * the first pass used up skips it. It is told the rules, and keeps every
+ * section they ask for (editor test 2026-11-12: a cut dropped the FAQ and
+ * fan-out sections). The cut is taken only when it is shorter, keeps every
+ * kept line and, with a rule asking for sections, every heading; else, or
+ * when it fails, the first rewrite stands (logged). A stop goes through.
  */
-async function cutToLength({ answer, page, length, band, brand, draft, model, modelId, run }) {
+async function cutToLength({
+  answer,
+  page,
+  length,
+  band,
+  brand,
+  draft,
+  model,
+  modelId,
+  run,
+  rules,
+}) {
   const total = ownText({ ...page, html: answer.html }) + page.keptChars;
   const max = band?.max ?? Math.round(length * (1 + LENGTH_TOLERANCE));
   if (total <= max) return answer;
@@ -978,7 +1001,7 @@ async function cutToLength({ answer, page, length, band, brand, draft, model, mo
         model,
         ...objectOptions(modelId, rewriteSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
         system: rewriteSystemPrompt(),
-        prompt: cutPrompt({ html: answer.html, page, total, length, max }),
+        prompt: cutPrompt({ html: answer.html, page, total, length, max, rules }),
         abortSignal,
       }),
     );
@@ -992,7 +1015,11 @@ async function cutToLength({ answer, page, length, band, brand, draft, model, mo
       cut < Infinity &&
       restoreKept(object.html, page.kept, { word: page.word, h1Token: page.h1Token }).missing
         .length === 0;
-    if (cut >= total || !keepsAll) {
+    // No section a rule asks for dropped: as many headings as the first pass wrote.
+    const keepsSections =
+      !rules.some((r) => SECTION_RULES.has(r.key)) ||
+      headings(object.html) >= headings(answer.html);
+    if (cut >= total || !keepsAll || !keepsSections) {
       logger.info(
         { draftId: draft.id, total, cut },
         '[content-writer] the cut pass kept nothing shorter',
@@ -1042,35 +1069,22 @@ async function withoutBanned({
   const found = bannedIn(brand, written, title);
   if (!found.length) return same;
   let result = same;
-  const budget = await reserveAiBudget(brand.organization_id, {
-    feature: 'content',
+  const object = await bannedCall({
+    brand,
+    draft,
+    model,
     modelId,
-    draftId: draft.id,
-  }).catch(() => null);
-  if (budget) {
-    try {
-      const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
-        generateObject({
-          model,
-          ...objectOptions(modelId, pageSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
-          system: writeSystemPrompt(),
-          prompt: `The page below uses phrases the brand never uses: ${found.map((p) => `"${p}"`).join(', ')}. Rewrite only the sentences (and the title or headings) that contain them, in other words. Keep everything else exactly as it is: the facts, links, placeholders in square brackets, {{find: …}} and {{ask: …}} markers. Return the whole page.\n\n${JSON.stringify(written)}\n\nWrite in the page's own language.`,
-          abortSignal,
-        }),
-      );
-      await budget.charge(usage);
-      const next = sourcedPage(object, known, people);
-      result = {
-        written: next,
-        title: headingCase(clean(next.title).slice(0, 300), language) || title,
-      };
-    } catch (err) {
-      if (isStop(err, run)) throw err;
-      if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
-      else await budget.release();
-    } finally {
-      await budget.release();
-    }
+    run,
+    schema: pageSchema,
+    system: writeSystemPrompt(),
+    prompt: `The page below uses phrases the brand never uses: ${found.map((p) => `"${p}"`).join(', ')}. Rewrite only the sentences (and the title or headings) that contain them, in other words. Keep everything else exactly as it is: the facts, links, placeholders in square brackets, {{find: …}} and {{ask: …}} markers. Return the whole page.\n\n${JSON.stringify(written)}\n\nWrite in the page's own language.`,
+  });
+  if (object) {
+    const next = sourcedPage(object, known, people);
+    result = {
+      written: next,
+      title: headingCase(clean(next.title).slice(0, 300), language) || title,
+    };
   }
   const left = bannedIn(brand, result.written, result.title);
   if (left.length) {
@@ -1082,12 +1096,101 @@ async function withoutBanned({
   return result;
 }
 
-/** What the cut pass is told: its own page, how long it is and the Length to cut it to. */
-function cutPrompt({ html, page, total, length, max }) {
+/**
+ * The banned-phrase pass's one call, on its own hold on the budget: its
+ * answer, or null without budget or when it fails. A stop goes through.
+ */
+async function bannedCall({ brand, draft, model, modelId, run, schema, system, prompt }) {
+  const budget = await reserveAiBudget(brand.organization_id, {
+    feature: 'content',
+    modelId,
+    draftId: draft.id,
+  }).catch(() => null);
+  if (!budget) return null;
+  try {
+    const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+      generateObject({
+        model,
+        ...objectOptions(modelId, schema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
+        system,
+        prompt,
+        abortSignal,
+      }),
+    );
+    await budget.charge(usage);
+    return object;
+  } catch (err) {
+    if (isStop(err, run)) throw err;
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
+    else await budget.release();
+    return null;
+  } finally {
+    await budget.release();
+  }
+}
+
+/**
+ * A rewrite without the brand's banned phrases, as a new page is
+ * (withoutBanned): its own words are checked, never the kept lines, which
+ * are the person's. Found one, the model rewrites only those sentences,
+ * once; taken when it keeps every kept line and heading, else the rewrite
+ * stands. A phrase left is offered anyway, logged with the count.
+ */
+async function rewriteWithoutBanned({ answer, page, brand, draft, model, modelId, run }) {
+  const banned = brand.bannedPhrases ?? [];
+  const found = bannedPhrasesIn([answer.html], banned);
+  if (!found.length) return answer;
+  const object = await bannedCall({
+    brand,
+    draft,
+    model,
+    modelId,
+    run,
+    schema: rewriteSchema,
+    system: rewriteSystemPrompt(),
+    prompt: `The page below uses phrases the brand never uses: ${found.map((p) => `"${p}"`).join(', ')}. Rewrite only the sentences (and headings) that contain them, in other words. Keep everything else exactly as it is: every heading and section, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, placeholders in square brackets, {{find: …}} and {{ask: …}} markers. Return the whole page.\n\n${answer.html}\n\nWrite in the page's own language.`,
+  });
+  const keeps =
+    object &&
+    isPageHtml(object.html) &&
+    restoreKept(object.html, page.kept, { word: page.word, h1Token: page.h1Token }).missing
+      .length === 0 &&
+    headings(object.html) >= headings(answer.html);
+  const next = keeps ? { ...answer, html: object.html } : answer;
+  const left = bannedPhrasesIn([next.html], banned);
+  if (left.length) {
+    logger.warn(
+      { brandId: draft.brand_id, count: left.length },
+      '[content-writer] banned phrases left in the rewrite, offered anyway',
+    );
+  }
+  return next;
+}
+
+/** The rules whose sections a cut keeps: fan-out H2s, FAQ, summary, direct answers. */
+const SECTION_RULES = new Set([
+  'fanoutH2',
+  'fanoutFaq',
+  'faq',
+  'buyingFaq',
+  'summary',
+  'h2Answer',
+  'first40Words',
+]);
+const headings = (html) => (String(html).match(/<h[23][\s>]/gi) ?? []).length;
+
+/**
+ * What the cut pass is told: its own page, how long it is, the Length to
+ * cut it to, and the rules it is written to (Length aside, said above).
+ */
+function cutPrompt({ html, page, total, length, max, rules = [] }) {
+  const meets = rules
+    .filter((r) => r.key !== 'length')
+    .map((r) => `- ${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   return `Your rewrite below is about ${total} characters of text, ${page.keptChars} of them in kept blocks, which count toward Length. Its Length is ${length} characters, up to ${max}. Cut it to about ${length}.
 
-Cut repetition, filler, long examples and the least useful detail first. Keep the H1, a short answer under each heading you keep (merge or drop the least useful sections when the Length can't hold them all), every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, each {{find: …}} and {{ask: …}} exactly as it is, and any placeholders in square brackets. Add nothing new. Return the whole page.
-
+Cut repetition, filler, long examples and the least useful detail first. Keep the H1, a short answer under each heading, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, each {{find: …}} and {{ask: …}} exactly as it is, and any placeholders in square brackets. Keep every section the rules require; shorten inside sections instead. Add nothing new. Return the whole page.
+${meets.length ? `\nThe rules the page is written to (key: rule — what it asks):\n${meets.join('\n')}\n` : ''}
 ${html}
 
 Write in the page's own language.`;
@@ -1458,7 +1561,16 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     lockedKeys,
     ruleKeys,
     withFactLinks(linkAllowList(targets), looked.links),
-    { numbered, known, people, attributable, banned: bannedWordsOf(input.rules), health },
+    {
+      numbered,
+      known,
+      people,
+      attributable,
+      banned: bannedWordsOf(input.rules),
+      health,
+      bannedPhrases: brand.bannedPhrases ?? [],
+      draftId: draft.id,
+    },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);

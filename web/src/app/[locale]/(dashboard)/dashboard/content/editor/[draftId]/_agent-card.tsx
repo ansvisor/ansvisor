@@ -36,6 +36,37 @@ import { WorkingDots } from './_working-dots';
 
 /** A ghost button on the card's grey: its hover shows. */
 const GHOST = 'hover:bg-foreground/5 dark:hover:bg-foreground/10';
+/** The card's box: one line, about 56 px, with its tile (the owner's layout, 2026-11-14). */
+const CARD =
+  'mx-4 mt-3 mb-1 flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-2xl border bg-muted px-3.5 py-2 shadow-xs';
+/** The skeleton's grey. */
+const BONE = 'block rounded-md bg-foreground/10';
+
+/**
+ * The card's place while its batch is read, when the draft's read says it
+ * shows (no jump): its tile, two lines and its buttons in grey, as high as
+ * the card.
+ */
+export function AgentCardSkeleton() {
+  return (
+    <div
+      aria-hidden
+      data-slot="agent-card-skeleton"
+      className={cn(CARD, 'animate-pulse motion-reduce:animate-none')}
+    >
+      <span className={cn(BONE, 'h-10 w-10 shrink-0 rounded-xl')} />
+      <span className="min-w-0 flex-1 basis-56 space-y-2">
+        <span className={cn(BONE, 'h-3 w-28')} />
+        <span className={cn(BONE, 'h-2.5 w-64 max-w-full')} />
+      </span>
+      <span className="ml-auto flex gap-1.5">
+        <span className={cn(BONE, 'h-7 w-16')} />
+        <span className={cn(BONE, 'h-7 w-20')} />
+        <span className={cn(BONE, 'h-7 w-20')} />
+      </span>
+    </div>
+  );
+}
 
 /** The rules as the card counts them. */
 export interface CardRules {
@@ -258,8 +289,10 @@ export function AgentCard({
   stopping = false,
   next = null,
   onAllSteps,
+  rewriteDropped = 0,
   length = null,
   lastRunFailed = false,
+  stillFinishing = false,
   pageChars = null,
 }: {
   suggestions: DraftSuggestion[];
@@ -312,8 +345,12 @@ export function AgentCard({
   } | null;
   /** Opens the basket with every step. */
   onAllSteps?: () => void;
+  /** A rewrite taken: the rules it left open that the page before it met (said, beside Undo). */
+  rewriteDropped?: number;
   /** The agent's last run failed: said in place of an earlier batch's review. */
   lastRunFailed?: boolean;
+  /** Its answer was lost and its run hasn't said how it ended: never read as failed. */
+  stillFinishing?: boolean;
   /** A rewrite's characters, before and after, as the toolbar counts them (the editor's count). */
   pageChars?: { before: number; after: number } | null;
   /**
@@ -422,8 +459,12 @@ export function AgentCard({
 
   let title: React.ReactNode;
   let line: React.ReactNode;
+  // Suggestions to decide: one line, what they change truncating (the owner's layout).
+  let oneLine = false;
   if (working) {
-    title = (
+    title = stillFinishing ? (
+      t('stillFinishing')
+    ) : (
       <>
         {t('working')}
         <WorkingDots />
@@ -495,11 +536,16 @@ export function AgentCard({
           {breaks}
           {builtFrom}
         </>
+      ) : page.status === 'accepted' && rewriteDropped > 0 ? (
+        <span className="text-amber-700 dark:text-amber-400">
+          {tRewrite('dropped', { count: rewriteDropped })}
+        </span>
       ) : page.status === 'accepted' && stillOpen > 0 ? (
         tRewrite('rulesOpen', { count: stillOpen })
       ) : null;
   } else if (open > 0) {
     title = t('waiting', { count: open });
+    oneLine = true;
     // The placeholders its changes add, for the person to fill once accepted.
     const batchLeft = openOnes.reduce(
       (n, s) =>
@@ -511,42 +557,50 @@ export function AgentCard({
         ),
       0,
     );
+    const first = sentence(openOnes[0]?.reason ?? '', locale);
+    // What it changes truncates; a warning, See sources and the action's link stay in sight.
     line = (
       <>
-        {sentence(openOnes[0]?.reason ?? '', locale)}
-        {openOnes.length > 1 && ` · ${t('more', { count: openOnes.length - 1 })}`}
-        {batchLeft > 0 && ` · ${t('placeholders', { count: batchLeft })}`}
-        {after > from && (
-          <>
-            {' · '}
-            <span className="font-medium text-emerald-700 dark:text-emerald-400">
-              {t('gain', { met: from, after, total: rules.total })}
-            </span>
-          </>
-        )}
-        {after < from && (
-          <>
-            {' · '}
-            <span className="font-medium text-amber-700 dark:text-amber-400">
-              {t('gain', { met: from, after, total: rules.total })}
-            </span>
-          </>
-        )}
-        {breaks}
-        {builtFrom}
-        {action && (
-          <>
-            {' · '}
-            <Link
-              href={`/dashboard/action-center/actions?action=${action.actionId}`}
-              className="underline underline-offset-2 hover:no-underline"
-            >
-              {tSuggestions('fromAction', { no: action.actionNo! })}
-            </Link>
-          </>
-        )}
+        <span title={first} className="min-w-12 truncate">
+          {first}
+          {openOnes.length > 1 && `, ${t('more', { count: openOnes.length - 1 })}`}
+          {batchLeft > 0 && ` · ${t('placeholders', { count: batchLeft })}`}
+          {after !== from && (
+            <>
+              {' · '}
+              <span
+                className={cn(
+                  'font-medium',
+                  after > from
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-amber-700 dark:text-amber-400',
+                )}
+              >
+                {t('gain', { met: from, after, total: rules.total })}
+              </span>
+            </>
+          )}
+        </span>
+        <span className="min-w-0 shrink-[0.1] truncate">
+          {breaks}
+          {builtFrom}
+          {action && (
+            <>
+              {' · '}
+              <Link
+                href={`/dashboard/action-center/actions?action=${action.actionId}`}
+                className="underline underline-offset-2 hover:no-underline"
+              >
+                {tSuggestions('fromAction', { no: action.actionNo! })}
+              </Link>
+            </>
+          )}
+        </span>
       </>
     );
+  } else if (stillFinishing) {
+    title = t('stillFinishing');
+    line = t('stillFinishingLine');
   } else if (lastRunFailed) {
     title = t('runFailed');
     line = t('runFailedLine');
@@ -601,7 +655,7 @@ export function AgentCard({
       role="region"
       aria-label={page ? tRewrite('bar') : tSuggestions('bar')}
       aria-busy={working}
-      className="mx-4 mt-3 mb-1 flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-2xl border bg-muted px-3.5 py-3 shadow-xs"
+      className={CARD}
     >
       {/* The person's tile only with nothing of the agent's to decide: its count stays in sight.
           With Chat on, the agent at work is Chat's own avatar (Chat agentic plan §2–3). */}
@@ -614,8 +668,16 @@ export function AgentCard({
       )}
       {/* Room for a line of text first: on a narrow page the buttons go under it. */}
       <div className="min-w-0 flex-1 basis-56">
-        <div className="text-sm font-semibold [overflow-wrap:anywhere]">{title}</div>
-        {line && (
+        {oneLine ? (
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="shrink-0 text-sm font-semibold">{title}</span>
+            {/* A flex item's first space goes: the gap stands in for the tail's. */}
+            <span className="flex min-w-0 gap-1 text-[12.5px] text-muted-foreground">{line}</span>
+          </div>
+        ) : (
+          <div className="text-sm font-semibold [overflow-wrap:anywhere]">{title}</div>
+        )}
+        {line && !oneLine && (
           <div className="text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]">{line}</div>
         )}
         {reason && (

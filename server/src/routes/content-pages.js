@@ -283,7 +283,7 @@ router.post('/page-read', pageReadLimiter, async (req, res) => {
     if (error) throw error;
     if (!draft) return res.status(404).json({ error: 'Draft not found', code: 'not_found' });
     const { orgId } = await assertBrandAccess(draft.brand_id, req.user.id);
-    const context = await pageReadContext(draft.brand_id);
+    const context = await pageReadContext(draft.brand_id, draft.body_html ?? '');
     const result = await readPage({
       orgId,
       draftId: parsed.data.draftId,

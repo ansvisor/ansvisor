@@ -118,6 +118,7 @@ async function render(
     reviewerRequired = false,
     reviewerLd = null as string | null,
     openWork = null as { rules: number; todos: number } | null,
+    bannedPhrases = [] as string[],
   } = {},
 ) {
   // As the editor makes it (00448): the author it names, the site's pages Site trust found.
@@ -169,6 +170,7 @@ async function render(
             disclosureAdded={disclosureAdded}
             onAddDisclosure={onAddDisclosure}
             openWork={openWork}
+            bannedPhrases={bannedPhrases}
           />
         </NextIntlClientProvider>
       </Wrap>,
@@ -468,6 +470,17 @@ describe('BeforePublish', () => {
     const groups = [...dialog().querySelectorAll('section h3')].map((h) => h.textContent);
     expect(groups).toEqual(['Fix before you publish', 'Check yourself', 'In place']);
     expect(rows()[0]).toMatch(/^No author yet · missing/);
+  });
+
+  it('asks to fix the brand’s banned phrases while one is on the page, and only then', async () => {
+    await render(quality({ trust: null }), { bannedPhrases: ['cheap', 'best price'] });
+    const groups = [...dialog().querySelectorAll('section h3')].map((h) => h.textContent);
+    expect(groups[0]).toBe('Fix before you publish');
+    expect(rows()[0]).toBe(
+      '2 banned phrases on the page · missing“cheap”, “best price”. Your brand never uses these: say them in other words, or use Fix on its rule in Rules.',
+    );
+    await render(quality({ trust: null }));
+    expect(rows().join(' ')).not.toContain('banned');
   });
 
   it('checks that a regulated page both selects and names its qualified reviewer', async () => {

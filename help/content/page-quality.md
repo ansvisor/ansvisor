@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by, trusted sources]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist, content reviewer, regulated page review]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -23,7 +23,7 @@ Quality scores the page from 0 to 100 on three things, each card saying what it 
 
 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.
 
-Under them, **Site Audit estimate** is about where the page would score in Site Audit. See the Content Editor article.
+In **Before you publish**, **AI search readiness (Site Audit estimate)** is about where the page would score in Site Audit. It's a different score from Quality. See the Content Editor article.
 
 At the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing.
 
@@ -44,13 +44,17 @@ In **Settings › Content**, admins and managers can have each brand's new pages
 
 ## Next step
 
-With Quality on, the header's **Next step** opens a window: every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.
-
-Once you've decided the agent's **Fix open rules** suggestions, the step is ticked. Rules its later suggestions leave open don't bring it back; your edits can.
+With Quality on, the header's **Next** button, with dots for the steps taken, opens a window (hover it for the step's name): every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.
 
 **Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.
 
 Marked ready with steps skipped, it says how many are still open. **Next step** then offers **Export** and **Mark published**.
+
+## The order of the steps
+
+With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then **Rewrite within all rules** for a page far off its Length.
+
+Once you've decided the agent's **Fix open rules** suggestions, the step is ticked, as the **Rules** tab counts the rules left yours. Rules its later suggestions leave open don't bring it back; your edits can.
 
 ## The page's author
 
@@ -58,14 +62,14 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 
 ## Before you publish
 
-**Mark ready** opens **Before you publish** first. A line sums up what to fix and to check; the checks show in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:
+**Mark ready** opens **Before you publish** first. A line sums up what to fix and check, in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:
 
 - placeholders, alt text and links (**Ready for your CMS**);
 - the author, and the qualified reviewer on pages that advise on health, money or the law;
 - visible dates;
 - the search engine details (Article schema) Ansvisor adds;
 - Trust under 60: AI answers may lean on the page less;
-- the rules and to-dos still open. You can still mark it ready.
+- open rules and to-dos. You can still mark it ready.
 
 Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data does too. On a shopping path page, it also names product cards whose catalog price changed since they went in. **Send to CMS** opens it only when it has something to ask about.
 

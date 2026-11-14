@@ -14,6 +14,7 @@ import {
 import type { AgentRun } from '@/lib/content/agent-runs';
 import {
   FEW_OPEN_RULES,
+  raisedLength,
   stepsLeft,
   type NextAction,
   type NextPath,
@@ -128,6 +129,8 @@ export type T = ReturnType<typeof useTranslations<'contentEditor.editor.nextStep
 /** A step's name: the Length step says which way the page is off. */
 export function stepName(t: T, id: NextStepId, state: NextStepState): string {
   if (id === 'review') return t('steps.review', { count: state.waiting ?? 0 });
+  if (id === 'conflict')
+    return t('steps.conflict', { n: raisedLength(state.conflict ?? { need: 0 }) });
   if (id === 'length' && state.rewrite?.reason === 'length') {
     return state.rewrite.count > state.rewrite.target
       ? t('steps.lengthLong')
@@ -175,6 +178,10 @@ export function stepReason(
   switch (id) {
     case 'review':
       return t('reasons.review', { count: state.waiting ?? 0 });
+    case 'pageType':
+      return t('reasons.pageType');
+    case 'conflict':
+      return t('reasons.conflict', state.conflict ?? { need: 0, max: 0 });
     case 'plan':
       return step.primary === 'addSources' ? t('reasons.planNoSources') : t('reasons.plan');
     case 'length':
@@ -257,7 +264,6 @@ export function NextStepButton({
   working,
   raises = [],
   cost = null,
-  compact = false,
 }: {
   next: NextPath;
   state: NextStepState;
@@ -283,8 +289,6 @@ export function NextStepButton({
    * the month's AI usage (null on an unlimited plan, or while unread).
    */
   cost?: { minutes: number; percent: number | null } | null;
-  /** In a narrow pane (embedded in Chat): "Next" and the bars at any window width. */
-  compact?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.nextStep');
   const { step, path, tips } = next;
@@ -346,6 +350,8 @@ export function NextStepButton({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* The dots and "Next" at any width (the owner's layout, 2026-11-14): the step's name on
+          hover and in its label, so the header stays quiet. */}
       <DialogTrigger
         render={<Button variant="outline" size="sm" />}
         aria-label={t('button', { step: name })}
@@ -353,10 +359,6 @@ export function NextStepButton({
       >
         <Bars path={path} />
         <span>{t('short')}</span>
-        {/* The step's name where there's room (§3b: "Next" with the bars at 1024px). */}
-        <span className={cn('hidden max-w-48 truncate', !compact && 'xl:inline')}>
-          {t('buttonStep', { step: name })}
-        </span>
       </DialogTrigger>
       {/* One large window in the page's middle (the user, 2026-11-03): every
           step on the left, the one to take on the right with why, what

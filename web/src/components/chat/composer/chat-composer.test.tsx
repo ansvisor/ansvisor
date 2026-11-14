@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
+import type { AiUsage } from '@/lib/billing/ai-usage';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { composerKeyAction } from './composer-keys';
 
@@ -28,6 +29,10 @@ const toast = vi.hoisted(() =>
 vi.mock('sonner', () => ({ toast }));
 const requestAccess = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess }));
+const aiUsage = vi.hoisted(() => ({ usage: null as AiUsage | null }));
+vi.mock('@/components/providers/ai-usage-provider', () => ({
+  useAiUsage: () => ({ usage: aiUsage.usage, refresh: () => {} }),
+}));
 
 const { ChatComposer } = await import('./chat-composer');
 
@@ -72,10 +77,10 @@ const modeButton = () =>
   container.querySelector<HTMLButtonElement>('[data-action="composer.openMode"]');
 // The menu opens in a portal, outside the composer.
 const modeItems = () => [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
-// The box's bottom row: ＋ / @, then the microphone and Send.
+// The box's bottom row: ＋ / @, the run mode, then the model, the microphone and Send.
 const sendRow = () => button('Send')!.closest('[data-slot="composer-send-group"]')!.parentElement!;
-const footer = () => container.lastElementChild!.lastElementChild!;
-const under = () => footer().textContent;
+// The line under the box, only while it says something.
+const under = () => container.querySelector('[data-slot="composer-status"]')?.textContent ?? '';
 
 async function type(value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
@@ -93,6 +98,7 @@ async function press(key: string, init: KeyboardEventInit = {}) {
 beforeEach(() => {
   Object.values(handlers).forEach((fn) => fn.mockReset());
   toast.mockReset();
+  aiUsage.usage = null;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -215,15 +221,15 @@ describe('ChatComposer', () => {
     expect(box().value).toBe('only blog pages');
   });
 
-  it('puts the run mode under the box, as a menu that says what each pick does, and locks Full auto below Growth', async () => {
+  it('puts the run mode in the box’s row by its short name, as a menu that says what each pick does, and locks Full auto below Growth', async () => {
     await render({ fullAutoOpen: false });
     const open = modeButton()!;
-    expect(open.textContent).toBe('Auto, ask before changes ▾');
+    expect(open.textContent).toBe('Ask before changes ▾');
     expect(open.getAttribute('aria-label')).toBe('Run mode: Auto, ask before changes');
     expect(open.getAttribute('aria-haspopup')).toBe('menu');
-    // In the line under the box, not in the box's row with Send.
-    expect(footer().contains(open)).toBe(true);
-    expect(sendRow().contains(open)).toBe(false);
+    // In the box's row with Send; nothing under the box.
+    expect(sendRow().contains(open)).toBe(true);
+    expect(under()).toBe('');
     expect(modeItems()).toHaveLength(0);
 
     await act(async () => open.click());
@@ -271,24 +277,31 @@ describe('ChatComposer', () => {
     expect(modeButton()!.textContent).toBe('Ask me first ▾');
   });
 
-  it('keeps one row in the box in every composer: ＋ / @ on the left, Send on the right', async () => {
+  it('keeps one row in the box in every composer: ＋ / @, the mode, then the model, the microphone and Send', async () => {
     for (const variant of ['home', 'dock', 'panel'] as const) {
       await render({ variant, fullAutoOpen: false });
       const row = sendRow();
-      // One line that never wraps, so Send is always in it.
+      // One line that never wraps, so Send is always in it; labels are cut instead.
       expect(row.className).not.toContain('flex-wrap');
       const group = button('Send')!.parentElement!;
       expect(group.getAttribute('data-slot')).toBe('composer-send-group');
-      expect(group.className).toContain('ml-auto');
       expect(group.className).toContain('shrink-0');
       expect(group.lastElementChild).toBe(button('Send'));
-      expect([...row.children].slice(0, -1).map((el) => el.getAttribute('data-action'))).toEqual([
+      expect(
+        [...row.children].map(
+          (el) => el.getAttribute('data-action') ?? el.getAttribute('data-slot'),
+        ),
+      ).toEqual([
         'composer.openPlus',
         'composer.openSlash',
         'composer.openRef',
+        null,
+        'composer.openMode',
+        'composer-model',
+        'composer-send-group',
       ]);
-      // No run mode in it: that is under the box.
-      expect(row.querySelector('[data-action="composer.openMode"]')).toBeNull();
+      expect(modeButton()!.querySelector('.truncate')).not.toBeNull();
+      expect(row.querySelector('[data-slot="composer-model"]')!.className).toContain('ml-auto');
     }
   });
 
@@ -311,9 +324,10 @@ describe('ChatComposer', () => {
       const link = container.querySelector('a')!;
       expect(link.textContent).toBe(`Read-only · ${name}`);
       expect(link.getAttribute('href')).toBe('/dashboard/chat/capabilities');
-      // Where the mode is for others: under the box.
-      expect(footer().contains(link)).toBe(true);
-      expect(under()).toContain('@ data · read-only');
+      // Where the mode is for others: in the box's row; the box says @ data, no skills.
+      expect(sendRow().contains(link)).toBe(true);
+      expect(box().placeholder).toBe('Ask anything · @ data');
+      expect(under()).toBe('');
     }
     // A manager changes things: the mode is there.
     await render({}, 'manager');
@@ -327,9 +341,57 @@ describe('ChatComposer', () => {
     expect(box().rows).toBe(1);
   });
 
-  it('shows the model on Auto in the line under the box', async () => {
+  it('shows the model on Auto, short, in the box’s row', async () => {
     await render();
-    expect(under()).toContain('Auto · Haiku reads, Sonnet writes');
+    expect(sendRow().querySelector('[data-slot="composer-model"]')!.textContent).toBe('Auto');
+  });
+
+  it('puts the / and @ hint in the placeholder, not under the box', async () => {
+    await render();
+    expect(box().placeholder).toBe('Ask anything · / skills · @ data');
+    expect(under()).toBe('');
+    await render({ placeholder: 'Make the intro shorter' });
+    expect(box().placeholder).toBe('Make the intro shorter · / skills · @ data');
+    // A run answering, or the box off at the limit: its own line alone.
+    await render({ running: true });
+    expect(box().placeholder).toBe('Steer while I work: “only blog pages”…');
+    await render({ disabled: true, placeholder: 'Your trial AI limit is used up' });
+    expect(box().placeholder).toBe('Your trial AI limit is used up');
+  });
+
+  it('marks the model button from 80% of the AI usage, amber, then red once used up', async () => {
+    const usage = (percentUsed: number): AiUsage => ({
+      plan: 'growth',
+      planName: 'Growth',
+      periodStart: '2026-11-01T00:00:00.000Z',
+      periodEnd: '2026-12-01T00:00:00.000Z',
+      unlimited: false,
+      percentUsed,
+      features: [],
+      chatMetered: true,
+    });
+    const props = {
+      modelChoice: { model: 'auto', effort: 'normal' } as const,
+      onModelChoice: vi.fn(),
+    };
+    const dot = () => container.querySelector<HTMLElement>('[data-slot="model-usage-dot"]');
+    aiUsage.usage = usage(42);
+    await render(props);
+    expect(dot()).toBeNull();
+    expect(button('Model')!.textContent).toBe('Auto ▾');
+
+    aiUsage.usage = usage(84.6);
+    await render(props);
+    expect(dot()!.dataset.tone).toBe('warning');
+    const warned = container.querySelector<HTMLButtonElement>('[data-action="model.openMenu"]')!;
+    expect(warned.getAttribute('aria-label')).toBe(
+      'Model · AI 84.6% used this month, close to the limit',
+    );
+    expect(warned.textContent).toBe('Auto ▾');
+
+    aiUsage.usage = usage(100);
+    await render(props);
+    expect(dot()!.dataset.tone).toBe('exhausted');
   });
 
   it('names the chat’s model and effort on the model button, and opens the model menu (W4-02)', async () => {
@@ -351,7 +413,7 @@ describe('ChatComposer', () => {
     vi.unstubAllGlobals();
 
     await render({ modelChoice: { model: 'auto', effort: 'normal' }, onModelChoice });
-    expect(button('Model')!.textContent).toBe('Auto · Haiku reads, Sonnet writes ▾');
+    expect(button('Model')!.textContent).toBe('Auto ▾');
   });
 });
 
@@ -416,6 +478,12 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
     await render({ chips, onRemoveChip });
     expect(chipTexts()).toEqual(['Ansvisor×', 'Last 30 days×', 'Best AI search visibility t…×']);
     const long = container.querySelectorAll('[data-action="composer.removeChip"]')[2];
+    // In one row above the box, outside it, each with a small icon.
+    const row = container.querySelector('[data-slot="composer-context"]')!;
+    expect(row.contains(long)).toBe(true);
+    expect(row.contains(box())).toBe(false);
+    expect(row.nextElementSibling!.contains(box())).toBe(true);
+    expect(long.parentElement!.querySelector('svg')).not.toBeNull();
     expect(long.parentElement!.getAttribute('title')).toBe(chips[2].label);
     expect(long.getAttribute('aria-label')).toBe(`Remove ${chips[2].label}`);
     await act(async () => (long as HTMLButtonElement).click());
@@ -834,7 +902,7 @@ describe('ChatComposer: the image model on the model button (W4-08b, CHAT-15 ite
     await render({ modelChoice: choice, onModelChoice: vi.fn(), imageModel: 'Nano Banana 2 Lite' });
     expect(model()).toBe('Image · Nano Banana 2 Lite ▾');
     await render({ modelChoice: choice, onModelChoice: vi.fn(), imageModel: null });
-    expect(model()).toBe('Auto · Haiku reads, Sonnet writes ▾');
+    expect(model()).toBe('Auto ▾');
   });
 });
 

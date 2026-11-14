@@ -1,14 +1,15 @@
 import { z } from 'zod';
 import { LANGUAGES } from '@/config/prompt-options';
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
-import { PAGE_TYPES, type DraftMethod, type PageType } from '@/lib/content/drafts';
+import { PAGE_TYPES, isPageType, type DraftMethod, type PageType } from '@/lib/content/drafts';
 import { lengthTarget } from '@/lib/content/editor';
 import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
 import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
 import { parseHtml } from '@/lib/content/dom';
 import { pageOffer } from '@/lib/content/page-schema';
 import { countWords, languageCode } from '@/lib/content/readability';
-import { wordsOf } from '@/lib/content/sources';
+import { carriesFanout } from '@/lib/content/fanout-match';
+import { bannedPhrasesIn } from '@/lib/chat/banned-phrases';
 import {
   shoppingLinks,
   type PageCard,
@@ -284,6 +285,33 @@ const SHOPPING_RULES: RuleDef[] = [
   { key: 'shopLinksLive', group: 'links', kind: 'switch', value: '', check: 'page' },
 ];
 
+/**
+ * Short pages ask for fewer fan-out sections and questions, so no default
+ * set asks for more than its Length holds (lengthConflict): two sections,
+ * three questions and a summary take 950 characters at the least, within
+ * the 960 an 800-character Length allows.
+ */
+const SHORT_TYPES: ReadonlySet<PageType | null> = new Set<PageType>([
+  'product_page',
+  'category_page',
+  'collection_page',
+  'sizing_guide',
+]);
+const SHORT_VALUES: Readonly<Record<string, string>> = { fanoutH2: '2', faq: '3', fanoutFaq: '2' };
+
+/**
+ * The brand's banned phrases (Brand settings › Content rules, 00538): in
+ * the Style group, after Banned words, only while the brand has some. On
+ * by default; checked against them (RuleContext's bannedPhrases).
+ */
+const BRAND_BANNED: RuleDef = {
+  key: 'brandBanned',
+  group: 'style',
+  kind: 'switch',
+  value: '',
+  check: 'page',
+};
+
 /** The Shopping rules' keys: checked against the shopping path (shoppingStatus). */
 export const SHOPPING_RULE_KEYS: ReadonlySet<string> = new Set(SHOPPING_RULES.map((r) => r.key));
 
@@ -299,6 +327,8 @@ export function ruleSet(
     language?: string | null;
     length?: number | null;
     shopping?: boolean;
+    /** The brand's banned phrases: the rule shows only when it has some. */
+    bannedPhrases?: readonly string[];
   } = {},
 ): RuleDef[] {
   const own = (pageType && TYPE_RULES[pageType]) || [];
@@ -315,8 +345,13 @@ export function ruleSet(
       if (rule.key === 'keywords' && defaults.keywords?.length) {
         return { ...rule, value: defaults.keywords.join(', ') };
       }
+      if (SHORT_TYPES.has(pageType) && Object.hasOwn(SHORT_VALUES, rule.key)) {
+        return { ...rule, value: SHORT_VALUES[rule.key] };
+      }
       return rule;
-    }),
+    }).flatMap((rule) =>
+      rule.key === 'bannedWords' && defaults.bannedPhrases?.length ? [rule, BRAND_BANNED] : [rule],
+    ),
   ];
 }
 
@@ -340,8 +375,14 @@ export type TextRule = z.infer<typeof textRuleSchema>;
 
 /** The draft's choices on its rules (content_drafts.rules, 00213). */
 export const draftRulesSchema = z.object({
-  /** The page type whose set applies; null follows the draft's type. */
+  /** The page type whose set applies; null follows the draft's type (ruleSetType). */
   set: z.enum(PAGE_TYPES).nullable(),
+  /**
+   * The page's type when that set was picked: the set holds while the page
+   * keeps it. None on a set picked before it was kept (legacyPin): that set
+   * holds whatever the type. Only the person's own pick writes it.
+   */
+  setFor: z.enum(PAGE_TYPES).optional(),
   /**
    * The set the draft started from: Ansvisor's default, or the workspace's
    * My rules (00214). Null until the person changes something: the
@@ -366,6 +407,43 @@ export const NO_DRAFT_RULES: DraftRules = {
   overrides: {},
   textRules: [],
 };
+
+/**
+ * A set picked before a pick kept the page's type with it (setFor): it holds
+ * whatever the page type, with or without one, its type rules checked, as it
+ * always did, until the person picks a set again.
+ */
+export const legacyPin = (rules: Pick<DraftRules, 'set' | 'setFor'>): boolean =>
+  !!rules.set && !rules.setFor;
+
+/**
+ * The page type whose set applies: a set picked before setFor (legacyPin)
+ * whatever the page type; one the person picked while the page had another
+ * type, as long as the page keeps that type; else the page type's own (a
+ * type set or changed since, or a set picked with none), so the rules
+ * follow the page type.
+ */
+export function ruleSetType(
+  rules: Pick<DraftRules, 'set' | 'setFor'>,
+  pageType: string | null,
+): PageType | null {
+  const own = isPageType(pageType) ? pageType : null;
+  if (legacyPin(rules)) return rules.set;
+  return rules.set && own && rules.setFor === own ? rules.set : own;
+}
+
+/**
+ * The page type the rules are checked as (RuleContext's pageType): the
+ * page's own, so another type's rules are set apart; a set picked before
+ * setFor (legacyPin) its own, so its type rules are checked as they were.
+ */
+export function rulesPageType(
+  rules: Pick<DraftRules, 'set' | 'setFor'>,
+  pageType: string | null,
+): PageType | null {
+  if (legacyPin(rules)) return rules.set;
+  return isPageType(pageType) ? pageType : null;
+}
 
 /** A workspace's My rules for one page type (content_rule_sets, 00214). */
 export const savedRuleSetSchema = z.object({
@@ -755,6 +833,8 @@ export type RuleStatus =
       count: number;
       /** The linked products that no longer sell, by name and why (shopLinksLive). */
       items?: { title: string; state: ShoppingLinkState }[];
+      /** The brand's banned phrases on the page, as the brand wrote them (brandBanned). */
+      phrases?: string[];
     }
   | {
       state: 'bad';
@@ -786,6 +866,9 @@ export type RuleStatus =
         | 'notHowTo'
         | 'englishOnly'
         | 'noSizes'
+        /** Another page type's own rule (otherType), or a product's specs the page doesn't give. */
+        | 'otherType'
+        | 'needsSpecs'
         /** No shopping path yet, it's being read, or it couldn't be (shopping path, part 6). */
         | 'noShoppingPath'
         | 'shoppingReading'
@@ -811,6 +894,14 @@ export interface RuleContext {
    * couldn't be; none without a path.
    */
   shopping?: ShoppingCheck | 'reading' | 'failed' | null;
+  /**
+   * The draft's own page type, as rulesPageType reads it: another type's own
+   * rules (a set picked for another type) aren't checked on it. None where
+   * it isn't told.
+   */
+  pageType?: PageType | null;
+  /** The brand's banned phrases (Content rules), for brandBanned. None where it isn't told. */
+  bannedPhrases?: readonly string[];
 }
 
 /** Phrases that read as machine-written (spec §10, "Remove AI traces"). */
@@ -857,13 +948,8 @@ function linkHost(href: string): string | null {
   return normalizeDomain(href) || null;
 }
 
-/** Whether a fan-out's words are carried by a text, as the Sources tab reads it. */
-function carries(fanout: string, text: string): boolean {
-  const words = [...new Set(wordsOf(fanout))];
-  if (!words.length) return false;
-  const have = new Set(wordsOf(text));
-  return words.filter((w) => have.has(w)).length / words.length >= 0.75;
-}
+/** Whether a heading or an FAQ question carries a fan-out (fanoutH2, fanoutFaq). */
+const carries = carriesFanout;
 
 /**
  * An FAQ's heading, in the languages it's read in ("FAQ", "Häufig gestellte
@@ -878,6 +964,8 @@ const FAQ_HEADING =
  */
 const SIZES =
   /(?<!\p{L})(?:size\s+(?:chart|guide|table)|sizes|sizing|xxs|xs|xl|xxl|xxxl|(?:eu|us|uk)\s?\d{1,2}(?:[.,]5)?)(?!\p{L})/iu;
+/** A product's spec as a page lists it: "Weight: 1.2 kg", "Material: leather". */
+const SPEC_LINE = /^\p{L}[\p{L}\p{N} ()/-]{0,30}:\s*\S/u;
 /** The languages an FAQ's heading is read in: another page's missing FAQ isn't said. */
 const FAQ_LANGUAGES = new Set(['en', 'de', 'fr', 'es', 'tr', 'it', 'pt', 'nl']);
 const isFaqHeading = (text: string) =>
@@ -1334,6 +1422,13 @@ export const ruleNumber = (rule: Pick<ActiveRule, 'current'>) =>
 
 /** Checks one rule against the page as written. */
 export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): RuleStatus {
+  if (
+    rule.group === 'type' &&
+    ctx.pageType !== undefined &&
+    !(ctx.pageType && TYPE_RULES[ctx.pageType]?.some((own) => own.key === rule.key))
+  ) {
+    return { state: 'info', code: 'otherType' };
+  }
   if (rule.check === 'feed') return feedStatus(page, ctx.catalog);
   if (rule.key === 'whoFor' && !rule.current.trim()) return { state: 'bad', code: 'notSet' };
   if (rule.check === 'ai') return { state: 'info', code: 'aiCheck' };
@@ -1475,13 +1570,26 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       const found = list(rule.current).reduce((sum, word) => sum + count(page.text, word), 0);
       return found ? { state: 'bad', code: 'found', count: found } : { state: 'ok' };
     }
+    case 'brandBanned': {
+      // As Chat's draft check reads them: whole words, in any case.
+      const phrases = bannedPhrasesIn([page.text], ctx.bannedPhrases ?? []);
+      return phrases.length
+        ? { state: 'bad', code: 'found', count: phrases.length, phrases }
+        : { state: 'ok' };
+    }
     case 'comparisonTable':
     case 'sideBySide':
     case 'specsTable':
     case 'sizeChart':
-      return blocks.some((b) => b.tag === 'table')
-        ? { state: 'ok' }
-        : { state: 'bad', code: 'missing' };
+      if (blocks.some((b) => b.tag === 'table')) return { state: 'ok' };
+      // No specs on the page to set out: the agent won't invent them.
+      if (
+        rule.key === 'specsTable' &&
+        blocks.filter((b) => isText(b) && SPEC_LINE.test(b.text)).length < 2
+      ) {
+        return { state: 'info', code: 'needsSpecs' };
+      }
+      return { state: 'bad', code: 'missing' };
     case 'proofPerSection': {
       const sections = splitSections(blocks);
       if (!sections.length) return { state: 'bad', code: 'noH2' };
@@ -1616,6 +1724,21 @@ export function lengthConflict(
   const { max } = span;
   return need > max ? { need, max } : null;
 }
+
+/**
+ * A rule this page can't meet: it doesn't apply here, or can't be checked
+ * (another type's rule, no feed, no sizes, no specs, no fan-outs…). The
+ * Rules tab sets it apart, "Not checked on this page"; it is never counted
+ * (rulesMet) nor sent to the Content Agent. Not an AI check, which applies,
+ * nor a feed or catalog still being read.
+ */
+const CHECKED_INFO: ReadonlySet<string> = new Set(['aiCheck', 'feedReading', 'shoppingReading']);
+export const notCheckedHere = (status: RuleStatus): boolean =>
+  status.state === 'info' && !CHECKED_INFO.has(status.code);
+
+/** The brand's banned phrases a rule's status found on the page (brandBanned); none otherwise. */
+export const phrasesFound = (status: RuleStatus | undefined): string[] =>
+  (status?.state === 'bad' && 'phrases' in status && status.phrases) || [];
 
 /** How many of the rules in effect are met: off rules and ones the page can't say don't count. */
 export function rulesMet(statuses: { rule: ActiveRule; status: RuleStatus }[]): {

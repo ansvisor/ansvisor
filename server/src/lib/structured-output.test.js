@@ -266,14 +266,25 @@ describe('a Claude 5.5 call through @ai-sdk/anthropic, as sent', () => {
   });
 
   it('rejects an answer past a limit Claude was only told, as zod did before', async () => {
-    const { provider } = fakeClaude({ suggestions: Array(9).fill(suggestion) });
+    const { provider } = fakeClaude({ items: ['a', 'b', 'c'] });
+    const two = z.object({ items: z.array(z.string()).max(2) });
     const call = generateObject({
+      model: provider('claude-haiku-5-5'),
+      ...objectOptions('anthropic/claude-haiku-5-5', two, { maxOutputTokens: 16_000 }),
+      prompt: 'List two.',
+    });
+    await expect(call).rejects.toSatisfy((err) => NoObjectGeneratedError.isInstance(err));
+  });
+
+  it('takes 9 suggestions: the agent keeps 8 (keepSuggestions), never failing the run', async () => {
+    const { provider } = fakeClaude({ suggestions: Array(9).fill(suggestion) });
+    const result = await generateObject({
       model: provider('claude-haiku-5-5'),
       ...objectOptions('anthropic/claude-haiku-5-5', suggestionsSchema, {
         maxOutputTokens: 16_000,
       }),
       prompt: 'Fix the open rules.',
     });
-    await expect(call).rejects.toSatisfy((err) => NoObjectGeneratedError.isInstance(err));
+    expect(result.object.suggestions).toHaveLength(9);
   });
 });

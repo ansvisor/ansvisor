@@ -427,13 +427,25 @@ describe('AiUsageMeter in the Content Editor', () => {
   const page = () =>
     [...popup()!.querySelectorAll('p')].find((p) => p.textContent?.startsWith('This page'));
 
-  it('is the header’s button height, the percent alone narrower than 1280px, named on hover', async () => {
+  it('is a 16 px ring and "AI 21.4%" after Saved, with no bar or border, named on hover', async () => {
     await render('admin', <AiUsageMeter compact draftId="d1" />);
     expect(trigger()!.className).toContain('h-7');
-    const [label, bar] = trigger()!.querySelectorAll('span');
-    expect(label.className).toContain('hidden xl:inline');
-    expect(bar.className).toContain('hidden xl:block');
+    expect(trigger()!.className).toContain('border-transparent');
+    const ring = trigger()!.querySelector('svg')!;
+    expect(ring.getAttribute('class')).toContain('h-4 w-4');
+    expect(ring.querySelectorAll('circle')[1].getAttribute('stroke-dasharray')).toBe('21.4 100');
+    expect(trigger()!.textContent).toBe('AI21.4%');
+    expect(trigger()!.querySelector('.rounded-full.bg-muted')).toBeNull();
     expect(trigger()!.title).toBe('AI 21.4% used this month');
+  });
+
+  it('turns the ring and its words amber near the limit, as the bar', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ percentUsed: 85 }));
+    await render('admin', <AiUsageMeter compact draftId="d1" />);
+    expect(trigger()!.className).toContain('text-amber-700');
+    const share = trigger()!.querySelectorAll('circle')[1];
+    expect(share.getAttribute('class')).toContain('stroke-amber-500');
+    expect(trigger()!.title).toBe('AI 85% used this month, close to the limit');
   });
 
   it('adds the page’s share of the month, read on each opening', async () => {
