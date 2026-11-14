@@ -176,6 +176,7 @@ import { MAX_PROOF_TODOS, type ProofSpot } from '@/lib/content/page-read';
 import {
   liveSkips,
   nextStep,
+  raisedLength,
   rulesForNext,
   stepState,
   thirdPassOf,
@@ -277,6 +278,7 @@ import {
 } from './_next-step';
 import {
   NO_TRIED,
+  agentFixable,
   readTried,
   runDecided,
   triedAfter,
@@ -573,7 +575,7 @@ export function DraftEditor({
     if (
       kind === 'fix' &&
       only &&
-      !rulesForNext(rules.rules, heldRules).every((key) => only.includes(key))
+      !rulesForNext(rules.rules, heldRules, triedShown).every((key) => only.includes(key))
     ) {
       return null;
     }
@@ -656,6 +658,8 @@ export function DraftEditor({
     input?: boolean;
     /** Quality's part to show, from the Next step basket: its to-dos, or what raises Trust. */
     focus?: QualityFocus;
+    /** A rule whose value Rules focuses: the Next step basket's Ask for fewer. */
+    rule?: string;
   } | null>(null);
   // Embedded, the bottom bar opens what is asked for itself, and the page's
   // own open-or-closed choice stays as it was.
@@ -2409,15 +2413,15 @@ export function DraftEditor({
       toast(t('suggestions.decideFirst', { count: openSuggestions }));
       return;
     }
-    const {
-      forAgent: open,
-      notForAgent,
-      held: heldOpen,
-    } = openRulesForAgent(rules.rules, only, heldRules);
+    // What it can still fix (agentFixable): not what it tried, read now, so Ask again's clear counts.
+    const tried = triedOpen(triedNow.current.tried, rules.rules);
+    const { fixable: open, yours } = agentFixable(rules.rules, { held: heldRules, tried, only });
     if (open.length === 0) {
       // Only rules it can't fix are open: say what to do instead.
+      const { notForAgent, held: heldOpen } = openRulesForAgent(rules.rules, only, heldRules);
       if (notForAgent.length) toast(t(`suggestions.${notForAgentMessage(notForAgent)}`));
       else if (heldOpen.length) toast(tRules(heldMessage(heldOpen)));
+      else if (yours.length) toast(tRules('yours.line', { count: yours.length }));
       return;
     }
     const pageText = editor.getText({ blockSeparator: '\n' });
@@ -2829,6 +2833,18 @@ export function DraftEditor({
     blocked: agentFixBlocked(fixRunning),
     held: heldRules,
     tried: triedShown,
+    askAgain: (key) => {
+      const store = triedNow.current;
+      saveTried({ ...store, tried: store.tried.filter((tried) => tried !== key) });
+      void fixRules([key]);
+    },
+    // At the rule's spot where it has one (an AI trace's phrase), else the page.
+    showInPage: (key) => {
+      const phrase = key === 'aiTraces' && editor ? aiTracesFound(editor.getText())[0] : undefined;
+      if (phrase && editor && findBlock(editor.state.doc, phrase))
+        showInPage(phrase, { focus: true });
+      else editor?.commands.focus();
+    },
   };
   const handOffCard: HandOff | null =
     sourcesOn && quality
@@ -2872,13 +2888,18 @@ export function DraftEditor({
   // The card's Run Agent says why it won't run, as the Rules card does: also
   // when the only rules left open are ones the agent doesn't fix (one H1).
   const agentRules = openRulesForAgent(rules.rules, undefined, heldRules);
+  // As the Rules tab reads them (agentFixable): none left it can fix, what's open is the person's.
+  const fixableNow = agentFixable(rules.rules, { held: heldRules, tried: triedShown });
+  const none = fixableNow.fixable.length === 0;
   const cardRunBlocked =
     agentFix.blocked ??
-    (agentRules.forAgent.length === 0 && agentRules.notForAgent.length > 0
+    (none && agentRules.notForAgent.length > 0
       ? t(`suggestions.${notForAgentMessage(agentRules.notForAgent)}`)
-      : agentRules.forAgent.length === 0 && agentRules.held.length > 0
+      : none && agentRules.held.length > 0
         ? tRules(heldMessage(agentRules.held))
-        : null);
+        : none && fixableNow.yours.length > 0
+          ? tRules('yours.line', { count: fixableNow.yours.length })
+          : null);
 
   // A drag with files over the page shows where they go; one dropped beside
   // the page (not on its text) goes in at the cursor.
@@ -3419,9 +3440,13 @@ export function DraftEditor({
     waiting: agentWorking ? 0 : openSuggestions,
     empty: !pageHasWords,
     rewrite: rewriteAdvice(rules.rules, reach, heldRules),
-    openRules: rulesForNext(rules.rules, heldRules),
-    fixable: openRulesForAgent(rules.rules, undefined, heldRules).forAgent.length,
+    // As the Rules tab reads them (agentFixable): the two never disagree.
+    openRules: rulesForNext(rules.rules, heldRules, triedShown),
+    fixable: fixableNow.fixable.length,
+    yours: fixableNow.yours.length,
     openTotal: rules.rules.filter(({ rule, status }) => rule.on && status.state === 'bad').length,
+    noType: !isPageType(pageType),
+    conflict: rules.lengthConflict,
     quality: quality
       ? {
           trust: trustNow,
@@ -3705,6 +3730,23 @@ export function DraftEditor({
   const runNext = (action: NextAction) => {
     setNextOpen(false);
     switch (action) {
+      case 'setPageType':
+        setTypeMenuOpen(true);
+        return;
+      case 'raiseLength':
+        if (rules.lengthConflict) {
+          rules.change('length', { value: String(raisedLength(rules.lengthConflict)) });
+        }
+        return;
+      case 'askFewer': {
+        // The count the rules ask the most of, focused in Rules.
+        const rule = ['fanoutH2', 'faq', 'buyingFaq', 'fanoutFaq'].find((key) =>
+          rules.rules.some(({ rule }) => rule.key === key && rule.on),
+        );
+        showPanel();
+        setTabRequest((prev) => ({ tab: 'rules', n: (prev?.n ?? 0) + 1, rule }));
+        return;
+      }
       case 'addSources':
         openPanelTab('sources');
         return;

@@ -14,6 +14,7 @@ import {
 import type { AgentRun } from '@/lib/content/agent-runs';
 import {
   FEW_OPEN_RULES,
+  raisedLength,
   stepsLeft,
   type NextAction,
   type NextPath,
@@ -128,6 +129,8 @@ export type T = ReturnType<typeof useTranslations<'contentEditor.editor.nextStep
 /** A step's name: the Length step says which way the page is off. */
 export function stepName(t: T, id: NextStepId, state: NextStepState): string {
   if (id === 'review') return t('steps.review', { count: state.waiting ?? 0 });
+  if (id === 'conflict')
+    return t('steps.conflict', { n: raisedLength(state.conflict ?? { need: 0 }) });
   if (id === 'length' && state.rewrite?.reason === 'length') {
     return state.rewrite.count > state.rewrite.target
       ? t('steps.lengthLong')
@@ -175,6 +178,10 @@ export function stepReason(
   switch (id) {
     case 'review':
       return t('reasons.review', { count: state.waiting ?? 0 });
+    case 'pageType':
+      return t('reasons.pageType');
+    case 'conflict':
+      return t('reasons.conflict', state.conflict ?? { need: 0, max: 0 });
     case 'plan':
       return step.primary === 'addSources' ? t('reasons.planNoSources') : t('reasons.plan');
     case 'length':

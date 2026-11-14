@@ -222,6 +222,8 @@ export function EditorSidePanel({
     input?: boolean;
     /** Quality's part to show (the Next step basket's Show to-dos, Show what raises Trust). */
     focus?: QualityFocus;
+    /** A rule whose value Rules focuses (the Next step basket's Ask for fewer). */
+    rule?: string;
   } | null;
   /** Run Agent's Fix open rules, for Rules (CE-018, v1.1 CE-029). */
   agentFix?: AgentFix;
@@ -689,6 +691,7 @@ export function EditorSidePanel({
                 draftPageType={isPageType(pageType) ? pageType : null}
                 brandRules={brandRules}
                 onChangeType={onChangeType}
+                focusRequest={tabRequest?.rule ? { key: tabRequest.rule, n: tabRequest.n } : null}
               />
             </div>
           )}

@@ -11554,9 +11554,11 @@
           "ahead": "to do"
         },
         "steps": {
+          "pageType": "Set page type",
           "plan": "Plan the page",
           "write": "Write the first draft",
           "import": "Bring in your page",
+          "conflict": "Raise Length to ~{n, number}",
           "lengthLong": "Shorten to your Length",
           "lengthShort": "Bring it up to your Length",
           "fixRules": "Fix open rules",
@@ -11566,6 +11568,8 @@
           "review": "Review {count, plural, one {# suggestion} other {# suggestions}}"
         },
         "reasons": {
+          "pageType": "The page has no type yet. Its rules follow its type, so set it before Content Agent runs.",
+          "conflict": "The sections, questions and summary the rules ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise the Length to fit them, or ask the rules for fewer.",
           "plan": "No brief yet. I build one from your prompts, fan-outs and cited pages.",
           "planNoSources": "No brief yet, and no prompt, fan-out or Search Console query is kept to build one from. Add one in Sources first.",
           "review": "Content Agent left {count, plural, one {# suggestion} other {# suggestions}} on the page. Accept or reject {count, plural, one {it} other {each, or all at once}}: the next step follows from what you keep.",
@@ -11587,6 +11591,9 @@
           "publishedLeft": "It's published, with {count, plural, one {# step} other {# steps}} still open: see All steps. Export it again when the page changes."
         },
         "actions": {
+          "setPageType": "Set page type",
+          "raiseLength": "Raise Length",
+          "askFewer": "Ask for fewer",
           "buildBrief": "Build brief",
           "addSources": "Add sources",
           "review": "Review",
@@ -12469,6 +12476,12 @@
         "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
         "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
         "triedNote": "Content Agent tried this and couldn't fix it. It's yours to decide: change the page yourself, or the rule.",
+        "yours": {
+          "line": "Content Agent did what it could. {count, plural, one {# rule is} other {# rules are}} yours to decide.",
+          "page": "Change the page",
+          "rule": "Change the rule",
+          "again": "Ask again"
+        },
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
         "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",

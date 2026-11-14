@@ -126,7 +126,7 @@ describe('NextStepButton', () => {
       state({
         method: 'optimize',
         rewrite: { reason: 'length', count: 19_203, target: 8_000, percent: 140 },
-        openRules: ['rule0', 'rule1', 'rule2'],
+        openRules: [],
       }),
     );
     expect(popup()!.textContent).toContain('Shorten to your Length');
@@ -135,8 +135,6 @@ describe('NextStepButton', () => {
     );
     await act(async () => button('Rewrite page')!.click());
     expect(onAction).toHaveBeenCalledWith('rewritePage');
-    await act(async () => button('Fix open rules')!.click());
-    expect(onAction).toHaveBeenCalledWith('fixRules');
     await act(async () => button('Skip this step')!.click());
     expect(onSkip).toHaveBeenCalledWith('length');
     expect(path()).toEqual([
@@ -149,6 +147,16 @@ describe('NextStepButton', () => {
     // If you see…: each line with its button, none repeating the step's own.
     expect(popup()!.textContent).not.toContain('Page far longer than Length');
     expect(popup()!.textContent).not.toContain('rules open →');
+    // Rules open: Fix first, with Rewrite page its other one.
+    await render(
+      state({
+        method: 'optimize',
+        rewrite: { reason: 'length', count: 19_203, target: 8_000, percent: 140 },
+        openRules: ['rule0', 'rule1', 'rule2'],
+      }),
+    );
+    await act(async () => button('Fix open rules')!.click());
+    expect(onAction).toHaveBeenCalledWith('fixRules');
     // Fix open rules passed: the line names how few are open (the Rules tab's rewrite count less one).
     const few = state({ openRules: ['faq', 'summary'], skipped: { fixRules: 'faq,summary' } });
     await render(few);

@@ -1,4 +1,4 @@
-import type { ActiveRule, RuleStatus } from './rules';
+import { NOT_FOR_AGENT, NO_HELD, notCheckedHere, type ActiveRule, type RuleStatus } from './rules';
 
 /**
  * The rules the Content Agent tried and couldn't close (editor test
@@ -95,4 +95,34 @@ export function triedStill<T extends { rule: ActiveRule; status: RuleStatus }>(
 ): string[] {
   const open = triedOpen(tried, rules);
   return open.size === tried.length ? tried : tried.filter((key) => open.has(key));
+}
+
+/**
+ * One state per rule (editor test 2026-11-12): the open rules the Content
+ * Agent can still close, less those it never fixes, a setting only the
+ * person fills (Who it's for), those held by what the page keeps, those it
+ * tried and couldn't close, and those this page can't meet. The Fix
+ * buttons, a Fix run, Next's step and its steps window all read it, so
+ * none offers the agent a rule another calls the person's. `yours`: the
+ * other open rules, the person's to decide.
+ */
+export function agentFixable<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+  {
+    held = NO_HELD,
+    tried = NO_HELD,
+    only,
+  }: { held?: ReadonlySet<string>; tried?: ReadonlySet<string>; only?: readonly string[] } = {},
+): { fixable: T[]; yours: T[] } {
+  const open = rules.filter(
+    (r) => isOpen(r) && !notCheckedHere(r.status) && (!only || only.includes(r.rule.key)),
+  );
+  const fixable = open.filter(
+    ({ rule, status }) =>
+      !NOT_FOR_AGENT.has(rule.key) &&
+      !held.has(rule.key) &&
+      !tried.has(rule.key) &&
+      !(status.state === 'bad' && status.code === 'notSet'),
+  );
+  return { fixable, yours: open.filter((r) => !fixable.includes(r)) };
 }

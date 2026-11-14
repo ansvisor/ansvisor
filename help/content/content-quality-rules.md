@@ -39,7 +39,9 @@ Admins and managers keep a brand's rules in **Settings › Content › Brand rul
 
 A decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage.
 
-An open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule.
+## Rules that are yours
+
+An open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide, and Fix leaves it out from then on. With nothing left it can fix, the button gives way to "Content Agent did what it could" and the rules that are yours, each with **Change the page**, **Change the rule** and, for a rule it tried, **Ask again**.
 
 ## Rewrite the whole page
 
