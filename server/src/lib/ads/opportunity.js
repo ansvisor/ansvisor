@@ -1,6 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { stripEntityMarkup } from '../entity-markup.js';
 import { extractHostname } from '../response-parser.js';
+import { readEarn } from './earn.js';
 import { readOpportunities, readsEveryOpportunity } from './opportunities.js';
 import { ADS_PERIODS, NotFound } from './standing.js';
 
@@ -11,6 +12,8 @@ import { ADS_PERIODS, NotFound } from './standing.js';
  * keyword seeds. Read with the service role, always by the brand and its
  * organization: a prompt outside them reads as not found. The answer text is
  * data, cut to an excerpt of plain text; nothing here reads it as markup.
+ * The Earn card's part: the prompt's target page and the active action that
+ * already covers it (lib/ads/earn.js).
  */
 
 export const EXCERPT_CHARS = 600;
@@ -88,7 +91,7 @@ export async function readOpportunity({ brand, orgId, promptId, period, now = ne
       .eq('prompt_id', promptId);
   const days = ADS_PERIODS[period] ?? ADS_PERIODS['30d'];
   const since = new Date(now.getTime() - days * 86_400_000).toISOString();
-  const [recent, volume] = await Promise.all([
+  const [recent, volume, earn] = await Promise.all([
     answers('id, platform')
       .neq('platform', 'chatgpt-shopping')
       .neq('response', '')
@@ -101,6 +104,7 @@ export async function readOpportunity({ brand, orgId, promptId, period, now = ne
       .eq('prompt_id', promptId)
       .order('fetched_at', { ascending: false })
       .limit(1),
+    readEarn(brandId, orgId, promptId),
   ]);
   // Oldest first, so each platform keeps its newest.
   const latest = new Map();
@@ -141,5 +145,6 @@ export async function readOpportunity({ brand, orgId, promptId, period, now = ne
     answers: list,
     fanOuts: [...fanOuts.values()].slice(0, FAN_OUTS),
     keywords: (Array.isArray(keywords) ? keywords : []).filter((k) => typeof k === 'string'),
+    earn,
   };
 }

@@ -2284,7 +2284,7 @@
         "dueDate": "Due date",
         "statusLabel": "Status",
         "events": {
-          "created": "{source, select, chat {Action created from Chat} other {Action created}}",
+          "created": "{source, select, chat {Action created from Chat} ads {Action created from Ads} other {Action created}}",
           "evidence_attached": "Finding added from Chat: “{finding}”",
           "evidence_withdrawn": "Finding from Chat withdrawn with Undo: “{finding}”",
           "file_attached": "Attached from Chat to {task}{title}: “{file}”",

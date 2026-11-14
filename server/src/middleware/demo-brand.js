@@ -90,6 +90,12 @@ export const DEMO_GUARDED = [
     brandIn('body'),
     rowIn('prompts', 'path', 'promptId'),
   ),
+  // The Earn card's Action Center action: the demo's actions are samples.
+  guard(
+    'POST /ads/opportunities/:promptId/earn',
+    brandIn('body'),
+    rowIn('prompts', 'path', 'promptId'),
+  ),
 
   // Site Audit (audits.js).
   guard('POST /audits', brandIn('body')),
