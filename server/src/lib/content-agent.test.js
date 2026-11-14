@@ -109,6 +109,7 @@ const {
   placeholderAttributions,
   placeholderAttributionsInHtml,
   bannedWordsOf,
+  bannedAdded,
   dropsPlaceholder,
   emptyWhy,
   fixDraftRules,
@@ -251,6 +252,22 @@ describe('the page as the agent reads it', () => {
     );
   });
 
+  it('names the brand’s banned phrases only when it has some', () => {
+    const prompt = (bannedPhrases) =>
+      buildFixPrompt({
+        brand: { name: 'Acme Coffee', language: 'en', bannedPhrases },
+        draft: rows.content_drafts,
+        passages: draftPassages(BODY),
+        lockedKeys: new Set(),
+        input: input(),
+      });
+    expect(prompt(['cheap', 'best price'])).toContain(
+      'The brand never uses these phrases: "cheap", "best price". Never write one in a change.',
+    );
+    expect(prompt([])).not.toContain('never uses these phrases');
+    expect(prompt(undefined)).not.toContain('never uses these phrases');
+  });
+
   describe('with Quality’s phase 2 live', () => {
     afterEach(() => vi.unstubAllEnvs());
 
@@ -380,6 +397,45 @@ describe('keepSuggestions', () => {
   const passages = draftPassages(BODY);
   const locked = new Set(input().locked);
   const ruleKeys = new Set(['dated', 'faq']);
+
+  it('drops a change that brings in one of the brand’s banned phrases, and logs the count', () => {
+    vi.mocked(logger.info).mockClear();
+    const banned = { bannedPhrases: ['cheap', 'best price'], draftId: DRAFT };
+    const keep = (s, over = banned) =>
+      keepSuggestions([s], passages, locked, ruleKeys, null, { ...sourcing, ...over });
+    const replace = (after) => suggestion({ after, sources: [], marks: [] });
+    // In its words, in any case, or across the passage as changed: dropped.
+    expect(keep(replace('cheap coffee and hot water'))).toEqual([]);
+    expect(keep(replace('BEST PRICE coffee and hot water'))).toEqual([]);
+    const best = draftPassages('<p>The best coffee and hot water.</p>');
+    expect(
+      keepSuggestions(
+        [suggestion({ passage: 1, before: 'coffee and hot water', after: 'price beans' })],
+        best,
+        new Set(),
+        ruleKeys,
+        null,
+        { ...sourcing, ...banned },
+      ),
+    ).toEqual([]);
+    expect(
+      keep(suggestion({ kind: 'insert', before: '', after: '<p>Cheap beans.</p>', sources: [] })),
+    ).toEqual([]);
+    expect(logger.info).toHaveBeenCalledWith(
+      { draftId: DRAFT, banned: 1 },
+      expect.stringContaining('banned phrase dropped'),
+    );
+    // Without the list, or a whole word it isn't ("cheaper"): kept.
+    expect(keep(replace('cheap coffee and hot water'), {})).toHaveLength(1);
+    expect(keep(replace('cheaper coffee and hot water'))).toHaveLength(1);
+  });
+
+  it('reads a phrase as brought in only when the old text didn’t have it', () => {
+    expect(bannedAdded(['cheap'], 'a cheap mug', 'a cheap cup')).toEqual([]);
+    expect(bannedAdded(['cheap'], 'a cheap mug', 'an affordable mug')).toEqual([]);
+    expect(bannedAdded(['cheap', 'free'], 'a mug', 'a cheap, free mug')).toEqual(['cheap', 'free']);
+    expect(bannedAdded([], 'a mug', 'a cheap mug')).toEqual([]);
+  });
 
   it('keeps a replace whose words are in its passage, with the rules sent and its sources', () => {
     // A source number the model wrote into its reason ("(S2)") isn't shown on the card.

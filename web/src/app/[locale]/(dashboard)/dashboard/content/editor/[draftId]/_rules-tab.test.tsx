@@ -716,6 +716,43 @@ describe('the Rules tab', () => {
     );
   });
 
+  it('names the brand’s banned phrases on the page in Style, with Fix for them alone', async () => {
+    const page = readPage('<h1>Cheap flights</h1><p>The best price, every day.</p>', 40);
+    const ctx = { brandDomains: [], competitorDomains: [], fanouts: [] };
+    const checked = (bannedPhrases?: string[]) =>
+      activeRules(ruleSet('feature_page', { bannedPhrases }), { overrides: {} }).map((rule) => ({
+        rule,
+        status: checkRule(rule, page, { ...ctx, bannedPhrases }),
+      }));
+    const run = vi.fn();
+    const show = (rules: ReturnType<typeof checked>) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages}>
+            <RoleProvider role="admin">
+              <RulesTab
+                state={state(undefined, { rules, ...rulesMet(rules) })}
+                siteType="b2b"
+                draftPageType="feature_page"
+                agentFix={{ run, running: false, blocked: null }}
+              />
+            </RoleProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+    await show(checked(['cheap', 'best price', 'free']));
+    const banned = row("Avoid your brand's banned phrases");
+    expect(banned.textContent).toContain('2 found');
+    expect(banned.textContent).toContain('On the page: “cheap”, “best price”');
+    await act(async () => {
+      [...banned.querySelectorAll('button')].find((b) => b.textContent === 'Fix')!.click();
+    });
+    expect(run).toHaveBeenCalledWith(['brandBanned']);
+    // No list in the brand's settings: nothing new shows.
+    await show(checked([]));
+    expect(container.textContent).not.toContain('banned phrases');
+  });
+
   it('explains the Shopping rules on hover, accepted by Merchant Center only when the brand has it', async () => {
     const checked = activeRules(ruleSet('buying_guide', { shopping: true }), {
       overrides: {},

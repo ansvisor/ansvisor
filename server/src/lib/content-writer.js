@@ -838,7 +838,18 @@ async function rewritePage({
   if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
   // Well past its Length: one more pass that only cuts, within the rules.
   const cut = { page, length, band, brand, draft, model, modelId, run, rules: input.rules };
-  const answer = ruleKeys.has('length') ? await cutToLength({ answer: object, ...cut }) : object;
+  const within = ruleKeys.has('length') ? await cutToLength({ answer: object, ...cut }) : object;
+  // A banned phrase that slipped through: those sentences once more, before
+  // the guards below read it (as a new page's, withoutBanned).
+  const answer = await rewriteWithoutBanned({
+    answer: within,
+    page,
+    brand,
+    draft,
+    model,
+    modelId,
+    run,
+  });
   await advanceRun(run, 3);
 
   // No invented person or quote (CE-044): read in its words as written,
@@ -1058,35 +1069,22 @@ async function withoutBanned({
   const found = bannedIn(brand, written, title);
   if (!found.length) return same;
   let result = same;
-  const budget = await reserveAiBudget(brand.organization_id, {
-    feature: 'content',
+  const object = await bannedCall({
+    brand,
+    draft,
+    model,
     modelId,
-    draftId: draft.id,
-  }).catch(() => null);
-  if (budget) {
-    try {
-      const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
-        generateObject({
-          model,
-          ...objectOptions(modelId, pageSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
-          system: writeSystemPrompt(),
-          prompt: `The page below uses phrases the brand never uses: ${found.map((p) => `"${p}"`).join(', ')}. Rewrite only the sentences (and the title or headings) that contain them, in other words. Keep everything else exactly as it is: the facts, links, placeholders in square brackets, {{find: …}} and {{ask: …}} markers. Return the whole page.\n\n${JSON.stringify(written)}\n\nWrite in the page's own language.`,
-          abortSignal,
-        }),
-      );
-      await budget.charge(usage);
-      const next = sourcedPage(object, known, people);
-      result = {
-        written: next,
-        title: headingCase(clean(next.title).slice(0, 300), language) || title,
-      };
-    } catch (err) {
-      if (isStop(err, run)) throw err;
-      if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
-      else await budget.release();
-    } finally {
-      await budget.release();
-    }
+    run,
+    schema: pageSchema,
+    system: writeSystemPrompt(),
+    prompt: `The page below uses phrases the brand never uses: ${found.map((p) => `"${p}"`).join(', ')}. Rewrite only the sentences (and the title or headings) that contain them, in other words. Keep everything else exactly as it is: the facts, links, placeholders in square brackets, {{find: …}} and {{ask: …}} markers. Return the whole page.\n\n${JSON.stringify(written)}\n\nWrite in the page's own language.`,
+  });
+  if (object) {
+    const next = sourcedPage(object, known, people);
+    result = {
+      written: next,
+      title: headingCase(clean(next.title).slice(0, 300), language) || title,
+    };
   }
   const left = bannedIn(brand, result.written, result.title);
   if (left.length) {
@@ -1096,6 +1094,77 @@ async function withoutBanned({
     );
   }
   return result;
+}
+
+/**
+ * The banned-phrase pass's one call, on its own hold on the budget: its
+ * answer, or null without budget or when it fails. A stop goes through.
+ */
+async function bannedCall({ brand, draft, model, modelId, run, schema, system, prompt }) {
+  const budget = await reserveAiBudget(brand.organization_id, {
+    feature: 'content',
+    modelId,
+    draftId: draft.id,
+  }).catch(() => null);
+  if (!budget) return null;
+  try {
+    const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+      generateObject({
+        model,
+        ...objectOptions(modelId, schema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
+        system,
+        prompt,
+        abortSignal,
+      }),
+    );
+    await budget.charge(usage);
+    return object;
+  } catch (err) {
+    if (isStop(err, run)) throw err;
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
+    else await budget.release();
+    return null;
+  } finally {
+    await budget.release();
+  }
+}
+
+/**
+ * A rewrite without the brand's banned phrases, as a new page is
+ * (withoutBanned): its own words are checked, never the kept lines, which
+ * are the person's. Found one, the model rewrites only those sentences,
+ * once; taken when it keeps every kept line and heading, else the rewrite
+ * stands. A phrase left is offered anyway, logged with the count.
+ */
+async function rewriteWithoutBanned({ answer, page, brand, draft, model, modelId, run }) {
+  const banned = brand.bannedPhrases ?? [];
+  const found = bannedPhrasesIn([answer.html], banned);
+  if (!found.length) return answer;
+  const object = await bannedCall({
+    brand,
+    draft,
+    model,
+    modelId,
+    run,
+    schema: rewriteSchema,
+    system: rewriteSystemPrompt(),
+    prompt: `The page below uses phrases the brand never uses: ${found.map((p) => `"${p}"`).join(', ')}. Rewrite only the sentences (and headings) that contain them, in other words. Keep everything else exactly as it is: every heading and section, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, placeholders in square brackets, {{find: …}} and {{ask: …}} markers. Return the whole page.\n\n${answer.html}\n\nWrite in the page's own language.`,
+  });
+  const keeps =
+    object &&
+    isPageHtml(object.html) &&
+    restoreKept(object.html, page.kept, { word: page.word, h1Token: page.h1Token }).missing
+      .length === 0 &&
+    headings(object.html) >= headings(answer.html);
+  const next = keeps ? { ...answer, html: object.html } : answer;
+  const left = bannedPhrasesIn([next.html], banned);
+  if (left.length) {
+    logger.warn(
+      { brandId: draft.brand_id, count: left.length },
+      '[content-writer] banned phrases left in the rewrite, offered anyway',
+    );
+  }
+  return next;
 }
 
 /** The rules whose sections a cut keeps: fan-out H2s, FAQ, summary, direct answers. */
@@ -1492,7 +1561,16 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     lockedKeys,
     ruleKeys,
     withFactLinks(linkAllowList(targets), looked.links),
-    { numbered, known, people, attributable, banned: bannedWordsOf(input.rules), health },
+    {
+      numbered,
+      known,
+      people,
+      attributable,
+      banned: bannedWordsOf(input.rules),
+      health,
+      bannedPhrases: brand.bannedPhrases ?? [],
+      draftId: draft.id,
+    },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);

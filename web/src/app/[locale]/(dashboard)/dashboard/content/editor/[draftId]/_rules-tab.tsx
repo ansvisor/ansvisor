@@ -41,6 +41,7 @@ import {
   lengthSpan,
   lengthOutOfReach,
   notCheckedHere,
+  phrasesFound,
   rewriteAdvice,
   splitRules,
   type ActiveRule,
@@ -70,6 +71,9 @@ interface RuleWhy {
 const YOURS =
   'shrink-0 font-medium underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50';
 
+/** Rules whose Fix rewrites only the phrases found: AI traces, the brand's banned phrases. */
+const FIX_PHRASES = new Set(['aiTraces', 'brandBanned']);
+
 /** Rules with an explanation on hover (spec §10). */
 const HINTED = new Set([
   'length',
@@ -79,6 +83,7 @@ const HINTED = new Set([
   'internalLinks',
   'outboundLinks',
   'aiTraces',
+  'brandBanned',
   'whoFor',
   'first40Words',
   'feedMatch',
@@ -612,7 +617,7 @@ export function RulesTab({
                   status={status}
                   yours={tried.has(rule.key) || held.has(rule.key)}
                   onChange={(change) => state.change(rule.key, change)}
-                  agentFix={rule.key === 'aiTraces' ? agentFix : undefined}
+                  agentFix={FIX_PHRASES.has(rule.key) ? agentFix : undefined}
                   onOpenSources={onOpenSources}
                   merchantCenter={state.merchantCenter ?? false}
                   why={group === 'notChecked' ? notCheckedWhy(status) : undefined}
@@ -835,6 +840,8 @@ function RuleRow({
   // The fan-outs still to use, the most searched first: what to add (fanoutH2, fanoutFaq).
   const left =
     rule.on && status.state === 'bad' && 'missing' in status ? listed(status.missing ?? []) : null;
+  // The brand's banned phrases on the page, as it wrote them (brandBanned).
+  const phrases = rule.on ? listed(phrasesFound(status)) : null;
   return (
     <li className={cn('px-3 py-2', !rule.on && 'opacity-60')}>
       <div className="flex items-center gap-2">
@@ -903,6 +910,14 @@ function RuleRow({
       {left && left.shown.length > 0 && (
         <p className="mt-1 pl-9 text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
           {t('fanoutsLeft', { list: left.shown.map((f) => `“${f}”`).join(', '), more: left.more })}
+        </p>
+      )}
+      {phrases && phrases.shown.length > 0 && (
+        <p className="mt-1 pl-9 text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
+          {t('bannedFound', {
+            list: phrases.shown.map((p) => `“${p}”`).join(', '),
+            more: phrases.more,
+          })}
         </p>
       )}
     </li>

@@ -198,7 +198,7 @@ Chat and its agents never make up a price, fee, date, rule or contact detail. Wh
 
 A brand's **Content rules** card, under **General** in the brand's settings, holds what Chat and the agents must follow when they write for it. Admins and Managers change it; others read it.
 
-**Banned phrases** are words or phrases the brand never uses, one per line. A draft that has one, as a whole word or phrase in any case, isn't saved: Chat is told which, rewrites those sentences and saves again. Reports and answers aren't checked; Chat is only told the list.
+**Banned phrases** are words or phrases the brand never uses, one per line. A draft that has one, as a whole word or phrase in any case, isn't saved: Chat is told which, rewrites those sentences and saves again. Reports and answers aren't checked; Chat is only told the list. In the Content Editor, the **Rules** tab checks the page against them as you write, and the Content Agent's suggestions never add one.
 
 **Blocked domains** are never suggested as link sources or cited. **Allowed domains** are preferred sources. Turn on **Only cite these domains** and link and source suggestions stay on the allowed domains and the brand's own site.
 

@@ -9,6 +9,7 @@ import { parseHtml } from '@/lib/content/dom';
 import { pageOffer } from '@/lib/content/page-schema';
 import { countWords, languageCode } from '@/lib/content/readability';
 import { carriesFanout } from '@/lib/content/fanout-match';
+import { bannedPhrasesIn } from '@/lib/chat/banned-phrases';
 import {
   shoppingLinks,
   type PageCard,
@@ -298,6 +299,19 @@ const SHORT_TYPES: ReadonlySet<PageType | null> = new Set<PageType>([
 ]);
 const SHORT_VALUES: Readonly<Record<string, string>> = { fanoutH2: '2', faq: '3', fanoutFaq: '2' };
 
+/**
+ * The brand's banned phrases (Brand settings › Content rules, 00538): in
+ * the Style group, after Banned words, only while the brand has some. On
+ * by default; checked against them (RuleContext's bannedPhrases).
+ */
+const BRAND_BANNED: RuleDef = {
+  key: 'brandBanned',
+  group: 'style',
+  kind: 'switch',
+  value: '',
+  check: 'page',
+};
+
 /** The Shopping rules' keys: checked against the shopping path (shoppingStatus). */
 export const SHOPPING_RULE_KEYS: ReadonlySet<string> = new Set(SHOPPING_RULES.map((r) => r.key));
 
@@ -313,6 +327,8 @@ export function ruleSet(
     language?: string | null;
     length?: number | null;
     shopping?: boolean;
+    /** The brand's banned phrases: the rule shows only when it has some. */
+    bannedPhrases?: readonly string[];
   } = {},
 ): RuleDef[] {
   const own = (pageType && TYPE_RULES[pageType]) || [];
@@ -333,7 +349,9 @@ export function ruleSet(
         return { ...rule, value: SHORT_VALUES[rule.key] };
       }
       return rule;
-    }),
+    }).flatMap((rule) =>
+      rule.key === 'bannedWords' && defaults.bannedPhrases?.length ? [rule, BRAND_BANNED] : [rule],
+    ),
   ];
 }
 
@@ -815,6 +833,8 @@ export type RuleStatus =
       count: number;
       /** The linked products that no longer sell, by name and why (shopLinksLive). */
       items?: { title: string; state: ShoppingLinkState }[];
+      /** The brand's banned phrases on the page, as the brand wrote them (brandBanned). */
+      phrases?: string[];
     }
   | {
       state: 'bad';
@@ -880,6 +900,8 @@ export interface RuleContext {
    * it isn't told.
    */
   pageType?: PageType | null;
+  /** The brand's banned phrases (Content rules), for brandBanned. None where it isn't told. */
+  bannedPhrases?: readonly string[];
 }
 
 /** Phrases that read as machine-written (spec §10, "Remove AI traces"). */
@@ -1548,6 +1570,13 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       const found = list(rule.current).reduce((sum, word) => sum + count(page.text, word), 0);
       return found ? { state: 'bad', code: 'found', count: found } : { state: 'ok' };
     }
+    case 'brandBanned': {
+      // As Chat's draft check reads them: whole words, in any case.
+      const phrases = bannedPhrasesIn([page.text], ctx.bannedPhrases ?? []);
+      return phrases.length
+        ? { state: 'bad', code: 'found', count: phrases.length, phrases }
+        : { state: 'ok' };
+    }
     case 'comparisonTable':
     case 'sideBySide':
     case 'specsTable':
@@ -1706,6 +1735,10 @@ export function lengthConflict(
 const CHECKED_INFO: ReadonlySet<string> = new Set(['aiCheck', 'feedReading', 'shoppingReading']);
 export const notCheckedHere = (status: RuleStatus): boolean =>
   status.state === 'info' && !CHECKED_INFO.has(status.code);
+
+/** The brand's banned phrases a rule's status found on the page (brandBanned); none otherwise. */
+export const phrasesFound = (status: RuleStatus | undefined): string[] =>
+  (status?.state === 'bad' && 'phrases' in status && status.phrases) || [];
 
 /** How many of the rules in effect are met: off rules and ones the page can't say don't count. */
 export function rulesMet(statuses: { rule: ActiveRule; status: RuleStatus }[]): {

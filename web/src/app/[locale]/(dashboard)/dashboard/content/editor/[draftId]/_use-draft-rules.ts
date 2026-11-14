@@ -181,6 +181,8 @@ export function useDraftRules({
   // The type the rules are checked as: a set picked before setFor keeps its type rules.
   const checkedAs = rulesPageType(choices, draftType);
   const sources = reads.sources;
+  // The brand's banned phrases, read with the draft: the rule shows only when it has some.
+  const bannedPhrases = draft.bannedPhrases;
   const ctx = useMemo<RuleContext>(() => {
     if (!sources || sources.failed) {
       return {
@@ -191,6 +193,7 @@ export function useDraftRules({
         catalog,
         shopping,
         pageType: checkedAs,
+        bannedPhrases,
       };
     }
     const fanouts = buildSourceGroups(sources.data, sources.choices, {
@@ -208,8 +211,18 @@ export function useDraftRules({
       catalog,
       shopping,
       pageType: checkedAs,
+      bannedPhrases,
     };
-  }, [sources, draft.title, draft.sourceUrl, language, catalog, shopping, checkedAs]);
+  }, [
+    sources,
+    draft.title,
+    draft.sourceUrl,
+    language,
+    catalog,
+    shopping,
+    checkedAs,
+    bannedPhrases,
+  ]);
   const brief = reads.brief;
   const keywords = useMemo(
     () => (brief.status === 'ready' ? (brief.brief?.keywords ?? []) : []),
@@ -235,10 +248,11 @@ export function useDraftRules({
           language,
           length: effective.importLength,
           shopping: shopping !== null && shopping !== 'reading',
+          bannedPhrases,
         }),
         effective,
       ),
-    [setType, keywords, language, effective, shopping],
+    [setType, keywords, language, effective, shopping, bannedPhrases],
   );
   // The checks follow the page a beat behind typing.
   const deferredHtml = useDeferredValue(html);

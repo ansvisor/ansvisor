@@ -205,6 +205,7 @@ import {
   keptOutOfReach,
   lengthOutOfReach,
   notCheckedHere,
+  phrasesFound,
   readPage,
   pageTextLength,
   ruleNumber,
@@ -2448,6 +2449,11 @@ export function DraftEditor({
             ...aimAndNow(rule, status),
             rule.key === 'aiTraces'
               ? `${tRules('agent.phrases')}: ${aiTracesFound(pageText).join(', ')}`
+              : null,
+            // The brand's banned phrases on the page, within the detail's room (the
+            // server's prompt has them all): the ones to say in other words.
+            phrasesFound(status).length
+              ? `${tRules('agent.phrases')}: ${phrasesFound(status).join(', ')}`.slice(0, 300)
               : null,
             // Which fan-outs, so it writes those rather than questions of its own.
             fanouts ? `${tRules('agent.fanouts')}: ${fanouts}` : null,
@@ -4792,6 +4798,10 @@ export function DraftEditor({
           product={productSchema}
           category={categorySchema}
           shopping={shoppingRead}
+          // The brand's banned phrases on the page, while their rule is on: to fix first.
+          bannedPhrases={phrasesFound(
+            rules.rules.find(({ rule }) => rule.key === 'brandBanned' && rule.on)?.status,
+          )}
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);

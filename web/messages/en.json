@@ -11781,6 +11781,10 @@
           "fill": "Fill now"
         },
         "logged": "If you mark it ready anyway, we note it with this Trust.",
+        "banned": {
+          "title": "{count, plural, one {# banned phrase} other {# banned phrases}} on the page",
+          "detail": "{list}{more, plural, =0 {} other { +# more}}. Your brand never uses these: say them in other words, or use Fix on its rule in Rules."
+        },
         "openWork": "Still open: {rules, plural, =0 {} one {# rule} other {# rules}}{rules, plural, =0 {} other {{todos, plural, =0 {} other { and }}}}{todos, plural, =0 {} one {# to-do} other {# to-dos}}. You can mark it ready: they stay in Rules and Quality.",
         "author": {
           "ok": "Author for your CMS",
@@ -12342,6 +12346,7 @@
           "citeInline": "Cite sources inline",
           "aiTraces": "Remove AI traces (humanize)",
           "bannedWords": "Banned words",
+          "brandBanned": "Avoid your brand's banned phrases",
           "tone": "Tone",
           "language": "Language",
           "comparisonTable": "Comparison table vs alternatives",
@@ -12376,6 +12381,7 @@
           "internalLinks": "Links with descriptive anchor text to your own pages.",
           "outboundLinks": "Descriptive anchor text to an authoritative source: research, a standards body, government or a well-known publication. Never a competitor. Opens in a new tab.",
           "aiTraces": "Finds phrases that read as machine-written (delve, in today's fast-paced world, not only… but also). Fixing them comes with the Content Agent.",
+          "brandBanned": "The phrases your brand never uses, from Brand settings › Content rules, found as whole words in any case. Content Agent says them in other words.",
           "whoFor": "Who the page is for, in one sentence, e.g. \"Sales leaders at 20–200 person B2B teams\".",
           "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
           "feedMatch": "Checked against the product in your product feed with this page's URL, or else its name: the price, any GTIN the page gives, and the stock, where both say them.",
@@ -12487,6 +12493,7 @@
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
         "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
         "fanoutsLeft": "Still to use: {list}{more, plural, =0 {} other { +# more}}",
+        "bannedFound": "On the page: {list}{more, plural, =0 {} other { +# more}}",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {
