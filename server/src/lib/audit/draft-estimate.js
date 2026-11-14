@@ -19,6 +19,7 @@
 
 import supabaseAdmin from '../../config/supabase.js';
 import { LLM_SIGNAL_KEYS } from './llm-signals.js';
+import { categories, isScored, signalsByKey } from './rubric.js';
 import { scoreAudit } from './scorer.js';
 
 /** The checks of the site around a page, rather than of the page: the same on each of its pages. */
@@ -42,11 +43,44 @@ const AI_SIGNALS = new Set(LLM_SIGNAL_KEYS);
 
 const na = (key) => ({ key, status: 'na', score: null });
 
+/** How many of the lowest checks the estimate names as why it is low. */
+const TOP_ISSUES = 3;
+const categoryWeight = new Map(categories.map((c) => [c.key, c.weight]));
+
+/**
+ * The checks that cost the estimate most: what each takes off the total
+ * (its category's weight, shared by the checks read in it), the biggest
+ * first. `scope` says where it is fixed: the draft ('page', the AI's too),
+ * or Site Audit ('site').
+ */
+function topIssues(results, categoryScores) {
+  return results
+    .filter(
+      (r) => r.status !== 'na' && typeof r.score === 'number' && r.score < 1 && isScored(r.key),
+    )
+    .map((r) => {
+      const { category, label } = signalsByKey[r.key];
+      const share =
+        (categoryWeight.get(category) ?? 0) / (categoryScores[category]?.evaluated || 1);
+      return {
+        key: r.key,
+        label,
+        scope: SITE_SIGNALS.has(r.key) ? 'site' : 'page',
+        loss: (1 - r.score) * share,
+      };
+    })
+    .filter((i) => i.loss > 0)
+    .sort((a, b) => b.loss - a.loss)
+    .slice(0, TOP_ISSUES)
+    .map(({ loss: _loss, ...issue }) => issue);
+}
+
 /**
  * The estimate from the draft's own readings: the page's checks as run on
  * the draft, the site's from its latest audit (none: left out), and the AI
  * checks' verdicts when there are any. `score` and each category's are
- * 0–100, whole; null where nothing was read.
+ * 0–100, whole; null where nothing was read. `issues` are the
+ * three checks that cost it most: { key, label, scope: 'page' | 'site' }.
  *
  * @param {{ page: Array<{ key: string, status: string, score: number|null }>,
  *   site: Array<{ key: string, status: string, score: number|null }>,
@@ -73,6 +107,7 @@ export function draftEstimate({ page, site, ai = [] }) {
       site: read([...siteByKey.values()]).length,
       ai: read([...aiByKey.values()]).length,
     },
+    issues: topIssues(results, categoryScores),
   };
 }
 

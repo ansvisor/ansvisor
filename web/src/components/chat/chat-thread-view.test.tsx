@@ -1740,7 +1740,7 @@ describe('ChatThreadView in the Content Editor’s Chat (W4-16)', () => {
       onSuggestions,
       pageRoute: '/dashboard/content/editor/d1',
     });
-    expect(box().getAttribute('placeholder')).toBe('Make the intro shorter');
+    expect(box().getAttribute('placeholder')).toBe('Make the intro shorter · / skills · @ data');
     await type('Make answer 3 shorter');
     await enter();
     expect(onSuggestions).toHaveBeenCalledExactlyOnceWith(2);
@@ -1780,7 +1780,8 @@ describe('ChatThreadView beside a page open in the editor (Open here, W4-15c)', 
   }
   const shownChips = () =>
     [...container.querySelectorAll('[data-action="composer.removeChip"]')].map((x) =>
-      x.parentElement!.firstChild!.textContent!.trim(),
+      // The chip's words: after its icon, before its ×.
+      x.parentElement!.textContent!.replace('×', '').trim(),
     );
 
   beforeEach(() => {
@@ -1906,7 +1907,7 @@ describe('ChatThreadView: images (W4-08b, CHAT-15 items 18 and 22)', () => {
 
   it('names the chat model when the latest answer wasn’t for images', async () => {
     await render({ thread: imagesThread([]), variant: 'dock' });
-    expect(model()).toBe('Auto · Haiku reads, Sonnet writes ▾');
+    expect(model()).toBe('Auto ▾');
   });
 
   it('puts a request for new images with the same model in the box on Try again', async () => {

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, PanelRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -96,13 +96,16 @@ const BAR_ITEM =
 /**
  * The panel's tabs while it is closed, down the editor's right edge, so the
  * panel is never out of sight (it starts closed on a narrow window). A tab
- * opens the panel on it.
+ * opens the panel on it; Show side panel, on top, as the panel last was.
  */
 export function EditorPanelRail({
   onOpen,
+  onShow,
   chat = false,
 }: {
   onOpen: (tab: PanelTab) => void;
+  /** Opens the panel: its own toggle, as Hide side panel is in the panel's tab row. */
+  onShow?: () => void;
   /** Chat is a tab (W4-16). */
   chat?: boolean;
 }) {
@@ -112,6 +115,18 @@ export function EditorPanelRail({
       aria-label={t('label')}
       className="flex w-9 shrink-0 flex-col items-center gap-1 border-l bg-card py-2"
     >
+      {onShow && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={false}
+          aria-label={t('show')}
+          title={t('show')}
+          onClick={onShow}
+        >
+          <PanelRight className="h-4 w-4" />
+        </Button>
+      )}
       {tabsOf(chat).map((value) => (
         <button
           key={value}
@@ -184,10 +199,10 @@ export function EditorSidePanel({
   onConfirmIntro,
   onChangeType,
   handOff = null,
-  auditEstimate = null,
   onShoppingPathChange,
   chat,
   layout = 'side',
+  onHide,
 }: {
   draft: ContentDraft;
   /**
@@ -223,6 +238,8 @@ export function EditorSidePanel({
     input?: boolean;
     /** Quality's part to show (the Next step basket's Show to-dos, Show what raises Trust). */
     focus?: QualityFocus;
+    /** A rule whose value Rules focuses (the Next step basket's Ask for fewer). */
+    rule?: string;
   } | null;
   /** Run Agent's Fix open rules, for Rules (CE-018, v1.1 CE-029). */
   agentFix?: AgentFix;
@@ -276,12 +293,10 @@ export function EditorSidePanel({
   onConfirmCase?: (key: string) => void;
   /** Quality's Confirm on a category intro's facts (CE-054). */
   onConfirmIntro?: () => void;
-  /** Quality's Change: the header's page type menu (CE-052). */
+  /** Quality's Change and the Rules tab's Set page type: the header's page type menu (CE-052). */
   onChangeType?: () => void;
   /** Hand it off to Content Agent, Quality's (CE-051). */
   handOff?: HandOff | null;
-  /** Quality's Site Audit estimate (customer priorities item 9). */
-  auditEstimate?: ReactNode;
   /** Brief › Shopping path changed: the Shopping rules read it again (shopping path, part 6). */
   onShoppingPathChange?: () => void;
   /**
@@ -297,6 +312,8 @@ export function EditorSidePanel({
   };
   /** `bar`: a bottom bar in place of the side panel (embedded in Chat, CHAT-25 §4). */
   layout?: 'side' | 'bar';
+  /** Hides the panel: Hide side panel at the right end of its tab row (the side layout's). */
+  onHide?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -508,7 +525,8 @@ export function EditorSidePanel({
         <Tabs
           value={tab}
           onValueChange={(value) => open(value as PanelTab)}
-          className="border-b px-3 pt-1.5"
+          // A row: Hide side panel at its right end (the owner's layout, 2026-11-14).
+          className="items-center gap-1 border-b px-3 pt-1.5 data-horizontal:flex-row"
         >
           <TabsList variant="line">
             {tabsOf(!!chat).map((value) => (
@@ -542,6 +560,19 @@ export function EditorSidePanel({
               </TabsTrigger>
             ))}
           </TabsList>
+          {onHide && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-pressed
+              aria-label={t('hide')}
+              title={t('hide')}
+              onClick={onHide}
+              className="ml-auto shrink-0"
+            >
+              <PanelRight className="h-4 w-4" />
+            </Button>
+          )}
         </Tabs>
       )}
       {/* Chat keeps its own scroll, its box at the bottom (W4-16); mounted once opened. */}
@@ -672,7 +703,6 @@ export function EditorSidePanel({
                 onConfirmIntro={onConfirmIntro}
                 onChangeType={onChangeType}
                 handOff={handOff}
-                auditEstimate={auditEstimate}
               />
             </div>
           )}
@@ -692,6 +722,8 @@ export function EditorSidePanel({
                 siteType={siteType}
                 draftPageType={isPageType(pageType) ? pageType : null}
                 brandRules={brandRules}
+                onChangeType={onChangeType}
+                focusRequest={tabRequest?.rule ? { key: tabRequest.rule, n: tabRequest.n } : null}
               />
             </div>
           )}

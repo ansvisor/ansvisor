@@ -282,6 +282,20 @@ export interface ContentDraft {
    * sends and exports (00448): their CMS writes its own.
    */
   schemaLeftOut: boolean;
+  /**
+   * The brand's banned phrases (Brand settings › Content rules, 00538): the
+   * Rules tab checks the page against them. None when it has none, or they
+   * couldn't be read.
+   */
+  bannedPhrases?: string[];
+  /**
+   * The agent card shows as the editor opens (its latest batch, unless a
+   * restore since closed it with none open): the editor keeps its place from
+   * the first paint. False when it doesn't, or that couldn't be read.
+   */
+  agentCardShown?: boolean;
+  /** The author's name as the draft was read: the header's chip before the authors are. */
+  authorName?: string | null;
 }
 
 /**

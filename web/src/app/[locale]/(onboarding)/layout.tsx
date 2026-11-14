@@ -6,6 +6,7 @@ import { NewUserTheme } from '@/components/theme/new-user-theme';
 import { isCloud } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import type { TeamRole } from '@/components/providers/role-provider';
+import { sendSignupEventOnce } from '@/lib/signup-event';
 
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -16,6 +17,11 @@ export default async function OnboardingLayout({ children }: { children: React.R
   if (!user) {
     redirect('/sign-in');
   }
+
+  // The sign-up events, as the dashboard's layout sends them, for a new
+  // account whose first page is the wizard (lib/signup-event.ts: once per
+  // account).
+  sendSignupEventOnce(user);
 
   // An already-onboarded member whose org subscription has lapsed must not
   // re-enter the wizard (they could re-create the brand / competitors on the

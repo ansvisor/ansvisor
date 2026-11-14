@@ -119,6 +119,37 @@ describe('a draft’s rules read for Chat (W4-12b part 2)', () => {
     expect(keywords?.rule.current).toBe('refund policy, plan change');
   });
 
+  it('keeps a set picked before setFor, its type rules checked, with and without a page type', async () => {
+    for (const pageType of ['docs_faq', null]) {
+      Object.assign(fake.db.tables.content_drafts[0], {
+        page_type: pageType,
+        rules: { set: 'comparison', source: 'default', overrides: {}, textRules: [] },
+      });
+      const read = await readDraftRules({ organizationId: ORG, draftId: DRAFT });
+      const type = read!.checked.filter(({ rule }) => rule.group === 'type');
+      expect(type.length).toBeGreaterThan(0);
+      expect(type.map(({ rule }) => rule.key)).toEqual(
+        ruleSet('comparison')
+          .filter((rule) => rule.group === 'type')
+          .map((rule) => rule.key),
+      );
+      expect(
+        type.some(({ status }) => status.state === 'info' && status.code === 'otherType'),
+      ).toBe(false);
+    }
+    // Picked for another type than the page has now: the page type's own set.
+    fake.db.tables.content_drafts[0].rules = {
+      set: 'comparison',
+      setFor: 'blog_post',
+      source: 'default',
+      overrides: {},
+      textRules: [],
+    };
+    fake.db.tables.content_drafts[0].page_type = 'docs_faq';
+    const back = await readDraftRules({ organizationId: ORG, draftId: DRAFT });
+    expect(back && { met: back.met, total: back.total }).toEqual(await editorCount());
+  });
+
   it('reads nothing of another workspace’s draft', async () => {
     expect(await readDraftRules({ organizationId: OTHER, draftId: DRAFT })).toBeNull();
   });

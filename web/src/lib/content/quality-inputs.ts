@@ -1,6 +1,7 @@
 import { factMismatches, type BrandFact } from './brand-facts';
 import { checkDateOnPage } from './check-date';
 import { inputsUsed, type DraftInputs } from './draft-inputs';
+import { factsForPage, pageNames } from './fact-scope';
 import { feedCheck, type CatalogMatch } from './feed-match';
 import { confirmedFacts, introFacts } from './intro-facts';
 import { aiChecksOnPage, pageImages, proofsOnPage, type PageRead } from './page-read';
@@ -61,6 +62,9 @@ export interface QualityReads {
   siteTrustRead: boolean;
   /** The brand's facts (phase 2), null until read. */
   brandFacts: BrandFact[] | null;
+  /** The page's title and addresses (its slug, where it is live): with its H1, its places (00539). */
+  pageTitle?: string | null;
+  pageUrls?: readonly (string | null | undefined)[];
   /** The links the person kept as sources. */
   keptSources: readonly string[];
   /** What the model says each unplaced site is (phase 2). */
@@ -91,6 +95,20 @@ export interface QualityReads {
   now: number;
 }
 
+/**
+ * The brand's facts a page is checked against (00539): the brand-wide ones
+ * and those for the places it names; another island's price is never its.
+ */
+export const pageFactsOf = (
+  reads: Pick<QualityReads, 'html' | 'brandFacts' | 'pageTitle' | 'pageUrls'>,
+) =>
+  reads.brandFacts
+    ? factsForPage(
+        reads.brandFacts,
+        pageNames({ html: reads.html, title: reads.pageTitle, urls: reads.pageUrls ?? [] }),
+      )
+    : null;
+
 /** The scores, and what the editor shows besides them, each as the editor had it. */
 export function qualityState(reads: QualityReads) {
   const {
@@ -109,10 +127,16 @@ export function qualityState(reads: QualityReads) {
   const texts = blocks.map((b) => b.text);
 
   const used = reads.inputs ? inputsUsed(texts.join('\n'), reads.inputs) : null;
-  const factCheck = brandFacts
+  const pageFacts = pageFactsOf({
+    html,
+    brandFacts,
+    pageTitle: reads.pageTitle,
+    pageUrls: reads.pageUrls,
+  });
+  const factCheck = pageFacts
     ? factMismatches({
         sentences: blocks.flatMap((b) => sentencesOf(b.text)),
-        facts: brandFacts,
+        facts: pageFacts,
         brandName,
         competitorDomains: competitorDomains ?? [],
       })

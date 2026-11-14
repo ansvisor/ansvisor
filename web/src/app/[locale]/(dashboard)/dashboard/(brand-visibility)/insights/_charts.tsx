@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
   AreaChart,
@@ -85,6 +85,31 @@ function ChartContainer({
 }
 
 // ─── Custom Tooltips ──────────────────────────────────────────────────────────
+
+/**
+ * The visibility trend tooltip's window note (#2371): every point is the
+ * rolling window ENDING on its day, not a standalone daily score, and shows
+ * the window's answer count. All time has no fixed window: its points cover
+ * everything up to their day.
+ */
+export function TrendWindowNote({
+  windowDays,
+  answers,
+  dateLabel,
+}: {
+  windowDays: number | null;
+  answers: number;
+  dateLabel: string;
+}) {
+  const t = useTranslations('insights.trend');
+  return (
+    <p className="text-muted-foreground mb-1">
+      {windowDays === null
+        ? t('windowCumulative', { date: dateLabel, count: answers })
+        : t('windowRolling', { days: windowDays, date: dateLabel, count: answers })}
+    </p>
+  );
+}
 
 function AreaTooltip({
   active,
@@ -316,7 +341,7 @@ export function VisibilityRateTrendChart({
     logoUrl: line.logoUrl ?? (line.domain ? getFaviconUrl(line.domain, 64) : ''),
   }));
 
-  const chartData = points.map((p) => ({ date: p.date, ...p.values }));
+  const chartData = points.map((p) => ({ date: p.date, answers: p.answers, ...p.values }));
   const lastIndex = points.length - 1;
 
   // Y axis ticks run 5, 15, 25, … and the top one sits just above the
@@ -367,11 +392,17 @@ export function VisibilityRateTrendChart({
               const ordered = [...payload].sort(
                 (a, b) => ((b.value as number) ?? 0) - ((a.value as number) ?? 0),
               );
+              const dateLabel = labelOf.get(String(label)) ?? String(label);
+              const pointAnswers =
+                (payload[0]?.payload as { answers?: number } | undefined)?.answers ?? 0;
               return (
                 <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-xs">
-                  <p className="font-medium text-foreground mb-1">
-                    {labelOf.get(String(label)) ?? label}
-                  </p>
+                  <p className="font-medium text-foreground mb-1">{dateLabel}</p>
+                  <TrendWindowNote
+                    windowDays={data.windowDays}
+                    answers={pointAnswers}
+                    dateLabel={dateLabel}
+                  />
                   {ordered.map((entry) => {
                     const entity = shown.find((e) => e.key === entry.dataKey);
                     if (!entity) return null;

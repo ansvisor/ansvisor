@@ -347,7 +347,9 @@
       "setByline": "Changing the byline setting needs a plan",
       "changeContentSettings": "Changing content settings needs a plan",
       "disconnectIntegrations": "Disconnecting an integration needs a plan",
-      "changeChatSettings": "Changing Chat's settings needs a plan"
+      "changeChatSettings": "Changing Chat's settings needs a plan",
+      "changeTags": "Changing tags needs a plan",
+      "removeTags": "Removing tags needs a plan"
     },
     "plans": {
       "perMonthBilledYearly": "{price} a month, billed yearly",
@@ -4940,6 +4942,8 @@
   "chatComposer": {
     "message": "Message",
     "placeholder": "Ask anything…",
+    "placeholderHint": "{placeholder} · / skills · @ data",
+    "placeholderHintReadOnly": "{placeholder} · @ data",
     "steerPlaceholder": "Steer while I work: “only blog pages”…",
     "send": "Send",
     "stop": "Stop",
@@ -4947,7 +4951,7 @@
     "readOnlyTitle": "{role}s ask and read. Admins and Managers make changes. See what you can do.",
     "model": "Model",
     "modelAuto": "Auto",
-    "modelAutoHow": "Haiku reads, Sonnet writes",
+    "modelWarn": "Model · {usage}",
     "modelImage": "Image · {model}",
     "modelMenu": {
       "label": "Model and effort",
@@ -4976,7 +4980,7 @@
       "ownKeyIncluded": "Included in your plan",
       "ownKeyUntil": "Works until {date}",
       "ownKeyLocked": "Own API keys come with Enterprise · you're on {plan}",
-      "usage": "Monthly AI usage",
+      "usage": "AI usage this month",
       "usageLine": "{percent} · Resets {date}",
       "plan": "Your plan",
       "planTrial": "{plan} · free trial",
@@ -5066,9 +5070,7 @@
     },
     "tab": "Tab",
     "under": {
-      "hint": "/ skills · @ data",
       "ghostHint": "Tab to accept · / skills · @ data",
-      "readOnly": "@ data · read-only",
       "answering": "Answering · Esc to stop",
       "answerQuestion": "Your message answers Chat's question · Esc stops the run",
       "steer": "Enter stops this run and sends your message"
@@ -5093,6 +5095,11 @@
       "ask_first": "Ask me first",
       "auto": "Auto, ask before changes",
       "full_auto": "Full auto",
+      "short": {
+        "ask_first": "Ask me first",
+        "auto": "Ask before changes",
+        "full_auto": "Full auto"
+      },
       "needsGrowth": "Needs Growth",
       "fullAutoLocked": "Full auto · Needs Growth: agents apply changes for you, logged and undoable",
       "offByAdmin": "Off by Admin",
@@ -5469,11 +5476,11 @@
     "lineDay": "Range: last 24 hours",
     "lineDays": "Range: last {days} days",
     "lineCustom": "Range: {from} – {to}",
-    "lineNotSet": "Range: not set yet",
     "lineTitle": "The period Chat reads when your message names none",
-    "change": "change",
-    "choose": "choose",
     "menuLabel": "Chat's date range",
+    "chipLabel": "{range} · Chat's date range",
+    "add": "Add date range",
+    "clear": "Clear the date range: Chat asks before the next analysis",
     "save": "Save",
     "saveFailed": "Couldn't save your date range. Try again.",
     "settingLabel": "Date range",
@@ -9411,6 +9418,8 @@
       "pinLimit": "Up to 5 competitors",
       "pinFailed": "Couldn't save the pinned competitors.",
       "promptsAdded": "{count, plural, one {# prompt} other {# prompts}} added · {date}",
+      "windowRolling": "Rolling {days}-day window ending {date} · {count, plural, one {# answer} other {# answers}}",
+      "windowCumulative": "All answers up to {date} · {count, plural, one {# answer} other {# answers}}",
       "goal": "Goal {value}",
       "goalLegend": "Action Center goal"
     },
@@ -10382,7 +10391,13 @@
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
       "auditEstimate": {
-        "title": "Site Audit estimate",
+        "title": "AI search readiness (Site Audit estimate)",
+        "intro": "Technical and site-wide checks, as Site Audit scores them. Different from Quality, which scores the writing.",
+        "reasons": {
+          "page": "This page",
+          "site": "Your site",
+          "siteLink": "Open Site Audit"
+        },
         "free": "free",
         "score": "≈{score}",
         "outOf": "{score}/100",
@@ -10396,7 +10411,7 @@
           "structure": "Structure",
           "content": "Content",
           "authority": "Authority",
-          "trust": "Trust",
+          "trust": "Site setup",
           "eeat": "E-E-A-T"
         },
         "estimateAi": "Estimate AI checks",
@@ -10488,8 +10503,11 @@
         "breaks": "would break {names}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
+        "stillFinishing": "Still finishing…",
+        "stillFinishingLine": "Its answer is taking longer than usual and may still land. Open this page again in a few minutes to see what it wrote.",
+        "stillFinishingToast": "Content Agent is still finishing. Open this page again in a few minutes to see what it wrote.",
         "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
-        "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
+        "waiting": "{count, plural, one {# suggestion} other {# suggestions}}",
         "gain": "{met, number} → {after, number}/{total, number} rules",
         "review": "Review",
         "reviewed": "All suggestions reviewed",
@@ -10540,6 +10558,7 @@
         "accepted": "Rewrite accepted",
         "rejected": "Rewrite rejected",
         "rulesOpen": "{count, plural, one {# rule still open} other {# rules still open}}",
+        "dropped": "Rewrite left {count, plural, one {# rule open that was met} other {# rules open that were met}}",
         "compare": "Compare",
         "compareTitle": "Your page and the rewrite",
         "before": "Your page · {count, number} characters",
@@ -10553,8 +10572,10 @@
         "rejectedToast": "Rewrite rejected. Your page stays as it is.",
         "undoneToast": "Your page is back, and the rewrite is open to decide again."
       },
-      "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
-      "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
+      "actionChip": "From Action AC-{no}",
+      "actionChipLabel": "From Action AC-{no}. Mark ready completes its task there.",
+      "actionChipHint": "This draft is the work of Action AC-{no}. Mark ready completes its task there.",
+      "actionChipHintDone": "This draft is the work of Action AC-{no}.",
       "chatBar": "From chat: <link>{title}</link>",
       "chatBarUntitled": "Untitled chat",
       "suggestions": {
@@ -11475,6 +11496,7 @@
       "rulesChip": "{met}/{total} rules",
       "rulesChipLabel": "Rules {met}/{total} met",
       "rulesChipReading": "Rules · reading",
+      "rulesChipName": "Rules",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "reviewer": {
         "title": "Reviewed by",
@@ -11508,12 +11530,12 @@
       "qualityChip": "Quality {score}",
       "qualityChipHint": "The average of E-E-A-T, Trust and Readability: an Ansvisor estimate, not a Google score. Open Quality.",
       "qualityChipReading": "Quality · reading…",
+      "qualityChipName": "Quality",
       "qualityChipUpdating": "updating as the page is read",
       "nextStep": {
         "label": "Next step",
         "short": "Next",
         "button": "Next · {step}",
-        "buttonStep": "· {step}",
         "stepOf": "Step {n} of {total}",
         "allDone": "Every step is done",
         "stepsLeft": "{count, plural, one {# step} other {# steps}} still open",
@@ -11540,10 +11562,12 @@
           "ahead": "to do"
         },
         "steps": {
+          "pageType": "Set page type",
           "plan": "Plan the page",
           "write": "Write the first draft",
           "import": "Bring in your page",
-          "lengthLong": "Shorten to your Length",
+          "conflict": "Raise Length to ~{n, number}",
+          "lengthLong": "Rewrite within all rules",
           "lengthShort": "Bring it up to your Length",
           "fixRules": "Fix open rules",
           "proof": "Add proof and author",
@@ -11552,6 +11576,8 @@
           "review": "Review {count, plural, one {# suggestion} other {# suggestions}}"
         },
         "reasons": {
+          "pageType": "The page has no type yet. Its rules follow its type, so set it before Content Agent runs.",
+          "conflict": "The sections, questions and summary the rules ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise the Length to fit them, or ask the rules for fewer.",
           "plan": "No brief yet. I build one from your prompts, fan-outs and cited pages.",
           "planNoSources": "No brief yet, and no prompt, fan-out or Search Console query is kept to build one from. Add one in Sources first.",
           "review": "Content Agent left {count, plural, one {# suggestion} other {# suggestions}} on the page. Accept or reject {count, plural, one {it} other {each, or all at once}}: the next step follows from what you keep.",
@@ -11573,6 +11599,9 @@
           "publishedLeft": "It's published, with {count, plural, one {# step} other {# steps}} still open: see All steps. Export it again when the page changes."
         },
         "actions": {
+          "setPageType": "Set page type",
+          "raiseLength": "Raise Length",
+          "askFewer": "Ask for fewer",
           "buildBrief": "Build brief",
           "addSources": "Add sources",
           "review": "Review",
@@ -11759,6 +11788,10 @@
           "fill": "Fill now"
         },
         "logged": "If you mark it ready anyway, we note it with this Trust.",
+        "banned": {
+          "title": "{count, plural, one {# banned phrase} other {# banned phrases}} on the page",
+          "detail": "{list}{more, plural, =0 {} other { +# more}}. Your brand never uses these: say them in other words, or use Fix on its rule in Rules."
+        },
         "openWork": "Still open: {rules, plural, =0 {} one {# rule} other {# rules}}{rules, plural, =0 {} other {{todos, plural, =0 {} other { and }}}}{todos, plural, =0 {} one {# to-do} other {# to-dos}}. You can mark it ready: they stay in Rules and Quality.",
         "author": {
           "ok": "Author for your CMS",
@@ -12294,7 +12327,15 @@
           "structure": "Length and structure",
           "fanouts": "Fan-outs and keywords",
           "links": "Links and sources",
-          "style": "Style"
+          "style": "Style",
+          "notChecked": "Not checked on this page"
+        },
+        "notChecked": {
+          "otherType": "{set, select, product_page {Product page rule. This page isn't a product page.} other {{type} rule. This page isn't one.}}",
+          "setPageType": "Set page type",
+          "needsFeed": "Needs your product feed. Connect a catalog, or turn this rule off.",
+          "noSizes": "No sizes on this page, so not checked.",
+          "needsSpecs": "Needs your product's specs. Content Agent won't invent them."
         },
         "names": {
           "sentence": "Max sentence length",
@@ -12312,6 +12353,7 @@
           "citeInline": "Cite sources inline",
           "aiTraces": "Remove AI traces (humanize)",
           "bannedWords": "Banned words",
+          "brandBanned": "Avoid your brand's banned phrases",
           "tone": "Tone",
           "language": "Language",
           "comparisonTable": "Comparison table vs alternatives",
@@ -12346,6 +12388,7 @@
           "internalLinks": "Links with descriptive anchor text to your own pages.",
           "outboundLinks": "Descriptive anchor text to an authoritative source: research, a standards body, government or a well-known publication. Never a competitor. Opens in a new tab.",
           "aiTraces": "Finds phrases that read as machine-written (delve, in today's fast-paced world, not only… but also). Fixing them comes with the Content Agent.",
+          "brandBanned": "The phrases your brand never uses, from Brand settings › Content rules, found as whole words in any case. Content Agent says them in other words.",
           "whoFor": "Who the page is for, in one sentence, e.g. \"Sales leaders at 20–200 person B2B teams\".",
           "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
           "feedMatch": "Checked against the product in your product feed with this page's URL, or else its name: the price, any GTIN the page gives, and the stock, where both say them.",
@@ -12400,6 +12443,8 @@
           "notHowTo": "Not a how-to",
           "englishOnly": "English only",
           "noSizes": "No sizes",
+          "otherType": "Other type",
+          "needsSpecs": "Needs specs",
           "noShoppingPath": "Pick in Brief",
           "shoppingReading": "Reading catalog",
           "shoppingFailed": "Couldn't read",
@@ -12445,9 +12490,17 @@
         "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
         "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
         "triedNote": "Content Agent tried this and couldn't fix it. It's yours to decide: change the page yourself, or the rule.",
+        "yours": {
+          "line": "Content Agent did what it could. {count, plural, one {# rule is} other {# rules are}} yours to decide.",
+          "page": "Change the page",
+          "rule": "Change the rule",
+          "again": "Ask again"
+        },
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
         "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
+        "fanoutsLeft": "Still to use: {list}{more, plural, =0 {} other { +# more}}",
+        "bannedFound": "On the page: {list}{more, plural, =0 {} other { +# more}}",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {
@@ -12570,6 +12623,7 @@
     "openPlan": "Open Plan",
     "moreActions": "More actions",
     "rowActions": "Actions for {title}",
+    "showFullText": "Show full text",
     "exportOne": {
       "button": "Export",
       "csv": "Export CSV",
@@ -13980,7 +14034,11 @@
       "removeTag": "Remove tag {tag}",
       "placeholder": "Add a tag and press Enter",
       "hint": "Up to 10 tags, 50 characters each.",
-      "allTags": "All tags"
+      "allTags": "All tags",
+      "selected": "{count, plural, one {# tag} other {# tags}}",
+      "match": "Match",
+      "matchAll": "Match all",
+      "matchAny": "Match any"
     },
     "loadError": "Couldn't load your prompts.",
     "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
@@ -13998,6 +14056,7 @@
       "citedOnlyTitle": "Cited in {cited} of {count, plural, one {# answer} other {# answers}} in this period, named in none"
     },
     "title": "Prompt Volumes",
+    "showFullText": "Show full text",
     "description": "Discover query volumes and trends across AI platforms.",
     "similarTopics": {
       "aiTitle": "Est. AI Volume",
@@ -14180,6 +14239,26 @@
       "emptyTitle": "No fan-out captured yet",
       "emptyBody": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
       "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
+    },
+    "bulkTags": {
+      "bulkButton": "Tags",
+      "bulkAdd": "Add tags",
+      "bulkRemove": "Remove tags",
+      "modes": "Add or remove",
+      "modeAdd": "Add",
+      "modeRemove": "Remove",
+      "title": "Add tags",
+      "lead": "Add tags to the {count} selected prompts. Tags a prompt already has stay as they are; a prompt that would go over 10 tags is left alone.",
+      "removeTitle": "Remove tags",
+      "removeLead": "Take tags off the {count} selected prompts. Prompts without them stay as they are.",
+      "removeTags": "Tags to remove",
+      "removeNone": "The selected prompts have no tags.",
+      "previewAdd": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} already have them · {blocked} would go over the 10-tag limit",
+      "previewRemove": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} don't have them",
+      "save": "Add to {count, plural, one {# prompt} other {# prompts}}",
+      "removeSave": "Remove from {count, plural, one {# prompt} other {# prompts}}",
+      "done": "{count, plural, one {# prompt tagged} other {# prompts tagged}}",
+      "removed": "{count, plural, one {Tags removed from # prompt} other {Tags removed from # prompts}}"
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
@@ -17285,6 +17364,12 @@
         "duplicateCompetitor": "{name} is already in the list",
         "setupComplete": "Brand setup complete! Tracking is starting."
       },
+      "step4": {
+        "listTitle": "Your Prompt List",
+        "topicColumn": "Topic",
+        "noPrompts": "No prompts generated yet.",
+        "saving": "Saving prompts..."
+      },
       "step5": {
         "title": "Add your competitors",
         "subtitle": "We'll track how often competitors appear alongside your brand in AI responses.",
@@ -17355,7 +17440,7 @@
       "facts": {
         "tab": "Brand facts",
         "title": "Brand facts",
-        "description": "Your prices and plans, your trial, when you were founded and the claims you make, read from your own pricing, About and product pages. Approve the ones that are right: Quality checks your pages against the approved ones that are still on your site.",
+        "description": "Your prices and plans, your trial, when you were founded and the claims you make, read from your own pricing, About and product pages. Approve the ones that are right: Quality checks your pages against the approved ones that are still on your site. A fact for one destination, operator or route is used only on pages about that place.",
         "loading": "Reading your brand facts",
         "loadFailed": "Your brand facts couldn't be read. Try again in a moment.",
         "off": "Brand facts aren't available yet.",
@@ -17388,6 +17473,15 @@
         "approveFact": "Approve {fact}",
         "rejectFact": "Reject {fact}",
         "reviewFailed": "That fact couldn't be saved. Try again.",
+        "scope": "Applies to",
+        "scopeFact": "Change where {fact} applies",
+        "scopeLabel": "Destination, operator or route",
+        "scopeHint": "Leave it empty when it holds for your whole brand. A page is checked against it only when its title, heading or address names that place.",
+        "scopeSave": "Save",
+        "scopeCancel": "Cancel",
+        "scopeFailed": "That couldn't be saved. Try again.",
+        "scopeTaken": "This fact is already kept for that place.",
+        "wholeBrand": "Whole brand",
         "gone": "No longer on your site",
         "replaces": "Was {value}",
         "trialDays": "{days, plural, one {# day} other {# days}}",

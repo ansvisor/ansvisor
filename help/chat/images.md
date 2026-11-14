@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [create image, create an image, /image, make an image, generate image, cover image, image model, nano banana, gpt image, images in chat, try again, new images]
 synonyms: [ai image, picture, illustration, hero image, blog cover, featured image, draw]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -17,7 +17,7 @@ Chat can make images for your brand, such as a cover for a blog post. Ask in you
 
 The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.
 
-After you pick, the model button under the box reads **Image ·** and the model, such as **Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu.
+After you pick, the model button in the box reads **Image ·** and the model, such as **Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu.
 
 ## Approve the images
 

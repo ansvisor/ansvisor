@@ -128,10 +128,13 @@ describe('the microphone', () => {
     const send = container.querySelector('[data-action="composer.send"]');
     expect(mic()!.nextElementSibling).toBe(send);
     expect(mic()!.parentElement!.getAttribute('data-slot')).toBe('composer-send-group');
-    // ＋ / @ stay on the left, before it.
-    expect(mic()!.parentElement!.previousElementSibling?.getAttribute('data-action')).toBe(
-      'composer.openRef',
+    // The model comes right before it; ＋ / @ stay on the left.
+    expect(mic()!.parentElement!.previousElementSibling?.getAttribute('data-slot')).toBe(
+      'composer-model',
     );
+    expect(
+      mic()!.parentElement!.parentElement!.firstElementChild!.getAttribute('data-action'),
+    ).toBe('composer.openPlus');
   });
 
   it('stops on a second click', async () => {

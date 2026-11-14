@@ -1,11 +1,11 @@
 ---
 title: Write to the Content Editor rules
 route: /dashboard/content/editor
-keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab, brand rules]
+keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab, brand rules, banned phrases]
 synonyms: [writing rules, style guide rules, apply rules with agent, rewrite page, let the agent fix the page]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -17,6 +17,14 @@ Every page in the Content Editor is written to a set of rules for its page type.
 
 In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet.
 
+## Rule sets and page types
+
+The rule set follows the page type. A set you pick for another type holds while the page keeps the type it had then; one picked before sets followed the page type stays, whatever the type, until you pick a set again. On a page with no type, picking a set sets it. Rules the page can't meet, such as another type's or one that needs your product feed, sit under **Not checked on this page**, never counted or sent to the Content Agent.
+
+## Fan-out rules
+
+**Use top fan-outs as H2s** and **Use fan-outs in FAQ questions** list the first fan-outs the page doesn't use yet. A heading or question uses a fan-out when it has most of its words, in any form: "Measuring AI Overviews" uses "how to measure ai overviews".
+
 ## Save or reset your rules
 
 Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or use **Paste many** to add several from a style guide.
@@ -25,13 +33,19 @@ Changes to the rules apply to this draft only. **Save as my rules**, for admins 
 
 Admins and managers keep a brand's rules in **Settings › Content › Brand rules**, one per line, up to 30, such as topics to stay away from. The Content Agent follows them on every page of the brand, before your text rules, and a brand rule wins when they disagree. They change what's written, not the **Rules** count.
 
+## Your brand's banned phrases
+
+When a brand has banned phrases in the **Content rules** of its settings, the **Style** group adds **Avoid your brand's banned phrases**, on unless you turn it off for a draft. It lists the ones on the page, as whole words in any case: **Fix** asks the Content Agent to say them in other words, its suggestions never add one, its rewrites are checked for them, and **Before you publish** asks you to fix them first.
+
 ## Fix open rules
 
 **Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.
 
 A decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage.
 
-An open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule.
+## Rules that are yours
+
+An open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide, and Fix leaves it out from then on. With nothing left it can fix, the button gives way to "Content Agent did what it could" and the rules that are yours, each with **Change the page**, **Change the rule** and, for a rule it tried, **Ask again**.
 
 ## Rewrite the whole page
 
@@ -39,13 +53,18 @@ The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page*
 
 A rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published.
 
-Your Length has the last word: a rewrite merges or drops the least useful sections rather than go past it, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too.
+## A rewrite and your Length
+
+Your Length has the last word: a rewrite shortens inside sections rather than go past it, keeping every section the rules ask for, such as fan-out headings, the FAQ and the summary, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too.
+
+A rewrite you accept that leaves open rules your page met says how many on its card, beside **Undo**.
 
 ## Before you run it again
 
 - Accept or reject the open suggestions before you run the agent again or edit the page as HTML.
 - The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.
 - The agent only changes drafts, not published pages.
+- When the agent's answer is slow to come back, its card says **Still finishing…** for up to three minutes. It says the agent couldn't finish only when its run failed; otherwise open the page again later to see what it wrote.
 
 ## How your choices teach the agent
 

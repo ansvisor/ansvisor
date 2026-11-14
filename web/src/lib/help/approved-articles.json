@@ -1308,7 +1308,8 @@
         "last 30d",
         "last 24h",
         "custom range",
-        "range under the box",
+        "range above the box",
+        "add date range",
         "change range",
         "welcome card",
         "preparing your data",
@@ -1483,7 +1484,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -1507,7 +1508,7 @@
         },
         {
           "heading": "Ask Chat",
-          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nUnder the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; under their box it says **Read-only**, with a link to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
+          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nIn the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; there it says **Read-only**, linking to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -1515,7 +1516,7 @@
         },
         {
           "heading": "What the panel looks at",
-          "text": "The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as your question's scope, but reads your own date range. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.\n\nAn empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.\n\nThe speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center."
+          "text": "Above the box in the panel, chips show what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as your question's scope, but reads your own date range. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.\n\nAn empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.\n\nThe speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center."
         },
         {
           "heading": "Chats in the panel",
@@ -1539,7 +1540,7 @@
         },
         {
           "heading": "Change the date range",
-          "text": "Under the box, **Range** shows the one Chat reads, such as **Range: last 30 days**. Click **change** to pick another; it is kept at once. **Settings** in the chat menu has it too.\n\nOr send a short range as your message, such as \"last 7d\", \"last 24h\" or \"use 90 days by default\". Chat changes your default at once, says so, and answers your last question again over the new range.\n\nA period inside a question, such as \"How was last week?\", is used for that answer only: your default stays as it is."
+          "text": "Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings** in the chat menu has it too.\n\nOr send a short range as your message, such as \"last 7d\", \"last 24h\" or \"use 90 days by default\". Chat changes your default at once, says so, and answers your last question again over the new range.\n\nA period inside a question, such as \"How was last week?\", is used for that answer only: your default stays as it is."
         },
         {
           "heading": "Change what you track",
@@ -1575,7 +1576,7 @@
         },
         {
           "heading": "Ask about the page beside the chat",
-          "text": "While a page is open beside the chat, the box shows a chip, **Page:** and the page's title. What you ask then doesn't change the page: the Content Agent leaves suggestions in it, labelled \"Content Agent · from your chat\", with the same guards as Fix open rules. They appear in the editor as the run ends, with no reload, and the page changes only when you **Accept** one; **Reject** drops it. Click **×** on the chip to talk about something else: Chat then doesn't edit that page, and the page stays open. Closing the page removes the chip too.\n\nThe editor beside the chat is narrower: **Brief**, **Rules** and **Quality** sit in a bar under the page, with **Sources** and **Live page** under its **More**. The toolbar's less used buttons, such as the table and **Add HTML**, move under the toolbar's own **More**."
+          "text": "While a page is open beside the chat, a chip above the box shows **Page:** and the page's title. What you ask then doesn't change the page: the Content Agent leaves suggestions in it, labelled \"Content Agent · from your chat\", with the same guards as Fix open rules. They appear in the editor as the run ends, with no reload, and the page changes only when you **Accept** one; **Reject** drops it. Click **×** on the chip to talk about something else: Chat then doesn't edit that page, and the page stays open. Closing the page removes the chip too.\n\nThe editor beside the chat is narrower: **Brief**, **Rules** and **Quality** sit in a bar under the page, with **Sources** and **Live page** under its **More**. The toolbar's less used buttons, such as the table and **Add HTML**, move under the toolbar's own **More**."
         },
         {
           "heading": "Versions of a page in chat",
@@ -1595,11 +1596,11 @@
         },
         {
           "heading": "Your brand facts",
-          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or a manager approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact.\n\nChat and its agents never make up a price, fee, date, rule or contact detail. When one is missing, they ask you for it, or leave that part out."
+          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or manager approved on the brand's **Brand facts** tab, in your site's own words. Facts waiting for approval, rejected or gone from your site aren't read, and a fact for one destination, operator or route is used only on that place's pages.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or give the facts yourself. Chat never approves a fact.\n\nChat and its agents never make up a price, fee, date, rule or contact detail. When one is missing, they ask you for it, or leave that part out."
         },
         {
           "heading": "Content rules",
-          "text": "A brand's **Content rules** card, under **General** in the brand's settings, holds what Chat and the agents must follow when they write for it. Admins and Managers change it; others read it.\n\n**Banned phrases** are words or phrases the brand never uses, one per line. A draft that has one, as a whole word or phrase in any case, isn't saved: Chat is told which, rewrites those sentences and saves again. Reports and answers aren't checked; Chat is only told the list.\n\n**Blocked domains** are never suggested as link sources or cited. **Allowed domains** are preferred sources. Turn on **Only cite these domains** and link and source suggestions stay on the allowed domains and the brand's own site."
+          "text": "A brand's **Content rules** card, under **General** in the brand's settings, holds what Chat and the agents must follow when they write for it. Admins and Managers change it; others read it.\n\n**Banned phrases** are words or phrases the brand never uses, one per line. A draft that has one, as a whole word or phrase in any case, isn't saved: Chat is told which, rewrites those sentences and saves again. Reports and answers aren't checked; Chat is only told the list. In the Content Editor, the **Rules** tab checks the page against them as you write, and the Content Agent's suggestions never add one.\n\n**Blocked domains** are never suggested as link sources or cited. **Allowed domains** are preferred sources. Turn on **Only cite these domains** and link and source suggestions stay on the allowed domains and the brand's own site."
         },
         {
           "heading": "Open a web page",
@@ -1631,7 +1632,7 @@
         },
         {
           "heading": "Reference your data",
-          "text": "Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off."
+          "text": "Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the box; **×** takes it off."
         },
         {
           "heading": "Attach files",
@@ -1667,7 +1668,7 @@
         },
         {
           "heading": "AI usage",
-          "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
+          "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The model button's menu ends with **AI usage this month**: a bar, the share used and when it resets. From 80% a dot on the model button turns amber (red once used up), and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
         },
         {
           "heading": "When only part of a job fits",
@@ -1754,7 +1755,7 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -1774,7 +1775,7 @@
         },
         {
           "heading": "Date range",
-          "text": "**Date range** is the period Chat reads when your message names none, in Chat and in the panel beside every page, for every brand. Pick **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days**, or **Custom** with a first and a last day: it is kept at once. **Ask me before the first analysis** clears it, so Chat asks again on the next analysis that reads data. The line under the message box shows the same range, with **change**."
+          "text": "**Date range** is the period Chat reads when your message names none, in Chat and in the panel beside every page, for every brand. Pick **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days**, or **Custom** with a first and a last day: it is kept at once. **Ask me before the first analysis** clears it, so Chat asks again on the next analysis that reads data. The date range chip above the message box shows the same range; click it to change it."
         },
         {
           "heading": "Notify me when an agent needs me",
@@ -2068,7 +2069,7 @@
         "draw"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -2076,7 +2077,7 @@
         },
         {
           "heading": "Pick an image model",
-          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.\n\nAfter you pick, the model button under the box reads **Image ·** and the model, such as **Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu."
+          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.\n\nAfter you pick, the model button in the box reads **Image ·** and the model, such as **Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu."
         },
         {
           "heading": "Approve the images",
@@ -2200,11 +2201,11 @@
         "thinking effort"
       ],
       "plan": "starter",
-      "updated": "2026-11-03",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
-          "text": "Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Sonnet 5.5 writes the answer. The model button under the message box shows what the chat runs on. Click it to open the model menu."
+          "text": "Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Sonnet 5.5 writes the answer. The model button, in the row at the bottom of the message box, shows what the chat runs on: **Auto**, or the model's short name. Click it to open the model menu."
         },
         {
           "heading": "Pick a model",
@@ -2232,7 +2233,7 @@
         },
         {
           "heading": "Your own API key, usage and plan",
-          "text": "The bottom of the menu shows:\n\n- **Use your own API key**: on Enterprise, **Included in your plan** opens **Settings › AI Providers**, where an Admin saves keys. A key saved before Chat started works until the date shown. On other plans, own keys come with Enterprise. Models that run on your own key say **Your key**.\n- **Monthly AI usage**: how much of this month's AI limit your workspace has used, and when it resets.\n- **Your plan**, with **See plans**."
+          "text": "The bottom of the menu shows:\n\n- **Use your own API key**: on Enterprise, **Included in your plan** opens **Settings › AI Providers**, where an Admin saves keys. A key saved before Chat started works until the date shown. On other plans, own keys come with Enterprise. Models that run on your own key say **Your key**.\n- **Your plan**, with **See plans**.\n- **AI usage this month**: a bar with how much of this month's AI limit your workspace has used, and when it resets. From 80%, a dot on the model button says so: amber, red once used up."
         }
       ]
     },
@@ -3099,7 +3100,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-11-07",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -3107,11 +3108,15 @@
         },
         {
           "heading": "The header",
-          "text": "The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept.\n\nOn the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel."
+          "text": "The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.\n\nOn the right are **Next** (hover it for the step) and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**."
         },
         {
-          "heading": "Site Audit estimate",
-          "text": "In the side panel's **Quality**, **Site Audit estimate** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.\n\nIt runs Site Audit's checks on the page as it would go out. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.\n\nThe 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew."
+          "heading": "AI search readiness (Site Audit estimate)",
+          "text": "In **Before you publish**, which opens on **Mark ready**, **Export** and **Send to CMS**, **AI search readiness (Site Audit estimate)** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Site setup and E-E-A-T. It's free, and it's read again each time you pause typing.\n\nIt's different from Quality, which scores the writing. Under the score, the top reasons it's low are split: **This page** for what you can fix in the draft, and **Your site** for what to fix in Site Audit, with a link there."
+        },
+        {
+          "heading": "What the estimate reads",
+          "text": "It runs Site Audit's checks on the page as it would go out, with its Article schema. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.\n\nThe 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew."
         },
         {
           "heading": "Status and runs",
@@ -3131,7 +3136,7 @@
         },
         {
           "heading": "The side panel",
-          "text": "The side panel's tabs are **Chat** (with Chat on, see below), **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**, or on **Chat** for a page Chat made.\n\nWhile the panel is closed, its tabs run down the editor's right edge: click one to open the panel there.\n\nBuilding the brief and running the Content Agent use your workspace's monthly AI usage."
+          "text": "The side panel's tabs are **Chat** (with Chat on, see below), **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**, or on **Chat** for a page Chat made.\n\n**Hide side panel**, at the right end of the panel's tabs, closes it. While it's closed, its tabs run down the editor's right edge under **Show side panel**: click one to open the panel there.\n\nBuilding the brief and running the Content Agent use your workspace's monthly AI usage."
         },
         {
           "heading": "Chat beside the page",
@@ -3397,7 +3402,8 @@
         "agent suggestions",
         "accept suggestions",
         "rules tab",
-        "brand rules"
+        "brand rules",
+        "banned phrases"
       ],
       "synonyms": [
         "writing rules",
@@ -3407,7 +3413,7 @@
         "let the agent fix the page"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -3418,6 +3424,14 @@
           "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
         },
         {
+          "heading": "Rule sets and page types",
+          "text": "The rule set follows the page type. A set you pick for another type holds while the page keeps the type it had then; one picked before sets followed the page type stays, whatever the type, until you pick a set again. On a page with no type, picking a set sets it. Rules the page can't meet, such as another type's or one that needs your product feed, sit under **Not checked on this page**, never counted or sent to the Content Agent."
+        },
+        {
+          "heading": "Fan-out rules",
+          "text": "**Use top fan-outs as H2s** and **Use fan-outs in FAQ questions** list the first fan-outs the page doesn't use yet. A heading or question uses a fan-out when it has most of its words, in any form: \"Measuring AI Overviews\" uses \"how to measure ai overviews\"."
+        },
+        {
           "heading": "Save or reset your rules",
           "text": "Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or use **Paste many** to add several from a style guide."
         },
@@ -3426,16 +3440,28 @@
           "text": "Admins and managers keep a brand's rules in **Settings › Content › Brand rules**, one per line, up to 30, such as topics to stay away from. The Content Agent follows them on every page of the brand, before your text rules, and a brand rule wins when they disagree. They change what's written, not the **Rules** count."
         },
         {
+          "heading": "Your brand's banned phrases",
+          "text": "When a brand has banned phrases in the **Content rules** of its settings, the **Style** group adds **Avoid your brand's banned phrases**, on unless you turn it off for a draft. It lists the ones on the page, as whole words in any case: **Fix** asks the Content Agent to say them in other words, its suggestions never add one, its rewrites are checked for them, and **Before you publish** asks you to fix them first."
+        },
+        {
           "heading": "Fix open rules",
-          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage.\n\nAn open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule."
+          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage."
+        },
+        {
+          "heading": "Rules that are yours",
+          "text": "An open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide, and Fix leaves it out from then on. With nothing left it can fix, the button gives way to \"Content Agent did what it could\" and the rules that are yours, each with **Change the page**, **Change the rule** and, for a rule it tried, **Ask again**."
         },
         {
           "heading": "Rewrite the whole page",
-          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published.\n\nYour Length has the last word: a rewrite merges or drops the least useful sections rather than go past it, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too."
+          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published."
+        },
+        {
+          "heading": "A rewrite and your Length",
+          "text": "Your Length has the last word: a rewrite shortens inside sections rather than go past it, keeping every section the rules ask for, such as fan-out headings, the FAQ and the summary, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too.\n\nA rewrite you accept that leaves open rules your page met says how many on its card, beside **Undo**."
         },
         {
           "heading": "Before you run it again",
-          "text": "- Accept or reject the open suggestions before you run the agent again or edit the page as HTML.\n- The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.\n- The agent only changes drafts, not published pages."
+          "text": "- Accept or reject the open suggestions before you run the agent again or edit the page as HTML.\n- The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.\n- The agent only changes drafts, not published pages.\n- When the agent's answer is slow to come back, its card says **Still finishing…** for up to three minutes. It says the agent couldn't finish only when its run failed; otherwise open the page again later to see what it wrote."
         },
         {
           "heading": "How your choices teach the agent",
@@ -3537,7 +3563,7 @@
         "regulated page review"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -3545,7 +3571,7 @@
         },
         {
           "heading": "The scores",
-          "text": "Quality scores the page from 0 to 100 on three things, each card saying what it scores:\n\n- **E-E-A-T**: who stands behind the page, such as its author and their experience.\n- **Trust**: sources, links and dated facts.\n- **Readability**: how easily it reads.\n\n80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nUnder them, **Site Audit estimate** is about where the page would score in Site Audit. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
+          "text": "Quality scores the page from 0 to 100 on three things, each card saying what it scores:\n\n- **E-E-A-T**: who stands behind the page, such as its author and their experience.\n- **Trust**: sources, links and dated facts.\n- **Readability**: how easily it reads.\n\n80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nIn **Before you publish**, **AI search readiness (Site Audit estimate)** is about where the page would score in Site Audit. It's a different score from Quality. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
         },
         {
           "heading": "Your to-dos and what would raise it",
@@ -3561,7 +3587,11 @@
         },
         {
           "heading": "Next step",
-          "text": "With Quality on, the header's **Next step** opens a window: every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.\n\nOnce you've decided the agent's **Fix open rules** suggestions, the step is ticked. Rules its later suggestions leave open don't bring it back; your edits can.\n\n**Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.\n\nMarked ready with steps skipped, it says how many are still open. **Next step** then offers **Export** and **Mark published**."
+          "text": "With Quality on, the header's **Next** button, with dots for the steps taken, opens a window (hover it for the step's name): every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.\n\n**Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.\n\nMarked ready with steps skipped, it says how many are still open. **Next step** then offers **Export** and **Mark published**."
+        },
+        {
+          "heading": "The order of the steps",
+          "text": "With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then **Rewrite within all rules** for a page far off its Length.\n\nOnce you've decided the agent's **Fix open rules** suggestions, the step is ticked, as the **Rules** tab counts the rules left yours. Rules its later suggestions leave open don't bring it back; your edits can."
         },
         {
           "heading": "The page's author",
@@ -3569,7 +3599,7 @@
         },
         {
           "heading": "Before you publish",
-          "text": "**Mark ready** opens **Before you publish** first. A line sums up what to fix and to check; the checks show in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:\n\n- placeholders, alt text and links (**Ready for your CMS**);\n- the author, and the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the search engine details (Article schema) Ansvisor adds;\n- Trust under 60: AI answers may lean on the page less;\n- the rules and to-dos still open. You can still mark it ready.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data does too. On a shopping path page, it also names product cards whose catalog price changed since they went in. **Send to CMS** opens it only when it has something to ask about."
+          "text": "**Mark ready** opens **Before you publish** first. A line sums up what to fix and check, in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:\n\n- placeholders, alt text and links (**Ready for your CMS**);\n- the author, and the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the search engine details (Article schema) Ansvisor adds;\n- Trust under 60: AI answers may lean on the page less;\n- open rules and to-dos. You can still mark it ready.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data does too. On a shopping path page, it also names product cards whose catalog price changed since they went in. **Send to CMS** opens it only when it has something to ask about."
         },
         {
           "heading": "Search engine details (Article schema)",
@@ -3867,7 +3897,7 @@
         },
         {
           "heading": "Add another brand",
-          "text": "To add another brand, admins and managers pick **Add Brand** in the brand switcher. It walks through the same first five steps as your first brand: brand basics, region and language, topics, prompts and competitors. Its first run starts when you finish. Your plan sets how many brands you can have."
+          "text": "To add another brand, admins and managers pick **Add Brand** in the brand switcher. It walks through the same first five steps as your first brand: brand basics, region and language, topics, prompts and competitors. In the prompts step, tick the prompts you want to track: only ticked ones are saved. Its first run starts when you finish. Your plan sets how many brands you can have."
         },
         {
           "heading": "Add the tracking snippet",
@@ -4644,7 +4674,10 @@
         "performance filter",
         "paused prompts",
         "waiting for a spot",
-        "free up a spot"
+        "free up a spot",
+        "prompt tags",
+        "tag filter",
+        "bulk tags"
       ],
       "synonyms": [
         "prompt list",
@@ -4653,7 +4686,7 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -4678,6 +4711,10 @@
         {
           "heading": "Filter by performance",
           "text": "The **Performance** filter groups prompts by where your brand is named in their AI answers over the selected range, across every platform the prompt tracks:\n\n- **Best**: named in the first third of the brands an answer lists.\n- **Good**: named in the middle third.\n- **Late**: named in the last third.\n- **Missing**: named in fewer than half the answers.\n\nLate and Missing list the furthest behind first. A prompt with no answers in the range, such as a new one, has no performance yet. The **Positions** column shows your average position and its change; hover it for each platform, or use its chart button to open the positions panel."
+        },
+        {
+          "heading": "Organize with tags",
+          "text": "Tags label prompts with your own words, such as a campaign or product line. A prompt carries up to 10 tags, each up to 50 characters. Admins and managers tag one from **Edit** on its **…** menu, under **Tags**: type and press Enter. Tags show beside the prompt's text in the table.\n\nTo tag many at once, tick their rows and open **Tags** in the bar that appears: **Add tags** puts them on every selected prompt, leaving one that would go over 10 alone, and **Remove tags** takes the picked tags off. The dialog says how many prompts will change before you save.\n\nThe **Tags** filter beside the search box narrows the table to one or more tags. With several picked, **Match all** keeps prompts carrying every one; **Match any** keeps those carrying at least one. It combines with search and the other filters."
         },
         {
           "heading": "Open a prompt or act on it",

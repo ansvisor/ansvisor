@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
@@ -108,7 +109,8 @@ export function useAuditEstimate(
  * Site Audit estimate (customer priorities item 9): about where the page
  * would score in Site Audit, its categories as the audit's report shows
  * them, what it rests on, and Estimate AI checks with what it takes of the
- * month's AI usage. In Quality, and from the header's chip.
+ * month's AI usage, and the top reasons it is low, split into what to fix
+ * in the draft and in Site Audit. In Before you publish.
  */
 export function AuditEstimateCard({
   state,
@@ -144,6 +146,7 @@ export function AuditEstimateCard({
           {score === null ? state.failed ? '—' : <LoadingDots /> : t('score', { score })}
         </span>
       </div>
+      <p className="text-xs text-muted-foreground">{t('intro')}</p>
       {estimate ? (
         <>
           <p className="text-xs text-muted-foreground">
@@ -180,6 +183,29 @@ export function AuditEstimateCard({
               );
             })}
           </ul>
+          {(['page', 'site'] as const).map((scope) => {
+            const list = (estimate.issues ?? []).filter((i) => i.scope === scope);
+            return (
+              list.length > 0 && (
+                <div key={scope} className="space-y-1">
+                  <p className="text-xs font-medium">{t(`reasons.${scope}`)}</p>
+                  <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                    {list.map((i) => (
+                      <li key={i.key}>{i.label}</li>
+                    ))}
+                  </ul>
+                  {scope === 'site' && (
+                    <Link
+                      href="/dashboard/audit"
+                      className="text-xs font-medium underline underline-offset-2"
+                    >
+                      {t('reasons.siteLink')}
+                    </Link>
+                  )}
+                </div>
+              )
+            );
+          })}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
             <Button
               variant="outline"

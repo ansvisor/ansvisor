@@ -12,9 +12,11 @@ import { newestOf } from './chat-facts';
  * Trust check and the go-live gate compare a page with: a pending, rejected
  * or gone fact never leaves. Each fact as the page's words that state it,
  * its kind and value, when it was approved and the page it was read from;
- * no id, slot or reviewer. `data_as_of` is the last time the site was read
- * and still said them (§15a). Null for a brand outside the organization or
- * the person's brand access.
+ * no id, slot or reviewer. The brand-wide ones first, then each place's
+ * (00539): a fact with a `scope` holds for that destination, operator or
+ * route only, and `scopes_note` says so. `data_as_of` is the last time the
+ * site was read and still said them (§15a). Null for a brand outside the
+ * organization or the person's brand access.
  */
 
 interface FactRow {
@@ -24,14 +26,18 @@ interface FactRow {
   source_url: string;
   reviewed_at: string | null;
   last_seen_at: string | null;
+  scope: string | null;
 }
+
+const SCOPES_NOTE =
+  "A fact with a scope holds only for that destination, operator or route: use it only on a page about that place, never on another's. A fact without one holds for the whole brand.";
 
 export async function getBrandFactsFor(auth: McpAuthContext, params: { brandId: string }) {
   if (!(await brandAllowed(auth, params.brandId))) return null;
   const { data, error } = await supabaseAdmin
     .from('brand_facts')
     .select(
-      'kind, value, quote, source_url, reviewed_at, last_seen_at, brands!inner(organization_id)',
+      'kind, value, quote, source_url, reviewed_at, last_seen_at, scope, brands!inner(organization_id)',
     )
     .eq('brand_id', params.brandId)
     .eq('brands.organization_id', auth.organizationId!)
@@ -41,15 +47,19 @@ export async function getBrandFactsFor(auth: McpAuthContext, params: { brandId: 
     .order('id');
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as unknown as FactRow[];
+  // The brand-wide ones first, then each place's, A to Z (a stable sort: in their order).
+  const sorted = [...rows].sort((a, b) => (a.scope ?? '').localeCompare(b.scope ?? ''));
   return {
-    facts: rows.map((row) => ({
+    facts: sorted.map((row) => ({
       kind: row.kind,
       text: row.quote,
       // A claim is its words; a price, a trial or a founding year has its value too.
       ...(row.kind === 'claim' ? {} : { value: row.value }),
+      ...(row.scope ? { scope: row.scope } : {}),
       approved_at: row.reviewed_at,
       source_url: row.source_url,
     })),
+    ...(rows.some((row) => row.scope) ? { scopes_note: SCOPES_NOTE } : {}),
     data_as_of: newestOf(rows.map((row) => row.last_seen_at)),
   };
 }

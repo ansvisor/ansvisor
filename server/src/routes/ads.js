@@ -6,6 +6,7 @@ import { adsEnabled } from '../lib/ads-flag.js';
 import { readAdsActivity } from '../lib/ads/activity.js';
 import {
   SNAPSHOT_PERIOD,
+  isDemoPrompt,
   readAdsSettings,
   readOpportunities,
   readsEveryOpportunity,
@@ -15,6 +16,7 @@ import {
 import { readOpportunity } from '../lib/ads/opportunity.js';
 import { readOverview } from '../lib/ads/overview.js';
 import { ADS_PERIODS } from '../lib/ads/standing.js';
+import { DEMO_BRAND } from '../middleware/demo-brand.js';
 
 /**
  * Ads (the Drive Ads spec, ADS-01) under /api/ads, while it is built.
@@ -26,6 +28,11 @@ import { ADS_PERIODS } from '../lib/ads/standing.js';
  *     request without a session before it gets here, on or off.
  *   - A route that names a brand checks the person can reach it
  *     (assertBrandAccess), as every brand route does.
+ *   - The demo brand's decisions are the rule's: a decision naming it, or a
+ *     prompt of it, is refused before it gets here
+ *     (middleware/demo-brand.js), and here too (402 demo_brand).
+ *   - A write is for a plan that reads every opportunity (Growth and up;
+ *     self-hosted has no plans): Starter and the trial get 403 plan_limit.
  *
  * Nothing here reaches an ad platform. The writes are Ads' own rows (a
  * decision, the thresholds), each logged (lib/ads/activity.js).
@@ -48,6 +55,10 @@ function failed(req, res, err, what) {
   req.log.error({ err: { name: err?.name, message: err?.message, stack: err?.stack } }, what);
   return res.status(500).json({ error: 'Failed to read Ads', code: 'failed' });
 }
+
+/** Starter's and the trial's answer to a write, or a row past theirs: Growth's (ADS-01 §8). */
+const planLimit = (res) =>
+  res.status(403).json({ error: 'plan_limit', code: 'plan_limit', feature: 'ads_read' });
 
 // GET /api/ads/status?brandId=… — Ads is on for this install, for a person
 // who can reach the brand. Where the plan stops (Starter's three rows, the
@@ -130,10 +141,7 @@ router.get('/opportunities/:promptId', async (req, res) => {
       promptId: promptId.data,
       period: parsed.data.period,
     });
-    if (!read) {
-      return res.status(403).json({ error: 'plan_limit', code: 'plan_limit', feature: 'ads_read' });
-    }
-    return res.json(read);
+    return read ? res.json(read) : planLimit(res);
   } catch (err) {
     return failed(req, res, err, 'ads opportunity read error');
   }
@@ -155,7 +163,8 @@ router.get('/overview', async (req, res) => {
 
 // PATCH /api/ads/opportunities/:promptId/decision { brandId, decision } — a
 // person's decision over the rule's (null takes it back): admins and
-// managers, on a plan that reads every opportunity. Logged.
+// managers, on a plan that reads every opportunity, never on the demo brand
+// (by the brand named or the prompt's). Logged.
 router.patch('/opportunities/:promptId/decision', async (req, res) => {
   const promptId = z.guid().safeParse(req.params.promptId);
   const body = z
@@ -166,14 +175,15 @@ router.patch('/opportunities/:promptId/decision', async (req, res) => {
   }
   try {
     const { brand, orgId } = await assertBrandAccess(body.data.brandId, req.user.id);
+    if (brand?.is_demo || (await isDemoPrompt(orgId, promptId.data))) {
+      return res.status(402).json(DEMO_BRAND);
+    }
     await assertRole(
       req.user.id,
       MANAGER_ROLES,
       'Only admins and managers can change an Ads decision.',
     );
-    if (!(await readsEveryOpportunity(orgId, brand))) {
-      return res.status(403).json({ error: 'plan_limit', code: 'plan_limit', feature: 'ads_read' });
-    }
+    if (!(await readsEveryOpportunity(orgId, brand))) return planLimit(res);
     const override = await setDecision({
       orgId,
       brandId: brand.id,
@@ -204,7 +214,8 @@ const settingsOf = ({ thresholds, updatedBy, updatedAt }) => ({
   updatedAt,
 });
 
-// GET /api/ads/settings — the workspace's earn-or-pay thresholds (Admins).
+// GET /api/ads/settings — the workspace's earn-or-pay thresholds (Admins, on
+// any plan: Starter and the trial read the ones their rows are decided by).
 router.get('/settings', async (req, res) => {
   try {
     const orgId = await adminWorkspace(req, res);
@@ -215,7 +226,8 @@ router.get('/settings', async (req, res) => {
 });
 
 // PATCH /api/ads/settings { thresholds: { key: number | null } } — changes
-// them (null: back to the default), logged (Admins).
+// them (null: back to the default), logged: Admins, on a plan that reads
+// every opportunity, as a decision. The workspace's own: names no brand.
 router.patch('/settings', async (req, res) => {
   const value = (schema) => schema.nullable().optional();
   const body = z
@@ -232,9 +244,9 @@ router.patch('/settings', async (req, res) => {
   if (!body.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {
     const orgId = await adminWorkspace(req, res);
-    return (
-      orgId && res.json(settingsOf(await saveAdsSettings(orgId, req.user.id, body.data.thresholds)))
-    );
+    if (!orgId) return undefined;
+    if (!(await readsEveryOpportunity(orgId))) return planLimit(res);
+    return res.json(settingsOf(await saveAdsSettings(orgId, req.user.id, body.data.thresholds)));
   } catch (err) {
     return failed(req, res, err, 'ads settings write error');
   }
