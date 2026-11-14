@@ -245,6 +245,20 @@ describe('the dashboard layout', () => {
     expect(band()).toBeNull();
   });
 
+  it('scrolls a page in its main area only, which holds what the page places absolutely (2026-11-14)', async () => {
+    await open();
+    // jsdom lays nothing out: the classes that keep the window from scrolling.
+    const shell = container.querySelector('.h-screen')!;
+    expect(shell.className.split(' ')).toEqual(expect.arrayContaining(['flex', 'overflow-hidden']));
+    const main = container.querySelector('main')!;
+    expect(main.getAttribute('data-slot')).toBe('dashboard-main');
+    expect(main.className.split(' ')).toEqual(
+      expect.arrayContaining(['relative', 'flex-1', 'overflow-y-auto']),
+    );
+    expect(shell.contains(main)).toBe(true);
+    expect(main.textContent).toContain('Page content');
+  });
+
   it('opens read-only for an admin whose plan ended, with the band and See plans', async () => {
     org = { ...org, subscription_status: 'canceled' };
     expect(await open()).toBeNull();

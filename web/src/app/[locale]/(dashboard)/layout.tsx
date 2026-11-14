@@ -295,7 +295,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
                               <ReadOnlyBanner />
                               <PlanEndsBanner />
                               <DemoBanner />
-                              <main className="flex-1 overflow-y-auto bg-background p-6">
+                              {/* The only scroll of a page. Relative: what a page places
+                                  absolutely with nothing positioned around it (a
+                                  screen-reader label, sr-only) is placed and clipped here.
+                                  Placed on the page instead, it made the window taller than
+                                  the shell, and the window scrolled past it (2026-11-14). */}
+                              <main
+                                data-slot="dashboard-main"
+                                className="relative flex-1 overflow-y-auto bg-background p-6"
+                              >
                                 <BrandGuard>{children}</BrandGuard>
                               </main>
                               <TrackingJobHandoff />
