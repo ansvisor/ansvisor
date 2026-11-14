@@ -11,6 +11,7 @@ import { getAuditQuota, runAuditsBulk, type AuditQuota } from '@/lib/actions/aud
 import { isNoPlan } from '@/lib/billing/no-plan';
 import { generateOpportunitiesOnDemand, getGenerationJobStatus } from '@/lib/actions/content';
 import { suggestForPage } from '@/lib/content-job';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import {
   sendTrafficPagesToActionCenter,
   type TrafficDateWindow,
@@ -72,14 +73,14 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
         if (result.created) {
           toast.success(t('sent'), {
             id: toastId,
-            description: t('sentDescription', { number: result.actionNo, count: sent.length }),
+            description: t('sentDescription', { number: actionCodeNo(result), count: sent.length }),
             duration: 10_000,
             action: open,
           });
         } else {
           toast.info(t('alreadySent'), {
             id: toastId,
-            description: t('alreadySentDescription', { number: result.actionNo }),
+            description: t('alreadySentDescription', { number: actionCodeNo(result) }),
             duration: 10_000,
             action: open,
           });

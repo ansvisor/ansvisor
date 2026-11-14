@@ -286,7 +286,7 @@ While Chat works, one line says what it is doing now, such as "Reading Citations
 
 Under the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
-Each Action Center action an answer names comes with its title, and its number, such as AC-1497, is a link: click it to open that action in Action Center in a new tab.
+Each Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both.
 
 ## Big requests in parts
 

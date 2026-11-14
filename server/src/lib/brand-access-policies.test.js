@@ -50,6 +50,8 @@ const SERVER_ONLY = [
   'ads_decision_overrides',
   'ads_opportunity_snapshots',
   'brand_fact_pages',
+  // Each brand's last action and signal number (00534).
+  'brand_number_counters',
   'chat_tool_cache',
   'citation_rollup_rebuilds',
   'cited_page_features',

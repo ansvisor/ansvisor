@@ -2132,6 +2132,7 @@
       },
       "drawer": {
         "actionId": "Action ID",
+        "previousCode": "Previously {code}",
         "tabs": {
           "overview": "Overview",
           "affected": "Affected",

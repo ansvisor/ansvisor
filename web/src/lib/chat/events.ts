@@ -250,8 +250,9 @@ export interface ChatConfirmForm {
  */
 export interface ChatActionSent {
   kind: 'action_created' | 'action_added';
-  /** "AC-1271" */
+  /** "AC-1271"; with its brand's number, "AC-03" (actionCode). */
   actionNo: number;
+  brandNo?: number | null;
   /** The new action's title, or the finding added. */
   title: string;
   href: ChatHref;

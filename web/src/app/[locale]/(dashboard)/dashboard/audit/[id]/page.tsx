@@ -28,6 +28,7 @@ import {
 } from '@/lib/actions/audits';
 import { AuditReport } from '@/components/audit/audit-report';
 import { failingChecks } from '@/lib/audit/failing-checks';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -176,7 +177,7 @@ export default function AuditDetailPage() {
         toast.success(t('sendToAction.sent'), {
           id: toastId,
           description: t('sendToAction.sentDescription', {
-            number: result.actionNo,
+            number: actionCodeNo(result),
             count: failing,
           }),
           duration: 10_000,
@@ -185,7 +186,7 @@ export default function AuditDetailPage() {
       } else {
         toast.info(t('sendToAction.alreadySent'), {
           id: toastId,
-          description: t('sendToAction.alreadySentDescription', { number: result.actionNo }),
+          description: t('sendToAction.alreadySentDescription', { number: actionCodeNo(result) }),
           duration: 10_000,
           action: open,
         });

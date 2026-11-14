@@ -4,7 +4,7 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 import { getKpiSnapshots } from '@/lib/actions/kpis';
 import { getGettingStarted } from '@/lib/actions/getting-started';
 import { getTrackingWindow } from '@/lib/actions/tracking';
-import { actionRef } from '@/lib/action-center/action-ref';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { actionTexts } from '@/lib/action-center/display';
 import { readEntityCounts, withEntityCounts } from '@/lib/action-center/entity-counts';
 import { storedPriorityLevel } from '@/lib/action-center/priority';
@@ -94,7 +94,7 @@ export interface ActionsPageParams {
 export interface ActionsPageRow {
   /** For get_action; never shown. */
   id: string;
-  /** Its number as the app shows and links it, "AC-12" (actionRef). */
+  /** Its code as the app shows and links it, "AC-12" (actionCode: its brand's number, 00534). */
   ref: string;
   /** Its title, as the Actions list words it. */
   title: string;
@@ -186,6 +186,7 @@ export function actionsPageNote(page: {
 interface ActionsPageDbRow {
   id: string;
   action_no: number;
+  brand_no?: number | null;
   kind: string;
   category: string;
   status: string;
@@ -227,7 +228,7 @@ export async function listActionsPageFor(
     let query = supabaseAdmin
       .from('actions')
       .select(
-        'id, action_no, kind, category, status, assignee_id, due_date, updated_at, priority_score, priority_level, stale_at, payload',
+        'id, action_no, brand_no, kind, category, status, assignee_id, due_date, updated_at, priority_score, priority_level, stale_at, payload',
         { count: 'exact', head },
       )
       .eq('brand_id', params.brandId)
@@ -296,7 +297,7 @@ export async function listActionsPageFor(
       const score = row.priority_score === null ? null : Number(row.priority_score);
       return {
         id: row.id,
-        ref: actionRef(row.action_no),
+        ref: actionCode({ actionNo: row.action_no, brandNo: row.brand_no }),
         title: actionTexts(
           { kind: row.kind, payload } as Parameters<typeof actionTexts>[0],
           plainTexts,

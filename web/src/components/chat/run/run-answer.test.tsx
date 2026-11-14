@@ -225,11 +225,11 @@ describe('RunAnswer', () => {
     const text = container.querySelector('[data-slot="run-text"]')!;
     const links = [...text.querySelectorAll<HTMLAnchorElement>('a')];
     expect(links.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
-      ['AC-1497', '/dashboard/action-center/actions/AC-1497'],
-      ['AC-62', '/dashboard/action-center/actions/AC-62'],
-      ['AC-1497', '/dashboard/action-center/actions/AC-1497'],
-      ['AC-62', '/dashboard/action-center/actions/AC-62'],
-      ['AC-429', '/dashboard/action-center/actions/AC-429'],
+      ['AC-1497', '/dashboard/action-center/actions/code/AC-1497'],
+      ['AC-62', '/dashboard/action-center/actions/code/AC-62'],
+      ['AC-1497', '/dashboard/action-center/actions/code/AC-1497'],
+      ['AC-62', '/dashboard/action-center/actions/code/AC-62'],
+      ['AC-429', '/dashboard/action-center/actions/code/AC-429'],
     ]);
     for (const a of links) {
       expect(a.getAttribute('target')).toBe('_blank');

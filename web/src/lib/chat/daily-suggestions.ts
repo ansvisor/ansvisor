@@ -77,8 +77,9 @@ export interface SuggestionStartNow {
 
 /** What a row reads of the summary. */
 export interface SuggestionSummary {
-  /** The action's number, shown as AC-2841; null when it has none. */
+  /** The action's number, shown as AC-2841, or its brand's AC-03 (actionCode); null when it has none. */
   actionNo: number | null;
+  brandNo?: number | null;
   kind: string;
   /** What actionTexts reads for the title. */
   payload: Record<string, unknown>;
@@ -106,6 +107,7 @@ export function parseSuggestionSummary(value: unknown): SuggestionSummary {
   const score = typeof priority.score === 'number' ? priority.score : null;
   return {
     actionNo: positive(action.no),
+    brandNo: positive(action.brandNo),
     kind: typeof action.kind === 'string' ? action.kind : '',
     payload: isRecord(action.payload) ? action.payload : {},
     priorityLevel: storedPriorityLevel(priority.level, score),

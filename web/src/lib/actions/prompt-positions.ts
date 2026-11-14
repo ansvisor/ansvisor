@@ -85,7 +85,7 @@ export async function getPromptPositions(
         : Promise.resolve({ data: null }),
       supabase
         .from('actions')
-        .select('id, action_no, status, position_outcome')
+        .select('id, action_no, brand_no, status, position_outcome')
         .eq('brand_id', brandId)
         .eq('kind', 'prompt_improve')
         .eq('payload->>promptId', promptId)

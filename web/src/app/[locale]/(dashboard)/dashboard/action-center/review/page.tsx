@@ -16,6 +16,7 @@ import {
 } from '@/lib/actions/action-task-reviews';
 import type { TaskDetailsEdit } from '@/lib/action-center/task-details';
 import { ACTION_CENTER_TODAY } from '@/lib/action-center/tabs';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { TaskDetailForm, TaskDetailView } from '@/components/action-center/task-detail';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
@@ -102,7 +103,8 @@ function ReviewContent({ brandId }: { brandId: string }) {
     return <p className="py-20 text-center text-sm text-muted-foreground">{t('empty')}</p>;
   }
 
-  const ref = (review: TaskReview) => (review.actionNo !== null ? `AC-${review.actionNo}` : '');
+  const ref = (review: TaskReview) =>
+    review.actionNo !== null ? actionCode({ ...review, actionNo: review.actionNo }) : '';
   const gone = (id: string) => {
     setReviews((list) => (list ?? []).filter((r) => r.id !== id));
   };

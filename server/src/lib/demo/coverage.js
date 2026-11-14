@@ -21,6 +21,8 @@ export const SKIPPED = {
     'AI spend on suggestion relevance: nothing is spent for a demo brand.',
   fast_rollups_ready:
     'The brands whose Topics and Perception reads use the summed rollups (00536), listed by the backfill script (src/scripts/backfill-fast-rollups.js), which leaves demo brands out: a demo brand is small, and reads the rollups it always has.',
+  brand_number_counters:
+    "Each brand's last action and signal number (00534), kept by the insert trigger as the demo's rows are written: nothing is built for it.",
   webhook_configs: 'Outgoing webhooks: a demo brand never calls out.',
   prompt_table_views:
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
