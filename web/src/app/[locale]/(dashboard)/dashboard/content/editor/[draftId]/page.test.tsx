@@ -3171,6 +3171,44 @@ describe('the side panel', () => {
     }
   });
 
+  it('keeps the page window-high, and Chat and each tab in a scroll of their own (the owner, 2026-11-14)', async () => {
+    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+    const classes = (el: Element | null | undefined) => el?.className.split(' ') ?? [];
+    chatPanel.value = { setup: { enabled: true } };
+    getContentDraft.mockResolvedValue(
+      draft({ conversation: { id: CHAT, title: 'Pricing FAQ', mine: true } }),
+    );
+    localStorage.setItem('aeo:content-editor-panel', '1');
+    try {
+      await renderPage('admin', { chatOn: true });
+      // jsdom lays nothing out: these are the classes that bound it (the harness checks the rest).
+      // The page: the dashboard's height, nothing in it taller.
+      expect(classes(container.firstElementChild)).toEqual(
+        expect.arrayContaining(['relative', 'flex', 'flex-col', 'overflow-y-clip']),
+      );
+      expect(classes(panel())).toEqual(expect.arrayContaining(['flex', 'flex-col', 'shrink-0']));
+      // Chat: the conversation scrolls in the panel, under its tabs; the box sticks to its bottom.
+      const chatScroll = panel()!.querySelector('[data-slot="editor-chat-scroll"]');
+      expect(chatScroll!.contains(panel()!.querySelector('[data-slot="editor-chat"]'))).toBe(true);
+      expect(classes(chatScroll)).toEqual(
+        expect.arrayContaining(['relative', 'min-h-0', 'flex-1', 'overflow-y-auto']),
+      );
+      expect(chatScroll!.className).not.toMatch(/\b(py|pb)-/);
+      expect(panel()!.querySelector('[role="tablist"]')!.compareDocumentPosition(chatScroll!)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      // Instructions (and Sources, Live page): their own scroll, and Chat hidden.
+      await pickTab('Instructions');
+      expect(classes(panel()!.querySelector('[data-panel-scroll]'))).toEqual(
+        expect.arrayContaining(['relative', 'min-h-0', 'flex-1', 'overflow-y-auto']),
+      );
+      expect(chatScroll!.hasAttribute('hidden')).toBe(true);
+    } finally {
+      chatPanel.value = null;
+      localStorage.removeItem('aeo:content-editor-panel');
+    }
+  });
+
   it('opens on Instructions when a teammate’s shared chat made the draft (W4-16)', async () => {
     const CHAT = 'cccccccc-0000-4000-8000-000000000001';
     chatPanel.value = { setup: { enabled: true } };

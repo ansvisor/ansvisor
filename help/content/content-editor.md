@@ -61,6 +61,8 @@ A brand counts as a health brand when its industry is Healthcare, or its industr
 
 The side panel's tabs are **Chat** (with Chat on, see below), **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**, or on **Chat** for a page Chat made.
 
+The panel is as tall as the window. Its tabs stay on top and each tab scrolls inside it, the Chat box at its bottom. The page scrolls on its own.
+
 **Hide side panel**, at the right end of the header's second row, above the panel, closes it, and in its place **Show side panel** opens it again. While it's closed, its tabs also run down the editor's right edge under **Show side panel**: click one to open the panel there.
 
 Building the brief and running the Content Agent use your workspace's monthly AI usage.

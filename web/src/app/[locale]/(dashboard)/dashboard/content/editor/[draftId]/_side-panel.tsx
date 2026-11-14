@@ -560,9 +560,18 @@ export function EditorSidePanel({
           </TabsList>
         </Tabs>
       )}
-      {/* Chat keeps its own scroll, its box at the bottom (W4-16); mounted once opened. */}
+      {/* Chat keeps its own scroll, its box at the bottom (W4-16); mounted once opened.
+          The thread's box is sticky to this scroll, as in Chat's side panel: without
+          it the conversation grew the page and scrolled the editor away. Relative:
+          the thread's screen-reader text is placed (and clipped) here, not on the
+          page, where it made the window taller than the screen. No padding under
+          it: the box keeps its own. */}
       {chat && opened.has('chat') && (
-        <div hidden={tab !== 'chat'} className="min-h-0 flex-1 px-3 py-3">
+        <div
+          hidden={tab !== 'chat'}
+          data-slot="editor-chat-scroll"
+          className="relative min-h-0 flex-1 overflow-y-auto px-3 pt-3"
+        >
           <EditorChat
             draftId={draft.id}
             conversation={chat.conversation}
@@ -571,12 +580,13 @@ export function EditorSidePanel({
           />
         </div>
       )}
-      {/* The panel's own scroll: a part shown in it scrolls here, never the page (scrollInPanel). */}
+      {/* The panel's own scroll: a part shown in it scrolls here, never the page (scrollInPanel).
+          Relative, as Chat's: what is placed absolutely in it stays in it. */}
       <div
         id={barPanelId}
         data-panel-scroll
         hidden={tab === 'chat' || (bar && !barOpen)}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+        className="relative min-h-0 flex-1 overflow-y-auto px-4 py-4"
       >
         <div hidden={tab !== 'instructions'} className="space-y-4">
           <DataNote />
