@@ -64,6 +64,10 @@ export const SKIPPED = {
     "Chat's log of the changes it made (00402): Chat's precedence refuses every change on a demo brand, so none is logged.",
   ads_activity_log:
     "Ads' append-only log of changes (00530): every Ads change on a demo brand is refused, so none is logged, and a row could never be removed again.",
+  ads_decision_overrides:
+    "A person's decision on an Ads prompt (00531): made with their click, and refused on a demo brand, whose decisions are the rule's.",
+  ads_opportunity_snapshots:
+    "Each Ads prompt's weekly decision (00531): never written for a demo brand, whose sample data doesn't change week to week.",
   chat_access_requests:
     "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
   chat_tool_cache:
