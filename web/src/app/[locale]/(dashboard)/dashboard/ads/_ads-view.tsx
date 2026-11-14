@@ -31,6 +31,7 @@ import { rangeChipLabel } from '@/lib/chat/page-context';
 import { isDemoSelected } from '@/lib/demo/demo-brand';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AdsOpportunities } from './_opportunities';
 import { AdsOverview } from './_overview';
 
 const TAB_ICONS: Record<AdsTab, LucideIcon> = {
@@ -73,9 +74,9 @@ function useAdsTab(): [AdsTab, (tab: AdsTab) => void] {
 /**
  * Whether the workspace reads Ads (ADS-01 §8, owner A2): Growth and above.
  * Starter and the free trial (an Enterprise deal's trial keeps its plan) see
- * each tab but the Overview locked, with what Growth adds (DECISIONS J),
- * until the tab's data comes with the plan's rows from the server. The demo
- * brand shows it as Growth has it. Self-hosted has no plans.
+ * the Overview, Opportunities' first rows from the server, and each other
+ * tab locked, with what Growth adds (DECISIONS J). The demo brand shows it as
+ * Growth has it. Self-hosted has no plans.
  */
 function useAdsAccess(): { readable: boolean; trial: boolean } {
   const { canUse, isCloud } = useFeatureGate();
@@ -88,10 +89,10 @@ function useAdsAccess(): { readable: boolean; trial: boolean } {
 /**
  * Ads (ADS-01 §3, mockup): the header every app page has, then the tab row
  * with the period and Export on its right, then the open tab. The Overview
- * reads its data for the period, on every plan (§8: Starter and the trial
- * too, their lock from the server). The other tabs say what they will show,
- * the period waits for their data and Export for any, and Starter and the
- * trial see their lock.
+ * and Opportunities read their data for the period, on every plan (§8:
+ * Starter and the trial too, their lock from the server). The other tabs say
+ * what they will show, the period waits for their data and Export for any,
+ * and Starter and the trial see their lock.
  */
 export function AdsView() {
   const t = useTranslations('ads');
@@ -101,7 +102,7 @@ export function AdsView() {
   const { readable, trial } = useAdsAccess();
   const { requiredPlanFor } = useFeatureGate();
   const Icon = TAB_ICONS[tab];
-  const periodOff = tab !== 'ov';
+  const periodOff = tab !== 'ov' && tab !== 'op';
 
   // Chat's side panel sees the page: Ads, its period and three questions.
   useChatPageContext({
@@ -172,7 +173,7 @@ export function AdsView() {
         </span>
 
         {/* The period and Export, as AI Referral Traffic has them: the period
-            for the Overview's data, Export off until Ads has data to export. */}
+            for the tab's data, Export off until Ads has data to export. */}
         <div
           className="flex items-center gap-2 pb-1.5"
           title={periodOff ? t('noDataYet') : undefined}
@@ -204,6 +205,8 @@ export function AdsView() {
       >
         {tab === 'ov' ? (
           <AdsOverview period={period} onOpenTab={openTab} />
+        ) : tab === 'op' ? (
+          <AdsOpportunities period={period} />
         ) : readable ? (
           <div data-slot="ads-empty" className="rounded-xl border border-dashed py-12 text-center">
             <Icon aria-hidden className="mx-auto h-10 w-10 text-muted-foreground/40" />

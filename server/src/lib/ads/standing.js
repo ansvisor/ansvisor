@@ -18,7 +18,8 @@ import { intentClass } from './intent.js';
  * - Leader: the competitor named before us, or without us, at the best
  *   position; else us when AI names us; else the competitor named in the
  *   most answers; else none.
- * - Volume: the largest total_google_volume of the prompt's rows; the intent
+ * - Volume: the largest total_google_volume of the prompt's rows, with that
+ *   row's est_ai_volume (AI prompts a month, estimated from it); the intent
  *   is the newest row's. Paid isn't measured yet (null), and the rule says so.
  */
 
@@ -95,15 +96,16 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
     (ids) =>
       supabaseAdmin
         .from('prompt_volumes')
-        .select('prompt_id, intent, total_google_volume')
+        .select('prompt_id, intent, total_google_volume, est_ai_volume')
         .in('prompt_id', ids)
         .order('fetched_at', { ascending: false }),
   );
   const demand = new Map();
   for (const v of must(volumes, 'prompt_volumes')) {
     const volume = v.total_google_volume == null ? null : Number(v.total_google_volume);
-    const known = demand.get(v.prompt_id) ?? { intent: v.intent, volume };
-    if (volume !== null && !(known.volume >= volume)) known.volume = volume;
+    const estAi = volume === null || v.est_ai_volume == null ? null : Number(v.est_ai_volume);
+    const known = demand.get(v.prompt_id) ?? { intent: v.intent, volume, estAi };
+    if (volume !== null && !(known.volume >= volume)) Object.assign(known, { volume, estAi });
     demand.set(v.prompt_id, known);
   }
 
@@ -165,6 +167,7 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
       platforms: p.platforms ?? [],
       regions: p.regions ?? [],
       answers: Number(s.cur_answers) || 0,
+      estAiVolume: demand.get(p.id).estAi,
       weNamed,
       leaderName: competitorName.get(leader) ?? null,
       standing,

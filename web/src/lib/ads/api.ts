@@ -12,6 +12,21 @@ import type { AdsPeriod } from './tabs';
 /** A read that hangs gives up after this, so the page can say so. */
 const READ_TIMEOUT_MS = 30_000;
 
+/** The JSON answer to GET /api/ads/…; anything but a 2xx throws. */
+async function read<T>(path: string): Promise<T> {
+  const {
+    data: { session },
+  } = await createClient().auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+  const res = await fetch(`${BROWSER_API_BASE_URL}/api/ads/${path}`, {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Ads ${path.split('?')[0]}: ${res.status}`);
+  return (await res.json()) as T;
+}
+
 /**
  * The Overview (GET /api/ads/overview, server lib/ads/overview.js), over
  * every buying-intent prompt, for every plan. Null is "not measured", never 0.
@@ -37,17 +52,50 @@ export interface AdsOverview {
   signups: number | null;
 }
 
-export async function readAdsOverview(brandId: string, period: AdsPeriod): Promise<AdsOverview> {
-  const {
-    data: { session },
-  } = await createClient().auth.getSession();
-  if (!session) throw new Error('Not authenticated');
-  const query = new URLSearchParams({ brandId, period });
-  const res = await fetch(`${BROWSER_API_BASE_URL}/api/ads/overview?${query}`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(READ_TIMEOUT_MS),
-  });
-  if (!res.ok) throw new Error(`Ads Overview: ${res.status}`);
-  return (await res.json()) as AdsOverview;
+export function readAdsOverview(brandId: string, period: AdsPeriod): Promise<AdsOverview> {
+  return read(`overview?${new URLSearchParams({ brandId, period })}`);
+}
+
+export type AdsDecision = 'earn' | 'pay' | 'earn_pay' | 'overlap';
+/** A decision a person can set (overlap is only ever the rule's). */
+export type AdsChosenDecision = Exclude<AdsDecision, 'overlap'>;
+export type AdsChannel = 'chatgpt' | 'google' | 'microsoft';
+
+/** One buying-intent prompt's row (server lib/ads/opportunities.js). */
+export interface AdsOpportunity {
+  promptId: string;
+  text: string;
+  topic: { id: string; name: string | null } | null;
+  /** In force: a person's, else the rule's (`recommended`). */
+  decision: AdsDecision;
+  recommended: AdsDecision;
+  override: { decision: AdsChosenDecision; setBy: string; setAt: string } | null;
+  /** Who AI picks first: 'us', a competitor's id, or 'none'. */
+  leader: string;
+  leaderName: string | null;
+  /** Where AI names us when a competitor is level or ahead; null elsewhere. */
+  ourPosition: number | null;
+  weNamed: boolean;
+  weCited: boolean;
+  /** Google searches a month (total_google_volume); null when not measured. */
+  volume: number | null;
+  /** AI prompts a month, estimated from it (est_ai_volume). */
+  estAiVolume: number | null;
+  /** Where ads can show beside the prompt's answers. */
+  adChannels: AdsChannel[];
+  paidMeasured: boolean;
+}
+
+/** Opportunities (GET /api/ads/opportunities): Starter's rows end where `locked` starts. */
+export interface AdsOpportunities {
+  period: AdsPeriod;
+  rows: AdsOpportunity[];
+  total: number;
+  /** Rows past the plan's (Starter, the trial), decided on the server. */
+  locked: number;
+  notAnalysed: number;
+}
+
+export function readAdsOpportunities(brandId: string, period: AdsPeriod) {
+  return read<AdsOpportunities>(`opportunities?${new URLSearchParams({ brandId, period })}`);
 }

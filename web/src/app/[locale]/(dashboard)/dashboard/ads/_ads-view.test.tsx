@@ -7,10 +7,11 @@ import type { PlanId } from '@/config/plans';
 
 /**
  * Ads' page (ADS-01 §3, mockup): the header every app page has, the five
- * tabs kept in the hash, the Overview with its period, Export off until there
- * is data, and an honest empty state on each other tab. Every plan sees the
- * Overview (§8); Growth and above read the rest, and Starter and the free
- * trial see the lock with what Growth adds.
+ * tabs kept in the hash, the Overview and Opportunities with their period,
+ * Export off until there is data, and an honest empty state on each other
+ * tab. Every plan sees the Overview and Opportunities, its rows from the
+ * server (§8); Growth and above read the rest, and Starter and the free trial
+ * see the lock with what Growth adds.
  */
 
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
@@ -36,6 +37,13 @@ vi.mock('./_overview', () => ({
       data-period={props.period}
       onClick={() => props.onOpenTab('op')}
     />
+  ),
+}));
+
+// Opportunities' rows, lock row and writes are _opportunities.test.tsx's.
+vi.mock('./_opportunities', () => ({
+  AdsOpportunities: (props: { period: string }) => (
+    <div data-slot="ads-opportunities" data-period={props.period} />
   ),
 }));
 
@@ -101,6 +109,7 @@ const panel = () => container.querySelector<HTMLElement>('[role="tabpanel"]')!;
 const empty = () => container.querySelector('[data-slot="ads-empty"]');
 const lock = () => container.querySelector('[data-slot="upgrade-card"]');
 const overview = () => container.querySelector<HTMLElement>('[data-slot="ads-overview"]');
+const opportunities = () => container.querySelector<HTMLElement>('[data-slot="ads-opportunities"]');
 const periods = () => [
   ...container.querySelectorAll<HTMLButtonElement>('[data-action="ads.period"]'),
 ];
@@ -210,7 +219,10 @@ describe('AdsView', () => {
     const exportButton = container.querySelector<HTMLButtonElement>('[data-action="ads.export"]')!;
     expect(exportButton.textContent).toBe('Export');
     expect(exportButton.disabled).toBe(true);
-    // The other tabs have no data for a period yet.
+    // Opportunities reads over it too; the other tabs have no data for a period yet.
+    await act(async () => tab('Opportunities').click());
+    expect(opportunities()?.dataset.period).toBe('7d');
+    expect(periods().some((b) => b.disabled)).toBe(false);
     await act(async () => tab('Campaigns').click());
     expect(periods().every((b) => b.disabled)).toBe(true);
   });
@@ -240,7 +252,7 @@ describe('AdsView', () => {
   it('shows an honest empty state on each other tab: no numbers, no sample data', async () => {
     await render();
     expect(overview()).not.toBeNull();
-    for (const name of ['Opportunities', 'Paid SoV', 'Campaigns', 'Connections']) {
+    for (const name of ['Paid SoV', 'Campaigns', 'Connections']) {
       await act(async () => tab(name).click());
       expect(empty()?.querySelector('h2')?.textContent).toBe('Coming soon in this preview');
       expect(empty()?.textContent).not.toMatch(/\d/);
@@ -255,13 +267,15 @@ describe('AdsView', () => {
         expect(lock(), plan).toBeNull();
         expect(overview(), plan).not.toBeNull();
         await act(async () => tab('Opportunities').click());
+        expect(opportunities(), plan).not.toBeNull();
+        await act(async () => tab('Paid SoV').click());
         expect(empty(), plan).not.toBeNull();
         await act(async () => tab('Overview').click());
       }
       expect(analytics.track).not.toHaveBeenCalled();
     });
 
-    it('shows Starter the Overview, and locks each other tab with the one line Growth adds and Upgrade', async () => {
+    it('shows Starter the Overview and Opportunities, and locks each other tab with the one line Growth adds and Upgrade', async () => {
       await render({ plan: 'starter' });
       expect(overview()).not.toBeNull();
       expect(lock()).toBeNull();
@@ -275,9 +289,13 @@ describe('AdsView', () => {
       expect(upgrade.getAttribute('href')).toBe('/dashboard/settings?tab=billing');
       expect(upgrade.textContent).toBe('GrowthUpgrade');
       // The tabs still switch, each locked.
-      await act(async () => tab('Opportunities').click());
-      expect(panel().dataset.tab).toBe('op');
+      await act(async () => tab('Campaigns').click());
+      expect(panel().dataset.tab).toBe('cmp');
       expect(lock()).not.toBeNull();
+      // Opportunities: the server's rows and its lock row.
+      await act(async () => tab('Opportunities').click());
+      expect(lock()).toBeNull();
+      expect(opportunities()).not.toBeNull();
       // Counted as an upgrade wall, by its feature and page.
       expect(analytics.track).toHaveBeenCalledWith('upgrade_wall_shown', {
         reason: 'plan',
@@ -286,14 +304,18 @@ describe('AdsView', () => {
       });
     });
 
-    it('locks it but the Overview in the free trial, whatever the plan; an Enterprise deal’s trial keeps its plan', async () => {
-      window.history.replaceState(null, '', '/dashboard/ads#op');
+    it('locks it but the Overview and Opportunities in the free trial, whatever the plan; an Enterprise deal’s trial keeps its plan', async () => {
+      window.history.replaceState(null, '', '/dashboard/ads#sov');
       for (const plan of ['starter', 'growth'] as const) {
         await render({ plan, status: 'trialing' });
         expect(empty(), plan).toBeNull();
         expect(lock()?.textContent, plan).toContain(
           'Ads is included from the Growth plan, after the free trial',
         );
+        await act(async () => tab('Opportunities').click());
+        expect(lock(), plan).toBeNull();
+        expect(opportunities(), plan).not.toBeNull();
+        await act(async () => tab('Paid SoV').click());
       }
       await render({ plan: 'enterprise', status: 'trialing' });
       expect(lock()).toBeNull();
@@ -301,7 +323,7 @@ describe('AdsView', () => {
     });
 
     it('opens on the demo brand, shown as Growth has it, in the trial too', async () => {
-      window.history.replaceState(null, '', '/dashboard/ads#op');
+      window.history.replaceState(null, '', '/dashboard/ads#sov');
       useBrandStore.setState({
         brands: [{ id: 'demo', isDemo: true } as never],
         activeBrandId: 'demo',
@@ -312,7 +334,7 @@ describe('AdsView', () => {
     });
 
     it('has no plan gate self-hosted', async () => {
-      window.history.replaceState(null, '', '/dashboard/ads#op');
+      window.history.replaceState(null, '', '/dashboard/ads#sov');
       await render({ plan: 'starter', cloud: false });
       expect(lock()).toBeNull();
       expect(empty()).not.toBeNull();

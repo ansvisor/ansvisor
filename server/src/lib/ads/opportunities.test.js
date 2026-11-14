@@ -67,6 +67,7 @@ const volume = (prompt_id, intent, total_google_volume, fetched_at = '2026-11-01
   prompt_id,
   intent,
   total_google_volume,
+  est_ai_volume: Math.round((total_google_volume ?? 0) * 0.45),
   fetched_at,
 });
 
@@ -140,7 +141,11 @@ describe('readStanding', () => {
     expect(notAnalysed).toBe(1);
     const [p1, p2, p5, p8] = rows;
     // Cited and level with Rival: we lead; the newest intent, the largest volume.
-    expect(p1).toMatchObject({ intent: 'best-top', topic: { id: 't1', name: 'CRM' } });
+    expect(p1).toMatchObject({
+      intent: 'best-top',
+      topic: { id: 't1', name: 'CRM' },
+      estAiVolume: 540,
+    });
     expect(p1.standing).toMatchObject({
       weCited: true,
       ourPosition: 2,
@@ -193,6 +198,13 @@ describe('readOpportunities', () => {
   it('gives Growth every row, the most searched first, with the thresholds that apply', async () => {
     const page = await read();
     expect(page.rows.map((r) => r.promptId)).toEqual(['p2', 'p1', 'p5', 'p8']);
+    // The ad channels of each prompt's engines, earn or pay; none for Claude's.
+    expect(page.rows.map((r) => [r.decision, r.channels, r.adChannels])).toEqual([
+      ['earn_pay', ['chatgpt', 'google'], ['chatgpt', 'google']],
+      ['earn', [], ['chatgpt', 'google']],
+      ['earn', [], []],
+      ['earn', [], ['chatgpt', 'google']],
+    ]);
     expect(page).toMatchObject({ total: 4, locked: 0, notAnalysed: 1, week: '2026-W46' });
     expect(page.thresholds).toEqual({
       minIntentWeight: 0.85,

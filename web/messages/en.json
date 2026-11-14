@@ -13836,9 +13836,49 @@
       "locked": "{count, plural, one {# more prompt} other {# more prompts}} in Opportunities {count, plural, one {is} other {are}} included from the {plan} plan.",
       "openSov": "Who pays per prompt"
     },
+    "opportunities": {
+      "failed": "Opportunities couldn't be read. Reload the page to try again.",
+      "emptyTitle": "No buying-intent prompts yet",
+      "empty": "Opportunities lists the prompts people ask to compare and choose, once Prompts has analysed their intent.",
+      "filter": "Decision",
+      "all": "All",
+      "filterCount": "{label} · {count}",
+      "decisions": {
+        "earn": "Earn",
+        "pay": "Pay",
+        "earn_pay": "Earn + pay",
+        "overlap": "Overlap"
+      },
+      "paidNotMeasured": "Who pays on these prompts isn't measured yet, so the decisions read AI answers and Google searches only.",
+      "columns": {
+        "prompt": "Prompt",
+        "decision": "Decision",
+        "leader": "Who AI picks",
+        "searches": "Google searches/mo",
+        "channels": "Channels"
+      },
+      "topic": "Topic · {name}",
+      "recommended": "Recommended: {decision}",
+      "leaderUs": "You",
+      "leaderNone": "No clear leader",
+      "leaderRival": "A competitor",
+      "you": "You: {at, select, named {named} none {not named} other {#{at}}}{cited, select, true {, cited} other {}}",
+      "notMeasured": "Not measured",
+      "searchesTip": "{google} Google searches a month",
+      "searchesTipAi": "{google} Google searches a month. AI prompts, estimated: {ai} a month",
+      "channels": {
+        "chatgpt": "ChatGPT",
+        "google": "Google",
+        "microsoft": "Microsoft"
+      },
+      "noChannel": "No ad channel",
+      "noAdNeeded": "No ad needed",
+      "open": "Open",
+      "noneFiltered": "No prompts with this decision.",
+      "lock": "{count, plural, one {# more prompt} other {# more prompts}} · Ads opportunities are included from {plan}"
+    },
     "empty": {
       "title": "Coming soon in this preview",
-      "op": "Opportunities will list your buying-intent prompts, each with a reason to earn the answer with content, pay for an ad, or do both.",
       "sov": "Paid SoV will show your share of the sponsored ads in AI answers, only on the platforms where Ansvisor can see them.",
       "cmp": "Campaigns will list your ad campaigns once an ad account is connected.",
       "con": "Connections will let you connect ChatGPT Ads, Google Ads and Microsoft Advertising, read-only to start."

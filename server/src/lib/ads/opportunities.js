@@ -4,6 +4,7 @@ import { getPlan, hasFeature, isCloud } from '../../config/plans.js';
 import { logger } from '../logger.js';
 import { applyPlanOverrides } from '../plan-guard.js';
 import { logAdsActivity } from './activity.js';
+import { channelsFor } from './decision.js';
 import { NotFound, readStanding } from './standing.js';
 
 /**
@@ -216,6 +217,8 @@ export async function readOpportunities({ brand, orgId, period, now = new Date()
       return {
         ...row,
         ...standing,
+        // Where ads can show beside the prompt's answers, whatever the decision.
+        adChannels: channelsFor(standing.engines).channels,
         recommended: row.decision,
         decision: own?.decision ?? row.decision,
         override: own ? { decision: own.decision, setBy: own.set_by, setAt: own.set_at } : null,
