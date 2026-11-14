@@ -3,7 +3,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ClampedText,
+  ClampedTextPreview,
   ClampedTextTooltip,
+  ClampedTextWithPreview,
   createClampedTextHandle,
   isTextCut,
 } from './clamped-text';
@@ -56,7 +58,11 @@ describe('ClampedText', () => {
     act(() => {
       root.render(
         <>
-          <ClampedText handle={handle} text={text} render={<span data-testid="cell" />} />
+          <ClampedText
+            handle={handle}
+            text={text}
+            render={<a href="#prompt" data-testid="cell" />}
+          />
           <ClampedTextTooltip handle={handle} />
         </>,
       );
@@ -111,5 +117,172 @@ describe('ClampedText', () => {
   it('shows nothing for text that fits', () => {
     hover({ scrollHeight: 40, clientHeight: 40 });
     expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+  });
+});
+
+describe('ClampedText children', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    vi.useRealTimers();
+  });
+
+  it('renders children in place of the plain text but tooltips the text', () => {
+    const handle = createClampedTextHandle();
+    const text = 'A long opportunity title that the one-line cell will cut';
+    act(() => {
+      root.render(
+        <>
+          <ClampedText handle={handle} text={text} render={<p data-testid="cell" />}>
+            <span data-testid="badge">New</span>
+            {text}
+          </ClampedText>
+          <ClampedTextTooltip handle={handle} />
+        </>,
+      );
+    });
+    const cell = container.querySelector('[data-testid="cell"]') as HTMLElement;
+    expect(cell.querySelector('[data-testid="badge"]')).not.toBeNull();
+    expect(cell.textContent).toBe('New' + text);
+    Object.defineProperty(cell, 'scrollWidth', { configurable: true, value: 500 });
+    Object.defineProperty(cell, 'clientWidth', { configurable: true, value: 300 });
+    act(() => {
+      for (const type of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'mousemove']) {
+        cell.dispatchEvent(new MouseEvent(type, { bubbles: !type.endsWith('enter') }));
+      }
+    });
+    act(() => vi.advanceTimersByTime(400));
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toBe(text);
+  });
+});
+
+describe('ClampedTextWithPreview', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  const text = 'Which specialty coffee subscriptions ship internationally to Europe?';
+  const realResizeObserver = globalThis.ResizeObserver;
+
+  // jsdom has no ResizeObserver; this stub lets a test fire a resize after it
+  // mocks the element's measurements.
+  class StubResizeObserver {
+    static instances: StubResizeObserver[] = [];
+    private cb: ResizeObserverCallback;
+    constructor(cb: ResizeObserverCallback) {
+      this.cb = cb;
+      StubResizeObserver.instances.push(this);
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    fire() {
+      this.cb([], this as unknown as ResizeObserver);
+    }
+  }
+
+  beforeEach(() => {
+    StubResizeObserver.instances = [];
+    globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver;
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    globalThis.ResizeObserver = realResizeObserver;
+  });
+
+  function renderPreview() {
+    const handle = createClampedTextHandle();
+    act(() => {
+      root.render(
+        <>
+          <ClampedTextWithPreview
+            handle={handle}
+            text={text}
+            preview={{ label: 'Show full text' }}
+            render={<a href="#prompt" data-testid="cell" />}
+          />
+          <ClampedTextTooltip handle={handle} />
+        </>,
+      );
+    });
+    return container.querySelector('[data-testid="cell"]') as HTMLElement;
+  }
+
+  function cut(cell: HTMLElement) {
+    Object.defineProperty(cell, 'scrollWidth', { configurable: true, value: 420 });
+    Object.defineProperty(cell, 'clientWidth', { configurable: true, value: 300 });
+    act(() => StubResizeObserver.instances.forEach((observer) => observer.fire()));
+  }
+
+  it('offers the preview button only once the element cuts the text', () => {
+    const cell = renderPreview();
+    expect(container.querySelector('[aria-label="Show full text"]')).toBeNull();
+    cut(cell);
+    expect(container.querySelector('[aria-label="Show full text"]')).not.toBeNull();
+  });
+
+  it('shows the full text in the preview popover on click', () => {
+    const cell = renderPreview();
+    cut(cell);
+    const button = container.querySelector('[aria-label="Show full text"]') as HTMLButtonElement;
+    act(() => button.click());
+    const popover = document.querySelector('[data-slot="popover-content"]');
+    expect(popover?.textContent).toContain(text);
+  });
+
+  it('still shows the tooltip on keyboard focus when the text is cut', () => {
+    vi.useFakeTimers();
+    const cell = renderPreview();
+    cut(cell);
+    act(() => cell.focus());
+    act(() => vi.advanceTimersByTime(400));
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toBe(text);
+    vi.useRealTimers();
+  });
+});
+
+describe('ClampedTextPreview', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it('opens the heading and body in a popover', () => {
+    act(() => {
+      root.render(
+        <ClampedTextPreview
+          label="Show full text"
+          heading="Full title"
+          body="The full description."
+        />,
+      );
+    });
+    const button = container.querySelector('[aria-label="Show full text"]') as HTMLButtonElement;
+    act(() => button.click());
+    const popover = document.querySelector('[data-slot="popover-content"]');
+    expect(popover?.textContent).toContain('Full title');
+    expect(popover?.textContent).toContain('The full description.');
   });
 });

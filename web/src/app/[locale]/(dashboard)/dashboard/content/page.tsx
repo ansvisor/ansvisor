@@ -3,6 +3,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useFailureToast } from '@/hooks/use-failure-toast';
+import {
+  ClampedText,
+  ClampedTextPreview,
+  ClampedTextTooltip,
+  createClampedTextHandle,
+  useTextCut,
+  type ClampedTextHandle,
+} from '@/components/prompts/clamped-text';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -341,6 +349,87 @@ function OpportunityScope({ opp }: { opp: ContentOpportunity }) {
   );
 }
 
+/**
+ * The Action cell: title and description clamp to one line each. Hover or
+ * keyboard focus shows the cut text in the shared tooltip; when either line
+ * is cut, the row also gets a preview button that opens both in full without
+ * opening the opportunity itself.
+ */
+function OpportunityTextCell({
+  opp,
+  handle,
+  onOpen,
+}: {
+  opp: ContentOpportunity;
+  handle: ClampedTextHandle;
+  onOpen: () => void;
+}) {
+  const t = useTranslations('content');
+  const [titleRef, titleCut] = useTextCut<HTMLParagraphElement>();
+  const [descriptionRef, descriptionCut] = useTextCut<HTMLParagraphElement>();
+  return (
+    <div className="flex items-start gap-1">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="block min-w-0 flex-1 text-left hover:underline"
+      >
+        <ClampedText
+          handle={handle}
+          text={opp.title}
+          ref={titleRef}
+          render={
+            <p className="text-sm font-medium line-clamp-1 wrap-break-word whitespace-normal" />
+          }
+        >
+          {opp.sourceData?.reopened && opp.status === 'new' && (
+            <Badge
+              variant="outline"
+              className="mr-1.5 border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400"
+            >
+              {t('newSignal')}
+            </Badge>
+          )}
+          {/* Before the title, which is clamped to one line. */}
+          {opp.sourceData?.alternativeOf && (
+            <Badge
+              variant="outline"
+              className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
+              title={t('alternative.of') + ' ' + opp.sourceData.alternativeOf.title}
+            >
+              {t('alternative.badge')}
+            </Badge>
+          )}
+          {opp.source && opp.source !== 'system' && (
+            <Badge
+              variant="outline"
+              className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
+              title={t(`sourceHint.${opp.source}`)}
+            >
+              {t(`source.${opp.source}`)}
+            </Badge>
+          )}
+          {opp.title}
+        </ClampedText>
+        <ClampedText
+          handle={handle}
+          text={opp.description}
+          ref={descriptionRef}
+          render={
+            <p className="text-xs text-muted-foreground line-clamp-1 wrap-break-word whitespace-normal mt-0.5" />
+          }
+        >
+          <OpportunityScope opp={opp} />
+          {opp.description}
+        </ClampedText>
+      </button>
+      {titleCut || descriptionCut ? (
+        <ClampedTextPreview label={t('showFullText')} heading={opp.title} body={opp.description} />
+      ) : null}
+    </div>
+  );
+}
+
 const ALL_PROMPTS = '__all__';
 
 interface PromptFilterItem {
@@ -353,6 +442,7 @@ interface PromptFilterItem {
 export default function ContentPage() {
   const t = useTranslations('content');
   const failureToast = useFailureToast();
+  const fullText = useMemo(() => createClampedTextHandle(), []);
   const assetTypeLabel = useAssetTypeLabel();
   const tCommon = useTranslations('common');
   const locale = useLocale();
@@ -1669,48 +1759,11 @@ export default function ContentPage() {
                         )}
                       </TableCell>
                       <TableCell className="pl-6 max-w-0">
-                        <button
-                          type="button"
-                          onClick={() => selectOpportunity(opp.id)}
-                          className="block w-full text-left hover:underline"
-                        >
-                          <p className="text-sm font-medium line-clamp-1">
-                            {opp.sourceData?.reopened && opp.status === 'new' && (
-                              <Badge
-                                variant="outline"
-                                className="mr-1.5 border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400"
-                              >
-                                {t('newSignal')}
-                              </Badge>
-                            )}
-                            {/* Before the title, which is clamped to one line. */}
-                            {opp.sourceData?.alternativeOf && (
-                              <Badge
-                                variant="outline"
-                                className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
-                                title={
-                                  t('alternative.of') + ' ' + opp.sourceData.alternativeOf.title
-                                }
-                              >
-                                {t('alternative.badge')}
-                              </Badge>
-                            )}
-                            {opp.source && opp.source !== 'system' && (
-                              <Badge
-                                variant="outline"
-                                className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
-                                title={t(`sourceHint.${opp.source}`)}
-                              >
-                                {t(`source.${opp.source}`)}
-                              </Badge>
-                            )}
-                            {opp.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                            <OpportunityScope opp={opp} />
-                            {opp.description}
-                          </p>
-                        </button>
+                        <OpportunityTextCell
+                          opp={opp}
+                          handle={fullText}
+                          onOpen={() => selectOpportunity(opp.id)}
+                        />
                       </TableCell>
                       <TableCell className="hidden whitespace-nowrap text-xs text-muted-foreground xl:table-cell">
                         <SuggestedCell
@@ -1827,6 +1880,7 @@ export default function ContentPage() {
                   ))}
                 </TableBody>
               </Table>
+              <ClampedTextTooltip handle={fullText} />
               {filtered.length === 0 && (
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <p className="text-sm text-muted-foreground">{t('noResults')}</p>

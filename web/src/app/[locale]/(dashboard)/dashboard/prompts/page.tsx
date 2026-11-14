@@ -253,6 +253,7 @@ import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-shee
 import {
   ClampedText,
   ClampedTextTooltip,
+  ClampedTextWithPreview,
   createClampedTextHandle,
 } from '@/components/prompts/clamped-text';
 import {
@@ -4528,13 +4529,14 @@ function AllPromptsTab({
                             aria-label={`Select ${p.text}`}
                           />
                         )}
-                        <ClampedText
+                        <ClampedTextWithPreview
                           handle={fullText}
                           text={p.text}
+                          preview={{ label: tPrompts('showFullText') }}
                           render={
                             <Link
                               href={`/dashboard/prompts/${p.id}`}
-                              className="line-clamp-2 transition-colors hover:text-primary hover:underline"
+                              className="line-clamp-2 wrap-break-word whitespace-normal transition-colors hover:text-primary hover:underline"
                             />
                           }
                         />

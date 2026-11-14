@@ -12580,6 +12580,7 @@
     "openPlan": "Open Plan",
     "moreActions": "More actions",
     "rowActions": "Actions for {title}",
+    "showFullText": "Show full text",
     "exportOne": {
       "button": "Export",
       "csv": "Export CSV",
@@ -13913,6 +13914,7 @@
       "citedOnlyTitle": "Cited in {cited} of {count, plural, one {# answer} other {# answers}} in this period, named in none"
     },
     "title": "Prompt Volumes",
+    "showFullText": "Show full text",
     "description": "Discover query volumes and trends across AI platforms.",
     "similarTopics": {
       "aiTitle": "Est. AI Volume",
