@@ -12516,8 +12516,9 @@
         "resetDone": "Back to the default set",
         "text": {
           "title": "Your text rules",
+          "heading": "Custom rule",
           "write": "Write a rule",
-          "placeholder": "Write a rule in your own words, e.g. \"Mention free shipping in the first paragraph\"",
+          "placeholder": "Write a rule in your own words",
           "help": "Numbers become checks. Other lines are checked by AI.",
           "add": "Add",
           "pasteMany": "Paste many",

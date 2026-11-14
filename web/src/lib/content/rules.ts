@@ -433,6 +433,24 @@ export function ruleSetType(
 }
 
 /**
+ * The draft's choices once the person picks its page type (the header's
+ * menu, Next's Set page type): a deliberate choice about the rules, so the
+ * set follows that type (the owner, 2026-11-14). A set picked before setFor
+ * (legacyPin) goes, and so does one picked for another type (it already fell
+ * back). Only the pin goes: the custom values, text rules, source and the
+ * page's own length stay, so a rule the type's set also has keeps its value.
+ * A set picked for this very type stays, and so does everything when no set
+ * is pinned: null then, nothing to save. Every other change keeps the pin
+ * (ruleSetType).
+ */
+export function rulesForPageType(rules: DraftRules, pageType: PageType): DraftRules | null {
+  if (!rules.set || rules.setFor === pageType) return null;
+  const next: DraftRules = { ...rules, set: null };
+  delete next.setFor;
+  return next;
+}
+
+/**
  * The page type the rules are checked as (RuleContext's pageType): the
  * page's own, so another type's rules are set apart; a set picked before
  * setFor (legacyPin) its own, so its type rules are checked as they were.

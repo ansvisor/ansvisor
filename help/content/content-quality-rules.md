@@ -19,7 +19,7 @@ In the side panel, **Instructions** opens on **Rules**. The rules come in five g
 
 ## Rule sets and page types
 
-The rule set follows the page type. A set you pick for another type holds while the page keeps the type it had then; one picked before sets followed the page type stays, whatever the type, until you pick a set again. On a page with no type, picking a set sets it. Rules the page can't meet, such as another type's or one that needs your product feed, sit under **Not checked on this page**, never counted or sent to the Content Agent.
+The rule set follows the page type. Choosing a page type in the header brings that type's set, with the rule values you changed, and a set you pick for another type stays until the page type changes. On a page with no type, picking a set sets it. Rules the page can't meet, such as another type's or one that needs your product feed, sit under **Not checked on this page**, never counted or sent to the Content Agent.
 
 ## Fan-out rules
 
@@ -27,7 +27,7 @@ The rule set follows the page type. A set you pick for another type holds while 
 
 ## Save or reset your rules
 
-Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or use **Paste many** to add several from a style guide.
+Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Custom rule**, write a rule in your own words and click **Add**, or use **Paste many** to add several from a style guide; they're listed under **Your text rules**.
 
 ## Brand rules
 

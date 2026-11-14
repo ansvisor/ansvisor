@@ -60,6 +60,7 @@ function state(
     checkHtml: () => checked,
     change,
     pickSet,
+    followPageType: vi.fn(),
     addTextRules,
     changeTextRule,
     saveAsMine,
@@ -457,6 +458,7 @@ describe('the Rules tab', () => {
     const s = state();
     await render(s);
     expect([...container.querySelectorAll('h4')].map((h) => h.textContent)).toEqual([
+      'Custom rule',
       'Feature page rules',
       'Length and structure',
       'Fan-outs and keywords',
@@ -586,9 +588,21 @@ describe('the Rules tab', () => {
     expect(changeTextRule).toHaveBeenCalledWith('b', { on: true });
   });
 
-  it('puts the box for your own rule before the first rule group', async () => {
+  it('puts the box for your own rule before the first rule group, under its own heading', async () => {
     await render(state());
-    const box = container.querySelector('textarea[aria-label="Write a rule"]')!;
+    const box = container.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Write a rule"]',
+    )!;
+    expect(box.placeholder).toBe('Write a rule in your own words');
+    // "Custom rule" above it, as Rule set is labelled, naming the box and its buttons.
+    const group = box.closest('[role="group"]')!;
+    const heading = group.firstElementChild!;
+    expect(heading.tagName).toBe('H4');
+    expect(heading.textContent).toBe('Custom rule');
+    expect(heading.className).toBe('text-xs text-muted-foreground');
+    expect(group.getAttribute('aria-labelledby')).toBe(heading.id);
+    expect(group.textContent).toContain('Numbers become checks. Other lines are checked by AI.');
+    expect(group.textContent).toContain('Paste many');
     const firstGroup = container.querySelector('section')!;
     expect(box.compareDocumentPosition(firstGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const save = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Reset')!;

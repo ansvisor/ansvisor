@@ -22,6 +22,7 @@ import {
   ruleSet,
   ruleSetFits,
   ruleSetType,
+  rulesForPageType,
   rulesMet,
   rulesPageType,
   setToSave,
@@ -80,6 +81,12 @@ export interface DraftRulesState {
    * My rules for it. On a page with no type, the page takes that type too.
    */
   pickSet: (type: PageType, source: 'default' | 'mine') => void;
+  /**
+   * The person picked the page's type (the header's menu, Next's Set page
+   * type), once it's saved: the set follows it (rulesForPageType). A set
+   * pinned before setFor, or for another type, goes; the rules' values stay.
+   */
+  followPageType: (type: PageType) => void;
   /** Adds rules in the person's own words, one per line. */
   addTextRules: (lines: string[]) => void;
   /** Edits a text rule, turns it on or off; an empty text removes it. */
@@ -158,8 +165,11 @@ export function useDraftRules({
   const language = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.language);
   // One save at a time, the latest waiting; what the database holds, to go back to.
   const saving = useRef(false);
-  const waiting = useRef<{ rules: DraftRules; message: string } | null>(null);
+  const waiting = useRef<{ rules: DraftRules; message: string | null } | null>(null);
   const saved = useRef<DraftRules>(draft.rules);
+  // The choices as last set here, a change waiting to save included: what a
+  // page type picked builds on once its save is back, not an older render's.
+  const latest = useRef<DraftRules>(draft.rules);
 
   // Read again once the brand's site type is saved (the editor passes it then).
   useEffect(() => {
@@ -230,8 +240,8 @@ export function useDraftRules({
   );
 
   const setType = ruleSetType(choices, draftType);
-  // The set as the person picked it, setFor or none: only picking a set
-  // changes it, never a rule's change, Reset or the page type changed.
+  // The set as the person picked it, setFor or none: only picking a set, or
+  // the page's type (followPageType), changes it; never a rule's change or Reset.
   const pinned: Pick<DraftRules, 'set' | 'setFor'> = {
     set: choices.set,
     ...(choices.setFor ? { setFor: choices.setFor } : {}),
@@ -292,11 +302,17 @@ export function useDraftRules({
     saveDraftRules(draft.id, next)
       .then(() => {
         saved.current = next;
-        if (!waiting.current) toast(message);
+        if (!waiting.current) {
+          if (message) toast(message);
+        } else {
+          // A change saved without a word of its own (followPageType) says this one's.
+          waiting.current.message ??= message;
+        }
       })
       .catch((err) => {
         console.error('Failed to save the rules:', err);
         if (!waiting.current) {
+          latest.current = saved.current;
           setChoices(saved.current);
           toast.error(t('saveFailed'));
         }
@@ -305,6 +321,13 @@ export function useDraftRules({
         saving.current = false;
         flush();
       });
+  };
+  /** Shows a change and saves it after the ones before it (null: no toast once saved). */
+  const queue = (next: DraftRules, message: string | null) => {
+    latest.current = next;
+    setChoices(next);
+    waiting.current = { rules: next, message: message ?? waiting.current?.message ?? null };
+    flush();
   };
   const save = (next: DraftRules, message: string) => {
     if (locked()) return;
@@ -315,9 +338,7 @@ export function useDraftRules({
       toast.error(t('tooLong'));
       return;
     }
-    setChoices(next);
-    waiting.current = { rules: next, message };
-    flush();
+    queue(next, message);
   };
   // A change keeps the set the draft's rules come from, and the set picked.
   const edited = (change: Partial<DraftRules>, message = t('updated')) =>
@@ -360,6 +381,12 @@ export function useDraftRules({
         },
         t('setPicked'),
       );
+    },
+    // The editor calls it once the type is saved (its own lock checked), on the
+    // choices as they are then: the pin goes, nothing else, with no toast of its own.
+    followPageType: (type) => {
+      const next = rulesForPageType(latest.current, type);
+      if (next) queue(next, null);
     },
     addTextRules: (lines) => {
       const room = MAX_TEXT_RULES - effective.textRules.length;
