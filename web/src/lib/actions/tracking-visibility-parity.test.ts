@@ -63,6 +63,8 @@ const SAME_PAYLOAD = {
   prev: sameTotals(780, 200, 260),
 };
 let SAME: unknown = null;
+// Trend RPC rows, per test (#2371's tooltip data: rolling answers + window length).
+let TREND_ROWS: unknown[] = [];
 let SAME_ERROR: { message: string } | null = null;
 
 const groups = {
@@ -115,7 +117,7 @@ function rpc(name: string, args: Record<string, unknown>) {
   let data: unknown = null;
   if (name.startsWith('ai_visibility_aggregates')) data = isPrev(args) ? PREV : CUR;
   else if (name === 'insights_breakdown_groups') data = groups;
-  else if (name.startsWith('visibility_rate_trend')) data = [];
+  else if (name.startsWith('visibility_rate_trend')) data = TREND_ROWS;
   else if (name.startsWith('competitor_aggregates')) data = competitorAgg;
   else if (name.startsWith('insights_aggregates')) data = isPrev(args) ? SUMMARY_PREV : SUMMARY_CUR;
   else if (name.startsWith('insights_same_prompt_compare')) {
@@ -342,5 +344,61 @@ describe('Same prompts parity (VIS-002)', () => {
       p_prev_from: '2026-08-16',
       p_prev_to: '2026-09-14',
     });
+  });
+});
+
+describe('Trend tooltip data (#2371)', () => {
+  const trendRow = (day: string, answers: number) => ({
+    day,
+    prompt_count: 2,
+    visible_prompts: 1,
+    answers,
+    mention_answers: Math.floor(answers / 2),
+    citation_answers: 0,
+    position_factor: null,
+    position_n: 0,
+    competitors: [],
+  });
+
+  beforeEach(() => {
+    TREND_ROWS = [];
+  });
+
+  it("each point carries its rolling window's answer count, warm-up days included", async () => {
+    // The day before the display range only warms up the trailing window.
+    TREND_ROWS = [
+      trendRow('2026-09-14', 10),
+      trendRow('2026-09-15', 20),
+      trendRow('2026-09-16', 30),
+    ];
+    const trend = await getVisibilityRateTrend('b1', thirtyDays);
+    expect(trend.windowDays).toBe(30);
+    expect(trend.points.map((p) => [p.day, p.answers])).toEqual([
+      ['2026-09-15', 30],
+      ['2026-09-16', 60],
+    ]);
+  });
+
+  it('drops days that fall out of the trailing window', async () => {
+    // 32 days of one answer each: a 30-day window ends holding exactly 30.
+    TREND_ROWS = Array.from({ length: 32 }, (_, i) => {
+      const day = new Date(Date.UTC(2026, 7, 16) + i * 86_400_000).toISOString().slice(0, 10);
+      return trendRow(day, 1);
+    });
+    const trend = await getVisibilityRateTrend('b1', thirtyDays);
+    expect(trend.points.map((p) => [p.day, p.answers])).toEqual([
+      ['2026-09-15', 30],
+      ['2026-09-16', 30],
+    ]);
+  });
+
+  it('All time expands cumulatively and says so with a null window', async () => {
+    TREND_ROWS = [trendRow('2026-09-14', 10), trendRow('2026-09-15', 20)];
+    const trend = await getVisibilityRateTrend('b1', { days: {} });
+    expect(trend.windowDays).toBeNull();
+    expect(trend.points.map((p) => [p.day, p.answers])).toEqual([
+      ['2026-09-14', 10],
+      ['2026-09-15', 30],
+    ]);
   });
 });
