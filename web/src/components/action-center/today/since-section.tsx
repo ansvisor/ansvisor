@@ -15,11 +15,11 @@ import {
   largestRivalMove,
   type ChangeDirection,
 } from '@/lib/action-center/since';
-import { getTodayChanges } from '@/lib/actions/today-changes';
-import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
+import type { TodayChanges } from '@/lib/actions/today-changes';
+import { Skeleton } from '@/components/ui/skeleton';
 import { actionHref } from './focus-section';
-import { TodaySection, TodaySkeleton, useScore } from './today-parts';
-import { useTodayRead, type TodayLoad, type TodayVisit } from './use-today';
+import { TodaySection, useScore } from './today-parts';
+import { useTodayPart, type TodayLoad, type TodayVisit } from './use-today';
 
 const SIGNALS_HREF = '/dashboard/action-center/signals';
 
@@ -49,17 +49,19 @@ export function useSinceTitle() {
  * changes the nightly checks found since the person's last look (Up, Down,
  * Rival), each with a link to the action it added; on a quiet day, that
  * nothing big changed, with the score from Where you stand's read. Signals
- * whose section is off the person's menu aren't listed. Reads once the
- * visit knows the last one, and stays away when the read fails.
+ * whose section is off the person's menu aren't listed. Read with Today's
+ * other parts from the person's last visit (getTodayStart), and stays away
+ * when the read fails.
  */
 export function SinceSection({
-  brandId,
+  read,
   visit,
   zone,
   standing,
   onSummary,
 }: {
-  brandId: string;
+  /** The changes' read, started with Today's others; null until the day is known. */
+  read: Promise<TodayChanges | null> | null;
   visit: TodayVisit;
   zone: string;
   standing: TodayLoad<TodayStanding | null>;
@@ -69,13 +71,8 @@ export function SinceSection({
   const t = useTranslations('actionCenter.today.since');
   const tToday = useTranslations('actionCenter.today');
   const tTexts = useTranslations('actionCenter.signalTexts');
-  const hidden = useHiddenMenuSections();
   const titleOf = useSinceTitle();
-  const seenAt = visit.seenAt;
-  const hiddenKey = [...hidden].sort().join(',');
-  const load = useTodayRead(seenAt === undefined ? null : `${brandId}|${hiddenKey}`, () =>
-    getTodayChanges(brandId, seenAt ?? null, [...hidden]),
-  );
+  const load = useTodayPart(read);
 
   const { settle } = visit;
   const settled = load.status === 'loading' ? null : load.status;
@@ -111,7 +108,7 @@ export function SinceSection({
       }
     >
       {load.status === 'loading' ? (
-        <TodaySkeleton />
+        <SinceSkeleton />
       ) : quiet ? (
         <QuietDay
           standing={standing}
@@ -162,6 +159,20 @@ export function SinceSection({
         </ul>
       )}
     </TodaySection>
+  );
+}
+
+/** Since yesterday reading: three rows shaped as its changes, a pill and a line each. */
+export function SinceSkeleton() {
+  return (
+    <ul aria-hidden="true" data-skeleton="since">
+      {[0, 1, 2].map((row) => (
+        <li key={row} className="flex items-center gap-3 border-t py-3">
+          <Skeleton className="h-[22px] w-12 shrink-0 rounded-full" />
+          <Skeleton className="h-[22px] flex-1" />
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFirstRun } from '@/hooks/use-first-run';
-import { getTodayOverview, getTodayStanding } from '@/lib/actions/today';
+import { getTodayStart, type TodayStart } from '@/lib/actions/today-start';
 import { getTodayFirstDay } from '@/lib/actions/today-first-day';
 import { getTodayEnded, getTodayLastWeek } from '@/lib/actions/today-week';
 import { isMondayIn } from '@/lib/action-center/last-week';
@@ -13,6 +13,7 @@ import { finishOne } from '@/lib/action-center/waiting';
 import { topicCardTime } from '@/lib/action-center/topic-card';
 import type { FocusCard } from '@/lib/actions/today-focus';
 import { viewerTimeZone } from '@/lib/time-zone';
+import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { ActionCenterHeader } from './action-center-header';
 import { ActionCenterTabs } from './action-center-tabs';
 import { FirstDayView } from './today/first-day';
@@ -31,7 +32,6 @@ import {
   usePausedSince,
 } from './today/week-and-ended';
 import {
-  AskChatBox,
   LoopStrip,
   ResultsValue,
   StandSection,
@@ -56,10 +56,33 @@ const VISIT_PARTS: Record<TodayMode, readonly TodayVisitPart[]> = {
 };
 
 /**
+ * Today's reads when the call itself failed: every part failed, so each
+ * part stays away, as when its own read fails.
+ */
+function startFailed(): TodayStart {
+  const failed = Promise.reject(new Error('Today could not be read'));
+  failed.catch(() => {});
+  return {
+    overview: failed,
+    state: failed,
+    focus: failed,
+    changes: failed,
+    waiting: failed,
+    setup: failed,
+    standing: failed,
+  };
+}
+
+/** The summary row's grid: side by side where two fit, one under the other where not. */
+const SUMMARY_ROW = 'grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))]';
+
+/**
  * Action Center › Today, the page everyone lands on (mockup Main): the date, brand and when AI answers
- * last came in, with how many changes and things wait; the loop strip; then
- * Since yesterday and Today's focus, with Waiting for you, Finish setting
- * up and Where you stand beside them; and Ask Chat at the bottom. A brand's
+ * last came in, with how many changes and things wait; the loop strip; a
+ * summary row with Waiting for you and Where you stand side by side; then
+ * Since yesterday and Today's focus across the page, with New area to
+ * track and Finish setting up under them when they show. Ask Chat is the
+ * header's, on every page. A brand's
  * first day, before its first run is stamped, asks the person to check the
  * prompts tracked for them instead (mockup Bugun-ilk-gun). On the person's
  * Monday, once the brand has a full week of runs, Last week takes the loop
@@ -68,18 +91,27 @@ const VISIT_PARTS: Record<TodayMode, readonly TodayVisitPart[]> = {
  * Choose a plan (mockup Bugun-bitmis); the global read-only band stays, and
  * Today adds only a note in its header. On the person's Monday, or once
  * today's focus is finished, "New area to track" may offer a topic to
- * track under Waiting for you. Each part reads on its own, so a slow or
- * failed read shows or hides only its part.
+ * track. The reads start together on the server in one call
+ * (getTodayStart), since the browser runs Server Actions one at a time,
+ * and each part shows as soon as its own read is in, so a slow or failed
+ * read shows or hides only its part. Until the overview says which day it
+ * is, the normal day's frame shows, each part at its final shape.
  */
 export function TodayPage() {
   const t = useTranslations('actionCenter.today');
   const brandId = useBrandStore((s) => s.activeBrandId);
   const brandName = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId)?.name);
   const firstRun = useFirstRun();
-  const overview = useTodayRead(brandId, () => getTodayOverview(brandId!, viewerTimeZone()));
-  const ready = overview.status === 'ready' ? overview.data : null;
   const upgrade = useUpgradeDialog();
   const ended = Boolean(upgrade?.isLocked && upgrade.reason === 'ended' && !upgrade.isDemo);
+  const hidden = useHiddenMenuSections();
+  const start = useTodayRead(
+    brandId ? `${brandId}|${[...hidden].sort().join(',')}|${ended}` : null,
+    () => getTodayStart(brandId!, viewerTimeZone(), [...hidden], ended).catch(startFailed),
+  );
+  const parts = start.status === 'ready' ? start.data : null;
+  const overview = useTodayRead(parts?.overview ?? null, () => parts!.overview);
+  const ready = overview.status === 'ready' ? overview.data : null;
   const mode: TodayMode = ended
     ? 'ended'
     : overview.status === 'loading'
@@ -92,13 +124,14 @@ export function TodayPage() {
 
   // Steps done, for today_viewed when it has read by then.
   const [setupDone, setSetupDone] = useState<number | null>(null);
-  const visit = useTodayVisit(brandId, VISIT_PARTS[mode], () => ({
+  const personState = useTodayRead(parts?.state ?? null, () => parts!.state);
+  const visit = useTodayVisit(brandId, personState, VISIT_PARTS[mode], () => ({
     state: mode === 'day1' || mode === 'ended' ? mode : monday ? 'monday' : 'normal',
     ...(setupDone === null ? {} : { setup_done: setupDone }),
   }));
-  const standing = useTodayRead(mode === 'normal' ? brandId : null, () =>
-    getTodayStanding(brandId!),
-  );
+  // The normal day's parts, once the overview says it is one.
+  const day = mode === 'normal' ? parts : null;
+  const standing = useTodayRead(day?.standing ?? null, () => day!.standing);
   const [firstDayVersion, setFirstDayVersion] = useState(0);
   const reloadFirstDay = useCallback(() => setFirstDayVersion((v) => v + 1), []);
   const firstDay = useTodayRead(
@@ -215,6 +248,7 @@ export function TodayPage() {
               <TrialFoundSection load={endedRead} />
               <FocusSection
                 brandId={brandId}
+                read={parts?.focus ?? null}
                 visit={visit}
                 title={tEnded('focus.title')}
                 sub={tEnded('focus.body')}
@@ -231,43 +265,41 @@ export function TodayPage() {
       {brandId && day1 && (
         <FirstDayView brandId={brandId} visit={visit} load={firstDay} reload={reloadFirstDay} />
       )}
-      {brandId && mode === 'normal' && (
-        <>
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-            <div className="space-y-4">
-              <SinceSection
-                brandId={brandId}
-                visit={visit}
-                zone={zone}
-                standing={standing}
-                onSummary={onSince}
-              />
-              <FocusSection
-                brandId={brandId}
-                visit={visit}
-                onCards={onFocusCards}
-                title={week ? tFocus('weekTitle') : undefined}
-              />
-            </div>
-            <div className="space-y-4">
-              <WaitingSection
-                brandId={brandId}
-                visit={visit}
-                focus={finishOne(focusCards ?? [])}
-                onSummary={setWaiting}
-              />
-              {topicCardTime(monday, focusCards) && <TopicCard brandId={brandId} />}
-              <SetupSection
-                brandId={brandId}
-                brandName={brandName ?? null}
-                visit={visit}
-                onDone={setSetupDone}
-              />
-              {!week && <StandSection load={standing} />}
-            </div>
+      {brandId && (mode === 'normal' || mode === 'loading') && (
+        <div key={brandId} className="space-y-4">
+          <div data-today-row="summary" className={SUMMARY_ROW}>
+            <WaitingSection
+              brandId={brandId}
+              read={day?.waiting ?? null}
+              visit={visit}
+              focus={finishOne(focusCards ?? [])}
+              onSummary={setWaiting}
+            />
+            {!week && <StandSection load={standing} />}
           </div>
-          <AskChatBox />
-        </>
+          <SinceSection
+            read={day?.changes ?? null}
+            visit={visit}
+            zone={zone}
+            standing={standing}
+            onSummary={onSince}
+          />
+          <FocusSection
+            brandId={brandId}
+            read={day?.focus ?? null}
+            visit={visit}
+            onCards={onFocusCards}
+            title={week ? tFocus('weekTitle') : undefined}
+          />
+          {topicCardTime(monday, focusCards) && <TopicCard brandId={brandId} />}
+          <SetupSection
+            brandId={brandId}
+            read={day?.setup ?? null}
+            brandName={brandName ?? null}
+            visit={visit}
+            onDone={setSetupDone}
+          />
+        </div>
       )}
     </div>
   );
