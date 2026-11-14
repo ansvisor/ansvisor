@@ -112,6 +112,11 @@ export function BulkTagsDialog({
       toast.success(t(removing ? 'removed' : 'done', { count: result.updated }));
       onOpenChange(false);
       onDone();
+    } catch {
+      // A thrown action (a network cut, a server 500) rejects the promise:
+      // without a catch that rejection surfaces nowhere and the dialog just
+      // looks idle.
+      setError(t('saveFailed'));
     } finally {
       setSaving(false);
     }

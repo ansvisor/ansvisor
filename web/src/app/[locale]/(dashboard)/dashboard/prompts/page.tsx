@@ -3599,6 +3599,10 @@ function AllPromptsTab({
   // Custom tags (#2151, #2378): any set of them, all or any matching.
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [tagMatch, setTagMatch] = useState<'all' | 'any'>('all');
+  // The brand the picked tags belong to: a brand switch swaps the whole
+  // roster, so the filter starts over instead of pointing at the old brand's
+  // tags.
+  const [tagFilterBrand, setTagFilterBrand] = useState(activeBrandId);
   // Optimistic per-row status overrides — the prompts prop belongs to the
   // parent's load cycle; a full reload for a one-column change would flash
   // the whole table.
@@ -3785,6 +3789,18 @@ function AllPromptsTab({
     () => [...new Set(prompts.flatMap((p) => p.tags ?? []))].sort(),
     [prompts],
   );
+  // A bulk removal can take the last prompt carrying a filtered tag, and the
+  // popover lists only live options, so the filter would stick on a tag that
+  // can't be cleared — with no tags left it would vanish while the table
+  // stays empty. Prune the filter to the live options; on a brand switch,
+  // start over. Adjust-state-during-render, like the positions panel above.
+  if (tagFilterBrand !== activeBrandId) {
+    setTagFilterBrand(activeBrandId);
+    if (tagFilter.length > 0) setTagFilter([]);
+  } else if (tagFilter.length > 0) {
+    const live = tagFilter.filter((tag) => tagOptions.includes(tag));
+    if (live.length !== tagFilter.length) setTagFilter(live);
+  }
 
   const performanceCounts = useMemo(() => {
     const counts: Record<PerformanceFilter, number> = {
