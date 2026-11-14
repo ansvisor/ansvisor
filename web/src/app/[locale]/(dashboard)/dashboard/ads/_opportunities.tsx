@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { UpgradeCard } from '@/components/billing/upgrade-card';
+import { Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { Link } from '@/i18n/navigation';
 import {
   readAdsOpportunities,
   type AdsDecision,
@@ -23,6 +25,7 @@ import {
 } from '@/lib/ads/api';
 import type { AdsPeriod } from '@/lib/ads/tabs';
 import { formatCompactNumber, formatNumber } from '@/lib/format';
+import { useUpgradeWallShown } from '@/lib/friction-events';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 
@@ -69,6 +72,55 @@ function Decision({ row }: { row: AdsOpportunity }) {
   );
 }
 
+/** Ads go only where the decision in force says to pay; earn and overlap need none. */
+const PAYS = (d: AdsDecision) => d === 'pay' || d === 'earn_pay';
+
+function Channels({ row }: { row: AdsOpportunity }) {
+  const t = useTranslations('ads.opportunities');
+  if (!PAYS(row.decision)) {
+    return (
+      <span className="text-muted-foreground">
+        <span aria-hidden>—</span>
+        <span className="sr-only">{t('noAdNeeded')}</span>
+      </span>
+    );
+  }
+  return row.adChannels.length
+    ? row.adChannels.map((c) => t(`channels.${c}`)).join(', ')
+    : t('noChannel');
+}
+
+/**
+ * Starter's and the trial's last row (mockup): one line, a data row's height,
+ * with how many more prompts the plan unlocks and Upgrade at its end. It
+ * counts as an upgrade wall, like `UpgradeCard`.
+ */
+function LockRow({ locked }: { locked: number }) {
+  const t = useTranslations('ads.opportunities');
+  const tCommon = useTranslations('common');
+  const { requiredPlanFor } = useFeatureGate();
+  useUpgradeWallShown({ reason: 'plan', feature: 'ads_read', source: 'ads' });
+  return (
+    <TableRow data-slot="ads-lock-row" className="hover:bg-transparent">
+      <TableCell colSpan={6}>
+        <div className="flex items-center gap-2">
+          <Lock aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+            {t('lock', { count: locked, plan: requiredPlanFor('ads_read') })}
+          </span>
+          <Link
+            href="/dashboard/settings?tab=billing"
+            data-action="plan.upgrade"
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            {tCommon('upgrade')}
+          </Link>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 /**
  * Ads' Opportunities (ADS-01 §3.2, §9.3, §9.7, mockup): each buying-intent
  * prompt with its decision, who AI picks, Google searches and its ad
@@ -78,8 +130,6 @@ function Decision({ row }: { row: AdsOpportunity }) {
  */
 export function AdsOpportunities({ period }: { period: AdsPeriod }) {
   const t = useTranslations('ads.opportunities');
-  const tAds = useTranslations('ads');
-  const { requiredPlanFor } = useFeatureGate();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const key = `${brandId}/${period}`;
   const [read, setRead] = useState<{ key: string; page: Page | null } | null>(null);
@@ -225,10 +275,8 @@ export function AdsOpportunities({ period }: { period: AdsPeriod }) {
                     </Tooltip>
                   )}
                 </TableCell>
-                <TableCell>
-                  {r.adChannels.length
-                    ? r.adChannels.map((c) => t(`channels.${c}`)).join(', ')
-                    : t('noChannel')}
+                <TableCell data-slot="ads-channels">
+                  <Channels row={r} />
                 </TableCell>
                 <TableCell className="text-right">
                   <Button
@@ -249,18 +297,7 @@ export function AdsOpportunities({ period }: { period: AdsPeriod }) {
                 </TableCell>
               </TableRow>
             )}
-            {page.locked > 0 && (
-              <TableRow data-slot="ads-lock-row" className="hover:bg-transparent">
-                <TableCell colSpan={6} className="p-3 whitespace-normal">
-                  <UpgradeCard
-                    feature="ads_read"
-                    source="ads"
-                    title={t('lock', { count: page.locked, plan: requiredPlanFor('ads_read') })}
-                    description={tAds('locked.description')}
-                  />
-                </TableCell>
-              </TableRow>
-            )}
+            {page.locked > 0 && <LockRow locked={page.locked} />}
           </TableBody>
         </Table>
       </div>
