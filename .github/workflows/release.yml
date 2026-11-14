@@ -1,0 +1,125 @@
+name: Release
+
+# One release, in the order the app needs it: the API server's new image is
+# built first (the running server is untouched), then the database
+# migrations, then the server restarts on the new image, and last the web
+# app ships by moving `production` (Vercel deploys that branch).
+#
+# Started by hand (Actions › Release › Run workflow) and held for an approval
+# in the `release` environment, which also holds the credentials:
+#   secrets: SUPABASE_ACCESS_TOKEN (Management API, Database read/write)
+#   vars:    AWS_RELEASE_ROLE_ARN (OIDC role that may only run SSM commands
+#            on the API server), AWS_REGION, EC2_INSTANCE_ID,
+#            SUPABASE_PROJECT_REF, APP_URL
+# See docs/release.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit on main to release (empty = main's latest)
+        required: false
+        default: ''
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push `production`
+  id-token: write # AWS role through OIDC
+  actions: read # read the commit's CI run
+  deployments: read # wait for Vercel's deployment
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Pick the commit and check it can ship
+        id: pick
+        run: |
+          set -euo pipefail
+          git fetch -q origin production
+          sha=$(git rev-parse "${{ inputs.sha || 'origin/main' }}^{commit}")
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          prod=$(git rev-parse origin/production)
+          echo "prod=$prod" >> "$GITHUB_OUTPUT"
+          git merge-base --is-ancestor "$sha" origin/main \
+            || { echo "::error::$sha is not on main."; exit 1; }
+          git merge-base --is-ancestor "$prod" "$sha" \
+            || { echo "::error::production ($prod) is not an ancestor of $sha: it can't move forward to it."; exit 1; }
+          if [ "$sha" = "$prod" ]; then echo "::error::production is already at $sha."; exit 1; fi
+          ci=$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=$sha&event=push" \
+            --jq '[.workflow_runs[] | select(.head_branch == "main")][0] | "\(.status) \(.conclusion)"')
+          [ "$ci" = "completed success" ] \
+            || { echo "::error::CI on $sha is '$ci', not a success. Pick a commit whose CI passed."; exit 1; }
+          git checkout -q --detach "$sha"
+          {
+            echo "## Release ${sha:0:9}"
+            echo
+            echo "production: ${prod:0:9} → ${sha:0:9} ($(git rev-list --count "$prod..$sha") commits)"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check the migrations
+        run: node scripts/release/migrations.mjs --check
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_RELEASE_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Build the server image
+        run: |
+          sed "s/__SHA__/${{ steps.pick.outputs.sha }}/g" scripts/release/server-build.sh > "$RUNNER_TEMP/build.sh"
+          bash scripts/release/ssm-run.sh "$RUNNER_TEMP/build.sh" 1500
+
+      - name: Apply the migrations
+        run: node scripts/release/migrations.mjs --apply
+
+      - name: Start the new server
+        run: bash scripts/release/ssm-run.sh scripts/release/server-up.sh 300
+
+      - name: Ship the web app (move production)
+        run: |
+          git push origin "${{ steps.pick.outputs.sha }}:refs/heads/production"
+          echo "- production moved to ${{ steps.pick.outputs.sha }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for Vercel's production deployment
+        run: |
+          set -euo pipefail
+          sha=${{ steps.pick.outputs.sha }}
+          for i in $(seq 1 60); do
+            id=$(gh api "repos/${{ github.repository }}/deployments?sha=$sha&environment=Production" --jq '.[0].id // empty')
+            if [ -n "$id" ]; then
+              state=$(gh api "repos/${{ github.repository }}/deployments/$id/statuses" --jq '.[0].state // "pending"')
+              echo "Vercel: $state"
+              case "$state" in
+                success) break ;;
+                failure | error) echo "::error::Vercel's deployment of $sha ended in $state."; exit 1 ;;
+              esac
+            fi
+            sleep 15
+          done
+          [ "${state:-}" = success ] || { echo "::error::Vercel's deployment didn't finish in 15 minutes."; exit 1; }
+          code=$(curl -s -o /dev/null -m 20 -w "%{http_code}" "${{ vars.APP_URL }}/sign-in")
+          echo "- web: Vercel ready, /sign-in answers $code" >> "$GITHUB_STEP_SUMMARY"
+          [ "$code" = 200 ]
