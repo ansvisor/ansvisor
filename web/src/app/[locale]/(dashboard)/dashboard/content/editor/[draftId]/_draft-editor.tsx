@@ -2102,6 +2102,19 @@ export function DraftEditor({
     reads.brief.status !== 'loading' &&
     (!feedOn || catalog !== undefined) &&
     shoppingCheck.check !== 'reading';
+  // A rewrite taken that meets fewer rules than the page before it: the
+  // rules it left open that were met, for the card to say beside Undo.
+  const rewriteDropped = useMemo(() => {
+    const before = pageSuggestion?.status === 'accepted' ? pageSuggestion.beforeHtml : null;
+    if (!before || !rulesSettled) return 0;
+    const then = rules.checkHtml(before, htmlChars(before));
+    if (rulesMet(then).met <= rules.met) return 0;
+    const metThen = new Set(then.filter((r) => r.status.state === 'ok').map((r) => r.rule.key));
+    return rules.rules.filter(
+      ({ rule, status }) => rule.on && status.state === 'bad' && metThen.has(rule.key),
+    ).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the rewrite's page before, once read
+  }, [pageSuggestion?.status, pageSuggestion?.beforeHtml, rules.rules, rulesSettled]);
   // Open rules no run can close on this page (editor test 2026-10-25): every
   // long sentence inside a passage AI answers quote, a Length out of a
   // rewrite's reach. They leave the agent's work and Next step; the Rules tab
@@ -4487,6 +4500,7 @@ export function DraftEditor({
               // The kept blocks are named only when they put the Length out of reach.
               length={length && { ...length, outOfReach: keptOutOfReach(rules.rules, reach) }}
               pageChars={pageChars}
+              rewriteDropped={rewriteDropped}
               onAllSteps={() => {
                 setNextFocus(true);
                 setNextOpen(true);

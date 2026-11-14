@@ -7518,7 +7518,7 @@ describe('the side panel', () => {
         await act(async () => nextButton()!.click());
         await act(async () => inBasket('Fix open rules')!.click());
         await settle();
-        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Rewrite within all rules');
         expect(stored().passes).toEqual({ fixRules: expect.any(Object) });
 
         // A rewrite begun on it, then the waiting page; its page decided.
@@ -7549,7 +7549,9 @@ describe('the side panel', () => {
         root = createRoot(container);
         await renderPage();
         await settle();
-        expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Shorten to your Length');
+        expect(nextButton()!.getAttribute('aria-label')).not.toBe(
+          'Next · Rewrite within all rules',
+        );
         expect(stored().passes).toEqual({ length: expect.any(Object) });
       });
 

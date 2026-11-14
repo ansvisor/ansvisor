@@ -52,7 +52,7 @@ Marked ready with steps skipped, it says how many are still open. **Next step** 
 
 ## The order of the steps
 
-With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then a rewrite for a page far off its Length.
+With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then **Rewrite within all rules** for a page far off its Length.
 
 Once you've decided the agent's **Fix open rules** suggestions, the step is ticked, as the **Rules** tab counts the rules left yours. Rules its later suggestions leave open don't bring it back; your edits can.
 
@@ -62,14 +62,14 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 
 ## Before you publish
 
-**Mark ready** opens **Before you publish** first. A line sums up what to fix and to check; the checks show in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:
+**Mark ready** opens **Before you publish** first. A line sums up what to fix and check, in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:
 
 - placeholders, alt text and links (**Ready for your CMS**);
 - the author, and the qualified reviewer on pages that advise on health, money or the law;
 - visible dates;
 - the search engine details (Article schema) Ansvisor adds;
 - Trust under 60: AI answers may lean on the page less;
-- the rules and to-dos still open. You can still mark it ready.
+- open rules and to-dos. You can still mark it ready.
 
 Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data does too. On a shopping path page, it also names product cards whose catalog price changed since they went in. **Send to CMS** opens it only when it has something to ask about.
 

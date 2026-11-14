@@ -836,10 +836,9 @@ async function rewritePage({
   );
   await budget.charge(usage);
   if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
-  // Well past its Length: one more pass that only cuts.
-  const answer = ruleKeys.has('length')
-    ? await cutToLength({ answer: object, page, length, band, brand, draft, model, modelId, run })
-    : object;
+  // Well past its Length: one more pass that only cuts, within the rules.
+  const cut = { page, length, band, brand, draft, model, modelId, run, rules: input.rules };
+  const answer = ruleKeys.has('length') ? await cutToLength({ answer: object, ...cut }) : object;
   await advanceRun(run, 3);
 
   // No invented person or quote (CE-044): read in its words as written,
@@ -952,11 +951,24 @@ async function rewritePage({
  * Any way past it, not only well past (editor test 2026-11-03: a rewrite
  * left a little long was taken as the most a rewrite reaches, so the
  * Length set was never met). On its own hold on the budget, so a budget
- * the first pass used up skips it. The cut is taken only when it is
- * shorter and keeps every kept line; else, or when it fails, the first
- * rewrite stands (logged). A stop goes through.
+ * the first pass used up skips it. It is told the rules, and keeps every
+ * section they ask for (editor test 2026-11-12: a cut dropped the FAQ and
+ * fan-out sections). The cut is taken only when it is shorter, keeps every
+ * kept line and, with a rule asking for sections, every heading; else, or
+ * when it fails, the first rewrite stands (logged). A stop goes through.
  */
-async function cutToLength({ answer, page, length, band, brand, draft, model, modelId, run }) {
+async function cutToLength({
+  answer,
+  page,
+  length,
+  band,
+  brand,
+  draft,
+  model,
+  modelId,
+  run,
+  rules,
+}) {
   const total = ownText({ ...page, html: answer.html }) + page.keptChars;
   const max = band?.max ?? Math.round(length * (1 + LENGTH_TOLERANCE));
   if (total <= max) return answer;
@@ -978,7 +990,7 @@ async function cutToLength({ answer, page, length, band, brand, draft, model, mo
         model,
         ...objectOptions(modelId, rewriteSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
         system: rewriteSystemPrompt(),
-        prompt: cutPrompt({ html: answer.html, page, total, length, max }),
+        prompt: cutPrompt({ html: answer.html, page, total, length, max, rules }),
         abortSignal,
       }),
     );
@@ -992,7 +1004,11 @@ async function cutToLength({ answer, page, length, band, brand, draft, model, mo
       cut < Infinity &&
       restoreKept(object.html, page.kept, { word: page.word, h1Token: page.h1Token }).missing
         .length === 0;
-    if (cut >= total || !keepsAll) {
+    // No section a rule asks for dropped: as many headings as the first pass wrote.
+    const keepsSections =
+      !rules.some((r) => SECTION_RULES.has(r.key)) ||
+      headings(object.html) >= headings(answer.html);
+    if (cut >= total || !keepsAll || !keepsSections) {
       logger.info(
         { draftId: draft.id, total, cut },
         '[content-writer] the cut pass kept nothing shorter',
@@ -1082,12 +1098,30 @@ async function withoutBanned({
   return result;
 }
 
-/** What the cut pass is told: its own page, how long it is and the Length to cut it to. */
-function cutPrompt({ html, page, total, length, max }) {
+/** The rules whose sections a cut keeps: fan-out H2s, FAQ, summary, direct answers. */
+const SECTION_RULES = new Set([
+  'fanoutH2',
+  'fanoutFaq',
+  'faq',
+  'buyingFaq',
+  'summary',
+  'h2Answer',
+  'first40Words',
+]);
+const headings = (html) => (String(html).match(/<h[23][\s>]/gi) ?? []).length;
+
+/**
+ * What the cut pass is told: its own page, how long it is, the Length to
+ * cut it to, and the rules it is written to (Length aside, said above).
+ */
+function cutPrompt({ html, page, total, length, max, rules = [] }) {
+  const meets = rules
+    .filter((r) => r.key !== 'length')
+    .map((r) => `- ${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   return `Your rewrite below is about ${total} characters of text, ${page.keptChars} of them in kept blocks, which count toward Length. Its Length is ${length} characters, up to ${max}. Cut it to about ${length}.
 
-Cut repetition, filler, long examples and the least useful detail first. Keep the H1, a short answer under each heading you keep (merge or drop the least useful sections when the Length can't hold them all), every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, each {{find: …}} and {{ask: …}} exactly as it is, and any placeholders in square brackets. Add nothing new. Return the whole page.
-
+Cut repetition, filler, long examples and the least useful detail first. Keep the H1, a short answer under each heading, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, each {{find: …}} and {{ask: …}} exactly as it is, and any placeholders in square brackets. Keep every section the rules require; shorten inside sections instead. Add nothing new. Return the whole page.
+${meets.length ? `\nThe rules the page is written to (key: rule — what it asks):\n${meets.join('\n')}\n` : ''}
 ${html}
 
 Write in the page's own language.`;
