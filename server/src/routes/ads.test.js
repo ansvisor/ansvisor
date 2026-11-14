@@ -51,6 +51,8 @@ vi.mock('../lib/access.js', async (importOriginal) => ({
 vi.mock('../lib/ads/activity.js', () => ({
   readAdsActivity: (...args) => readAdsActivity(...args),
 }));
+const readOverview = vi.fn();
+vi.mock('../lib/ads/overview.js', () => ({ readOverview: (...a) => readOverview(...a) }));
 vi.mock('../lib/ads/opportunities.js', async (importOriginal) => ({
   ...(await importOriginal()),
   ...Object.fromEntries(Object.keys(ads).map((name) => [name, (...a) => ads[name](...a)])),
@@ -109,6 +111,7 @@ const PATHS = [
   ['GET', `/opportunities/${BRAND}`],
   ['GET', '/activity'],
   ['GET', `/opportunities?brandId=${BRAND}`],
+  ['GET', `/overview?brandId=${BRAND}`],
   ['PATCH', `/opportunities/${PROMPT}/decision`],
   ['GET', '/settings'],
   ['GET', `/activity?brandId=${BRAND}`],
@@ -275,6 +278,28 @@ describe('opportunities, decisions and settings while ADS_ENABLED is on', () => 
     );
     expect((await send(`/opportunities?brandId=${BRAND}`)).status).toBe(403);
     expect(ads.readOpportunities).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads the Overview of a brand the person can reach, over the period, on every plan', async () => {
+    readOverview.mockReset().mockResolvedValue({ total: 0, locked: 0 });
+    ads.readsEveryOpportunity.mockResolvedValue(false);
+    const res = await send(`/overview?brandId=${BRAND}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ total: 0, locked: 0 });
+    expect(readOverview).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      period: '30d',
+    });
+    expect((await send(`/overview?brandId=${BRAND}&period=90d`)).status).toBe(200);
+    expect(readOverview.mock.lastCall[0].period).toBe('90d');
+    expect((await send(`/overview?brandId=${BRAND}&period=1y`)).status).toBe(400);
+    expect((await send('/overview?brandId=nope')).status).toBe(400);
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error("This brand isn't in your workspace"), { status: 403 }),
+    );
+    expect((await send(`/overview?brandId=${BRAND}`)).status).toBe(403);
+    expect(readOverview).toHaveBeenCalledTimes(2);
   });
 
   it('lets admins and managers set a decision, and no one else', async () => {
