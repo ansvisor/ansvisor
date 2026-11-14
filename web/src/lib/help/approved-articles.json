@@ -1308,7 +1308,8 @@
         "last 30d",
         "last 24h",
         "custom range",
-        "range under the box",
+        "range above the box",
+        "add date range",
         "change range",
         "welcome card",
         "preparing your data",
@@ -1483,7 +1484,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -1507,7 +1508,7 @@
         },
         {
           "heading": "Ask Chat",
-          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nUnder the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; under their box it says **Read-only**, with a link to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
+          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nIn the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; there it says **Read-only**, linking to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -1515,7 +1516,7 @@
         },
         {
           "heading": "What the panel looks at",
-          "text": "The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as your question's scope, but reads your own date range. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.\n\nAn empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.\n\nThe speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center."
+          "text": "Above the box in the panel, chips show what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as your question's scope, but reads your own date range. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.\n\nAn empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.\n\nThe speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center."
         },
         {
           "heading": "Chats in the panel",
@@ -1539,7 +1540,7 @@
         },
         {
           "heading": "Change the date range",
-          "text": "Under the box, **Range** shows the one Chat reads, such as **Range: last 30 days**. Click **change** to pick another; it is kept at once. **Settings** in the chat menu has it too.\n\nOr send a short range as your message, such as \"last 7d\", \"last 24h\" or \"use 90 days by default\". Chat changes your default at once, says so, and answers your last question again over the new range.\n\nA period inside a question, such as \"How was last week?\", is used for that answer only: your default stays as it is."
+          "text": "Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings** in the chat menu has it too.\n\nOr send a short range as your message, such as \"last 7d\", \"last 24h\" or \"use 90 days by default\". Chat changes your default at once, says so, and answers your last question again over the new range.\n\nA period inside a question, such as \"How was last week?\", is used for that answer only: your default stays as it is."
         },
         {
           "heading": "Change what you track",
@@ -1575,7 +1576,7 @@
         },
         {
           "heading": "Ask about the page beside the chat",
-          "text": "While a page is open beside the chat, the box shows a chip, **Page:** and the page's title. What you ask then doesn't change the page: the Content Agent leaves suggestions in it, labelled \"Content Agent · from your chat\", with the same guards as Fix open rules. They appear in the editor as the run ends, with no reload, and the page changes only when you **Accept** one; **Reject** drops it. Click **×** on the chip to talk about something else: Chat then doesn't edit that page, and the page stays open. Closing the page removes the chip too.\n\nThe editor beside the chat is narrower: **Brief**, **Rules** and **Quality** sit in a bar under the page, with **Sources** and **Live page** under its **More**. The toolbar's less used buttons, such as the table and **Add HTML**, move under the toolbar's own **More**."
+          "text": "While a page is open beside the chat, a chip above the box shows **Page:** and the page's title. What you ask then doesn't change the page: the Content Agent leaves suggestions in it, labelled \"Content Agent · from your chat\", with the same guards as Fix open rules. They appear in the editor as the run ends, with no reload, and the page changes only when you **Accept** one; **Reject** drops it. Click **×** on the chip to talk about something else: Chat then doesn't edit that page, and the page stays open. Closing the page removes the chip too.\n\nThe editor beside the chat is narrower: **Brief**, **Rules** and **Quality** sit in a bar under the page, with **Sources** and **Live page** under its **More**. The toolbar's less used buttons, such as the table and **Add HTML**, move under the toolbar's own **More**."
         },
         {
           "heading": "Versions of a page in chat",
@@ -1631,7 +1632,7 @@
         },
         {
           "heading": "Reference your data",
-          "text": "Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off."
+          "text": "Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the box; **×** takes it off."
         },
         {
           "heading": "Attach files",
@@ -1667,7 +1668,7 @@
         },
         {
           "heading": "AI usage",
-          "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
+          "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The model button's menu ends with **AI usage this month**: a bar, the share used and when it resets. From 80% a dot on the model button turns amber (red once used up), and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
         },
         {
           "heading": "When only part of a job fits",
@@ -1754,7 +1755,7 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -1774,7 +1775,7 @@
         },
         {
           "heading": "Date range",
-          "text": "**Date range** is the period Chat reads when your message names none, in Chat and in the panel beside every page, for every brand. Pick **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days**, or **Custom** with a first and a last day: it is kept at once. **Ask me before the first analysis** clears it, so Chat asks again on the next analysis that reads data. The line under the message box shows the same range, with **change**."
+          "text": "**Date range** is the period Chat reads when your message names none, in Chat and in the panel beside every page, for every brand. Pick **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days**, or **Custom** with a first and a last day: it is kept at once. **Ask me before the first analysis** clears it, so Chat asks again on the next analysis that reads data. The date range chip above the message box shows the same range; click it to change it."
         },
         {
           "heading": "Notify me when an agent needs me",
@@ -2068,7 +2069,7 @@
         "draw"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -2076,7 +2077,7 @@
         },
         {
           "heading": "Pick an image model",
-          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.\n\nAfter you pick, the model button under the box reads **Image ·** and the model, such as **Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu."
+          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.\n\nAfter you pick, the model button in the box reads **Image ·** and the model, such as **Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu."
         },
         {
           "heading": "Approve the images",
@@ -2200,11 +2201,11 @@
         "thinking effort"
       ],
       "plan": "starter",
-      "updated": "2026-11-03",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
-          "text": "Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Sonnet 5.5 writes the answer. The model button under the message box shows what the chat runs on. Click it to open the model menu."
+          "text": "Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Sonnet 5.5 writes the answer. The model button, in the row at the bottom of the message box, shows what the chat runs on: **Auto**, or the model's short name. Click it to open the model menu."
         },
         {
           "heading": "Pick a model",
@@ -2232,7 +2233,7 @@
         },
         {
           "heading": "Your own API key, usage and plan",
-          "text": "The bottom of the menu shows:\n\n- **Use your own API key**: on Enterprise, **Included in your plan** opens **Settings › AI Providers**, where an Admin saves keys. A key saved before Chat started works until the date shown. On other plans, own keys come with Enterprise. Models that run on your own key say **Your key**.\n- **Monthly AI usage**: how much of this month's AI limit your workspace has used, and when it resets.\n- **Your plan**, with **See plans**."
+          "text": "The bottom of the menu shows:\n\n- **Use your own API key**: on Enterprise, **Included in your plan** opens **Settings › AI Providers**, where an Admin saves keys. A key saved before Chat started works until the date shown. On other plans, own keys come with Enterprise. Models that run on your own key say **Your key**.\n- **Your plan**, with **See plans**.\n- **AI usage this month**: a bar with how much of this month's AI limit your workspace has used, and when it resets. From 80%, a dot on the model button says so: amber, red once used up."
         }
       ]
     },
