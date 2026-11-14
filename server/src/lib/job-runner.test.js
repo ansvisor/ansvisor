@@ -29,6 +29,8 @@ vi.mock('./pulse/engine.js', () => ({ generatePulseForBrand: vi.fn() }));
 vi.mock('./signals/pass.js', () => ({ runFirstSignalPass: vi.fn(), runSignalPass: vi.fn() }));
 const sendFirstResultsEmail = vi.hoisted(() => vi.fn());
 vi.mock('./first-results-email.js', () => ({ sendFirstResultsEmail }));
+const captureWorkspaceEvent = vi.hoisted(() => vi.fn());
+vi.mock('./core-loop-events.js', () => ({ captureWorkspaceEvent }));
 const emitToBrand = vi.hoisted(() => vi.fn());
 vi.mock('./socket-rooms.js', () => ({ emitToBrand }));
 vi.mock('./logger.js', () => ({
@@ -257,6 +259,32 @@ describe('the e-mail after a brand’s first run', () => {
     await flush();
     expect(sendFirstResultsEmail).toHaveBeenCalledWith('brand-1');
     expect(runFirstSignalPass).toHaveBeenCalledWith('brand-1');
+  });
+
+  it('sends the funnel event once the run stamps with results, beside the e-mail', async () => {
+    claimWith({});
+    captureWorkspaceEvent.mockReset().mockResolvedValue(undefined);
+    processTrackingJob.mockResolvedValue({ resultCount: 40, stamped: true, firstRun: true });
+    runTrackingJob('funnel');
+    await flush();
+    expect(captureWorkspaceEvent).toHaveBeenCalledWith('brand-1', 'tracking_results_ready', {
+      result_count: 40,
+      first_run: true,
+      source: 'manual',
+    });
+    expect(sendFirstResultsEmail).toHaveBeenCalledWith('brand-1');
+  });
+
+  it('sends no funnel event for a run with no results or no stamp', async () => {
+    claimWith({});
+    captureWorkspaceEvent.mockReset();
+    processTrackingJob.mockResolvedValue({ resultCount: 0, stamped: true });
+    runTrackingJob('empty');
+    await flush();
+    processTrackingJob.mockResolvedValue({ resultCount: 5, stamped: false });
+    runTrackingJob('unstamped');
+    await flush();
+    expect(captureWorkspaceEvent).not.toHaveBeenCalled();
   });
 
   it('waits for a late stamp, and is not sent when the run never stamps', async () => {

@@ -33,9 +33,25 @@ let chatSettings: { full_auto_for_members: boolean } | null;
 let chatPrefs: Record<string, unknown> | null;
 const reads: string[] = [];
 
+// The signed-in account, as the Auth server has it: what getUser() and the
+// admin API read, and where the sign-up event's claim is written.
+const auth = vi.hoisted(() => ({
+  account: null as Record<string, unknown> | null,
+  admin: { getUserById: vi.fn(), updateUserById: vi.fn() },
+}));
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { auth: { admin: auth.admin } } }));
+// The work a page leaves for after its response (next/server's after()).
+const later = vi.hoisted(() => ({ tasks: [] as (() => Promise<unknown>)[] }));
+vi.mock('next/server', async (original) => ({
+  ...(await original<typeof import('next/server')>()),
+  after: (task: () => Promise<unknown>) => {
+    later.tasks.push(task);
+  },
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+    auth: { getUser: async () => ({ data: { user: structuredClone(auth.account) } }) },
     from: (table: string) => {
       reads.push(table);
       const query = {
@@ -175,6 +191,26 @@ const band = () => container.querySelector('[role="status"]');
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  // An account from before the welcome e-mail: no sign-up event.
+  auth.account = {
+    id: 'u1',
+    email: 'ada@example.com',
+    created_at: '2026-10-01T09:00:00Z',
+    app_metadata: { provider: 'email' },
+    user_metadata: { full_name: 'Ada Lovelace' },
+  };
+  auth.admin.getUserById.mockImplementation(async () => ({
+    data: { user: structuredClone(auth.account) },
+    error: null,
+  }));
+  auth.admin.updateUserById.mockImplementation(
+    async (_id: string, { app_metadata }: { app_metadata: object }) => {
+      const meta = auth.account!.app_metadata as object;
+      auth.account = { ...auth.account, app_metadata: { ...meta, ...app_metadata } };
+      return { data: { user: auth.account }, error: null };
+    },
+  );
+  later.tasks.length = 0;
   profile = { organization_id: 'org1', onboarding_completed: true, role: 'admin' };
   org = {
     plan: 'starter',
@@ -346,5 +382,121 @@ describe('the dashboard layout and the demo brand', () => {
       'See plans',
       'See the demo',
     ]);
+  });
+});
+
+describe('the dashboard layout and the sign-up event', () => {
+  const resend = vi.fn();
+  /** The sign-up events sent to Resend. */
+  const sent = () =>
+    resend.mock.calls
+      .filter(([url]) => url === 'https://api.resend.com/events/send')
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+  /** The events sent to PostHog. */
+  const captured = () =>
+    resend.mock.calls
+      .filter(([url]) => url === 'https://eu.i.posthog.com/capture/')
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+  /** The page's after() work, as Next runs it once the response is sent. */
+  async function runLater() {
+    const tasks = later.tasks.splice(0);
+    await Promise.all(tasks.map((task) => task()));
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('RESEND_API_KEY', 're_test');
+    resend.mockReset().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', resend);
+    // A new account: e-mail and password, made after the welcome e-mail started.
+    auth.account = { ...auth.account, created_at: '2026-11-13T09:00:00Z' };
+    profile = { organization_id: null, onboarding_completed: false, role: 'admin' };
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends an e-mail sign-up's event once, from its first page, on the way to onboarding", async () => {
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', 'https://eu.i.posthog.com');
+    expect(await open()).toBe('/dashboard/onboarding');
+    expect(sent()).toEqual([]);
+    await runLater();
+    expect(sent()).toEqual([
+      { event: 'user.signed_up', email: 'ada@example.com', payload: { first_name: 'Ada' } },
+    ]);
+    // PostHog's signed_up from the same claim.
+    expect(captured()).toEqual([
+      expect.objectContaining({
+        event: 'signed_up',
+        distinct_id: 'u1',
+        properties: expect.objectContaining({ source: 'email' }),
+      }),
+    ]);
+    expect(auth.account!.app_metadata).toMatchObject({ signup_event_at: expect.any(String) });
+
+    // The next page, onboarded or not: nothing more, and no read for it.
+    auth.admin.getUserById.mockClear();
+    expect(await open()).toBe('/dashboard/onboarding');
+    profile = { organization_id: 'org1', onboarding_completed: true, role: 'admin' };
+    expect(await open()).toBeNull();
+    await runLater();
+    expect(sent()).toHaveLength(1);
+    expect(captured()).toHaveLength(1);
+    expect(auth.admin.getUserById).not.toHaveBeenCalled();
+  });
+
+  it('sends it once for pages drawn at the same time, or with a session read before the claim', async () => {
+    await open();
+    await open();
+    await runLater();
+    expect(sent()).toHaveLength(1);
+
+    // Another server's page, its session read before this one claimed it.
+    auth.account = { ...auth.account, app_metadata: { provider: 'email' } };
+    await open();
+    const [first] = later.tasks.splice(0);
+    await open();
+    await first();
+    await runLater();
+    expect(sent()).toHaveLength(2);
+  });
+
+  it('never sends it for an account made before the welcome e-mail started', async () => {
+    auth.account = { ...auth.account, created_at: '2026-11-12T20:59:59Z' };
+    expect(await open()).toBe('/dashboard/onboarding');
+    await runLater();
+    expect(sent()).toEqual([]);
+    expect(auth.admin.getUserById).not.toHaveBeenCalled();
+    expect(auth.admin.updateUserById).not.toHaveBeenCalled();
+  });
+
+  it("sends a Google or GitHub sign-up's event once too", async () => {
+    auth.account = {
+      ...auth.account,
+      created_at: new Date(Date.now() - 5_000).toISOString(),
+      app_metadata: { provider: 'google', providers: ['google'] },
+      user_metadata: { name: 'Grace Hopper' },
+    };
+    await open();
+    await runLater();
+    await open();
+    await runLater();
+    expect(sent()).toEqual([
+      { event: 'user.signed_up', email: 'ada@example.com', payload: { first_name: 'Grace' } },
+    ]);
+  });
+
+  it('draws the page whatever the send does', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    profile = { organization_id: 'org1', onboarding_completed: true, role: 'admin' };
+    resend.mockRejectedValueOnce(new Error('Resend down'));
+    expect(await open()).toBeNull();
+    expect(container.textContent).toContain('Page content');
+    await expect(runLater()).resolves.toBeUndefined();
+
+    auth.account = { ...auth.account, app_metadata: { provider: 'email' } };
+    auth.admin.getUserById.mockRejectedValueOnce(new Error('Auth down'));
+    expect(await open()).toBeNull();
+    expect(container.textContent).toContain('Page content');
+    await expect(runLater()).resolves.toBeUndefined();
+    vi.mocked(console.error).mockRestore();
   });
 });

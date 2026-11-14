@@ -12,9 +12,6 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { exchangeCodeForSession: exchange } }),
 }));
 
-const sendSignedUp = vi.fn();
-vi.mock('@/lib/resend-event', () => ({ sendSignedUpEvent: (u: unknown) => sendSignedUp(u) }));
-
 const { GET } = await import('./route');
 
 const callback = (query: string, cookie?: string) =>
@@ -24,10 +21,7 @@ const callback = (query: string, cookie?: string) =>
     }),
   );
 
-beforeEach(() => {
-  exchange.mockReset().mockResolvedValue({ error: null });
-  sendSignedUp.mockReset();
-});
+beforeEach(() => exchange.mockReset().mockResolvedValue({ error: null }));
 
 describe('GET /auth/callback', () => {
   it('goes on to ?next=, or the page the OAuth buttons kept, and clears the cookie', async () => {
@@ -59,21 +53,5 @@ describe('GET /auth/callback', () => {
     exchange.mockResolvedValue({ error: { message: 'bad code' } });
     const res = await callback('code=c1&next=%2Fdashboard%2Ftraffic');
     expect(res.headers.get('location')).toBe('https://app.example.com/sign-in?error=auth');
-  });
-
-  it('tells Resend once for a first sign-in, not for a later one', async () => {
-    const user = (signedInAt: string) => ({
-      email: 'a@b.co',
-      created_at: '2026-11-13T10:00:00Z',
-      last_sign_in_at: signedInAt,
-    });
-    exchange.mockResolvedValue({ data: { user: user('2026-11-13T10:00:01Z') }, error: null });
-    await callback('code=c1');
-    expect(sendSignedUp).toHaveBeenCalledTimes(1);
-
-    sendSignedUp.mockClear();
-    exchange.mockResolvedValue({ data: { user: user('2026-11-20T09:00:00Z') }, error: null });
-    await callback('code=c1');
-    expect(sendSignedUp).not.toHaveBeenCalled();
   });
 });
