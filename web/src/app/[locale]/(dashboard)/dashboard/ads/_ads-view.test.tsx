@@ -42,11 +42,12 @@ vi.mock('./_overview', () => ({
 
 // Opportunities' rows, lock row and writes are _opportunities.test.tsx's.
 vi.mock('./_opportunities', () => ({
-  AdsOpportunities: (props: { period: string; writable: boolean }) => (
+  AdsOpportunities: (props: { period: string; writable: boolean; thresholds: boolean }) => (
     <div
       data-slot="ads-opportunities"
       data-period={props.period}
       data-writable={String(props.writable)}
+      data-thresholds={String(props.thresholds)}
     />
   ),
 }));
@@ -337,6 +338,33 @@ describe('AdsView', () => {
       expect(empty()).not.toBeNull();
       await act(async () => tab('Opportunities').click());
       expect(opportunities()?.dataset.writable).toBe('false');
+    });
+
+    it('lets Admins change the thresholds only where the workspace’s own plan can: not Starter or the trial, on any brand', async () => {
+      const thresholds = async (over: Parameters<typeof render>[0]) => {
+        await render(over);
+        await act(async () => tab('Opportunities').click());
+        return opportunities()?.dataset.thresholds;
+      };
+      for (const plan of ['growth', 'enterprise'] as const) {
+        expect(await thresholds({ plan }), plan).toBe('true');
+      }
+      expect(await thresholds({ plan: 'enterprise', status: 'trialing' })).toBe('true');
+      expect(await thresholds({ plan: 'starter' })).toBe('false');
+      for (const plan of ['starter', 'growth'] as const) {
+        expect(await thresholds({ plan, status: 'trialing' }), plan).toBe('false');
+      }
+      // The demo brand is shown as Growth has it; the thresholds stay the workspace's.
+      act(() =>
+        useBrandStore.setState({
+          brands: [{ id: 'demo', isDemo: true } as never],
+          activeBrandId: 'demo',
+        }),
+      );
+      expect(await thresholds({ plan: 'starter' })).toBe('false');
+      expect(await thresholds({ plan: 'growth', status: 'trialing' })).toBe('false');
+      expect(await thresholds({ plan: 'growth' })).toBe('true');
+      expect(await thresholds({ plan: 'starter', cloud: false })).toBe('true');
     });
 
     it('has no plan gate self-hosted', async () => {

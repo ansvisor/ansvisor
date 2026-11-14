@@ -18,6 +18,7 @@ import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { PLANS, hasFeature } from '@/config/plans';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import {
   ADS_PERIODS,
@@ -77,13 +78,24 @@ function useAdsTab(): [AdsTab, (tab: AdsTab) => void] {
  * the Overview, Opportunities' first rows from the server, and each other
  * tab locked, with what Growth adds (DECISIONS J). The demo brand shows it as
  * Growth has it, its decisions the rule's. Self-hosted has no plans.
+ *
+ * `thresholds`: whether the workspace's own plan changes the thresholds, as
+ * the server allows (routes/ads.js, PATCH /settings): Growth and above, not
+ * the trial. They are the workspace's, so the demo brand's Growth doesn't
+ * count.
  */
-function useAdsAccess(): { readable: boolean; trial: boolean; demo: boolean } {
+function useAdsAccess(): { readable: boolean; trial: boolean; demo: boolean; thresholds: boolean } {
   const { canUse, isCloud } = useFeatureGate();
   const { subscriptionStatus, ownPlanId } = usePlanContext();
   const demo = useBrandStore(isDemoSelected);
   const trial = isCloud && subscriptionStatus === 'trialing' && ownPlanId !== 'enterprise';
-  return { readable: !isCloud || (canUse('ads_read') && (!trial || demo)), trial, demo };
+  const ownPlan = PLANS[ownPlanId] ?? PLANS.starter;
+  return {
+    readable: !isCloud || (canUse('ads_read') && (!trial || demo)),
+    trial,
+    demo,
+    thresholds: !isCloud || (hasFeature(ownPlan, 'ads_read') && !trial),
+  };
 }
 
 /**
@@ -99,7 +111,7 @@ export function AdsView() {
   const tRange = useTranslations('chatPanel.range');
   const [tab, openTab] = useAdsTab();
   const [period, setPeriod] = useState<AdsPeriod>(DEFAULT_ADS_PERIOD);
-  const { readable, trial, demo } = useAdsAccess();
+  const { readable, trial, demo, thresholds } = useAdsAccess();
   const { requiredPlanFor } = useFeatureGate();
   const Icon = TAB_ICONS[tab];
   const periodOff = tab !== 'ov' && tab !== 'op';
@@ -206,7 +218,7 @@ export function AdsView() {
         {tab === 'ov' ? (
           <AdsOverview period={period} onOpenTab={openTab} />
         ) : tab === 'op' ? (
-          <AdsOpportunities period={period} writable={readable && !demo} />
+          <AdsOpportunities period={period} writable={readable && !demo} thresholds={thresholds} />
         ) : readable ? (
           <div data-slot="ads-empty" className="rounded-xl border border-dashed py-12 text-center">
             <Icon aria-hidden className="mx-auto h-10 w-10 text-muted-foreground/40" />

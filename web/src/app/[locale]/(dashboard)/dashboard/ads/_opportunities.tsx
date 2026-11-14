@@ -185,7 +185,16 @@ function LockRow({ locked }: { locked: number }) {
  * set the thresholds. Open keeps the prompt opened (`ads.openOpportunity`)
  * for its drawer.
  */
-export function AdsOpportunities({ period, writable }: { period: AdsPeriod; writable: boolean }) {
+export function AdsOpportunities({
+  period,
+  writable,
+  thresholds,
+}: {
+  period: AdsPeriod;
+  writable: boolean;
+  /** The workspace's own plan changes the thresholds: not Starter, not the trial, on any brand. */
+  thresholds: boolean;
+}) {
   const t = useTranslations('ads.opportunities');
   const { canManage, canAdmin } = useUserRole();
   const brandId = useBrandStore((s) => s.activeBrandId);
@@ -296,7 +305,7 @@ export function AdsOpportunities({ period, writable }: { period: AdsPeriod; writ
           ))}
         </div>
         <span className="flex-1" />
-        {canAdmin && <AdsThresholds onSaved={() => setReads((n) => n + 1)} />}
+        {canAdmin && thresholds && <AdsThresholds onSaved={() => setReads((n) => n + 1)} />}
       </div>
       {page.rows.some((r) => !r.paidMeasured) && (
         <p className="text-xs text-muted-foreground">{t('paidNotMeasured')}</p>
