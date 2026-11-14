@@ -185,7 +185,8 @@ export function AdsView() {
         </span>
 
         {/* The period and Export, as AI Referral Traffic has them: the period
-            for the tab's data, Export off until Ads has data to export. */}
+            for the tab's data, Export off until Ads has data to export.
+            Opportunities has its own, by its filter (_export.tsx). */}
         <div
           className="flex items-center gap-2 pb-1.5"
           title={periodOff ? t('noDataYet') : undefined}
@@ -199,12 +200,14 @@ export function AdsView() {
             disabled={periodOff}
             action="ads.period"
           />
-          <span title={t('noDataYet')}>
-            <Button variant="outline" className="gap-2" disabled data-action="ads.export">
-              <Download className="h-4 w-4" />
-              {t('export')}
-            </Button>
-          </span>
+          {tab !== 'op' && (
+            <span title={t('noDataYet')}>
+              <Button variant="outline" className="gap-2" disabled data-action="ads.export">
+                <Download className="h-4 w-4" />
+                {t('export')}
+              </Button>
+            </span>
+          )}
         </div>
       </div>
 

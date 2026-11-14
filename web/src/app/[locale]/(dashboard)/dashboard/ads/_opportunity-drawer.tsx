@@ -21,6 +21,7 @@ import { formatDate, formatNumber } from '@/lib/format';
 import { regionLabel } from '@/lib/region';
 import { AdsDoBoth, useAdsHalf } from './_do-both';
 import { AdsEarnCard } from './_earn-card';
+import { AdsCopyBrief, AdsExportOne } from './_export';
 import { AdsPayCard } from './_pay-card';
 
 const num = (v: unknown) => (typeof v === 'number' ? formatNumber(v) : '');
@@ -37,9 +38,10 @@ function Heading({ children }: { children: ReactNode }) {
 /**
  * An opportunity's drawer (ADS-01 §3.2, mockup): the row's decision and why
  * at the top, then "What AI answers today", the latest answer on each
- * platform, with its fan-outs and keyword seeds, the Earn and Pay cards
- * and "Do both". Answer text is the AI's, not ours: shown as quoted plain
- * text only. It closes with ✕, the overlay or Esc (`drawer.close`), and gives
+ * platform, with its fan-outs and keyword seeds, the Earn and Pay cards,
+ * and the footer: "Copy as campaign brief", Export this prompt and "Do
+ * both". Answer text is the AI's, not ours: shown as quoted plain text
+ * only. It closes with ✕, the overlay or Esc (`drawer.close`), and gives
  * focus back to the row's Open. The table keys it by prompt.
  */
 export function AdsOpportunityDrawer({
@@ -72,6 +74,7 @@ export function AdsOpportunityDrawer({
   );
   const pay = useAdsHalf((k) => createAdsDrafts(brandId, promptId, k));
   const key = `${brandId}/${promptId}/${period}`;
+  const created = pay.done !== null;
   const [read, setRead] = useState<{ key: string; detail: AdsOpportunityDetail | null } | null>(
     null,
   );
@@ -82,11 +85,13 @@ export function AdsOpportunityDrawer({
     const done = (detail: AdsOpportunityDetail | null) => {
       if (live) setRead({ key, detail });
     };
-    readAdsOpportunity(brandId, promptId, period).then(done, () => done(null));
+    // Read again once drafts are made, for the facts they rest on (the
+    // brief's), keeping the first read if that fails.
+    readAdsOpportunity(brandId, promptId, period).then(done, () => !created && done(null));
     return () => {
       live = false;
     };
-  }, [open, brandId, promptId, period, key]);
+  }, [open, brandId, promptId, period, key, created]);
 
   const reason = (r: AdsReason) =>
     t.has(`reasons.${r.code}`)
@@ -97,7 +102,7 @@ export function AdsOpportunityDrawer({
           threshold: num(r.threshold),
         })
       : null;
-  const reasons = (row.reasons ?? []).map(reason).filter(Boolean);
+  const reasons = (row.reasons ?? []).map(reason).filter((r) => r !== null);
   const detail = read?.key === key ? read.detail : undefined;
   const drafts = pay.done?.drafts ?? detail?.drafts ?? [];
 
@@ -213,12 +218,21 @@ export function AdsOpportunityDrawer({
               </>
             )}
           </div>
-          {detail && canSend && (
-            <AdsDoBoth
-              decision={row.decision}
-              earn={{ done: !!(earn.done?.action ?? detail.earn.action), half: earn }}
-              pay={{ done: drafts.length > 0, half: pay }}
-            />
+          {detail && (
+            <div
+              data-slot="ads-drawer-footer"
+              className="flex flex-wrap items-center justify-end gap-2 border-t px-5 py-3"
+            >
+              <AdsCopyBrief row={row} detail={detail} reasons={reasons} drafts={drafts} />
+              {canSend && <AdsExportOne brandId={brandId} promptId={promptId} period={period} />}
+              {canSend && (
+                <AdsDoBoth
+                  decision={row.decision}
+                  earn={{ done: !!(earn.done?.action ?? detail.earn.action), half: earn }}
+                  pay={{ done: drafts.length > 0, half: pay }}
+                />
+              )}
+            </div>
           )}
         </Dialog.Popup>
       </Dialog.Portal>

@@ -68,8 +68,12 @@ export function AdsDoBoth({
   const failed = kind !== 'both' && (kind === 'earn' ? earn : pay).half.failed;
 
   return (
-    <div data-slot="ads-do-both" className="flex items-center gap-3 border-t px-5 py-3">
-      <p role="status" className="flex-1 text-xs text-muted-foreground">
+    // In the drawer's footer: the line above its buttons (out of the row while empty), the button last.
+    <div data-slot="ads-do-both" className="contents">
+      <p
+        role="status"
+        className="order-first basis-full text-xs text-muted-foreground empty:absolute"
+      >
         {/* The other half of "Do both" is done: say which one failed. */}
         {failed && decision === 'earn_pay' && t(kind === 'earn' ? 'earnFailed' : 'payFailed')}
       </p>
