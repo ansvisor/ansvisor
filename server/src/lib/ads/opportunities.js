@@ -61,30 +61,50 @@ export async function readAdsSettings(orgId) {
   };
 }
 
-/** Lays `changes` over the workspace's thresholds (null takes one back to its default), logged. */
+/**
+ * Puts a change back (`write` of the row it replaced) when the activity log
+ * can't hold it, so nothing changes unlogged. A put-back that fails too is
+ * logged here; the caller throws the log's error either way.
+ */
+async function putBack(write, row, what) {
+  const { error } = await write(row);
+  if (error) logger.error({ err: error.message }, `[ads] ${what} put-back failed`);
+}
+
+/**
+ * Lays `changes` over the workspace's thresholds (null takes one back to its
+ * default), logged; a change the log can't hold is put back.
+ */
 export async function saveAdsSettings(orgId, userId, changes) {
-  const before = (await readAdsSettings(orgId)).thresholds;
+  const settings = () => supabaseAdmin.from('ads_settings');
+  const write = (row) =>
+    row
+      ? settings().upsert({ organization_id: orgId, ...row })
+      : settings().delete().eq('organization_id', orgId);
+  const own = settings().select('thresholds, updated_by, updated_at').eq('organization_id', orgId);
+  const was = must(await own.maybeSingle(), 'ads settings');
+  const before = was?.thresholds ?? {};
   const thresholds = { ...before };
   for (const [key, value] of Object.entries(changes)) {
     if (value === null) delete thresholds[key];
     else thresholds[key] = value;
   }
-  const at = new Date().toISOString();
-  must(
-    await supabaseAdmin
-      .from('ads_settings')
-      .upsert({ organization_id: orgId, thresholds, updated_by: userId, updated_at: at }),
-    'ads settings write',
-  );
-  await logAdsActivity({
-    orgId,
-    actor: { userId },
-    event: 'settings.changed',
-    target: { setting: 'thresholds' },
-    before,
-    after: thresholds,
-  });
-  return { thresholds, updatedBy: userId, updatedAt: at };
+  const now = { thresholds, updated_by: userId, updated_at: new Date().toISOString() };
+  must(await write(now), 'ads settings write');
+  try {
+    await logAdsActivity({
+      orgId,
+      actor: { userId },
+      event: 'settings.changed',
+      target: { setting: 'thresholds' },
+      before,
+      after: thresholds,
+    });
+  } catch (err) {
+    await putBack(write, was, 'settings');
+    throw err;
+  }
+  return { thresholds, updatedBy: userId, updatedAt: now.updated_at };
 }
 
 /**
@@ -121,10 +141,28 @@ export async function setDecision({ orgId, brandId, promptId, decision, userId }
       after: { decision },
     });
   } catch (err) {
-    await write(was);
+    await putBack(write, was, 'decision');
     throw err;
   }
   return now ? { decision, setBy: userId, setAt: now.set_at } : null;
+}
+
+/**
+ * Whether the prompt is one of the organization's demo brand's (00380),
+ * whose decisions are the rule's: the decision route refuses it as the
+ * middleware does, whichever brand the request names. A prompt outside the
+ * organization isn't one here, and setDecision reads it as not found.
+ */
+export async function isDemoPrompt(orgId, promptId) {
+  const prompt = supabaseAdmin
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id, brands!inner(organization_id, is_demo))')
+    .eq('id', promptId);
+  const found = must(
+    await prompt.eq('prompt_sets.brands.organization_id', orgId).maybeSingle(),
+    'prompt',
+  );
+  return found?.prompt_sets?.brands?.is_demo === true;
 }
 
 /**

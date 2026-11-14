@@ -63140,20 +63140,23 @@ notify pgrst, 'reload schema';
 -- 00531: Ads' opportunities: thresholds, decisions, weekly snapshots (PR 6)
 -- ============================================================================
 -- ADS-01 §2 and §3.2, behind ADS_ENABLED. Schema only: no rows are written
--- here, and nothing is backfilled. The server writes all three (service
--- role, lib/ads/opportunities.js) and checks the person's role itself.
+-- here, and nothing is backfilled. Only the server reads and writes all
+-- three (service role, lib/ads/opportunities.js): it checks the person's
+-- role, and their plan's rows (Starter and the trial see the first three,
+-- §8), itself. A person's session reads no row of them, as the snapshots
+-- and decisions of a locked row would show what the plan hides.
 --
 --   * ads_settings: a workspace's earn-or-pay thresholds (minIntentWeight,
 --     leadPosition, minPaidVolume), laid over product's defaults
 --     (server config/ads.js), and who changed them last. Admins read and
---     change them through the API only; members read no row.
+--     change them through the API only.
 --   * ads_decision_overrides: a person's decision for a prompt (Earn, Pay,
---     Earn + pay), which beats the rule's until it is taken back. Members
---     read their brands' rows.
+--     Earn + pay), which beats the rule's until it is taken back. The API
+--     serves them with the rows the plan reads.
 --   * ads_opportunity_snapshots: each prompt's rule decision, its reasons
 --     and its inputs, once per ISO week (2026-W46): the week's first read of
 --     Opportunities writes it, and the key keeps it to one. "+6 new" and the
---     weekly agent compare with it. Members read their brands' rows.
+--     weekly agent compare with it, through the server.
 
 create table if not exists public.ads_settings (
   organization_id uuid primary key references public.organizations(id) on delete cascade,
@@ -63200,9 +63203,9 @@ create index if not exists ads_opportunity_snapshots_brand_week_idx
 comment on table public.ads_settings is
   'Ads (00531, ADS-01 §2): a workspace''s earn-or-pay thresholds over product''s defaults, and who changed them last. Server only: Admins read and change them through the API.';
 comment on table public.ads_decision_overrides is
-  'Ads (00531, ADS-01 §2): a person''s decision for a prompt (earn, pay, earn_pay), which beats the rule''s. Members read their brands'' rows; the server writes.';
+  'Ads (00531, ADS-01 §2): a person''s decision for a prompt (earn, pay, earn_pay), which beats the rule''s. Server only: the API serves them with the rows the plan reads.';
 comment on table public.ads_opportunity_snapshots is
-  'Ads (00531, ADS-01 §3.2): each prompt''s rule decision, reasons and inputs, once per ISO week, written by the week''s first read. Members read their brands'' rows; the server writes.';
+  'Ads (00531, ADS-01 §3.2): each prompt''s rule decision, reasons and inputs, once per ISO week, written by the week''s first read. Server only: it holds every row, the ones the plan locks too.';
 
 -- ─── Who reads and writes ───────────────────────────────────────────────────
 
@@ -63213,25 +63216,10 @@ alter table public.ads_opportunity_snapshots enable row level security;
 revoke all on table public.ads_settings from anon, authenticated;
 revoke all on table public.ads_decision_overrides from anon, authenticated;
 revoke all on table public.ads_opportunity_snapshots from anon, authenticated;
-grant select on table public.ads_decision_overrides to authenticated;
-grant select on table public.ads_opportunity_snapshots to authenticated;
 grant all on table public.ads_settings to service_role;
 grant all on table public.ads_decision_overrides to service_role;
 grant all on table public.ads_opportunity_snapshots to service_role;
-
-drop policy if exists "ads_decision_overrides: member select" on public.ads_decision_overrides;
-create policy "ads_decision_overrides: member select"
-  on public.ads_decision_overrides
-  for select
-  to authenticated
-  using (brand_id in (select public.user_brand_ids()));
-
-drop policy if exists "ads_opportunity_snapshots: member select" on public.ads_opportunity_snapshots;
-create policy "ads_opportunity_snapshots: member select"
-  on public.ads_opportunity_snapshots
-  for select
-  to authenticated
-  using (brand_id in (select public.user_brand_ids()));
+-- No grant and no policy for a session (anon, authenticated): it reads no row.
 
 notify pgrst, 'reload schema';
 

@@ -12,6 +12,8 @@ let db;
 const writes = [];
 const rpcs = [];
 const logAdsActivity = vi.fn();
+/** Whether a write (op, table) fails, as the database would answer it. */
+let failing = () => false;
 const at = (row, path) => path.split('.').reduce((v, k) => v?.[k], row);
 function from(table) {
   let rows = db[table] ?? [];
@@ -29,8 +31,9 @@ function from(table) {
     delete: () => ((write = ['delete', table]), q),
     then: (resolve, reject) => {
       if (write) writes.push(write[0] === 'delete' ? [...write, filters] : write);
+      const error = write && failing(write[0], table) ? { message: 'write failed' } : null;
       const data = write ? null : one ? (rows[0] ?? null) : rows;
-      return Promise.resolve({ data, error: null }).then(resolve, reject);
+      return Promise.resolve({ data, error }).then(resolve, reject);
     },
   };
   return q;
@@ -43,9 +46,10 @@ vi.mock('../../config/supabase.js', () => ({
 }));
 vi.mock('./activity.js', () => ({ logAdsActivity: (...args) => logAdsActivity(...args) }));
 
-const { isoWeek, readOpportunities, saveAdsSettings, setDecision } =
+const { isDemoPrompt, isoWeek, readOpportunities, saveAdsSettings, setDecision } =
   await import('./opportunities.js');
 const { readStanding } = await import('./standing.js');
+const { logger } = await import('../logger.js');
 
 const NOW = new Date('2026-11-13T12:00:00Z');
 const BRAND = { id: 'b1', organization_id: 'o1', is_demo: false };
@@ -70,6 +74,7 @@ beforeEach(() => {
   vi.stubEnv('IS_CLOUD', 'true');
   writes.length = 0;
   rpcs.length = 0;
+  failing = () => false;
   logAdsActivity.mockReset().mockResolvedValue({ id: 'a1' });
   db = {
     brands: [BRAND, { id: 'b2', organization_id: 'o2' }],
@@ -123,7 +128,10 @@ beforeEach(() => {
     },
   };
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe('readStanding', () => {
   it("composes each buying-intent prompt's standing from the rollups, and runs the rule", async () => {
@@ -319,6 +327,25 @@ describe('setDecision', () => {
   });
 });
 
+describe('isDemoPrompt', () => {
+  it("finds the organization's demo brand's prompt, and nothing of another organization", async () => {
+    const demo = (organization_id) => ({
+      brand_id: 'bd',
+      brands: { organization_id, is_demo: true },
+    });
+    db.prompts.push(
+      prompt('pd', 'best crm', { prompt_sets: demo('o1') }),
+      prompt('px', 'best crm', { prompt_sets: demo('o2') }),
+    );
+    expect(await isDemoPrompt('o1', 'pd')).toBe(true);
+    expect(await isDemoPrompt('o1', 'p1')).toBe(false);
+    // Another organization's, or none: not found here, and setDecision answers 404.
+    expect(await isDemoPrompt('o1', 'px')).toBe(false);
+    expect(await isDemoPrompt('o1', 'nope')).toBe(false);
+    expect(writes).toEqual([]);
+  });
+});
+
 describe('saveAdsSettings', () => {
   it("lays the changes over the workspace's thresholds, logged", async () => {
     db.ads_settings = [
@@ -338,5 +365,49 @@ describe('saveAdsSettings', () => {
         after: { minPaidVolume: 2000 },
       }),
     );
+  });
+
+  it("puts the thresholds back when the log can't hold the change, and fails", async () => {
+    const was = {
+      organization_id: 'o1',
+      thresholds: { minPaidVolume: 500 },
+      updated_by: 'u0',
+      updated_at: 'T0',
+    };
+    db.ads_settings = [was];
+    logAdsActivity.mockRejectedValue(new Error('ads activity write failed'));
+    await expect(saveAdsSettings('o1', 'u1', { minPaidVolume: 2000 })).rejects.toThrow(
+      'ads activity write failed',
+    );
+    expect(writes.map((w) => w.slice(0, 3))).toEqual([
+      [
+        'upsert',
+        'ads_settings',
+        expect.objectContaining({ thresholds: { minPaidVolume: 2000 }, updated_by: 'u1' }),
+      ],
+      ['upsert', 'ads_settings', was],
+    ]);
+
+    // A workspace on the defaults until now goes back to none of its own.
+    writes.length = 0;
+    db.ads_settings = [];
+    await expect(saveAdsSettings('o1', 'u1', { leadPosition: 2 })).rejects.toThrow(
+      'ads activity write failed',
+    );
+    expect(writes.map((w) => w.slice(0, 2))).toEqual([
+      ['upsert', 'ads_settings'],
+      ['delete', 'ads_settings'],
+    ]);
+    expect(writes[1][2]).toEqual([['organization_id', 'o1']]);
+  });
+
+  it("logs a put-back that fails too, and still fails with the log's error", async () => {
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    logAdsActivity.mockRejectedValue(new Error('ads activity write failed'));
+    failing = (op) => op === 'delete';
+    await expect(saveAdsSettings('o1', 'u1', { leadPosition: 2 })).rejects.toThrow(
+      'ads activity write failed',
+    );
+    expect(error).toHaveBeenCalledWith({ err: 'write failed' }, '[ads] settings put-back failed');
   });
 });

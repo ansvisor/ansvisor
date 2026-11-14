@@ -17,12 +17,15 @@ const readAdsActivity = vi.fn();
 const ads = {
   readOpportunities: vi.fn(),
   setDecision: vi.fn(),
+  isDemoPrompt: vi.fn(),
   readsEveryOpportunity: vi.fn(),
   readAdsSettings: vi.fn(),
   saveAdsSettings: vi.fn(),
 };
 const PROMPT = '44444444-4444-4444-4444-444444444444';
 let role;
+/** The workspace, for the real plan check (readsEveryOpportunity). */
+let org;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -32,9 +35,10 @@ vi.mock('../config/supabase.js', () => ({
           ? { data: { user: { id: 'u1' } }, error: null }
           : { data: { user: null }, error: { message: 'invalid JWT' } },
     },
-    // The caller's profile, for the real assertRole.
-    from: () => {
-      const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: { role } }) };
+    // The caller's profile, for the real assertRole; the workspace, for the real plan check.
+    from: (table) => {
+      const data = () => (table === 'organizations' ? org : { role });
+      const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: data() }) };
       return q;
     },
   },
@@ -54,6 +58,7 @@ vi.mock('../lib/ads/opportunities.js', async (importOriginal) => ({
 
 const { default: Middleware } = await import('../middleware/index.js');
 const { default: router } = await import('./ads.js');
+const actual = await vi.importActual('../lib/ads/opportunities.js');
 
 let server;
 let baseUrl;
@@ -65,7 +70,9 @@ beforeEach(async () => {
   readAdsActivity.mockReset().mockResolvedValue({ entries: [], next: null });
   for (const fn of Object.values(ads)) fn.mockReset();
   ads.readsEveryOpportunity.mockResolvedValue(true);
+  ads.isDemoPrompt.mockResolvedValue(false);
   role = 'manager';
+  org = { id: 'o1', plan: 'growth', subscription_status: 'active' };
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -326,6 +333,33 @@ describe('opportunities, decisions and settings while ADS_ENABLED is on', () => 
     expect(ads.setDecision).toHaveBeenCalledOnce();
   });
 
+  it('refuses the demo brand, named or by its prompt, on any plan and role (402 demo_brand)', async () => {
+    const refused = async (what) => {
+      const res = await decide({ brandId: BRAND, decision: 'pay' });
+      expect(res.status, what).toBe(402);
+      expect(await res.json(), what).toMatchObject({ error: 'plan_limit', code: 'demo_brand' });
+    };
+    // readsEveryOpportunity reads a demo brand as Growth, so it must not be what stops it.
+    for (role of ['admin', 'manager', 'analyst']) {
+      assertBrandAccess.mockResolvedValue({ brand: { id: BRAND, is_demo: true }, orgId: 'o1' });
+      await refused(`demo brand, ${role}`);
+      // A real brand named, with the demo's prompt.
+      assertBrandAccess.mockResolvedValue({ brand: { id: BRAND, is_demo: false }, orgId: 'o1' });
+      ads.isDemoPrompt.mockResolvedValue(true);
+      await refused(`demo prompt, ${role}`);
+      ads.isDemoPrompt.mockResolvedValue(false);
+    }
+    expect(ads.isDemoPrompt).toHaveBeenLastCalledWith('o1', PROMPT);
+    expect(ads.readsEveryOpportunity).not.toHaveBeenCalled();
+    expect(ads.setDecision).not.toHaveBeenCalled();
+
+    // A real brand and its own prompt go on as before.
+    role = 'manager';
+    ads.setDecision.mockResolvedValue(null);
+    expect((await decide({ brandId: BRAND, decision: null })).status).toBe(200);
+    expect(ads.setDecision).toHaveBeenCalledOnce();
+  });
+
   it('keeps the thresholds to Admins, and checks what they are set to', async () => {
     brandAccessOf.mockResolvedValue({ orgId: 'o1', role: 'manager' });
     expect((await send('/settings')).status).toBe(403);
@@ -347,6 +381,7 @@ describe('opportunities, decisions and settings while ADS_ENABLED is on', () => 
       updatedAt: 'T',
     });
     expect((await send('/settings', { method: 'PATCH', body: change })).status).toBe(200);
+    expect(ads.readsEveryOpportunity).toHaveBeenCalledWith('o1');
     expect(ads.saveAdsSettings).toHaveBeenCalledWith('o1', 'u1', change.thresholds);
     for (const body of [
       {},
@@ -362,6 +397,39 @@ describe('opportunities, decisions and settings while ADS_ENABLED is on', () => 
       ).toBe(400);
     }
     expect(ads.saveAdsSettings).toHaveBeenCalledOnce();
+  });
+
+  it('lets Starter and the trial read the thresholds, and change them on Growth only', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    ads.readsEveryOpportunity.mockImplementation(actual.readsEveryOpportunity);
+    const saved = { thresholds: {}, updatedBy: null, updatedAt: null };
+    ads.readAdsSettings.mockResolvedValue(saved);
+    ads.saveAdsSettings.mockResolvedValue(saved);
+    const change = { method: 'PATCH', body: { thresholds: { minPaidVolume: 2000 } } };
+    for (const plan of [
+      { plan: 'starter', subscription_status: 'active' },
+      { plan: 'growth', subscription_status: 'trialing' },
+      { plan: 'starter', subscription_status: 'canceled' },
+    ]) {
+      org = { id: 'o1', ...plan };
+      expect((await send('/settings')).status, JSON.stringify(plan)).toBe(200);
+      const res = await send('/settings', change);
+      expect(res.status, JSON.stringify(plan)).toBe(403);
+      expect(await res.json()).toEqual({
+        error: 'plan_limit',
+        code: 'plan_limit',
+        feature: 'ads_read',
+      });
+    }
+    expect(ads.saveAdsSettings).not.toHaveBeenCalled();
+    for (const plan of [
+      { plan: 'growth', subscription_status: 'active' },
+      { plan: 'enterprise', subscription_status: 'trialing' },
+    ]) {
+      org = { id: 'o1', ...plan };
+      expect((await send('/settings', change)).status, JSON.stringify(plan)).toBe(200);
+    }
+    expect(ads.saveAdsSettings).toHaveBeenCalledTimes(2);
   });
 });
 
