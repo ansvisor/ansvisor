@@ -455,17 +455,23 @@ afterEach(() => {
 });
 
 describe('the content editor', () => {
-  it('shows the month’s AI usage before History, with this page’s share, and its banner from 80%', async () => {
+  it('shows the month’s AI usage after Saved, with this page’s share, and its banner from 80%', async () => {
     aiUsage.usage = usageAt(84);
     getContentDraft.mockResolvedValue(draft());
     await renderPage();
     const meter = button('AI 84% used this month, close to the limit')!;
-    expect(meter.closest('header')).not.toBeNull();
+    // A status beside Saved, not among the actions (the owner's layout, 2026-11-14).
+    const status = meter.parentElement!;
+    expect(status.querySelector('h1')).not.toBeNull();
+    expect(status.querySelector('[role="status"]')!.textContent).toBe('Saved');
     expect(
-      meter.compareDocumentPosition(button('History')!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      status.querySelector('[role="status"]')!.compareDocumentPosition(meter) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    // Narrower than 1280px, the percent alone, as Next's label goes (Next step spec §3b).
-    expect(meter.querySelector('span')!.className).toContain('hidden xl:inline');
+    expect(status.contains(button('History')!)).toBe(false);
+    // A 16 px ring in place of the bar, amber near the limit.
+    expect(meter.querySelector('svg circle')).not.toBeNull();
+    expect(meter.className).toContain('text-amber-700');
     expect(container.textContent).toContain("You've used 84% of this month's AI limit.");
 
     await act(async () => meter.click());
@@ -1527,21 +1533,27 @@ describe('the content editor', () => {
     markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 1 });
     await renderPage();
 
-    const note = [...container.querySelectorAll('p')].find((p) =>
-      p.textContent?.startsWith('This draft is the work of'),
-    )!;
-    expect(note.textContent).toBe(
+    // A chip at the end of the header's tags (the owner's layout, 2026-11-14), not a line.
+    const tags = container.querySelector('header')!.children[1];
+    const chip = tags.lastElementChild as HTMLAnchorElement;
+    expect(chip.textContent).toBe('From Action AC-214');
+    expect(chip.getAttribute('href')).toBe('/dashboard/action-center/actions?action=act-1');
+    expect(chip.title).toBe(
       'This draft is the work of Action AC-214. Mark ready completes its task there.',
     );
-    expect(note.querySelector('a')!.getAttribute('href')).toBe(
-      '/dashboard/action-center/actions?action=act-1',
+    expect(chip.getAttribute('aria-label')).toBe(
+      'From Action AC-214. Mark ready completes its task there.',
     );
+    expect(
+      [...container.querySelectorAll('p')].some((p) => p.textContent?.includes('the work of')),
+    ).toBe(false);
 
     await act(async () => button('Mark ready')!.click());
     expect(toast.success).toHaveBeenCalledWith(
       "Marked ready, and its task in Action AC-214 is done. Publish it on your site when you're ready.",
     );
-    expect(note.textContent).toBe('This draft is the work of Action AC-214.');
+    expect(chip.title).toBe('This draft is the work of Action AC-214.');
+    expect(chip.getAttribute('aria-label')).toBeNull();
 
     // Taken back, the task Ready completed is open again.
     unmarkContentDraftReady.mockResolvedValueOnce({ status: 'in_review', tasksReopened: 1 });
@@ -2365,13 +2377,43 @@ describe('the content editor', () => {
       (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }).editor.state.doc
         .textContent;
 
+    it('keeps the card’s place from the first paint when the draft’s read says it shows', async () => {
+      let batchIn!: (read: DraftSuggestion[]) => void;
+      getDraftSuggestions.mockReturnValue(new Promise((resolve) => (batchIn = resolve)));
+      getContentDraft.mockResolvedValue({ ...page, agentCardShown: true });
+      await renderPage();
+      const skeleton = () => container.querySelector('[data-slot="agent-card-skeleton"]');
+      // Where the card goes, over the toolbar, before its batch is read (no jump).
+      expect(bar()).toBeNull();
+      expect(
+        skeleton()!.compareDocumentPosition(container.querySelector('[role="toolbar"]')!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      await act(async () => batchIn(batch));
+      expect(skeleton()).toBeNull();
+      expect(bar()!.textContent).toContain('2 suggestions');
+
+      // Nothing kept when it doesn't show, nor once its read failed.
+      for (const [shown, read] of [
+        [false, () => new Promise<DraftSuggestion[]>(() => {})],
+        [true, () => Promise.reject(new Error('offline'))],
+      ] as const) {
+        act(() => root.unmount());
+        root = createRoot(container);
+        getDraftSuggestions.mockImplementation(read);
+        getContentDraft.mockResolvedValue({ ...page, agentCardShown: shown });
+        await renderPage();
+        expect(skeleton()).toBeNull();
+      }
+    });
+
     it('shows each open suggestion where it applies, with the agent bar', async () => {
       getContentDraft.mockResolvedValue(page);
       getDraftSuggestions.mockResolvedValue(batch);
       await renderPage();
 
       expect(getDraftSuggestions).toHaveBeenCalledWith('d1');
-      expect(bar()!.textContent).toContain('Content Agent has 2 suggestions for you');
+      expect(bar()!.textContent).toContain('2 suggestions');
       expect(bar()!.textContent).toContain('from Action AC-214');
       expect(bar()!.querySelector('a')!.getAttribute('href')).toBe(
         '/dashboard/action-center/actions?action=a1',
@@ -2442,7 +2484,7 @@ describe('the content editor', () => {
       expect(container.querySelector('.ProseMirror .agent-accepted-text')!.textContent).toBe(
         'Accuracy is shown per team, each week, against closed revenue.',
       );
-      expect(bar()!.textContent).toContain('Content Agent has 1 suggestion for you');
+      expect(bar()!.textContent).toContain('1 suggestion');
 
       await press('s1', 'Undo');
       expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s1'], 'open');
@@ -2588,7 +2630,7 @@ describe('the content editor', () => {
       await act(async () => {});
       expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s2', 's1'], 'open');
       expect(pageText()).toBe(`Pipeline forecasting${VAGUE}Teams trust it.`);
-      expect(bar()!.textContent).toContain('Content Agent has 2 suggestions for you');
+      expect(bar()!.textContent).toContain('2 suggestions');
     });
 
     it('never applies one to a passage AI quotes, or to one the page changed', async () => {
@@ -3151,7 +3193,11 @@ describe('the side panel', () => {
     await renderPage();
     expect(panel()).toBeNull();
     const rail = () => container.querySelector('nav[aria-label="Side panel"]');
-    const tabs = [...rail()!.querySelectorAll('button')];
+    // Show side panel on top (the header has no toggle now), then the tabs.
+    const [show, ...tabs] = [...rail()!.querySelectorAll('button')];
+    expect(show.getAttribute('aria-label')).toBe('Show side panel');
+    expect(show.getAttribute('aria-pressed')).toBe('false');
+    expect(container.querySelector('header')!.contains(button('Show side panel')!)).toBe(false);
     expect(tabs.map((b) => b.textContent)).toEqual(['Instructions', 'Sources', 'Live page']);
     expect(tabs[1].getAttribute('title')).toBe('Open Sources in the side panel');
 
@@ -3162,10 +3208,18 @@ describe('the side panel', () => {
     expect(rail()).toBeNull();
     expect(localStorage.getItem('aeo:content-editor-panel')).toBe('1');
 
-    // Closed again from the header, the strip is back.
-    await act(async () => button('Hide side panel')!.click());
+    // Closed again from the panel's own tab row, at its right end, the strip is back.
+    const hide = button('Hide side panel')!;
+    expect(hide.getAttribute('aria-pressed')).toBe('true');
+    expect(hide.parentElement!.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(hide.parentElement!.lastElementChild).toBe(hide);
+    await act(async () => hide.click());
     expect(panel()).toBeNull();
     expect(rail()).not.toBeNull();
+    // And Show side panel opens it again, as it was left.
+    await act(async () => button('Show side panel')!.click());
+    expect(panel()).not.toBeNull();
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('1');
   });
 
   // Brief › Shopping path (shopping path, part 3): an online shop's page that links products.
@@ -3575,6 +3629,9 @@ describe('the side panel', () => {
     // 8 of 12 then 11 of 15 on first paint (editor test 2026-10-25): no count until it stands.
     const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
     expect(chip.getAttribute('aria-label')).toBe('Rules · reading');
+    // "Rules ···", as wide as its count will be: the chips after it stay put.
+    expect(chip.textContent).toBe('Rules');
+    expect(chip.className).toContain('min-w-24');
   });
 
   it('shows how many rules the page meets, and opens them from the header', async () => {
@@ -4155,7 +4212,7 @@ describe('the side panel', () => {
           b.textContent?.startsWith('Quality'),
         );
       // Readability alone would say more than the page is worth: no number yet.
-      expect(chip()?.textContent).toBe('Quality · reading…');
+      expect(chip()?.getAttribute('aria-label')).toBe('Quality · reading…');
       await act(async () =>
         authorsIn({
           authors: [],
@@ -4263,7 +4320,7 @@ describe('the side panel', () => {
         window.innerWidth = 1440;
         await renderPage();
         // The claims are read after a save's pause: no score until they are.
-        expect(qualityChip()?.textContent).toBe('Quality · reading…');
+        expect(qualityChip()?.getAttribute('aria-label')).toBe('Quality · reading…');
         await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
         expect(qualityChip()?.textContent).toMatch(/^Quality \d+/);
         await pickTab('Brief');
@@ -4296,7 +4353,7 @@ describe('the side panel', () => {
         await renderPage();
         await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
         // Every other read is in: the facts still hold it.
-        expect(qualityChip()?.textContent).toBe('Quality · reading…');
+        expect(qualityChip()?.getAttribute('aria-label')).toBe('Quality · reading…');
         await act(async () =>
           factsIn({
             facts: [],
@@ -5334,7 +5391,7 @@ describe('the side panel', () => {
           [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
             b.textContent?.startsWith('Quality'),
           );
-        expect(chip()?.textContent).toBe('Quality · reading…');
+        expect(chip()?.getAttribute('aria-label')).toBe('Quality · reading…');
         await act(async () =>
           pageIn({
             spots: [],
@@ -5742,6 +5799,37 @@ describe('the side panel', () => {
       expect(getContentAuthors).not.toHaveBeenCalled();
       expect(byButton()).toBeUndefined();
       expect(strip()).toBeNull();
+    });
+
+    it('names the author from the draft’s read on the first paint, until the menu is read', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      let authorsIn!: (read: unknown) => void;
+      getContentAuthors.mockReturnValue(new Promise((resolve) => (authorsIn = resolve)));
+      getContentDraft.mockResolvedValue({
+        ...draft({ authorId: 'a1' }),
+        authorName: 'Ada Lovelace',
+      });
+      await renderPage();
+      const chip = () => container.querySelector('header [data-slot="author-chip"]');
+      expect(chip()!.textContent).toBe('By Ada Lovelace');
+      expect(byButton()).toBeUndefined();
+      await act(async () =>
+        authorsIn({
+          authors: [ada],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'analyst' },
+        }),
+      );
+      expect(chip()).toBeNull();
+      expect(byButton()!.textContent).toBe('By Ada Lovelace');
+
+      // An author the read couldn't name: nothing ahead of the menu, never a guess.
+      act(() => root.unmount());
+      root = createRoot(container);
+      getContentAuthors.mockReturnValue(new Promise(() => {}));
+      getContentDraft.mockResolvedValue({ ...draft({ authorId: 'a1' }), authorName: null });
+      await renderPage();
+      expect(chip()).toBeNull();
     });
 
     it('names the author in the header and a Page info strip outside the page', async () => {
@@ -8136,7 +8224,7 @@ describe('the side panel', () => {
       await act(async () => answer({ count: 1 }));
       await act(async () => {});
       expect(card().getAttribute('aria-busy')).toBe('false');
-      expect(card().textContent).toContain('Content Agent has 1 suggestion for you');
+      expect(card().textContent).toContain('1 suggestion');
     });
 
     it('shows the run’s steps while it works, and Stop leaves the page as it was', async () => {
@@ -8416,7 +8504,7 @@ describe('the side panel', () => {
       expect(request).toMatchObject({ textRules: [], locked: [] });
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('Content Agent has 1 suggestion for you');
+      ).toContain('1 suggestion');
       expect(toast.success).toHaveBeenCalledWith(
         'Content Agent suggested 1 change · review them in the page',
       );
@@ -8745,7 +8833,7 @@ describe('the side panel', () => {
         expect(getDraftSuggestions).toHaveBeenCalledTimes(3);
         expect(
           container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-        ).toContain('Content Agent has 1 suggestion for you');
+        ).toContain('1 suggestion');
         expect(toast.success).toHaveBeenCalledWith(
           'Content Agent suggested 1 change · review them in the page',
         );
@@ -8958,7 +9046,7 @@ describe('the side panel', () => {
       );
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('Content Agent has 1 suggestion for you');
+      ).toContain('1 suggestion');
     });
   });
 

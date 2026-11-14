@@ -96,8 +96,10 @@ afterEach(() => {
 describe('NextStepButton', () => {
   it('names the step on the header button and opens the basket on a click', async () => {
     await render(state({ hasBrief: false, empty: true }), { open: false });
+    // The dots and "Next" alone: the step's name in its label and on hover.
     expect(trigger().getAttribute('aria-label')).toBe('Next · Plan the page');
-    expect(trigger().textContent).toBe('Next· Plan the page');
+    expect(trigger().title).toBe('Next · Plan the page');
+    expect(trigger().textContent).toBe('Next');
     expect(popup()).toBeNull();
     await act(async () => trigger().click());
     expect(onOpenChange).toHaveBeenCalledWith(true, expect.anything());

@@ -10503,7 +10503,7 @@
         "stillFinishingLine": "Its answer is taking longer than usual and may still land. Open this page again in a few minutes to see what it wrote.",
         "stillFinishingToast": "Content Agent is still finishing. Open this page again in a few minutes to see what it wrote.",
         "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
-        "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
+        "waiting": "{count, plural, one {# suggestion} other {# suggestions}}",
         "gain": "{met, number} → {after, number}/{total, number} rules",
         "review": "Review",
         "reviewed": "All suggestions reviewed",
@@ -10568,8 +10568,10 @@
         "rejectedToast": "Rewrite rejected. Your page stays as it is.",
         "undoneToast": "Your page is back, and the rewrite is open to decide again."
       },
-      "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
-      "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
+      "actionChip": "From Action AC-{no}",
+      "actionChipLabel": "From Action AC-{no}. Mark ready completes its task there.",
+      "actionChipHint": "This draft is the work of Action AC-{no}. Mark ready completes its task there.",
+      "actionChipHintDone": "This draft is the work of Action AC-{no}.",
       "chatBar": "From chat: <link>{title}</link>",
       "chatBarUntitled": "Untitled chat",
       "suggestions": {
@@ -11490,6 +11492,7 @@
       "rulesChip": "{met}/{total} rules",
       "rulesChipLabel": "Rules {met}/{total} met",
       "rulesChipReading": "Rules · reading",
+      "rulesChipName": "Rules",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "reviewer": {
         "title": "Reviewed by",
@@ -11523,12 +11526,12 @@
       "qualityChip": "Quality {score}",
       "qualityChipHint": "The average of E-E-A-T, Trust and Readability: an Ansvisor estimate, not a Google score. Open Quality.",
       "qualityChipReading": "Quality · reading…",
+      "qualityChipName": "Quality",
       "qualityChipUpdating": "updating as the page is read",
       "nextStep": {
         "label": "Next step",
         "short": "Next",
         "button": "Next · {step}",
-        "buttonStep": "· {step}",
         "stepOf": "Step {n} of {total}",
         "allDone": "Every step is done",
         "stepsLeft": "{count, plural, one {# step} other {# steps}} still open",

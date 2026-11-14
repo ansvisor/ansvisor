@@ -12,14 +12,13 @@ import { TableKit } from '@tiptap/extension-table';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import {
   ArrowLeft,
+  ArrowUpRight,
   Bot,
   Check,
   Copy,
   Download,
   MessageSquare,
-  PanelRight,
   Send,
-  Target,
   X,
 } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -222,8 +221,8 @@ import { exportAuthor, exportFileWord } from '@/lib/white-label/export-name';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { AgentCard } from './_agent-card';
-import { AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
+import { AgentCard, AgentCardSkeleton } from './_agent-card';
+import { AuthorChip, AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
 import { ReviewerMenu } from './_reviewer-menu';
 import { BeforePublish, TRUST_GATE, type ReadyAnyway, type ReadyToPaste } from './_before-publish';
 import { FlashBlock, findBlock, flashKey } from './_flash-block';
@@ -403,6 +402,13 @@ async function agentOutcome(
   return null;
 }
 
+/**
+ * The rules and Quality chips: as wide while they read as with their count
+ * (the owner's layout, 2026-11-14), so the chips after them don't move.
+ */
+const CHIP_WIDE =
+  'inline-flex h-5 min-w-24 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium';
+
 /** What a paragraph Remove empties goes with, when it was all they held (CE-045). */
 const EMPTIED_WITH = new Set([
   'listItem',
@@ -523,6 +529,8 @@ export function DraftEditor({
   const [citedRead, setCitedRead] = useState(!draft.sourceUrl);
   // An agent's suggestions (CE-018): its latest batch, with what was decided.
   const [suggestions, setSuggestions] = useState<DraftSuggestion[]>([]);
+  // The batch was read as the editor opened (or failed to): until then, the card's place.
+  const [suggestionsRead, setSuggestionsRead] = useState(false);
   // The agent's last run failed (Fix or hand-off): the card says so over an earlier batch.
   const [lastRunFailed, setLastRunFailed] = useState(false);
   // Its answer was lost and how its run ended isn't known yet: "Still finishing…", never failed.
@@ -1837,7 +1845,8 @@ export function DraftEditor({
         const ranAt = read[0]?.createdAt;
         if (restoredAt && ranAt && Date.parse(ranAt) < Date.parse(restoredAt)) setBarClosed(true);
       })
-      .catch((err) => console.error('Failed to read the agent suggestions:', err));
+      .catch((err) => console.error('Failed to read the agent suggestions:', err))
+      .finally(() => setSuggestionsRead(true));
   }, [editor, draft.id]);
 
   // Suggestions the Content Agent left for a request in the Chat tab (W4-14, W4-16): read, as
@@ -2728,6 +2737,9 @@ export function DraftEditor({
   // The agent at work from this page: Fix open rules, or the brief. Its run,
   // step by step, and Stop (CE-027/035).
   const agentWorking = fixing || briefRebuilding;
+  // The agent card: while it works, or its batch until a closed one has none open.
+  const cardShown =
+    agentWorking || (suggestions.length > 0 && !(barClosed && openSuggestions === 0));
   const pagePill = pagePillOf({ working: agentWorking, openSuggestions, status });
   // Any run the card follows (Fix, a hand-off, the brief): a failed one before it is behind it.
   useEffect(() => {
@@ -4075,6 +4087,14 @@ export function DraftEditor({
             <span className="shrink-0">
               <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
             </span>
+            {/* The month's AI usage, with this page's share (AI usage spec §3.1): a status
+                beside Saved, not an action (the owner's layout, 2026-11-14). */}
+            {aiUsage !== null && !aiUsage?.unlimited && (
+              <span aria-hidden className="-mx-1 text-xs text-muted-foreground">
+                ·
+              </span>
+            )}
+            <AiUsageMeter compact draftId={draft.id} />
           </div>
           <div
             className={cn(
@@ -4084,8 +4104,6 @@ export function DraftEditor({
           >
             {qualityOn && (
               <NextStepButton
-                // The pane is narrow on a wide window: "Next" and the bars, the step on hover.
-                compact={embedded}
                 next={next}
                 state={nextState}
                 todoLine={todoLine}
@@ -4120,8 +4138,6 @@ export function DraftEditor({
                 readAgain={`${agentWorking}:${agentRun?.id ?? ''}`}
               />
             )}
-            {/* The month's AI usage, with this page's share (AI usage spec §3.1). */}
-            <AiUsageMeter compact draftId={draft.id} />
             <HeaderTip label={t('history.button')} hint={historyWaits ?? t('history.hint')}>
               <HistoryMenu
                 draftId={draft.id}
@@ -4229,20 +4245,6 @@ export function DraftEditor({
                 </Button>
               </HeaderTip>
             )}
-            {/* Embedded, the bottom bar holds the panel's parts: nothing to show or hide. */}
-            {!embedded && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-pressed={panelOpen}
-                aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
-                title={panelOpen ? t('panel.hide') : t('panel.show')}
-                onClick={togglePanel}
-                className={cn(panelOpen && 'bg-muted')}
-              >
-                <PanelRight className="h-4 w-4" />
-              </Button>
-            )}
           </div>
         </div>
         {/* Lined up under the title (the back button's 28px and the 10px gap). */}
@@ -4263,6 +4265,15 @@ export function DraftEditor({
             open={typeMenuOpen}
             onOpenChange={setTypeMenuOpen}
           />
+          {/* Before the authors are read, the author as the draft was read (no jump). */}
+          {!authorsRead &&
+            qualityOn &&
+            !authorsTried &&
+            (draft.authorName || (!draft.authorId && brandName)) && (
+              <AuthorChip
+                name={draft.authorName || t('author.organization', { brand: brandName })}
+              />
+            )}
           {authorsRead && (
             <AuthorMenu
               brandId={draft.brandId}
@@ -4297,7 +4308,7 @@ export function DraftEditor({
                 : t('rulesChipReading')
             }
             className={cn(
-              'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium',
+              CHIP_WIDE,
               !rulesSettled
                 ? 'text-muted-foreground'
                 : rules.total > 0 && rules.met === rules.total
@@ -4308,22 +4319,29 @@ export function DraftEditor({
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
             {/* One count once the set and the fan-outs are read (editor test
                 2026-10-25: 8 of 12 on first paint, then 11 of 15). */}
-            {rulesSettled
-              ? t('rulesChip', { met: rules.met, total: rules.total })
-              : t('rulesChipReading')}
+            {rulesSettled ? (
+              t('rulesChip', { met: rules.met, total: rules.total })
+            ) : (
+              <>
+                {t('rulesChipName')}
+                <LoadingDots />
+              </>
+            )}
           </button>
           {qualityOn && shownQuality === null && (
             <button
               type="button"
               onClick={() => openPanelTab('quality')}
               title={t('qualityChipHint')}
-              className="inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 px-2 text-xs font-medium text-muted-foreground"
+              aria-label={t('qualityChipReading')}
+              className={cn(CHIP_WIDE, 'bg-muted/40 text-muted-foreground')}
             >
               <span
                 aria-hidden
                 className="h-1.5 w-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none"
               />
-              {t('qualityChipReading')}
+              {t('qualityChipName')}
+              <LoadingDots />
             </button>
           )}
           {shownScore !== null && (
@@ -4331,10 +4349,7 @@ export function DraftEditor({
               type="button"
               onClick={() => openPanelTab('quality')}
               title={t('qualityChipHint')}
-              className={cn(
-                'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium tabular-nums',
-                BAND_CLASSES[qualityBand(shownScore)],
-              )}
+              className={cn(CHIP_WIDE, 'tabular-nums', BAND_CLASSES[qualityBand(shownScore)])}
             >
               <span
                 aria-hidden
@@ -4360,6 +4375,23 @@ export function DraftEditor({
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
               {t('cited.chip', { count: citedCount })}
             </span>
+          )}
+          {/* The action this draft is the work of (CE-022), at the row's end: Mark ready
+              completes its task there, as its hint and label say. */}
+          {draft.action && (
+            <Link
+              href={`/dashboard/action-center/actions?action=${draft.action.id}`}
+              title={t(canMarkReady ? 'actionChipHint' : 'actionChipHintDone', {
+                no: draft.action.number,
+              })}
+              aria-label={
+                canMarkReady ? t('actionChipLabel', { no: draft.action.number }) : undefined
+              }
+              className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              {t('actionChip', { no: draft.action.number })}
+              <ArrowUpRight aria-hidden className="h-3 w-3" />
+            </Link>
           )}
         </div>
       </header>
@@ -4406,26 +4438,6 @@ export function DraftEditor({
               </span>
             </div>
           )}
-          {/* The action this draft is the work of (CE-022): under the header,
-              which has no room left at 1024px, and Mark ready completes its task. */}
-          {draft.action && (
-            <p className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-[13px] text-muted-foreground">
-              <Target aria-hidden className="h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0">
-                {t.rich(canMarkReady ? 'actionBar' : 'actionBarDone', {
-                  no: draft.action.number,
-                  link: (chunks) => (
-                    <Link
-                      href={`/dashboard/action-center/actions?action=${draft.action!.id}`}
-                      className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
-                    >
-                      {chunks}
-                    </Link>
-                  ),
-                })}
-              </span>
-            </p>
-          )}
           {/* The chat it was made in (W4-10): "From chat: {title}", with the new Chat on. */}
           {chatOn && draft.conversation && (
             <p
@@ -4449,7 +4461,10 @@ export function DraftEditor({
               </span>
             </p>
           )}
-          {(agentWorking || (suggestions.length > 0 && !(barClosed && openSuggestions === 0))) && (
+          {/* Its place from the first paint when the draft's read says it shows, until its batch
+              is read (the owner's layout, 2026-11-14: no jump); nothing when it doesn't. */}
+          {!cardShown && !suggestionsRead && draft.agentCardShown && <AgentCardSkeleton />}
+          {cardShown && (
             <AgentCard
               suggestions={suggestions}
               rules={cardRules}
@@ -4598,6 +4613,8 @@ export function DraftEditor({
         {embedded || panelOpen ? (
           <EditorSidePanel
             layout={embedded ? 'bar' : 'side'}
+            // In its own tab row (the owner's layout); embedded, the bar has nothing to hide.
+            onHide={embedded ? undefined : togglePanel}
             draft={draft}
             liveUrl={liveUrl}
             published={status === 'published'}
@@ -4663,7 +4680,7 @@ export function DraftEditor({
             onShoppingPathChange={shoppingCheck.reload}
           />
         ) : (
-          <EditorPanelRail onOpen={openPanelTab} chat={chatTab} />
+          <EditorPanelRail onOpen={openPanelTab} onShow={togglePanel} chat={chatTab} />
         )}
       </div>
 
