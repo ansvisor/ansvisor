@@ -5,6 +5,7 @@ import { brandOutsiders, brandReaders } from '../access.js';
 import { dispatchBrandWebhook } from '../webhook-dispatch.js';
 import { computePulseMetrics } from './metrics.js';
 import { renderPulseEmail, sendPulseEmail } from './email.js';
+import { skipsAsNotNotable } from './send-rules.js';
 import { deliverToSlack } from '../slack/deliver.js';
 import { pulseMessage } from '../slack/blocks/pulse.js';
 
@@ -192,7 +193,7 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
       .select('frequency, recipients')
       .eq('brand_id', brandId)
       .maybeSingle();
-    const frequency = settings?.frequency ?? 'daily';
+    const frequency = settings?.frequency ?? 'notable';
 
     if (frequency === 'off') return { skipped: 'off' };
     if (frequency === 'weekly' && now.getUTCDay() !== WEEKLY_SEND_UTC_DAY) {
@@ -250,7 +251,17 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
     const cooldown = await recentWarningKeys(brandId, now);
     metrics.warnings = metrics.warnings.filter((w) => !cooldown.has(w.key));
 
-    if (frequency === 'notable' && !metrics.highlights.length && !metrics.warnings.length) {
+    // "Only when notable" still sends a brand's first pulse. A failed read
+    // counts as "not first", so a hiccup can't turn into an extra mail.
+    let isFirstPulse = false;
+    if (frequency === 'notable') {
+      const { count, error: countError } = await supabaseAdmin
+        .from('sent_pulses')
+        .select('id', { count: 'exact', head: true })
+        .eq('brand_id', brandId);
+      isFirstPulse = !countError && count === 0;
+    }
+    if (skipsAsNotNotable({ frequency, isFirstPulse, metrics })) {
       return { skipped: 'nothing_notable' };
     }
 
