@@ -13843,7 +13843,10 @@
         "channels": "Channels"
       },
       "topic": "Topic · {name}",
+      "change": "Change the decision",
+      "useRecommended": "Back to the recommendation ({decision})",
       "recommended": "Recommended: {decision}",
+      "saveFailed": "The decision couldn't be saved. Try again.",
       "leaderUs": "You",
       "leaderNone": "No clear leader",
       "leaderRival": "A competitor",
@@ -13860,6 +13863,20 @@
       "open": "Open",
       "noneFiltered": "No prompts with this decision.",
       "lock": "{count, plural, one {# more prompt} other {# more prompts}} · Ads opportunities are included from {plan}"
+    },
+    "thresholds": {
+      "open": "Thresholds",
+      "title": "Earn-or-pay thresholds",
+      "description": "They decide every brand's opportunities in this workspace. Leave one empty for its default.",
+      "reading": "Reading the thresholds…",
+      "readFailed": "The thresholds couldn't be read. Try again.",
+      "minIntentWeight": "Buying intent from (0 to 1)",
+      "leadPosition": "We lead when AI names us at or above",
+      "minPaidVolume": "Pay from Google searches/mo",
+      "default": "Default: {value}",
+      "save": "Save",
+      "saved": "Thresholds saved",
+      "failed": "The thresholds couldn't be saved. Try again."
     },
     "empty": {
       "title": "Coming soon in this preview",

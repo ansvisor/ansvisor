@@ -3,23 +3,28 @@ import { createClient } from '@/lib/supabase/client';
 import type { AdsPeriod } from './tabs';
 
 /**
- * Ads' reads from the API server (server/src/routes/ads.js), with the
- * person's session as a bearer token, through the same-origin proxy, as the
- * AI usage meter reads (lib/billing/ai-usage-client.ts): never a server
+ * Ads' reads and writes on the API server (server/src/routes/ads.js), with
+ * the person's session as a bearer token, through the same-origin proxy, as
+ * the AI usage meter reads (lib/billing/ai-usage-client.ts): never a server
  * action, which Next runs one at a time behind the page's others.
  */
 
 /** A read that hangs gives up after this, so the page can say so. */
 const READ_TIMEOUT_MS = 30_000;
 
-/** The JSON answer to GET /api/ads/…; anything but a 2xx throws. */
-async function read<T>(path: string): Promise<T> {
+/** The JSON answer to a call to /api/ads/…; anything but a 2xx throws. */
+async function call<T>(path: string, init?: { method: 'PATCH'; body: unknown }): Promise<T> {
   const {
     data: { session },
   } = await createClient().auth.getSession();
   if (!session) throw new Error('Not authenticated');
   const res = await fetch(`${BROWSER_API_BASE_URL}/api/ads/${path}`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
+    method: init?.method ?? 'GET',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      ...(init && { 'Content-Type': 'application/json' }),
+    },
+    body: init && JSON.stringify(init.body),
     cache: 'no-store',
     signal: AbortSignal.timeout(READ_TIMEOUT_MS),
   });
@@ -53,7 +58,7 @@ export interface AdsOverview {
 }
 
 export function readAdsOverview(brandId: string, period: AdsPeriod): Promise<AdsOverview> {
-  return read(`overview?${new URLSearchParams({ brandId, period })}`);
+  return call(`overview?${new URLSearchParams({ brandId, period })}`);
 }
 
 export type AdsDecision = 'earn' | 'pay' | 'earn_pay' | 'overlap';
@@ -97,5 +102,39 @@ export interface AdsOpportunities {
 }
 
 export function readAdsOpportunities(brandId: string, period: AdsPeriod) {
-  return read<AdsOpportunities>(`opportunities?${new URLSearchParams({ brandId, period })}`);
+  return call<AdsOpportunities>(`opportunities?${new URLSearchParams({ brandId, period })}`);
+}
+
+/** A person's decision for a prompt (Admin, Manager), or null back to the rule's. */
+export function setAdsDecision(
+  brandId: string,
+  promptId: string,
+  decision: AdsChosenDecision | null,
+) {
+  return call<{ promptId: string; override: AdsOpportunity['override'] }>(
+    `opportunities/${encodeURIComponent(promptId)}/decision`,
+    { method: 'PATCH', body: { brandId, decision } },
+  );
+}
+
+/** The earn-or-pay thresholds (server config/ads.js). */
+export interface AdsThresholds {
+  minIntentWeight: number;
+  leadPosition: number;
+  minPaidVolume: number;
+}
+/** The workspace's own (`saved`), what applies, and the defaults (Admins). */
+export interface AdsSettings {
+  saved: Partial<AdsThresholds>;
+  thresholds: AdsThresholds;
+  defaults: AdsThresholds;
+}
+
+export function readAdsSettings() {
+  return call<AdsSettings>('settings');
+}
+
+/** Each threshold given, or null back to its default (Admins). */
+export function saveAdsSettings(thresholds: { [K in keyof AdsThresholds]?: number | null }) {
+  return call<AdsSettings>('settings', { method: 'PATCH', body: { thresholds } });
 }
