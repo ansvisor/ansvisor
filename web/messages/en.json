@@ -13993,7 +13993,7 @@
       },
       "doBoth": {
         "both": "Do both",
-        "earn": "Add to Action Center",
+        "earn": "Send to Action Center",
         "pay": "Create ad drafts",
         "retryEarn": "Retry the Action Center task",
         "retryPay": "Retry the ad drafts",

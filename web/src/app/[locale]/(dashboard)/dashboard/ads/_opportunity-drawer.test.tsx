@@ -373,7 +373,7 @@ describe('the Pay card and "Do both"', () => {
 
   it('§9.4: the primary button follows the decision, and does only its half', async () => {
     for (const [decision, label, calls] of [
-      ['earn', 'Add to Action Center', [1, 0]],
+      ['earn', 'Send to Action Center', [1, 0]],
       ['pay', 'Create ad drafts', [0, 1]],
     ] as const) {
       api.sendAdsEarn.mockClear();
