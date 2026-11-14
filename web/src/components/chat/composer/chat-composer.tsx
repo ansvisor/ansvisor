@@ -156,14 +156,17 @@ function ChipIcon({ chipKey }: { chipKey: string }) {
 
 /**
  * Chat's composer (CHAT-02; the owner's layout of 2026-11-14, in every Chat
- * box): context chips above the box, then the text, then one row: ＋ / @, the
- * run mode, the model, the microphone and Send. The placeholder carries the
- * "/ skills · @ data" hint; under the box are only alerts and the run's
- * status. Enter sends, Shift+Enter adds a
+ * box): context chips above the box, then the text, then one row in the box:
+ * ＋ / @ on the left, the microphone and Send on the right. One line under the
+ * box holds the run mode and the model on the right, by their full names
+ * (the owner's change after testing it live, 2026-11-14), and the run's
+ * status on the left; the line keeps its height, so nothing moves as a run
+ * starts or ends. Alerts follow under it. The placeholder carries the
+ * "/ skills · @ data" hint. Enter sends, Shift+Enter adds a
  * line. While a run answers, Send is Stop (Esc too), and the box steers:
  * Enter stops the run, its done steps kept, and sends the text as the next
  * message (decided 2026-10-30). Analysts and Agency partners read only: no
- * run mode and no skills, a "Read-only" link to what they can do in its place.
+ * run mode and no skills, a "Read-only" link to what they can do in the mode's place.
  * A send the page refuses (it answers false) puts the text back.
  *
  * Context chips sit above the box (W1-11), each with a small icon, then
@@ -337,6 +340,8 @@ export function ChatComposer({
   const [shortcut, setShortcut] = useState<{ id: ShortcutId; trigger: string } | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
+  // The box the / @ ＋ menus open on, as popovers in the page's body.
+  const shell = useRef<HTMLDivElement>(null);
   // The page's last hand-off taken in: each one once.
   const [taken, setTaken] = useState<number | null>(null);
   if (draft && draft.nonce !== taken) {
@@ -395,11 +400,14 @@ export function ChatComposer({
     el?.setSelectionRange(el.value.length, el.value.length);
   }, [taken]);
 
-  // A menu closes on a click outside the composer.
+  // A menu closes on a click outside the composer and its menu (in the page's body).
   useEffect(() => {
     if (!menu) return;
     const onDown = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) setMenu(null);
+      const target = e.target as Node;
+      if (root.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-slot="composer-menu"]')) return;
+      setMenu(null);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
@@ -731,7 +739,7 @@ export function ChatComposer({
     }
   }
 
-  // The line under the box, only while it says something: the files, what Enter and Esc do now, a ghost's Tab.
+  // The status on the line under the box: the files, what Enter and Esc do now, a ghost's Tab.
   const status = uploading
     ? t('files.sendWaits')
     : running
@@ -858,6 +866,8 @@ export function ChatComposer({
         <RangeChip running={running} />
       </div>
       <div
+        ref={shell}
+        data-slot="composer-box"
         onDragOver={(e) => {
           if (uploader && e.dataTransfer.types.includes('Files')) e.preventDefault();
         }}
@@ -887,6 +897,7 @@ export function ChatComposer({
         )}
         {menu?.kind === 'slash' && (
           <SlashMenu
+            anchor={shell}
             shortcuts={shortcuts}
             skills={skillRows}
             skillsOn={skills.length > 0}
@@ -897,13 +908,14 @@ export function ChatComposer({
         )}
         {menu?.kind === 'at' && (
           <ReferenceMenu
+            anchor={shell}
             references={atRefs}
             loading={atLoading}
             active={active}
             onPick={pickReference}
           />
         )}
-        {menu?.kind === 'plus' && <PlusMenu items={plusItems} active={active} />}
+        {menu?.kind === 'plus' && <PlusMenu anchor={shell} items={plusItems} active={active} />}
         {files.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-2.5 pt-2">
             {files.map((entry) => {
@@ -1015,10 +1027,7 @@ export function ChatComposer({
             </div>
           )}
         </div>
-        {/*
-          One row under the text that never wraps: ＋ / @, a divider, the run mode;
-          then the model, the microphone and Send on the right. Labels are cut to fit.
-        */}
+        {/* One row under the text: ＋ / @ on the left, the microphone and Send on the right. */}
         <div
           data-slot="composer-controls"
           className="flex items-center gap-1 pt-1.5 pr-2 pb-2 pl-2"
@@ -1060,57 +1069,10 @@ export function ChatComposer({
           >
             @
           </button>
-          <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-border" />
-          {readOnly ? (
-            <Link
-              data-action="access.see"
-              href={ACCESS_HREF}
-              title={t('readOnlyTitle', { role: tRoles(role) })}
-              className="flex h-7 min-w-0 items-center rounded-lg px-1.5 text-xs text-muted-foreground no-underline hover:bg-muted hover:text-foreground"
-            >
-              <span className="truncate">{t('readOnly', { role: tRoles(role) })}</span>
-            </Link>
-          ) : (
-            <ModeMenu
-              mode={mode}
-              onChange={onModeChange}
-              fullAutoOpen={fullAutoOpen}
-              offByAdmin={fullAutoOffByAdmin}
-            />
-          )}
-          <span data-slot="composer-model" className="relative ml-auto flex min-w-0">
-            {onModelChoice || onOpenModel ? (
-              <button
-                type="button"
-                data-action="model.openMenu"
-                onClick={onModelChoice ? () => setModelOpen((on) => !on) : onOpenModel}
-                aria-label={usageLabel ? t('modelWarn', { usage: usageLabel }) : t('model')}
-                aria-expanded={onModelChoice ? modelOpen : undefined}
-                title={usageLabel}
-                className="flex h-7 max-w-[10rem] min-w-0 items-center gap-1 rounded-lg px-1.5 text-xs hover:bg-muted aria-expanded:bg-muted"
-              >
-                <span className="truncate">{modelWords}</span> <span aria-hidden>▾</span>
-                {usageDot}
-              </button>
-            ) : (
-              <span
-                title={usageLabel}
-                className="flex h-7 min-w-0 items-center gap-1 px-1.5 text-xs"
-              >
-                <span className="truncate">{modelWords}</span>
-                {usageDot}
-              </span>
-            )}
-            {modelOpen && onModelChoice && (
-              <ModelMenu
-                choice={modelChoice ?? AUTO_CHOICE}
-                onChange={onModelChoice}
-                onClose={() => setModelOpen(false)}
-                onOpenKeys={keyForm && canAdmin ? () => setKeysOpen(true) : undefined}
-              />
-            )}
-          </span>
-          <div data-slot="composer-send-group" className="flex shrink-0 items-center gap-1.5">
+          <div
+            data-slot="composer-send-group"
+            className="ml-auto flex shrink-0 items-center gap-1.5"
+          >
             <VoiceButton onText={addSpoken} onDeniedChange={setMicDenied} disabled={disabled} />
             {(running || answering) && (
               // While a question waits, Stop sits beside Send, outlined: Send answers.
@@ -1148,6 +1110,71 @@ export function ChatComposer({
               </button>
             )}
           </div>
+        </div>
+      </div>
+      {/*
+        One line under the box that keeps its height: the run's status on the left (two short
+        lines at most, the whole text in its tooltip), the run mode, or Read-only, and the
+        model on the right, by their full names.
+      */}
+      <div data-slot="composer-under" className="mt-1 flex h-7 items-center gap-2">
+        <p
+          data-slot="composer-status"
+          title={status ?? undefined}
+          className="line-clamp-2 min-w-0 flex-1 px-0.5 text-[11.5px] leading-[14px] text-muted-foreground"
+        >
+          {status}
+        </p>
+        <div data-slot="composer-settings" className="flex min-w-0 items-center gap-0.5">
+          {readOnly ? (
+            <Link
+              data-action="access.see"
+              href={ACCESS_HREF}
+              title={t('readOnlyTitle', { role: tRoles(role) })}
+              className="flex h-7 shrink-0 items-center rounded-lg px-1.5 text-xs whitespace-nowrap text-muted-foreground no-underline hover:bg-muted hover:text-foreground"
+            >
+              {t('readOnly', { role: tRoles(role) })}
+            </Link>
+          ) : (
+            <ModeMenu
+              mode={mode}
+              onChange={onModeChange}
+              fullAutoOpen={fullAutoOpen}
+              offByAdmin={fullAutoOffByAdmin}
+            />
+          )}
+          <span data-slot="composer-model" className="relative flex min-w-0">
+            {onModelChoice || onOpenModel ? (
+              <button
+                type="button"
+                data-action="model.openMenu"
+                onClick={onModelChoice ? () => setModelOpen((on) => !on) : onOpenModel}
+                aria-label={usageLabel ? t('modelWarn', { usage: usageLabel }) : t('model')}
+                aria-expanded={onModelChoice ? modelOpen : undefined}
+                title={usageLabel}
+                className="flex h-7 min-w-0 items-center gap-1 rounded-lg px-1.5 text-xs whitespace-nowrap hover:bg-muted aria-expanded:bg-muted"
+              >
+                <span className="truncate">{modelWords}</span> <span aria-hidden>▾</span>
+                {usageDot}
+              </button>
+            ) : (
+              <span
+                title={usageLabel}
+                className="flex h-7 min-w-0 items-center gap-1 px-1.5 text-xs whitespace-nowrap"
+              >
+                <span className="truncate">{modelWords}</span>
+                {usageDot}
+              </span>
+            )}
+            {modelOpen && onModelChoice && (
+              <ModelMenu
+                choice={modelChoice ?? AUTO_CHOICE}
+                onChange={onModelChoice}
+                onClose={() => setModelOpen(false)}
+                onOpenKeys={keyForm && canAdmin ? () => setKeysOpen(true) : undefined}
+              />
+            )}
+          </span>
         </div>
       </div>
       {keyInText && (
@@ -1205,14 +1232,6 @@ export function ChatComposer({
           >
             {t('files.retry')}
           </button>
-        </p>
-      )}
-      {status && (
-        <p
-          data-slot="composer-status"
-          className="mt-1.5 px-0.5 text-[11.5px] text-muted-foreground"
-        >
-          {status}
         </p>
       )}
     </div>

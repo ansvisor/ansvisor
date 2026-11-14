@@ -77,9 +77,12 @@ const modeButton = () =>
   container.querySelector<HTMLButtonElement>('[data-action="composer.openMode"]');
 // The menu opens in a portal, outside the composer.
 const modeItems = () => [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
-// The box's bottom row: ＋ / @, the run mode, then the model, the microphone and Send.
-const sendRow = () => button('Send')!.closest('[data-slot="composer-send-group"]')!.parentElement!;
-// The line under the box, only while it says something.
+// The box's row: ＋ / @ on the left, the microphone and Send on the right.
+const boxRow = () => container.querySelector<HTMLElement>('[data-slot="composer-controls"]')!;
+// The line under the box: the run's status on the left, the mode and the model on the right.
+const underLine = () => container.querySelector<HTMLElement>('[data-slot="composer-under"]')!;
+const settings = () => container.querySelector<HTMLElement>('[data-slot="composer-settings"]')!;
+// The status on that line; empty while there's nothing to say.
 const under = () => container.querySelector('[data-slot="composer-status"]')?.textContent ?? '';
 
 async function type(value: string) {
@@ -221,14 +224,15 @@ describe('ChatComposer', () => {
     expect(box().value).toBe('only blog pages');
   });
 
-  it('puts the run mode in the box’s row by its short name, as a menu that says what each pick does, and locks Full auto below Growth', async () => {
+  it('puts the run mode under the box by its short name, as a menu that says what each pick does, and locks Full auto below Growth', async () => {
     await render({ fullAutoOpen: false });
     const open = modeButton()!;
     expect(open.textContent).toBe('Ask before changes ▾');
     expect(open.getAttribute('aria-label')).toBe('Run mode: Auto, ask before changes');
     expect(open.getAttribute('aria-haspopup')).toBe('menu');
-    // In the box's row with Send; nothing under the box.
-    expect(sendRow().contains(open)).toBe(true);
+    // On the line under the box, not in the box's row with Send; no status while idle.
+    expect(settings().contains(open)).toBe(true);
+    expect(boxRow().contains(open)).toBe(false);
     expect(under()).toBe('');
     expect(modeItems()).toHaveLength(0);
 
@@ -277,15 +281,16 @@ describe('ChatComposer', () => {
     expect(modeButton()!.textContent).toBe('Ask me first ▾');
   });
 
-  it('keeps one row in the box in every composer: ＋ / @, the mode, then the model, the microphone and Send', async () => {
+  it('keeps only ＋ / @ and the microphone and Send in the box’s row, in every composer', async () => {
     for (const variant of ['home', 'dock', 'panel'] as const) {
       await render({ variant, fullAutoOpen: false });
-      const row = sendRow();
-      // One line that never wraps, so Send is always in it; labels are cut instead.
+      const row = boxRow();
+      expect(row.closest('[data-slot="composer-box"]')).not.toBeNull();
       expect(row.className).not.toContain('flex-wrap');
       const group = button('Send')!.parentElement!;
       expect(group.getAttribute('data-slot')).toBe('composer-send-group');
       expect(group.className).toContain('shrink-0');
+      expect(group.className).toContain('ml-auto');
       expect(group.lastElementChild).toBe(button('Send'));
       expect(
         [...row.children].map(
@@ -295,14 +300,79 @@ describe('ChatComposer', () => {
         'composer.openPlus',
         'composer.openSlash',
         'composer.openRef',
-        null,
-        'composer.openMode',
-        'composer-model',
         'composer-send-group',
       ]);
-      expect(modeButton()!.querySelector('.truncate')).not.toBeNull();
-      expect(row.querySelector('[data-slot="composer-model"]')!.className).toContain('ml-auto');
+      expect(row.querySelector('[data-action="composer.openMode"]')).toBeNull();
+      expect(row.querySelector('[data-slot="composer-model"]')).toBeNull();
     }
+  });
+
+  it('puts the mode and the model on one line under the box, on the right, by their full labels (owner’s change after testing it live)', async () => {
+    for (const variant of ['home', 'dock', 'panel'] as const) {
+      await render({
+        variant,
+        modelChoice: { model: 'auto', effort: 'normal' },
+        onModelChoice: vi.fn(),
+      });
+      const line = underLine();
+      // After the box, its next sibling: chips above, the box, then this line.
+      expect(line.previousElementSibling!.getAttribute('data-slot')).toBe('composer-box');
+      expect([...line.children].map((el) => el.getAttribute('data-slot'))).toEqual([
+        'composer-status',
+        'composer-settings',
+      ]);
+      expect(
+        [...settings().children].map(
+          (el) => el.getAttribute('data-action') ?? el.getAttribute('data-slot'),
+        ),
+      ).toEqual(['composer.openMode', 'composer-model']);
+      // The whole names, never cut: no truncation and no cap on the mode's width.
+      const mode = modeButton()!;
+      expect(mode.textContent).toBe('Ask before changes ▾');
+      expect(mode.querySelector('.truncate')).toBeNull();
+      expect(mode.className).toContain('shrink-0');
+      expect(mode.className).toContain('whitespace-nowrap');
+      const model = button('Model')!;
+      expect(model.textContent).toBe('Auto ▾');
+      expect(model.className).not.toMatch(/max-w-/);
+      expect(model.className).toContain('whitespace-nowrap');
+      // The status takes what the buttons leave: they keep their room.
+      expect(container.querySelector('[data-slot="composer-status"]')!.className).toContain(
+        'flex-1',
+      );
+    }
+  });
+
+  it('keeps the line under the box the same height and the same nodes as a run starts and ends', async () => {
+    const props = { onStop: handlers.onStop, onSteer: handlers.onSteer, ghost: 'Show the pages' };
+    await render(props);
+    const line = underLine();
+    const status = container.querySelector('[data-slot="composer-status"]')!;
+    const settled = [...line.children];
+    // A fixed 28px line; the status at most two 14px lines, so it never grows it.
+    expect(line.className).toContain('h-7');
+    expect(status.className).toContain('line-clamp-2');
+    expect(status.className).toContain('leading-[14px]');
+    const says: string[] = [under()];
+    for (const state of [{ running: true }, { answering: true }, {}] as const) {
+      await render({ ...props, ...state });
+      // The same line and the same status, its text changed in place.
+      expect(underLine()).toBe(line);
+      expect([...line.children]).toEqual(settled);
+      expect(line.className).toContain('h-7');
+      says.push(under());
+    }
+    expect(says).toEqual([
+      'Tab to accept · / skills · @ data',
+      'Answering · Esc to stop',
+      "Your message answers Chat's question · Esc stops the run",
+      'Tab to accept · / skills · @ data',
+    ]);
+    // A long status is cut at two lines, the whole of it in the tooltip.
+    await render({ ...props, answering: true });
+    expect(status.getAttribute('title')).toBe(
+      "Your message answers Chat's question · Esc stops the run",
+    );
   });
 
   it('keeps Stop and Send together on the right while a question waits', async () => {
@@ -324,8 +394,9 @@ describe('ChatComposer', () => {
       const link = container.querySelector('a')!;
       expect(link.textContent).toBe(`Read-only · ${name}`);
       expect(link.getAttribute('href')).toBe('/dashboard/chat/capabilities');
-      // Where the mode is for others: in the box's row; the box says @ data, no skills.
-      expect(sendRow().contains(link)).toBe(true);
+      // Where the mode is for others: first on the line under the box; the box says @ data, no skills.
+      expect(settings().firstElementChild).toBe(link);
+      expect(link.className).toContain('whitespace-nowrap');
       expect(box().placeholder).toBe('Ask anything · @ data');
       expect(under()).toBe('');
     }
@@ -341,9 +412,9 @@ describe('ChatComposer', () => {
     expect(box().rows).toBe(1);
   });
 
-  it('shows the model on Auto, short, in the box’s row', async () => {
+  it('shows the model on Auto, short, on the line under the box', async () => {
     await render();
-    expect(sendRow().querySelector('[data-slot="composer-model"]')!.textContent).toBe('Auto');
+    expect(settings().querySelector('[data-slot="composer-model"]')!.textContent).toBe('Auto');
   });
 
   it('puts the / and @ hint in the placeholder, not under the box', async () => {
@@ -581,12 +652,12 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
 describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
   // A row's words, without its mark (aria-hidden).
   const options = () =>
-    [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].map((o) => {
+    [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].map((o) => {
       const copy = o.cloneNode(true) as HTMLElement;
       copy.querySelectorAll('[aria-hidden]').forEach((mark) => mark.remove());
       return copy.textContent;
     });
-  const listbox = () => container.querySelector('[role="listbox"]');
+  const listbox = () => document.querySelector('[role="listbox"]');
   // CHAT-08's shortcuts, as the / menu lists them (W2-09).
   const ALL_SHORTCUTS = [
     '/startGet started',
@@ -617,11 +688,11 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await render();
     await type('/');
     await press('ArrowDown');
-    expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe('/analyzeAnalyze');
+    expect(document.querySelector('[aria-selected="true"]')!.textContent).toBe('/analyzeAnalyze');
     await press('ArrowUp');
     await press('ArrowUp');
     // Up from the first wraps to the last: /image (W4-08b).
-    expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe(
+    expect(document.querySelector('[aria-selected="true"]')!.textContent).toBe(
       '/imageCreate image',
     );
     await press('Escape');
@@ -631,7 +702,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await type('Compare a/b');
     expect(listbox()).toBeNull();
     await type('/zz');
-    expect(container.textContent).toContain('No shortcuts match');
+    expect(document.body.textContent).toContain('No shortcuts match');
   });
 
   it('opens the shortcuts from the / button, the text kept after the starter', async () => {
@@ -639,7 +710,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await type('our pricing page');
     await act(async () => button('Skills and shortcuts')!.click());
     await act(async () =>
-      [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')][1].click(),
+      [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')][1].click(),
     );
     expect(box().value).toBe('Analyze our pricing page');
   });
@@ -662,7 +733,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await type('Q3 share of voice');
     await act(async () => button('Skills and shortcuts')!.click());
     await act(async () =>
-      [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')][2].click(),
+      [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')][2].click(),
     );
     expect(box().value).toBe('Create a report on Q3 share of voice');
     await press('Enter');
@@ -722,7 +793,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
       '/reportWeekly report',
       '/compareComparison page',
     ]);
-    expect(container.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe('Skills');
+    expect(document.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe('Skills');
 
     await type('/fa');
     expect(options()).toEqual(['/faqFAQ from fan-outs']);
@@ -741,20 +812,20 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await type('our pricing page');
     await act(async () => button('Skills and shortcuts')!.click());
     await press('ArrowUp');
-    expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe(
+    expect(document.querySelector('[aria-selected="true"]')!.textContent).toBe(
       '/compareComparison page',
     );
     await press('Enter');
     expect(box().value).toBe('/compare our pricing page');
 
     await type('/zz');
-    expect(container.textContent).toContain('No shortcuts or skills match');
+    expect(document.body.textContent).toContain('No shortcuts or skills match');
   });
 
   it('shows no Skills group without skills: the new Chat off', async () => {
     await render();
     await type('/');
-    expect(container.querySelector('[role="group"]')).toBeNull();
+    expect(document.querySelector('[role="group"]')).toBeNull();
     expect(options()).toHaveLength(ALL_SHORTCUTS.length);
   });
 
@@ -780,8 +851,8 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
       'ansvisor.com/pricingPage',
     ]);
     // No ID anywhere on screen.
-    expect(container.textContent).not.toContain('visibility-by-platform');
-    expect(container.textContent).not.toContain('p1');
+    expect(document.body.textContent).not.toContain('visibility-by-platform');
+    expect(document.body.textContent).not.toContain('p1');
 
     await press('Enter');
     expect(box().value).toBe('Explain ');
@@ -829,14 +900,14 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
       'Connect a toolAdmins connect · others ask an Admin',
     ]);
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[data-action="plusMenu.attachFiles"]')!.click(),
+      document.querySelector<HTMLButtonElement>('[data-action="plusMenu.attachFiles"]')!.click(),
     );
     expect(pick).toHaveBeenCalledOnce();
     pick.mockRestore();
 
     await act(async () => button('Attach, read a page or connect a tool')!.click());
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[data-action="plusMenu.connectTool"]')!.click(),
+      document.querySelector<HTMLButtonElement>('[data-action="plusMenu.connectTool"]')!.click(),
     );
     expect(router.push).toHaveBeenCalledWith('/dashboard/settings/integrations');
   });
@@ -851,7 +922,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
       'Ask your Admin to connectAdmins connect · others ask an Admin',
     ]);
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[data-action="plusMenu.connectTool"]')!.click(),
+      document.querySelector<HTMLButtonElement>('[data-action="plusMenu.connectTool"]')!.click(),
     );
     expect(requestAccess).toHaveBeenCalledWith({
       asked: 'Connect a tool so Chat can use it',
@@ -865,11 +936,11 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await type('our GEO post');
     await act(async () => button('Attach, read a page or connect a tool')!.click());
     await act(async () =>
-      container.querySelector<HTMLButtonElement>('[data-action="plusMenu.createImage"]')!.click(),
+      document.querySelector<HTMLButtonElement>('[data-action="plusMenu.createImage"]')!.click(),
     );
     // The text typed stays after the shortcut's first words.
     expect(box().value).toBe('Create an image for our GEO post');
-    expect(container.querySelector('[data-action="plusMenu.createImage"]')).toBeNull();
+    expect(document.querySelector('[data-action="plusMenu.createImage"]')).toBeNull();
     await press('Enter');
     expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Create an image for our GEO post', {
       context: [],
@@ -890,7 +961,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
   it('offers no Create an image to a role that only reads (W4-08b)', async () => {
     await render({}, 'analyst');
     await act(async () => button('Attach, read a page or connect a tool')!.click());
-    expect(container.querySelector('[data-action="plusMenu.createImage"]')).toBeNull();
+    expect(document.querySelector('[data-action="plusMenu.createImage"]')).toBeNull();
   });
 });
 
@@ -907,30 +978,34 @@ describe('ChatComposer: the image model on the model button (W4-08b, CHAT-15 ite
 });
 
 describe("ChatComposer: a menu's side and height (W2-04)", () => {
-  // The page's scrolling area, under a 53px header, in a 1024×768 window (jsdom's height).
+  // The page's scrolling area, under a 53px header, in a 1024×768 window (jsdom's size).
   const SCROLLER = { top: 53, bottom: 768 };
   const SKILLS = Array.from({ length: 14 }, (_, i) => ({
     name: `skill-${i}`,
     title: `Skill ${i}`,
   }));
-  const listbox = () => container.querySelector<HTMLElement>('[role="listbox"]')!;
+  const listbox = () => document.querySelector<HTMLElement>('[role="listbox"]')!;
 
-  /** The composer's box at `box`, and the menu's rows `content` px tall. */
-  function layout(box: { top: number; bottom: number }, content = 500) {
+  /** The composer's box at `box` (`left` and `width` across), and the menu's rows `content` px tall. */
+  type Rect = { top: number; bottom: number; left?: number; width?: number };
+  function layout(box: Rect, content = 500) {
     container.style.overflowY = 'auto';
     vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(content);
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: Element,
     ) {
-      const isBox = [...this.children].some((child) => child.getAttribute('role') === 'listbox');
-      const r = this === container ? SCROLLER : isBox ? box : { top: 0, bottom: 0 };
+      const isBox = this.getAttribute('data-slot') === 'composer-box';
+      const r: Rect = this === container ? SCROLLER : isBox ? box : { top: 0, bottom: 0 };
+      const left = r.left ?? 0;
+      const width = r.width ?? 0;
       return {
-        ...r,
-        left: 0,
-        right: 0,
-        x: 0,
+        top: r.top,
+        bottom: r.bottom,
+        left,
+        right: left + width,
+        x: left,
         y: r.top,
-        width: 0,
+        width,
         height: r.bottom - r.top,
       } as DOMRect;
     });
@@ -943,8 +1018,10 @@ describe("ChatComposer: a menu's side and height (W2-04)", () => {
     await render({ skills: SKILLS });
     await type('/');
     expect(listbox().dataset.side).toBe('below');
-    expect(listbox().className).toContain('top-full');
-    expect(listbox().className).not.toContain('bottom-full');
+    // Fixed in the window, 8px under the box.
+    expect(listbox().className).toContain('fixed');
+    expect(listbox().style.top).toBe('371px');
+    expect(listbox().style.bottom).toBe('');
     expect(listbox().style.maxHeight).toBe('300px');
   });
 
@@ -953,7 +1030,9 @@ describe("ChatComposer: a menu's side and height (W2-04)", () => {
     await render({ skills: SKILLS });
     await type('/');
     expect(listbox().dataset.side).toBe('above');
-    expect(listbox().className).toContain('bottom-full');
+    // Its bottom 8px over the box's top, so it stays on the box as filtering shortens it.
+    expect(listbox().style.bottom).toBe(`${768 - 600 + 8}px`);
+    expect(listbox().style.top).toBe('');
     expect(listbox().style.maxHeight).toBe('300px');
 
     // A short menu fits above Chat Home's box too.
@@ -974,9 +1053,47 @@ describe("ChatComposer: a menu's side and height (W2-04)", () => {
     expect(listbox().style.maxHeight).toBe(`${200 - 53 - 8}px`);
   });
 
-  it('picks its side again when the window changes size, and keeps the active row in view', async () => {
+  it('is no wider than a narrow panel’s box, starts at its left edge, and never passes the window’s right edge', async () => {
+    // The Content Editor's Chat: a 423px box at the window's right.
+    layout({ top: 600, bottom: 700, left: 593, width: 423 });
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(listbox().style.width).toBe('423px');
+    expect(listbox().style.left).toBe('593px');
+
+    // The Chat page: a 720px box, the menu at its own 520px.
+    act(() => root.unmount());
+    root = createRoot(container);
+    layout({ top: 600, bottom: 700, left: 152, width: 720 });
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(listbox().style.width).toBe('520px');
+    expect(listbox().style.left).toBe('152px');
+
+    // A box running past the window: the menu moves left to stay 8px inside it.
+    act(() => root.unmount());
+    root = createRoot(container);
+    layout({ top: 600, bottom: 700, left: 800, width: 400 });
+    await render({ skills: SKILLS });
+    await type('/');
+    expect(listbox().style.width).toBe('400px');
+    expect(listbox().style.left).toBe(`${1024 - 8 - 400}px`);
+  });
+
+  it('picks its side again when the window changes size, and keeps the active row in view by scrolling only itself', async () => {
     const box = { top: 263, bottom: 363 };
     layout(box);
+    // Each row 34px, under a 40px title; the menu shows 300px of them.
+    vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const rows = [...document.querySelectorAll('[role="option"]')];
+      return rows.includes(this) ? 40 + rows.indexOf(this) * 34 : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(34);
+    vi.spyOn(Element.prototype, 'clientHeight', 'get').mockImplementation(function (this: Element) {
+      return this.getAttribute('role') === 'listbox' ? 300 : 0;
+    });
     const scrolled = vi.fn();
     Object.defineProperty(Element.prototype, 'scrollIntoView', {
       value: scrolled,
@@ -992,13 +1109,86 @@ describe("ChatComposer: a menu's side and height (W2-04)", () => {
       expect(listbox().dataset.side).toBe('above');
 
       await press('ArrowUp');
-      const selected = container.querySelector('[aria-selected="true"]')!;
+      const selected = document.querySelector('[aria-selected="true"]')!;
       expect(selected.textContent).toBe('/skill-13Skill 13');
-      expect(scrolled.mock.contexts.at(-1)).toBe(selected);
-      expect(scrolled).toHaveBeenLastCalledWith({ block: 'nearest' });
+      // The 22nd row's bottom at 40 + 22 × 34: the menu scrolls to it, nothing else does.
+      expect(listbox().scrollTop).toBe(40 + 22 * 34 - 300);
+      expect(scrolled).not.toHaveBeenCalled();
+      await press('ArrowDown');
+      expect(listbox().scrollTop).toBe(40);
     } finally {
       delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
     }
+  });
+});
+
+describe('ChatComposer: "/" opens without a jump (owner’s report, 2026-11-14)', () => {
+  // The composer's own blocks and the box's, as nodes, to see that none is added, dropped or swapped.
+  const blocks = () => {
+    const composer = container.firstElementChild!;
+    const shell = container.querySelector('[data-slot="composer-box"]')!;
+    return {
+      composer: [...composer.children],
+      box: [...shell.children],
+      boxClass: shell.className,
+      line: underLine(),
+    };
+  };
+
+  it('draws the / menu in the page’s body, so the box, its line and what holds them stay as they were', async () => {
+    await render({ ghost: 'Show which pages Gemini cites most', variant: 'panel' });
+    const before = blocks();
+    expect(under()).toBe('Tab to accept · / skills · @ data');
+
+    await type('/');
+    const menu = document.querySelector<HTMLElement>('[role="listbox"]')!;
+    expect(menu.getAttribute('aria-label')).toBe('Skills and shortcuts');
+    // A popover: a child of the body, outside the composer, fixed in the window.
+    expect(menu.parentElement).toBe(document.body);
+    expect(container.contains(menu)).toBe(false);
+    expect(menu.className).toContain('fixed');
+    // Nothing in the composer moved: the same nodes in the same places.
+    const after = blocks();
+    expect(after.composer).toEqual(before.composer);
+    expect(after.box).toEqual(before.box);
+    expect(after.boxClass).toBe(before.boxClass);
+    expect(after.line).toBe(before.line);
+    // The ghost's hint goes from the line, the line stays.
+    expect(under()).toBe('');
+    expect(underLine().className).toContain('h-7');
+
+    // The same from the / button, and for @ and ＋.
+    await press('Escape');
+    await type('');
+    for (const label of [
+      'Skills and shortcuts',
+      'Reference a chart, metric, page or task',
+      'Attach, read a page or connect a tool',
+    ]) {
+      await act(async () => button(label)!.click());
+      expect(document.querySelector('[role="listbox"]')!.parentElement).toBe(document.body);
+      expect(blocks().box).toEqual(before.box);
+      expect(blocks().line).toBe(before.line);
+      await press('Escape');
+    }
+  });
+
+  it('keeps a click in the menu, and closes it on a click outside the composer', async () => {
+    await render();
+    await type('/');
+    const option = document.querySelector<HTMLElement>('[data-action="slashMenu.pickShortcut"]')!;
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    await act(async () => option.click());
+    expect(box().value).toBe('Help me get started. What should I set up first? ');
+
+    await type('/');
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
   });
 });
 

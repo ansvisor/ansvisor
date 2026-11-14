@@ -104,7 +104,7 @@ export function EditorPanelRail({
   chat = false,
 }: {
   onOpen: (tab: PanelTab) => void;
-  /** Opens the panel: its own toggle, as Hide side panel is in the panel's tab row. */
+  /** Opens the panel, as the header's toggle above it does. */
   onShow?: () => void;
   /** Chat is a tab (W4-16). */
   chat?: boolean;
@@ -202,7 +202,6 @@ export function EditorSidePanel({
   onShoppingPathChange,
   chat,
   layout = 'side',
-  onHide,
 }: {
   draft: ContentDraft;
   /**
@@ -312,8 +311,6 @@ export function EditorSidePanel({
   };
   /** `bar`: a bottom bar in place of the side panel (embedded in Chat, CHAT-25 §4). */
   layout?: 'side' | 'bar';
-  /** Hides the panel: Hide side panel at the right end of its tab row (the side layout's). */
-  onHide?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -525,8 +522,9 @@ export function EditorSidePanel({
         <Tabs
           value={tab}
           onValueChange={(value) => open(value as PanelTab)}
-          // A row: Hide side panel at its right end (the owner's layout, 2026-11-14).
-          className="items-center gap-1 border-b px-3 pt-1.5 data-horizontal:flex-row"
+          // The tabs alone: Hide side panel is in the header, above the panel (the
+          // owner, 2026-11-14), so nothing here is cut off at the panel's edge.
+          className="border-b px-3 pt-1.5"
         >
           <TabsList variant="line">
             {tabsOf(!!chat).map((value) => (
@@ -560,19 +558,6 @@ export function EditorSidePanel({
               </TabsTrigger>
             ))}
           </TabsList>
-          {onHide && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-pressed
-              aria-label={t('hide')}
-              title={t('hide')}
-              onClick={onHide}
-              className="ml-auto shrink-0"
-            >
-              <PanelRight className="h-4 w-4" />
-            </Button>
-          )}
         </Tabs>
       )}
       {/* Chat keeps its own scroll, its box at the bottom (W4-16); mounted once opened. */}
