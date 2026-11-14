@@ -1237,19 +1237,95 @@ describe('setFactScope', () => {
 
   it('sets where a brand’s own fact holds, as its other facts write it; nothing for the whole brand', async () => {
     const { db, writes } = fakeDb({ brand_facts: [{ scope: 'Bozcaada' }] });
-    expect(await setFactScope(fact, ' BOZCAADA ', { db })).toEqual({ id: 'f1', scope: 'Bozcaada' });
+    expect(await setFactScope(fact, ' BOZCAADA ', { db, now: NOW })).toEqual({
+      id: 'f1',
+      scope: 'Bozcaada',
+    });
     expect(writes[0]).toEqual(
       expect.objectContaining({
         op: 'update',
-        payload: { scope: 'Bozcaada' },
+        payload: { scope: 'Bozcaada', scope_set_at: new Date(NOW).toISOString() },
         filters: [
           ['eq', 'id', 'f1'],
           ['eq', 'brand_id', 'b1'],
         ],
       }),
     );
-    const { db: wide } = fakeDb({ brand_facts: [] });
-    expect(await setFactScope(fact, '  ', { db: wide })).toEqual({ id: 'f1', scope: null });
+    // Cleared by a person: brand-wide on purpose, so set by them too.
+    const { db: wide, writes: cleared } = fakeDb({ brand_facts: [] });
+    expect(await setFactScope(fact, '  ', { db: wide, now: NOW })).toEqual({
+      id: 'f1',
+      scope: null,
+    });
+    expect(cleared[0].payload).toEqual({ scope: null, scope_set_at: new Date(NOW).toISOString() });
+  });
+
+  it('keeps the place a person moved or cleared through the next read, with no copy of the fact', async () => {
+    const FERRY = (...islands) =>
+      `<title>Feribot · Adalar</title><h1>Feribot fiyatları</h1>
+      ${islands.map((island) => `<h3>${island}</h3><p>Yetişkin ₺150 tek yön</p>`).join('')}
+      <p>${'Biletler iskelede ve internette satılır, her gün sefer vardır. '.repeat(4)}</p>`;
+    // Read as Bozcaada's, and approved.
+    const row = {
+      ...{ ...fact, value_key: '150.00', status: 'approved', scope: 'Bozcaada' },
+      ...{ scope_set_at: null, quote: '₺150 tek yön', source_kind: 'pricing' },
+    };
+    // A person sets its place; then the site is read again, giving the places it gives.
+    const placeThenRead = async (raw, islands) => {
+      const { db, writes } = fakeDb({ brand_facts: [row] });
+      await setFactScope(row, raw, { db, now: NOW });
+      const placed = { ...row, ...writes[0].payload };
+      generateObject.mockResolvedValue(
+        answerFor(
+          islands.map((scope) => ({
+            kind: 'price',
+            quote: '₺150 tek yön',
+            plan: 'Yetişkin',
+            scope,
+          })),
+        ),
+      );
+      const read = fakeDb({
+        brands: { id: 'b1', site_type: 'b2b' },
+        brand_domains: [{ domain: 'ledgerly.example', is_primary: true }],
+        site_pages: [
+          { url: 'https://ledgerly.example/pricing', title: 'Pricing', fetch_status: 200 },
+        ],
+        site_trust: null,
+        brand_fact_pages: [],
+        brand_facts: [placed],
+      });
+      const fetcher = async (url) => {
+        if (url.endsWith('/pricing')) return { url, html: FERRY(...islands) };
+        throw new PageFetchError('http_error', '404', { status: 404 });
+      };
+      await refreshBrandFacts('b1', { orgId: 'o1', now: NOW + 60_000, db: read.db, fetcher });
+      const factWrites = read.writes.filter((w) => w.table === 'brand_facts');
+      return {
+        scope: placed.scope,
+        set: placed.scope_set_at,
+        writes: factWrites.map((w) => [w.op, w.payload, w.filters]),
+      };
+    };
+    const seenOnly = [
+      [
+        'update',
+        { last_seen_at: new Date(NOW + 60_000).toISOString(), gone_at: null },
+        [['in', 'id', ['f1']]],
+      ],
+    ];
+    // Moved from Bozcaada to Gökçeada, read again as Bozcaada's: Gökçeada's still, one fact.
+    expect(await placeThenRead('Gökçeada', ['Bozcaada'])).toEqual({
+      scope: 'Gökçeada',
+      set: new Date(NOW).toISOString(),
+      writes: seenOnly,
+    });
+    // Cleared, read again as Bozcaada's and Gökçeada's: the whole brand's still, one fact.
+    expect(await placeThenRead(' ', ['Bozcaada', 'Gökçeada'])).toEqual({
+      scope: null,
+      set: new Date(NOW).toISOString(),
+      writes: seenOnly,
+    });
   });
 
   it('says when the same fact is kept for that scope already', async () => {

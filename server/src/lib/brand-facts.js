@@ -1111,10 +1111,11 @@ export async function setFactStatus(
 /**
  * Sets where a fact holds (00539): a destination, operator or route, as the
  * brand's facts already write it; null for the whole brand. Only the
- * brand's own fact. The same fact kept in that scope already is a 409; one
- * a read removed meanwhile a 404.
+ * brand's own fact. A person set it, cleared too (`scope_set_at`): a later
+ * read keeps it, wherever the page puts the fact. The same fact kept in
+ * that scope already is a 409; one a read removed meanwhile a 404.
  */
-export async function setFactScope(fact, raw, { db = supabaseAdmin } = {}) {
+export async function setFactScope(fact, raw, { db = supabaseAdmin, now = Date.now() } = {}) {
   const { data: rows, error: readError } = await db
     .from('brand_facts')
     .select('scope')
@@ -1128,7 +1129,7 @@ export async function setFactScope(fact, raw, { db = supabaseAdmin } = {}) {
     ) ?? null;
   const { data, error } = await db
     .from('brand_facts')
-    .update({ scope })
+    .update({ scope, scope_set_at: new Date(now).toISOString() })
     .eq('id', fact.id)
     .eq('brand_id', fact.brand_id)
     .select('id, scope')

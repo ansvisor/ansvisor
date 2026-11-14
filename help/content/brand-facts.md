@@ -19,7 +19,7 @@ Each fact shows its value, the words on your site that hold it and the page it c
 
 ## Facts for one destination, operator or route
 
-Some values differ by place: a ferry's price on one route, a tour's length on one island. Ansvisor sets the place when your site names it beside the fact or in the page's title. To change it, admins and managers select **Applies to** on the fact, type the place, such as Bozcaada, and select **Save**. Leave it empty for your whole brand. The list groups facts by place, your whole brand's first.
+Some values differ by place: a ferry's price on one route, a tour's length on one island. Ansvisor sets the place when your site names it beside the fact or in the page's title. To change it, admins and managers select **Applies to** on the fact, type the place, such as Bozcaada, and select **Save**. Leave it empty for your whole brand. The place you set, or empty, stays when Ansvisor reads your site again. The list groups facts by place, your whole brand's first.
 
 ## How pages use them
 
