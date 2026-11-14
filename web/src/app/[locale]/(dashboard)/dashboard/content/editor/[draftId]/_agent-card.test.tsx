@@ -264,6 +264,18 @@ describe('AgentCard', () => {
     expect(container.textContent).not.toContain('You can leave this page');
   });
 
+  it('says a rewrite taken left rules open that were met, beside Undo (B2)', async () => {
+    const page = suggestion({ kind: 'page', status: 'accepted', beforeHtml: '<h1>Old</h1>' });
+    await render([page], false, { rewriteDropped: 2 });
+    expect(container.textContent).toContain('Rewrite left 2 rules open that were met');
+    await click('Undo');
+    expect(handlers.onDecidePage).toHaveBeenCalledWith('open');
+    // None dropped: the rules still open, as before.
+    await render([page], false);
+    expect(container.textContent).not.toContain('Rewrite left');
+    expect(container.textContent).toContain('5 rules still open');
+  });
+
   it('says how many placeholders the result leaves to fill', async () => {
     const page = suggestion({
       kind: 'page',

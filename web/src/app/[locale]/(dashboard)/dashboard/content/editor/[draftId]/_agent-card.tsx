@@ -258,6 +258,7 @@ export function AgentCard({
   stopping = false,
   next = null,
   onAllSteps,
+  rewriteDropped = 0,
   length = null,
   lastRunFailed = false,
   pageChars = null,
@@ -312,6 +313,8 @@ export function AgentCard({
   } | null;
   /** Opens the basket with every step. */
   onAllSteps?: () => void;
+  /** A rewrite taken: the rules it left open that the page before it met (said, beside Undo). */
+  rewriteDropped?: number;
   /** The agent's last run failed: said in place of an earlier batch's review. */
   lastRunFailed?: boolean;
   /** A rewrite's characters, before and after, as the toolbar counts them (the editor's count). */
@@ -495,6 +498,10 @@ export function AgentCard({
           {breaks}
           {builtFrom}
         </>
+      ) : page.status === 'accepted' && rewriteDropped > 0 ? (
+        <span className="text-amber-700 dark:text-amber-400">
+          {tRewrite('dropped', { count: rewriteDropped })}
+        </span>
       ) : page.status === 'accepted' && stillOpen > 0 ? (
         tRewrite('rulesOpen', { count: stillOpen })
       ) : null;

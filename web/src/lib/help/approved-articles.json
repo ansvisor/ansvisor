@@ -3435,7 +3435,11 @@
         },
         {
           "heading": "Rewrite the whole page",
-          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published.\n\nYour Length has the last word: a rewrite merges or drops the least useful sections rather than go past it, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too."
+          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published."
+        },
+        {
+          "heading": "A rewrite and your Length",
+          "text": "Your Length has the last word: a rewrite shortens inside sections rather than go past it, keeping every section the rules ask for, such as fan-out headings, the FAQ and the summary, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too.\n\nA rewrite you accept that leaves open rules your page met says how many on its card, beside **Undo**."
         },
         {
           "heading": "Before you run it again",
@@ -3569,7 +3573,7 @@
         },
         {
           "heading": "The order of the steps",
-          "text": "With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then a rewrite for a page far off its Length.\n\nOnce you've decided the agent's **Fix open rules** suggestions, the step is ticked, as the **Rules** tab counts the rules left yours. Rules its later suggestions leave open don't bring it back; your edits can."
+          "text": "With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then **Rewrite within all rules** for a page far off its Length.\n\nOnce you've decided the agent's **Fix open rules** suggestions, the step is ticked, as the **Rules** tab counts the rules left yours. Rules its later suggestions leave open don't bring it back; your edits can."
         },
         {
           "heading": "The page's author",

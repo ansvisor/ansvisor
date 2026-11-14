@@ -1452,6 +1452,32 @@ describe('Rewrite the page to these rules', () => {
       expect(row().after_chars).toBe(textLength(row().after_text));
     });
 
+    it('keeps every section the rules ask for: told the rules, a cut dropping one is not taken', async () => {
+      const faq = `<h2>FAQ</h2><h3>Why pour-over?</h3><p>${'Long words. '.repeat(6)}</p>`;
+      answers(long + faq, short);
+      const rules = [
+        ...toLength().rules,
+        { key: 'fanoutH2', name: 'Use top fan-outs as H2s', detail: 'aim: 3' },
+        { key: 'faq', name: 'FAQ block', detail: '' },
+      ];
+      await expect(run({ ...toLength(), rules })).resolves.toEqual({ rewritten: true });
+      const { prompt } = generateObject.mock.calls[1][0];
+      expect(prompt).toContain(
+        'Keep every section the rules require; shorten inside sections instead.',
+      );
+      expect(prompt).not.toContain('drop the least useful sections');
+      expect(prompt).toContain('- fanoutH2: Use top fan-outs as H2s — aim: 3\n- faq: FAQ block');
+      expect(prompt).not.toContain('- length:');
+      // The cut dropped the FAQ: the first rewrite stands.
+      expect(row().after_text).toContain('Why pour-over?');
+
+      // With no rule asking for sections, a shorter cut is taken.
+      writes = [];
+      answers(long + faq, short);
+      await run(toLength());
+      expect(row().after_text).not.toContain('Why pour-over?');
+    });
+
     it('rewrites and cuts with the model it was started with, held at its own id', async () => {
       answers(long, short);
       await runDraftWriting({

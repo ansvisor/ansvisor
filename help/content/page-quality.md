@@ -52,7 +52,7 @@ Marked ready with steps skipped, it says how many are still open. **Next step** 
 
 ## The order of the steps
 
-With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then a rewrite for a page far off its Length.
+With no page type yet, the first step is **Set page type**. When the rules ask for more than the Length holds, the step is **Raise Length to ~N**, set in one click, or **Ask for fewer**. **Fix open rules** comes next, then **Rewrite within all rules** for a page far off its Length.
 
 Once you've decided the agent's **Fix open rules** suggestions, the step is ticked, as the **Rules** tab counts the rules left yours. Rules its later suggestions leave open don't bring it back; your edits can.
 

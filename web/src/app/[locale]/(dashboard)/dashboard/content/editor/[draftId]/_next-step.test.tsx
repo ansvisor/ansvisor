@@ -129,7 +129,7 @@ describe('NextStepButton', () => {
         openRules: [],
       }),
     );
-    expect(popup()!.textContent).toContain('Shorten to your Length');
+    expect(popup()!.textContent).toContain('Rewrite within all rules');
     expect(popup()!.textContent).toContain(
       "19,203 characters against a Length of 8,000. Small fixes won't get there, so rewrite it in one go.",
     );
@@ -140,7 +140,7 @@ describe('NextStepButton', () => {
     expect(path()).toEqual([
       'Plan the page · done',
       'Bring in your page · done',
-      '3Shorten to your Length · now',
+      '3Rewrite within all rules · now',
       '4Add proof and author · to do',
       '5Check and mark ready · to do',
     ]);
