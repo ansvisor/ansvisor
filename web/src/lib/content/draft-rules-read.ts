@@ -16,6 +16,7 @@ import {
   ruleSet,
   ruleSetType,
   rulesMet,
+  rulesPageType,
   savedRuleSetSchema,
   type ActiveRule,
   type RuleContext,
@@ -129,7 +130,7 @@ export async function readDraftRules(input: {
     language,
     catalog,
     shopping: null,
-    pageType,
+    pageType: rulesPageType(choices, pageType),
   };
   // The page is read with the content DOM, as the editor's helpers read it on the server.
   await withContentDom();

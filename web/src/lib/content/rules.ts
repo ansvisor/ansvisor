@@ -377,7 +377,11 @@ export type TextRule = z.infer<typeof textRuleSchema>;
 export const draftRulesSchema = z.object({
   /** The page type whose set applies; null follows the draft's type (ruleSetType). */
   set: z.enum(PAGE_TYPES).nullable(),
-  /** The page's type when that set was picked: the set holds while the page keeps it. */
+  /**
+   * The page's type when that set was picked: the set holds while the page
+   * keeps it. None on a set picked before it was kept (legacyPin): that set
+   * holds whatever the type. Only the person's own pick writes it.
+   */
   setFor: z.enum(PAGE_TYPES).optional(),
   /**
    * The set the draft started from: Ansvisor's default, or the workspace's
@@ -405,17 +409,40 @@ export const NO_DRAFT_RULES: DraftRules = {
 };
 
 /**
- * The page type whose set applies: one the person picked while the page had
- * another type, as long as the page keeps that type; else the page type's
- * own (a type set or changed since, or a set picked with none), so the
- * rules follow the page type.
+ * A set picked before a pick kept the page's type with it (setFor): it holds
+ * whatever the page type, with or without one, its type rules checked, as it
+ * always did, until the person picks a set again.
+ */
+export const legacyPin = (rules: Pick<DraftRules, 'set' | 'setFor'>): boolean =>
+  !!rules.set && !rules.setFor;
+
+/**
+ * The page type whose set applies: a set picked before setFor (legacyPin)
+ * whatever the page type; one the person picked while the page had another
+ * type, as long as the page keeps that type; else the page type's own (a
+ * type set or changed since, or a set picked with none), so the rules
+ * follow the page type.
  */
 export function ruleSetType(
   rules: Pick<DraftRules, 'set' | 'setFor'>,
   pageType: string | null,
 ): PageType | null {
   const own = isPageType(pageType) ? pageType : null;
+  if (legacyPin(rules)) return rules.set;
   return rules.set && own && rules.setFor === own ? rules.set : own;
+}
+
+/**
+ * The page type the rules are checked as (RuleContext's pageType): the
+ * page's own, so another type's rules are set apart; a set picked before
+ * setFor (legacyPin) its own, so its type rules are checked as they were.
+ */
+export function rulesPageType(
+  rules: Pick<DraftRules, 'set' | 'setFor'>,
+  pageType: string | null,
+): PageType | null {
+  if (legacyPin(rules)) return rules.set;
+  return isPageType(pageType) ? pageType : null;
 }
 
 /** A workspace's My rules for one page type (content_rule_sets, 00214). */
@@ -868,8 +895,9 @@ export interface RuleContext {
    */
   shopping?: ShoppingCheck | 'reading' | 'failed' | null;
   /**
-   * The draft's own page type: another type's own rules (a set picked for
-   * another type) aren't checked on it. None where it isn't told.
+   * The draft's own page type, as rulesPageType reads it: another type's own
+   * rules (a set picked for another type) aren't checked on it. None where
+   * it isn't told.
    */
   pageType?: PageType | null;
   /** The brand's banned phrases (Content rules), for brandBanned. None where it isn't told. */
