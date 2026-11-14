@@ -141,7 +141,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'brands',
     description:
-      "The brand's approved facts: its prices and plans, trial, founding year and the claims it makes of itself, each as its own page's words, with when a person approved it and the page it came from. Only facts a person approved and still on the brand's site. Read it before checking a draft or an AI answer against the brand's facts.",
+      "The brand's approved facts: its prices and plans, trial, founding year and the claims it makes of itself, each as its own page's words, with when a person approved it and the page it came from; a fact with a scope holds only for that destination, operator or route. Only facts a person approved and still on the brand's site. Read it before checking a draft or an AI answer against the brand's facts.",
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },

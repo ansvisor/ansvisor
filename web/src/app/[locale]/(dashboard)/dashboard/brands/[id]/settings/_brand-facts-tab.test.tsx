@@ -173,6 +173,12 @@ describe('BrandFactsTab', () => {
     expect(container.textContent).toContain('About page: turned our reader away');
   });
 
+  it('says where a fact holds when it holds for one place (00539)', async () => {
+    getBrandFacts.mockResolvedValue({ ...READ, facts: [fact({ scope: 'Bozcaada' })] });
+    await render();
+    expect(section('To approve (1)').textContent).toContain('Pricing page · For Bozcaada only');
+  });
+
   it('approves a fact as the admin or manager, in the list at once, dropping the gone one it replaces', async () => {
     const gone = fact({ id: 'f0', status: 'approved', gone: true, quote: '$59 per month' });
     getBrandFacts.mockResolvedValue({ ...READ, facts: [...READ.facts, gone] });

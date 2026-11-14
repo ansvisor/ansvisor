@@ -110,6 +110,7 @@ describe('getBrandFactsFor', () => {
       'source_url',
       'reviewed_at',
       'last_seen_at',
+      'scope',
       'brands!inner(organization_id)',
     ]);
   });
@@ -136,6 +137,16 @@ describe('getBrandFactsFor', () => {
       // The last time the site was read and still said them.
       data_as_of: '2026-11-03T06:00:00Z',
     });
+  });
+
+  it('gives the brand-wide facts first, then each place’s with its scope, and says how to use them', async () => {
+    db.rows = [{ ...claim, scope: 'Bozcaada' }, price];
+    const read = await getBrandFactsFor(auth, { brandId: BRAND });
+    expect(read!.facts.map((f) => [f.text, 'scope' in f ? f.scope : null])).toEqual([
+      ['Pro is $49 a month, billed annually', null],
+      ['Rated #1 by G2 in 2026', 'Bozcaada'],
+    ]);
+    expect(read!.scopes_note).toMatch(/only on a page about that place/);
   });
 
   it('says so when the brand has no approved facts yet', async () => {
