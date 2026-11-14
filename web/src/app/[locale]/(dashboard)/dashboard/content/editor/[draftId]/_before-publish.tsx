@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -125,7 +125,10 @@ export function BeforePublish({
   reviewerRequired = false,
   reviewerLd = null,
   openWork = null,
+  auditEstimate = null,
 }: {
+  /** Site Audit's estimate of the page, its AI search readiness (customer priorities item 9). */
+  auditEstimate?: ReactNode;
   /**
    * What is still open as it is marked ready (editor UX review 2026-11-03,
    * decision a): the rules not met, the to-dos not done. Counted, never
@@ -655,6 +658,7 @@ export function BeforePublish({
             </ul>
           </section>
         ))}
+        {auditEstimate}
         {jsonLd && (
           <div className="space-y-1.5">
             {mode === 'send' && (

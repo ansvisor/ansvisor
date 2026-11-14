@@ -348,11 +348,11 @@ const DOCUMENT_CLASS = cn(
 );
 
 /**
- * How long Fix open rules waits for the agent's batch when its answer didn't
- * come back: past the API's model call (content-agent.js, 60 s) and the
- * batch's save.
+ * How long Fix open rules waits for the agent's batch once its answer is
+ * lost: past the model's call (content-agent.js, 60 s), its facts lookup
+ * (content-research.js, up to 90 s) and the batch's save.
  */
-const FIX_WAIT_MS = 90_000;
+const FIX_WAIT_MS = 180_000;
 
 /** The runs the agent card shows: Fix open rules', or the brief's. */
 // Fix open rules, and Quality's hand-off (CE-051): the same card, steps and Stop.
@@ -522,6 +522,8 @@ export function DraftEditor({
   const [suggestions, setSuggestions] = useState<DraftSuggestion[]>([]);
   // The agent's last run failed (Fix or hand-off): the card says so over an earlier batch.
   const [lastRunFailed, setLastRunFailed] = useState(false);
+  // Its answer was lost and how its run ended isn't known yet: "Still finishing…", never failed.
+  const [stillFinishing, setStillFinishing] = useState(false);
   const suggestionsNow = useRef(suggestions);
   // The agent on the Next step basket's third step (Fix open rules, Rewrite
   // page): its run, and the steps it took with what the page read then; and
@@ -2520,6 +2522,7 @@ export function DraftEditor({
       if (error === 'failed') setLastRunFailed(true);
     };
     setLastRunFailed(false);
+    setStillFinishing(false);
     setStoppingRun(null);
     stopSent.current = null;
     setFixing(true);
@@ -2529,7 +2532,6 @@ export function DraftEditor({
         pending: { keys: tried, batch: suggestionsNow.current[0]?.batchId ?? null },
       });
     }
-    const asked = Date.now();
     try {
       // The agent reads the page as saved.
       await autosave.settle();
@@ -2550,13 +2552,21 @@ export function DraftEditor({
       }
       if ('error' in result && result.error === 'unconfirmed') {
         // No answer is not a failure: how its run ended says (its batch, or its row).
-        const outcome = await agentOutcome(draft.id, before, asked + FIX_WAIT_MS);
-        if (outcome && 'stopped' in outcome) {
+        setStillFinishing(true);
+        const outcome = await agentOutcome(draft.id, before, Date.now() + FIX_WAIT_MS);
+        if (!outcome) {
+          // Still not known: it may land yet, so it's never said to have failed.
+          untried();
+          if (!quiet) toast(t('agentCard.stillFinishingToast'));
+          return;
+        }
+        setStillFinishing(false);
+        if ('stopped' in outcome) {
           untried();
           toast(t('agentCard.stopped'));
           return;
         }
-        if (outcome && 'nothing' in outcome) {
+        if ('nothing' in outcome) {
           nothing();
           if (!quiet) {
             toast(
@@ -2569,7 +2579,8 @@ export function DraftEditor({
           }
           return;
         }
-        if (!outcome || 'failed' in outcome) {
+        // Only its row says it failed.
+        if ('failed' in outcome) {
           failed('suggestions.fixErrors.failed', 'failed');
           return;
         }
@@ -2697,7 +2708,9 @@ export function DraftEditor({
   const pagePill = pagePillOf({ working: agentWorking, openSuggestions, status });
   // Any run the card follows (Fix, a hand-off, the brief): a failed one before it is behind it.
   useEffect(() => {
-    if (agentWorking) setLastRunFailed(false);
+    if (!agentWorking) return;
+    setLastRunFailed(false);
+    setStillFinishing(false);
   }, [agentWorking]);
   // Another run started here (Fix, a hand-off, the brief): the band of the
   // one that couldn't finish goes (editor UX review 2026-11-03: it stayed over
@@ -2958,7 +2971,7 @@ export function DraftEditor({
     authorsRead && (pageAuthor || !authorConfirmed.real) ? teamName(language, brandName) : '';
   // Site Audit's estimate (customer priorities item 9): the page as Export's
   // HTML file has it, read again once typing pauses, whatever Quality's phase.
-  const estimateDoc = useMemo(() => {
+  const estimatePage = useMemo(() => {
     const html = publishableHtml(pageHtml);
     const fields = pageFields({
       title,
@@ -2968,7 +2981,7 @@ export function DraftEditor({
       reviewer: pageReviewer,
       teamByline,
     });
-    return estimateDocument({
+    return {
       title,
       html: withReviewerJsonLd(
         title,
@@ -2977,8 +2990,13 @@ export function DraftEditor({
       ),
       metaDescription: fields.metaDescription,
       author: fields.author,
-    });
+    };
   }, [pageHtml, title, draft.sourceUrl, pageAuthor, pageReviewer, teamByline, contentByline]);
+  // With the Article JSON-LD Export and Copy HTML add: the page that ships.
+  const estimateDoc = estimateDocument({
+    ...estimatePage,
+    html: withArticleSchema(estimatePage.html, addedSchema),
+  });
   const auditEstimate = useAuditEstimate(draft.id, draft.brandId, estimateDoc);
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
@@ -4382,6 +4400,7 @@ export function DraftEditor({
               onServer={(fixing && fixOnServer) || (briefRebuilding && briefOnServer)}
               run={agentRun}
               lastRunFailed={lastRunFailed}
+              stillFinishing={stillFinishing}
               onStop={() => void stopAgent()}
               stopping={stoppingRun !== null && stoppingRun === agentRun?.id}
               onAcceptAll={() =>
@@ -4571,7 +4590,6 @@ export function DraftEditor({
             onConfirmIntro={() => void confirmIntro()}
             onChangeType={() => setTypeMenuOpen(true)}
             handOff={handOffCard}
-            auditEstimate={<AuditEstimateCard state={auditEstimate} />}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
             onConfirmAuthor={confirmAuthor}
@@ -4707,6 +4725,7 @@ export function DraftEditor({
           pageType={pageType}
           image={firstImage(pageHtml)}
           articleSchema={addedSchema}
+          auditEstimate={<AuditEstimateCard state={auditEstimate} />}
           ownArticleSchema={hasArticleSchema(publishOpen.html)}
           onSchemaLeftOut={leaveOutSchema}
           linksPending={linksPending}

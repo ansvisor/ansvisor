@@ -755,6 +755,9 @@ function RuleRow({
 }) {
   const t = useTranslations('contentEditor.editor.rules');
   const name = t(`names.${rule.key}`);
+  // The fan-outs still to use, the most searched first: what to add (fanoutH2, fanoutFaq).
+  const left =
+    rule.on && status.state === 'bad' && 'missing' in status ? listed(status.missing ?? []) : null;
   return (
     <li className={cn('px-3 py-2', !rule.on && 'opacity-60')}>
       <div className="flex items-center gap-2">
@@ -818,6 +821,11 @@ function RuleRow({
               </button>
             </>
           )}
+        </p>
+      )}
+      {left && left.shown.length > 0 && (
+        <p className="mt-1 pl-9 text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
+          {t('fanoutsLeft', { list: left.shown.map((f) => `“${f}”`).join(', '), more: left.more })}
         </p>
       )}
     </li>

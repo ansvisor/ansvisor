@@ -676,6 +676,22 @@ describe('the Rules tab', () => {
     );
   });
 
+  it('names the fan-outs still to use on their rows, the first three', async () => {
+    const fanouts = ['ai overviews', 'ai mode', 'search console', 'ga4 reports', 'llms txt'];
+    const page = readPage('<h1>T</h1><p>x</p>', 10);
+    const checked = activeRules(ruleSet('feature_page'), { overrides: {} }).map((rule) => ({
+      rule,
+      status: checkRule(rule, page, { brandDomains: [], competitorDomains: [], fanouts }),
+    }));
+    await render(state(undefined, { rules: checked, ...rulesMet(checked) }));
+    expect(row('Use top fan-outs as H2s').textContent).toContain(
+      'Still to use: “ai overviews”, “ai mode”, “search console” +1 more',
+    );
+    expect(row('Use fan-outs in FAQ questions').textContent).toContain(
+      'Still to use: “ai overviews”',
+    );
+  });
+
   it('explains the Shopping rules on hover, accepted by Merchant Center only when the brand has it', async () => {
     const checked = activeRules(ruleSet('buying_guide', { shopping: true }), {
       overrides: {},

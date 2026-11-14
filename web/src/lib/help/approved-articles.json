@@ -3110,8 +3110,12 @@
           "text": "The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept.\n\nOn the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel."
         },
         {
-          "heading": "Site Audit estimate",
-          "text": "In the side panel's **Quality**, **Site Audit estimate** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.\n\nIt runs Site Audit's checks on the page as it would go out. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.\n\nThe 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew."
+          "heading": "AI search readiness (Site Audit estimate)",
+          "text": "In **Before you publish**, which opens on **Mark ready**, **Export** and **Send to CMS**, **AI search readiness (Site Audit estimate)** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Site setup and E-E-A-T. It's free, and it's read again each time you pause typing.\n\nIt's different from Quality, which scores the writing. Under the score, the top reasons it's low are split: **This page** for what you can fix in the draft, and **Your site** for what to fix in Site Audit, with a link there."
+        },
+        {
+          "heading": "What the estimate reads",
+          "text": "It runs Site Audit's checks on the page as it would go out, with its Article schema. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.\n\nThe 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew."
         },
         {
           "heading": "Status and runs",
@@ -3418,6 +3422,10 @@
           "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet.\n\nThe rule set follows the page type; on a page with no type, picking a set sets it. Rules the page can't meet, such as another type's or one that needs your product feed, sit under **Not checked on this page**, never counted or sent to the Content Agent."
         },
         {
+          "heading": "Fan-out rules",
+          "text": "**Use top fan-outs as H2s** and **Use fan-outs in FAQ questions** list the first fan-outs the page doesn't use yet. A heading or question uses a fan-out when it has most of its words, in any form: \"Measuring AI Overviews\" uses \"how to measure ai overviews\"."
+        },
+        {
           "heading": "Save or reset your rules",
           "text": "Changes to the rules apply to this draft only. **Save as my rules**, for admins and managers, keeps them for your workspace's next drafts of this page type, and **Reset** goes back to the default set. Under **Your text rules**, write a rule in your own words, or use **Paste many** to add several from a style guide."
         },
@@ -3435,7 +3443,7 @@
         },
         {
           "heading": "Before you run it again",
-          "text": "- Accept or reject the open suggestions before you run the agent again or edit the page as HTML.\n- The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.\n- The agent only changes drafts, not published pages."
+          "text": "- Accept or reject the open suggestions before you run the agent again or edit the page as HTML.\n- The agent doesn't change heading levels: turn extra H1s into H2s in the toolbar yourself.\n- The agent only changes drafts, not published pages.\n- When the agent's answer is slow to come back, its card says **Still finishing…** for up to three minutes. It says the agent couldn't finish only when its run failed; otherwise open the page again later to see what it wrote."
         },
         {
           "heading": "How your choices teach the agent",
@@ -3545,7 +3553,7 @@
         },
         {
           "heading": "The scores",
-          "text": "Quality scores the page from 0 to 100 on three things, each card saying what it scores:\n\n- **E-E-A-T**: who stands behind the page, such as its author and their experience.\n- **Trust**: sources, links and dated facts.\n- **Readability**: how easily it reads.\n\n80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nUnder them, **Site Audit estimate** is about where the page would score in Site Audit. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
+          "text": "Quality scores the page from 0 to 100 on three things, each card saying what it scores:\n\n- **E-E-A-T**: who stands behind the page, such as its author and their experience.\n- **Trust**: sources, links and dated facts.\n- **Readability**: how easily it reads.\n\n80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nIn **Before you publish**, **AI search readiness (Site Audit estimate)** is about where the page would score in Site Audit. It's a different score from Quality. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
         },
         {
           "heading": "Your to-dos and what would raise it",
