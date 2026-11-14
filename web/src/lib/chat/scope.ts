@@ -40,7 +40,9 @@ export const ROW_LIMITS: Readonly<Record<string, { default: number; max: number 
   get_gsc_queries: { default: 25, max: 49 },
   list_ai_answers: { default: 5, max: 9 },
   list_citations: { default: 20, max: ROW_CAP },
-  list_action_center_tasks: { default: 10, max: ROW_CAP },
+  // A page of all the brand's open actions, ranked on the server, with their total; the next by
+  // its offset (registry/read-tools.ts): "most important" judges them all, not the first 10.
+  list_action_center_tasks: { default: ROW_CAP, max: ROW_CAP },
   list_signals: { default: 10, max: ROW_CAP },
   get_action_history: { default: 10, max: ROW_CAP },
   list_content_opportunities: { default: 10, max: ROW_CAP },
@@ -50,6 +52,13 @@ export const ROW_LIMITS: Readonly<Record<string, { default: number; max: number 
   // No `limit` input: a page of up to 100 answers, cut after the read (CHAT-04 §B 20 / 100).
   list_mentions: { default: 20, max: 20 },
 };
+
+/**
+ * Reads that count every row that matches and page by `offset` themselves:
+ * their result says the total and the next page, so no extra row is read to
+ * see if there are more.
+ */
+export const PAGED_READS: ReadonlySet<string> = new Set(['list_action_center_tasks']);
 
 /**
  * The days a `days` read covers when the model names none: Google's
@@ -400,7 +409,8 @@ export async function scopeRead(
     };
   }
 
-  // Rows: the model's count, held to the tool's max; one more read to see if there are more.
+  // Rows: the model's count, held to the tool's max; one more read to see if there are more,
+  // unless the read counts them itself.
   const limits = ROW_LIMITS[tool.name];
   let cap: RowCap = { rows: limits?.default ?? ROW_CAP, probe: null };
   if (hasField(tool, 'limit')) {
@@ -408,7 +418,7 @@ export async function scopeRead(
     const asked = typeof input.limit === 'number' ? input.limit : null;
     const rows = Math.max(1, Math.min(asked ?? limits?.default ?? ROW_CAP, max));
     const probe = rows + 1;
-    const probes = accepts(tool, { ...input, limit: probe });
+    const probes = !PAGED_READS.has(tool.name) && accepts(tool, { ...input, limit: probe });
     input.limit = probes ? probe : rows;
     cap = { rows, probe: probes ? probe : null };
   }

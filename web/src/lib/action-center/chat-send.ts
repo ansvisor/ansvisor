@@ -7,6 +7,7 @@ import type {
   ChatActionProposal,
   CreateChatActionResult,
 } from '@/lib/actions/chat-action-center';
+import { actionRef } from '@/lib/action-center/action-ref';
 import type { ChatWritePlace } from '@/lib/chat/registry/define-tool';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
@@ -137,7 +138,7 @@ function duplicateOf(body: Record<string, unknown>): ChatActionDuplicate {
   return {
     ok: false,
     reason: 'duplicate',
-    message: `AC-${no} already covers this.`,
+    message: `${actionRef(no)} already covers this.`,
     action_id: String(action.id ?? ''),
     action_no: no,
     can_create_anyway: body.canCreateAnyway === true,

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
+import { actionRef } from '@/lib/action-center/action-ref';
 import { getAiUsageFor, getMeFor } from '@/lib/mcp/account';
+import { ACTIONS_PAGE_MAX, listActionsPageFor } from '@/lib/mcp/action-center-reads';
 import { getBrandFactsFor } from '@/lib/mcp/brand-facts-reads';
 import { getContentDraftFor, listContentDraftsFor } from '@/lib/mcp/content';
 import { contentUuid, listDraftsShape } from '@/lib/mcp/content-schemas';
@@ -15,7 +17,6 @@ import {
   getVisibilitySummaryFor,
   getVisibilityTrendFor,
   listActionHistoryFor,
-  listActionsFor,
   listBrandsFor,
   listCitationsFor,
   listCompetitorsFor,
@@ -629,8 +630,7 @@ export const READ_TOOLS = [
     name: 'list_action_center_tasks',
     class: 'read',
     area: 'action_center',
-    description:
-      "The brand's Action Center actions, highest priority first: category, impact, priority, status, assignee, due date and task progress.",
+    description: `The brand's Action Center actions, a page at a time: every one that matches is counted and ranked on the server, highest Priority Score first (sort "updated": most recently changed first), so a page is the top of all of them. Open actions (New, In progress, On hold) unless you ask for one status. Each row: ref (its number, as ${actionRef(12)}), title, category, status, priority (0–100) and priority_level, stale_since (only when stale), due, assignee, tasks (done/total) and updated. total is how many match; note says how many this page shows. For "what matters most", "what should I do first" or an overview, read the default page (${ACTIONS_PAGE_MAX} rows) before you judge. When total is more than the page, say how many you judged ("the top ${ACTIONS_PAGE_MAX} of 53"), or read the next page with next_offset. Name each action by its title, with its ref after it: never a ref alone.`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -641,18 +641,28 @@ export const READ_TOOLS = [
     specRow: '38',
     inputSchema: z.object({
       brand_id: brandId,
-      status: z.enum(['new', 'in_progress', 'on_hold', 'completed', 'dismissed']).optional(),
+      status: z
+        .enum(['open', 'new', 'in_progress', 'on_hold', 'completed', 'dismissed'])
+        .optional()
+        .describe('open (default): New, In progress and On hold.'),
       category: z.enum(['growth', 'protect', 'recover', 'fix', 'compete']).optional(),
-      limit: rowCap(200).describe('Row cap, default 50.'),
-      sort: z.enum(['updated', 'priority']).optional(),
+      sort: z.enum(['priority', 'updated']).optional().describe('priority (default).'),
+      limit: rowCap(ACTIONS_PAGE_MAX).describe(`Rows on this page, default ${ACTIONS_PAGE_MAX}.`),
+      offset: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("The next page: the last page's next_offset."),
     }),
     run: (ctx, input) =>
-      listActionsFor(ctx, {
+      listActionsPageFor(ctx, {
         brandId: input.brand_id,
         status: input.status,
         category: input.category,
-        limit: input.limit,
         sort: input.sort,
+        limit: input.limit,
+        offset: input.offset,
       }),
     fixture: { input: { brand_id: BRAND, status: 'new' } },
   }),

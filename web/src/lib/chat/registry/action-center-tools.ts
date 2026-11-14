@@ -9,6 +9,7 @@ import {
   setTaskReadyForReview,
   type ChatActionProposal,
 } from '@/lib/actions/chat-action-center';
+import { actionRef } from '@/lib/action-center/action-ref';
 import { actorOf } from '@/lib/chat/actor/access';
 import {
   checkChatActionCoverFor,
@@ -138,7 +139,7 @@ async function actionNo(actionId: string): Promise<string | null> {
     .eq('id', actionId)
     .maybeSingle();
   if (error) throw new Error(`Could not read the action: ${error.message}`);
-  return data ? `AC-${data.action_no}` : null;
+  return data ? actionRef(data.action_no) : null;
 }
 
 /** A task as its card names it: its own title, or its template's, and its action's number. */
@@ -161,7 +162,7 @@ async function taskName(taskId: string, brandId: string): Promise<string | null>
     (row.task_key && typeof tasks[row.task_key] === 'string'
       ? (tasks[row.task_key] as string)
       : '');
-  return [`AC-${row.actions.action_no}`, text ? `“${text}”` : null].filter(Boolean).join(' ');
+  return [actionRef(row.actions.action_no), text ? `“${text}”` : null].filter(Boolean).join(' ');
 }
 
 /**

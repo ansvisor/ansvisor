@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { actionRefHref, actionRefNo, opensOneAction, splitActionRefs } from './action-ref';
+import {
+  actionRef,
+  actionRefHref,
+  actionRefNo,
+  opensOneAction,
+  splitActionRefs,
+} from './action-ref';
 
 /**
  * "AC-1497" as the app shows an action's number, and the address that opens
@@ -8,6 +14,16 @@ import { actionRefHref, actionRefNo, opensOneAction, splitActionRefs } from './a
 
 const refs = (text: string) =>
   splitActionRefs(text).flatMap((part) => (typeof part === 'string' ? [] : [part.ref]));
+
+describe('an action number as the app writes it', () => {
+  it('is one format for every code shown, linked or given as an example', () => {
+    expect(actionRef(12)).toBe('AC-12');
+    expect(actionRef('1497')).toBe('AC-1497');
+    // What it writes, the text finds and links again.
+    expect(refs(`Recover lost citations (${actionRef(12)})`)).toEqual([actionRef(12)]);
+    expect(actionRefHref('12')).toBe(`/dashboard/action-center/actions/${actionRef(12)}`);
+  });
+});
 
 describe('action numbers in text', () => {
   it('finds each whole AC number, in English and Turkish', () => {

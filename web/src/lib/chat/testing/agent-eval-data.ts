@@ -1,3 +1,5 @@
+import { priorityLevelOf } from '@/lib/action-center/priority';
+
 /**
  * The workspace the agents' and skills' test set runs in (agent-eval.ts):
  * Brewline Coffee, the demo brand's world (server/src/lib/demo/brewline.js),
@@ -995,8 +997,27 @@ export function evalReadResult(tool: string, input: Record<string, unknown>): un
     case 'list_site_audit_issues':
       return AUDIT_ISSUES;
     case 'list_action_center_tasks':
+      // As listActionsPageFor pages them: compact rows, ranked, with the total and its note.
       return {
-        actions: ACTIONS.map(({ tasks, ...action }) => ({ ...action, tasks: tasks.length })),
+        status: 'open',
+        category: null,
+        sort: 'priority',
+        total: ACTIONS.length,
+        offset: 0,
+        next_offset: null,
+        note: `All ${ACTIONS.length} open actions, highest Priority Score first. Name each by its title, with its ref.`,
+        actions: ACTIONS.map((action) => ({
+          id: action.id,
+          ref: action.number,
+          title: action.title,
+          category: action.category,
+          status: action.status,
+          priority: action.priority_score,
+          priority_level: priorityLevelOf(action.priority_score),
+          due: action.due,
+          tasks: `0/${action.tasks.length}`,
+          updated: '2026-11-02',
+        })),
       };
     case 'get_action': {
       const action = ACTIONS.find((a) => a.id === input.action_id || a.number === input.number);
