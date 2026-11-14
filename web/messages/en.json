@@ -347,7 +347,9 @@
       "setByline": "Changing the byline setting needs a plan",
       "changeContentSettings": "Changing content settings needs a plan",
       "disconnectIntegrations": "Disconnecting an integration needs a plan",
-      "changeChatSettings": "Changing Chat's settings needs a plan"
+      "changeChatSettings": "Changing Chat's settings needs a plan",
+      "changeTags": "Changing tags needs a plan",
+      "removeTags": "Removing tags needs a plan"
     },
     "plans": {
       "perMonthBilledYearly": "{price} a month, billed yearly",
@@ -13895,7 +13897,11 @@
       "removeTag": "Remove tag {tag}",
       "placeholder": "Add a tag and press Enter",
       "hint": "Up to 10 tags, 50 characters each.",
-      "allTags": "All tags"
+      "allTags": "All tags",
+      "selected": "{count, plural, one {# tag} other {# tags}}",
+      "match": "Match",
+      "matchAll": "Match all",
+      "matchAny": "Match any"
     },
     "loadError": "Couldn't load your prompts.",
     "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
@@ -14095,6 +14101,26 @@
       "emptyTitle": "No fan-out captured yet",
       "emptyBody": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
       "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
+    },
+    "bulkTags": {
+      "bulkButton": "Tags",
+      "bulkAdd": "Add tags",
+      "bulkRemove": "Remove tags",
+      "modes": "Add or remove",
+      "modeAdd": "Add",
+      "modeRemove": "Remove",
+      "title": "Add tags",
+      "lead": "Add tags to the {count} selected prompts. Tags a prompt already has stay as they are; a prompt that would go over 10 tags is left alone.",
+      "removeTitle": "Remove tags",
+      "removeLead": "Take tags off the {count} selected prompts. Prompts without them stay as they are.",
+      "removeTags": "Tags to remove",
+      "removeNone": "The selected prompts have no tags.",
+      "previewAdd": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} already have them · {blocked} would go over the 10-tag limit",
+      "previewRemove": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} don't have them",
+      "save": "Add to {count, plural, one {# prompt} other {# prompts}}",
+      "removeSave": "Remove from {count, plural, one {# prompt} other {# prompts}}",
+      "done": "{count, plural, one {# prompt tagged} other {# prompts tagged}}",
+      "removed": "{count, plural, one {Tags removed from # prompt} other {Tags removed from # prompts}}"
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",

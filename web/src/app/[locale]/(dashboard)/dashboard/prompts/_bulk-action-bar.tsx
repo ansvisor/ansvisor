@@ -1,6 +1,16 @@
 'use client';
 
-import { ChevronDown, Lightbulb, Loader2, MapPin, Pause, Play, Trash2, X } from 'lucide-react';
+import {
+  ChevronDown,
+  Lightbulb,
+  Loader2,
+  MapPin,
+  Pause,
+  Play,
+  Tags,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +40,8 @@ export function BulkActionBar({
   onSuggestContent,
   onAddLocations,
   onRemoveLocations,
+  onAddTags,
+  onRemoveTags,
   onDelete,
   onClear,
 }: {
@@ -49,11 +61,15 @@ export function BulkActionBar({
   /** Open the locations dialog on the selection, to add or to stop some. */
   onAddLocations: () => void;
   onRemoveLocations: () => void;
+  /** Open the tags dialog on the selection, to add or to remove some. */
+  onAddTags: () => void;
+  onRemoveTags: () => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
   const t = useTranslations('prompts.bulkDelete');
   const tLocations = useTranslations('prompts.addLocations');
+  const tTags = useTranslations('prompts.bulkTags');
   const pausedCount = count - activeCount;
   const progress = deleting && (
     <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -112,6 +128,20 @@ export function BulkActionBar({
             <DropdownMenuItem onClick={onRemoveLocations}>
               {tLocations('bulkRemove')}
             </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" />}
+            disabled={busy}
+          >
+            <Tags className="h-3 w-3" />
+            {tTags('bulkButton')}
+            <ChevronDown className="h-3 w-3" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={onAddTags}>{tTags('bulkAdd')}</DropdownMenuItem>
+            <DropdownMenuItem onClick={onRemoveTags}>{tTags('bulkRemove')}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         {suggestBlockedReason && !suggesting && (
