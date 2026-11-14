@@ -26,6 +26,7 @@ import {
   readPage,
   ruleSet,
   ruleSetType,
+  rulesPageType,
   savedRuleSetSchema,
   type SavedRuleSet,
 } from './rules';
@@ -279,7 +280,7 @@ function typeRulesOf(
     language,
     catalog: catalog ?? null,
     shopping: null,
-    pageType: draftType,
+    pageType: rulesPageType(choices, draftType),
   };
   return rules.flatMap((rule) => {
     if (rule.group !== 'type' || rule.check !== 'page' || !rule.on) return [];
