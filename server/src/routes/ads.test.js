@@ -53,6 +53,10 @@ vi.mock('../lib/ads/activity.js', () => ({
 }));
 const readOverview = vi.fn();
 vi.mock('../lib/ads/overview.js', () => ({ readOverview: (...a) => readOverview(...a) }));
+const readOpportunity = vi.fn();
+vi.mock('../lib/ads/opportunity.js', () => ({
+  readOpportunity: (...a) => readOpportunity(...a),
+}));
 vi.mock('../lib/ads/opportunities.js', async (importOriginal) => ({
   ...(await importOriginal()),
   ...Object.fromEntries(Object.keys(ads).map((name) => [name, (...a) => ads[name](...a)])),
@@ -70,6 +74,7 @@ beforeEach(async () => {
   assertBrandAccess.mockReset().mockResolvedValue({ brand: { id: BRAND }, orgId: 'o1' });
   brandAccessOf.mockReset().mockResolvedValue({ orgId: 'o1', role: 'admin' });
   readAdsActivity.mockReset().mockResolvedValue({ entries: [], next: null });
+  readOpportunity.mockReset();
   for (const fn of Object.values(ads)) fn.mockReset();
   ads.readsEveryOpportunity.mockResolvedValue(true);
   ads.isDemoPrompt.mockResolvedValue(false);
@@ -134,6 +139,7 @@ describe('/api/ads while ADS_ENABLED is off', () => {
       }
       expect(assertBrandAccess).not.toHaveBeenCalled();
       expect(readAdsActivity).not.toHaveBeenCalled();
+      expect(readOpportunity).not.toHaveBeenCalled();
       for (const fn of Object.values(ads)) expect(fn).not.toHaveBeenCalled();
     });
   }
@@ -278,6 +284,50 @@ describe('opportunities, decisions and settings while ADS_ENABLED is on', () => 
     );
     expect((await send(`/opportunities?brandId=${BRAND}`)).status).toBe(403);
     expect(ads.readOpportunities).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads one prompt's drawer within the brand; another's is not found, a locked one the plan's", async () => {
+    const path = (q = `brandId=${BRAND}`) => `/opportunities/${PROMPT}?${q}`;
+    readOpportunity.mockResolvedValue({ promptId: PROMPT, answers: [] });
+    let res = await send(path(`brandId=${BRAND}&period=7d`));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ promptId: PROMPT, answers: [] });
+    expect(readOpportunity).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      promptId: PROMPT,
+      period: '7d',
+    });
+    expect(assertBrandAccess).toHaveBeenLastCalledWith(BRAND, 'u1');
+
+    readOpportunity.mockRejectedValue(
+      Object.assign(new Error('Prompt not found'), { status: 404 }),
+    );
+    res = await send(path());
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('not_found');
+
+    readOpportunity.mockResolvedValue(null);
+    res = await send(path());
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: 'plan_limit',
+      code: 'plan_limit',
+      feature: 'ads_read',
+    });
+
+    for (const bad of [
+      path('brandId=nope'),
+      path(`brandId=${BRAND}&period=1y`),
+      '/opportunities/x?brandId=' + BRAND,
+    ]) {
+      expect((await send(bad)).status, bad).toBe(400);
+    }
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error("This brand isn't in your workspace"), { status: 403 }),
+    );
+    expect((await send(path())).status).toBe(403);
+    expect(readOpportunity).toHaveBeenCalledTimes(3);
   });
 
   it('reads the Overview of a brand the person can reach, over the period, on every plan', async () => {

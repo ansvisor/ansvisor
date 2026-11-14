@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronDown, Lock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,6 +41,7 @@ import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { useUpgradeWallShown } from '@/lib/friction-events';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AdsOpportunityDrawer } from './_opportunity-drawer';
 import { AdsThresholds } from './_thresholds';
 
 /** The filters (§3.2), in the mockup's order; overlap rows show under All. */
@@ -157,7 +158,8 @@ function LockRow({ locked }: { locked: number }) {
   useUpgradeWallShown({ reason: 'plan', feature: 'ads_read', source: 'ads' });
   return (
     <TableRow data-slot="ads-lock-row" className="hover:bg-transparent">
-      <TableCell colSpan={6}>
+      {/* py-3 and a small button: a two-line data row's height. */}
+      <TableCell colSpan={6} className="py-3">
         <div className="flex items-center gap-2">
           <Lock aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 text-xs text-muted-foreground">
@@ -166,7 +168,7 @@ function LockRow({ locked }: { locked: number }) {
           <Link
             href="/dashboard/settings?tab=billing"
             data-action="plan.upgrade"
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
           >
             {tCommon('upgrade')}
           </Link>
@@ -182,8 +184,8 @@ function LockRow({ locked }: { locked: number }) {
  * channels, filtered by decision. The rows come from the server: Starter and
  * the trial get theirs and a lock row for the rest. Admins and Managers
  * change a decision where the plan reads every row (`writable`), and Admins
- * set the thresholds. Open keeps the prompt opened (`ads.openOpportunity`)
- * for its drawer.
+ * set the thresholds. Open (`ads.openOpportunity`) opens the prompt's
+ * drawer; the last one opened stays while it slides away.
  */
 export function AdsOpportunities({
   period,
@@ -202,7 +204,8 @@ export function AdsOpportunities({
   const key = `${brandId}/${period}/${reads}`;
   const [read, setRead] = useState<{ key: string; page: Page | null } | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
-  const [opened, setOpened] = useState<string | null>(null);
+  const [opened, setOpened] = useState<{ id: string; open: boolean } | null>(null);
+  const openedFrom = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!brandId) return;
@@ -258,6 +261,7 @@ export function AdsOpportunities({
   const count = (f: Filter) =>
     f === 'all' ? page.rows.length : page.rows.filter((r) => r.decision === f).length;
   const rows = filter === 'all' ? page.rows : page.rows.filter((r) => r.decision === filter);
+  const openedRow = page.rows.find((r) => r.promptId === opened?.id);
   const leader = (r: AdsOpportunity) =>
     r.leader === 'us'
       ? t('leaderUs')
@@ -330,7 +334,7 @@ export function AdsOpportunities({
               <TableRow
                 key={r.promptId}
                 data-prompt-id={r.promptId}
-                data-state={opened === r.promptId ? 'selected' : undefined}
+                data-state={opened?.open && opened.id === r.promptId ? 'selected' : undefined}
               >
                 <TableCell className="max-w-md whitespace-normal">
                   {r.text}
@@ -387,7 +391,10 @@ export function AdsOpportunities({
                     size="sm"
                     variant="outline"
                     data-action="ads.openOpportunity"
-                    onClick={() => setOpened(r.promptId)}
+                    onClick={(e) => {
+                      openedFrom.current = e.currentTarget;
+                      setOpened({ id: r.promptId, open: true });
+                    }}
                   >
                     {t('open')}
                   </Button>
@@ -405,6 +412,17 @@ export function AdsOpportunities({
           </TableBody>
         </Table>
       </div>
+      {openedRow && (
+        <AdsOpportunityDrawer
+          row={openedRow}
+          open={opened?.open ?? false}
+          brandId={brandId}
+          period={period}
+          decision={<Decision row={openedRow} onChange={null} />}
+          finalFocus={openedFrom}
+          onClose={() => setOpened({ id: openedRow.promptId, open: false })}
+        />
+      )}
     </div>
   );
 }

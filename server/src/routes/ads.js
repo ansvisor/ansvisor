@@ -13,6 +13,7 @@ import {
   saveAdsSettings,
   setDecision,
 } from '../lib/ads/opportunities.js';
+import { readOpportunity } from '../lib/ads/opportunity.js';
 import { readOverview } from '../lib/ads/overview.js';
 import { ADS_PERIODS } from '../lib/ads/standing.js';
 import { DEMO_BRAND } from '../middleware/demo-brand.js';
@@ -55,7 +56,7 @@ function failed(req, res, err, what) {
   return res.status(500).json({ error: 'Failed to read Ads', code: 'failed' });
 }
 
-/** Starter's and the trial's answer to a write: it is Growth's (ADS-01 §8). */
+/** Starter's and the trial's answer to a write, or a row past theirs: Growth's (ADS-01 §8). */
 const planLimit = (res) =>
   res.status(403).json({ error: 'plan_limit', code: 'plan_limit', feature: 'ads_read' });
 
@@ -119,6 +120,30 @@ router.get('/opportunities', async (req, res) => {
     return res.json(await readOpportunities({ brand, orgId, period: parsed.data.period }));
   } catch (err) {
     return failed(req, res, err, 'ads opportunities read error');
+  }
+});
+
+// GET /api/ads/opportunities/:promptId?brandId=…&period=… — one prompt's
+// drawer: the latest answer per platform, its fan-outs and keyword seeds
+// (lib/ads/opportunity.js). A prompt outside the brand is not found; one
+// past Starter's or the trial's rows is the plan's.
+router.get('/opportunities/:promptId', async (req, res) => {
+  const promptId = z.guid().safeParse(req.params.promptId);
+  const parsed = brandPeriod.safeParse(req.query);
+  if (!promptId.success || !parsed.success) {
+    return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  }
+  try {
+    const { brand, orgId } = await assertBrandAccess(parsed.data.brandId, req.user.id);
+    const read = await readOpportunity({
+      brand,
+      orgId,
+      promptId: promptId.data,
+      period: parsed.data.period,
+    });
+    return read ? res.json(read) : planLimit(res);
+  } catch (err) {
+    return failed(req, res, err, 'ads opportunity read error');
   }
 });
 

@@ -105,6 +105,32 @@ export function readAdsOpportunities(brandId: string, period: AdsPeriod) {
   return call<AdsOpportunities>(`opportunities?${new URLSearchParams({ brandId, period })}`);
 }
 
+/** One platform's latest answer in the period (server lib/ads/opportunity.js). */
+export interface AdsAnswer {
+  platform: string;
+  region: string | null;
+  at: string;
+  /** Plain text cut from the answer: data, never markup. */
+  excerpt: string;
+  /** Where the answer names us, 1 = first; null when it doesn't. */
+  mentionPosition: number | null;
+  competitors: { name: string; position: number | null }[];
+  /** The domains it cites most. */
+  domains: string[];
+}
+
+/** An opportunity's drawer (GET /api/ads/opportunities/:promptId). */
+export interface AdsOpportunityDetail {
+  promptId: string;
+  answers: AdsAnswer[];
+}
+
+export function readAdsOpportunity(brandId: string, promptId: string, period: AdsPeriod) {
+  return call<AdsOpportunityDetail>(
+    `opportunities/${encodeURIComponent(promptId)}?${new URLSearchParams({ brandId, period })}`,
+  );
+}
+
 /** A person's decision for a prompt (Admin, Manager), or null back to the rule's. */
 export function setAdsDecision(
   brandId: string,
