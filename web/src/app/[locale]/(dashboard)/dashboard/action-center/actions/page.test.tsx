@@ -107,7 +107,20 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock('@/components/action-center/action-center-tabs', () => ({ ActionCenterTabs: () => null }));
-vi.mock('@/components/action-center/action-table', () => ({ ActionTable: () => null }));
+// The table as the page renders it: its rows in order, its sort, and where a header click goes.
+const table = vi.hoisted(() => ({
+  props: null as {
+    actions: ActionItem[];
+    sort?: string;
+    onSortChange?: (sort: string) => void;
+  } | null,
+}));
+vi.mock('@/components/action-center/action-table', () => ({
+  ActionTable: (props: NonNullable<typeof table.props>) => {
+    table.props = props;
+    return null;
+  },
+}));
 // The drawer as the page opens it: its action, and where it reports a change.
 const drawer = vi.hoisted(() => ({
   props: null as {
@@ -261,6 +274,9 @@ describe('the actions list Export CSV', () => {
     const [header, row] = new TextDecoder().decode(bytes.slice(3)).split('\n');
     expect(header).toContain(',signal_count,affected_count,affected_items,created');
     expect(row).toContain(',3,3,Best coffee subscription?; Coffee delivery,');
+    // Each row starts with the code the list shows and Chat names it by.
+    expect(header.startsWith('number,')).toBe(true);
+    expect(row.startsWith('AC-35,')).toBe(true);
     expect(exportButton().disabled).toBe(false);
   });
 
@@ -411,5 +427,132 @@ describe('what Chat’s side panel sees (W1-08)', () => {
       ),
     );
     expect(setPage.mock.lastCall![0].suggestions[0]).toBe('actionHow: High one');
+  });
+});
+
+/**
+ * Owner's feedback (14 Nov): the list opens on the date it shows, Updated,
+ * most recent first; Newest (by creation, shown nowhere) is gone, its old
+ * links landing on the one date sort; the Updated header flips it.
+ */
+describe('the list’s order', () => {
+  const at = (id: string, actionNo: number, updatedAt: string, createdAt: string): ActionItem => ({
+    ...action,
+    id,
+    actionNo,
+    updatedAt,
+    createdAt,
+  });
+  // Created newest first, but updated in another order: Newest used to list a, b, c.
+  const rows = [
+    at('a', 3, '2026-10-29T00:00:00+00:00', '2026-11-01T00:00:00+00:00'),
+    at('b', 2, '2026-11-09T00:00:00+00:00', '2026-10-20T00:00:00+00:00'),
+    at('c', 1, '2026-11-08T00:00:00+00:00', '2026-10-10T00:00:00+00:00'),
+  ];
+  const ids = () => table.props!.actions.map((row) => row.id);
+  const sortParam = () => new URLSearchParams(window.location.search).get('sort');
+  /** The URL is written 300ms after a change. */
+  const settle = () =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    table.props = null;
+    getActions.mockResolvedValue(rows);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('opens on the most recently updated first, with no sort in the URL', async () => {
+    await render();
+    expect(table.props!.sort).toBe('updated');
+    expect(ids()).toEqual(['b', 'c', 'a']);
+    expect(text()).toContain('sort.updated');
+    await settle();
+    expect(sortParam()).toBeNull();
+  });
+
+  it('takes an old link’s ?sort=newest to the same date sort', async () => {
+    window.history.replaceState(null, '', '/?sort=newest&status=new');
+    await render();
+    expect(table.props!.sort).toBe('updated');
+    expect(ids()).toEqual(['b', 'c', 'a']);
+    await settle();
+    expect(sortParam()).toBeNull();
+    expect(new URLSearchParams(window.location.search).get('status')).toBe('new');
+  });
+
+  it('turns the other way round on a header click, and back, in the URL', async () => {
+    await render();
+    await act(async () => table.props!.onSortChange!('updated_asc'));
+    expect(ids()).toEqual(['a', 'c', 'b']);
+    expect(table.props!.sort).toBe('updated_asc');
+    expect(text()).toContain('sort.updated_asc');
+    await settle();
+    expect(sortParam()).toBe('updated_asc');
+
+    await act(async () => table.props!.onSortChange!('updated'));
+    expect(ids()).toEqual(['b', 'c', 'a']);
+    await settle();
+    expect(sortParam()).toBeNull();
+  });
+
+  it('keeps a sort the URL names, Priority included', async () => {
+    window.history.replaceState(null, '', '/?sort=updated_asc');
+    await render();
+    expect(ids()).toEqual(['a', 'c', 'b']);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    window.history.replaceState(null, '', '/?sort=priority');
+    getActions.mockResolvedValue([
+      { ...rows[0], priorityScore: 40 },
+      { ...rows[1], priorityScore: 10 },
+      { ...rows[2], priorityScore: 70 },
+    ]);
+    await render();
+    expect(table.props!.sort).toBe('priority');
+    expect(ids()).toEqual(['c', 'a', 'b']);
+    await settle();
+    expect(sortParam()).toBe('priority');
+  });
+});
+
+/** Owner's feedback (14 Nov): Chat says "AC-251"; the list's search finds it. */
+describe('finding an action by its code', () => {
+  const numbered = (id: string, actionNo: number): ActionItem => ({ ...action, id, actionNo });
+  const ids = () => table.props?.actions.map((row) => row.id) ?? [];
+
+  beforeEach(() => {
+    getActions.mockResolvedValue([
+      numbered('n251', 251),
+      numbered('n2510', 2510),
+      numbered('n1251', 1251),
+      numbered('n25', 25),
+    ]);
+  });
+
+  for (const query of ['AC-251', 'ac-251', '251']) {
+    it(`lists only AC-251 for “${query}”`, async () => {
+      table.props = null;
+      window.history.replaceState(null, '', `/?q=${encodeURIComponent(query)}`);
+      await render();
+      expect(ids()).toEqual(['n251']);
+    });
+  }
+
+  it('lists nothing for a number no action has, and every action without a search', async () => {
+    table.props = null;
+    window.history.replaceState(null, '', '/?q=AC-999');
+    await render();
+    expect(table.props).toBeNull();
+    expect(text()).toContain('noResults');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    window.history.replaceState(null, '', '/');
+    await render();
+    expect(ids()).toHaveLength(4);
   });
 });

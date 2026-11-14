@@ -21,16 +21,6 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
 }));
-vi.mock('@/stores/use-brand-store', () => ({
-  useBrandStore: (selector: (state: { activeBrandId: string }) => unknown) =>
-    selector({ activeBrandId: 'b1' }),
-}));
-const { getNewSignalCount, getMyOpenActionCount } = vi.hoisted(() => ({
-  getNewSignalCount: vi.fn(async () => 0),
-  getMyOpenActionCount: vi.fn(async () => 0),
-}));
-vi.mock('@/lib/actions/signals', () => ({ getNewSignalCount }));
-vi.mock('@/lib/actions/action-center-counts', () => ({ getMyOpenActionCount }));
 let planHasAgents = true;
 vi.mock('@/hooks/use-feature-gate', () => ({
   useFeatureGate: () => ({ canUse: (feature: string) => feature !== 'ai_agent' || planHasAgents }),
@@ -140,26 +130,23 @@ describe('ActionCenterTabs', () => {
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'History']);
   });
 
-  it('count the person’s open actions, the new signals and their agents whose run waits on them', async () => {
-    getMyOpenActionCount.mockResolvedValue(3);
-    getNewSignalCount.mockResolvedValue(5);
+  it('count the agents whose run waits on the person, and nothing beside Actions or Signals', async () => {
     const fetch = stubAgents(1, 2);
     await render({ chatAgentic: true });
-    expect(getMyOpenActionCount).toHaveBeenCalledWith('b1');
-    expect(getNewSignalCount).toHaveBeenCalledWith('b1');
     expect(fetch).toHaveBeenCalledWith('/api/chat/agents?view=mine', { cache: 'no-store' });
-    expect(tabs()).toEqual(['Today', 'Actions3', 'Signals5', 'Agents1', 'History']);
-    // Plain numbers, as in the mockup: no colour of their own beside the menu's dots.
-    for (const key of ['actions', 'signals', 'agents']) {
-      const pill = container.querySelector(`[data-count="${key}"]`)!;
-      expect(pill.className).toContain('text-muted-foreground');
-      expect(pill.className).not.toMatch(/blue|amber|bg-/);
+    // Owner's feedback (14 Nov): a number beside Actions or Signals that differed
+    // from their lists read as wrong; the menu's dots say what is new or waiting.
+    expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'Agents1', 'History']);
+    for (const key of ['actions', 'signals', 'today', 'history']) {
+      expect(container.querySelector(`[data-count="${key}"]`), key).toBeNull();
     }
+    // A plain number, as in the mockup: no colour of its own beside the menu's dots.
+    const pill = container.querySelector('[data-count="agents"]')!;
+    expect(pill.className).toContain('text-muted-foreground');
+    expect(pill.className).not.toMatch(/blue|amber|bg-/);
   });
 
   it('show no count that is 0 or failed', async () => {
-    getMyOpenActionCount.mockRejectedValue(new Error('down'));
-    getNewSignalCount.mockResolvedValue(0);
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({ ok: false, json: async () => ({ ok: false }) })),
@@ -168,17 +155,12 @@ describe('ActionCenterTabs', () => {
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'Agents', 'History']);
   });
 
-  it('keep each count’s room from the first paint, so the row doesn’t move when they arrive', async () => {
-    getMyOpenActionCount.mockReturnValueOnce(new Promise(() => {}));
-    getNewSignalCount.mockReturnValueOnce(new Promise(() => {}));
+  it('keep the count’s room from the first paint, so the row doesn’t move when it arrives', async () => {
     stubAgents(0);
     await render({ chatAgentic: true });
-    for (const key of ['actions', 'signals', 'agents']) {
-      const room = container.querySelector(`[data-count="${key}"]`)!;
-      expect(room.textContent).toBe('');
-      expect(room.className).toMatch(/inline-block min-w-\[2ch\]/);
-    }
-    expect(container.querySelector('[data-count="today"]')).toBeNull();
+    const room = container.querySelector('[data-count="agents"]')!;
+    expect(room.textContent).toBe('');
+    expect(room.className).toMatch(/inline-block min-w-\[2ch\]/);
   });
 
   it('mark the tab of the page shown: Today, Agents under its pages, and History on KPIs', async () => {

@@ -338,10 +338,3 @@ export const FROM_PRODUCTS_KINDS: readonly string[] = ['shopping_product', 'shop
 export function isActionKind(value: string): value is ActionKind {
   return (ACTION_KINDS as readonly string[]).includes(value);
 }
-
-/**
- * Sort orders the toolbar offers. Priority is the server's score (AC-006),
- * which already weighs impact in, so impact is not an order of its own.
- */
-export type ActionSort = 'priority' | 'newest' | 'due_date' | 'updated';
-export const ACTION_SORTS: readonly ActionSort[] = ['priority', 'newest', 'due_date', 'updated'];

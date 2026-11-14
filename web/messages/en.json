@@ -692,8 +692,7 @@
       "agentWorking": "it is running now",
       "agentNeedsOk": "it is waiting for your OK",
       "agentRunFailed": "its last run failed"
-    },
-    "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
+    }
   },
   "pageDots": {
     "reasons": {
@@ -1891,10 +1890,11 @@
       },
       "sort": {
         "label": "Sort",
+        "updated": "Recently updated",
+        "updated_asc": "Least recently updated",
         "priority": "Priority",
-        "newest": "Newest",
-        "due_date": "Due date",
-        "updated": "Recently updated"
+        "priority_asc": "Lowest priority first",
+        "due_date": "Due date"
       },
       "table": {
         "priority": "Priority Score",
@@ -1903,6 +1903,7 @@
         "assignee": "Assignee",
         "dueDate": "Due date",
         "updated": "Updated",
+        "sortTo": "Sort: {sort}",
         "actions": "Actions"
       },
       "status": {
