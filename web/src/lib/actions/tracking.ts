@@ -3143,6 +3143,12 @@ export interface VisibilityRateTrendPoint {
   date: string;
   /** The UTC day it covers, 'YYYY-MM-DD' (VIS-007: markers are placed by day). */
   day: string;
+  /**
+   * The brand's answers in the point's window — the shared denominator every
+   * entity's score divides by (#2371: the tooltip shows it so a point can't
+   * be read as a standalone daily score).
+   */
+  answers: number;
   /** Per-entity rate for the day, keyed by entity key. 0 = tracked but not visible. */
   values: Record<string, number>;
 }
@@ -3174,6 +3180,12 @@ export interface VisibilityRateTrendData {
   summary: VisibilityRateTrendSummary;
   /** Competitors pinned on the chart (VIS-007), in pin order; ids of deleted ones dropped. */
   pinned: string[];
+  /**
+   * The days in each point's trailing window (#2371). Null for All time,
+   * whose points cover everything up to their day instead (the window
+   * expands cumulatively from the first row).
+   */
+  windowDays: number | null;
 }
 
 interface VisibilityRateTrendRow {
@@ -3403,6 +3415,7 @@ export async function getVisibilityRateTrend(
         day: 'numeric',
       }),
       day: row.day,
+      answers: brandSums.answers,
       values,
     });
   }
@@ -3428,7 +3441,7 @@ export async function getVisibilityRateTrend(
   const competitorIds = new Set((competitors ?? []).map((c) => c.id));
   const pinned = (pins?.insights_pinned_competitors ?? []).filter((id) => competitorIds.has(id));
 
-  return { entities, points, summary, pinned };
+  return { entities, points, summary, pinned, windowDays };
 }
 
 // ─── Head-to-Head Competitor Comparison ─────────────────────────────────────
