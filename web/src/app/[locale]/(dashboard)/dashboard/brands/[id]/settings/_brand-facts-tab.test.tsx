@@ -10,10 +10,12 @@ import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 const getBrandFacts = vi.fn();
 const readBrandFactsAgain = vi.fn();
 const setBrandFactStatus = vi.fn();
+const setBrandFactScope = vi.fn();
 vi.mock('@/lib/actions/brand-facts', () => ({
   getBrandFacts: (...args: unknown[]) => getBrandFacts(...args),
   readBrandFactsAgain: (...args: unknown[]) => readBrandFactsAgain(...args),
   setBrandFactStatus: (...args: unknown[]) => setBrandFactStatus(...args),
+  setBrandFactScope: (...args: unknown[]) => setBrandFactScope(...args),
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -132,6 +134,7 @@ beforeEach(() => {
   getBrandFacts.mockReset().mockResolvedValue(READ);
   readBrandFactsAgain.mockReset();
   setBrandFactStatus.mockReset();
+  setBrandFactScope.mockReset();
   toast.error.mockReset();
   container = document.createElement('div');
   document.body.append(container);
@@ -173,12 +176,6 @@ describe('BrandFactsTab', () => {
     expect(container.textContent).toContain('About page: turned our reader away');
   });
 
-  it('says where a fact holds when it holds for one place (00539)', async () => {
-    getBrandFacts.mockResolvedValue({ ...READ, facts: [fact({ scope: 'Bozcaada' })] });
-    await render();
-    expect(section('To approve (1)').textContent).toContain('Pricing page · For Bozcaada only');
-  });
-
   it('approves a fact as the admin or manager, in the list at once, dropping the gone one it replaces', async () => {
     const gone = fact({ id: 'f0', status: 'approved', gone: true, quote: '$59 per month' });
     getBrandFacts.mockResolvedValue({ ...READ, facts: [...READ.facts, gone] });
@@ -192,6 +189,33 @@ describe('BrandFactsTab', () => {
     const approved = section('Approved');
     expect(approved.textContent).toContain('Pro · $49 / month');
     expect(approved.textContent).not.toContain('$59 per month');
+  });
+
+  it('groups facts by where they hold, the whole brand’s first, and sets a fact’s place', async () => {
+    const scoped = fact({ id: 'f5', status: 'approved', quote: '₺150', scope: 'Bozcaada' });
+    getBrandFacts.mockResolvedValue({ ...READ, facts: [...READ.facts, scoped] });
+    await render();
+    const headings = [...section('Approved').querySelectorAll('h5')].map((h) => h.textContent);
+    expect(headings).toEqual(['Whole brand', 'Bozcaada']);
+    setBrandFactScope.mockResolvedValue({ id: 'f2', scope: 'Bozcaada' });
+    await act(async () => button('Applies to', section('Approved'))!.click());
+    const input = container.querySelector('input')!;
+    expect(input.getAttribute('aria-label')).toBe('Destination, operator or route');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        input,
+        'bozcaada',
+      );
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => button('Save')!.click());
+    expect(setBrandFactScope).toHaveBeenCalledWith('f2', 'bozcaada');
+    // The list as kept now, its groups too.
+    expect(getBrandFacts).toHaveBeenCalledTimes(2);
+    setBrandFactScope.mockResolvedValue({ error: 'duplicate' });
+    await act(async () => button('Applies to', section('Approved'))!.click());
+    await act(async () => button('Save')!.click());
+    expect(toast.error).toHaveBeenCalledWith('This fact is already kept for that place.');
   });
 
   it('reviews nothing on a read-only workspace: Approve opens the upgrade dialog', async () => {

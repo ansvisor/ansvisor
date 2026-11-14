@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { factMismatches, type BrandFact } from './brand-facts';
-import { namesScope, pageNames } from './fact-scope';
+import { byScope, namesScope, pageNames } from './fact-scope';
 import { pageFactsOf } from './quality-inputs';
 
 /**
@@ -57,5 +57,14 @@ describe('fact scopes', () => {
     expect(check({ ...bozcaada, pageUrls: ['gokceada'] })).toEqual({ compared: 0, mismatches: [] });
     // On Bozcaada's own page, it is.
     expect(check({ ...bozcaada, pageTitle: 'Bozcaada' }).mismatches).toHaveLength(1);
+  });
+
+  it('groups facts by where they hold, the whole brand’s first', () => {
+    const groups = byScope([price(1, 'Gökçeada'), price(2, null), price(3, 'Bozcaada')]);
+    expect(groups.map((g) => [g.scope, g.facts.map((f) => f.id)])).toEqual([
+      [null, ['f-2']],
+      ['Bozcaada', ['f-3']],
+      ['Gökçeada', ['f-1']],
+    ]);
   });
 });
