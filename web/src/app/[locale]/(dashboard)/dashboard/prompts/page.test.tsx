@@ -31,6 +31,7 @@ const actions = vi.hoisted(() => ({
   getLocationQuota: vi.fn(),
   getPromptLocationMatrix: vi.fn(),
   bulkUpdatePromptLocations: vi.fn(),
+  bulkUpdatePromptTags: vi.fn(),
 }));
 vi.mock('@/lib/actions/prompt', () => actions);
 // The table's reads go through /api/prompts/read (lib/prompts-reads.ts): the
@@ -138,9 +139,16 @@ vi.mock('./_suggestions-tab', () => ({
 vi.mock('@/lib/white-label/export-name', () => ({
   exportFileName: vi.fn(async (rest: string) => `Ansvisor_${rest}`),
 }));
+
+// The workspace's brands: b1 unless a test switches brands mid-render.
+const brandState = vi.hoisted(() => ({
+  current: {
+    activeBrandId: 'b1',
+    brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }],
+  } as { activeBrandId: string; brands: { id: string; slug: string; name: string }[] },
+}));
 vi.mock('@/stores/use-brand-store', () => ({
-  useBrandStore: (select: (state: unknown) => unknown) =>
-    select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
+  useBrandStore: (select: (state: unknown) => unknown) => select(brandState.current),
 }));
 // The page's query string: empty unless a test says otherwise.
 const query = vi.hoisted(() => ({ search: '' }));
@@ -231,6 +239,11 @@ beforeEach(() => {
   nav.pathname = '/dashboard/prompts/tracked';
   query.search = '';
   role.canManage = true;
+  brandState.current = {
+    activeBrandId: 'b1',
+    brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }],
+  };
+  actions.bulkUpdatePromptTags.mockResolvedValue({ updated: 1, unchanged: 0, blocked: 0 });
   swap.getSwapOptions.mockResolvedValue({ error: 'not read in these tests' });
   filterOptions.regions = [];
   firstRun.run = null;
@@ -612,6 +625,181 @@ describe('the Tags filter (#2378)', () => {
     expect(container.textContent).not.toContain(both.text);
     expect(container.textContent).toContain(coffeeOnly.text);
     expect(container.textContent).not.toContain(neither.text);
+  });
+
+  const selectRow = async (text: string) => {
+    const box = container.querySelector<HTMLElement>(`[aria-label="Select ${text}"]`)!;
+    await act(async () => box.click());
+  };
+  const openBulkTags = async (item: 'Add tags' | 'Remove tags') => {
+    await act(async () => button('Tags')!.click());
+    const menuItem = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === item,
+    )!;
+    await act(async () => menuItem.click());
+  };
+  const saveDialog = async (label: string) => {
+    const save = [...dialog()!.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === label,
+    )!;
+    await act(async () => save.click());
+    await act(async () => {});
+  };
+
+  it('lets go of a filtered tag a bulk removal takes off its last prompt', async () => {
+    await renderTagged();
+    await openTagFilter();
+    await toggleTag('priority');
+    // Only p1 carries priority: the table shows just it.
+    expect(container.textContent).toContain(both.text);
+    expect(container.textContent).not.toContain(coffeeOnly.text);
+
+    // The maintainer's scenario: filter by a tag, then bulk-remove it.
+    await selectRow(both.text);
+    await openBulkTags('Remove tags');
+    // The reload the save triggers brings the roster back without the tag.
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [{ ...both, tags: ['coffee'] }, coffeeOnly, neither] }],
+      visibility: {},
+      positions: {},
+    });
+    const badge = [...dialog()!.querySelectorAll<HTMLElement>('button')].find((b) =>
+      b.textContent?.includes('priority'),
+    )!;
+    await act(async () => badge.click());
+    await saveDialog('Remove from 1 prompt');
+
+    // The filter lets the removed tag go: every prompt is back, not a table
+    // stuck empty on a tag the popover no longer lists.
+    expect(actions.bulkUpdatePromptTags).toHaveBeenCalledWith(['p1'], 'remove', ['priority']);
+    expect(container.textContent).toContain(both.text);
+    expect(container.textContent).toContain(coffeeOnly.text);
+    expect(container.textContent).toContain(neither.text);
+    expect(button('All tags')).toBeDefined();
+  });
+
+  it('keeps the picked tags that still exist when only one is removed', async () => {
+    await renderTagged();
+    await openTagFilter();
+    await toggleTag('coffee');
+    await toggleTag('priority');
+    expect(container.textContent).toContain(both.text);
+    expect(container.textContent).not.toContain(coffeeOnly.text);
+
+    await selectRow(both.text);
+    await openBulkTags('Remove tags');
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [{ ...both, tags: ['coffee'] }, coffeeOnly, neither] }],
+      visibility: {},
+      positions: {},
+    });
+    const badge = [...dialog()!.querySelectorAll<HTMLElement>('button')].find((b) =>
+      b.textContent?.includes('priority'),
+    )!;
+    await act(async () => badge.click());
+    await saveDialog('Remove from 1 prompt');
+
+    // coffee still filters; only the gone tag left the filter.
+    expect(button('1 tag')).toBeDefined();
+    expect(container.textContent).toContain(both.text);
+    expect(container.textContent).toContain(coffeeOnly.text);
+    expect(container.textContent).not.toContain(neither.text);
+  });
+
+  it('hides the filter once no tags remain, with the table back in full', async () => {
+    const only = tagged('p1', 'Best coffee subscription?', ['coffee']);
+    const plain = tagged('p2', 'Decaf options?', []);
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [only, plain] }],
+      visibility: {},
+      positions: {},
+    });
+    await render(false);
+    await openTagFilter();
+    await toggleTag('coffee');
+    expect(container.textContent).toContain(only.text);
+    expect(container.textContent).not.toContain(plain.text);
+
+    await selectRow(only.text);
+    await openBulkTags('Remove tags');
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [{ ...only, tags: [] }, plain] }],
+      visibility: {},
+      positions: {},
+    });
+    const badge = [...dialog()!.querySelectorAll<HTMLElement>('button')].find((b) =>
+      b.textContent?.includes('coffee'),
+    )!;
+    await act(async () => badge.click());
+    await saveDialog('Remove from 1 prompt');
+
+    // No tags left anywhere: the filter control goes, and the table is not
+    // stuck empty behind an invisible filter.
+    expect(
+      [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.getAttribute('aria-label') === 'Tags',
+      ),
+    ).toBeUndefined();
+    expect(container.textContent).toContain(only.text);
+    expect(container.textContent).toContain(plain.text);
+  });
+
+  it('resets the picked tags on a brand switch', async () => {
+    await renderTagged();
+    await openTagFilter();
+    await toggleTag('coffee');
+    expect(container.textContent).not.toContain(neither.text);
+
+    await act(async () => {
+      brandState.current = {
+        activeBrandId: 'b2',
+        brands: [{ id: 'b2', slug: 'beta', name: 'Beta' }],
+      };
+    });
+    await render(false);
+
+    // The old brand's tags don't filter the new brand's roster.
+    expect(button('All tags')).toBeDefined();
+    expect(container.textContent).toContain(both.text);
+    expect(container.textContent).toContain(coffeeOnly.text);
+    expect(container.textContent).toContain(neither.text);
+  });
+
+  it('says so in the dialog when saving the tags throws', async () => {
+    await renderTagged();
+    await selectRow(both.text);
+    await openBulkTags('Add tags');
+    const input = dialog()!.querySelector<HTMLInputElement>('#bulk-prompt-tags')!;
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, 'q4-push');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    actions.bulkUpdatePromptTags.mockRejectedValue(new Error('fetch failed'));
+    await saveDialog('Add to 1 prompt');
+
+    // The rejection surfaces in the dialog, which stays open and usable.
+    expect(dialog()).not.toBeNull();
+    expect(dialog()!.textContent).toContain("Couldn't save the tags. Try again.");
+    expect(toast.success).not.toHaveBeenCalled();
+    const save = [...dialog()!.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'Add to 1 prompt',
+    )!;
+    expect(save.disabled).toBe(false);
   });
 });
 
