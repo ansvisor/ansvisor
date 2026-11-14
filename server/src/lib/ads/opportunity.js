@@ -1,6 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { stripEntityMarkup } from '../entity-markup.js';
 import { extractHostname } from '../response-parser.js';
+import { readAdDrafts } from './draft-rows.js';
 import { readEarn } from './earn.js';
 import { readOpportunities, readsEveryOpportunity } from './opportunities.js';
 import { ADS_PERIODS, NotFound } from './standing.js';
@@ -13,7 +14,9 @@ import { ADS_PERIODS, NotFound } from './standing.js';
  * organization: a prompt outside them reads as not found. The answer text is
  * data, cut to an excerpt of plain text; nothing here reads it as markup.
  * The Earn card's part: the prompt's target page and the active action that
- * already covers it (lib/ads/earn.js).
+ * already covers it (lib/ads/earn.js). The Pay card's: the prompt's latest
+ * saved ad draft of each channel (00532, lib/ads/drafts.js), which a session
+ * can't read itself.
  */
 
 export const EXCERPT_CHARS = 600;
@@ -71,12 +74,14 @@ export async function readOpportunity({ brand, orgId, promptId, period, now = ne
   const brandId = brand.id;
   const prompt = supabaseAdmin
     .from('prompts')
-    .select('id, prompt_sets!inner(brand_id, brands!inner(organization_id))')
+    .select('id, text, prompt_sets!inner(brand_id, brands!inner(organization_id))')
     .eq('id', promptId)
     .eq('prompt_sets.brand_id', brandId);
-  if (!must(await prompt.eq('prompt_sets.brands.organization_id', orgId).maybeSingle(), 'prompt')) {
-    throw new NotFound('Prompt not found');
-  }
+  const found = must(
+    await prompt.eq('prompt_sets.brands.organization_id', orgId).maybeSingle(),
+    'prompt',
+  );
+  if (!found) throw new NotFound('Prompt not found');
   if (!(await readsEveryOpportunity(orgId, brand))) {
     const { rows } = await readOpportunities({ brand, orgId, period, now });
     if (!rows.some((r) => r.promptId === promptId)) return null;
@@ -91,7 +96,7 @@ export async function readOpportunity({ brand, orgId, promptId, period, now = ne
       .eq('prompt_id', promptId);
   const days = ADS_PERIODS[period] ?? ADS_PERIODS['30d'];
   const since = new Date(now.getTime() - days * 86_400_000).toISOString();
-  const [recent, volume, earn] = await Promise.all([
+  const [recent, volume, earn, drafts] = await Promise.all([
     answers('id, platform')
       .neq('platform', 'chatgpt-shopping')
       .neq('response', '')
@@ -105,6 +110,7 @@ export async function readOpportunity({ brand, orgId, promptId, period, now = ne
       .order('fetched_at', { ascending: false })
       .limit(1),
     readEarn(brandId, orgId, promptId),
+    readAdDrafts({ orgId, brandId, promptId }),
   ]);
   // Oldest first, so each platform keeps its newest.
   const latest = new Map();
@@ -141,10 +147,12 @@ export async function readOpportunity({ brand, orgId, promptId, period, now = ne
   const keywords = must(volume, 'prompt_volumes')?.[0]?.keywords;
   return {
     promptId,
+    text: found.text ?? '',
     period,
     answers: list,
     fanOuts: [...fanOuts.values()].slice(0, FAN_OUTS),
     keywords: (Array.isArray(keywords) ? keywords : []).filter((k) => typeof k === 'string'),
     earn,
+    drafts,
   };
 }

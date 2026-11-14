@@ -96,6 +96,12 @@ export const DEMO_GUARDED = [
     brandIn('body'),
     rowIn('prompts', 'path', 'promptId'),
   ),
+  // The Pay card's ad drafts: a model call on the budget, for a sample brand.
+  guard(
+    'POST /ads/opportunities/:promptId/drafts',
+    brandIn('body'),
+    rowIn('prompts', 'path', 'promptId'),
+  ),
 
   // Site Audit (audits.js).
   guard('POST /audits', brandIn('body')),

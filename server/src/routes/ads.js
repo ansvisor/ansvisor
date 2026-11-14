@@ -4,6 +4,7 @@ import { ADS_THRESHOLDS, adsThresholds } from '../config/ads.js';
 import { MANAGER_ROLES, assertBrandAccess, assertRole, brandAccessOf } from '../lib/access.js';
 import { adsEnabled } from '../lib/ads-flag.js';
 import { readAdsActivity } from '../lib/ads/activity.js';
+import { AdDraftsError, createAdDrafts } from '../lib/ads/drafts.js';
 import { sendEarn } from '../lib/ads/earn.js';
 import {
   SNAPSHOT_PERIOD,
@@ -17,6 +18,7 @@ import {
 import { readOpportunity } from '../lib/ads/opportunity.js';
 import { readOverview } from '../lib/ads/overview.js';
 import { ADS_PERIODS } from '../lib/ads/standing.js';
+import { PlanLimitError } from '../lib/plan-guard.js';
 import { DEMO_BRAND } from '../middleware/demo-brand.js';
 
 /**
@@ -36,8 +38,8 @@ import { DEMO_BRAND } from '../middleware/demo-brand.js';
  *     self-hosted has no plans): Starter and the trial get 403 plan_limit.
  *
  * Nothing here reaches an ad platform. The writes are Ads' own rows (a
- * decision, the thresholds) and the Earn card's Action Center action, each
- * logged (lib/ads/activity.js).
+ * decision, the thresholds, the Pay card's ad drafts) and the Earn card's
+ * Action Center action, each logged (lib/ads/activity.js).
  */
 
 const router = Router();
@@ -234,6 +236,59 @@ router.post('/opportunities/:promptId/earn', async (req, res) => {
     return res.status(sent.created ? 201 : 200).json(sent);
   } catch (err) {
     return failed(req, res, err, 'ads earn error');
+  }
+});
+
+// POST /api/ads/opportunities/:promptId/drafts { brandId, idempotencyKey? } —
+// the Pay card's ad drafts, one per channel (lib/ads/drafts.js): a model call
+// on the workspace's AI budget as 'ads', so admins and managers only, on a
+// plan that reads every opportunity, never the demo brand. Only drafts that
+// pass the claims gate are saved (none: 422 gate_failed); no approved brand
+// fact, or brand facts off below Quality's phase 2, is 409 facts_needed. The
+// same key again answers the drafts it saved. Logged.
+router.post('/opportunities/:promptId/drafts', async (req, res) => {
+  const promptId = z.guid().safeParse(req.params.promptId);
+  const body = z
+    .object({ brandId: z.guid(), idempotencyKey: z.string().trim().min(8).max(100).optional() })
+    .safeParse(req.body);
+  if (!promptId.success || !body.success) {
+    return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  }
+  try {
+    const { brand, orgId } = await assertBrandAccess(body.data.brandId, req.user.id, {
+      columns: 'name',
+    });
+    if (brand?.is_demo || (await isDemoPrompt(orgId, promptId.data))) {
+      return res.status(402).json(DEMO_BRAND);
+    }
+    await assertRole(req.user.id, MANAGER_ROLES, 'Only admins and managers can write ad drafts.');
+    if (!(await readsEveryOpportunity(orgId, brand))) return planLimit(res);
+    const opportunity = await readOpportunity({
+      brand,
+      orgId,
+      promptId: promptId.data,
+      period: SNAPSHOT_PERIOD,
+    });
+    if (!opportunity) return planLimit(res);
+    const made = await createAdDrafts({
+      brand,
+      orgId,
+      opportunity,
+      userId: req.user.id,
+      idempotencyKey: body.data.idempotencyKey ?? null,
+      source: 'drawer',
+    });
+    return res.status(made.created ? 201 : 200).json(made);
+  } catch (err) {
+    if (err instanceof AdDraftsError) {
+      return res.status(err.status).json({ error: err.message, code: err.code, ...err.extra });
+    }
+    // No plan: one to choose (402); a spent AI budget waits for the next period (429).
+    if (err instanceof PlanLimitError) {
+      const code = err.statusCode === 402 ? 'no_subscription' : 'ai_budget';
+      return res.status(err.statusCode === 402 ? 402 : 429).json({ error: err.message, code });
+    }
+    return failed(req, res, err, 'ads drafts error');
   }
 });
 
