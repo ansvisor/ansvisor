@@ -39,9 +39,9 @@ In the free trial, and while you explore the demo brand, a welcome card sits abo
 
 ## Ask Chat
 
-Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.
+Type in the box and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.
 
-In the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
+On the right under the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
 
 Analysts and Agency partners only read; there it says **Read-only**, linking to their role.
 
@@ -74,6 +74,8 @@ The panel isn't on Chat's own pages, where **Ctrl J** takes you to the message b
 While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the line with the steps says how long it worked, such as **Stopped after 41s · 5 steps**.
 
 You can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example "only blog pages".
+
+The line under the box says on its left what Enter and Esc do now, such as **Answering · Esc to stop**, next to the run mode and the model.
 
 ## When Chat asks you
 

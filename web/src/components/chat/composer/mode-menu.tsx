@@ -20,11 +20,11 @@ const isComposerMode = (value: unknown): value is ChatMode =>
   COMPOSER_MODES.includes(value as ChatMode);
 
 /**
- * The run mode, in the box's control row after ＋ / @ (the owner's layout,
- * 2026-11-14): a button with the mode's short name, "Ask before changes ▾",
- * cut to fit a narrow panel, whose menu opens below it, or above when
- * there's no room below. The menu keeps the full names: Ask me first · Auto,
- * ask before changes · Full auto, the one on checked. Full auto needs Growth and a paid plan (`fullAutoOpen`,
+ * The run mode, on the line under the box, before the model (the owner's
+ * layout, changed after testing it live on 2026-11-14): a button with the
+ * mode's short name in full, "Ask before changes ▾", whose menu opens below
+ * it, or above when there's no room below. The menu keeps the full names:
+ * Ask me first · Auto, ask before changes · Full auto, the one on checked. Full auto needs Growth and a paid plan (`fullAutoOpen`,
  * plan facts §7), and for non-Admins the Admin's "Full auto for members"
  * switch (`offByAdmin`): locked, it says which and can't be picked. Each pick
  * says in a toast what the mode does.
@@ -49,11 +49,11 @@ export function ModeMenu({
         data-action="composer.openMode"
         aria-label={t('current', { mode: t(mode) })}
         title={t(mode)}
-        className="flex h-7 min-w-0 items-center gap-1 rounded-lg px-1.5 text-xs text-foreground hover:bg-muted data-popup-open:bg-muted"
+        className="flex h-7 shrink-0 items-center gap-1 rounded-lg px-1.5 text-xs whitespace-nowrap text-foreground hover:bg-muted data-popup-open:bg-muted"
       >
-        <span className="truncate">{t(`short.${mode}`)}</span> <span aria-hidden>▾</span>
+        {t(`short.${mode}`)} <span aria-hidden>▾</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="bottom" className="w-64">
+      <DropdownMenuContent align="end" side="bottom" className="w-64">
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t('label')}</DropdownMenuLabel>
           <DropdownMenuRadioGroup
