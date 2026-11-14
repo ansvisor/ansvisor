@@ -7,9 +7,9 @@ import type { AdsOpportunity, AdsOpportunityDetail } from '@/lib/ads/api';
 
 /**
  * An opportunity's drawer (ADS-01 §3.2, §11), opened from the table's Open:
- * the row's decision, the latest answer per platform as quoted plain text,
- * no sponsored line without data, and closed by ✕, the overlay or Esc with
- * focus back on Open.
+ * the row's decision and why, the latest answer per platform as quoted plain
+ * text, fan-outs and seeds, no sponsored line without data, and closed by
+ * ✕, the overlay or Esc with focus back on Open.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -45,6 +45,12 @@ const ROW: AdsOpportunity = {
   estAiVolume: 6300,
   adChannels: ['chatgpt'],
   paidMeasured: false,
+  reasons: [
+    { code: 'rival_leads', competitorId: 'c1' },
+    { code: 'volume_at_least', volume: 14_000, threshold: 1000 },
+    { code: 'paid_not_measured', rivalPays: true, wePay: true },
+    { code: 'a_later_code' },
+  ],
 };
 const DETAIL: AdsOpportunityDetail = {
   promptId: 'p1',
@@ -71,6 +77,8 @@ const DETAIL: AdsOpportunityDetail = {
       domains: [],
     },
   ],
+  fanOuts: [{ query: 'best crm 2026', platform: 'google-aio' }],
+  keywords: ['best crm', 'crm small team'],
 };
 
 let container: HTMLDivElement;
@@ -116,7 +124,7 @@ async function open() {
 }
 
 describe('AdsOpportunityDrawer', () => {
-  it("shows the row's decision, then the latest answer per platform", async () => {
+  it("shows the row's decision and why, then the latest answer per platform, fan-outs and seeds", async () => {
     await open();
     expect(api.readAdsOpportunity).toHaveBeenCalledWith('b1', 'p1', '30d');
     const d = drawer()!;
@@ -124,6 +132,12 @@ describe('AdsOpportunityDrawer', () => {
     expect(d.querySelector('h2')?.textContent).toBe('Best CRM for small teams');
     expect(d.querySelector('[data-decision]')?.textContent).toBe('Earn + pay');
     expect(d.textContent).toContain('Recommended: Earn');
+    // Each reason the rule gave, in words; a code it doesn't know yet, left out.
+    expect([...d.querySelectorAll('ul[aria-label="Why"] li')].map((li) => li.textContent)).toEqual([
+      'Kestrel leads the AI answer',
+      '14,000 Google searches a month, at least 1,000',
+      "Who pays isn't measured yet",
+    ]);
     const answers = [...d.querySelectorAll('[data-slot="ads-answer"]')];
     expect(answers.map((a) => a.querySelector('p')?.textContent)).toEqual([
       'ChatGPT · United States · Nov 13, 2026',
@@ -133,6 +147,10 @@ describe('AdsOpportunityDrawer', () => {
     expect(answers[0].textContent).toContain('Cites: g2.com, kestrel.example');
     expect(answers[1].textContent).toContain('You: #2');
     expect(answers[1].textContent).not.toContain('Cites');
+    expect(d.querySelector('[data-slot="ads-fanouts"]')?.textContent).toBe('best crm 2026');
+    expect(d.querySelector('[data-slot="ads-keywords"]')?.textContent).toBe(
+      'best crmcrm small team',
+    );
   });
 
   it('renders the answer as quoted text: a <script> in it is only text', async () => {
@@ -151,9 +169,10 @@ describe('AdsOpportunityDrawer', () => {
   });
 
   it('says so when there is no answer in the period, or the read fails', async () => {
-    api.readAdsOpportunity.mockResolvedValue({ ...DETAIL, answers: [] });
+    api.readAdsOpportunity.mockResolvedValue({ ...DETAIL, answers: [], fanOuts: [], keywords: [] });
     await open();
     expect(drawer()!.textContent).toContain('No AI answer on this prompt in this period yet.');
+    expect(drawer()!.querySelector('[data-slot="ads-fanouts"]')).toBeNull();
     await act(async () =>
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
     );

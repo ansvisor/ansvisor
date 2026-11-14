@@ -13935,11 +13935,28 @@
     },
     "drawer": {
       "close": "Close",
+      "why": "Why",
+      "reasons": {
+        "we_lead": "{position, select, none {AI picks you} other {AI names you at #{position}}}",
+        "we_cited": "AI cites your pages",
+        "rival_leads": "{name} leads the AI answer",
+        "rival_pays": "A competitor pays for ads on it",
+        "we_pay": "You pay for ads on it",
+        "no_rival_pays": "No competitor pays for ads on it",
+        "no_leader": "No clear leader in the AI answer",
+        "volume_at_least": "{volume} Google searches a month, at least {threshold}",
+        "volume_below": "{volume} Google searches a month, below {threshold}",
+        "volume_not_measured": "Google searches aren't measured yet",
+        "paid_not_measured": "Who pays isn't measured yet",
+        "no_ad_channel": "No ad channel reaches the AI platforms it's tracked on"
+      },
       "answers": "What AI answers today",
       "answerOn": "{platform}{region, select, none {} other { · {region}}} · {date}",
       "noAnswers": "No AI answer on this prompt in this period yet.",
       "named": "Names: {names}",
       "cites": "Cites: {domains}",
+      "fanOuts": "Fan-out queries",
+      "keywords": "Keyword seeds",
       "failed": "The answers couldn't be read. Close this and open it again."
     },
     "empty": {

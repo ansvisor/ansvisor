@@ -7,17 +7,33 @@ import { XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
-import { readAdsOpportunity, type AdsOpportunity, type AdsOpportunityDetail } from '@/lib/ads/api';
+import {
+  readAdsOpportunity,
+  type AdsOpportunity,
+  type AdsOpportunityDetail,
+  type AdsReason,
+} from '@/lib/ads/api';
 import type { AdsPeriod } from '@/lib/ads/tabs';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatNumber } from '@/lib/format';
 import { regionLabel } from '@/lib/region';
 
+const num = (v: unknown) => (typeof v === 'number' ? formatNumber(v) : '');
+
+/** A section's small heading, as the mockup's. */
+function Heading({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="mt-5 mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      {children}
+    </h3>
+  );
+}
+
 /**
- * An opportunity's drawer (ADS-01 §3.2, mockup): the row's decision at the
- * top, then "What AI answers today", the latest answer on each platform.
- * Answer text is the AI's, not ours: shown as quoted plain text only. It
- * closes with ✕, the overlay or Esc (`drawer.close`), and gives focus back
- * to the row's Open.
+ * An opportunity's drawer (ADS-01 §3.2, mockup): the row's decision and why
+ * at the top, then "What AI answers today", the latest answer on each
+ * platform, with its fan-outs and keyword seeds. Answer text is the AI's,
+ * not ours: shown as quoted plain text only. It closes with ✕, the overlay
+ * or Esc (`drawer.close`), and gives focus back to the row's Open.
  */
 export function AdsOpportunityDrawer({
   row,
@@ -57,6 +73,16 @@ export function AdsOpportunityDrawer({
     };
   }, [open, brandId, promptId, period, key]);
 
+  const reason = (r: AdsReason) =>
+    t.has(`reasons.${r.code}`)
+      ? t(`reasons.${r.code}`, {
+          position: typeof r.position === 'number' ? String(r.position) : 'none',
+          name: row.leaderName ?? tRows('leaderRival'),
+          volume: num(r.volume),
+          threshold: num(r.threshold),
+        })
+      : null;
+  const reasons = (row.reasons ?? []).map(reason).filter(Boolean);
   const detail = read?.key === key ? read.detail : undefined;
 
   return (
@@ -75,6 +101,13 @@ export function AdsOpportunityDrawer({
             <div className="min-w-0 flex-1 space-y-2">
               <Dialog.Title className="text-base font-semibold">{row.text}</Dialog.Title>
               {decision}
+              {reasons.length > 0 && (
+                <ul aria-label={t('why')} className="space-y-0.5 text-xs text-muted-foreground">
+                  {reasons.map((text) => (
+                    <li key={text}>{text}</li>
+                  ))}
+                </ul>
+              )}
             </div>
             <Dialog.Close
               data-action="drawer.close"
@@ -86,9 +119,7 @@ export function AdsOpportunityDrawer({
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 pb-5">
-            <h3 className="mt-5 mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              {t('answers')}
-            </h3>
+            <Heading>{t('answers')}</Heading>
             {detail === undefined ? (
               <Skeleton className="h-32 w-full rounded-xl" />
             ) : detail === null ? (
@@ -127,6 +158,31 @@ export function AdsOpportunityDrawer({
               </ul>
             )}
             {/* Sponsored units show here once PR 16/17 store them; never before, never estimated. */}
+
+            {detail && detail.fanOuts.length > 0 && (
+              <>
+                <Heading>{t('fanOuts')}</Heading>
+                <ul className="flex flex-wrap gap-1.5" data-slot="ads-fanouts">
+                  {detail.fanOuts.map((f) => (
+                    <li key={f.query} className="rounded-full border px-2.5 py-0.5 text-xs">
+                      {f.query}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {detail && detail.keywords.length > 0 && (
+              <>
+                <Heading>{t('keywords')}</Heading>
+                <ul className="flex flex-wrap gap-1.5" data-slot="ads-keywords">
+                  {detail.keywords.map((k) => (
+                    <li key={k} className="rounded-full bg-muted px-2.5 py-0.5 text-xs">
+                      {k}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             {/* The Earn and Pay cards (PR 10–12) go here. */}
           </div>
         </Dialog.Popup>

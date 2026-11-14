@@ -89,6 +89,13 @@ export interface AdsOpportunity {
   /** Where ads can show beside the prompt's answers. */
   adChannels: AdsChannel[];
   paidMeasured: boolean;
+  /** Why the rule decided `recommended` (server lib/ads/decision.js). */
+  reasons: AdsReason[];
+}
+
+export interface AdsReason {
+  code: string;
+  [key: string]: unknown;
 }
 
 /** Opportunities (GET /api/ads/opportunities): Starter's rows end where `locked` starts. */
@@ -123,6 +130,9 @@ export interface AdsAnswer {
 export interface AdsOpportunityDetail {
   promptId: string;
   answers: AdsAnswer[];
+  fanOuts: { query: string; platform: string }[];
+  /** The prompt's keyword seeds (prompt_volumes.keywords). */
+  keywords: string[];
 }
 
 export function readAdsOpportunity(brandId: string, promptId: string, period: AdsPeriod) {
