@@ -23,6 +23,7 @@ import {
   ruleSetFits,
   ruleSetType,
   rulesMet,
+  rulesPageType,
   setToSave,
   textRuleCheck,
   type ActiveRule,
@@ -177,6 +178,8 @@ export function useDraftRules({
   }, [draft.brandId, siteType]);
 
   const draftType = isPageType(pageType) ? pageType : null;
+  // The type the rules are checked as: a set picked before setFor keeps its type rules.
+  const checkedAs = rulesPageType(choices, draftType);
   const sources = reads.sources;
   const ctx = useMemo<RuleContext>(() => {
     if (!sources || sources.failed) {
@@ -187,7 +190,7 @@ export function useDraftRules({
         language,
         catalog,
         shopping,
-        pageType: draftType,
+        pageType: checkedAs,
       };
     }
     const fanouts = buildSourceGroups(sources.data, sources.choices, {
@@ -204,9 +207,9 @@ export function useDraftRules({
       language,
       catalog,
       shopping,
-      pageType: draftType,
+      pageType: checkedAs,
     };
-  }, [sources, draft.title, draft.sourceUrl, language, catalog, shopping, draftType]);
+  }, [sources, draft.title, draft.sourceUrl, language, catalog, shopping, checkedAs]);
   const brief = reads.brief;
   const keywords = useMemo(
     () => (brief.status === 'ready' ? (brief.brief?.keywords ?? []) : []),
@@ -214,11 +217,12 @@ export function useDraftRules({
   );
 
   const setType = ruleSetType(choices, draftType);
-  // What a save keeps of the set: one picked for another page type than the page's now goes.
-  const pin: Pick<DraftRules, 'set' | 'setFor'> =
-    draftType && setType !== draftType
-      ? { set: setType, setFor: draftType }
-      : { set: null, setFor: undefined };
+  // The set as the person picked it, setFor or none: only picking a set
+  // changes it, never a rule's change, Reset or the page type changed.
+  const pinned: Pick<DraftRules, 'set' | 'setFor'> = {
+    set: choices.set,
+    ...(choices.setFor ? { setFor: choices.setFor } : {}),
+  };
   const effective = useMemo(
     () => effectiveRules(choices, setType ? mine[setType] : undefined),
     [choices, setType, mine],
@@ -301,9 +305,9 @@ export function useDraftRules({
     waiting.current = { rules: next, message };
     flush();
   };
-  // A change keeps the set the draft's rules come from.
+  // A change keeps the set the draft's rules come from, and the set picked.
   const edited = (change: Partial<DraftRules>, message = t('updated')) =>
-    save({ ...effective, ...pin, source: effective.source ?? 'default', ...change }, message);
+    save({ ...effective, ...pinned, source: effective.source ?? 'default', ...change }, message);
   const typeName = (type: PageType | null) => (type ? tTypes(type) : '');
 
   return {
@@ -331,7 +335,8 @@ export function useDraftRules({
       const set = source === 'mine' ? mine[type] : undefined;
       save(
         {
-          // Another type's set holds while the page keeps the type it was picked on.
+          // Another type's set holds while the page keeps the type it was picked on
+          // (a set picked before setFor takes it now); the page type's own follows it.
           ...(draftType && type !== draftType ? { set: type, setFor: draftType } : { set: null }),
           source,
           // The page's own length stays the Length rule's starting point.
@@ -393,7 +398,7 @@ export function useDraftRules({
     reset: () =>
       save(
         {
-          ...pin,
+          ...pinned,
           source: 'default',
           overrides: {},
           textRules: [],

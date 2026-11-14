@@ -29,6 +29,8 @@ import {
   ruleSet,
   ruleSetType,
   rulesMet,
+  rulesPageType,
+  legacyPin,
   notCheckedHere,
   type ActiveRule,
   type RuleContext,
@@ -1074,14 +1076,51 @@ describe('rules that follow the page, and rules it can’t meet', () => {
   });
 
   it('follows the page type, unless a set was picked for the type the page has (A1)', () => {
-    // Picked with no page type, or before the page's type was set or changed: it goes.
-    expect(ruleSetType({ set: 'product_page' }, null)).toBeNull();
-    expect(ruleSetType({ set: 'product_page' }, 'blog_post')).toBe('blog_post');
+    // Picked for another type than the page has now (its type set or changed since): it falls back.
     expect(ruleSetType({ set: 'product_page', setFor: 'blog_post' }, 'guide')).toBe('guide');
+    expect(ruleSetType({ set: 'product_page', setFor: 'blog_post' }, null)).toBeNull();
+    expect(rulesPageType({ set: 'product_page', setFor: 'blog_post' }, 'guide')).toBe('guide');
     expect(ruleSetType({ set: 'product_page', setFor: 'blog_post' }, 'blog_post')).toBe(
       'product_page',
     );
+    // Its type rules aren't the page's: they're set apart, as #2389 sets them.
+    expect(rulesPageType({ set: 'product_page', setFor: 'blog_post' }, 'blog_post')).toBe(
+      'blog_post',
+    );
     expect(ruleSetType({ set: null }, 'guide')).toBe('guide');
+    expect(ruleSetType({ set: null }, null)).toBeNull();
+  });
+
+  it('keeps a set picked before setFor, with its type rules, whatever the page type', () => {
+    const legacy = { set: 'product_page' as const };
+    expect(legacyPin(legacy)).toBe(true);
+    expect(legacyPin({ set: 'product_page', setFor: 'blog_post' })).toBe(false);
+    expect(legacyPin({ set: null })).toBe(false);
+    // With a page type, another or its own, and with none.
+    for (const pageType of ['blog_post', 'product_page', 'not_a_type', null]) {
+      expect([pageType, ruleSetType(legacy, pageType)]).toEqual([pageType, 'product_page']);
+      expect([pageType, rulesPageType(legacy, pageType)]).toEqual([pageType, 'product_page']);
+    }
+    // Its type rules are checked as they were, on a blog post and on a page with no type.
+    const table = '<table><tr><td>Weight</td><td>1.2 kg</td></tr></table>';
+    for (const pageType of ['blog_post', null]) {
+      const on = { ...ctx, pageType: rulesPageType(legacy, pageType) };
+      expect(checkRule(rule('specsTable', 'product_page'), page(table), on)).toEqual({
+        state: 'ok',
+      });
+      expect(checkRule(rule('specsTable', 'product_page'), page('<p>x</p>'), on)).not.toEqual({
+        state: 'info',
+        code: 'otherType',
+      });
+    }
+    // Its customised rules stay on it.
+    const choices = draftRulesSchema.parse({
+      set: 'product_page',
+      source: 'default',
+      overrides: { specsTable: { on: false } },
+    });
+    const kept = activeRules(ruleSet(ruleSetType(choices, 'blog_post')), choices);
+    expect(kept.find((r) => r.key === 'specsTable')?.on).toBe(false);
   });
 
   it('sets apart another type’s rules and a product page with no specs, never counted (H)', () => {
