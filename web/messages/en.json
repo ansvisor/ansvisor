@@ -13860,6 +13860,7 @@
         "microsoft": "Microsoft"
       },
       "noChannel": "No ad channel",
+      "noAdNeeded": "No ad needed",
       "open": "Open",
       "noneFiltered": "No prompts with this decision.",
       "lock": "{count, plural, one {# more prompt} other {# more prompts}} · Ads opportunities are included from {plan}"

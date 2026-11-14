@@ -156,6 +156,26 @@ describe('AdsOpportunities', () => {
     expect(rows().map((r) => r.dataset.state ?? '')).toEqual(['', '', 'selected', '', '', '']);
   });
 
+  it('fills Channels only where the decision says to pay; Earn and Overlap need no ad', async () => {
+    await render();
+    const channels = (id: string) =>
+      rows()
+        .find((r) => r.dataset.promptId === id)!
+        .querySelector<HTMLElement>('[data-slot="ads-channels"]')!;
+    // Pay and Earn + pay list their channels.
+    expect(channels('p3').textContent).toBe('ChatGPT, Google');
+    expect(channels('p1').textContent).toBe('ChatGPT, Google');
+    // Earn and Overlap show a muted dash that reads as "No ad needed".
+    for (const id of ['p4', 'p5', 'p6']) {
+      const cell = channels(id);
+      expect(cell.querySelector('[aria-hidden]')?.textContent).toBe('—');
+      expect(cell.querySelector('.sr-only')?.textContent).toBe('No ad needed');
+      expect(cell.textContent).not.toContain('ChatGPT');
+    }
+    // The header stays.
+    expect(container.querySelector('thead')?.textContent).toContain('Channels');
+  });
+
   it('says what the Google searches estimate for AI on hover', async () => {
     await render();
     vi.useFakeTimers();
@@ -193,11 +213,19 @@ describe('AdsOpportunities', () => {
   it('shows Starter the server’s 3 rows and the lock row with Upgrade; Growth sees all (§9.7)', async () => {
     await render(page(ROWS.slice(0, 3), 5), { writable: false });
     expect(ids()).toEqual(['p1', 'p2', 'p3']);
-    const lock = container.querySelector('[data-slot="ads-lock-row"]')!;
-    expect(lock.textContent).toContain(
-      '5 more prompts · Ads opportunities are included from Growth',
+    // One slim row across the columns: the lock, the count and Upgrade, not a card.
+    const lock = container.querySelector<HTMLElement>('[data-slot="ads-lock-row"]')!;
+    expect(lock.tagName).toBe('TR');
+    const cell = lock.querySelector('td')!;
+    expect(lock.querySelectorAll('td')).toHaveLength(1);
+    expect(cell.colSpan).toBe(6);
+    expect(cell.querySelector('svg')).not.toBeNull();
+    expect(lock.querySelector('[data-slot="upgrade-card"]')).toBeNull();
+    expect(lock.textContent).toBe(
+      '5 more prompts · Ads opportunities are included from GrowthUpgrade',
     );
     const upgrade = lock.querySelector('[data-action="plan.upgrade"]')!;
+    expect(upgrade.textContent).toBe('Upgrade');
     expect(upgrade.getAttribute('href')).toBe('/dashboard/settings?tab=billing');
     // Locked rows stay locked under each filter.
     await click(filter('Earn · 0'));
@@ -242,10 +270,15 @@ describe('AdsOpportunities', () => {
     let refuse: (err: Error) => void = () => {};
     api.setAdsDecision.mockReturnValue(new Promise((_, reject) => (refuse = reject)));
     await render();
+    // Channels follow the decision in force: none on Earn, the channels on Earn + pay.
+    const channels = () => cells(rows()[3])[4];
+    expect(channels()).toBe('—No ad needed');
     await pick(3, 'Earn + pay');
     expect(cells(rows()[3])[1]).toBe('Earn + payChange the decisionRecommended: Earn');
+    expect(channels()).toBe('ChatGPT, Google');
     await act(async () => refuse(new Error('Ads opportunities/p4/decision: 403')));
     expect(cells(rows()[3])[1]).toBe('EarnChange the decision');
+    expect(channels()).toBe('—No ad needed');
     expect(toast.error).toHaveBeenCalledWith("The decision couldn't be saved. Try again.");
   });
 
