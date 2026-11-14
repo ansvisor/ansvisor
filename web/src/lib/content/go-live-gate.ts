@@ -12,7 +12,7 @@ import { isPageType } from './drafts';
 import type { PageRead } from './page-read';
 import { qualityAverage, qualityPhase } from './quality';
 import { trustBlocks, unplacedSites, type LinkCheck, type TrustBlock } from './quality-checks';
-import { qualityState, type QualityReads, type QualityState } from './quality-inputs';
+import { pageFactsOf, qualityState, type QualityReads, type QualityState } from './quality-inputs';
 import { profileFor } from './quality-profiles';
 import { sentencesOf } from './readability';
 import {
@@ -367,7 +367,7 @@ async function readDraftQuality(
     supabaseAdmin
       .from('content_drafts')
       .select(
-        'id, brand_id, title, body_html, page_type, author_id, author_real_at, author_profile_at, rules, kept_sources, brands!inner(organization_id, name, language, site_type, industry, shopping_mode_enabled)',
+        'id, brand_id, title, slug, source_url, published_url, body_html, page_type, author_id, author_real_at, author_profile_at, rules, kept_sources, brands!inner(organization_id, name, language, site_type, industry, shopping_mode_enabled)',
       )
       .eq('id', input.draftId)
       .eq('brands.organization_id', input.organizationId)
@@ -519,6 +519,9 @@ async function readDraftQuality(
     (confirms ?? []).filter((r) => r.kind === 'intro_fact').map((r) => r.key),
   );
 
+  // Its title and addresses, which with its H1 say which places' facts are its own (00539).
+  const pageTitle = draft.title;
+  const pageUrls = [draft.slug, draft.published_url, draft.source_url];
   const state = qualityState({
     html,
     blocks,
@@ -553,6 +556,8 @@ async function readDraftQuality(
       : null,
     siteTrustRead: true,
     brandFacts: sourcesOn ? facts : null,
+    pageTitle,
+    pageUrls,
     keptSources,
     aiKinds,
     claimBlocks,
@@ -576,7 +581,8 @@ async function readDraftQuality(
   });
   return {
     state,
-    facts,
+    // The facts this page is checked against: with only other places', it is unchecked.
+    facts: pageFactsOf({ html, brandFacts: facts, pageTitle, pageUrls }) ?? facts,
     sentences: blocks.flatMap((b) => sentencesOf(b.text)),
     brandName: authors.brands.find((b) => b.id === draft.brand_id)?.name ?? brand.name,
   };

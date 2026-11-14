@@ -79,7 +79,7 @@ router.patch('/:id', async (req, res) => {
   try {
     const { data: fact, error } = await supabaseAdmin
       .from('brand_facts')
-      .select('id, brand_id, kind, slot')
+      .select('id, brand_id, kind, slot, scope')
       .eq('id', id.data)
       .maybeSingle();
     if (error) throw error;

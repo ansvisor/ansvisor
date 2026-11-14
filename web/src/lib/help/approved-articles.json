@@ -1483,7 +1483,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -1595,7 +1595,7 @@
         },
         {
           "heading": "Your brand facts",
-          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or a manager approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact.\n\nChat and its agents never make up a price, fee, date, rule or contact detail. When one is missing, they ask you for it, or leave that part out."
+          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or manager approved on the brand's **Brand facts** tab, in your site's own words. Facts waiting for approval, rejected or gone from your site aren't read, and a fact for one destination, operator or route is used only on that place's pages.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or give the facts yourself. Chat never approves a fact.\n\nChat and its agents never make up a price, fee, date, rule or contact detail. When one is missing, they ask you for it, or leave that part out."
         },
         {
           "heading": "Content rules",

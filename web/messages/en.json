@@ -17309,6 +17309,7 @@
         "approveFact": "Approve {fact}",
         "rejectFact": "Reject {fact}",
         "reviewFailed": "That fact couldn't be saved. Try again.",
+        "forPlace": "For {place} only",
         "gone": "No longer on your site",
         "replaces": "Was {value}",
         "trialDays": "{days, plural, one {# day} other {# days}}",
