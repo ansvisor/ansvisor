@@ -419,6 +419,7 @@ export function AdsOpportunities({
           brandId={brandId}
           period={period}
           decision={<Decision row={openedRow} onChange={null} />}
+          canSend={canManage && writable}
           finalFocus={openedFrom}
           onClose={() => setOpened({ id: openedRow.promptId, open: false })}
         />

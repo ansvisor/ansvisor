@@ -3,23 +3,34 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
+import type { TeamRole } from '@/components/providers/role-provider';
 import type { AdsOpportunity, AdsOpportunityDetail } from '@/lib/ads/api';
 
 /**
  * An opportunity's drawer (ADS-01 §3.2, §11), opened from the table's Open:
  * the row's decision and why, the latest answer per platform as quoted plain
  * text, fan-outs and seeds, no sponsored line without data, and closed by
- * ✕, the overlay or Esc with focus back on Open.
+ * ✕, the overlay or Esc with focus back on Open. The Earn card on Earn and
+ * Earn + pay: what to fix, and Send to Action Center for Admins and Managers
+ * where they can change the decision, then the action it made or found.
  */
 
 vi.mock('@/i18n/navigation', () => ({
-  Link: ({ href, children }: { href: string; children: ReactNode }) => (
-    <a href={href}>{children}</a>
+  Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
-const api = vi.hoisted(() => ({ readAdsOpportunities: vi.fn(), readAdsOpportunity: vi.fn() }));
+const api = vi.hoisted(() => ({
+  readAdsOpportunities: vi.fn(),
+  readAdsOpportunity: vi.fn(),
+  sendAdsEarn: vi.fn(),
+}));
 vi.mock('@/lib/ads/api', () => api);
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
 
 const { AdsOpportunities } = await import('./_opportunities');
@@ -79,33 +90,45 @@ const DETAIL: AdsOpportunityDetail = {
   ],
   fanOuts: [{ query: 'best crm 2026', platform: 'google-aio' }],
   keywords: ['best crm', 'crm small team'],
+  earn: { page: 'https://northwind.example/small-teams/', action: null },
 };
 
 let container: HTMLDivElement;
 let root: Root;
 
-beforeEach(async () => {
+/** The table with one row, for a role, where the plan writes (not the demo brand, Starter or the trial). */
+async function mount(role: TeamRole = 'analyst', row = ROW, writable = true) {
   api.readAdsOpportunities.mockReset().mockResolvedValue({
     period: '30d',
-    rows: [ROW],
+    rows: [row],
     total: 1,
     locked: 0,
     notAnalysed: 0,
   });
-  api.readAdsOpportunity.mockReset().mockResolvedValue(DETAIL);
-  useBrandStore.setState({ brands: [], activeBrandId: 'b1' });
-  container = document.createElement('div');
-  document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <RoleProvider role="analyst">
-          <AdsOpportunities period="30d" writable thresholds={false} />
+        <RoleProvider role={role}>
+          <AdsOpportunities period="30d" writable={writable} thresholds={false} />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
+}
+async function remount(...args: Parameters<typeof mount>) {
+  act(() => root.unmount());
+  await mount(...args);
+}
+
+beforeEach(async () => {
+  api.readAdsOpportunity.mockReset().mockResolvedValue(DETAIL);
+  api.sendAdsEarn.mockReset();
+  toast.error.mockReset();
+  useBrandStore.setState({ brands: [], activeBrandId: 'b1' });
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  await mount();
 });
 afterEach(() => {
   act(() => root.unmount());
@@ -217,5 +240,82 @@ describe('AdsOpportunityDrawer', () => {
     });
     expect(drawer()).toBeNull();
     expect(document.activeElement).toBe(openButton());
+  });
+});
+
+describe('the Earn card', () => {
+  const card = () => drawer()?.querySelector<HTMLElement>('[data-slot="ads-earn"]') ?? null;
+  const sendButton = () => card()?.querySelector<HTMLButtonElement>('[data-action="ads.earnTask"]');
+  const opened = () => card()?.querySelector<HTMLAnchorElement>('[data-action="ads.openAction"]');
+
+  it('says what to fix on Earn and Earn + pay only; an analyst sees no button', async () => {
+    await open();
+    expect(card()?.textContent).toBe(
+      'Earn · fix the answerRefresh /small-teams to answer this prompt, so AI picks you over Kestrel.',
+    );
+    expect(sendButton()).toBeNull();
+    for (const decision of ['pay', 'overlap'] as const) {
+      await remount('manager', { ...ROW, decision });
+      await open();
+      expect(card(), decision).toBeNull();
+    }
+    api.readAdsOpportunity.mockResolvedValue({ ...DETAIL, earn: { page: null, action: null } });
+    await remount('manager', { ...ROW, decision: 'earn', leader: 'none', reasons: [] });
+    await open();
+    expect(card()?.querySelector('p')?.textContent).toBe(
+      'Write a page that answers this prompt, so AI has a page of yours to pick.',
+    );
+    expect(sendButton()?.textContent).toBe('Send to Action Center');
+  });
+
+  it('sends the fix once per card, then opens the action; one failure keeps the key', async () => {
+    await remount('admin');
+    await open();
+    api.sendAdsEarn.mockRejectedValueOnce(new Error('Ads opportunities/p1/earn: 500'));
+    await act(async () => sendButton()!.click());
+    expect(toast.error).toHaveBeenCalledWith(
+      "The fix couldn't be sent to the Action Center. Try again.",
+    );
+    api.sendAdsEarn.mockResolvedValue({
+      action: { id: 'a1', no: 1300 },
+      created: true,
+      covered: false,
+    });
+    await act(async () => sendButton()!.click());
+    const [first, second] = api.sendAdsEarn.mock.calls;
+    expect(first).toEqual(['b1', 'p1', expect.stringMatching(/^[\w-]{36}$/)]);
+    expect(second).toEqual(first);
+    expect(sendButton()).toBeNull();
+    expect(opened()?.textContent).toBe('Sent · Open AC-1300');
+    expect(opened()?.getAttribute('href')).toBe('/dashboard/action-center/actions?action=a1');
+  });
+
+  it('opens the action that already covers the prompt instead of sending another', async () => {
+    api.readAdsOpportunity.mockResolvedValue({
+      ...DETAIL,
+      earn: { page: null, action: { id: 'a9', no: 1258 } },
+    });
+    await remount('manager');
+    await open();
+    expect(sendButton()).toBeNull();
+    expect(opened()?.textContent).toBe('Open AC-1258');
+
+    api.readAdsOpportunity.mockResolvedValue(DETAIL);
+    api.sendAdsEarn.mockResolvedValue({
+      action: { id: 'a9', no: 1258 },
+      created: false,
+      covered: true,
+    });
+    await remount('manager');
+    await open();
+    await act(async () => sendButton()!.click());
+    expect(opened()?.textContent).toBe('Open AC-1258');
+  });
+
+  it('has no button on the demo brand, Starter or the trial, whatever the role', async () => {
+    await remount('admin', ROW, false);
+    await open();
+    expect(card()).not.toBeNull();
+    expect(sendButton()).toBeNull();
   });
 });

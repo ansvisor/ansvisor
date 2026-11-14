@@ -13958,7 +13958,15 @@
       "cites": "Cites: {domains}",
       "fanOuts": "Fan-out queries",
       "keywords": "Keyword seeds",
-      "failed": "The answers couldn't be read. Close this and open it again."
+      "failed": "The answers couldn't be read. Close this and open it again.",
+      "earn": {
+        "title": "Earn · fix the answer",
+        "fix": "{page, select, none {Write a page that answers this prompt} other {Refresh {page} to answer this prompt}}{why, select, rival {, so AI picks you over {name, select, none {the competitor it names} other {{name}}}} protect {, so AI keeps picking you} other {, so AI has a page of yours to pick}}.",
+        "send": "Send to Action Center",
+        "sent": "Sent · Open AC-{no}",
+        "open": "Open AC-{no}",
+        "failed": "The fix couldn't be sent to the Action Center. Try again."
+      }
     },
     "empty": {
       "title": "Coming soon in this preview",
