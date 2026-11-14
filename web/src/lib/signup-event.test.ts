@@ -30,6 +30,10 @@ const sendSignedUp = vi.fn();
 vi.mock('@/lib/resend-event', () => ({
   sendSignedUpEvent: (u: unknown) => sendSignedUp(u),
 }));
+const capturePostHog = vi.fn();
+vi.mock('@/lib/posthog-server', () => ({
+  capturePostHog: (...args: unknown[]) => capturePostHog(...args),
+}));
 
 const { SIGNUP_EVENT_SINCE, sendSignupEventOnce } = await import('./signup-event');
 
@@ -57,6 +61,7 @@ beforeEach(() => {
   later.tasks.length = 0;
   later.outsideRequest = false;
   sendSignedUp.mockReset().mockResolvedValue(undefined);
+  capturePostHog.mockReset().mockResolvedValue(undefined);
   auth.admin.getUserById.mockReset().mockImplementation(async () => ({
     data: { user: structuredClone(auth.account) },
     error: null,
@@ -91,6 +96,9 @@ describe('sendSignupEventOnce', () => {
     expect(sendSignedUp).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'u1', email: 'ada@example.com' }),
     );
+    // PostHog's signed_up from the same claim: the user id and the way in only.
+    expect(capturePostHog).toHaveBeenCalledTimes(1);
+    expect(capturePostHog).toHaveBeenCalledWith('signed_up', 'u1', { source: 'email' });
     // The other app_metadata stays.
     expect(auth.account!.app_metadata).toMatchObject({ provider: 'email', providers: ['email'] });
   });
@@ -119,14 +127,24 @@ describe('sendSignupEventOnce', () => {
     sendSignupEventOnce(signUp({ created_at: ago(5_000), app_metadata: { provider: 'github' } }));
     await runLater();
     expect(sendSignedUp).toHaveBeenCalledTimes(1);
+    expect(capturePostHog).toHaveBeenCalledWith('signed_up', 'u1', {
+      source: 'oauth',
+      provider: 'github',
+    });
   });
 
-  it('reads nothing for an account already claimed, or without RESEND_API_KEY', () => {
+  it('reads nothing for an account already claimed, or without a Resend or PostHog key', () => {
     sendSignupEventOnce(signUp({ app_metadata: { provider: 'email', signup_event_at: 'x' } }));
     vi.stubEnv('RESEND_API_KEY', '');
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', '');
     sendSignupEventOnce(signUp());
     expect(later.tasks).toHaveLength(0);
     expect(auth.admin.getUserById).not.toHaveBeenCalled();
+
+    // PostHog's key alone: still claimed once, for the funnel.
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
+    sendSignupEventOnce(signUp());
+    expect(later.tasks).toHaveLength(1);
   });
 
   it('sends nothing when the claim is already there, or cannot be written', async () => {
@@ -155,6 +173,7 @@ describe('sendSignupEventOnce', () => {
     });
     await runLater();
     expect(sendSignedUp).not.toHaveBeenCalled();
+    expect(capturePostHog).not.toHaveBeenCalled();
   });
 
   it('never throws, and never logs the address', async () => {

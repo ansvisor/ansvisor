@@ -392,6 +392,11 @@ describe('the dashboard layout and the sign-up event', () => {
     resend.mock.calls
       .filter(([url]) => url === 'https://api.resend.com/events/send')
       .map(([, init]) => JSON.parse((init as RequestInit).body as string));
+  /** The events sent to PostHog. */
+  const captured = () =>
+    resend.mock.calls
+      .filter(([url]) => url === 'https://eu.i.posthog.com/capture/')
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string));
   /** The page's after() work, as Next runs it once the response is sent. */
   async function runLater() {
     const tasks = later.tasks.splice(0);
@@ -409,11 +414,21 @@ describe('the dashboard layout and the sign-up event', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("sends an e-mail sign-up's event once, from its first page, on the way to onboarding", async () => {
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', 'https://eu.i.posthog.com');
     expect(await open()).toBe('/dashboard/onboarding');
     expect(sent()).toEqual([]);
     await runLater();
     expect(sent()).toEqual([
       { event: 'user.signed_up', email: 'ada@example.com', payload: { first_name: 'Ada' } },
+    ]);
+    // PostHog's signed_up from the same claim.
+    expect(captured()).toEqual([
+      expect.objectContaining({
+        event: 'signed_up',
+        distinct_id: 'u1',
+        properties: expect.objectContaining({ source: 'email' }),
+      }),
     ]);
     expect(auth.account!.app_metadata).toMatchObject({ signup_event_at: expect.any(String) });
 
@@ -424,6 +439,7 @@ describe('the dashboard layout and the sign-up event', () => {
     expect(await open()).toBeNull();
     await runLater();
     expect(sent()).toHaveLength(1);
+    expect(captured()).toHaveLength(1);
     expect(auth.admin.getUserById).not.toHaveBeenCalled();
   });
 

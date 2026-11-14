@@ -2,12 +2,14 @@ import { after } from 'next/server';
 import type { User } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { sendSignedUpEvent } from '@/lib/resend-event';
+import { capturePostHog } from '@/lib/posthog-server';
 
 /**
- * The sign-up event, sent once per account from its first signed-in page
+ * The sign-up events, sent once per account from its first signed-in page
  * (the dashboard's layouts), whichever way the account was made: an e-mail
  * and password, Google or GitHub. Resend's welcome e-mail Automation starts
- * on it (`user.signed_up`).
+ * on `user.signed_up`; PostHog's `signed_up` is the core-loop funnel's first
+ * step (docs/analytics/core-loop-funnel.md).
  *
  * Not from the sign-in links: the e-mail sign-up's confirmation link doesn't
  * come through /auth/confirm (the template links to {{ .ConfirmationURL }}),
@@ -17,9 +19,9 @@ import { sendSignedUpEvent } from '@/lib/resend-event';
  */
 
 /**
- * Accounts made from this moment on are sent the event: the welcome
+ * Accounts made from this moment on are sent the events: the welcome
  * Automation started then (13 Nov 2026, 00:00 Istanbul time). An older
- * account is never sent it, whenever it next signs in.
+ * account is never sent them, whenever it next signs in.
  */
 export const SIGNUP_EVENT_SINCE = Date.parse('2026-11-13T00:00:00+03:00');
 
@@ -50,6 +52,14 @@ function owed(user: SessionUser, now: number): boolean {
 /** Accounts this server is claiming right now: two of its pages at once claim once. */
 const claiming = new Set<string>();
 
+/** PostHog's way in: an e-mail, or the provider; no e-mail address or name. */
+function signupSource(user: Pick<User, 'app_metadata'>): Record<string, unknown> {
+  const provider = user.app_metadata?.provider;
+  return provider === 'email'
+    ? { source: 'email' }
+    : { source: 'oauth', provider: provider ?? null };
+}
+
 async function readUser(id: string): Promise<User | null> {
   const { data, error } = await supabaseAdmin.auth.admin.getUserById(id);
   return error ? null : (data?.user ?? null);
@@ -75,7 +85,10 @@ async function claimAndSend(id: string): Promise<void> {
     if (error) return;
     const claimed = await readUser(id);
     if (claimed?.app_metadata?.[CLAIM_KEY] !== claim) return;
-    await sendSignedUpEvent(claimed);
+    await Promise.all([
+      sendSignedUpEvent(claimed),
+      capturePostHog('signed_up', id, signupSource(claimed)),
+    ]);
   } catch (err) {
     console.error('[signup-event] failed:', err instanceof Error ? err.name : 'error');
   } finally {
@@ -84,15 +97,17 @@ async function claimAndSend(id: string): Promise<void> {
 }
 
 /**
- * Sends the sign-up event if the signed-in person's account is owed it, in
- * the background (after()): the page never waits, and this never throws.
+ * Sends the sign-up events if the signed-in person's account is owed them,
+ * in the background (after()): the page never waits, and this never throws.
  * `user` is the session's own (supabase.auth.getUser()); every admin read and
- * write is keyed by its id. An account that has had it, or never will, costs
- * no read at all. Does nothing without RESEND_API_KEY.
+ * write is keyed by its id. An account that has had them, or never will,
+ * costs no read at all. Does nothing without RESEND_API_KEY or
+ * NEXT_PUBLIC_POSTHOG_KEY (each event needs its own).
  */
 export function sendSignupEventOnce(user: SessionUser): void {
   try {
-    if (!process.env.RESEND_API_KEY || !user?.id || !owed(user, Date.now())) return;
+    const anyKey = process.env.RESEND_API_KEY || process.env.NEXT_PUBLIC_POSTHOG_KEY;
+    if (!anyKey || !user?.id || !owed(user, Date.now())) return;
     after(() => claimAndSend(user.id));
   } catch (err) {
     console.error('[signup-event] not scheduled:', err instanceof Error ? err.name : 'error');

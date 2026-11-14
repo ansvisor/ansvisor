@@ -18,8 +18,9 @@ export default async function OnboardingLayout({ children }: { children: React.R
     redirect('/sign-in');
   }
 
-  // The sign-up event, as the dashboard's layout sends it, for a new account
-  // whose first page is the wizard (lib/signup-event.ts: once per account).
+  // The sign-up events, as the dashboard's layout sends them, for a new
+  // account whose first page is the wizard (lib/signup-event.ts: once per
+  // account).
   sendSignupEventOnce(user);
 
   // An already-onboarded member whose org subscription has lapsed must not
