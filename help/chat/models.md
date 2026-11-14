@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json]
 ---
-Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Sonnet 5.5 writes the answer. The model button, in the row at the bottom of the message box, shows what the chat runs on: **Auto**, or the model's short name. Click it to open the model menu.
+Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Sonnet 5.5 writes the answer. The model button, under the message box on the right, shows what the chat runs on: **Auto**, or the model's short name. Click it to open the model menu.
 
 ## Pick a model
 

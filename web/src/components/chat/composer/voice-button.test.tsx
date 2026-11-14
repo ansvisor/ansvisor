@@ -128,9 +128,9 @@ describe('the microphone', () => {
     const send = container.querySelector('[data-action="composer.send"]');
     expect(mic()!.nextElementSibling).toBe(send);
     expect(mic()!.parentElement!.getAttribute('data-slot')).toBe('composer-send-group');
-    // The model comes right before it; ＋ / @ stay on the left.
-    expect(mic()!.parentElement!.previousElementSibling?.getAttribute('data-slot')).toBe(
-      'composer-model',
+    // ＋ / @ on the left, right before it; the model is on the line under the box.
+    expect(mic()!.parentElement!.previousElementSibling?.getAttribute('data-action')).toBe(
+      'composer.openRef',
     );
     expect(
       mic()!.parentElement!.parentElement!.firstElementChild!.getAttribute('data-action'),
