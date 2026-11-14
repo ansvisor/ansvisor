@@ -3,7 +3,7 @@ import { useTranslations } from 'next-intl';
 import { getCitedPassages, getDraftSources, getMyRuleSets } from '@/lib/actions/content-drafts';
 import { rebuildSources, type RebuildSources } from './brief';
 import { pagePassages } from './cited-passages';
-import { isPageType, type DraftMethod } from './drafts';
+import type { DraftMethod } from './drafts';
 import {
   NOT_FOR_AGENT,
   activeRules,
@@ -14,6 +14,7 @@ import {
   ruleLength,
   ruleLengthBand,
   ruleSet,
+  ruleSetType,
   type ActiveRule,
   type DraftRules,
   type RuleStatus,
@@ -151,7 +152,7 @@ export async function agentWriteRequest(
   /** The locked passages' keys, as the editor holds them; read from the server otherwise. */
   locked?: string[],
 ): Promise<AgentWriteRequest> {
-  const setType = draft.rules.set ?? (isPageType(draft.pageType) ? draft.pageType : null);
+  const setType = ruleSetType(draft.rules, draft.pageType);
   const [read, mine, cited] = await Promise.all([
     getDraftSources(draft.id),
     // Without the workspace's rules, the page type's defaults still apply.

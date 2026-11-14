@@ -3654,6 +3654,128 @@ describe('the side panel', () => {
     ).toHaveLength(1);
   });
 
+  describe('a rule set picked for another page type', () => {
+    /** A set picked before a pick kept the page's type with it (no setFor), customised. */
+    const legacy = {
+      set: 'product_page' as const,
+      source: 'default' as const,
+      overrides: { sentence: { on: false } },
+      textRules: [{ id: 't1', text: 'Mention free shipping', on: true }],
+    };
+    const openRules = async () => {
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!.click(),
+      );
+    };
+    const toggle = (label: string) =>
+      act(async () =>
+        panel()!
+          .querySelector<HTMLElement>(`[role="switch"][aria-label="${label}: on or off"]`)!
+          .click(),
+      );
+    const setTrigger = () => panel()!.querySelector('[aria-label="Rule set"]')!;
+    const groups = () => [...panel()!.querySelectorAll('section h4')].map((h) => h.textContent);
+    const lastSaved = () => saveDraftRules.mock.calls.at(-1)![1] as Record<string, unknown>;
+
+    it('keeps a set picked before setFor, its type rules and its custom rules, through an edit', async () => {
+      for (const pageType of ['blog_post', null]) {
+        saveDraftRules.mockClear();
+        getContentDraft.mockResolvedValue(draft({ pageType, rules: legacy }));
+        window.innerWidth = 1024;
+        await renderPage();
+        await openRules();
+        expect(setTrigger().textContent).toContain('Product page · Ansvisor default');
+        // Its type rules are checked, as before setFor: not set apart as another type's.
+        expect(groups()).toContain('Product page rules');
+        expect(panel()!.textContent).not.toContain("This page isn't a product page.");
+        expect(
+          panel()!
+            .querySelector('[role="switch"][aria-label="Max sentence length: on or off"]')!
+            .getAttribute('aria-checked'),
+        ).toBe('false');
+
+        // An unrelated edit keeps the set, no setFor added, and the custom rules.
+        await toggle('FAQ block');
+        expect(saveDraftRules).toHaveBeenCalledTimes(1);
+        expect(lastSaved()).toEqual({
+          ...legacy,
+          overrides: { sentence: { on: false }, faq: { on: false } },
+        });
+        expect(lastSaved()).not.toHaveProperty('setFor');
+        act(() => root.unmount());
+        root = createRoot(container);
+      }
+    });
+
+    it('keeps a set picked before setFor when the page type changes from the header', async () => {
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post', rules: legacy }));
+      window.innerWidth = 1024;
+      await renderPage();
+      const typeMenu = container.querySelector<HTMLButtonElement>(
+        'header button[aria-label^="Page type:"]',
+      )!;
+      await act(async () => {
+        typeMenu.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        typeMenu.click();
+      });
+      const guide = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
+        (item) => item.textContent?.startsWith('How-to guide'),
+      )!;
+      await act(async () => guide.click());
+      expect(setContentDraftPageType).toHaveBeenCalledWith('d1', 'guide');
+      // Nothing is written to the rules; the Rules tab still shows the set picked.
+      expect(saveDraftRules).not.toHaveBeenCalled();
+      await openRules();
+      expect(setTrigger().textContent).toContain('Product page · Ansvisor default');
+      expect(groups()).toContain('Product page rules');
+
+      // Reset clears the custom rules, not the set.
+      await act(async () =>
+        [...panel()!.querySelectorAll('button')].find((b) => b.textContent === 'Reset')!.click(),
+      );
+      expect(lastSaved()).toMatchObject({ set: 'product_page', overrides: {}, textRules: [] });
+      expect(lastSaved()).not.toHaveProperty('setFor');
+    });
+
+    it('writes setFor when the person picks a set, and set: null for the page type’s own', async () => {
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post', rules: legacy }));
+      window.innerWidth = 1024;
+      await renderPage();
+      await openRules();
+      const pick = async (name: string) => {
+        const trigger = setTrigger();
+        await act(async () => {
+          trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+          (trigger as HTMLElement).click();
+        });
+        const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+          (o) => o.textContent === name,
+        )!;
+        await act(async () => {
+          option.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+        });
+        await act(async () => option.click());
+      };
+
+      // Another type's set: it holds while the page is a blog post.
+      await pick('Feature page · Ansvisor default');
+      expect(lastSaved()).toMatchObject({
+        set: 'feature_page',
+        setFor: 'blog_post',
+        source: 'default',
+      });
+      expect(setTrigger().textContent).toContain('Feature page · Ansvisor default');
+      expect(groups()).not.toContain('Feature page rules');
+      expect(panel()!.textContent).toContain("Feature page rule. This page isn't one.");
+
+      // The page type's own: the set follows the page type again.
+      await pick('Blog post · Ansvisor default');
+      expect(lastSaved()).toMatchObject({ set: null, source: 'default' });
+      expect(lastSaved()).not.toHaveProperty('setFor');
+      expect(toast).toHaveBeenCalledWith('Rule set changed for this draft');
+    });
+  });
+
   it('says when the rules are too long to save, rather than failing the save', async () => {
     // 40 rules of 300 characters in a script of 3 bytes each: past the 32 KB check.
     const textRules = Array.from({ length: 40 }, (_, i) => ({
@@ -3806,6 +3928,8 @@ describe('the side panel', () => {
       });
       getContentDraft.mockResolvedValue({
         ...readable,
+        // Specs the page gives, not in a table yet: a page with none isn't asked for one.
+        bodyHtml: `${readable.bodyHtml}<p>Weight: 1.2 kg</p><p>Volume: 28 l</p>`,
         pageType: 'product_page',
         siteType: 'ecommerce',
       });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import messages from '../../../messages/en.json';
+import { PAGE_TYPES } from './drafts';
 import { htmlBlockElement } from './html-allowlist';
 import { productBlockHtml } from './product-block';
 import type { ShoppingCheck, ShoppingLinkState } from './shopping-check';
@@ -26,7 +27,11 @@ import {
   lengthWarns,
   lengthConflict,
   ruleSet,
+  ruleSetType,
   rulesMet,
+  rulesPageType,
+  legacyPin,
+  notCheckedHere,
   type ActiveRule,
   type RuleContext,
   draftRulesFit,
@@ -1056,6 +1061,92 @@ describe('lengthConflict', () => {
         : s,
     );
     expect(lengthConflict(met, 3)).toBeNull();
+  });
+});
+
+describe('rules that follow the page, and rules it can’t meet', () => {
+  it('never gives a default set more sections and questions than its Length holds (G1)', () => {
+    for (const type of [null, ...PAGE_TYPES]) {
+      const open = activeRules(ruleSet(type, { shopping: true }), NO_DRAFT_RULES).map((r) => ({
+        rule: r,
+        status: { state: 'bad', code: 'missing' } as RuleStatus,
+      }));
+      expect([type, lengthConflict(open, 10)]).toEqual([type, null]);
+    }
+  });
+
+  it('follows the page type, unless a set was picked for the type the page has (A1)', () => {
+    // Picked for another type than the page has now (its type set or changed since): it falls back.
+    expect(ruleSetType({ set: 'product_page', setFor: 'blog_post' }, 'guide')).toBe('guide');
+    expect(ruleSetType({ set: 'product_page', setFor: 'blog_post' }, null)).toBeNull();
+    expect(rulesPageType({ set: 'product_page', setFor: 'blog_post' }, 'guide')).toBe('guide');
+    expect(ruleSetType({ set: 'product_page', setFor: 'blog_post' }, 'blog_post')).toBe(
+      'product_page',
+    );
+    // Its type rules aren't the page's: they're set apart, as #2389 sets them.
+    expect(rulesPageType({ set: 'product_page', setFor: 'blog_post' }, 'blog_post')).toBe(
+      'blog_post',
+    );
+    expect(ruleSetType({ set: null }, 'guide')).toBe('guide');
+    expect(ruleSetType({ set: null }, null)).toBeNull();
+  });
+
+  it('keeps a set picked before setFor, with its type rules, whatever the page type', () => {
+    const legacy = { set: 'product_page' as const };
+    expect(legacyPin(legacy)).toBe(true);
+    expect(legacyPin({ set: 'product_page', setFor: 'blog_post' })).toBe(false);
+    expect(legacyPin({ set: null })).toBe(false);
+    // With a page type, another or its own, and with none.
+    for (const pageType of ['blog_post', 'product_page', 'not_a_type', null]) {
+      expect([pageType, ruleSetType(legacy, pageType)]).toEqual([pageType, 'product_page']);
+      expect([pageType, rulesPageType(legacy, pageType)]).toEqual([pageType, 'product_page']);
+    }
+    // Its type rules are checked as they were, on a blog post and on a page with no type.
+    const table = '<table><tr><td>Weight</td><td>1.2 kg</td></tr></table>';
+    for (const pageType of ['blog_post', null]) {
+      const on = { ...ctx, pageType: rulesPageType(legacy, pageType) };
+      expect(checkRule(rule('specsTable', 'product_page'), page(table), on)).toEqual({
+        state: 'ok',
+      });
+      expect(checkRule(rule('specsTable', 'product_page'), page('<p>x</p>'), on)).not.toEqual({
+        state: 'info',
+        code: 'otherType',
+      });
+    }
+    // Its customised rules stay on it.
+    const choices = draftRulesSchema.parse({
+      set: 'product_page',
+      source: 'default',
+      overrides: { specsTable: { on: false } },
+    });
+    const kept = activeRules(ruleSet(ruleSetType(choices, 'blog_post')), choices);
+    expect(kept.find((r) => r.key === 'specsTable')?.on).toBe(false);
+  });
+
+  it('sets apart another type’s rules and a product page with no specs, never counted (H)', () => {
+    const on = (key: string, html: string, pageType: RuleContext['pageType']) =>
+      checkRule(rule(key, 'product_page'), page(html), { ...ctx, pageType });
+    const table = '<table><tr><td>Weight</td><td>1.2 kg</td></tr></table>';
+    expect(on('specsTable', table, 'blog_post')).toEqual({ state: 'info', code: 'otherType' });
+    expect(on('feedMatch', '<p>x</p>', null)).toEqual({ state: 'info', code: 'otherType' });
+    expect(on('specsTable', table, 'product_page')).toEqual({ state: 'ok' });
+    expect(on('specsTable', '<p>A daypack.</p>', 'product_page')).toEqual({
+      state: 'info',
+      code: 'needsSpecs',
+    });
+    // Specs the page gives, not yet in a table: the agent sets them out.
+    const specs = '<ul><li>Weight: 1.2 kg</li><li>Volume: 28 l</li></ul>';
+    expect(on('specsTable', specs, 'product_page')).toEqual({ state: 'bad', code: 'missing' });
+    const codes = ['otherType', 'needsSpecs', 'needsFeed', 'noSizes', 'aiCheck', 'feedReading'];
+    expect(codes.map((code) => notCheckedHere({ state: 'info', code } as RuleStatus))).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+    ]);
+    expect(notCheckedHere({ state: 'bad', code: 'missing' })).toBe(false);
   });
 });
 

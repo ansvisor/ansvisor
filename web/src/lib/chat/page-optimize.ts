@@ -10,7 +10,7 @@ import {
 import { agentWriteRequest, describeRule } from '@/lib/content/agent-write';
 import { readDraftRules, type DraftRulesRead } from '@/lib/content/draft-rules-read';
 import { ruleStatusDetail } from '@/lib/content/rule-words';
-import { NOT_FOR_AGENT, type ActiveRule } from '@/lib/content/rules';
+import { NOT_FOR_AGENT, notCheckedHere, type ActiveRule } from '@/lib/content/rules';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { withContentDom } from '@/lib/content/server-dom';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -203,7 +203,10 @@ export async function optimizeDraftHere(
 
     // The request as the editor's rewrite makes it, without the rules tried here before.
     await withContentDom();
-    const inEffect = before.checked.filter(({ rule }) => rule.on && !tried.has(rule.key));
+    // Not the rules this page can't meet (an info status): the agent can't meet them either.
+    const inEffect = before.checked.filter(
+      ({ rule, status }) => rule.on && !tried.has(rule.key) && !notCheckedHere(status),
+    );
     const request = await agentWriteRequest(
       {
         id: draft.id,

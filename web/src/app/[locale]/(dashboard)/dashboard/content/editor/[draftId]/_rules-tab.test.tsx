@@ -438,6 +438,8 @@ describe('the Rules tab', () => {
       'Fan-outs and keywords',
       'Links and sources',
       'Style',
+      // No fan-outs or keywords to check here.
+      'Not checked on this page',
     ]);
     expect(container.textContent).toContain(`${s.met}/${s.total} rules met`);
     expect(row('Comparison table vs alternatives').textContent).toContain('✓');
@@ -713,6 +715,49 @@ describe('the Rules tab', () => {
     expect(hint('No out-of-stock or refused product linked')).toContain(
       'is in stock, accepted by Merchant Center for free listings, and still in the catalog.',
     );
+  });
+
+  it('sets apart the rules this page can’t meet, uncounted, saying why (H)', async () => {
+    const onChangeType = vi.fn();
+    const page = readPage('<h1>Why we roast light</h1><p>Light roasts keep more.</p>', 0);
+    const checked = activeRules(ruleSet('product_page'), { overrides: {} }).map((rule) => ({
+      rule,
+      status: checkRule(rule, page, {
+        brandDomains: [],
+        competitorDomains: [],
+        fanouts: [],
+        pageType: 'blog_post',
+      }),
+    }));
+    const s = state(undefined, { setType: 'product_page', rules: checked, ...rulesMet(checked) });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <RoleProvider role="admin">
+            <RulesTab
+              state={s}
+              siteType="ecommerce"
+              draftPageType="blog_post"
+              onChangeType={onChangeType}
+            />
+          </RoleProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    const apart = [...container.querySelectorAll('section')].find(
+      (section) => section.querySelector('h4')?.textContent === 'Not checked on this page',
+    )!;
+    expect(row('Specs table').closest('section')).toBe(apart);
+    expect(row('Specs table').textContent).toContain(
+      "Product page rule. This page isn't a product page.",
+    );
+    expect(container.textContent).not.toContain('Product page rules');
+    expect(s.total).toBe(rulesMet(checked.filter(({ rule }) => rule.group !== 'type')).total);
+    const button = [...apart.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Set page type',
+    );
+    await act(async () => button!.click());
+    expect(onChangeType).toHaveBeenCalled();
   });
 
   it('shows Ansvisor’s set when a draft on My rules has none for its type', async () => {
