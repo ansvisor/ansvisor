@@ -10,7 +10,8 @@ import type { AdsDecision, AdsOpportunities, AdsOpportunity } from '@/lib/ads/ap
  * Ads' Opportunities (ADS-01 §3.2, §9.3, §9.7): every row with a decision
  * and Open, the decision filters, Starter's rows and lock row from the
  * server, a decision changed by Admins and Managers only (put back when the
- * server refuses it), and the thresholds for Admins only.
+ * server refuses it), and the thresholds for Admins only, on a plan that
+ * changes them.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -96,7 +97,11 @@ afterEach(() => {
 
 async function render(
   read: AdsOpportunities | Error = page(),
-  { role = 'manager', writable = true }: { role?: TeamRole; writable?: boolean } = {},
+  {
+    role = 'manager',
+    writable = true,
+    thresholds = true,
+  }: { role?: TeamRole; writable?: boolean; thresholds?: boolean } = {},
 ) {
   if (read instanceof Error) api.readAdsOpportunities.mockRejectedValue(read);
   else api.readAdsOpportunities.mockResolvedValue(read);
@@ -107,7 +112,7 @@ async function render(
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role={role}>
-          <Opportunities period="30d" writable={writable} />
+          <Opportunities period="30d" writable={writable} thresholds={thresholds} />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -316,6 +321,16 @@ describe('AdsOpportunities', () => {
     });
     expect(toast.success).toHaveBeenCalledWith('Thresholds saved');
     expect(api.readAdsOpportunities).toHaveBeenCalledOnce();
+  });
+
+  it('gives a Starter or trial Admin no thresholds, as the server refuses their change; a Growth Admin has them', async () => {
+    // Starter and the trial: their rows and lock row, and a plan that can't change the thresholds.
+    await render(page(ROWS.slice(0, 3), 5), { role: 'admin', writable: false, thresholds: false });
+    expect(container.querySelector('[data-slot="ads-lock-row"]')).not.toBeNull();
+    expect(all('ads.thresholds')).toEqual([]);
+    // Growth.
+    await render(page(), { role: 'admin' });
+    expect(all('ads.thresholds').map((b) => b.textContent)).toEqual(['Thresholds']);
   });
 
   it('says so when Opportunities can’t be read, or there are none yet', async () => {
