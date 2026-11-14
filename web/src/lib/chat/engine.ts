@@ -1144,13 +1144,26 @@ const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
  * that goes away doesn't stop it (CHAT-03 item 21). `sessionUserId`: whose
  * session the request carries, left out in the actor's own request (the run
  * routes); null for none (an agent run the minute tick or a signal started).
+ * `onCard`: told once, as soon as the card `resume` answers is settled and
+ * before the run goes on, whether its change was made (its step done); false
+ * when the run ends, waits again or fails before that. Approve all counts
+ * with it what it made (actions/chat-approve-all.ts).
  */
 export async function driveRun(
   actor: ChatActor,
   runId: string,
   resume?: ResumeAction,
-  { sessionUserId = actor.userId }: { sessionUserId?: string | null } = {},
+  {
+    sessionUserId = actor.userId,
+    onCard,
+  }: { sessionUserId?: string | null; onCard?: (made: boolean) => void } = {},
 ): Promise<void> {
+  let carded = false;
+  const cardSettled = (made: boolean) => {
+    if (carded) return;
+    carded = true;
+    onCard?.(made);
+  };
   const controller = registerDriver(runId);
   const segmentStart = Date.now();
   let rc: RunContext | null = null;
@@ -1191,7 +1204,7 @@ export async function driveRun(
     );
     if (!rc) return;
     if (resume && run.pending) {
-      const outcome = await resumePending(rc, run.pending, resume);
+      const outcome = await resumePending(rc, run.pending, resume, cardSettled);
       if (outcome !== 'continue') return;
     }
     // A how-to question is answered from Help before any data is read (CHAT-19 §5);
@@ -1234,6 +1247,8 @@ export async function driveRun(
       console.error('[chat/engine] could not end a run:', e),
     );
   } finally {
+    // Ended, waiting again or failed before its card's change was made.
+    cardSettled(false);
     if (watch) clearInterval(watch);
     unregisterDriver(runId, controller);
     await sink?.flush();
@@ -5059,12 +5074,17 @@ async function pause(rc: RunContext, pending: PendingCalls): Promise<void> {
  * later) and runs it, unless that answer is now a refusal. Then the calls
  * after it, and the model goes on. In a read-only workspace only an
  * ALWAYS_OPEN_TOOLS call gets here, and the run ends after it, without a
- * model step it couldn't pay for.
+ * model step it couldn't pay for. What runs is the call as its card stored
+ * it, never a call made again from what the page is now: a change written
+ * from an older page (update_draft sends the whole page) overwrites what
+ * came since. `settled`: told whether the card's change was made, once it is
+ * settled and before the calls after it (driveRun's onCard).
  */
 async function resumePending(
   rc: RunContext,
   pending: PendingCalls,
   action: ResumeAction,
+  settled?: (made: boolean) => void,
 ): Promise<'continue' | 'ended'> {
   const call = pending.calls[pending.index];
   if (pending.kind === 'question') {
@@ -5120,6 +5140,7 @@ async function resumePending(
   await saveState(rc.run.id, { pending: null, waitingSince: null });
   let answer: CallResult;
   let writable = true;
+  let made = false;
 
   if (!tool || !bound || action.kind === 'skip') {
     const row = await updateStep(pending.stepId, { status: 'skipped', detail: t('step.skipped') });
@@ -5171,8 +5192,10 @@ async function resumePending(
         return 'ended';
       }
       answer = outcome.result;
+      made = !answer.error;
     }
   }
+  settled?.(made);
 
   const next = await handleCalls(rc, pending.calls, pending.index + 1, [
     ...pending.results,
