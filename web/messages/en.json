@@ -15997,6 +15997,7 @@
     "pulseFrequency_daily": "Daily",
     "pulseFrequency_weekly": "Weekly",
     "pulseFrequency_notable": "Only when notable",
+    "pulseFrequency_notableNote": "Your first pulse, then only when something notable happens.",
     "pulseFrequency_off": "Off",
     "pulseRecipients": "Recipients",
     "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",

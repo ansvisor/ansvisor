@@ -27,7 +27,7 @@ If another brand already posts to a Slack workspace, **Use the same workspace as
 
 ## When the Pulse is posted
 
-With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable**. Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.
+With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable** (the default for new brands). Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.
 
 Each Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day.
 

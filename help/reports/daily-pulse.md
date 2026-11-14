@@ -17,9 +17,9 @@ The Daily Pulse is a short digest for each brand that goes out after its schedul
 
 Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.
 
-- **Daily** (the default): after every scheduled daily tracking run.
+- **Daily**: after every scheduled daily tracking run.
 - **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.
-- **Only when notable**: like Daily, but skipped when there are no highlights and no warnings.
+- **Only when notable** (the default for new brands): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings. A brand that already saved **Daily** keeps it.
 - **Off**: no email, no webhook and no Slack post.
 
 ## Choose who gets it
@@ -32,7 +32,7 @@ Each brand's row also has **AI Traffic weekly digest**: every Monday, last week'
 
 ## When it is sent
 
-A pulse follows a brand's scheduled daily tracking run; manual runs and single-prompt refreshes never trigger one. It waits up to 90 minutes for late answers, so its numbers match the dashboard. No pulse is sent when the frequency is **Off**, or **Weekly** and it isn't Monday; when the brand already had one that day; when there are no tracking results in the window; when the frequency is **Only when notable** and nothing is notable; or, on the cloud, when the subscription isn't active or trialing.
+A pulse follows a brand's scheduled daily tracking run; manual runs and single-prompt refreshes never trigger one. It waits up to 90 minutes for late answers, so its numbers match the dashboard. No pulse is sent when the frequency is **Off**, or **Weekly** and it isn't Monday; when the brand already had one that day; when there are no tracking results in the window; when the frequency is **Only when notable**, it isn't the brand's first pulse and nothing is notable; or, on the cloud, when the subscription isn't active or trialing.
 
 ## What's in a pulse
 

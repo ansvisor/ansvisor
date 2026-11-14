@@ -109,6 +109,38 @@ describe('NotificationsSection', () => {
     });
   });
 
+  it('preselects Only when notable for a brand with no saved row, and saves it', async () => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method === 'PUT'
+        ? { ok: true, json: async () => ({ success: true }) }
+        : {
+            ok: true,
+            json: async () => ({
+              brands: [
+                {
+                  brandId: 'b1',
+                  brandName: 'Acme',
+                  frequency: 'notable',
+                  recipients: [],
+                  trafficDigest: true,
+                },
+              ],
+            }),
+          },
+    );
+    await render();
+    expect(container.textContent).toContain('Only when notable');
+    expect(container.textContent).toContain(
+      'Your first pulse, then only when something notable happens.',
+    );
+    const save = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Save changes',
+    )!;
+    await act(async () => save.click());
+    const [, init] = fetchMock.mock.calls.find(([, i]) => i?.method === 'PUT')!;
+    expect(JSON.parse(init.body).frequency).toBe('notable');
+  });
+
   it("shows it off, and can't be turned on, while the brand's pulse is off", async () => {
     fetchMock.mockImplementation(async () => ({
       ok: true,
