@@ -199,7 +199,9 @@
         "what changed",
         "visibility drop",
         "lost citation",
-        "signal status"
+        "signal status",
+        "signal code",
+        "find signal by number"
       ],
       "synonyms": [
         "alerts",
@@ -208,7 +210,7 @@
         "findings"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -216,7 +218,7 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards show Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before.\n\nFilter by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, or search."
+          "text": "The cards show Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before.\n\nFilter by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, or search. Each signal has a code beside its title, such as S-12: each brand numbers its own signals from S-01, and searching for S-12 or 12 finds it."
         },
         {
           "heading": "Signal status",
