@@ -68,9 +68,19 @@ const named = (mentions) =>
 
 /**
  * The drawer's read, or null when the plan doesn't open this prompt:
- * Starter and the trial read only the rows Opportunities gives them.
+ * Starter and the trial read only the rows Opportunities gives them. An
+ * export (`drawer: false`) skips what only the drawer shows: the action
+ * covering the prompt, and the approved facts its drafts rest on (`facts`,
+ * for "Copy as campaign brief").
  */
-export async function readOpportunity({ brand, orgId, promptId, period, now = new Date() }) {
+export async function readOpportunity({
+  brand,
+  orgId,
+  promptId,
+  period,
+  now = new Date(),
+  drawer = true,
+}) {
   const brandId = brand.id;
   const prompt = supabaseAdmin
     .from('prompts')
@@ -109,9 +119,21 @@ export async function readOpportunity({ brand, orgId, promptId, period, now = ne
       .eq('prompt_id', promptId)
       .order('fetched_at', { ascending: false })
       .limit(1),
-    readEarn(brandId, orgId, promptId),
+    readEarn(brandId, orgId, promptId, { action: drawer }),
     readAdDrafts({ orgId, brandId, promptId }),
   ]);
+  const factIds = drawer ? [...new Set(drafts.flatMap((d) => d.factIds))] : [];
+  const facts = factIds.length
+    ? must(
+        await supabaseAdmin
+          .from('brand_facts')
+          .select('id, quote, source_url, brands!inner(organization_id)')
+          .eq('brand_id', brandId)
+          .eq('brands.organization_id', orgId)
+          .in('id', factIds),
+        'brand_facts',
+      )
+    : [];
   // Oldest first, so each platform keeps its newest.
   const latest = new Map();
   for (const r of (must(recent, 'answers') ?? []).toReversed()) latest.set(r.platform, r.id);
@@ -154,5 +176,6 @@ export async function readOpportunity({ brand, orgId, promptId, period, now = ne
     keywords: (Array.isArray(keywords) ? keywords : []).filter((k) => typeof k === 'string'),
     earn,
     drafts,
+    facts: (facts ?? []).map((f) => ({ id: f.id, quote: f.quote, sourceUrl: f.source_url })),
   };
 }

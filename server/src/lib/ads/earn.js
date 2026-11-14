@@ -45,11 +45,14 @@ async function coveringAction(brandId, promptId) {
   return found ? { id: found.actionId, no: found.actionNo } : null;
 }
 
-/** The drawer's Earn card: the prompt's target page and the action covering it, if any. */
-export async function readEarn(brandId, orgId, promptId) {
+/**
+ * The drawer's Earn card: the prompt's target page and the action covering
+ * it, if any; an export reads the page alone (`action: false`).
+ */
+export async function readEarn(brandId, orgId, promptId, { action: covering = true } = {}) {
   const [page, action] = await Promise.all([
     targetPage(brandId, orgId, promptId),
-    coveringAction(brandId, promptId),
+    covering ? coveringAction(brandId, promptId) : null,
   ]);
   return { page, action };
 }

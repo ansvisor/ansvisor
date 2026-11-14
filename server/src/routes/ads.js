@@ -6,6 +6,7 @@ import { adsEnabled } from '../lib/ads-flag.js';
 import { readAdsActivity } from '../lib/ads/activity.js';
 import { AdDraftsError, createAdDrafts } from '../lib/ads/drafts.js';
 import { sendEarn } from '../lib/ads/earn.js';
+import { exportEditor, exportOpportunity } from '../lib/ads/export.js';
 import {
   SNAPSHOT_PERIOD,
   isDemoPrompt,
@@ -39,7 +40,8 @@ import { DEMO_BRAND } from '../middleware/demo-brand.js';
  *
  * Nothing here reaches an ad platform. The writes are Ads' own rows (a
  * decision, the thresholds, the Pay card's ad drafts) and the Earn card's
- * Action Center action, each logged (lib/ads/activity.js).
+ * Action Center action, each logged (lib/ads/activity.js), and the Google
+ * Ads Editor exports, logged too, which a person imports themselves.
  */
 
 const router = Router();
@@ -289,6 +291,69 @@ router.post('/opportunities/:promptId/drafts', async (req, res) => {
       return res.status(err.statusCode === 402 ? 402 : 429).json({ error: err.message, code });
     }
     return failed(req, res, err, 'ads drafts error');
+  }
+});
+
+/**
+ * An export's refusals before anything is read, as the Ads writes': the
+ * file is the Phase 0 form of pushing paused drafts to an ad account (§7a
+ * rules 7 and 11), so admins and managers, on a plan that reads every
+ * opportunity, never the demo brand (a GET, so not the middleware's: here).
+ * Answered here, and false.
+ */
+async function mayExport(req, res, brand, orgId, promptId = null) {
+  if (brand?.is_demo || (promptId && (await isDemoPrompt(orgId, promptId)))) {
+    res.status(402).json(DEMO_BRAND);
+    return false;
+  }
+  await assertRole(req.user.id, MANAGER_ROLES, 'Only admins and managers can export Ads.');
+  if (await readsEveryOpportunity(orgId, brand)) return true;
+  planLimit(res);
+  return false;
+}
+
+// GET /api/ads/export/editor?brandId=…&decision=all|earn_pay|pay|earn&period=… —
+// the Opportunities' rows under the decision filter as a Google Ads Editor
+// CSV (lib/ads/export.js): { fileName, csv, rowCount, prompts, droppedUrls },
+// as JSON (the web's proxy passes on no Content-Disposition). Logged.
+router.get('/export/editor', async (req, res) => {
+  const parsed = brandPeriod
+    .extend({ decision: z.enum(['all', 'earn_pay', 'pay', 'earn']).default('all') })
+    .safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  const { brandId, decision, period } = parsed.data;
+  try {
+    const { brand, orgId } = await assertBrandAccess(brandId, req.user.id, { columns: 'name' });
+    if (!(await mayExport(req, res, brand, orgId))) return undefined;
+    return res.json(await exportEditor({ brand, orgId, userId: req.user.id, decision, period }));
+  } catch (err) {
+    return failed(req, res, err, 'ads editor export error');
+  }
+});
+
+// GET /api/ads/export/opportunity/:promptId?brandId=…&period=… — one prompt
+// as a Google Ads Editor CSV, as above; another brand's prompt is not found.
+router.get('/export/opportunity/:promptId', async (req, res) => {
+  const promptId = z.guid().safeParse(req.params.promptId);
+  const parsed = brandPeriod.safeParse(req.query);
+  if (!promptId.success || !parsed.success) {
+    return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  }
+  try {
+    const { brand, orgId } = await assertBrandAccess(parsed.data.brandId, req.user.id, {
+      columns: 'name',
+    });
+    if (!(await mayExport(req, res, brand, orgId, promptId.data))) return undefined;
+    const file = await exportOpportunity({
+      brand,
+      orgId,
+      userId: req.user.id,
+      promptId: promptId.data,
+      period: parsed.data.period,
+    });
+    return res.json(file);
+  } catch (err) {
+    return failed(req, res, err, 'ads opportunity export error');
   }
 });
 

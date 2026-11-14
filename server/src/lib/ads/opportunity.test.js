@@ -122,7 +122,7 @@ describe('readOpportunity', () => {
     const got = await read('p1');
     // The Earn card's part (earn.js), within the brand and organization.
     expect(got.earn).toEqual({ page: null, action: null });
-    expect(readEarn).toHaveBeenCalledWith('b1', 'o1', 'p1');
+    expect(readEarn).toHaveBeenCalledWith('b1', 'o1', 'p1', { action: true });
     expect(got.answers.map((a) => [a.platform, a.at])).toEqual([
       ['perplexity-web', '2026-11-13T08:00:00Z'],
       ['chatgpt-web', '2026-11-12T08:00:00Z'],
@@ -227,6 +227,28 @@ describe("readOpportunity's ad drafts (00532)", () => {
       source: 'drawer',
       createdAt: '2026-11-11T08:00:00Z',
     });
+  });
+
+  it('gives the approved facts its drafts rest on, within the brand; an export reads none', async () => {
+    db.ads_ad_drafts = [draft('d1', 'google', '2026-11-12T08:00:00Z', { fact_ids: ['f1', 'f2'] })];
+    const fact = (id, over = {}) => ({
+      id,
+      brand_id: 'b1',
+      brands: { organization_id: 'o1' },
+      quote: `Fact ${id}`,
+      source_url: `https://northwind.example/${id}`,
+      ...over,
+    });
+    // f2 under another organization: never this brand's.
+    db.brand_facts = [fact('f1'), fact('f2', { brands: { organization_id: 'o2' } }), fact('f3')];
+    expect((await read('p1')).facts).toEqual([
+      { id: 'f1', quote: 'Fact f1', sourceUrl: 'https://northwind.example/f1' },
+    ]);
+    reads.length = 0;
+    const exported = await read('p1', { drawer: false });
+    expect(exported.facts).toEqual([]);
+    expect(reads).not.toContain('brand_facts');
+    expect(readEarn).toHaveBeenLastCalledWith('b1', 'o1', 'p1', { action: false });
   });
 
   it('reads none for a prompt the plan locks', async () => {
