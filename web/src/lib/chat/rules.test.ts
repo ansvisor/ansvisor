@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PERSONA_RULES, SAFETY_RULES } from './rules';
+import { actionRef } from '@/lib/action-center/action-ref';
+import { ACTION_NAME_RULES, PERSONA_RULES, SAFETY_RULES } from './rules';
 
 /** Chat's system rules (CHAT-05), the safety ones (owner decision 2026-11-03). */
 
@@ -32,5 +33,34 @@ describe('PERSONA_RULES facts', () => {
   it('explain a change by its drivers, never by a share left unexplained', () => {
     expect(PERSONA_RULES).toContain('explain the drivers the data supports');
     expect(PERSONA_RULES).toContain('also reflects shifts across AI answers');
+  });
+});
+
+describe('ACTION_NAME_RULES (the owner’s report, 2026-11-14)', () => {
+  it("are in the writer's persona rules", () => {
+    expect(PERSONA_RULES).toContain(ACTION_NAME_RULES);
+  });
+
+  it('name an action by its title with its linked number, never by a number alone', () => {
+    expect(ACTION_NAME_RULES).toContain(
+      `Name an action by its title, then its number in brackets, which the app turns into a link: **Recover lost citations on 3 prompts** (${actionRef(12)}).`,
+    );
+    expect(ACTION_NAME_RULES).toContain('Never a number alone');
+    expect(ACTION_NAME_RULES).toContain('never bare numbers');
+    // A group says what it shares and gives each its own number.
+    expect(ACTION_NAME_RULES).toContain(
+      `3 stale actions about sources (${actionRef(12)}, ${actionRef(13)}, ${actionRef(14)})`,
+    );
+    expect(ACTION_NAME_RULES).toContain('Never a range in place of the numbers');
+  });
+
+  it('say how many actions a read judged when it showed fewer than its total', () => {
+    expect(ACTION_NAME_RULES).toContain('the top 50 of 53 open actions');
+    expect(ACTION_NAME_RULES).toContain('or read the next page first');
+  });
+
+  it('build every example number with the shared formatter, small and generic', () => {
+    expect(actionRef(12)).toBe('AC-12');
+    expect(ACTION_NAME_RULES).not.toMatch(/AC-\d{3,}/);
   });
 });

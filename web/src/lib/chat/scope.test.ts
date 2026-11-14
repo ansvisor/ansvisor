@@ -15,6 +15,7 @@ vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { rpc: vi.fn() } }));
 
 const {
   DEFAULT_RANGE_DAYS,
+  PAGED_READS,
   ROW_CAP,
   ROW_LIMITS,
   asksAllTime,
@@ -312,6 +313,21 @@ describe('rows', () => {
     ).toMatchObject({ input: { limit: 10 }, cap: { rows: 10, probe: null } });
   });
 
+  it('reads a page of 50 actions, not 10, and no extra row: the read counts them all itself', async () => {
+    const actions = CHAT_TOOLS.find((t) => t.name === 'list_action_center_tasks')!;
+    expect(ROW_LIMITS.list_action_center_tasks).toEqual({ default: ROW_CAP, max: ROW_CAP });
+    expect(await scopeRead(actions, { brand_id: BRAND }, facts())).toMatchObject({
+      input: { limit: 50 },
+      used: { rows: 50 },
+      cap: { rows: 50, probe: null },
+    });
+    // The next page keeps its offset; a bigger page is held to 50.
+    expect(
+      await scopeRead(actions, { brand_id: BRAND, limit: 200, offset: 50 }, facts()),
+    ).toMatchObject({ input: { limit: 50, offset: 50 }, cap: { rows: 50, probe: null } });
+    expect([...PAGED_READS].every((name) => CHAT_TOOLS.some((t) => t.name === name))).toBe(true);
+  });
+
   it('cuts every list to its rows and says how many were left out', () => {
     const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ i })) as Json[];
     const exact = capRows(
@@ -362,7 +378,9 @@ describe('rows', () => {
       const limits = ROW_LIMITS[tool.name];
       if ('limit' in shape) {
         expect(limits, tool.name).toBeDefined();
-        const input = { ...tool.fixture.input, limit: limits.max + 1 };
+        // One more for the probe, unless the read counts its rows itself.
+        const probe = PAGED_READS.has(tool.name) ? 0 : 1;
+        const input = { ...tool.fixture.input, limit: limits.max + probe };
         expect(tool.inputSchema.safeParse(input).success, tool.name).toBe(true);
       }
       expect(limits ? limits.max <= ROW_CAP : true, tool.name).toBe(true);

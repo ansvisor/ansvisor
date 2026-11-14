@@ -1,3 +1,4 @@
+import { actionRef } from '@/lib/action-center/action-ref';
 import { readMemberEmails } from '@/lib/member-emails';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { summaryValue } from './activity';
@@ -89,7 +90,7 @@ const createAction: UndoRule = {
       target: { type: 'action', id },
       summaryParams: {
         title: summaryValue(asObject(input).title),
-        no: made ? `AC-${made.action_no}` : '',
+        no: made ? actionRef(String(made.action_no)) : '',
       },
       // The same approval again made nothing new: nothing to cancel.
       undo: id && made?.created === true ? { after: { status: 'new' } } : null,
@@ -140,7 +141,7 @@ const attachToAction: UndoRule = {
     return {
       target: { type: 'action', id: textOf(made?.action_id) },
       summaryParams: {
-        no: made ? `AC-${made.action_no}` : '',
+        no: made ? actionRef(String(made.action_no)) : '',
         finding: summaryValue(asObject(input).finding),
       },
       undo: eventId ? { after: { eventId } } : null,
@@ -201,7 +202,7 @@ async function readTask(taskId: string, brandId: string | null = null) {
 const taskWords = (task: Awaited<ReturnType<typeof readTask>>) =>
   task
     ? [
-        task.actions ? `AC-${task.actions.action_no}` : null,
+        task.actions ? actionRef(task.actions.action_no) : null,
         task.title?.trim() ? `“${task.title.trim()}”` : null,
       ]
         .filter(Boolean)

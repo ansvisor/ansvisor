@@ -8,6 +8,7 @@ const {
   RUNS_PER_USER,
   readBudget,
   readCap,
+  resultCharsFor,
   startDecision,
   workspaceRunLimit,
   writeCap,
@@ -51,6 +52,12 @@ describe('run limits', () => {
     });
     expect(readBudget('high').reads).toBe(12);
     expect(readBudget('max').dataChars).toBe(144_000);
+  });
+
+  it('give a page of 50 actions room for all its rows, never less than the run’s own share', () => {
+    expect(resultCharsFor(readBudget('normal'), 'list_action_center_tasks')).toBe(20_000);
+    expect(resultCharsFor(readBudget('max'), 'list_action_center_tasks')).toBe(36_000);
+    expect(resultCharsFor(readBudget('normal'), 'list_citations')).toBe(12_000);
   });
 
   it('give an agent’s run room for its skills’ reads, scaled by effort the same way', () => {

@@ -9,6 +9,7 @@ import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { useActionStory } from '@/components/action-center/use-action-story';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { buttonVariants } from '@/components/ui/button';
+import { actionRef } from '@/lib/action-center/action-ref';
 import { actionTexts } from '@/lib/action-center/display';
 import { priorityReasonText } from '@/lib/action-center/priority';
 import { getActionSignals } from '@/lib/actions/action-center';
@@ -90,7 +91,7 @@ export function SuggestionDetailView({
   const cardId = useId();
   const { suggestion, action, pick, start, auditedAt, today } = detail;
   const closed = suggestion.closed;
-  const number = `AC-${action.actionNo}`;
+  const number = actionRef(action.actionNo);
   const title = actionTexts(action, tTexts).title;
   const sent = sentDay(suggestion.sentOn, today);
   // The person's own day once their clock is known; the server's (UTC) until then.
@@ -404,7 +405,7 @@ export function ChatSuggestion({
   const { suggestion, action, start } = detail;
   const brandId = suggestion.brandId;
   const brand = brands.find((b) => b.id === brandId) ?? null;
-  const number = `AC-${action.actionNo}`;
+  const number = actionRef(action.actionNo);
   const title = actionTexts(action, tTexts).title;
   const route = `/dashboard/chat/inbox/${suggestion.id}`;
   const { busy, begin, end } = useOneMove();

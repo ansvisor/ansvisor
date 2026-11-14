@@ -65,6 +65,7 @@ const { getContentDraftPackageFor } = await import('./content-package');
 const { getContentPlanFor } = await import('./content-plan');
 const { explainChangeFor } = await import('./why');
 const { createMcpServer } = await import('./server');
+const { listActionsPageFor } = await import('./action-center-reads');
 
 const ALL: McpAuthContext = {
   userId: 'user-1',
@@ -150,6 +151,8 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     ],
     ['getPromptPerformanceFor', () => data.getPromptPerformanceFor(SELECTED, { brandId: 'b1' })],
     ['listActionsFor', () => data.listActionsFor(SELECTED, { brandId: 'b1' })],
+    // Chat's page of actions (list_action_center_tasks).
+    ['listActionsPageFor', () => listActionsPageFor(SELECTED, { brandId: 'b1' })],
     ['listSignalsFor', () => data.listSignalsFor(SELECTED, { brandId: 'b1' })],
     ['listActionHistoryFor', () => data.listActionHistoryFor(SELECTED, { brandId: 'b1' })],
     ['listCompetitorsFor', () => data.listCompetitorsFor(SELECTED, 'b1')],

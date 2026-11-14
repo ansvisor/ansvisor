@@ -100,6 +100,21 @@ export function readBudget(
 }
 
 /**
+ * One result's share of the run, by tool, where the whole page is the point
+ * of the read: a page of 50 actions with their titles (list_action_center_tasks)
+ * is about 15,000 characters, and an answer about "the most important" judges
+ * all of it (the owner's report, 2026-11-14). Never less than the run's own.
+ */
+export const RESULT_CHARS: Readonly<Record<string, number>> = {
+  list_action_center_tasks: 20_000,
+};
+
+/** How many characters one result of this tool may send the model. */
+export function resultCharsFor(budget: Pick<ReadBudget, 'resultChars'>, toolName: string): number {
+  return Math.max(budget.resultChars, RESULT_CHARS[toolName] ?? 0);
+}
+
+/**
  * WRITE caps per run (§14), by tool name; a write not named here gets
  * DEFAULT_WRITE_CAP. A batch row's cap counts its items (add_prompts: 50
  * prompts, add_competitors: 5 competitors), any other's its calls. Rows that

@@ -1,6 +1,7 @@
 import { after } from 'next/server';
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
+import { actionRef } from '@/lib/action-center/action-ref';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import {
@@ -322,10 +323,10 @@ function runScope(
     chips.push({
       key: 'action',
       label: runnerT('chip.action'),
-      value: (withIds ? `AC-${action.no} ${action.id}` : `AC-${action.no} · ${action.title}`).slice(
-        0,
-        200,
-      ),
+      value: (withIds
+        ? `${actionRef(action.no)} ${action.id}`
+        : `${actionRef(action.no)} · ${action.title}`
+      ).slice(0, 200),
     });
   }
   if (withIds) {
@@ -362,7 +363,7 @@ function runScope(
       ? {
           references: [{ type: 'task' as const, id: action.id, label: action.title.slice(0, 200) }],
           action: {
-            number: `AC-${action.no}`,
+            number: actionRef(action.no),
             title: action.title,
             category: action.category,
             open_tasks: action.tasks,

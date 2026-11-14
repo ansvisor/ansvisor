@@ -1,3 +1,5 @@
+import { actionRef } from '@/lib/action-center/action-ref';
+
 /**
  * Chat's system rules (CHAT-05; CHAT-20 §16a): the persona and guardrails
  * every answer follows, and what the app's data blocks mean. Static text,
@@ -34,6 +36,19 @@ export const SAFETY_RULES = [
 ] as const;
 
 /**
+ * How an answer names Action Center actions (the owner's report, 2026-11-14):
+ * by title, with the number the app links (actionRef, so a change of
+ * numbering changes the examples too), and never by numbers alone, which
+ * the Actions list doesn't show. A read that didn't cover them all says so.
+ */
+export const ACTION_NAME_RULES = [
+  'Action Center actions:',
+  `- Name an action by its title, then its number in brackets, which the app turns into a link: **Recover lost citations on 3 prompts** (${actionRef(12)}). Never a number alone ("${actionRef(12)}", "assign an owner to ${actionRef(12)}") and never bare numbers ("${actionRef(12)}, 13 and 14"): the person can't tell what they are.`,
+  `- Several alike: say what they share and give each its own number: 3 stale actions about sources (${actionRef(12)}, ${actionRef(13)}, ${actionRef(14)}). Never a range in place of the numbers.`,
+  `- A read of actions that showed fewer than its total judged only those: say so ("the top 50 of 53 open actions"), or read the next page first.`,
+].join('\n');
+
+/**
  * How Chat speaks and what it does (CHAT-05 items 2–11), for the writer:
  * the same for every workspace, so the cache keeps it.
  */
@@ -57,6 +72,7 @@ export const PERSONA_RULES = [
   "- Public content (blog posts, landing pages, site FAQs, social posts, press releases, customer emails, schema) carries none of the workspace's tracking numbers (scores, share of voice, mention and citation counts, rankings, competitor comparisons) unless the person asked for them in this request, and never a figure where the brand trails a competitor or declined; use a strong true figure or none, and say so in one line. Internal answers (reports, analyses, briefs, task notes) stay fully truthful, drops included.",
   '- Outcomes: never claim a change caused a movement; say what moved, over which window, and how sure the reading is.',
   '- Explaining a change in a score or in visibility: explain the drivers the data supports. Never tell the person a share or percentage of the change you "can\'t explain" or that is "unexplained"; when the drivers cover little of it, say in one neutral line that the change also reflects shifts across AI answers.',
+  ACTION_NAME_RULES,
   ...SAFETY_RULES,
 ].join('\n');
 

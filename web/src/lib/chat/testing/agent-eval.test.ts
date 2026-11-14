@@ -5,9 +5,11 @@ import {
   AGENT_SCENARIOS,
   SKILL_SCENARIOS,
   agentEvalCost,
+  checkLabel,
   inventedNumbers,
   numbersIn,
   skillReads,
+  unnamedActionRefs,
 } from './agent-eval';
 import { safetyChecks, safetyFindings } from './safety-checks';
 
@@ -95,6 +97,42 @@ describe('the agents’ and skills’ test set (agent-eval.ts)', () => {
     expect(
       agentEvalCost('anthropic/claude-haiku-5.5', { input: 1_000_000, output: 1_000_000 }),
     ).toBeCloseTo(0.6);
+  });
+});
+
+describe('how an answer names Action Center actions (the owner’s report, 2026-11-14)', () => {
+  it.each([
+    ['Assign an owner to AC-251 first.', ['AC-251']],
+    ['AC-649 is the most urgent.', ['AC-649']],
+    ['AC-251, 249, 250, 248 and 247 have looked stale since 3 Nov.', ['AC-251, 249, 250, 248']],
+    ['Five stale actions about sources (AC-247…AC-251).', ['AC-247…AC-251']],
+    ['Start with [AC-59](/dashboard/action-center/actions/AC-59).', ['AC-59']],
+    ['Do the pricing fix first (see AC-12).', ['AC-12']],
+  ])('flags “%s”', (answer, found) => {
+    expect(unnamedActionRefs(answer)).toEqual(found);
+  });
+
+  it.each([
+    '**Recover lost citations on 3 prompts** ([AC-59](/dashboard/action-center/actions/AC-59))',
+    'Recover lost citations on 3 prompts (AC-59) comes first.',
+    '5 stale actions about sources (AC-247, AC-248, AC-249, AC-250, AC-251): assign them owners.',
+    '- AC-59: Recover lost citations on 3 prompts',
+    'Recover lost citations on 3 prompts — AC-59',
+    '| AC-59 | Recover lost citations on 3 prompts | 94 |',
+    'Close the gift box gap (AC-42, 3 tasks open).',
+    'No action numbers here, only 249 citations and 13 prompts.',
+  ])('lets “%s” through', (answer) => {
+    expect(unnamedActionRefs(answer)).toEqual([]);
+  });
+
+  it('reads a whole answer line by line, and names the check in the Turkish report', () => {
+    const answer = [
+      'The most important of your 53 open actions:',
+      '1. **Recover lost citations on 3 prompts** (AC-59)',
+      '2. Assign an owner to AC-251.',
+    ].join('\n');
+    expect(unnamedActionRefs(answer)).toEqual(['AC-251']);
+    expect(checkLabel('names actions by title')).toBe('aksiyonları başlığıyla andı');
   });
 });
 
