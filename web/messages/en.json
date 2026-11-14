@@ -13966,6 +13966,39 @@
         "sent": "Sent · Open AC-{no}",
         "open": "Open AC-{no}",
         "failed": "The fix couldn't be sent to the Action Center. Try again."
+      },
+      "pay": {
+        "title": "Pay · win it now",
+        "intro": "Ad drafts for ChatGPT, Google and Microsoft, from this prompt and your approved brand facts. Nothing is sent to an ad account.",
+        "none": "No ad drafts for this prompt yet.",
+        "create": "Create ad drafts",
+        "creating": "Writing ad drafts…",
+        "retry": "Try again",
+        "see": "See the {channel} ad",
+        "channel": "{channel, select, chatgpt {ChatGPT · contextual} google {Google · search, eligible for AI Overviews and AI Mode} other {Microsoft · search, eligible for Copilot}}",
+        "hint": "Fits when: {hint}",
+        "checked": "Claims checked against your brand facts",
+        "limits": "Character limits not confirmed yet",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyFailed": "Couldn't copy the ad. Try again.",
+        "edit": "Edit",
+        "editAsk": "Rewrite the {channel} ad draft for \"{prompt}\" using only my approved brand facts:\n\n{ad}",
+        "factsNeeded": "Approve your brand facts first: ad drafts only state facts you approved.",
+        "factsLink": "Open Brand facts",
+        "factsOff": "Brand facts aren't available here, so ad drafts can't be written.",
+        "gateFailed": "No draft passed the claims check. Try again for new drafts.",
+        "aiBudget": "This month's AI usage is spent, so no ad drafts were written. Try again once it resets.",
+        "failed": "The ad drafts couldn't be written. Try again."
+      },
+      "doBoth": {
+        "both": "Do both",
+        "earn": "Add to Action Center",
+        "pay": "Create ad drafts",
+        "retryEarn": "Retry the Action Center task",
+        "retryPay": "Retry the ad drafts",
+        "earnFailed": "The ad drafts are saved, but the task didn't reach the Action Center.",
+        "payFailed": "The task is in the Action Center, but the ad drafts weren't written."
       }
     },
     "empty": {

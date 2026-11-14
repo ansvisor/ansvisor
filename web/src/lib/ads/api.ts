@@ -12,7 +12,22 @@ import type { AdsPeriod } from './tabs';
 /** A read that hangs gives up after this, so the page can say so. */
 const READ_TIMEOUT_MS = 30_000;
 
-/** The JSON answer to a call to /api/ads/…; anything but a 2xx throws. */
+/** A call to /api/ads/… answered with anything but a 2xx: its status and the body's code. */
+export class AdsApiError extends Error {
+  status: number;
+  /** The answer's `code` (facts_needed, gate_failed, ai_budget, …); null without one. */
+  code: string | null;
+  body: Record<string, unknown>;
+  constructor(message: string, status: number, body: Record<string, unknown>) {
+    super(message);
+    this.name = 'AdsApiError';
+    this.status = status;
+    this.code = typeof body.code === 'string' ? body.code : null;
+    this.body = body;
+  }
+}
+
+/** The JSON answer to a call to /api/ads/…; anything but a 2xx throws an AdsApiError. */
 async function call<T>(
   path: string,
   init?: { method: 'PATCH' | 'POST'; body: unknown },
@@ -31,7 +46,14 @@ async function call<T>(
     cache: 'no-store',
     signal: AbortSignal.timeout(READ_TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`Ads ${path.split('?')[0]}: ${res.status}`);
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    throw new AdsApiError(
+      `Ads ${path.split('?')[0]}: ${res.status}`,
+      res.status,
+      body && typeof body === 'object' ? (body as Record<string, unknown>) : {},
+    );
+  }
   return (await res.json()) as T;
 }
 
@@ -138,6 +160,20 @@ export interface AdsOpportunityDetail {
   keywords: string[];
   /** The Earn card's: the prompt's target page, and the active action covering it. */
   earn: { page: string | null; action: AdsActionRef | null };
+  /** The Pay card's: the prompt's latest saved draft of each channel, ChatGPT first. */
+  drafts: AdsAdDraft[];
+}
+
+/** A saved ad draft (server lib/ads/draft-rows.js), past the claims gate: the model's words. */
+export interface AdsAdDraft {
+  id: string;
+  channel: AdsChannel;
+  headlines: string[];
+  descriptions: string[];
+  /** ChatGPT's: when the ad fits the conversation. */
+  contextHint: string | null;
+  /** `limits` stays 'unconfirmed' until each channel's are confirmed (config/ad-limits.js). */
+  gate: { limits?: 'confirmed' | 'unconfirmed' };
 }
 
 /** An Action Center action, as AC-{no} names it. */
@@ -172,6 +208,19 @@ export function setAdsDecision(
 export function sendAdsEarn(brandId: string, promptId: string, idempotencyKey: string) {
   return call<{ action: AdsActionRef; created: boolean; covered: boolean }>(
     `opportunities/${encodeURIComponent(promptId)}/earn`,
+    { method: 'POST', body: { brandId, idempotencyKey } },
+  );
+}
+
+/**
+ * The Pay card's ad drafts written and saved (Admin, Manager): those that
+ * pass the claims gate; the same key again answers them. Refused with 409
+ * facts_needed (`why`: 'none' approved, or 'off' here), 422 gate_failed or
+ * 429 ai_budget.
+ */
+export function createAdsDrafts(brandId: string, promptId: string, idempotencyKey: string) {
+  return call<{ promptId: string; created: boolean; drafts: AdsAdDraft[] }>(
+    `opportunities/${encodeURIComponent(promptId)}/drafts`,
     { method: 'POST', body: { brandId, idempotencyKey } },
   );
 }

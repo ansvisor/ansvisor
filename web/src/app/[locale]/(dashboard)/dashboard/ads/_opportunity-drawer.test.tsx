@@ -4,7 +4,8 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { TeamRole } from '@/components/providers/role-provider';
-import type { AdsOpportunity, AdsOpportunityDetail } from '@/lib/ads/api';
+import type { AdsAdDraft, AdsOpportunity, AdsOpportunityDetail } from '@/lib/ads/api';
+import type { ChatPanelState } from '@/components/chat/panel/chat-panel-context';
 
 /**
  * An opportunity's drawer (ADS-01 §3.2, §11), opened from the table's Open:
@@ -12,7 +13,8 @@ import type { AdsOpportunity, AdsOpportunityDetail } from '@/lib/ads/api';
  * text, fan-outs and seeds, no sponsored line without data, and closed by
  * ✕, the overlay or Esc with focus back on Open. The Earn card on Earn and
  * Earn + pay: what to fix, and Send to Action Center for Admins and Managers
- * where they can change the decision, then the action it made or found.
+ * where they can change the decision, then the action it made or found. The
+ * Pay card's drafts and the primary button that follows the decision.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -27,6 +29,8 @@ const api = vi.hoisted(() => ({
   readAdsOpportunities: vi.fn(),
   readAdsOpportunity: vi.fn(),
   sendAdsEarn: vi.fn(),
+  createAdsDrafts: vi.fn(),
+  AdsApiError: class extends Error {},
 }));
 vi.mock('@/lib/ads/api', () => api);
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
@@ -36,6 +40,7 @@ vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeIt
 const { AdsOpportunities } = await import('./_opportunities');
 const { RoleProvider } = await import('@/components/providers/role-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
+const { ChatPanelContext } = await import('@/components/chat/panel/chat-panel-context');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -91,10 +96,18 @@ const DETAIL: AdsOpportunityDetail = {
   fanOuts: [{ query: 'best crm 2026', platform: 'google-aio' }],
   keywords: ['best crm', 'crm small team'],
   earn: { page: 'https://northwind.example/small-teams/', action: null },
+  drafts: [],
 };
 
 let container: HTMLDivElement;
 let root: Root;
+const panel = {
+  available: true,
+  open: false,
+  fill: vi.fn(),
+  toggle: vi.fn(),
+  setup: { skills: [] },
+};
 
 /** The table with one row, for a role, where the plan writes (not the demo brand, Starter or the trial). */
 async function mount(role: TeamRole = 'analyst', row = ROW, writable = true) {
@@ -109,9 +122,11 @@ async function mount(role: TeamRole = 'analyst', row = ROW, writable = true) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <RoleProvider role={role}>
-          <AdsOpportunities period="30d" writable={writable} thresholds={false} />
-        </RoleProvider>
+        <ChatPanelContext.Provider value={panel as unknown as ChatPanelState}>
+          <RoleProvider role={role}>
+            <AdsOpportunities period="30d" writable={writable} thresholds={false} />
+          </RoleProvider>
+        </ChatPanelContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -124,6 +139,7 @@ async function remount(...args: Parameters<typeof mount>) {
 beforeEach(async () => {
   api.readAdsOpportunity.mockReset().mockResolvedValue(DETAIL);
   api.sendAdsEarn.mockReset();
+  api.createAdsDrafts.mockReset();
   toast.error.mockReset();
   useBrandStore.setState({ brands: [], activeBrandId: 'b1' });
   container = document.createElement('div');
@@ -144,6 +160,8 @@ async function open() {
     openButton().focus();
     openButton().click();
   });
+  // Base UI moves focus into the drawer on the next frame.
+  await act(() => new Promise<void>((frame) => requestAnimationFrame(() => frame())));
 }
 
 describe('AdsOpportunityDrawer', () => {
@@ -317,5 +335,189 @@ describe('the Earn card', () => {
     await open();
     expect(card()).not.toBeNull();
     expect(sendButton()).toBeNull();
+  });
+});
+
+describe('the Pay card and "Do both"', () => {
+  const q = (action: string) => [
+    ...(drawer()?.querySelectorAll<HTMLElement>(`[data-action="${action}"]`) ?? []),
+  ];
+  const click = (el: HTMLElement) => act(async () => el.click());
+  const pay = () => drawer()?.querySelector<HTMLElement>('[data-slot="ads-pay"]') ?? null;
+  const drafts = () => [
+    ...(drawer()?.querySelectorAll<HTMLElement>('[data-slot="ads-draft"]') ?? []),
+  ];
+  const draft = (channel: AdsAdDraft['channel'], over: Partial<AdsAdDraft> = {}): AdsAdDraft => ({
+    id: `d-${channel}`,
+    channel,
+    headlines: ['Pipeline live in one afternoon', 'Outlook <b>built in</b>'],
+    descriptions: ['Set up in a day.'],
+    contextHint: null,
+    gate: { limits: 'unconfirmed' },
+    ...over,
+  });
+  /** The API's refusal, as lib/ads/api.ts throws it. */
+  const refused = (body: Record<string, unknown>) =>
+    Object.assign(new api.AdsApiError(), { code: body.code, body });
+  beforeEach(() => {
+    api.sendAdsEarn.mockResolvedValue({
+      action: { id: 'a1', no: 7 },
+      created: true,
+      covered: false,
+    });
+    api.createAdsDrafts.mockResolvedValue({ created: true, drafts: [draft('google')] });
+    panel.fill.mockReset();
+    panel.toggle.mockReset();
+    panel.setup.skills = [];
+  });
+
+  it('§9.4: the primary button follows the decision, and does only its half', async () => {
+    for (const [decision, label, calls] of [
+      ['earn', 'Add to Action Center', [1, 0]],
+      ['pay', 'Create ad drafts', [0, 1]],
+    ] as const) {
+      api.sendAdsEarn.mockClear();
+      api.createAdsDrafts.mockClear();
+      await remount('manager', { ...ROW, decision });
+      await open();
+      expect(q('ads.doBoth').map((b) => b.textContent)).toEqual([label]);
+      await click(q('ads.doBoth')[0]);
+      expect([api.sendAdsEarn.mock.calls.length, api.createAdsDrafts.mock.calls.length]).toEqual(
+        calls,
+      );
+      // Done: nothing is left for it to do.
+      expect(q('ads.doBoth')).toEqual([]);
+    }
+    await remount('manager', { ...ROW, decision: 'overlap' });
+    await open();
+    expect(q('ads.doBoth')).toEqual([]);
+    expect(pay()).toBeNull();
+  });
+
+  it('"Do both" sends the task and creates the drafts, each with its own key; nothing else goes out', async () => {
+    const network = vi.spyOn(globalThis, 'fetch');
+    await remount('admin');
+    await open();
+    expect(q('ads.doBoth')[0].textContent).toBe('Do both');
+    await click(q('ads.doBoth')[0]);
+    const [[, , earnKey]] = api.sendAdsEarn.mock.calls;
+    expect(api.createAdsDrafts.mock.calls).toEqual([['b1', 'p1', expect.any(String)]]);
+    expect(api.createAdsDrafts.mock.calls[0][2]).not.toBe(earnKey);
+    // The two Ads routes only (lib/ads/api.test.ts), and no other request: no ad platform.
+    expect(network).not.toHaveBeenCalled();
+    network.mockRestore();
+    expect(q('ads.openAction')[0].textContent).toBe('Sent · Open AC-7');
+    expect(drafts()).toHaveLength(1);
+    expect(q('ads.doBoth')).toEqual([]);
+  });
+
+  it('says which half failed, and retries only that half with its key', async () => {
+    api.createAdsDrafts.mockRejectedValueOnce(refused({ code: 'gate_failed' }));
+    await remount('manager');
+    await open();
+    await click(q('ads.doBoth')[0]);
+    expect(drawer()!.querySelector('[data-slot="ads-do-both"] [role="status"]')?.textContent).toBe(
+      "The task is in the Action Center, but the ad drafts weren't written.",
+    );
+    expect(pay()!.querySelector('[role="alert"]')?.textContent).toBe(
+      'No draft passed the claims check. Try again for new drafts.',
+    );
+    expect(q('ads.doBoth')[0].textContent).toBe('Retry the ad drafts');
+    await click(q('ads.doBoth')[0]);
+    expect(api.sendAdsEarn).toHaveBeenCalledTimes(1);
+    const [first, second] = api.createAdsDrafts.mock.calls;
+    expect(second).toEqual(first);
+    expect(drafts()).toHaveLength(1);
+  });
+
+  it('asks for approved facts, says when they are off here, and gives the AI budget message', async () => {
+    api.createAdsDrafts
+      .mockRejectedValueOnce(refused({ code: 'facts_needed', why: 'none' }))
+      .mockRejectedValueOnce(refused({ code: 'facts_needed', why: 'off' }))
+      .mockRejectedValueOnce(refused({ code: 'ai_budget' }));
+    await remount('manager', { ...ROW, decision: 'pay' });
+    await open();
+    const alert = () => pay()!.querySelector('[role="alert"]')?.textContent;
+    expect(q('ads.createDrafts')[0].textContent).toBe('Create ad drafts');
+    await click(q('ads.createDrafts')[0]);
+    expect(alert()).toBe(
+      'Approve your brand facts first: ad drafts only state facts you approved.',
+    );
+    expect(q('ads.openBrandFacts')[0].getAttribute('href')).toBe(
+      '/dashboard/brands/b1/settings?tab=facts',
+    );
+    await click(q('ads.createDrafts')[0]);
+    expect(alert()).toBe("Brand facts aren't available here, so ad drafts can't be written.");
+    expect(q('ads.openBrandFacts')).toEqual([]);
+    await click(q('ads.createDrafts')[0]);
+    expect(alert()).toBe(
+      "This month's AI usage is spent, so no ad drafts were written. Try again once it resets.",
+    );
+    expect(q('ads.createDrafts')[0].textContent).toBe('Try again');
+  });
+
+  it('shows each draft as plain text with its gate result; scroll, Copy and Edit', async () => {
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
+    const writeText = vi.fn<(text: string) => Promise<void>>(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    api.readAdsOpportunity.mockResolvedValue({
+      ...DETAIL,
+      drafts: [
+        draft('chatgpt', { contextHint: 'Asked for a CRM' }),
+        draft('google', { gate: { limits: 'confirmed' } }),
+      ],
+    });
+    await remount('admin');
+    await open();
+    const [chatgpt, google] = drafts();
+    expect(chatgpt.textContent).toContain('ChatGPT · contextual');
+    expect(chatgpt.textContent).toContain(
+      'Pipeline live in one afternoon | Outlook <b>built in</b>',
+    );
+    expect(chatgpt.textContent).toContain('Fits when: Asked for a CRM');
+    expect(pay()!.querySelector('b')).toBeNull();
+    expect(drafts().map((d) => d.querySelector('[data-slot="ads-gate"]')?.textContent)).toEqual([
+      'Claims checked against your brand facts · Character limits not confirmed yet',
+      'Claims checked against your brand facts',
+    ]);
+    expect(q('ads.createDrafts')).toEqual([]);
+
+    await click(q('ads.scrollAds')[1]);
+    expect(scrolled.mock.contexts).toEqual([google]);
+    await click(q('ads.copyAd')[0]);
+    const text = 'Pipeline live in one afternoon\nOutlook <b>built in</b>\nSet up in a day.';
+    expect(writeText).toHaveBeenCalledWith(text);
+
+    // No /ad-drafts skill yet: a plain request, and the drawer makes way for the panel.
+    await click(q('ads.editAd')[1]);
+    expect(panel.fill).toHaveBeenCalledWith(
+      `Rewrite the Google ad draft for "Best CRM for small teams" using only my approved brand facts:\n\n${text}`,
+    );
+    expect(panel.toggle).toHaveBeenCalled();
+    expect(drawer()).toBeNull();
+    panel.setup.skills = [{ name: 'ad-drafts', title: 'Ad drafts' }] as never;
+    await open();
+    await click(q('ads.editAd')[0]);
+    expect(panel.fill.mock.lastCall?.[0]).toMatch(/^\/ad-drafts Rewrite the ChatGPT ad draft/);
+  });
+
+  it('is read-only for an analyst and on the demo brand, Starter or the trial: Copy only', async () => {
+    for (const [role, writable] of [
+      ['analyst', true],
+      ['admin', false],
+    ] as const) {
+      api.readAdsOpportunity.mockResolvedValue({ ...DETAIL, drafts: [draft('google')] });
+      await remount(role, ROW, writable);
+      await open();
+      expect(q('ads.copyAd')).toHaveLength(1);
+      for (const action of ['ads.editAd', 'ads.createDrafts', 'ads.earnTask', 'ads.doBoth']) {
+        expect(q(action), `${role} ${action}`).toEqual([]);
+      }
+      api.readAdsOpportunity.mockResolvedValue(DETAIL);
+      await remount(role, ROW, writable);
+      await open();
+      expect(pay()!.textContent).toBe('Pay · win it nowNo ad drafts for this prompt yet.');
+    }
   });
 });
