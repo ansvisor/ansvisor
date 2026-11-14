@@ -288,6 +288,14 @@ export interface ContentDraft {
    * couldn't be read.
    */
   bannedPhrases?: string[];
+  /**
+   * The agent card shows as the editor opens (its latest batch, unless a
+   * restore since closed it with none open): the editor keeps its place from
+   * the first paint. False when it doesn't, or that couldn't be read.
+   */
+  agentCardShown?: boolean;
+  /** The author's name as the draft was read: the header's chip before the authors are. */
+  authorName?: string | null;
 }
 
 /**

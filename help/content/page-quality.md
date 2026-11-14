@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by, trusted sources]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist, content reviewer, regulated page review]
 plan: all
-updated: 2026-11-13
-last_checked: 2026-11-13
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -44,7 +44,7 @@ In **Settings › Content**, admins and managers can have each brand's new pages
 
 ## Next step
 
-With Quality on, the header's **Next step** opens a window: every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.
+With Quality on, the header's **Next** button, with dots for the steps taken, opens a window (hover it for the step's name): every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.
 
 **Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.
 

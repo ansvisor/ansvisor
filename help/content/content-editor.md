@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j, accepted suggestions, rejected suggestions, read your choices in the editor]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-07
-last_checked: 2026-11-07
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,9 +15,9 @@ The Content Editor is where pages are written. It opens from the Library, from t
 
 ## The header
 
-The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept.
+The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.
 
-On the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel.
+On the right are **Next** (hover it for the step) and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**.
 
 ## AI search readiness (Site Audit estimate)
 
@@ -61,7 +61,7 @@ A brand counts as a health brand when its industry is Healthcare, or its industr
 
 The side panel's tabs are **Chat** (with Chat on, see below), **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**, or on **Chat** for a page Chat made.
 
-While the panel is closed, its tabs run down the editor's right edge: click one to open the panel there.
+**Hide side panel**, at the right end of the panel's tabs, closes it. While it's closed, its tabs run down the editor's right edge under **Show side panel**: click one to open the panel there.
 
 Building the brief and running the Content Agent use your workspace's monthly AI usage.
 

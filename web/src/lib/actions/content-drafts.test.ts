@@ -952,10 +952,10 @@ describe('getContentDraft', () => {
     };
     missingColumn = 'schema_left_out';
     await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ schemaLeftOut: false });
-    // Asked with the column, then again without it (the brand's rules aside).
+    // Asked with the column, then again without it (the brand's rules and the opening aside).
     expect(
       calls
-        .filter((c) => c.columns !== 'brands(content_rules)')
+        .filter((c) => c.columns?.startsWith('id, brand_id'))
         .map((c) => c.columns?.includes('schema_left_out')),
     ).toEqual([true, false]);
 
@@ -994,6 +994,40 @@ describe('getContentDraft', () => {
     expect(read?.filters).toEqual([['eq', 'id', DRAFT]]);
     row = { ...base, brands: { content_rules: null } };
     await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ bannedPhrases: [] });
+  });
+
+  it('says whether the agent card shows as the editor opens, and the author’s name (no jump)', async () => {
+    const base = { id: DRAFT, brand_id: 'b1', title: '', method: 'create', body_html: '' };
+    const batch = (status: string, at = '2026-11-09T10:00:00Z') => [
+      { batch_id: 'b2', status, created_at: at },
+      { batch_id: 'b1', status: 'open', created_at: '2026-11-01T10:00:00Z' },
+    ];
+    // The latest batch, all decided, from before a restore: closed, as the editor closes it.
+    row = { ...base, page_author: { name: 'Ada Lovelace' }, restored_at: '2026-11-10T10:00:00Z' };
+    list = batch('accepted');
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({
+      agentCardShown: false,
+      authorName: 'Ada Lovelace',
+    });
+    expect(calls.find((c) => c.columns === 'batch_id, status, created_at')?.filters).toEqual([
+      ['eq', 'draft_id', DRAFT],
+    ]);
+    // One open still shows; so does a decided batch after the last restore, or with none.
+    list = batch('open');
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ agentCardShown: true });
+    list = batch('rejected', '2026-11-11T10:00:00Z');
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ agentCardShown: true });
+    row = { ...base, restored_at: null };
+    list = batch('accepted');
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({
+      agentCardShown: true,
+      authorName: null,
+    });
+    // No batch, or one that can't be read: nothing kept ahead, and the draft still opens.
+    list = [];
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ agentCardShown: false });
+    readError = 'timeout';
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ agentCardShown: false });
   });
 
   it('reads nothing for a malformed id', async () => {
