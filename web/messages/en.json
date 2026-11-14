@@ -13807,7 +13807,7 @@
       "sov": "Paid SoV",
       "sovNote": "Sponsored ads in AI answers aren't captured yet",
       "cost": "Cost per AI-assisted signup",
-      "costNote": "Needs ad spend, from Phase 1",
+      "costNote": "Needs a connected ad account",
       "signups": "{count, plural, one {# AI-assisted signup} other {# AI-assisted signups}} in this period",
       "signupsNotMeasured": "AI-assisted signups: not measured",
       "barTitle": "Earn or pay · {count, plural, one {# prompt} other {# prompts}}",

@@ -124,7 +124,7 @@ describe('AdsOverview', () => {
       "Paid SoVNot measuredSponsored ads in AI answers aren't captured yetWho pays per prompt",
     );
     expect(kpis()[3]).toBe(
-      'Cost per AI-assisted signupNot measuredNeeds ad spend, from Phase 19 AI-assisted signups in this period',
+      'Cost per AI-assisted signupNot measuredNeeds a connected ad account9 AI-assisted signups in this period',
     );
     await render({ ...UNPAID, signups: null });
     expect(container.querySelector('[data-slot="ads-signups"]')?.textContent).toBe(
