@@ -912,6 +912,105 @@ describe('refreshBrandFacts', () => {
     expect(writesOf(writes, 'brand_facts', 'delete')[0].filters).toEqual([['in', 'id', ['g']]]);
   });
 
+  describe('the place a person set', () => {
+    const FERRY = (...islands) =>
+      `<title>Feribot · Adalar</title><h1>Feribot fiyatları</h1>
+      ${islands.map((island) => `<h3>${island}</h3><p>Yetişkin ₺150 tek yön</p>`).join('')}
+      <p>${'Biletler iskelede ve internette satılır, her gün sefer vardır. '.repeat(4)}</p>`;
+    const said = (scope) => ({ kind: 'price', quote: '₺150 tek yön', plan: 'Yetişkin', scope });
+    const kept = (id, scope, scope_set_at = null) => ({
+      ...{ id, kind: 'price', slot: 'price|yetişkin|TRY|||', value_key: '150.00' },
+      ...{ status: 'approved', scope, scope_set_at, quote: '₺150 tek yön', source_kind: 'pricing' },
+    });
+    const SET = '2026-10-23T09:00:00.000Z';
+    const run = async (facts, html, answer) => {
+      generateObject.mockResolvedValue(answerFor(answer));
+      const { db, writes } = fakeDb(base({ brand_facts: facts }));
+      const fetcher = async (url) => {
+        if (url.endsWith('/pricing')) return { url, html };
+        throw new PageFetchError('http_error', '404', { status: 404 });
+      };
+      await refreshBrandFacts('b1', { orgId: 'o1', now: NOW, db, fetcher });
+      const [inserted] = writesOf(writes, 'brand_facts', 'upsert');
+      return {
+        inserted: (inserted?.payload ?? []).map((f) => [f.scope, f.value_key]),
+        seen: writesOf(writes, 'brand_facts', 'update')[0]?.filters,
+        // A read never changes a kept fact's scope.
+        scoped: writesOf(writes, 'brand_facts', 'update').some((w) => 'scope' in w.payload),
+        removed: writesOf(writes, 'brand_facts', 'delete'),
+      };
+    };
+
+    it('keeps a fact moved from Bozcaada to Gökçeada there, read again as Bozcaada’s, with no copy', async () => {
+      const moved = await run([kept('f', 'Gökçeada', SET)], FERRY('Bozcaada'), [said('Bozcaada')]);
+      expect(moved).toEqual({
+        inserted: [],
+        seen: [['in', 'id', ['f']]],
+        scoped: false,
+        removed: [],
+      });
+      // It is one fact read: the same value read for one more place is that place's.
+      const one = await run([kept('f', 'Gökçeada', SET)], FERRY('Bozcaada', 'Assos'), [
+        said('Bozcaada'),
+        said('Assos'),
+      ]);
+      expect(one.inserted).toEqual([['Assos', '150.00']]);
+      expect(one.scoped).toBe(false);
+    });
+
+    it('keeps a fact made brand-wide so, whichever places the page gives its value', async () => {
+      const wide = await run([kept('f', null, SET)], FERRY('Bozcaada', 'Gökçeada'), [
+        said('Bozcaada'),
+        said('Gökçeada'),
+      ]);
+      expect(wide).toEqual({
+        inserted: [],
+        seen: [['in', 'id', ['f']]],
+        scoped: false,
+        removed: [],
+      });
+    });
+
+    it('matches a fact nobody placed as before: across places only where one is the brand’s', async () => {
+      // Kept brand-wide: Bozcaada's read is it, Gökçeada's is new.
+      const wide = await run([kept('f', null)], FERRY('Bozcaada', 'Gökçeada'), [
+        said('Bozcaada'),
+        said('Gökçeada'),
+      ]);
+      expect(wide.inserted).toEqual([['Gökçeada', '150.00']]);
+      expect(wide.scoped).toBe(false);
+      // Kept for Gökçeada: read as Bozcaada's, it is a new fact.
+      const placed = await run([kept('f', 'Gökçeada')], FERRY('Bozcaada'), [said('Bozcaada')]);
+      expect(placed.inserted).toEqual([['Bozcaada', '150.00']]);
+      expect(placed.scoped).toBe(false);
+    });
+
+    it('reads a place written two ways in one read as one place, as first written', async () => {
+      const PAGE = `<title>Feribot · Adalar</title><h1>Feribot fiyatları</h1>
+        <h3>Bozcaada</h3><p>Yetişkin ₺150 tek yön</p><p>Çocuk ₺75 tek yön</p>
+        <p>${'Biletler iskelede ve internette satılır, her gün sefer vardır. '.repeat(4)}</p>`;
+      generateObject.mockImplementation(async ({ prompt }) =>
+        prompt.startsWith('Page: pricing')
+          ? answerFor([said('BOZCAADA'), said('Bozcaada')])
+          : answerFor([
+              said('bozcaada'),
+              { kind: 'price', quote: '₺75 tek yön', plan: 'Çocuk', scope: 'Bozcaada' },
+            ]),
+      );
+      const { db, writes } = fakeDb(base());
+      const fetcher = async (url) => {
+        if (url.endsWith('/pricing') || url.endsWith('/about')) return { url, html: PAGE };
+        throw new PageFetchError('http_error', '404', { status: 404 });
+      };
+      await refreshBrandFacts('b1', { orgId: 'o1', now: NOW, db, fetcher });
+      const [inserted] = writesOf(writes, 'brand_facts', 'upsert');
+      expect(inserted.payload.map((f) => [f.scope, f.value_key, f.source_kind])).toEqual([
+        ['BOZCAADA', '150.00', 'pricing'],
+        ['BOZCAADA', '75.00', 'about'],
+      ]);
+    });
+  });
+
   it('reads nothing for a brand with no domain', async () => {
     const { db } = fakeDb(base({ brand_domains: [] }));
     expect(await refresh(db)).toEqual({ noDomain: true, paused: false });

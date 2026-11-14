@@ -7,7 +7,7 @@ import { resolveModel } from './ai-provider.js';
 import { CONTENT_READ_MAX_TOKENS } from './content-brief.js';
 import { fold } from './content-quality-claims.js';
 import { sourceClassModelId } from './content-source-class.js';
-import { namesScope, sameScope, scopeText } from './fact-scope.js';
+import { namesScope, sameScope, scopeText, scopeWords } from './fact-scope.js';
 import { logger } from './logger.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 import { PageFetchError, fetchPage } from './safe-fetch.js';
@@ -629,14 +629,19 @@ export function keptFacts(page, answer, { now = Date.now(), heads = {} } = {}) {
   return kept;
 }
 
-/** A fact's key: one per scope (null the brand's), slot and value (00539). */
-const keyOf = (f) => `${f.scope ?? ''}\n${f.slot}\n${f.value_key}`;
+/**
+ * A fact's key: one per scope (null the brand's), slot and value (00539),
+ * its scope as compared ("BOZCAADA" and "Bozcaada" are one).
+ */
+const keyOf = (f) => `${scopeWords(f.scope)}\n${f.slot}\n${f.value_key}`;
 
 /**
- * The kept fact each fact read is, by its key: the same scope's, else the
- * same slot and value kept brand-wide where it was read scoped, or the other
- * way round, that no fact read has (a person changed its scope: theirs
- * stands); null for a new one.
+ * The kept fact each fact read is, by its key: the same scope's; else one
+ * with the same slot and value whose scope a person set (`scope_set_at`),
+ * whatever scope the page gives it, as theirs stands: one they made
+ * brand-wide for every fact read (it holds everywhere), one they placed for
+ * one that no fact read has; else, one kept brand-wide where it was read
+ * scoped, or the other way round, that no fact read has; null for a new one.
  */
 function matchKept(facts, found) {
   const byKey = new Map(facts.map((f) => [keyOf(f), f]));
@@ -645,14 +650,13 @@ function matchKept(facts, found) {
   for (const fact of found) {
     const key = keyOf(fact);
     if (matched.has(key)) continue;
-    let had = byKey.get(key);
-    had ??= facts.find(
-      (f) =>
-        !taken.has(f.id) &&
-        (!f.scope || !fact.scope) &&
-        f.slot === fact.slot &&
-        f.value_key === fact.value_key,
-    );
+    const same = (f) => f.slot === fact.slot && f.value_key === fact.value_key;
+    const free = (f) => same(f) && !taken.has(f.id);
+    const had =
+      byKey.get(key) ??
+      facts.find((f) => same(f) && f.scope_set_at && !f.scope) ??
+      facts.find((f) => free(f) && f.scope_set_at) ??
+      facts.find((f) => free(f) && (!f.scope || !fact.scope));
     if (had) taken.add(had.id);
     matched.set(key, had ?? null);
   }
@@ -763,7 +767,9 @@ export async function refreshBrandFacts(
       .eq('brand_id', brandId),
     db
       .from('brand_facts')
-      .select('id, kind, slot, value, value_key, quote, status, source_kind, gone_at, scope')
+      .select(
+        'id, kind, slot, value, value_key, quote, status, source_kind, gone_at, scope, scope_set_at',
+      )
       .eq('brand_id', brandId),
   ]);
   for (const res of [brandRes, domainsRes, pagesRes, factsRes]) {
@@ -855,10 +861,15 @@ export async function refreshBrandFacts(
   // What the model found, against the facts kept: a fact it found again,
   // or on any page read in its words (the model passed over it, or the page
   // didn't change), stays; one whose page was read and has it no more goes.
-  // A scope as the brand's facts already write it ("bozcaada" is "Bozcaada").
+  // A scope as the brand's facts already write it ("bozcaada" is
+  // "Bozcaada"), else as first read in this run ("BOZCAADA", then
+  // "Bozcaada", are one).
   const scopes = facts.map((f) => f.scope);
   const read = reads.flatMap((r) => r.kept ?? []);
-  for (const fact of read) fact.scope = sameScope(scopes, fact.scope) ?? null;
+  for (const fact of read) {
+    fact.scope = sameScope(scopes, fact.scope) ?? null;
+    scopes.push(fact.scope);
+  }
   const byKey = matchKept(facts, read);
   const seen = new Set([...byKey.values()].filter(Boolean).map((f) => f.id));
   const texts = reads.filter((r) => r.text);

@@ -64573,10 +64573,15 @@ alter table public.brands add column if not exists content_rules jsonb;
 -- whole brand. Pages use the brand-wide facts and those whose scope they
 -- name. One fact per scope, slot and value: nulls count as equal, so the
 -- server's upsert names the index (brand_id, scope, slot, value_key).
--- Grants and policies stay: members still change only a fact's status.
+-- `scope_set_at` is when a person last set or cleared the scope (null: a
+-- read set it): a later read keeps that scope wherever the page puts the
+-- fact, and adds no copy of it.
+-- Grants and policies stay: members still change only a fact's status; the
+-- server writes the scope and `scope_set_at`.
 -- Schema only, no backfill: kept facts stay brand-wide (at most 60 a brand).
 
 alter table public.brand_facts add column if not exists scope text;
+alter table public.brand_facts add column if not exists scope_set_at timestamptz;
 
 alter table public.brand_facts drop constraint if exists brand_facts_scope_check;
 alter table public.brand_facts add constraint brand_facts_scope_check
@@ -64589,6 +64594,9 @@ alter table public.brand_facts drop constraint if exists brand_facts_brand_id_sl
 
 comment on column public.brand_facts.scope is
   'Where the fact holds (00539): a destination, operator or route, e.g. "Bozcaada"; null for the whole brand.';
+
+comment on column public.brand_facts.scope_set_at is
+  'When a person last set or cleared the fact''s scope (00539); null when a read set it. A read keeps a scope a person set.';
 
 notify pgrst, 'reload schema';
 
