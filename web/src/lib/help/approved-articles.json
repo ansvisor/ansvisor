@@ -3815,7 +3815,6 @@
         "needs you",
         "needs attention",
         "working on it",
-        "action center count",
         "settings dot",
         "account menu dot"
       ],
@@ -3827,7 +3826,7 @@
         "unread"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -3866,8 +3865,8 @@
           "text": "The same dots show inside some pages, beside a title: on actions in **Actions**, on rows in **Content Plan** and **Library**, and on the **Auto-audit** line and **Opportunities** tab in **Audit**. They follow the same colours and rules, and never replace a row's status."
         },
         {
-          "heading": "The Action Center's number",
-          "text": "The number beside **Action Center** is how many open actions are unassigned or yours. It is hidden once your plan or trial has ended. The demo brand shows green and grey dots only, a workspace whose plan ended shows no yellow, and a section off your menu shows none."
+          "heading": "Who sees which dots",
+          "text": "The demo brand shows green and grey dots only, a workspace whose plan ended shows no yellow, and a section off your menu shows none. **Action Center** has no number beside it in the menu, nor do its **Actions** and **Signals** tabs: their dots say when something is new or waiting, and each list shows its own count."
         }
       ]
     },

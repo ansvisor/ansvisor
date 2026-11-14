@@ -692,8 +692,7 @@
       "agentWorking": "it is running now",
       "agentNeedsOk": "it is waiting for your OK",
       "agentRunFailed": "its last run failed"
-    },
-    "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
+    }
   },
   "pageDots": {
     "reasons": {

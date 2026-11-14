@@ -182,18 +182,6 @@ export async function getSignalsSummary(
 }
 
 /**
- * Untriaged signals for the Action Center tab badge, counted the way the list
- * shows them: copies of one finding count once (signals_new_count, 00141).
- * One number back, immune to the row cap.
- */
-export async function getNewSignalCount(brandId: string): Promise<number> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc('signals_new_count', { p_brand_id: brandId });
-  if (error) throw new Error(error.message);
-  return Number(data ?? 0);
-}
-
-/**
  * Triage: any org member can move signals through their lifecycle (RLS
  * enforces membership). Several at once for a group's menu, which acts on
  * every copy. Resolving stamps resolved_at; leaving the resolved state

@@ -649,7 +649,7 @@ describe('Action Center › Today', () => {
   it('lists what broke first, "Fix this", from the menu’s own read', async () => {
     useMenuStateStore.setState({
       read: {
-        key: 'b1|traffic|count||red',
+        key: 'b1|traffic||red',
         brandId: 'b1',
         at: Date.now(),
         state: {
@@ -657,7 +657,6 @@ describe('Action Center › Today', () => {
           newSuggestionAt: null,
           newActionAt: null,
           newOpportunityAt: null,
-          openActions: null,
           navSeen: null,
           broken: { traffic: 'searchConsole' },
         },
