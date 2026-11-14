@@ -18,6 +18,7 @@ import {
   Copy,
   Download,
   MessageSquare,
+  PanelRight,
   Send,
   X,
 } from 'lucide-react';
@@ -3983,7 +3984,13 @@ export function DraftEditor({
       console.error('Failed to set the page type:', err);
       setPicked(before);
       toast.error(t('pageType.failed'));
+      return;
     }
+    // A type picked is a choice about the rules (the owner, 2026-11-14): its set
+    // comes with it, and a set pinned for another type or before setFor goes;
+    // every other edit keeps the pin (#2389). One place for the header's menu
+    // and every Set page type that opens it (Next, Quality, Rules).
+    rules.followPageType(type);
   };
 
   // The site type, for the whole brand as in Brand settings: admins and
@@ -4393,6 +4400,22 @@ export function DraftEditor({
               <ArrowUpRight aria-hidden className="h-3 w-3" />
             </Link>
           )}
+          {/* The side panel's toggle at the row's right end, above the panel's edge, never
+              cut off (the owner, 2026-11-14); as tall as the chips, so the row keeps its
+              height. Embedded, the bottom bar holds the panel's parts: nothing to hide. */}
+          {!embedded && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-pressed={panelOpen}
+              aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
+              title={panelOpen ? t('panel.hide') : t('panel.show')}
+              onClick={togglePanel}
+              className={cn('-my-1 ml-auto shrink-0', panelOpen && 'bg-muted')}
+            >
+              <PanelRight className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </header>
 
@@ -4613,8 +4636,6 @@ export function DraftEditor({
         {embedded || panelOpen ? (
           <EditorSidePanel
             layout={embedded ? 'bar' : 'side'}
-            // In its own tab row (the owner's layout); embedded, the bar has nothing to hide.
-            onHide={embedded ? undefined : togglePanel}
             draft={draft}
             liveUrl={liveUrl}
             published={status === 'published'}

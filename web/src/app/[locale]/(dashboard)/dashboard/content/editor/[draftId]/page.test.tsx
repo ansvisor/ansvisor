@@ -1533,9 +1533,11 @@ describe('the content editor', () => {
     markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 1 });
     await renderPage();
 
-    // A chip at the end of the header's tags (the owner's layout, 2026-11-14), not a line.
+    // A chip at the end of the header's tags (the owner's layout, 2026-11-14), not a line;
+    // only the side panel's toggle comes after it.
     const tags = container.querySelector('header')!.children[1];
-    const chip = tags.lastElementChild as HTMLAnchorElement;
+    expect(tags.lastElementChild!.getAttribute('aria-label')).toMatch(/side panel$/);
+    const chip = tags.lastElementChild!.previousElementSibling as HTMLAnchorElement;
     expect(chip.textContent).toBe('From Action AC-214');
     expect(chip.getAttribute('href')).toBe('/dashboard/action-center/actions?action=act-1');
     expect(chip.title).toBe(
@@ -3193,11 +3195,10 @@ describe('the side panel', () => {
     await renderPage();
     expect(panel()).toBeNull();
     const rail = () => container.querySelector('nav[aria-label="Side panel"]');
-    // Show side panel on top (the header has no toggle now), then the tabs.
+    // Show side panel on top, then the tabs.
     const [show, ...tabs] = [...rail()!.querySelectorAll('button')];
     expect(show.getAttribute('aria-label')).toBe('Show side panel');
     expect(show.getAttribute('aria-pressed')).toBe('false');
-    expect(container.querySelector('header')!.contains(button('Show side panel')!)).toBe(false);
     expect(tabs.map((b) => b.textContent)).toEqual(['Instructions', 'Sources', 'Live page']);
     expect(tabs[1].getAttribute('title')).toBe('Open Sources in the side panel');
 
@@ -3208,16 +3209,32 @@ describe('the side panel', () => {
     expect(rail()).toBeNull();
     expect(localStorage.getItem('aeo:content-editor-panel')).toBe('1');
 
-    // Closed again from the panel's own tab row, at its right end, the strip is back.
+    // Closed again from the header, at the right end of its tags above the panel (the
+    // owner, 2026-11-14), the strip is back. The panel's tab row holds its tabs alone.
+    const tags = container.querySelector('header')!.children[1];
     const hide = button('Hide side panel')!;
     expect(hide.getAttribute('aria-pressed')).toBe('true');
-    expect(hide.parentElement!.querySelector('[role="tablist"]')).not.toBeNull();
-    expect(hide.parentElement!.lastElementChild).toBe(hide);
+    expect(hide.title).toBe('Hide side panel');
+    expect(tags.lastElementChild).toBe(hide);
+    expect(hide.className).toContain('ml-auto');
+    const tabRow = panel()!.querySelector('[role="tablist"]')!.parentElement!;
+    expect([...tabRow.children].map((el) => el.getAttribute('role'))).toEqual(['tablist']);
+    expect(panel()!.querySelector('[aria-label="Hide side panel"]')).toBeNull();
     await act(async () => hide.click());
     expect(panel()).toBeNull();
     expect(rail()).not.toBeNull();
-    // And Show side panel opens it again, as it was left.
-    await act(async () => button('Show side panel')!.click());
+    // The same button shows it again, in its place, as the rail's does.
+    expect(tags.lastElementChild).toBe(hide);
+    expect(hide.getAttribute('aria-label')).toBe('Show side panel');
+    expect(hide.getAttribute('aria-pressed')).toBe('false');
+    expect(hide.title).toBe('Show side panel');
+    await act(async () => hide.click());
+    expect(panel()).not.toBeNull();
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('1');
+    // And the rail's Show side panel opens it again, as it was left.
+    await act(async () => button('Hide side panel')!.click());
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('0');
+    await act(async () => rail()!.querySelector<HTMLButtonElement>('button')!.click());
     expect(panel()).not.toBeNull();
     expect(localStorage.getItem('aeo:content-editor-panel')).toBe('1');
   });
@@ -3759,15 +3776,20 @@ describe('the side panel', () => {
           overrides: { sentence: { on: false }, faq: { on: false } },
         });
         expect(lastSaved()).not.toHaveProperty('setFor');
+
+        // Reset clears the custom rules, not the set.
+        await act(async () =>
+          [...panel()!.querySelectorAll('button')].find((b) => b.textContent === 'Reset')!.click(),
+        );
+        expect(lastSaved()).toMatchObject({ set: 'product_page', overrides: {}, textRules: [] });
+        expect(lastSaved()).not.toHaveProperty('setFor');
         act(() => root.unmount());
         root = createRoot(container);
       }
     });
 
-    it('keeps a set picked before setFor when the page type changes from the header', async () => {
-      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post', rules: legacy }));
-      window.innerWidth = 1024;
-      await renderPage();
+    /** Picks a page type from the header's menu, as Next's Set page type opens it. */
+    const pickType = async (name: string) => {
       const typeMenu = container.querySelector<HTMLButtonElement>(
         'header button[aria-label^="Page type:"]',
       )!;
@@ -3775,23 +3797,91 @@ describe('the side panel', () => {
         typeMenu.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
         typeMenu.click();
       });
-      const guide = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
-        (item) => item.textContent?.startsWith('How-to guide'),
+      const item = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
+        (el) => el.textContent?.startsWith(name),
       )!;
-      await act(async () => guide.click());
-      expect(setContentDraftPageType).toHaveBeenCalledWith('d1', 'guide');
-      // Nothing is written to the rules; the Rules tab still shows the set picked.
-      expect(saveDraftRules).not.toHaveBeenCalled();
+      await act(async () => item.click());
+    };
+
+    it('brings the type’s set when the person picks a page type: a set picked before setFor goes, its values stay (the owner, 2026-11-14)', async () => {
+      // The owner's draft: "Set page type" in the header, Product page in Rules.
+      getContentDraft.mockResolvedValue(draft({ pageType: null, rules: legacy }));
+      window.innerWidth = 1024;
+      await renderPage();
       await openRules();
       expect(setTrigger().textContent).toContain('Product page · Ansvisor default');
-      expect(groups()).toContain('Product page rules');
 
-      // Reset clears the custom rules, not the set.
-      await act(async () =>
-        [...panel()!.querySelectorAll('button')].find((b) => b.textContent === 'Reset')!.click(),
-      );
-      expect(lastSaved()).toMatchObject({ set: 'product_page', overrides: {}, textRules: [] });
+      await pickType('Blog post');
+      expect(setContentDraftPageType).toHaveBeenCalledWith('d1', 'blog_post');
+      // Only the pin goes: the custom values and text rules stay, no setFor.
+      expect(saveDraftRules).toHaveBeenCalledTimes(1);
+      expect(lastSaved()).toEqual({ ...legacy, set: null });
       expect(lastSaved()).not.toHaveProperty('setFor');
+      // Said by the header's type, not a toast of the rules' own.
+      expect(toast).not.toHaveBeenCalled();
+      expect(setTrigger().textContent).toContain('Blog post · Ansvisor default');
+      // A blog post has no type rules of its own; the product page's are gone.
+      expect(groups()).not.toContain('Product page rules');
+      expect(panel()!.textContent).not.toContain('Product page rule');
+      // A rule the blog post's set also has keeps its value.
+      expect(
+        panel()!
+          .querySelector('[role="switch"][aria-label="Max sentence length: on or off"]')!
+          .getAttribute('aria-checked'),
+      ).toBe('false');
+      expect(panel()!.textContent).toContain('Your text rules');
+
+      // The set follows the type from then on.
+      await pickType('How-to guide');
+      expect(setContentDraftPageType).toHaveBeenLastCalledWith('d1', 'guide');
+      expect(saveDraftRules).toHaveBeenCalledTimes(1);
+      expect(setTrigger().textContent).toContain('How-to guide · Ansvisor default');
+    });
+
+    it('builds on the rule changes still saving when the person picks a page type, after them', async () => {
+      getContentDraft.mockResolvedValue(draft({ pageType: null, rules: legacy }));
+      let finish: () => void = () => {};
+      saveDraftRules.mockImplementationOnce(() => new Promise<void>((r) => (finish = r)));
+      window.innerWidth = 1024;
+      await renderPage();
+      await openRules();
+      await toggle('FAQ block');
+      await pickType('Blog post');
+      // The toggle's save is still under way: the pin's goes next, holding the toggle.
+      expect(saveDraftRules).toHaveBeenCalledTimes(1);
+      expect(lastSaved()).toMatchObject({ set: 'product_page' });
+      await act(async () => finish());
+      await act(async () => {});
+      expect(saveDraftRules).toHaveBeenCalledTimes(2);
+      expect(lastSaved()).toEqual({
+        ...legacy,
+        set: null,
+        overrides: { sentence: { on: false }, faq: { on: false } },
+      });
+      // The toggle's own toast, once all is saved; none for the set that followed the type.
+      expect(toast).toHaveBeenCalledTimes(1);
+      expect(toast).toHaveBeenCalledWith('Rule updated for this draft');
+    });
+
+    it('drops a set picked for another type when the person picks a page type, and keeps it when that fails', async () => {
+      const pinned = { ...legacy, set: 'feature_page' as const, setFor: 'blog_post' as const };
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post', rules: pinned }));
+      window.innerWidth = 1024;
+      await renderPage();
+      await openRules();
+      expect(setTrigger().textContent).toContain('Feature page · Ansvisor default');
+
+      // Not saved: the type goes back, and so does nothing of the rules.
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setContentDraftPageType.mockRejectedValueOnce(new Error('not_found'));
+      await pickType('How-to guide');
+      expect(toast.error).toHaveBeenCalledWith("Couldn't change the page type. Try again.");
+      expect(saveDraftRules).not.toHaveBeenCalled();
+      expect(setTrigger().textContent).toContain('Feature page · Ansvisor default');
+
+      await pickType('How-to guide');
+      expect(lastSaved()).toEqual({ ...legacy, set: null });
+      expect(setTrigger().textContent).toContain('How-to guide · Ansvisor default');
     });
 
     it('writes setFor when the person picks a set, and set: null for the page type’s own', async () => {

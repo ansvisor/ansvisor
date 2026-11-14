@@ -31,6 +31,7 @@ import {
   ruleSetType,
   rulesMet,
   rulesPageType,
+  rulesForPageType,
   legacyPin,
   notCheckedHere,
   phrasesFound,
@@ -1162,6 +1163,34 @@ describe('rules that follow the page, and rules it can’t meet', () => {
     });
     const kept = activeRules(ruleSet(ruleSetType(choices, 'blog_post')), choices);
     expect(kept.find((r) => r.key === 'specsTable')?.on).toBe(false);
+  });
+
+  it('brings the type’s set when the person picks a page type: only the pin goes (the owner, 2026-11-14)', () => {
+    const custom = {
+      source: 'mine' as const,
+      overrides: { sentence: { on: false }, specsTable: { on: false } },
+      textRules: [{ id: 't1', text: 'Mention free shipping', on: true }],
+      importLength: 4_800,
+    };
+    // A set picked before setFor: it goes, whatever the type picked, its own too.
+    for (const type of ['blog_post', 'product_page'] as const) {
+      const next = rulesForPageType({ ...custom, set: 'product_page' }, type);
+      expect(next).toEqual({ ...custom, set: null });
+      expect(next).not.toHaveProperty('setFor');
+      expect(ruleSetType(next!, type)).toBe(type);
+      expect(rulesPageType(next!, type)).toBe(type);
+    }
+    // One picked for another type than the one picked now: it goes too (it already fell back).
+    const forBlog = { ...custom, set: 'feature_page' as const, setFor: 'blog_post' as const };
+    expect(rulesForPageType(forBlog, 'guide')).toEqual({ ...custom, set: null });
+    // Picked for this very type: the page keeps its type, the set stays.
+    expect(rulesForPageType(forBlog, 'blog_post')).toBeNull();
+    // No set pinned: nothing to save.
+    expect(rulesForPageType({ ...custom, set: null }, 'guide')).toBeNull();
+    // A value the new type's set also has keeps it.
+    const next = rulesForPageType({ ...custom, set: 'product_page' }, 'blog_post')!;
+    const kept = activeRules(ruleSet(ruleSetType(next, 'blog_post')), next);
+    expect(kept.find((r) => r.key === 'sentence')?.on).toBe(false);
   });
 
   it('sets apart another type’s rules and a product page with no specs, never counted (H)', () => {

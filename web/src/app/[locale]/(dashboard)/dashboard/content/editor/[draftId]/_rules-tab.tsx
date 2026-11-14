@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { ChevronDown, Database, Info, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -729,9 +729,13 @@ function shoppingNote(
   });
 }
 
-/** Write a rule, or paste many: each line becomes a rule (bullets and numbering taken off). */
+/**
+ * Write a rule, or paste many: each line becomes a rule (bullets and numbering
+ * taken off). Under its own small heading, as Rule set has (the owner, 2026-11-14).
+ */
 function AddTextRules({ onAdd }: { onAdd: (lines: string[]) => void }) {
   const t = useTranslations('contentEditor.editor.rules.text');
+  const headingId = useId();
   const [text, setText] = useState('');
   const [pasting, setPasting] = useState(false);
   const [pasted, setPasted] = useState('');
@@ -739,38 +743,43 @@ function AddTextRules({ onAdd }: { onAdd: (lines: string[]) => void }) {
   const pastedLines = splitRules(pasted);
 
   return (
-    <div className="space-y-1.5 rounded-lg border p-2">
-      <Textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={t('placeholder')}
-        aria-label={t('write')}
-        rows={2}
-        className="min-h-0 resize-none border-0 p-1 text-xs shadow-none focus-visible:ring-0"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey && lines.length) {
-            e.preventDefault();
-            onAdd(lines);
-            setText('');
-          }
-        }}
-      />
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 text-[11px] text-muted-foreground">{t('help')}</span>
-        <Button size="sm" variant="ghost" onClick={() => setPasting(true)}>
-          {t('pasteMany')}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!lines.length}
-          onClick={() => {
-            onAdd(lines);
-            setText('');
+    <div role="group" aria-labelledby={headingId} className="space-y-1.5">
+      <h4 id={headingId} className="text-xs text-muted-foreground">
+        {t('heading')}
+      </h4>
+      <div className="space-y-1.5 rounded-lg border p-2">
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={t('placeholder')}
+          aria-label={t('write')}
+          rows={2}
+          className="min-h-0 resize-none border-0 p-1 text-xs shadow-none focus-visible:ring-0"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey && lines.length) {
+              e.preventDefault();
+              onAdd(lines);
+              setText('');
+            }
           }}
-        >
-          {t('add')}
-        </Button>
+        />
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 text-[11px] text-muted-foreground">{t('help')}</span>
+          <Button size="sm" variant="ghost" onClick={() => setPasting(true)}>
+            {t('pasteMany')}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!lines.length}
+            onClick={() => {
+              onAdd(lines);
+              setText('');
+            }}
+          >
+            {t('add')}
+          </Button>
+        </div>
       </div>
       <Dialog open={pasting} onOpenChange={setPasting}>
         <DialogContent className="sm:max-w-lg">
