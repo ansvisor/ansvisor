@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BarChart3,
   Check,
   CirclePlay,
@@ -71,6 +74,13 @@ import {
   labelInitials,
 } from '@/lib/action-center/display';
 import { STALE_AFTER_DAYS, isStale, type PriorityLevel } from '@/lib/action-center/priority';
+import { actionCode } from '@/lib/action-center/action-ref';
+import {
+  columnSortDirection,
+  nextColumnSort,
+  type ActionSort,
+  type ActionSortColumn,
+} from '@/lib/action-center/sort';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -353,6 +363,48 @@ function ActionMenu({
   );
 }
 
+/**
+ * A header that sorts the list on a click (the Updated and Priority Score
+ * columns): most recent or highest first, then the other way round. Its
+ * arrow and `aria-sort` say how the list is sorted now.
+ */
+function SortHead({
+  column,
+  label,
+  sort,
+  onSortChange,
+}: {
+  column: ActionSortColumn;
+  label: string;
+  sort?: ActionSort;
+  onSortChange?: (sort: ActionSort) => void;
+}) {
+  const t = useTranslations('actionCenter.actionsPage');
+  if (!sort || !onSortChange) return <TableHead className="text-xs">{label}</TableHead>;
+  const direction = columnSortDirection(sort, column);
+  const next = nextColumnSort(sort, column);
+  const Arrow = direction === 'ascending' ? ArrowUp : direction ? ArrowDown : ArrowUpDown;
+  return (
+    <TableHead className="text-xs" aria-sort={direction ?? undefined}>
+      <button
+        type="button"
+        onClick={() => onSortChange(next)}
+        title={t('table.sortTo', { sort: t(`sort.${next}`) })}
+        className="group inline-flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {label}
+        <Arrow
+          aria-hidden="true"
+          className={cn(
+            'h-3 w-3',
+            !direction && 'text-muted-foreground opacity-50 group-hover:opacity-100',
+          )}
+        />
+      </button>
+    </TableHead>
+  );
+}
+
 export function ActionTable({
   actions,
   onSelect,
@@ -362,6 +414,8 @@ export function ActionTable({
   onStartNow,
   canDelete = false,
   busyIds,
+  sort,
+  onSortChange,
 }: {
   actions: ActionItem[];
   onSelect: (action: ActionItem) => void;
@@ -379,6 +433,9 @@ export function ActionTable({
   canDelete?: boolean;
   /** Actions with a change in flight: their menu waits. */
   busyIds?: Set<string>;
+  /** The list's sort: with onSortChange, the Updated and Priority Score headers set it. */
+  sort?: ActionSort;
+  onSortChange?: (sort: ActionSort) => void;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
   const withMenu = Boolean(onStatusChange && onDelete);
@@ -394,11 +451,21 @@ export function ActionTable({
         <TableHeader>
           <TableRow>
             <TableHead className="text-xs">{t('table.action')}</TableHead>
-            <TableHead className="text-xs">{t('table.priority')}</TableHead>
+            <SortHead
+              column="priority"
+              label={t('table.priority')}
+              sort={sort}
+              onSortChange={onSortChange}
+            />
             <TableHead className="text-xs">{t('table.status')}</TableHead>
             <TableHead className="text-xs">{t('table.assignee')}</TableHead>
             <TableHead className="text-xs">{t('table.dueDate')}</TableHead>
-            <TableHead className="text-xs">{t('table.updated')}</TableHead>
+            <SortHead
+              column="updated"
+              label={t('table.updated')}
+              sort={sort}
+              onSortChange={onSortChange}
+            />
             {withMenu && (
               <TableHead className={MENU_CELL}>
                 <span className="sr-only">{t('table.actions')}</span>
@@ -439,7 +506,11 @@ export function ActionTable({
                         />
                       </div>
                       <p className="truncate text-xs text-muted-foreground">{texts.description}</p>
-                      <div className="mt-1 flex flex-wrap gap-1">
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {/* Its number, as Chat names it ("AC-251"): kept whole when the row is narrow. */}
+                        <span className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
+                          {actionCode(action)}
+                        </span>
                         <Badge variant="outline" className="text-[10px]">
                           {tCategories(action.category)}
                         </Badge>
