@@ -51,11 +51,11 @@ Late and Missing list the furthest behind first. A prompt with no answers in the
 
 ## Organize with tags
 
-Tags label prompts with your own words, such as a campaign or a product line. A prompt can carry up to 10 tags, each up to 50 characters. Admins and managers tag a prompt from **Edit** on its **…** menu, under **Tags**: type one and press Enter. A prompt's tags show beside its text in the table.
+Tags label prompts with your own words, such as a campaign or product line. A prompt carries up to 10 tags, each up to 50 characters. Admins and managers tag one from **Edit** on its **…** menu, under **Tags**: type and press Enter. Tags show beside the prompt's text in the table.
 
-To tag many prompts at once, tick their rows and open **Tags** in the bar that appears: **Add tags** puts tags on every selected prompt, leaving one that would go over 10 tags alone, and **Remove tags** takes the tags you pick off them. The dialog says how many prompts will change before you save.
+To tag many at once, tick their rows and open **Tags** in the bar that appears: **Add tags** puts them on every selected prompt, leaving one that would go over 10 alone, and **Remove tags** takes the picked tags off. The dialog says how many prompts will change before you save.
 
-The **Tags** filter, beside the search box, narrows the table to one or more tags. With several picked, **Match all** keeps the prompts carrying every one; **Match any** keeps those carrying at least one. It combines with the search box and the other filters.
+The **Tags** filter beside the search box narrows the table to one or more tags. With several picked, **Match all** keeps prompts carrying every one; **Match any** keeps those carrying at least one. It combines with search and the other filters.
 
 ## Open a prompt or act on it
 
