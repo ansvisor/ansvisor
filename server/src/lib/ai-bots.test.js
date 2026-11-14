@@ -66,6 +66,55 @@ describe('addresses and prefixes', () => {
     expect(inPrefixes('not-an-ip', prefixes)).toBe(false);
     expect(parsePrefix('20.171.206.0/33')).toBeNull();
   });
+
+  it('refuses a malformed prefix length instead of reading it as another one (#2346)', () => {
+    for (const bad of [
+      '203.0.113.7/',
+      '203.0.113.7/24/garbage',
+      '203.0.113.7',
+      '/24',
+      '203.0.113.7/ 24',
+      '203.0.113.7/24 ',
+      ' 203.0.113.0/24',
+      '203.0.113.7/+24',
+      '203.0.113.7/-1',
+      '203.0.113.7/0x18',
+      '203.0.113.7/24.0',
+      '203.0.113.7/1e1',
+      '203.0.113.7/33',
+      '2001:db8::/',
+      '2001:db8::/129',
+    ]) {
+      expect(parsePrefix(bad)).toBeNull();
+    }
+  });
+
+  it('keeps every valid prefix, /0 included', () => {
+    expect(parsePrefix('0.0.0.0/0')).toEqual({ family: 4, base: 0n, shift: 32n });
+    expect(parsePrefix('203.0.113.7/32')).toEqual({
+      family: 4,
+      base: parseIp('203.0.113.7').value,
+      shift: 0n,
+    });
+    expect(parsePrefix('::/0')).toEqual({ family: 6, base: 0n, shift: 128n });
+    expect(parsePrefix('2001:db8::/32')?.shift).toBe(96n);
+  });
+
+  it('drops malformed entries from a range file, so they let no other address through', () => {
+    const prefixes = readRangeFile({
+      prefixes: [
+        { ipv4Prefix: '203.0.113.7/' },
+        { ipv4Prefix: '203.0.113.7/24/garbage' },
+        { ipv4Prefix: '198.51.100.0/0x18' },
+        { ipv4Prefix: '20.171.206.0/24' },
+      ],
+    });
+    expect(prefixes).toHaveLength(1);
+    expect(inPrefixes('20.171.206.9', prefixes)).toBe(true);
+    expect(inPrefixes('8.8.8.8', prefixes)).toBe(false);
+    expect(inPrefixes('203.0.113.200', prefixes)).toBe(false);
+    expect(inPrefixes('198.51.100.9', prefixes)).toBe(false);
+  });
 });
 
 describe('rangesFor', () => {
