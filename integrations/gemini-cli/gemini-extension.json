@@ -1,0 +1,13 @@
+{
+  "name": "ansvisor",
+  "version": "0.1.0",
+  "description": "Ask how your brand shows up in AI answers: Ansvisor's visibility, mentions, citations, prompts, content, Site Audits and Action Center, through its MCP server.",
+  "mcpServers": {
+    "ansvisor": {
+      "url": "https://app.ansvisor.com/api/mcp",
+      "type": "http",
+      "description": "Ansvisor: AI visibility data and actions for your brands."
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}

@@ -94,6 +94,7 @@
         "guides/daily-pulse",
         "guides/menu-access",
         "guides/mcp-server",
+        "guides/gemini-cli",
         "guides/looker-studio"
       ]
     },
