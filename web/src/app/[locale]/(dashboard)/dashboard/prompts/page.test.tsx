@@ -380,6 +380,116 @@ describe('the Location filter', () => {
   });
 });
 
+describe('the Tags filter (#2378)', () => {
+  const tagged = (id: string, text: string, tags: string[]): Prompt => ({
+    ...prompt,
+    id,
+    text,
+    tags,
+  });
+  const both = tagged('p1', 'Best coffee subscription?', ['coffee', 'priority']);
+  const coffeeOnly = tagged('p2', 'Top espresso machines?', ['coffee']);
+  const neither = tagged('p3', 'Decaf options?', ['decaf']);
+
+  const renderTagged = async () => {
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [both, coffeeOnly, neither] }],
+      visibility: {},
+      positions: {},
+    });
+    await render(false);
+  };
+  const openTagFilter = async () => {
+    const trigger = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.getAttribute('aria-label') === 'Tags',
+    )!;
+    await act(async () => trigger.click());
+  };
+  const toggleTag = async (tag: string) => {
+    const box = [...document.querySelectorAll<HTMLElement>('[role="checkbox"]')].find(
+      (el) => el.getAttribute('aria-label') === tag,
+    )!;
+    await act(async () => box.click());
+  };
+  const matchSelect = () =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.getAttribute('aria-label') === 'Match',
+    );
+  const typeSearch = async (text: string) => {
+    const input = container.querySelector<HTMLInputElement>(
+      'input[placeholder="Search prompts…"]',
+    )!;
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  it('shows every prompt while no tag is picked', async () => {
+    await renderTagged();
+    expect(container.textContent).toContain(both.text);
+    expect(container.textContent).toContain(coffeeOnly.text);
+    expect(container.textContent).toContain(neither.text);
+    expect(button('All tags')).toBeDefined();
+  });
+
+  it('keeps the prompts carrying one picked tag, and offers no match mode yet', async () => {
+    await renderTagged();
+    await openTagFilter();
+    await toggleTag('coffee');
+    expect(container.textContent).toContain(both.text);
+    expect(container.textContent).toContain(coffeeOnly.text);
+    expect(container.textContent).not.toContain(neither.text);
+    expect(button('1 tag')).toBeDefined();
+    expect(matchSelect()).toBeUndefined();
+  });
+
+  it('matches every picked tag by default', async () => {
+    await renderTagged();
+    await openTagFilter();
+    await toggleTag('coffee');
+    await toggleTag('priority');
+    expect(container.textContent).toContain(both.text);
+    expect(container.textContent).not.toContain(coffeeOnly.text);
+    expect(container.textContent).not.toContain(neither.text);
+    expect(matchSelect()?.textContent).toContain('Match all');
+  });
+
+  it('matches any picked tag when asked', async () => {
+    await renderTagged();
+    await openTagFilter();
+    await toggleTag('coffee');
+    await toggleTag('priority');
+    await act(async () => matchSelect()!.click());
+    const any = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (el) => el.textContent === 'Match any',
+    )!;
+    await act(async () => {
+      any.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await act(async () => any.click());
+    expect(container.textContent).toContain(both.text);
+    expect(container.textContent).toContain(coffeeOnly.text);
+    expect(container.textContent).not.toContain(neither.text);
+  });
+
+  it('combines with the search box', async () => {
+    await renderTagged();
+    await openTagFilter();
+    await toggleTag('coffee');
+    await typeSearch('espresso');
+    expect(container.textContent).not.toContain(both.text);
+    expect(container.textContent).toContain(coffeeOnly.text);
+    expect(container.textContent).not.toContain(neither.text);
+  });
+});
+
 describe("what Chat's side panel sees", () => {
   // A link that carries a location from Tracked Prompts to every tab.
   const filtersOn = async (pathname: string) => {

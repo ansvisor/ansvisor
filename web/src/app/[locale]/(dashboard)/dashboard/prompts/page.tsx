@@ -207,6 +207,7 @@ import {
   type SortDir,
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
+import { TagFilter } from './_tag-filter';
 import { ColumnsPanel } from './_columns-panel';
 import { PlanLimitButtons } from './_plan-limit-buttons';
 import { PromptLimitDialog } from './_prompt-limit-dialog';
@@ -218,6 +219,7 @@ import {
   loadLocationMatrix,
 } from './_location-matrix';
 import { AddLocationsDialog, type AddLocationsPreset } from './_add-locations-dialog';
+import { BulkTagsDialog, type BulkTagsPreset } from './_bulk-tags-dialog';
 import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt-table-views';
 import {
   effectiveView,
@@ -3080,7 +3082,6 @@ function AllPromptsTab({
   const tCommon = useTranslations('common');
   const failureToast = useFailureToast();
   const tPrompts = useTranslations('prompts');
-  const tTags = useTranslations('prompts.tags');
   // One tooltip for every prompt and topic the table cuts short.
   const fullText = useMemo(() => createClampedTextHandle(), []);
   const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
@@ -3557,7 +3558,9 @@ function AllPromptsTab({
   // Where the brand stands in each prompt's answers: Best, Good, Late, Missing.
   const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
   // Custom tags (#2151): all prompts, or only those carrying one.
-  const [tagFilter, setTagFilter] = useState<string>('all');
+  // Custom tags (#2151, #2378): any set of them, all or any matching.
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [tagMatch, setTagMatch] = useState<'all' | 'any'>('all');
   // Optimistic per-row status overrides — the prompts prop belongs to the
   // parent's load cycle; a full reload for a one-column change would flash
   // the whole table.
@@ -3599,6 +3602,12 @@ function AllPromptsTab({
   const [addLocations, setAddLocations] = useState<{
     open: boolean;
     preset: AddLocationsPreset | null;
+  }>({ open: false, preset: null });
+  // Add or remove custom tags on the selected prompts (#2378), from the bulk
+  // bar; each opener is guarded, as the locations dialog's.
+  const [bulkTags, setBulkTags] = useState<{
+    open: boolean;
+    preset: BulkTagsPreset | null;
   }>({ open: false, preset: null });
   // A Locations view cell opens the panel on its location (PROMPT-015b).
   const [panelRegion, setPanelRegion] = useState<string | null>(null);
@@ -3725,11 +3734,15 @@ function AllPromptsTab({
         workFilter === 'none' ? statusOf(p) === null : statusOf(p) === workFilter,
       );
     }
-    if (tagFilter !== 'all') {
-      list = list.filter((p) => (p.tags ?? []).includes(tagFilter));
+    if (tagFilter.length > 0) {
+      list = list.filter((p) =>
+        tagMatch === 'all'
+          ? tagFilter.every((tag) => (p.tags ?? []).includes(tag))
+          : tagFilter.some((tag) => (p.tags ?? []).includes(tag)),
+      );
     }
     return list;
-  }, [prompts, search, statusFilter, workFilter, tagFilter, statusOf, now]);
+  }, [prompts, search, statusFilter, workFilter, tagFilter, tagMatch, statusOf, now]);
   const tagOptions = useMemo(
     () => [...new Set(prompts.flatMap((p) => p.tags ?? []))].sort(),
     [prompts],
@@ -4114,28 +4127,13 @@ function AllPromptsTab({
                 <SelectItem value="none">No status</SelectItem>
               </SelectContent>
             </Select>
-            {tagOptions.length > 0 && (
-              <Select
-                value={tagFilter}
-                onValueChange={(v) => setTagFilter(v ?? 'all')}
-                items={[
-                  { value: 'all', label: tTags('allTags') },
-                  ...tagOptions.map((tag) => ({ value: tag, label: tag })),
-                ]}
-              >
-                <SelectTrigger className="h-8 w-32 text-xs" aria-label={tTags('allTags')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{tTags('allTags')}</SelectItem>
-                  {tagOptions.map((tag) => (
-                    <SelectItem key={tag} value={tag}>
-                      {tag}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <TagFilter
+              tagOptions={tagOptions}
+              tagFilter={tagFilter}
+              tagMatch={tagMatch}
+              onFilterChange={setTagFilter}
+              onMatchChange={setTagMatch}
+            />
             <Select
               value={performanceFilter}
               onValueChange={(v) => changePerformance((v as PerformanceFilter | null) ?? 'all')}
@@ -4211,6 +4209,12 @@ function AllPromptsTab({
               () => setAddLocations({ open: true, preset: { mode: 'remove' } }),
               { action: tActions('removeLocations') },
             )}
+            onAddTags={guard(() => setBulkTags({ open: true, preset: { mode: 'add' } }), {
+              action: tActions('changeTags'),
+            })}
+            onRemoveTags={guard(() => setBulkTags({ open: true, preset: { mode: 'remove' } }), {
+              action: tActions('removeTags'),
+            })}
             onDelete={guard(() => setConfirmDelete(selectedPrompts), {
               action: tActions('deletePrompts'),
             })}
@@ -4671,19 +4675,29 @@ function AllPromptsTab({
           ))}
       </CardContent>
       {onEditPrompt && (
-        <AddLocationsDialog
-          open={addLocations.open}
-          onOpenChange={(open) => setAddLocations((prev) => ({ ...prev, open }))}
-          brandId={activeBrandId}
-          prompts={filtered}
-          selectedIds={selectedIds}
-          preset={addLocations.preset}
-          onDone={() => {
-            // The prompts' locations changed: read the matrix again.
-            clearLocationMatrixCache();
-            onChanged();
-          }}
-        />
+        <>
+          <AddLocationsDialog
+            open={addLocations.open}
+            onOpenChange={(open) => setAddLocations((prev) => ({ ...prev, open }))}
+            brandId={activeBrandId}
+            prompts={filtered}
+            selectedIds={selectedIds}
+            preset={addLocations.preset}
+            onDone={() => {
+              // The prompts' locations changed: read the matrix again.
+              clearLocationMatrixCache();
+              onChanged();
+            }}
+          />
+          <BulkTagsDialog
+            open={bulkTags.open}
+            onOpenChange={(open) => setBulkTags((prev) => ({ ...prev, open }))}
+            prompts={filtered}
+            selectedIds={selectedIds}
+            preset={bulkTags.preset}
+            onDone={onChanged}
+          />
+        </>
       )}
       <PromptPositionsSheet
         prompt={openPositions}

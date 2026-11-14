@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { normalizeTags } from '../prompt-tags';
+import { normalizeTags, planBulkTagChange } from '../prompt-tags';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
@@ -606,6 +606,82 @@ export async function bulkUpdatePromptLocations(
     blocked: plan.blocked,
     delta: plan.delta,
   };
+}
+
+export interface BulkTagSummary {
+  /** Prompts whose tags changed. */
+  updated: number;
+  /** Already had every added tag, or none of the removed ones. */
+  unchanged: number;
+  /** Skipped: adding would have taken them past 10 tags. */
+  blocked: number;
+}
+
+export type BulkUpdatePromptTagsResult = BulkTagSummary | { error: string };
+
+/**
+ * Add or remove one or more custom tags across a selection of prompts
+ * (#2378). Add/remove rather than "set every selected prompt to this list",
+ * as the bulk location change: a selection can hold prompts carrying
+ * different tags, and assigning one list to all of them would erase that
+ * without saying so. A prompt that would pass 10 tags is skipped and
+ * counted, never silently trimmed. RLS decides which selected prompts may be
+ * written (Admins and Managers); a selection that resolves to nothing is a
+ * stale page, not a request to write.
+ */
+export async function bulkUpdatePromptTags(
+  promptIds: string[],
+  action: 'add' | 'remove',
+  tagsInput: string[],
+): Promise<BulkUpdatePromptTagsResult> {
+  await assertWritable();
+  const supabase = await createClient();
+
+  const ids = [...new Set(promptIds)].filter(Boolean);
+  if (ids.length === 0) return { error: 'Select at least one prompt.' };
+
+  const tags = normalizeTags(tagsInput);
+  if (tags.length === 0) return { error: 'Enter at least one tag.' };
+
+  const rows: { id: string; tags: string[] }[] = [];
+  for (let i = 0; i < ids.length; i += BULK_LOCATION_READ_CHUNK) {
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('id, tags')
+      .in('id', ids.slice(i, i + BULK_LOCATION_READ_CHUNK));
+    if (error) return { error: error.message };
+    for (const row of data ?? []) {
+      rows.push({ id: row.id as string, tags: (row.tags as string[] | null) ?? [] });
+    }
+  }
+
+  // RLS decides what came back.
+  if (rows.length === 0) return { error: 'None of the selected prompts are available.' };
+
+  const plan = planBulkTagChange(rows, action, tags);
+  if (plan.changes.length === 0) {
+    return { updated: 0, unchanged: plan.unchanged, blocked: plan.blocked };
+  }
+
+  let updated = 0;
+  for (const change of plan.changes) {
+    const { error } = await supabase
+      .from('prompts')
+      .update({ tags: change.tags })
+      .eq('id', change.promptId);
+    if (error) {
+      return {
+        error:
+          updated > 0
+            ? `${error.message} (${updated} prompt${updated === 1 ? '' : 's'} updated before this.)`
+            : error.message,
+      };
+    }
+    updated++;
+  }
+
+  revalidatePath('/dashboard/brands');
+  return { updated, unchanged: plan.unchanged, blocked: plan.blocked };
 }
 
 /**

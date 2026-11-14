@@ -4648,7 +4648,10 @@
         "performance filter",
         "paused prompts",
         "waiting for a spot",
-        "free up a spot"
+        "free up a spot",
+        "prompt tags",
+        "tag filter",
+        "bulk tags"
       ],
       "synonyms": [
         "prompt list",
@@ -4657,7 +4660,7 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -4682,6 +4685,10 @@
         {
           "heading": "Filter by performance",
           "text": "The **Performance** filter groups prompts by where your brand is named in their AI answers over the selected range, across every platform the prompt tracks:\n\n- **Best**: named in the first third of the brands an answer lists.\n- **Good**: named in the middle third.\n- **Late**: named in the last third.\n- **Missing**: named in fewer than half the answers.\n\nLate and Missing list the furthest behind first. A prompt with no answers in the range, such as a new one, has no performance yet. The **Positions** column shows your average position and its change; hover it for each platform, or use its chart button to open the positions panel."
+        },
+        {
+          "heading": "Organize with tags",
+          "text": "Tags label prompts with your own words, such as a campaign or product line. A prompt carries up to 10 tags, each up to 50 characters. Admins and managers tag one from **Edit** on its **…** menu, under **Tags**: type and press Enter. Tags show beside the prompt's text in the table.\n\nTo tag many at once, tick their rows and open **Tags** in the bar that appears: **Add tags** puts them on every selected prompt, leaving one that would go over 10 alone, and **Remove tags** takes the picked tags off. The dialog says how many prompts will change before you save.\n\nThe **Tags** filter beside the search box narrows the table to one or more tags. With several picked, **Match all** keeps prompts carrying every one; **Match any** keeps those carrying at least one. It combines with search and the other filters."
         },
         {
           "heading": "Open a prompt or act on it",

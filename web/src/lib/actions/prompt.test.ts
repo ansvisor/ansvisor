@@ -37,7 +37,7 @@ let brandReadError: string | null = null;
 /** When set, each heavy read takes a moment, counted while it runs. */
 let slowReads: { running: number; most: number } | null = null;
 /** The prompts a bulk location change reads, and what it writes back. */
-let bulkRows: { id: string; regions: string[]; is_active: boolean }[] = [];
+let bulkRows: { id: string; regions: string[]; is_active: boolean; tags?: string[] }[] = [];
 let appliedLocations: unknown[] = [];
 const slowRead = async <T>(read: () => T | Promise<T>): Promise<T> => {
   if (!slowReads) return read();
@@ -105,11 +105,13 @@ vi.mock('@/lib/supabase/server', () => ({
     },
     from: (table: string) => ({
       select: () => ({
-        in: async () => ({
-          data: bulkRows.map((row) => ({
-            ...row,
-            prompt_sets: { brands: { organization_id: 'org-1' } },
-          })),
+        in: async (_column: string, ids: string[]) => ({
+          data: bulkRows
+            .filter((row) => ids.includes(row.id))
+            .map((row) => ({
+              ...row,
+              prompt_sets: { brands: { organization_id: 'org-1' } },
+            })),
           error: null,
         }),
         eq: () => ({
@@ -152,6 +154,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const {
   bulkUpdatePromptLocations,
+  bulkUpdatePromptTags,
   getPromptLocationMatrix,
   getPromptsPageData,
   setPromptActive,
@@ -312,6 +315,53 @@ describe('bulkUpdatePromptLocations (PROMPT-015)', () => {
 
     expect(result).toEqual({ error: 'Unknown location code: TR~ATLANTIS' });
     expect(appliedLocations).toEqual([]);
+  });
+});
+
+describe('bulkUpdatePromptTags (#2378)', () => {
+  beforeEach(() => {
+    writes = [];
+    bulkRows = [
+      { id: 'p1', regions: ['US'], is_active: true, tags: ['campaign-x'] },
+      { id: 'p2', regions: ['US'], is_active: true, tags: ['campaign-x', 'bottom-funnel'] },
+      {
+        id: 'p3',
+        regions: ['US'],
+        is_active: true,
+        tags: Array.from({ length: 10 }, (_, i) => `t${i + 1}`),
+      },
+    ];
+  });
+
+  it('adds the missing tags only, and skips a prompt at the cap', async () => {
+    const result = await bulkUpdatePromptTags(['p1', 'p2', 'p3'], 'add', ['priority']);
+
+    expect(result).toEqual({ updated: 2, unchanged: 0, blocked: 1 });
+    expect(writes).toEqual([
+      { tags: ['campaign-x', 'priority'] },
+      { tags: ['campaign-x', 'bottom-funnel', 'priority'] },
+    ]);
+  });
+
+  it('takes tags off, counting prompts without them as unchanged', async () => {
+    const result = await bulkUpdatePromptTags(['p1', 'p2'], 'remove', ['campaign-x']);
+
+    expect(result).toEqual({ updated: 2, unchanged: 0, blocked: 0 });
+    expect(writes).toEqual([{ tags: [] }, { tags: ['bottom-funnel'] }]);
+  });
+
+  it('writes nothing when every prompt already has the tags', async () => {
+    const result = await bulkUpdatePromptTags(['p1', 'p2'], 'add', ['campaign-x']);
+
+    expect(result).toEqual({ updated: 0, unchanged: 2, blocked: 0 });
+    expect(writes).toEqual([]);
+  });
+
+  it('refuses an empty tag list before reading anything', async () => {
+    const result = await bulkUpdatePromptTags(['p1'], 'add', ['  ', '']);
+
+    expect(result).toEqual({ error: 'Enter at least one tag.' });
+    expect(writes).toEqual([]);
   });
 });
 

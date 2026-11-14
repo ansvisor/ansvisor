@@ -14,6 +14,8 @@ let container: HTMLDivElement;
 let root: Root;
 const onAddLocations = vi.fn();
 const onRemoveLocations = vi.fn();
+const onAddTags = vi.fn();
+const onRemoveTags = vi.fn();
 
 async function render(busy = false) {
   await act(async () => {
@@ -31,6 +33,8 @@ async function render(busy = false) {
           onSuggestContent={() => {}}
           onAddLocations={onAddLocations}
           onRemoveLocations={onRemoveLocations}
+          onAddTags={onAddTags}
+          onRemoveTags={onRemoveTags}
           onDelete={() => {}}
           onClear={() => {}}
         />
