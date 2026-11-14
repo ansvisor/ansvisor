@@ -36,6 +36,11 @@ vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: () => nul
 vi.mock('@/components/auth/onboarding-sign-out-button', () => ({
   OnboardingSignOutButton: () => null,
 }));
+// Once per account, in the background: its own tests.
+const sendSignupEventOnce = vi.fn();
+vi.mock('@/lib/signup-event', () => ({
+  sendSignupEventOnce: (u: unknown) => sendSignupEventOnce(u),
+}));
 
 const { default: OnboardingLayout } = await import('./layout');
 
@@ -77,5 +82,11 @@ describe('the onboarding layout', () => {
   it('lets a new member who has not finished onboarding through', async () => {
     profile = { organization_id: null, onboarding_completed: false, role: 'admin' };
     expect(await open()).toBe(true);
+  });
+
+  it("hands the signed-in account to the sign-up event, for a new account's first page", async () => {
+    profile = { organization_id: null, onboarding_completed: false, role: 'admin' };
+    expect(await open()).toBe(true);
+    expect(sendSignupEventOnce).toHaveBeenCalledWith({ id: 'u1' });
   });
 });

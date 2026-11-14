@@ -513,7 +513,7 @@ describe('the content editor', () => {
         checks: { page: 18, site: 13, ai: 0 },
       },
     });
-    getContentDraft.mockResolvedValue(draft());
+    getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
     await renderPage();
     await act(() => new Promise((resolve) => setTimeout(resolve, 1_100)));
 
@@ -529,6 +529,9 @@ describe('the content editor', () => {
     expect(doc).toMatch(/^<!doctype html>/);
     expect(doc).toContain('<title>Pipeline forecasting</title>');
     expect(doc).toContain('<h1>Pipeline forecasting</h1>');
+    // The Article JSON-LD Export and Copy HTML add: the page that ships.
+    expect(doc).toContain('application/ld+json');
+    expect(doc).toContain('"@type": "Article"');
   });
 
   it('remembers the draft for Content › Editor, per brand', async () => {
@@ -3289,7 +3292,8 @@ describe('the side panel', () => {
     await renderPage();
     // The editor reads the sources once on opening; the tab itself isn't there yet.
     expect(getDraftSources).toHaveBeenCalledTimes(1);
-    expect(panel()!.textContent).not.toContain('pipeline forecasting');
+    // Rules names the fan-out still to use; Sources' row for it isn't there.
+    expect(panel()!.querySelector('[aria-label="Use pipeline forecasting"]')).toBeNull();
 
     // The tab counts the sources in use, from the editor's one read.
     const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
@@ -8664,7 +8668,7 @@ describe('the side panel', () => {
         expect(toast.error).not.toHaveBeenCalled();
       });
 
-      it('says it stopped, or failed, as its row says, without waiting out the minute and a half', async () => {
+      it('says it stopped, or failed, as its row says, without waiting out the three minutes', async () => {
         runs(null, ended({ outcome: 'stopped' }));
         await run();
         expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
@@ -8683,9 +8687,10 @@ describe('the side panel', () => {
         runs(earlier, earlier);
         await run();
         expect(toast).not.toHaveBeenCalledWith('Stopped · nothing was changed');
-        await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
+        await act(async () => void (await vi.advanceTimersByTimeAsync(175_000)));
         await act(async () => {});
-        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+        expect(toast).toHaveBeenCalledWith(expect.stringMatching(/still finishing/));
+        expect(toast.error).not.toHaveBeenCalled();
       });
     });
 
@@ -8700,7 +8705,7 @@ describe('the side panel', () => {
       );
     });
 
-    it('says the agent couldn’t run when no batch lands in time', async () => {
+    it('says it is still finishing, never that it failed, when no batch lands in time', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {
         getContentDraft.mockResolvedValue(traced);
@@ -8709,11 +8714,15 @@ describe('the side panel', () => {
         await openRules();
 
         await act(async () => panelButton('Fix open rules').click());
-        await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
-        expect(toast.error).not.toHaveBeenCalled();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(175_000)));
+        expect(
+          container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+        ).toContain('Still finishing…');
+        expect(toast).not.toHaveBeenCalledWith(expect.stringMatching(/still finishing/));
         await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
         await act(async () => {});
-        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+        expect(toast).toHaveBeenCalledWith(expect.stringMatching(/still finishing/));
+        expect(toast.error).not.toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }

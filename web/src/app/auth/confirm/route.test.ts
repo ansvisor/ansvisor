@@ -11,24 +11,12 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { verifyOtp } }),
 }));
 
-const sendSignedUp = vi.fn();
-vi.mock('@/lib/resend-event', () => ({ sendSignedUpEvent: (u: unknown) => sendSignedUp(u) }));
-
-const capturePostHog = vi.fn();
-vi.mock('@/lib/posthog-server', () => ({
-  capturePostHog: (...args: unknown[]) => capturePostHog(...args),
-}));
-
 const { GET } = await import('./route');
 
 const confirm = (query: string) =>
   GET(new Request(`https://app.example.com/auth/confirm?token_hash=h1&type=invite&${query}`));
 
-beforeEach(() => {
-  verifyOtp.mockReset().mockResolvedValue({ error: null });
-  sendSignedUp.mockReset();
-  capturePostHog.mockReset().mockResolvedValue(undefined);
-});
+beforeEach(() => verifyOtp.mockReset().mockResolvedValue({ error: null }));
 afterEach(() => vi.unstubAllEnvs());
 
 describe('GET /auth/confirm', () => {
@@ -83,21 +71,5 @@ describe('GET /auth/confirm', () => {
     expect(res.headers.get('location')).toBe(
       'https://app.example.com/sign-in?error=auth_confirm_failed&reason=expired',
     );
-  });
-
-  it('tells Resend once when a sign-up link is confirmed, and not for invites', async () => {
-    const user = { id: 'u1', email: 'a@b.co', user_metadata: { full_name: 'Ada L' } };
-    verifyOtp.mockResolvedValue({ data: { user }, error: null });
-    await GET(new Request('https://app.example.com/auth/confirm?token_hash=h1&type=signup'));
-    expect(sendSignedUp).toHaveBeenCalledTimes(1);
-    expect(sendSignedUp).toHaveBeenCalledWith(user);
-    // The funnel's first step: the user id and the way in, no e-mail or name.
-    expect(capturePostHog).toHaveBeenCalledWith('signed_up', 'u1', { source: 'email' });
-
-    sendSignedUp.mockClear();
-    capturePostHog.mockClear();
-    await confirm('next=/invite/t1');
-    expect(sendSignedUp).not.toHaveBeenCalled();
-    expect(capturePostHog).not.toHaveBeenCalled();
   });
 });

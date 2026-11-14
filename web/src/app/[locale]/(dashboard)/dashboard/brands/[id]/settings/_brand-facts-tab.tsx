@@ -168,6 +168,8 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
           >
             {t(`sources.${fact.sourceKind}`)}
           </a>
+          {/* Where it holds (00539): only pages about that place are checked against it. */}
+          {fact.scope && ` · ${t('forPlace', { place: fact.scope })}`}
           {fact.replaces && (
             <>
               {' · '}

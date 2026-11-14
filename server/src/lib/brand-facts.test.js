@@ -77,6 +77,7 @@ function fakeDb(tables) {
         select: () => chain,
         eq: (col, value) => (q.filters.push(['eq', col, value]), chain),
         in: (col, value) => (q.filters.push(['in', col, value]), chain),
+        is: (col, value) => (q.filters.push(['is', col, value]), chain),
         neq: (col, value) => (q.filters.push(['neq', col, value]), chain),
         not: (col, op, value) => (q.filters.push(['not', col, value]), chain),
         order: () => chain,
@@ -325,6 +326,31 @@ describe('keptFacts', () => {
     ).toEqual([]);
   });
 
+  it('keeps a fact’s scope only where the page names it, one fact per scope', () => {
+    const page = 'Bozcaada\nYetişkin ₺150\nGökçeada\nYetişkin ₺150\nÇocuk ₺75';
+    const read = (facts, heads) =>
+      keptFacts(page, { facts }, { heads }).map((f) => [f.quote, f.value_key, f.scope]);
+    expect(
+      read([
+        { kind: 'price', quote: '₺150', plan: 'Yetişkin', scope: 'Bozcaada' },
+        { kind: 'price', quote: '₺150', plan: 'Yetişkin', scope: 'GÖKÇEADA' },
+        // Not on the page: the brand's.
+        { kind: 'price', quote: '₺75', plan: 'Çocuk', scope: 'Assos' },
+      ]),
+    ).toEqual([
+      ['₺150', '150.00', 'Bozcaada'],
+      ['₺150', '150.00', 'GÖKÇEADA'],
+      ['₺75', '75.00', null],
+    ]);
+    // A page about one place: its title or H1 names it.
+    expect(
+      read([{ kind: 'price', quote: '₺75', plan: 'Çocuk', scope: 'Assos' }], {
+        title: 'Assos turu',
+        h1: '',
+      }),
+    ).toEqual([['₺75', '75.00', 'Assos']]);
+  });
+
   it('finds words copied with straight marks, and keeps each fact once', () => {
     const curly = 'Ledgerly is the world’s first forecasting app — “built for finance teams”.';
     expect(
@@ -476,7 +502,7 @@ describe('refreshBrandFacts', () => {
       ['founded', '2015', 'pending', 'about'],
     ]);
     expect(inserted.options).toEqual({
-      onConflict: 'brand_id,slot,value_key',
+      onConflict: 'brand_id,scope,slot,value_key',
       ignoreDuplicates: true,
     });
     const [pages] = writesOf(writes, 'brand_fact_pages', 'upsert');
@@ -860,6 +886,31 @@ describe('refreshBrandFacts', () => {
     ]);
   });
 
+  it('adds a fact per scope, and keeps the scope a kept fact has when read again', async () => {
+    const FERRY = `<title>Feribot · Adalar</title><h1>Feribot fiyatları</h1>
+      <h3>Bozcaada</h3><p>Yetişkin ₺150 tek yön</p><h3>Gökçeada</h3><p>Yetişkin ₺150 tek yön</p>
+      <p>${'Biletler iskelede ve internette satılır, her gün sefer vardır. '.repeat(4)}</p>`;
+    const said = (scope) => ({ kind: 'price', quote: '₺150 tek yön', plan: 'Yetişkin', scope });
+    generateObject.mockResolvedValue(answerFor([said('Bozcaada'), said('GÖKÇEADA')]));
+    const kept = (id, value_key, status, scope) => ({
+      ...{ id, kind: 'price', slot: 'price|yetişkin|TRY|||', value_key, status, scope },
+      ...{ quote: `₺${parseInt(value_key)} tek yön`, source_kind: 'pricing' },
+    });
+    // Kept for the whole brand before scopes: Bozcaada's, read again.
+    const facts = [kept('old', '150.00', 'approved'), kept('g', '200.00', 'pending', 'Gökçeada')];
+    const { db, writes } = fakeDb(base({ brand_facts: facts }));
+    const fetcher = async (url) => {
+      if (url.endsWith('/pricing')) return { url, html: FERRY };
+      throw new PageFetchError('http_error', '404', { status: 404 });
+    };
+    await refreshBrandFacts('b1', { orgId: 'o1', now: NOW, db, fetcher });
+    // One fact per scope, slot and value, its scope as the brand writes it.
+    const [inserted] = writesOf(writes, 'brand_facts', 'upsert');
+    expect(inserted.payload.map((f) => [f.scope, f.value_key])).toEqual([['Gökçeada', '150.00']]);
+    expect(writesOf(writes, 'brand_facts', 'update')[0].filters).toEqual([['in', 'id', ['old']]]);
+    expect(writesOf(writes, 'brand_facts', 'delete')[0].filters).toEqual([['in', 'id', ['g']]]);
+  });
+
   it('reads nothing for a brand with no domain', async () => {
     const { db } = fakeDb(base({ brand_domains: [] }));
     expect(await refresh(db)).toEqual({ noDomain: true, paused: false });
@@ -921,6 +972,25 @@ describe('readBrandFacts', () => {
     const fetcher = vi.fn();
     await readBrandFacts('b1', { orgId: 'o1', now: NOW, db: again, refresh: true, fetcher });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('names what a pending fact would replace in its own scope only, and each fact’s scope', async () => {
+    const [a, b] = tables().brand_facts;
+    const { db } = fakeDb(
+      tables({
+        brand_facts: [
+          { ...a, gone_at: null, scope: 'Bozcaada' },
+          { ...b, id: 'g', scope: 'Gökçeada' },
+          { ...b, id: 'z', value_key: '69.00', scope: 'Bozcaada' },
+        ],
+      }),
+    );
+    const read = await readBrandFacts('b1', { orgId: 'o1', now: NOW, db });
+    expect(read.facts.map((f) => [f.id, f.scope, f.replaces?.id ?? null])).toEqual([
+      ['a', 'Bozcaada', null],
+      ['g', 'Gökçeada', null],
+      ['z', 'Bozcaada', 'a'],
+    ]);
   });
 
   it('never reads the site once the plan has ended: as kept, if anything is', async () => {
@@ -1031,14 +1101,23 @@ describe('setFactStatus', () => {
       op: 'update',
       payload: { status: 'approved', reviewed_by: 'u1' },
     });
+    expect(writes[0].filters).toEqual([
+      ['eq', 'id', 'f1'],
+      ['eq', 'brand_id', 'b1'],
+    ]);
     expect(writes[1]).toMatchObject({
       op: 'delete',
       filters: expect.arrayContaining([
         ['eq', 'slot', fact.slot],
         ['neq', 'id', 'f1'],
         ['not', 'gone_at', null],
+        ['is', 'scope', null],
       ]),
     });
+    // A scoped fact replaces only its scope's.
+    const { db: scoped, writes: w3 } = fakeDb({});
+    await setFactStatus({ ...fact, scope: 'Bozcaada' }, 'approved', 'u1', { db: scoped, now: NOW });
+    expect(w3[1].filters).toContainEqual(['eq', 'scope', 'Bozcaada']);
     // A fact a read removed meanwhile.
     const { db: gone } = fakeDb({ brand_facts: null });
     await expect(

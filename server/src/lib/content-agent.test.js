@@ -2152,6 +2152,27 @@ describe('fixDraftRules', () => {
     expect(usage.value.cost_usd).toBeCloseTo(0.0038, 6);
   });
 
+  it('keeps the first 8 of an answer with more, never failing the run over them', async () => {
+    const tips = 'kettle scale grinder filter dripper mug beans water timer'.split(' ');
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: tips.map((tip) =>
+          suggestion({
+            kind: 'insert',
+            before: '',
+            after: `<p>Warm the ${tip} first.</p>`,
+            rules: ['faq'],
+            sources: [],
+            marks: [],
+          }),
+        ),
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    const { count } = await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    expect(count).toBe(8);
+  });
+
   it('charges the budget, asks the model and keeps one batch for review', async () => {
     generateObject.mockResolvedValue({
       object: {
@@ -2798,6 +2819,26 @@ describe('Quality’s hand-off (CE-051)', () => {
     expect(writes.find((w) => w.table === 'content_draft_suggestions').value[0].after_text).toBe(
       'good coffee and hot water, from $49 per month',
     );
+  });
+
+  it('writes a fact scoped to a place only on a page that names it (00539)', async () => {
+    const after = 'good coffee and hot water, from $49 per month';
+    const written = async (scope) => {
+      rows.brand_facts = [{ quote: 'Pro costs $49 per month', scope }];
+      writes = [];
+      const object = {
+        suggestions: [suggestion({ after, rules: ['trust:brandFacts'], sources: [] })],
+      };
+      generateObject.mockResolvedValue({ object, usage: { inputTokens: 900, outputTokens: 200 } });
+      const rules = [{ key: 'trust:brandFacts', name: 'Match the facts', detail: '' }];
+      const input = handoff({ rules });
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input, handoff: { origin: 'person' } });
+      const kept = writes.find((w) => w.table === 'content_draft_suggestions')?.value ?? [];
+      return kept.map((row) => row.after_text);
+    };
+    // The page's H1 names "pour-over": that place's fact is its own; Bozcaada's isn't.
+    expect(await written('Pour-over')).toEqual([after]);
+    expect(await written('Bozcaada')).not.toContain(after);
   });
 
   it('leaves a placeholder to the person: a change that fills or drops one isn’t kept', () => {

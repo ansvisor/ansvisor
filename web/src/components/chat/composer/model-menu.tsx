@@ -6,7 +6,7 @@ import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import type { ChatModelAccess } from '@/app/api/chat/models/route';
-import { percentLabel } from '@/lib/billing/ai-usage';
+import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import type { ChatModelMenu, ModelTone } from '@/lib/chat/model-menu';
 import { AUTO_MODEL, CHAT_EFFORTS, offeredModel, type ChatModelChoice } from '@/lib/chat/models';
 import { formatMonthDay } from '@/lib/format';
@@ -53,8 +53,9 @@ type Loaded =
  * The composer's model menu (CHAT-16 §A–C, W4-02; mockup #s-limits): Auto
  * (Default, Haiku reads and Sonnet writes, 1x), the offered models with their
  * multipliers, ✓ on the chat's pick, the catalog's line ("Prices from
- * OpenRouter, updated today. 1x = Auto."), the effort, the own-key row, this
- * month's AI usage and the plan. No dollar anywhere (the 2026-10-27
+ * OpenRouter, updated today. 1x = Auto."), the effort, the own-key row and
+ * the plan, then this month's AI usage with its meter (it left the line
+ * under the box on 2026-11-14). No dollar anywhere (the 2026-10-27
  * decision). In the free trial only Auto at Normal (Wave 4 decision 2 B).
  * The pick goes with each message of the chat; Auto stays the default.
  */
@@ -72,6 +73,7 @@ export function ModelMenu({
 }) {
   const t = useTranslations('chatComposer.modelMenu');
   const { usage } = useAiUsage();
+  const usageTone = usage && !usage.unlimited ? aiUsageTone(usage) : null;
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
   const root = useRef<HTMLDivElement>(null);
 
@@ -289,19 +291,6 @@ export function ModelMenu({
                 )}
               </div>
             )}
-            {usage && !usage.unlimited && usage.percentUsed !== null && (
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{t('usage')}</span>
-                <span className="ml-auto text-muted-foreground">
-                  {usage.periodEnd
-                    ? t('usageLine', {
-                        percent: percentLabel(usage.percentUsed),
-                        date: formatMonthDay(usage.periodEnd),
-                      })
-                    : percentLabel(usage.percentUsed)}
-                </span>
-              </div>
-            )}
             {ready.access.planName && (
               <div className="flex items-center gap-2">
                 <span className="font-medium">{t('plan')}</span>
@@ -321,6 +310,42 @@ export function ModelMenu({
             )}
           </div>
         </>
+      )}
+      {/* Last, after a divider: this month's AI usage, with the meter that was under the box. */}
+      {usage && usageTone && usage.percentUsed !== null && (
+        <div data-slot="model-usage" className="border-t px-2 pt-2 pb-1.5 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{t('usage')}</span>
+            <span className="ml-auto text-muted-foreground tabular-nums">
+              {usage.periodEnd
+                ? t('usageLine', {
+                    percent: percentLabel(usage.percentUsed),
+                    date: formatMonthDay(usage.periodEnd),
+                  })
+                : percentLabel(usage.percentUsed)}
+            </span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label={t('usage')}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.floor(Math.min(100, usage.percentUsed))}
+            aria-valuetext={percentLabel(usage.percentUsed)}
+            className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+          >
+            {/* Coloured as the header's meter: amber from 80%, red once used up. */}
+            <div
+              data-tone={usageTone}
+              className={cn(
+                'h-full rounded-full bg-foreground',
+                usageTone === 'warning' && 'bg-amber-500',
+                usageTone === 'exhausted' && 'bg-red-500',
+              )}
+              style={{ width: `${Math.min(100, usage.percentUsed)}%` }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

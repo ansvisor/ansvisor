@@ -560,6 +560,17 @@ describe('the Rules tab', () => {
     expect(changeTextRule).toHaveBeenCalledWith('b', { on: true });
   });
 
+  it('puts the box for your own rule before the first rule group', async () => {
+    await render(state());
+    const box = container.querySelector('textarea[aria-label="Write a rule"]')!;
+    const firstGroup = container.querySelector('section')!;
+    expect(box.compareDocumentPosition(firstGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const save = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Reset')!;
+    expect(
+      firstGroup.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('adds a rule written in the box, one per line', async () => {
     await render(state());
     const box = container.querySelector<HTMLTextAreaElement>(
@@ -660,6 +671,22 @@ describe('the Rules tab', () => {
     expect(live.textContent).toContain('4 found');
     expect(live.textContent).toContain(
       'A (not in stock), B (Merchant Center refuses it), C (not in stock) +1 more: remove or replace these links on the page.',
+    );
+  });
+
+  it('names the fan-outs still to use on their rows, the first three', async () => {
+    const fanouts = ['ai overviews', 'ai mode', 'search console', 'ga4 reports', 'llms txt'];
+    const page = readPage('<h1>T</h1><p>x</p>', 10);
+    const checked = activeRules(ruleSet('feature_page'), { overrides: {} }).map((rule) => ({
+      rule,
+      status: checkRule(rule, page, { brandDomains: [], competitorDomains: [], fanouts }),
+    }));
+    await render(state(undefined, { rules: checked, ...rulesMet(checked) }));
+    expect(row('Use top fan-outs as H2s').textContent).toContain(
+      'Still to use: “ai overviews”, “ai mode”, “search console” +1 more',
+    );
+    expect(row('Use fan-outs in FAQ questions').textContent).toContain(
+      'Still to use: “ai overviews”',
     );
   });
 

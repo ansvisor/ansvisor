@@ -260,6 +260,7 @@ export function AgentCard({
   onAllSteps,
   length = null,
   lastRunFailed = false,
+  stillFinishing = false,
   pageChars = null,
 }: {
   suggestions: DraftSuggestion[];
@@ -314,6 +315,8 @@ export function AgentCard({
   onAllSteps?: () => void;
   /** The agent's last run failed: said in place of an earlier batch's review. */
   lastRunFailed?: boolean;
+  /** Its answer was lost and its run hasn't said how it ended: never read as failed. */
+  stillFinishing?: boolean;
   /** A rewrite's characters, before and after, as the toolbar counts them (the editor's count). */
   pageChars?: { before: number; after: number } | null;
   /**
@@ -423,7 +426,9 @@ export function AgentCard({
   let title: React.ReactNode;
   let line: React.ReactNode;
   if (working) {
-    title = (
+    title = stillFinishing ? (
+      t('stillFinishing')
+    ) : (
       <>
         {t('working')}
         <WorkingDots />
@@ -547,6 +552,9 @@ export function AgentCard({
         )}
       </>
     );
+  } else if (stillFinishing) {
+    title = t('stillFinishing');
+    line = t('stillFinishingLine');
   } else if (lastRunFailed) {
     title = t('runFailed');
     line = t('runFailedLine');

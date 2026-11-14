@@ -65,6 +65,7 @@ import { getLanguageName } from './languages.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 import { carefulLine, carefulRules } from './content-suggestion-stats.js';
 import { livePageLine, readLivePage } from './content-live-page.js';
+import { factsForPage, pageNames } from './fact-scope.js';
 import { logger } from './logger.js';
 import { objectOptions } from './structured-output.js';
 
@@ -200,7 +201,9 @@ export const suggestionsSchema = z.object({
         marks: marksField,
       }),
     )
-    .max(MAX_AGENT_SUGGESTIONS),
+    // Told, never checked: a ninth would throw the whole answer away
+    // (NoObjectGeneratedError), and keepSuggestions keeps the first eight.
+    .describe(`(at most ${MAX_AGENT_SUGGESTIONS} items)`),
 });
 
 export const SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimization (AEO). You improve one web page so it meets its writing rules, by suggesting small changes that a person reviews.
@@ -1299,7 +1302,7 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      `id, brand_id, title, body_html, page_type, rules, action_id, status, source_url, published_url, agent_state, agent_state_at, shopping_path${handoff ? ', quality_handoff' : ''}`,
+      `id, brand_id, title, body_html, page_type, rules, action_id, status, source_url, published_url, slug, agent_state, agent_state_at, shopping_path${handoff ? ', quality_handoff' : ''}`,
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -1416,16 +1419,27 @@ const SOURCE_CHECKS = new Set([
   'trust:noBrokenLinks',
 ]);
 
-/** The brand's approved facts still on its site (CE-047), as their words. */
-async function approvedFacts(brandId) {
+/**
+ * The brand's approved facts still on its site (CE-047), as their words:
+ * the brand-wide ones and those whose scope the page names (00539), so one
+ * island's price never goes on another's page.
+ */
+async function approvedFacts(brandId, draft) {
   const { data, error } = await supabaseAdmin
     .from('brand_facts')
-    .select('quote')
+    .select('quote, scope')
     .eq('brand_id', brandId)
     .eq('status', 'approved')
     .is('gone_at', null);
   if (error) throw error;
-  return (data ?? []).map((f) => f.quote).filter(Boolean);
+  const names = pageNames({
+    html: draft.body_html,
+    title: draft.title,
+    urls: [draft.slug, draft.published_url, draft.source_url],
+  });
+  return factsForPage(data ?? [], names)
+    .map((f) => f.quote)
+    .filter(Boolean);
 }
 
 /** Fix open rules' run itself, step by step: nothing is kept once it is stopped. */
@@ -1513,7 +1527,8 @@ async function fixWithRun({
         ...input.textRules,
         ...(brand.rules ?? []),
       ];
-  const facts = handoff && ruleKeys.has('trust:brandFacts') ? await approvedFacts(brandId) : [];
+  const facts =
+    handoff && ruleKeys.has('trust:brandFacts') ? await approvedFacts(brandId, draft) : [];
   // The shopping path's prices and names: the catalog's, written unmarked.
   const shopping = shoppingGiven(shoppingPath);
   const known = withNamedNumbers(

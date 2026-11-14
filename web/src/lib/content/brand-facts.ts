@@ -34,6 +34,8 @@ export interface BrandFact {
   quote: string;
   sourceUrl: string;
   sourceKind: FactSource;
+  /** Where it holds: a destination, operator or route (00539); none for the whole brand. */
+  scope?: string | null;
   status: FactStatus;
   reviewedAt: string | null;
   firstSeenAt: string;

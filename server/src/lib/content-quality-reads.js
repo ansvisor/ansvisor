@@ -97,7 +97,7 @@ export async function readQuality({ orgId, actingUserId, draft, sites: asked, re
             ...common,
             html,
             pageType: draft.page_type,
-            ...(await pageReadContext(draft.brand_id)),
+            ...(await pageReadContext(draft.brand_id, html)),
             reserve,
           }),
         )

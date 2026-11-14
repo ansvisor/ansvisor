@@ -42,6 +42,7 @@ import { DemoBanner } from '@/components/billing/demo-banner';
 import { PlanEndsBanner } from '@/components/billing/plan-ends-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 import { FirstRunReady } from '@/components/layout/first-run-ready';
+import { sendSignupEventOnce } from '@/lib/signup-event';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -60,6 +61,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     )
     .eq('id', user.id)
     .single();
+
+  // The sign-up event (Resend's welcome e-mail), once per account, from its
+  // first signed-in page: every kind of sign-up comes here. In the
+  // background, and before onboarding's redirect, where a new account goes.
+  if (profile) sendSignupEventOnce(user);
 
   if (!profile?.organization_id || !profile?.onboarding_completed) {
     redirect('/dashboard/onboarding');

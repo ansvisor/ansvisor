@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { safeRedirectUrl } from '@/lib/auth-next';
-import { sendSignedUpEvent } from '@/lib/resend-event';
-import { capturePostHog } from '@/lib/posthog-server';
 
 /**
  * GET /auth/confirm — server-side OTP verification for email-driven auth flows.
@@ -42,19 +40,12 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
+  const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
 
   if (error) {
     return NextResponse.redirect(
       `${origin}/sign-in?error=auth_confirm_failed&reason=${encodeURIComponent(error.message)}`,
     );
-  }
-
-  // The sign-up link works once, so this is the one time a person who signed
-  // up with an e-mail is confirmed: tell Resend, for the welcome e-mail.
-  if (type === 'signup' && data?.user) {
-    await sendSignedUpEvent(data.user);
-    await capturePostHog('signed_up', data.user.id, { source: 'email' });
   }
 
   return NextResponse.redirect(redirectTarget);

@@ -1,11 +1,11 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range under the box, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, open action from answer, action link]
+keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range above the box, add date range, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, open action from answer, action link]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -41,9 +41,9 @@ In the free trial, and while you explore the demo brand, a welcome card sits abo
 
 Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.
 
-Under the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
+In the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
 
-Analysts and Agency partners only read; under their box it says **Read-only**, with a link to their role.
+Analysts and Agency partners only read; there it says **Read-only**, linking to their role.
 
 The demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog.
 
@@ -55,7 +55,7 @@ At the top of the panel, start a **New chat**, open a recent one from **Chat his
 
 ## What the panel looks at
 
-The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as your question's scope, but reads your own date range. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.
+Above the box in the panel, chips show what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as your question's scope, but reads your own date range. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.
 
 An empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.
 
@@ -99,7 +99,7 @@ Each range covers the same days as on the app's pages: **Last 30 days** is today
 
 ## Change the date range
 
-Under the box, **Range** shows the one Chat reads, such as **Range: last 30 days**. Click **change** to pick another; it is kept at once. **Settings** in the chat menu has it too.
+Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings** in the chat menu has it too.
 
 Or send a short range as your message, such as "last 7d", "last 24h" or "use 90 days by default". Chat changes your default at once, says so, and answers your last question again over the new range.
 
@@ -162,7 +162,7 @@ With **Open here**, the chat stays on the left and the page opens on the right. 
 
 ## Ask about the page beside the chat
 
-While a page is open beside the chat, the box shows a chip, **Page:** and the page's title. What you ask then doesn't change the page: the Content Agent leaves suggestions in it, labelled "Content Agent · from your chat", with the same guards as Fix open rules. They appear in the editor as the run ends, with no reload, and the page changes only when you **Accept** one; **Reject** drops it. Click **×** on the chip to talk about something else: Chat then doesn't edit that page, and the page stays open. Closing the page removes the chip too.
+While a page is open beside the chat, a chip above the box shows **Page:** and the page's title. What you ask then doesn't change the page: the Content Agent leaves suggestions in it, labelled "Content Agent · from your chat", with the same guards as Fix open rules. They appear in the editor as the run ends, with no reload, and the page changes only when you **Accept** one; **Reject** drops it. Click **×** on the chip to talk about something else: Chat then doesn't edit that page, and the page stays open. Closing the page removes the chip too.
 
 The editor beside the chat is narrower: **Brief**, **Rules** and **Quality** sit in a bar under the page, with **Sources** and **Live page** under its **More**. The toolbar's less used buttons, such as the table and **Add HTML**, move under the toolbar's own **More**.
 
@@ -188,9 +188,9 @@ To take a published page back down to a draft in its CMS, ask Chat, or click **T
 
 ## Your brand facts
 
-Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or a manager approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.
+Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or manager approved on the brand's **Brand facts** tab, in your site's own words. Facts waiting for approval, rejected or gone from your site aren't read, and a fact for one destination, operator or route is used only on that place's pages.
 
-**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact.
+**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or give the facts yourself. Chat never approves a fact.
 
 Chat and its agents never make up a price, fee, date, rule or contact detail. When one is missing, they ask you for it, or leave that part out.
 
@@ -248,7 +248,7 @@ Under the shortcuts are the skills Chat can use, such as **/report** for the wee
 
 ## Reference your data
 
-Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the text; **×** takes it off.
+Type **@**, or click **@**, to point Chat at your data: charts and metrics on the page, tracked prompts, your pages and open Action Center tasks. Use the arrow keys and Enter, or click. Your pick shows as a chip above the box; **×** takes it off.
 
 ## Attach files
 
@@ -302,7 +302,7 @@ While the key isn't working, a line above the message box says why. You can stil
 
 ## AI usage
 
-Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month, on whichever device you are on; **×** closes it.
+Chat draws on your workspace's monthly AI usage, shared by every seat. The model button's menu ends with **AI usage this month**: a bar, the share used and when it resets. From 80% a dot on the model button turns amber (red once used up), and a line above the box says so once a month, on whichever device you are on; **×** closes it.
 
 Once the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage.
 
