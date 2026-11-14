@@ -2,9 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Lock } from 'lucide-react';
+import { ChevronDown, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -16,9 +26,12 @@ import {
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 import { Link } from '@/i18n/navigation';
 import {
   readAdsOpportunities,
+  setAdsDecision,
+  type AdsChosenDecision,
   type AdsDecision,
   type AdsOpportunities as Page,
   type AdsOpportunity,
@@ -28,10 +41,12 @@ import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { useUpgradeWallShown } from '@/lib/friction-events';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AdsThresholds } from './_thresholds';
 
 /** The filters (§3.2), in the mockup's order; overlap rows show under All. */
 const FILTERS = ['all', 'earn_pay', 'pay', 'earn'] as const;
 type Filter = (typeof FILTERS)[number];
+const CHOICES: AdsChosenDecision[] = ['earn', 'pay', 'earn_pay'];
 
 /** The mockup's pills: earn green, pay grey, earn + pay dark. */
 const PILL: Record<AdsDecision, string> = {
@@ -57,15 +72,55 @@ function Pill({ decision }: { decision: AdsDecision }) {
   );
 }
 
-/** The decision in force, and the rule's when a person changed it. */
-function Decision({ row }: { row: AdsOpportunity }) {
+/** The decision in force; Admins and Managers change it here, others only read it. */
+function Decision({
+  row,
+  onChange,
+}: {
+  row: AdsOpportunity;
+  onChange: ((decision: AdsChosenDecision | null) => void) | null;
+}) {
   const t = useTranslations('ads.opportunities');
+  const label = (d: AdsDecision) => t(`decisions.${d}`);
   return (
     <div className="space-y-0.5">
-      <Pill decision={row.decision} />
+      {onChange ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            data-action="ads.overrideDecision"
+            className="inline-flex items-center gap-0.5 rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <Pill decision={row.decision} />
+            <ChevronDown aria-hidden className="size-3.5 text-muted-foreground" />
+            <span className="sr-only">{t('change')}</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-60">
+            <DropdownMenuRadioGroup
+              value={row.decision}
+              onValueChange={(d) => onChange(d as AdsChosenDecision)}
+            >
+              {CHOICES.map((d) => (
+                <DropdownMenuRadioItem key={d} value={d} closeOnClick data-action="ads.setDecision">
+                  {label(d)}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            {row.override && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem data-action="ads.setDecision" onClick={() => onChange(null)}>
+                  {t('useRecommended', { decision: label(row.recommended) })}
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <Pill decision={row.decision} />
+      )}
       {row.override && (
         <small className="block text-xs text-muted-foreground">
-          {t('recommended', { decision: t(`decisions.${row.recommended}`) })}
+          {t('recommended', { decision: label(row.recommended) })}
         </small>
       )}
     </div>
@@ -125,13 +180,17 @@ function LockRow({ locked }: { locked: number }) {
  * Ads' Opportunities (ADS-01 §3.2, §9.3, §9.7, mockup): each buying-intent
  * prompt with its decision, who AI picks, Google searches and its ad
  * channels, filtered by decision. The rows come from the server: Starter and
- * the trial get theirs and a lock row for the rest. Open keeps the prompt
- * opened (`ads.openOpportunity`) for its drawer.
+ * the trial get theirs and a lock row for the rest. Admins and Managers
+ * change a decision where the plan reads every row (`writable`), and Admins
+ * set the thresholds. Open keeps the prompt opened (`ads.openOpportunity`)
+ * for its drawer.
  */
-export function AdsOpportunities({ period }: { period: AdsPeriod }) {
+export function AdsOpportunities({ period, writable }: { period: AdsPeriod; writable: boolean }) {
   const t = useTranslations('ads.opportunities');
+  const { canManage, canAdmin } = useUserRole();
   const brandId = useBrandStore((s) => s.activeBrandId);
-  const key = `${brandId}/${period}`;
+  const [reads, setReads] = useState(0);
+  const key = `${brandId}/${period}/${reads}`;
   const [read, setRead] = useState<{ key: string; page: Page | null } | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [opened, setOpened] = useState<string | null>(null);
@@ -150,13 +209,42 @@ export function AdsOpportunities({ period }: { period: AdsPeriod }) {
 
   if (read?.key !== key) return <Skeleton className="h-64 w-full rounded-xl" />;
   const page = read.page;
-  if (!page) {
+  if (!page || !brandId) {
     return (
       <p role="alert" className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
         {t('failed')}
       </p>
     );
   }
+
+  const patch = (promptId: string, next: Partial<AdsOpportunity>) =>
+    setRead((r) => {
+      if (!r?.page) return r;
+      const rows = r.page.rows.map((x) => (x.promptId === promptId ? { ...x, ...next } : x));
+      return { ...r, page: { ...r.page, rows } };
+    });
+  // Shown at once, then as saved; put back when the server refuses it.
+  const change = async (row: AdsOpportunity, decision: AdsChosenDecision | null) => {
+    const { override, recommended } = row;
+    patch(row.promptId, {
+      decision: decision ?? recommended,
+      override: decision && {
+        decision,
+        setBy: override?.setBy ?? '',
+        setAt: override?.setAt ?? '',
+      },
+    });
+    try {
+      const saved = await setAdsDecision(brandId, row.promptId, decision);
+      patch(row.promptId, {
+        decision: saved.override?.decision ?? recommended,
+        override: saved.override,
+      });
+    } catch {
+      patch(row.promptId, { decision: row.decision, override });
+      toast.error(t('saveFailed'));
+    }
+  };
 
   const count = (f: Filter) =>
     f === 'all' ? page.rows.length : page.rows.filter((r) => r.decision === f).length;
@@ -179,32 +267,36 @@ export function AdsOpportunities({ period }: { period: AdsPeriod }) {
 
   return (
     <div data-slot="ads-opportunities" className="space-y-3">
-      <div
-        role="group"
-        aria-label={t('filter')}
-        className="flex h-8 w-fit overflow-hidden rounded-md border"
-      >
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            type="button"
-            aria-pressed={filter === f}
-            data-action="ads.filterDecision"
-            data-filter={f}
-            onClick={() => setFilter(f)}
-            className={cn(
-              'px-3 text-xs font-medium transition-colors',
-              filter === f
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card text-foreground hover:bg-muted',
-            )}
-          >
-            {t('filterCount', {
-              label: f === 'all' ? t('all') : t(`decisions.${f}`),
-              count: count(f),
-            })}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label={t('filter')}
+          className="flex h-8 w-fit overflow-hidden rounded-md border"
+        >
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              type="button"
+              aria-pressed={filter === f}
+              data-action="ads.filterDecision"
+              data-filter={f}
+              onClick={() => setFilter(f)}
+              className={cn(
+                'px-3 text-xs font-medium transition-colors',
+                filter === f
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card text-foreground hover:bg-muted',
+              )}
+            >
+              {t('filterCount', {
+                label: f === 'all' ? t('all') : t(`decisions.${f}`),
+                count: count(f),
+              })}
+            </button>
+          ))}
+        </div>
+        <span className="flex-1" />
+        {canAdmin && <AdsThresholds onSaved={() => setReads((n) => n + 1)} />}
       </div>
       {page.rows.some((r) => !r.paidMeasured) && (
         <p className="text-xs text-muted-foreground">{t('paidNotMeasured')}</p>
@@ -240,7 +332,10 @@ export function AdsOpportunities({ period }: { period: AdsPeriod }) {
                   )}
                 </TableCell>
                 <TableCell>
-                  <Decision row={r} />
+                  <Decision
+                    row={r}
+                    onChange={canManage && writable ? (d) => void change(r, d) : null}
+                  />
                 </TableCell>
                 <TableCell>
                   {leader(r)}

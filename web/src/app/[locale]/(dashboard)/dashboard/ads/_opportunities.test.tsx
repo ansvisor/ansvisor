@@ -3,12 +3,14 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
+import type { TeamRole } from '@/components/providers/role-provider';
 import type { AdsDecision, AdsOpportunities, AdsOpportunity } from '@/lib/ads/api';
 
 /**
  * Ads' Opportunities (ADS-01 §3.2, §9.3, §9.7): every row with a decision
- * and Open, the decision filters, and Starter's rows and lock row from the
- * server.
+ * and Open, the decision filters, Starter's rows and lock row from the
+ * server, a decision changed by Admins and Managers only (put back when the
+ * server refuses it), and the thresholds for Admins only.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -19,11 +21,19 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
-const api = vi.hoisted(() => ({ readAdsOpportunities: vi.fn() }));
+const api = vi.hoisted(() => ({
+  readAdsOpportunities: vi.fn(),
+  setAdsDecision: vi.fn(),
+  readAdsSettings: vi.fn(),
+  saveAdsSettings: vi.fn(),
+}));
 vi.mock('@/lib/ads/api', () => api);
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
 
 const { AdsOpportunities: Opportunities } = await import('./_opportunities');
+const { RoleProvider } = await import('@/components/providers/role-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -71,7 +81,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
-  api.readAdsOpportunities.mockReset();
+  for (const fn of [...Object.values(api), toast.error, toast.success]) fn.mockReset();
   useBrandStore.setState({ brands: [], activeBrandId: 'b1' });
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -84,7 +94,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function render(read: AdsOpportunities | Error = page()) {
+async function render(
+  read: AdsOpportunities | Error = page(),
+  { role = 'manager', writable = true }: { role?: TeamRole; writable?: boolean } = {},
+) {
   if (read instanceof Error) api.readAdsOpportunities.mockRejectedValue(read);
   else api.readAdsOpportunities.mockResolvedValue(read);
   // Mounted anew each time, so it reads again.
@@ -93,7 +106,9 @@ async function render(read: AdsOpportunities | Error = page()) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <Opportunities period="30d" />
+        <RoleProvider role={role}>
+          <Opportunities period="30d" writable={writable} />
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -105,6 +120,10 @@ const ids = () => rows().map((r) => r.dataset.promptId);
 const all = (id: string) => [...document.querySelectorAll<HTMLElement>(`[data-action="${id}"]`)];
 const filter = (label: string) => all('ads.filterDecision').find((b) => b.textContent === label)!;
 const click = (el: Element) => act(async () => (el as HTMLElement).click());
+const pick = async (r: number, item: string) => {
+  await click(rows()[r].querySelector('[data-action="ads.overrideDecision"]')!);
+  await click(all('ads.setDecision').find((i) => i.textContent === item)!);
+};
 
 describe('AdsOpportunities', () => {
   it('lists every row with a decision and Open, who AI picks, Google searches and channels (§9.3)', async () => {
@@ -117,7 +136,7 @@ describe('AdsOpportunities', () => {
     }
     expect(cells(rows()[0])).toEqual([
       'Prompt p1Topic · CRM',
-      'Earn + payRecommended: Earn',
+      'Earn + payChange the decisionRecommended: Earn',
       'KestrelYou: not named',
       '14k',
       'ChatGPT, Google',
@@ -127,7 +146,7 @@ describe('AdsOpportunities', () => {
     expect(cells(rows()[2]).slice(2, 4)).toEqual(['YouYou: #1', 'Not measured']);
     expect(cells(rows()[3]).slice(0, 3)).toEqual([
       'Prompt p4',
-      'Earn',
+      'EarnChange the decision',
       'No clear leaderYou: named',
     ]);
     expect(container.textContent).toContain("Who pays on these prompts isn't measured yet");
@@ -192,7 +211,7 @@ describe('AdsOpportunities', () => {
   });
 
   it('shows Starter the server’s 3 rows and the lock row with Upgrade; Growth sees all (§9.7)', async () => {
-    await render(page(ROWS.slice(0, 3), 5));
+    await render(page(ROWS.slice(0, 3), 5), { writable: false });
     expect(ids()).toEqual(['p1', 'p2', 'p3']);
     // One slim row across the columns: the lock, the count and Upgrade, not a card.
     const lock = container.querySelector<HTMLElement>('[data-slot="ads-lock-row"]')!;
@@ -216,6 +235,87 @@ describe('AdsOpportunities', () => {
     await render(page());
     expect(ids()).toHaveLength(6);
     expect(container.querySelector('[data-slot="ads-lock-row"]')).toBeNull();
+  });
+
+  it('offers the decision menu to Admins and Managers, never to an Analyst or past the plan', async () => {
+    const menus = () => all('ads.overrideDecision').length;
+    for (const role of ['admin', 'manager'] as const) {
+      await render(page(), { role });
+      expect(menus(), role).toBe(6);
+    }
+    await render(page(), { role: 'analyst' });
+    expect(menus()).toBe(0);
+    expect(rows()[0].querySelector('[data-decision]')?.textContent).toBe('Earn + pay');
+    await render(page(), { writable: false });
+    expect(menus()).toBe(0);
+  });
+
+  it('saves a decision at once, then back to the recommendation', async () => {
+    const override = { decision: 'pay', setBy: 'u1', setAt: '2026-11-14T09:00:00Z' };
+    api.setAdsDecision.mockResolvedValue({ promptId: 'p2', override });
+    await render();
+    await pick(1, 'Pay');
+    expect(api.setAdsDecision).toHaveBeenCalledWith('b1', 'p2', 'pay');
+    expect(cells(rows()[1])[1]).toBe('PayChange the decisionRecommended: Earn + pay');
+    expect(filter('Pay · 2')).toBeDefined();
+
+    api.setAdsDecision.mockResolvedValue({ promptId: 'p2', override: null });
+    await pick(1, 'Back to the recommendation (Earn + pay)');
+    expect(api.setAdsDecision).toHaveBeenLastCalledWith('b1', 'p2', null);
+    expect(cells(rows()[1])[1]).toBe('Earn + payChange the decision');
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('puts the decision back when the server refuses it, and says so', async () => {
+    let refuse: (err: Error) => void = () => {};
+    api.setAdsDecision.mockReturnValue(new Promise((_, reject) => (refuse = reject)));
+    await render();
+    // Channels follow the decision in force: none on Earn, the channels on Earn + pay.
+    const channels = () => cells(rows()[3])[4];
+    expect(channels()).toBe('—No ad needed');
+    await pick(3, 'Earn + pay');
+    expect(cells(rows()[3])[1]).toBe('Earn + payChange the decisionRecommended: Earn');
+    expect(channels()).toBe('ChatGPT, Google');
+    await act(async () => refuse(new Error('Ads opportunities/p4/decision: 403')));
+    expect(cells(rows()[3])[1]).toBe('EarnChange the decision');
+    expect(channels()).toBe('—No ad needed');
+    expect(toast.error).toHaveBeenCalledWith("The decision couldn't be saved. Try again.");
+  });
+
+  it('gives only Admins the thresholds, saved together, and reads the rows again', async () => {
+    for (const role of ['manager', 'analyst'] as const) {
+      await render(page(), { role });
+      expect(all('ads.thresholds'), role).toEqual([]);
+    }
+    const defaults = { minIntentWeight: 0.85, leadPosition: 1, minPaidVolume: 1000 };
+    api.readAdsSettings.mockResolvedValue({
+      saved: { leadPosition: 2 },
+      thresholds: { ...defaults, leadPosition: 2 },
+      defaults,
+    });
+    api.saveAdsSettings.mockImplementation(async (t) => ({ saved: t, thresholds: t, defaults }));
+    await render(page(), { role: 'admin' });
+    api.readAdsOpportunities.mockClear();
+    await click(all('ads.thresholds')[0]);
+    const fields = all('ads.threshold') as HTMLInputElement[];
+    expect(fields.map((f) => [f.value, f.placeholder])).toEqual([
+      ['', '0.85'],
+      ['2', '1'],
+      ['', '1000'],
+    ]);
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      set.call(fields[2], '5000');
+      fields[2].dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await click(all('ads.saveThresholds')[0]);
+    expect(api.saveAdsSettings).toHaveBeenCalledWith({
+      minIntentWeight: null,
+      leadPosition: 2,
+      minPaidVolume: 5000,
+    });
+    expect(toast.success).toHaveBeenCalledWith('Thresholds saved');
+    expect(api.readAdsOpportunities).toHaveBeenCalledOnce();
   });
 
   it('says so when Opportunities can’t be read, or there are none yet', async () => {

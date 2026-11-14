@@ -76,14 +76,14 @@ function useAdsTab(): [AdsTab, (tab: AdsTab) => void] {
  * Starter and the free trial (an Enterprise deal's trial keeps its plan) see
  * the Overview, Opportunities' first rows from the server, and each other
  * tab locked, with what Growth adds (DECISIONS J). The demo brand shows it as
- * Growth has it. Self-hosted has no plans.
+ * Growth has it, its decisions the rule's. Self-hosted has no plans.
  */
-function useAdsAccess(): { readable: boolean; trial: boolean } {
+function useAdsAccess(): { readable: boolean; trial: boolean; demo: boolean } {
   const { canUse, isCloud } = useFeatureGate();
   const { subscriptionStatus, ownPlanId } = usePlanContext();
   const demo = useBrandStore(isDemoSelected);
   const trial = isCloud && subscriptionStatus === 'trialing' && ownPlanId !== 'enterprise';
-  return { readable: !isCloud || (canUse('ads_read') && (!trial || demo)), trial };
+  return { readable: !isCloud || (canUse('ads_read') && (!trial || demo)), trial, demo };
 }
 
 /**
@@ -99,7 +99,7 @@ export function AdsView() {
   const tRange = useTranslations('chatPanel.range');
   const [tab, openTab] = useAdsTab();
   const [period, setPeriod] = useState<AdsPeriod>(DEFAULT_ADS_PERIOD);
-  const { readable, trial } = useAdsAccess();
+  const { readable, trial, demo } = useAdsAccess();
   const { requiredPlanFor } = useFeatureGate();
   const Icon = TAB_ICONS[tab];
   const periodOff = tab !== 'ov' && tab !== 'op';
@@ -206,7 +206,7 @@ export function AdsView() {
         {tab === 'ov' ? (
           <AdsOverview period={period} onOpenTab={openTab} />
         ) : tab === 'op' ? (
-          <AdsOpportunities period={period} />
+          <AdsOpportunities period={period} writable={readable && !demo} />
         ) : readable ? (
           <div data-slot="ads-empty" className="rounded-xl border border-dashed py-12 text-center">
             <Icon aria-hidden className="mx-auto h-10 w-10 text-muted-foreground/40" />

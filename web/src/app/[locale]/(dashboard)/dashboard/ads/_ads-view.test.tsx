@@ -42,8 +42,12 @@ vi.mock('./_overview', () => ({
 
 // Opportunities' rows, lock row and writes are _opportunities.test.tsx's.
 vi.mock('./_opportunities', () => ({
-  AdsOpportunities: (props: { period: string }) => (
-    <div data-slot="ads-opportunities" data-period={props.period} />
+  AdsOpportunities: (props: { period: string; writable: boolean }) => (
+    <div
+      data-slot="ads-opportunities"
+      data-period={props.period}
+      data-writable={String(props.writable)}
+    />
   ),
 }));
 
@@ -267,7 +271,7 @@ describe('AdsView', () => {
         expect(lock(), plan).toBeNull();
         expect(overview(), plan).not.toBeNull();
         await act(async () => tab('Opportunities').click());
-        expect(opportunities(), plan).not.toBeNull();
+        expect(opportunities()?.dataset.writable, plan).toBe('true');
         await act(async () => tab('Paid SoV').click());
         expect(empty(), plan).not.toBeNull();
         await act(async () => tab('Overview').click());
@@ -292,10 +296,10 @@ describe('AdsView', () => {
       await act(async () => tab('Campaigns').click());
       expect(panel().dataset.tab).toBe('cmp');
       expect(lock()).not.toBeNull();
-      // Opportunities: the server's rows and its lock row.
+      // Opportunities: the server's rows and lock row, no decision changes.
       await act(async () => tab('Opportunities').click());
       expect(lock()).toBeNull();
-      expect(opportunities()).not.toBeNull();
+      expect(opportunities()?.dataset.writable).toBe('false');
       // Counted as an upgrade wall, by its feature and page.
       expect(analytics.track).toHaveBeenCalledWith('upgrade_wall_shown', {
         reason: 'plan',
@@ -314,7 +318,7 @@ describe('AdsView', () => {
         );
         await act(async () => tab('Opportunities').click());
         expect(lock(), plan).toBeNull();
-        expect(opportunities(), plan).not.toBeNull();
+        expect(opportunities()?.dataset.writable, plan).toBe('false');
         await act(async () => tab('Paid SoV').click());
       }
       await render({ plan: 'enterprise', status: 'trialing' });
@@ -322,7 +326,7 @@ describe('AdsView', () => {
       expect(empty()).not.toBeNull();
     });
 
-    it('opens on the demo brand, shown as Growth has it, in the trial too', async () => {
+    it('opens on the demo brand, shown as Growth has it, in the trial too; its decisions stay the rule’s', async () => {
       window.history.replaceState(null, '', '/dashboard/ads#sov');
       useBrandStore.setState({
         brands: [{ id: 'demo', isDemo: true } as never],
@@ -331,6 +335,8 @@ describe('AdsView', () => {
       await render({ plan: 'starter', status: 'trialing' });
       expect(lock()).toBeNull();
       expect(empty()).not.toBeNull();
+      await act(async () => tab('Opportunities').click());
+      expect(opportunities()?.dataset.writable).toBe('false');
     });
 
     it('has no plan gate self-hosted', async () => {
@@ -338,6 +344,8 @@ describe('AdsView', () => {
       await render({ plan: 'starter', cloud: false });
       expect(lock()).toBeNull();
       expect(empty()).not.toBeNull();
+      await act(async () => tab('Opportunities').click());
+      expect(opportunities()?.dataset.writable).toBe('true');
     });
   });
 });
