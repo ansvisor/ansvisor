@@ -101,7 +101,7 @@ beforeEach(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role="analyst">
-          <AdsOpportunities period="30d" writable />
+          <AdsOpportunities period="30d" writable thresholds={false} />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
