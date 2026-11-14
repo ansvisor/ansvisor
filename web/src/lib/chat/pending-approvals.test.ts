@@ -10,7 +10,8 @@ vi.mock('@/lib/supabase/admin', async () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { readPendingApprovals, viewOf, groupKeyOf } = await import('./pending-approvals');
+const { readPendingApprovals, viewOf, groupKeyOf, togetherOf } =
+  await import('./pending-approvals');
 
 const ORG = 'o0000000-0000-4000-8000-000000000001';
 const OTHER_ORG = 'o0000000-0000-4000-8000-000000000002';
@@ -21,6 +22,8 @@ const DRAFT = 'd0000000-0000-4000-8000-000000000001';
 const DRAFT_2 = 'd0000000-0000-4000-8000-000000000002';
 const FOREIGN_DRAFT = 'd0000000-0000-4000-8000-0000000000ff';
 const actor = { userId: ME, email: null, organizationId: ORG };
+/** A run's chat: its id holds no run id. */
+const chatOf = (runId: string) => `chat-${runId.slice(1)}`;
 
 const pending = (draftId: string, tool = 'update_draft', kind = 'ask') => ({
   kind,
@@ -50,11 +53,11 @@ function run(
   });
   db.tables.chat_runs.push({
     id,
-    conversation_id: `chat-${id}`,
+    conversation_id: chatOf(id),
     status: extra.status ?? 'waiting',
   });
   db.tables.chat_conversations.push({
-    id: `chat-${id}`,
+    id: chatOf(id),
     organization_id: ORG,
     user_id: ME,
     agent_run_id: agent ? `ar-${id}` : null,
@@ -114,6 +117,8 @@ describe('readPendingApprovals', () => {
     const view = viewOf(actor, BRAND, group);
     expect(view).toMatchObject({ title: 'Pricing FAQ', agents: 2 });
     expect(view.key).toBe(groupKeyOf(actor, BRAND, DRAFT));
+    // Each change opens its own chat, where its card is: the person's own.
+    expect(view.items.map((i) => i.chatId)).toEqual([chatOf('r1'), chatOf('r2')]);
     const text = JSON.stringify(view);
     for (const id of [DRAFT, 'r1', 'r2', `digest-${DRAFT}`]) expect(text).not.toContain(id);
   });
@@ -158,6 +163,35 @@ describe('readPendingApprovals', () => {
     run('r2', DRAFT, 'SEO agent', { tool: 'publish_cms' });
     run('r3', DRAFT, 'SEO agent', { tool: 'list_content_drafts' });
     expect(await readPendingApprovals(actor, BRAND)).toEqual([]);
+  });
+
+  it('asks for changes one by one when more than one rewrites the page', async () => {
+    // Each update_draft is the whole page, from the page its run read: they'd overwrite each other.
+    run('r1', DRAFT, 'SEO agent');
+    run('r2', DRAFT, 'Tone agent');
+    // Optimize here rewrites the page too.
+    run('r3', DRAFT_2, 'SEO agent', { tool: 'optimize_draft' });
+    run('r4', DRAFT_2, 'Tone agent', { tool: 'update_draft' });
+    const groups = await readPendingApprovals(actor, BRAND);
+    expect(groups.map((g) => [g.title, togetherOf(g.items)])).toEqual([
+      ['Pricing FAQ', false],
+      ['About us', false],
+    ]);
+    expect(groups.map((g) => viewOf(actor, BRAND, g).together)).toEqual([false, false]);
+  });
+
+  it('approves together one page rewrite with changes that leave the page as it is', async () => {
+    run('r1', DRAFT, 'SEO agent');
+    run('r2', DRAFT, 'Tone agent', { tool: 'set_draft_ready' });
+    run('r3', DRAFT, 'Facts agent', { tool: 'suggest_draft_changes' });
+    run('r4', DRAFT_2, 'SEO agent', { tool: 'set_draft_ready' });
+    run('r5', DRAFT_2, 'Tone agent', { tool: 'set_draft_ready' });
+    const groups = await readPendingApprovals(actor, BRAND);
+    expect(groups.map((g) => g.items.map((i) => i.rewritesPage))).toEqual([
+      [true, false, false],
+      [false, false],
+    ]);
+    expect(groups.map((g) => viewOf(actor, BRAND, g).together)).toEqual([true, true]);
   });
 
   it('changes the version when a card changes', async () => {

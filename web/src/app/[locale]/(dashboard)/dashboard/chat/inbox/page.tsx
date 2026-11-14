@@ -6,6 +6,15 @@ import { readDailySuggestions } from '@/lib/actions/chat-suggestions';
 import { chatPageOpen } from '../_chat-page-access';
 
 /**
+ * Approve all (lib/actions/chat-approve-all.ts) makes each change in this
+ * page's request, and its runs go on in that request's background: a server
+ * action gets its page's time, so the Inbox gets the run routes' 300 s
+ * (RUN_REQUEST_MS), as POST /api/chat/runs/{id}/approve has. Never set in the
+ * 'use server' file itself: it exports async functions only (#2347).
+ */
+export const maxDuration = 300;
+
+/**
  * Chat's Inbox (mockup #s-inbox): what needs the person, what their agents
  * are running, and the results they haven't opened, with their daily
  * suggestions in topic tabs (CHAT-26, mockup #d-inbox), and an Admin's

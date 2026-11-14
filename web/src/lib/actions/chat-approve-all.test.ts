@@ -2,7 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
 
-/** Approve all for a draft: each run is approved through the engine and goes on in the background. */
+/**
+ * Approve all for a draft: each run is approved through the engine, its
+ * change is made before the action answers, and the run goes on in the
+ * background. A group whose changes would overwrite each other (more than
+ * one rewrites the page) is refused, and the count is what was made.
+ */
 
 const ORG = 'o0000000-0000-4000-8000-000000000001';
 const ME = 'u0000000-0000-4000-8000-000000000001';
@@ -11,9 +16,10 @@ const OTHER_BRAND = 'b0000000-0000-4000-8000-000000000002';
 const DRAFT = 'd0000000-0000-4000-8000-000000000001';
 const FOREIGN = 'd0000000-0000-4000-8000-0000000000ff';
 
+type DriveOptions = { onCard?: (made: boolean) => void };
 const engine = vi.hoisted(() => ({
   prepareResume: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-  driveRun: vi.fn<(...args: unknown[]) => Promise<void>>(async () => {}),
+  driveRun: vi.fn<(...args: [unknown, string, unknown, DriveOptions?]) => Promise<void>>(),
 }));
 const guard = vi.hoisted(() => ({ assertWritable: vi.fn(async () => {}) }));
 
@@ -38,7 +44,15 @@ const { approveGroup, listDraftApprovalGroups } = await import('./chat-approve-a
 const { readPendingApprovals, viewOf } = await import('@/lib/chat/pending-approvals');
 const actor = { userId: ME, email: 'me@example.com', organizationId: ORG };
 
-function run(id: string, agent: string, draftId = DRAFT, brandId = BRAND) {
+const PAGE = '<h1>Pricing FAQ</h1><p>Plans.</p>';
+
+function run(
+  id: string,
+  agent: string,
+  draftId = DRAFT,
+  brandId = BRAND,
+  call: { tool: string; input?: Record<string, unknown> } = { tool: 'update_draft' },
+) {
   db.tables.chat_run_state.push({
     run_id: id,
     user_id: ME,
@@ -53,7 +67,9 @@ function run(id: string, agent: string, draftId = DRAFT, brandId = BRAND) {
       results: [],
       stepId: 's',
       offerDontAskAgain: false,
-      calls: [{ toolCallId: 'c', toolName: 'update_draft', input: { draft_id: draftId } }],
+      calls: [
+        { toolCallId: 'c', toolName: call.tool, input: { draft_id: draftId, ...call.input } },
+      ],
     },
   });
   db.tables.chat_runs.push({ id, conversation_id: `chat-${id}`, status: 'waiting' });
@@ -65,6 +81,21 @@ function run(id: string, agent: string, draftId = DRAFT, brandId = BRAND) {
   });
   db.tables.chat_agent_runs.push({ id: `ar-${id}`, organization_id: ORG, agent_id: `a-${id}` });
   db.tables.chat_agents.push({ id: `a-${id}`, organization_id: ORG, name: agent });
+}
+
+/**
+ * The engine's driver as it resumes: it makes the change the card stored (the
+ * call's own input: update_draft's whole page) and tells onCard it was made.
+ */
+async function makeStoredChange(_actor: unknown, runId: string, _r: unknown, o?: DriveOptions) {
+  const state = db.tables.chat_run_state.find((r) => r.run_id === runId)!;
+  const { toolName, input } = (
+    state.pending as { calls: { toolName: string; input: Record<string, unknown> }[] }
+  ).calls[0];
+  const draft = db.tables.content_drafts.find((d) => d.id === input.draft_id)!;
+  if (toolName === 'update_draft') draft.body_html = input.body_html;
+  if (toolName === 'set_draft_ready') draft.status = 'ready';
+  o?.onCard?.(true);
 }
 
 async function group(brandId = BRAND, draftId = DRAFT) {
@@ -79,7 +110,8 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   engine.prepareResume.mockReset();
   engine.prepareResume.mockImplementation(async () => ({ ok: true, resume: { kind: 'approve' } }));
-  engine.driveRun.mockClear();
+  engine.driveRun.mockReset();
+  engine.driveRun.mockImplementation(makeStoredChange);
   guard.assertWritable.mockClear();
   db.tables = {
     profiles: [{ id: ME, organization_id: ORG }],
@@ -88,7 +120,7 @@ beforeEach(() => {
       { id: OTHER_BRAND, organization_id: ORG },
     ],
     content_drafts: [
-      { id: DRAFT, brand_id: BRAND, title: 'Pricing FAQ' },
+      { id: DRAFT, brand_id: BRAND, title: 'Pricing FAQ', body_html: PAGE, status: 'draft' },
       { id: FOREIGN, brand_id: OTHER_BRAND, title: 'Other brand' },
     ],
     chat_run_state: [],
@@ -97,29 +129,123 @@ beforeEach(() => {
     chat_agent_runs: [],
     chat_agents: [],
   };
-  run('r1', 'SEO agent');
-  run('r2', 'Tone agent');
-  run('r3', 'Facts agent');
+  // One change rewrites the page; the others leave it as it is.
+  run('r1', 'SEO agent', DRAFT, BRAND, {
+    tool: 'update_draft',
+    input: { body_html: `${PAGE}<h2>Teams</h2>` },
+  });
+  run('r2', 'Tone agent', DRAFT, BRAND, { tool: 'set_draft_ready' });
+  run('r3', 'Facts agent', DRAFT, BRAND, {
+    tool: 'suggest_draft_changes',
+    input: { request: 'x' },
+  });
 });
 
 describe('listDraftApprovalGroups', () => {
   it('lists drafts with two or more waiting runs', async () => {
     const result = await listDraftApprovalGroups(BRAND);
-    expect(result).toMatchObject({ ok: true, groups: [{ title: 'Pricing FAQ', agents: 3 }] });
+    expect(result).toMatchObject({
+      ok: true,
+      groups: [{ title: 'Pricing FAQ', agents: 3, together: true }],
+    });
+  });
+
+  it('lists a group whose changes would overwrite each other as one by one', async () => {
+    run('r4', 'Links agent', DRAFT, BRAND, { tool: 'update_draft', input: { body_html: PAGE } });
+    const result = await listDraftApprovalGroups(BRAND);
+    expect(result).toMatchObject({ ok: true, groups: [{ together: false }] });
   });
 });
 
 describe('approveGroup', () => {
-  it('approves each run through the engine and drives it in the background', async () => {
+  it('approves each run through the engine, makes every change, and counts them', async () => {
     const g = await group();
     const result = await approveGroup(BRAND, g.key, g.version);
-    expect(result).toEqual({ ok: true, started: 3, failed: [] });
+    expect(result).toEqual({ ok: true, made: 3, failed: [] });
+    // Both changes to the draft are there: the page rewrite and Mark ready.
+    expect(db.tables.content_drafts[0]).toMatchObject({
+      body_html: `${PAGE}<h2>Teams</h2>`,
+      status: 'ready',
+    });
     expect(guard.assertWritable).toHaveBeenCalledWith({ brandId: BRAND });
     const approved = engine.prepareResume.mock.calls.map((c) => [c[1], c[2], c[3]]);
     expect(approved).toEqual(
       ['r1', 'r2', 'r3'].map((id) => [id, 'approve', { n: 1, digest: `digest-${id}` }]),
     );
     expect(engine.driveRun.mock.calls.map((c) => c[1] as string)).toEqual(['r1', 'r2', 'r3']);
+    // Each driver tells the action when its card's change is made.
+    for (const c of engine.driveRun.mock.calls) expect(c[3]?.onCard).toEqual(expect.any(Function));
+  });
+
+  it('refuses two page rewrites, which would overwrite each other, and changes nothing', async () => {
+    // Both pages were written from the same page: approved together, only the last would be kept.
+    run('r4', 'Links agent', DRAFT, BRAND, {
+      tool: 'update_draft',
+      input: { body_html: `${PAGE}<h2>Links</h2>` },
+    });
+    const g = await group();
+    expect(g.together).toBe(false);
+    expect(await approveGroup(BRAND, g.key, g.version)).toEqual({
+      ok: false,
+      reason: 'one_by_one',
+    });
+    expect(engine.prepareResume).not.toHaveBeenCalled();
+    expect(engine.driveRun).not.toHaveBeenCalled();
+    expect(db.tables.content_drafts[0]).toMatchObject({ body_html: PAGE, status: 'draft' });
+  });
+
+  it('refuses Optimize here with another page rewrite too', async () => {
+    run('r4', 'Rules agent', DRAFT, BRAND, { tool: 'optimize_draft' });
+    const g = await group();
+    expect(await approveGroup(BRAND, g.key, g.version)).toEqual({
+      ok: false,
+      reason: 'one_by_one',
+    });
+    expect(engine.prepareResume).not.toHaveBeenCalled();
+  });
+
+  it('counts only the changes made: one approved and not made is listed, not counted', async () => {
+    engine.driveRun.mockImplementation(async (actor, runId, resume, options) => {
+      // Its write was refused when it ran (its step failed): approved, not made.
+      if (runId === 'r2') return options?.onCard?.(false);
+      return makeStoredChange(actor, runId, resume, options);
+    });
+    const g = await group();
+    const result = await approveGroup(BRAND, g.key, g.version);
+    expect(result).toEqual({
+      ok: true,
+      made: 2,
+      failed: [{ agent: 'Tone agent', summary: expect.any(String), error: '', approved: true }],
+    });
+    expect(db.tables.content_drafts[0].status).toBe('draft');
+  });
+
+  it('waits for each change before it answers', async () => {
+    let release: () => void = () => {};
+    const slowStarted = new Promise<void>((started) => {
+      engine.driveRun.mockImplementation(async (actor, runId, resume, options) => {
+        if (runId !== 'r3') return makeStoredChange(actor, runId, resume, options);
+        // The editor's suggestions take a while: the answer waits for them.
+        await new Promise<void>((resolve) => {
+          release = () => {
+            options?.onCard?.(true);
+            resolve();
+          };
+          started();
+        });
+      });
+    });
+    const g = await group();
+    let answered = false;
+    const pending = approveGroup(BRAND, g.key, g.version).then((result) => {
+      answered = true;
+      return result;
+    });
+    await slowStarted;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(answered).toBe(false);
+    release();
+    expect(await pending).toEqual({ ok: true, made: 3, failed: [] });
   });
 
   it("goes on with the others when one can't be approved, and says which", async () => {
@@ -132,10 +258,15 @@ describe('approveGroup', () => {
     );
     const g = await group();
     const result = await approveGroup(BRAND, g.key, g.version);
-    expect(result).toMatchObject({ ok: true, started: 1 });
+    expect(result).toMatchObject({ ok: true, made: 1 });
     expect(result.ok && result.failed).toEqual([
-      { agent: 'Tone agent', summary: expect.any(String), error: 'It no longer waits.' },
-      { agent: 'Facts agent', summary: expect.any(String), error: '' },
+      {
+        agent: 'Tone agent',
+        summary: expect.any(String),
+        error: 'It no longer waits.',
+        approved: false,
+      },
+      { agent: 'Facts agent', summary: expect.any(String), error: '', approved: false },
     ]);
     expect(engine.driveRun.mock.calls.map((c) => c[1])).toEqual(['r1']);
   });
@@ -143,7 +274,11 @@ describe('approveGroup', () => {
   it('records a run that fails after it was approved without stopping the rest', async () => {
     engine.driveRun.mockRejectedValueOnce(new Error('drive failed'));
     const g = await group();
-    expect(await approveGroup(BRAND, g.key, g.version)).toMatchObject({ started: 3 });
+    expect(await approveGroup(BRAND, g.key, g.version)).toEqual({
+      ok: true,
+      made: 2,
+      failed: [{ agent: 'SEO agent', summary: expect.any(String), error: '', approved: true }],
+    });
     expect(engine.driveRun).toHaveBeenCalledTimes(3);
   });
 
@@ -165,7 +300,7 @@ describe('approveGroup', () => {
 
   it('never approves a draft of another brand through this brand', async () => {
     run('f1', 'SEO agent', FOREIGN, OTHER_BRAND);
-    run('f2', 'Tone agent', FOREIGN, OTHER_BRAND);
+    run('f2', 'Tone agent', FOREIGN, OTHER_BRAND, { tool: 'set_draft_ready' });
     const other = await group(OTHER_BRAND, FOREIGN);
     expect(await approveGroup(BRAND, other.key, other.version)).toEqual({
       ok: false,

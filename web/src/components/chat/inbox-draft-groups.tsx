@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import {
   approveGroup,
@@ -10,19 +11,21 @@ import {
 } from '@/lib/actions/chat-approve-all';
 import type { ApprovalGroup } from '@/lib/chat/pending-approvals';
 
-/** What Approve all did for a draft: how many went on, and the items that didn't. */
+/** What Approve all did for a draft: how many changes were made, and the ones that weren't. */
 interface Outcome {
   key: string;
   title: string;
-  started: number;
+  made: number;
   failed: ApproveFailure[];
 }
 
 /**
- * Drafts that several of the person's runs wait on, each with one Approve
- * all (Needs you): "N changes from M agents", each agent's change, and the
- * button. Each run is still approved from its own chat. Approve all starts
- * every run in the background and lists the ones that couldn't be approved.
+ * Drafts that several of the person's runs wait on (Needs you): "N changes
+ * from M agents", each agent's change, which opens its chat, and one Approve
+ * all. Approve all says how many changes were made and lists the ones that
+ * weren't. When more than one change rewrites the page, they would overwrite
+ * each other: the card asks for them one by one, from their own chats, and
+ * offers no Approve all (the server refuses one too).
  */
 export function InboxDraftGroups({ brandId }: { brandId: string | null | undefined }) {
   const t = useTranslations('chatShell.inbox.drafts');
@@ -54,18 +57,20 @@ export function InboxDraftGroups({ brandId }: { brandId: string | null | undefin
       if (result.ok) {
         setOutcomes((all) => [
           ...all,
-          { key: group.key, title: group.title, started: result.started, failed: result.failed },
+          { key: group.key, title: group.title, made: result.made, failed: result.failed },
         ]);
       } else {
         setProblem(
           t(
             result.reason === 'changed'
               ? 'changed'
-              : result.reason === 'not_found'
-                ? 'notFound'
-                : result.reason === 'read_only'
-                  ? 'readOnly'
-                  : 'signedOut',
+              : result.reason === 'one_by_one'
+                ? 'oneByOne'
+                : result.reason === 'not_found'
+                  ? 'notFound'
+                  : result.reason === 'read_only'
+                    ? 'readOnly'
+                    : 'signedOut',
           ),
         );
       }
@@ -98,19 +103,32 @@ export function InboxDraftGroups({ brandId }: { brandId: string | null | undefin
                 {t('summary', { changes: group.items.length, agents: group.agents })}
               </span>
             </span>
-            <Button
-              size="sm"
-              data-action="inbox.approveAll"
-              disabled={busy !== null}
-              onClick={() => void approve(group)}
-            >
-              {t(busy === group.key ? 'approving' : 'approveAll')}
-            </Button>
+            {group.together && (
+              <Button
+                size="sm"
+                data-action="inbox.approveAll"
+                disabled={busy !== null}
+                onClick={() => void approve(group)}
+              >
+                {t(busy === group.key ? 'approving' : 'approveAll')}
+              </Button>
+            )}
           </div>
+          {!group.together && (
+            <p className="mt-1 text-xs" data-testid="inbox-one-by-one">
+              {t('oneByOne')}
+            </p>
+          )}
           <ul className="mt-2 flex flex-col gap-0.5 text-xs text-muted-foreground">
             {group.items.map((item, i) => (
               <li key={i}>
-                {item.agent} · {item.summary}
+                <Link
+                  href={`/dashboard/chat/${item.chatId}`}
+                  data-action="inbox.draftGroupItem"
+                  className="hover:text-foreground hover:underline"
+                >
+                  {item.agent} · {item.summary}
+                </Link>
               </li>
             ))}
           </ul>
@@ -118,9 +136,7 @@ export function InboxDraftGroups({ brandId }: { brandId: string | null | undefin
       ))}
       {outcomes.map((outcome) => (
         <div key={outcome.key} role="status" className="rounded-[14px] border p-3 text-xs">
-          {outcome.started > 0 && (
-            <p>{t('started', { started: outcome.started, title: outcome.title })}</p>
-          )}
+          {outcome.made > 0 && <p>{t('made', { made: outcome.made, title: outcome.title })}</p>}
           {outcome.failed.length > 0 && (
             <div className="mt-1 text-red-700 dark:text-red-400">
               <p className="font-medium">{t('failedTitle', { failed: outcome.failed.length })}</p>
@@ -130,7 +146,7 @@ export function InboxDraftGroups({ brandId }: { brandId: string | null | undefin
                     {t('failedLine', {
                       agent: item.agent,
                       summary: item.summary,
-                      error: item.error || t('failedGeneric'),
+                      error: item.approved ? t('notMade') : item.error || t('failedGeneric'),
                     })}
                   </li>
                 ))}

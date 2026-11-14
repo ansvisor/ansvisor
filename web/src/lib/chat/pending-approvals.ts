@@ -16,14 +16,32 @@ import { chatTool } from './registry/tools';
  * state) and the brand's, which must be in their organization. A draft id
  * comes from a model's tool input, so a draft is read only with that brand:
  * one outside it reads as not found and its runs are left out.
+ *
+ * Together or one by one: an approved run makes the change its card stored
+ * (the engine's resumePending), never one made again from the page as it is
+ * then. update_draft's change is the whole page, written from the page its
+ * run read, so two such changes overwrite each other in any order and only
+ * the last would be kept. A group is approved together only when at most one
+ * of its changes rewrites the page (togetherOf); otherwise each is approved
+ * from its own chat, where the person sees what it does to the page now.
  */
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatShell.inbox.drafts' });
 const toolT = createTranslator({ locale: 'en', messages, namespace: 'chatTools' });
 
+/**
+ * The changes to a draft that leave its page as it is: Mark ready sets its
+ * status, and the editor's suggestions wait there for the person's Accept.
+ * Every other change to a draft rewrites its page (update_draft, Optimize
+ * here), a new one too until it is named here.
+ */
+const PAGE_KEPT_TOOLS: ReadonlySet<string> = new Set(['set_draft_ready', 'suggest_draft_changes']);
+
 /** One run waiting on a change to the draft. */
 export interface PendingApproval {
   runId: string;
+  /** Its chat, where its own card is. */
+  chatId: string;
   /** What prepareResume needs: the card's step and digest. */
   n: number;
   digest: string;
@@ -33,6 +51,8 @@ export interface PendingApproval {
   /** The agent's id, or the run's chat for one with no agent: counts the agents. */
   source: string;
   summary: string;
+  /** Its change writes the whole page (or its title) from the page its run read. */
+  rewritesPage: boolean;
 }
 
 export interface DraftApprovals {
@@ -49,7 +69,10 @@ export interface ApprovalGroup {
   version: string;
   title: string;
   agents: number;
-  items: { agent: string; summary: string }[];
+  /** Approve all is offered (togetherOf); else each change is approved from its own chat. */
+  together: boolean;
+  /** Each change, with its chat: the person's own, where its card is. */
+  items: { agent: string; summary: string; chatId: string }[];
 }
 
 function secret(): string {
@@ -68,8 +91,14 @@ export const groupKeyOf = (actor: ChatActor, brandId: string, draftId: string) =
 export const versionOf = (items: PendingApproval[]) =>
   sign('version', ...items.map((item) => `${item.runId}:${item.n}:${item.digest}`).sort());
 
+/** At most one of the changes rewrites the page: made together, none overwrites another. */
+export const togetherOf = (items: PendingApproval[]) =>
+  items.filter((item) => item.rewritesPage).length <= 1;
+
 /** The draft a waiting card changes, for a change a card asks for (never a go-live click). */
-function draftOfCard(pending: PendingCalls): { draftId: string; toolKey: string } | null {
+function draftOfCard(
+  pending: PendingCalls,
+): { draftId: string; toolKey: string; rewritesPage: boolean } | null {
   if (pending.kind !== 'ask') return null;
   const call = pending.calls[pending.index];
   const tool = call ? chatTool(call.toolName) : undefined;
@@ -77,7 +106,9 @@ function draftOfCard(pending: PendingCalls): { draftId: string; toolKey: string 
   if (!tool || tool.class !== 'write' || tool.flags.goLiveOnOwn || tool.flags.costCard) return null;
   if (!brandOf || !('lookup' in brandOf) || brandOf.lookup !== 'content_drafts') return null;
   const id = (call.input as Record<string, unknown> | null)?.[brandOf.idField];
-  return typeof id === 'string' && id ? { draftId: id, toolKey: tool.labelKey } : null;
+  return typeof id === 'string' && id
+    ? { draftId: id, toolKey: tool.labelKey, rewritesPage: !PAGE_KEPT_TOOLS.has(tool.name) }
+    : null;
 }
 
 const summaryOf = (labelKey: string) =>
@@ -204,12 +235,14 @@ export async function readPendingApprovals(
     const agentId = agentIdOf.get(agentRunOf.get(conversationId) ?? '') ?? null;
     const item: PendingApproval = {
       runId: card.runId,
+      chatId: conversationId,
       n: card.pending.n,
       digest: card.pending.digest,
       draftId: card.draftId,
       agent: (agentId && nameOf.get(agentId)) || t('chatAgent'),
       source: agentId ?? conversationId,
       summary: summaryOf(card.toolKey),
+      rewritesPage: card.rewritesPage,
     };
     const group = groups.get(card.draftId) ?? { draftId: card.draftId, title, items: [] };
     group.items.push(item);
@@ -225,6 +258,7 @@ export function viewOf(actor: ChatActor, brandId: string, group: DraftApprovals)
     version: versionOf(group.items),
     title: group.title,
     agents: new Set(group.items.map((item) => item.source)).size,
-    items: group.items.map(({ agent, summary }) => ({ agent, summary })),
+    together: togetherOf(group.items),
+    items: group.items.map(({ agent, summary, chatId }) => ({ agent, summary, chatId })),
   };
 }

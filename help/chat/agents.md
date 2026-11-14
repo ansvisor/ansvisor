@@ -168,7 +168,7 @@ A **Run now** that starts as you click it follows the agent's mode, so in **Full
 
 On a card that asks you to publish a draft, send it to your CMS or send it to your webhook, **Show full text** opens the draft's whole text, read-only, so you can read it before you approve. Click it again to close it. Approving works as before.
 
-When two or more of your agents each wait on a change to the same draft, **Needs you** in your **Inbox** shows one card for it: “N changes from M agents”, with each agent's change. **Approve all** approves every one and they go on in the background. A change that can't be approved is listed on the card; the others still go on. Each change can still be approved from its own chat.
+When two or more of your agents each wait on a change to the same draft, **Needs you** in your **Inbox** shows one card for it: “N changes from M agents”, with each agent's change. **Approve all** makes every change and says how many were made; a change that wasn't made is listed on the card. When more than one change rewrites the page, they would overwrite each other, so the card says **Approve these one by one**: click each change to open its chat and approve it there.
 
 ## Agent work: who starts agent work
 

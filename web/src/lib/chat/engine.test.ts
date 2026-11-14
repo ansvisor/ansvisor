@@ -8645,6 +8645,61 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     expect(ofType(events, 'deliverable.created')).toEqual([]);
   });
 
+  /** Approves the card the run waits on and drives on, keeping what onCard was told. */
+  async function approveTold(runId: string): Promise<boolean[]> {
+    const confirm = ofType(await eventsOf(runId), 'confirm.required').at(-1)!.data;
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+    });
+    if (!prepared.ok) throw new Error(`not approved: ${prepared.code}`);
+    const told: boolean[] = [];
+    await engine.driveRun(ADMIN, runId, prepared.resume, { onCard: (made) => told.push(made) });
+    return told;
+  }
+
+  it('makes the page its card stored: two cards from one page overwrite each other, in turn too (Approve all)', async () => {
+    const TEAMS = `${FILLED}<h2>Plans for teams</h2><p>Per seat.</p>`;
+    const LINKS = `${FILLED}<h2>Sources</h2><p>Our docs.</p>`;
+    useModels(
+      [READY, READY],
+      [
+        calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: TEAMS })),
+        calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: LINKS })),
+        text('Done.'),
+        text('Done.'),
+      ],
+    );
+    const first = await turn(ADMIN, 'Add a teams section', 'ask_first');
+    const second = await turn(ADMIN, 'Add a sources section', 'ask_first');
+    expect([runRow(first).status, runRow(second).status]).toEqual(['waiting', 'waiting']);
+    // One after another, each run makes the whole page its card holds, not one made from now.
+    expect(await approveTold(first)).toEqual([true]);
+    expect(await approveTold(second)).toEqual([true]);
+    const page = db.tables.content_drafts.find((d) => d.id === DRAFT)!.body_html as string;
+    expect(page).toBe(LINKS);
+    expect(page).not.toContain('Plans for teams');
+  });
+
+  it('tells onCard, once, that an approved change wasn’t made', async () => {
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: FILLED })),
+        text('It changed meanwhile.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Fill the refund period', 'ask_first');
+    vi.mocked(updateContentDraft).mockResolvedValueOnce({
+      ok: false,
+      reason: 'conflict',
+      message: 'The page changed while Chat was saving it. Open it to see the latest.',
+    });
+    expect(await approveTold(runId)).toEqual([false]);
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'error' });
+    expect(runRow(runId).status).toBe('done');
+  });
+
   it('offers Mark ready after a version with nothing left to fill, not once it is Ready (W4-12b)', async () => {
     const DONE = PAGE.replace('[REFUND PERIOD]', '30 days');
     const firstMove = async (runId: string) =>
