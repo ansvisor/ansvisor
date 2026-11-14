@@ -4,8 +4,8 @@ route: /dashboard/chat/settings
 keywords: [chat settings, date range, default date range, time range, ask me before the first analysis, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, slack when an agent waits, thought for, thinking time, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -27,7 +27,7 @@ sources: [web/messages/en.json, web/src/lib/chat/range.ts]
 
 ## Date range
 
-**Date range** is the period Chat reads when your message names none, in Chat and in the panel beside every page, for every brand. Pick **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days**, or **Custom** with a first and a last day: it is kept at once. **Ask me before the first analysis** clears it, so Chat asks again on the next analysis that reads data. The line under the message box shows the same range, with **change**.
+**Date range** is the period Chat reads when your message names none, in Chat and in the panel beside every page, for every brand. Pick **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days**, or **Custom** with a first and a last day: it is kept at once. **Ask me before the first analysis** clears it, so Chat asks again on the next analysis that reads data. The date range chip above the message box shows the same range; click it to change it.
 
 ## Notify me when an agent needs me
 

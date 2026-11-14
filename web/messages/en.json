@@ -4940,6 +4940,8 @@
   "chatComposer": {
     "message": "Message",
     "placeholder": "Ask anything…",
+    "placeholderHint": "{placeholder} · / skills · @ data",
+    "placeholderHintReadOnly": "{placeholder} · @ data",
     "steerPlaceholder": "Steer while I work: “only blog pages”…",
     "send": "Send",
     "stop": "Stop",
@@ -4947,7 +4949,7 @@
     "readOnlyTitle": "{role}s ask and read. Admins and Managers make changes. See what you can do.",
     "model": "Model",
     "modelAuto": "Auto",
-    "modelAutoHow": "Haiku reads, Sonnet writes",
+    "modelWarn": "Model · {usage}",
     "modelImage": "Image · {model}",
     "modelMenu": {
       "label": "Model and effort",
@@ -4976,7 +4978,7 @@
       "ownKeyIncluded": "Included in your plan",
       "ownKeyUntil": "Works until {date}",
       "ownKeyLocked": "Own API keys come with Enterprise · you're on {plan}",
-      "usage": "Monthly AI usage",
+      "usage": "AI usage this month",
       "usageLine": "{percent} · Resets {date}",
       "plan": "Your plan",
       "planTrial": "{plan} · free trial",
@@ -5066,9 +5068,7 @@
     },
     "tab": "Tab",
     "under": {
-      "hint": "/ skills · @ data",
       "ghostHint": "Tab to accept · / skills · @ data",
-      "readOnly": "@ data · read-only",
       "answering": "Answering · Esc to stop",
       "answerQuestion": "Your message answers Chat's question · Esc stops the run",
       "steer": "Enter stops this run and sends your message"
@@ -5093,6 +5093,11 @@
       "ask_first": "Ask me first",
       "auto": "Auto, ask before changes",
       "full_auto": "Full auto",
+      "short": {
+        "ask_first": "Ask me first",
+        "auto": "Ask before changes",
+        "full_auto": "Full auto"
+      },
       "needsGrowth": "Needs Growth",
       "fullAutoLocked": "Full auto · Needs Growth: agents apply changes for you, logged and undoable",
       "offByAdmin": "Off by Admin",
@@ -5469,11 +5474,11 @@
     "lineDay": "Range: last 24 hours",
     "lineDays": "Range: last {days} days",
     "lineCustom": "Range: {from} – {to}",
-    "lineNotSet": "Range: not set yet",
     "lineTitle": "The period Chat reads when your message names none",
-    "change": "change",
-    "choose": "choose",
     "menuLabel": "Chat's date range",
+    "chipLabel": "{range} · Chat's date range",
+    "add": "Add date range",
+    "clear": "Clear the date range: Chat asks before the next analysis",
     "save": "Save",
     "saveFailed": "Couldn't save your date range. Try again.",
     "settingLabel": "Date range",

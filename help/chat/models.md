@@ -4,14 +4,14 @@ route: /dashboard/chat
 keywords: [model, choose model, pick model, model menu, auto, haiku, sonnet, gpt, openai, gemini, google, effort, normal effort, high effort, max effort, multiplier, 2.3x, uses your limit faster, own api key, your key, your api keys, add api key, use for, images key, use ansvisor's limit]
 synonyms: [ai model, llm, which model, switch model, thinking effort]
 plan: starter
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json]
 ---
-Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Sonnet 5.5 writes the answer. The model button under the message box shows what the chat runs on. Click it to open the model menu.
+Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Sonnet 5.5 writes the answer. The model button, in the row at the bottom of the message box, shows what the chat runs on: **Auto**, or the model's short name. Click it to open the model menu.
 
 ## Pick a model
 
@@ -52,5 +52,5 @@ If a key stops working during an answer, Chat stops and says why. Admins can ope
 The bottom of the menu shows:
 
 - **Use your own API key**: on Enterprise, **Included in your plan** opens **Settings › AI Providers**, where an Admin saves keys. A key saved before Chat started works until the date shown. On other plans, own keys come with Enterprise. Models that run on your own key say **Your key**.
-- **Monthly AI usage**: how much of this month's AI limit your workspace has used, and when it resets.
 - **Your plan**, with **See plans**.
+- **AI usage this month**: a bar with how much of this month's AI limit your workspace has used, and when it resets. From 80%, a dot on the model button says so: amber, red once used up.
