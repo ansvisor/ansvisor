@@ -89,6 +89,20 @@ describe('draftEstimate', () => {
     expect(estimate.score).toBeLessThan(100);
   });
 
+  it('names the checks that cost most, where each is fixed', () => {
+    const estimate = draftEstimate({
+      page: [pass('h1-quality'), fail('lists'), fail('https')],
+      site: [fail('https'), { key: 'canonical', status: 'warn', score: 0.5 }, pass('viewport')],
+    });
+    expect(estimate.issues.length).toBeLessThanOrEqual(3);
+    expect(estimate.issues.map((i) => i.key)).toEqual(expect.arrayContaining(['lists', 'https']));
+    for (const issue of estimate.issues) {
+      expect(issue.label).toEqual(expect.any(String));
+      expect(issue.scope).toBe(SITE_SIGNALS.has(issue.key) ? 'site' : 'page');
+    }
+    expect(estimate.issues.find((i) => i.key === 'h1-quality')).toBeUndefined();
+  });
+
   it('names 13 site checks and no AI check among them', () => {
     expect(SITE_SIGNALS.size).toBe(13);
     expect(LLM_SIGNAL_KEYS.some((key) => SITE_SIGNALS.has(key))).toBe(false);

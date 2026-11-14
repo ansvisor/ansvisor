@@ -457,6 +457,14 @@ describe('fan-outs and keywords', () => {
     });
   });
 
+  it('counts a fan-out H2 or FAQ question written in its own words', () => {
+    const measure = { ...ctx, fanouts: ['how to measure ai overviews'] };
+    const h2 = page('<h2>Measuring AI Overviews</h2>');
+    expect(checkRule(rule('fanoutH2'), h2, measure)).toEqual({ state: 'ok' });
+    const faq = page('<h2>FAQ</h2><h3>How do you measure AI Overviews?</h3><p>In GA4.</p>');
+    expect(checkRule(rule('fanoutFaq'), faq, measure)).toEqual({ state: 'ok' });
+  });
+
   it('quotes the fan-outs still to use for the agent, as many as fit', () => {
     const status = check('fanoutH2', '<h2>x</h2>');
     expect(fanoutsToUse(status)).toBe(

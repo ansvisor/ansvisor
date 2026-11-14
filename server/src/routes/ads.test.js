@@ -12,6 +12,8 @@ const BRAND = '33333333-3333-3333-3333-333333333333';
 const SESSION = 'session-token';
 const logError = vi.fn();
 const assertBrandAccess = vi.fn();
+const brandAccessOf = vi.fn();
+const readAdsActivity = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -26,6 +28,10 @@ vi.mock('../config/supabase.js', () => ({
 vi.mock('../lib/access.js', async (importOriginal) => ({
   ...(await importOriginal()),
   assertBrandAccess: (...args) => assertBrandAccess(...args),
+  brandAccessOf: (...args) => brandAccessOf(...args),
+}));
+vi.mock('../lib/ads/activity.js', () => ({
+  readAdsActivity: (...args) => readAdsActivity(...args),
 }));
 
 const { default: Middleware } = await import('../middleware/index.js');
@@ -37,6 +43,8 @@ beforeEach(async () => {
   vi.stubEnv('ADS_ENABLED', 'true');
   logError.mockReset();
   assertBrandAccess.mockReset().mockResolvedValue({ brand: { id: BRAND }, orgId: 'o1' });
+  brandAccessOf.mockReset().mockResolvedValue({ orgId: 'o1', role: 'admin' });
+  readAdsActivity.mockReset().mockResolvedValue({ entries: [], next: null });
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -71,6 +79,8 @@ const PATHS = [
   ['GET', '/'],
   ['GET', '/opportunities'],
   ['GET', `/opportunities/${BRAND}`],
+  ['GET', '/activity'],
+  ['GET', `/activity?brandId=${BRAND}`],
   ['POST', '/opportunities/x/earn'],
   ['PATCH', '/settings'],
   ['DELETE', '/anything/at/all'],
@@ -89,6 +99,7 @@ describe('/api/ads while ADS_ENABLED is off', () => {
         });
       }
       expect(assertBrandAccess).not.toHaveBeenCalled();
+      expect(readAdsActivity).not.toHaveBeenCalled();
     });
   }
 
@@ -154,6 +165,61 @@ describe('GET /api/ads/status while ADS_ENABLED is on', () => {
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: 'Failed to read Ads', code: 'failed' });
     expect(logError).toHaveBeenCalledOnce();
+  });
+});
+
+describe('GET /api/ads/activity while ADS_ENABLED is on', () => {
+  it("gives an Admin the workspace's log, of one brand or all", async () => {
+    readAdsActivity.mockResolvedValue({ entries: [{ id: 'a1' }], next: null });
+    let res = await send('/activity?limit=20&before=2026-11-13T10:00:00Z');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ entries: [{ id: 'a1' }], next: null });
+    expect(brandAccessOf).toHaveBeenCalledWith('u1');
+    expect(readAdsActivity).toHaveBeenLastCalledWith({
+      orgId: 'o1',
+      brandId: undefined,
+      before: '2026-11-13T10:00:00Z',
+      limit: 20,
+    });
+
+    assertBrandAccess.mockResolvedValue({ brand: { id: BRAND }, orgId: 'o1', role: 'admin' });
+    res = await send(`/activity?brandId=${BRAND}`);
+    expect(res.status).toBe(200);
+    expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'u1');
+    expect(readAdsActivity).toHaveBeenLastCalledWith({
+      orgId: 'o1',
+      brandId: BRAND,
+      before: undefined,
+      limit: 50,
+    });
+  });
+
+  it('refuses everyone but an Admin, and a person with no workspace', async () => {
+    for (const access of [
+      { orgId: 'o1', role: 'manager' },
+      { orgId: 'o1', role: 'analyst' },
+      { orgId: 'o1', role: 'agency_partner' },
+      { orgId: null, role: 'admin' },
+    ]) {
+      brandAccessOf.mockResolvedValue(access);
+      const res = await send('/activity');
+      expect(res.status, JSON.stringify(access)).toBe(403);
+      expect((await res.json()).code).toBe('forbidden');
+    }
+    assertBrandAccess.mockResolvedValue({ brand: { id: BRAND }, orgId: 'o1', role: 'analyst' });
+    expect((await send(`/activity?brandId=${BRAND}`)).status).toBe(403);
+    expect(readAdsActivity).not.toHaveBeenCalled();
+  });
+
+  it("refuses another workspace's brand, and a malformed query", async () => {
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error("This brand isn't in your workspace"), { status: 403 }),
+    );
+    expect((await send(`/activity?brandId=${BRAND}`)).status).toBe(403);
+    for (const query of ['brandId=nope', 'limit=0', 'limit=101', 'before=yesterday']) {
+      expect((await send(`/activity?${query}`)).status, query).toBe(400);
+    }
+    expect(readAdsActivity).not.toHaveBeenCalled();
   });
 });
 

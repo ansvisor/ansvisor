@@ -10382,7 +10382,13 @@
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
       "auditEstimate": {
-        "title": "Site Audit estimate",
+        "title": "AI search readiness (Site Audit estimate)",
+        "intro": "Technical and site-wide checks, as Site Audit scores them. Different from Quality, which scores the writing.",
+        "reasons": {
+          "page": "This page",
+          "site": "Your site",
+          "siteLink": "Open Site Audit"
+        },
         "free": "free",
         "score": "≈{score}",
         "outOf": "{score}/100",
@@ -10396,7 +10402,7 @@
           "structure": "Structure",
           "content": "Content",
           "authority": "Authority",
-          "trust": "Trust",
+          "trust": "Site setup",
           "eeat": "E-E-A-T"
         },
         "estimateAi": "Estimate AI checks",
@@ -10488,6 +10494,9 @@
         "breaks": "would break {names}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
+        "stillFinishing": "Still finishing…",
+        "stillFinishingLine": "Its answer is taking longer than usual and may still land. Open this page again in a few minutes to see what it wrote.",
+        "stillFinishingToast": "Content Agent is still finishing. Open this page again in a few minutes to see what it wrote.",
         "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "{met, number} → {after, number}/{total, number} rules",
@@ -12471,6 +12480,7 @@
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
         "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
+        "fanoutsLeft": "Still to use: {list}{more, plural, =0 {} other { +# more}}",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {

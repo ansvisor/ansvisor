@@ -23,7 +23,7 @@ Quality scores the page from 0 to 100 on three things, each card saying what it 
 
 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.
 
-Under them, **Site Audit estimate** is about where the page would score in Site Audit. See the Content Editor article.
+In **Before you publish**, **AI search readiness (Site Audit estimate)** is about where the page would score in Site Audit. It's a different score from Quality. See the Content Editor article.
 
 At the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing.
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -148,7 +148,6 @@ export function QualityTab({
   handOff = null,
   onConfirmAuthor,
   onChangeType,
-  auditEstimate = null,
 }: {
   quality: QualityRead;
   /**
@@ -156,8 +155,6 @@ export function QualityTab({
    * marked a moment, Quality open already or not (editor test 2026-11-03).
    */
   focusRequest?: { to: QualityFocus; n: number } | null;
-  /** Site Audit's estimate of the page (customer priorities item 9), under the scores. */
-  auditEstimate?: ReactNode;
   /** Opens the header's page type menu: the checks and weights follow the type (CE-052). */
   onChangeType?: () => void;
   /** Scrolls the draft to a passage and marks it. */
@@ -268,7 +265,6 @@ export function QualityTab({
             )}
           </p>
         )}
-        {auditEstimate}
         {quality.feed && (
           <p className="text-xs text-muted-foreground">
             {t(`feed.${quality.feed}`)}
