@@ -143,7 +143,7 @@ export function EditorPanelRail({
 }
 
 /**
- * The editor's right panel (Content Editor spec v2 §6), 400px beside the page.
+ * The editor's right panel (Content Editor spec v2 §6), 440px beside the page: room for Chat's box and the line under it.
  * Its tabs are Instructions · Sources · Live page (v1.1, CE-028): Instructions
  * holds what the agent follows, the Brief (CE-007) and the Rules (CE-009),
  * under a Brief | Rules control, with the rules still open on both. The panel
@@ -502,7 +502,7 @@ export function EditorSidePanel({
       className={
         bar
           ? 'flex max-h-[60%] shrink-0 flex-col border-t bg-card'
-          : 'flex w-[400px] shrink-0 flex-col border-l bg-card'
+          : 'flex w-[440px] shrink-0 flex-col border-l bg-card'
       }
     >
       {bar ? (
@@ -570,7 +570,7 @@ export function EditorSidePanel({
         <div
           hidden={tab !== 'chat'}
           data-slot="editor-chat-scroll"
-          className="relative min-h-0 flex-1 overflow-y-auto px-3 pt-3"
+          className="relative min-h-0 flex-1 overflow-y-auto px-2 pt-3"
         >
           <EditorChat
             draftId={draft.id}
