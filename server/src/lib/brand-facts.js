@@ -1096,3 +1096,36 @@ export async function setFactStatus(
   }
   return { id: data.id, status: data.status, reviewedAt: data.reviewed_at };
 }
+
+/**
+ * Sets where a fact holds (00539): a destination, operator or route, as the
+ * brand's facts already write it; null for the whole brand. Only the
+ * brand's own fact. The same fact kept in that scope already is a 409; one
+ * a read removed meanwhile a 404.
+ */
+export async function setFactScope(fact, raw, { db = supabaseAdmin } = {}) {
+  const { data: rows, error: readError } = await db
+    .from('brand_facts')
+    .select('scope')
+    .eq('brand_id', fact.brand_id)
+    .not('scope', 'is', null);
+  if (readError) throw new Error(readError.message);
+  const scope =
+    sameScope(
+      (rows ?? []).map((r) => r.scope),
+      scopeText(raw),
+    ) ?? null;
+  const { data, error } = await db
+    .from('brand_facts')
+    .update({ scope })
+    .eq('id', fact.id)
+    .eq('brand_id', fact.brand_id)
+    .select('id, scope')
+    .maybeSingle();
+  if (error?.code === '23505') {
+    throw Object.assign(new Error('The fact is kept for that scope already'), { status: 409 });
+  }
+  if (error) throw new Error(error.message);
+  if (!data) throw Object.assign(new Error('Fact not found'), { status: 404 });
+  return { id: data.id, scope: data.scope ?? null };
+}

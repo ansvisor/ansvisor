@@ -3,8 +3,9 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { MANAGER_ROLES, assertBrandAccess, assertRole } from '../lib/access.js';
 import { isOrgActive } from '../lib/active-subscriptions.js';
-import { readBrandFacts, setFactStatus } from '../lib/brand-facts.js';
+import { readBrandFacts, setFactScope, setFactStatus } from '../lib/brand-facts.js';
 import { qualityPhase } from '../lib/content-quality.js';
+import { MAX_SCOPE_CHARS, scopeText } from '../lib/fact-scope.js';
 import { isDemoBrand } from '../middleware/demo-brand.js';
 import { brandFactsLimiter } from '../middleware/rate-limiter.js';
 
@@ -19,12 +20,12 @@ const router = Router();
 
 const off = (res) => res.status(404).json({ error: 'Not available', code: 'off' });
 
+const CODES = { 403: 'forbidden', 404: 'not_found', 409: 'duplicate' };
+
 /** An error's name and message only: a provider's error carries the page's text. */
 function failed(req, res, err, what) {
-  if (err?.status === 403 || err?.status === 404) {
-    return res
-      .status(err.status)
-      .json({ error: err.message, code: err.status === 404 ? 'not_found' : 'forbidden' });
+  if (CODES[err?.status]) {
+    return res.status(err.status).json({ error: err.message, code: CODES[err.status] });
   }
   req.log.error({ err: { name: err?.name, message: err?.message, stack: err?.stack } }, what);
   return res.status(500).json({ error: 'Failed to read the brand facts', code: 'failed' });
@@ -68,11 +69,22 @@ router.post('/fetch', brandFactsLimiter, async (req, res) => {
   }
 });
 
-// PATCH /api/brand-facts/:id { status } — approve or reject a fact.
+// A fact's status, or where it holds (00539): a destination, operator or
+// route; null, or nothing but spaces, for the whole brand.
+const patchBody = z.union([
+  z.object({ status: z.enum(['approved', 'rejected']) }).strict(),
+  z
+    .object({ scope: z.string().max(MAX_SCOPE_CHARS).nullable() })
+    .strict()
+    .refine(({ scope }) => !scope?.trim() || scopeText(scope)),
+]);
+
+// PATCH /api/brand-facts/:id { status } | { scope } — approve or reject a
+// fact, or set where it holds.
 router.patch('/:id', async (req, res) => {
   if (qualityPhase() < 2) return off(res);
   const id = z.guid().safeParse(req.params.id);
-  const body = z.object({ status: z.enum(['approved', 'rejected']) }).safeParse(req.body);
+  const body = patchBody.safeParse(req.body);
   if (!id.success || !body.success) {
     return res.status(400).json({ error: 'invalid', code: 'invalid' });
   }
@@ -91,6 +103,7 @@ router.patch('/:id', async (req, res) => {
       MANAGER_ROLES,
       'Only admins and managers can approve or reject brand facts.',
     );
+    if ('scope' in body.data) return res.json(await setFactScope(fact, body.data.scope));
     return res.json(await setFactStatus(fact, body.data.status, req.user.id));
   } catch (err) {
     return failed(req, res, err, 'brand fact status error');

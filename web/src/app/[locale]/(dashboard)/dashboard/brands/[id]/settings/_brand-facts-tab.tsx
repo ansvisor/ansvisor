@@ -6,8 +6,14 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { LoadingDots } from '@/components/ui/loading-dots';
-import { getBrandFacts, readBrandFactsAgain, setBrandFactStatus } from '@/lib/actions/brand-facts';
+import {
+  getBrandFacts,
+  readBrandFactsAgain,
+  setBrandFactScope,
+  setBrandFactStatus,
+} from '@/lib/actions/brand-facts';
 import {
   factValueText,
   isPrice,
@@ -15,6 +21,7 @@ import {
   type BrandFactsRead,
   type FactStatus,
 } from '@/lib/content/brand-facts';
+import { MAX_SCOPE_CHARS, byScope } from '@/lib/content/fact-scope';
 import { cn } from '@/lib/utils';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -25,7 +32,9 @@ import { useUserRole } from '@/hooks/use-user-role';
  * words on the page and where; a member approves or rejects each one (no
  * "approve all": the spec has each approved). Only approved facts still on
  * the site are compared with a page. "Read again" reads the site again, not
- * more than the API allows; nothing else here reads the site.
+ * more than the API allows; nothing else here reads the site. A fact can
+ * hold for one destination, operator or route (00539): set under "Applies
+ * to", and the list is grouped by it, the whole brand's first.
  */
 export function BrandFactsTab({ brandId }: { brandId: string }) {
   const t = useTranslations('brands.settings.facts');
@@ -36,6 +45,7 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
   const [failed, setFailed] = useState<'off' | 'failed' | null>(null);
   const [reading, setReading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{ id: string; scope: string } | null>(null);
   const ids = useId();
   // A read-only workspace (plan not active): Approve, Reject and Read again
   // (it reads the site) open the upgrade dialog instead.
@@ -100,6 +110,32 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
     }
   };
 
+  const saveScope = async (fact: BrandFact, scope: string) => {
+    setBusy(fact.id);
+    try {
+      const result = await setBrandFactScope(fact.id, scope);
+      if ('error' in result) {
+        toast.error(result.error === 'duplicate' ? t('scopeTaken') : t('scopeFailed'));
+        return;
+      }
+      setEditing(null);
+      setRead(
+        (prev) =>
+          prev && {
+            ...prev,
+            facts: prev.facts.map((f) => (f.id === fact.id ? { ...f, scope: result.scope } : f)),
+          },
+      );
+      // What a pending fact would replace follows its scope: the list as kept now.
+      const again = await getBrandFacts(brandId);
+      if (!('error' in again)) setRead(again);
+    } catch {
+      toast.error(t('scopeFailed'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const valueOf = (fact: Pick<BrandFact, 'kind' | 'value' | 'quote'>) => {
     const text = factValueText(fact.kind, fact.value, fact.quote);
     if (fact.kind === 'trial') return t('trialDays', { days: Number(text) });
@@ -129,6 +165,9 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
   const pending = read?.facts.filter((f) => f.status === 'pending') ?? [];
   const approved = read?.facts.filter((f) => f.status === 'approved') ?? [];
   const rejected = read?.facts.filter((f) => f.status === 'rejected') ?? [];
+  const scopes = [
+    ...new Set(read?.facts.map((f) => f.scope).filter((scope): scope is string => !!scope)),
+  ];
   // One thing at a time: a read of the site and a review would overwrite each other.
   const canReadAgain =
     !!read &&
@@ -168,8 +207,6 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
           >
             {t(`sources.${fact.sourceKind}`)}
           </a>
-          {/* Where it holds (00539): only pages about that place are checked against it. */}
-          {fact.scope && ` · ${t('forPlace', { place: fact.scope })}`}
           {fact.replaces && (
             <>
               {' · '}
@@ -179,9 +216,54 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
             </>
           )}
         </p>
+        {editing?.id === fact.id && (
+          <form
+            className="flex flex-wrap items-center gap-1.5 pt-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void saveScope(fact, editing.scope);
+            }}
+          >
+            <Input
+              autoFocus
+              value={editing.scope}
+              onChange={(e) => setEditing({ id: fact.id, scope: e.target.value })}
+              placeholder={t('wholeBrand')}
+              aria-label={t('scopeLabel')}
+              list={`${ids}-scopes`}
+              maxLength={MAX_SCOPE_CHARS}
+              className="h-7 w-56 text-xs"
+            />
+            <Button type="submit" size="sm" className="h-7" disabled={busy !== null}>
+              {t('scopeSave')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7"
+              onClick={() => setEditing(null)}
+            >
+              {t('scopeCancel')}
+            </Button>
+            <p className="w-full text-xs text-muted-foreground">{t('scopeHint')}</p>
+          </form>
+        )}
       </div>
       {canManage && (
         <div className="flex shrink-0 gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7"
+            disabled={busy !== null || reading}
+            aria-label={t('scopeFact', { fact: valueOf(fact) })}
+            onClick={guard(() => setEditing({ id: fact.id, scope: fact.scope ?? '' }), {
+              action: tActions('reviewBrandFacts'),
+            })}
+          >
+            {t('scope')}
+          </Button>
           {fact.status !== 'approved' && (
             <Button
               size="sm"
@@ -214,6 +296,19 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
       )}
     </li>
   );
+
+  // By where they hold, the whole brand's first; one list while none is scoped.
+  const list = (facts: BrandFact[]) =>
+    scopes.length ? (
+      byScope(facts).map((group) => (
+        <div key={group.scope ?? ''} className="space-y-1">
+          <h5 className="text-xs text-muted-foreground">{group.scope ?? t('wholeBrand')}</h5>
+          <ul className="divide-y rounded-xl border">{group.facts.map(row)}</ul>
+        </div>
+      ))
+    ) : (
+      <ul className="divide-y rounded-xl border">{facts.map(row)}</ul>
+    );
 
   return (
     <Card>
@@ -288,6 +383,11 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
               </p>
             )}
 
+            <datalist id={`${ids}-scopes`}>
+              {scopes.map((scope) => (
+                <option key={scope} value={scope} />
+              ))}
+            </datalist>
             {read.facts.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('empty')}</p>
             ) : (
@@ -297,7 +397,7 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
                     <h4 id={`${ids}-pending`} className="text-xs font-medium text-muted-foreground">
                       {t('toApprove', { count: pending.length })}
                     </h4>
-                    <ul className="divide-y rounded-xl border">{pending.map(row)}</ul>
+                    {list(pending)}
                   </section>
                 )}
                 {approved.length > 0 && (
@@ -308,7 +408,7 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
                     >
                       {t('approved')}
                     </h4>
-                    <ul className="divide-y rounded-xl border">{approved.map(row)}</ul>
+                    {list(approved)}
                   </section>
                 )}
                 {rejected.length > 0 && (
@@ -316,7 +416,7 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
                     <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                       {t('rejected', { count: rejected.length })}
                     </summary>
-                    <ul className="mt-2 divide-y rounded-xl border">{rejected.map(row)}</ul>
+                    <div className="mt-2 space-y-2">{list(rejected)}</div>
                   </details>
                 )}
               </>

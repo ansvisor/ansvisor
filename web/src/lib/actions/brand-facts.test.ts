@@ -11,7 +11,8 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getBrandFacts, readBrandFactsAgain, setBrandFactStatus } = await import('./brand-facts');
+const { getBrandFacts, readBrandFactsAgain, setBrandFactScope, setBrandFactStatus } =
+  await import('./brand-facts');
 
 const BRAND = '33333333-3333-3333-3333-333333333333';
 const FACT = '5e8cd4c2-2bc4-4fb7-8711-bc0ad1bb4a29';
@@ -49,6 +50,23 @@ describe('brand facts actions', () => {
     response = new Response(JSON.stringify({ id: FACT, status: 'approved' }), { status: 200 });
     expect(await setBrandFactStatus(FACT, 'approved')).toEqual({ id: FACT, status: 'approved' });
     expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'PATCH' });
+  });
+
+  it('sets where a fact holds, empty for the whole brand, and says when it is kept there already', async () => {
+    response = new Response(JSON.stringify({ id: FACT, scope: 'Bozcaada' }), { status: 200 });
+    expect(await setBrandFactScope(FACT, '  Bozcaada ')).toEqual({ id: FACT, scope: 'Bozcaada' });
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: 'PATCH',
+      body: JSON.stringify({ scope: 'Bozcaada' }),
+    });
+    response = new Response(JSON.stringify({ id: FACT, scope: null }), { status: 200 });
+    await setBrandFactScope(FACT, ' ');
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ body: JSON.stringify({ scope: null }) });
+    response = new Response(JSON.stringify({ code: 'duplicate' }), { status: 409 });
+    expect(await setBrandFactScope(FACT, 'Gökçeada')).toEqual({ error: 'duplicate' });
+    fetchMock.mockClear();
+    expect(await setBrandFactScope(FACT, 'x'.repeat(101))).toEqual({ error: 'invalid' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('says off before phase 2, failed otherwise, and asks nothing for a malformed id', async () => {

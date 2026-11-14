@@ -49,6 +49,7 @@ const {
   parseTrial,
   readBrandFacts,
   refreshBrandFacts,
+  setFactScope,
   setFactStatus,
 } = await import('./brand-facts.js');
 
@@ -1129,5 +1130,40 @@ describe('setFactStatus', () => {
     const { db: db2, writes: w2 } = fakeDb({});
     await setFactStatus(fact, 'rejected', 'u1', { db: db2, now: NOW });
     expect(w2.map((w) => w.op)).toEqual(['update']);
+  });
+});
+
+describe('setFactScope', () => {
+  const fact = { id: 'f1', brand_id: 'b1', kind: 'price', slot: 'price|yetişkin|TRY|||' };
+
+  it('sets where a brand’s own fact holds, as its other facts write it; nothing for the whole brand', async () => {
+    const { db, writes } = fakeDb({ brand_facts: [{ scope: 'Bozcaada' }] });
+    expect(await setFactScope(fact, ' BOZCAADA ', { db })).toEqual({ id: 'f1', scope: 'Bozcaada' });
+    expect(writes[0]).toEqual(
+      expect.objectContaining({
+        op: 'update',
+        payload: { scope: 'Bozcaada' },
+        filters: [
+          ['eq', 'id', 'f1'],
+          ['eq', 'brand_id', 'b1'],
+        ],
+      }),
+    );
+    const { db: wide } = fakeDb({ brand_facts: [] });
+    expect(await setFactScope(fact, '  ', { db: wide })).toEqual({ id: 'f1', scope: null });
+  });
+
+  it('says when the same fact is kept for that scope already', async () => {
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      not: () => chain,
+      update: () => chain,
+      then: (resolve) => resolve({ data: [], error: null }),
+      maybeSingle: async () => ({ data: null, error: { code: '23505', message: 'duplicate' } }),
+    };
+    await expect(
+      setFactScope(fact, 'Gökçeada', { db: { from: () => chain } }),
+    ).rejects.toMatchObject({ status: 409 });
   });
 });
