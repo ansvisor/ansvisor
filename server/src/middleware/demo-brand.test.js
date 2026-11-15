@@ -495,6 +495,9 @@ describe('coverage of the write routes', () => {
       'internal-trigger-tracking.js',
       // The free report card's form on www.ansvisor.com: no sign-in and no brand (00472).
       'public-report-card.js',
+      // The Slack app's clicks (SLACK_SIGNING_SECRET): its post's demo brand is refused before
+      // anything, and the web decides with the app's own demo check.
+      'slack-interactivity.js',
       'traffic.js',
       'webhook-content-callback.js',
       'webhook-content-draft-callback.js',
