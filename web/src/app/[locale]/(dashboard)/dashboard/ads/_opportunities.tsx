@@ -414,6 +414,7 @@ export function AdsOpportunities({
       </div>
       {openedRow && (
         <AdsOpportunityDrawer
+          key={openedRow.promptId}
           row={openedRow}
           open={opened?.open ?? false}
           brandId={brandId}

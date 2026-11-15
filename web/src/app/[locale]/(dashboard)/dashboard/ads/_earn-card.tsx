@@ -1,13 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
-import { sendAdsEarn, type AdsActionRef, type AdsOpportunity } from '@/lib/ads/api';
+import type { AdsActionRef, AdsOpportunity, sendAdsEarn } from '@/lib/ads/api';
 import { cn } from '@/lib/utils';
+import type { AdsHalf } from './_do-both';
 
 /** "/small-teams" for a page's address; its host for the home page. */
 function pageLabel(url: string) {
@@ -25,24 +24,22 @@ function pageLabel(url: string) {
  * Send to Action Center (`ads.earnTask`), which the server makes one action
  * of, once per key. Where an active action already covers the prompt, or once
  * sent, it opens that action. The button is there only for those who can
- * change the decision (`canSend`), as the decision's own menu.
+ * change the decision (`canSend`), as the decision's own menu. Sending is
+ * "Do both"'s Earn half (`half`), which the drawer's primary button shares.
  */
 export function AdsEarnCard({
   row,
-  brandId,
   earn,
   canSend,
+  half,
 }: {
   row: AdsOpportunity;
-  brandId: string;
   earn: { page: string | null; action: AdsActionRef | null };
   canSend: boolean;
+  half: AdsHalf<Awaited<ReturnType<typeof sendAdsEarn>>>;
 }) {
   const t = useTranslations('ads.drawer.earn');
-  // One key per card: a retry after a failure can't make a second action.
-  const [key] = useState(() => crypto.randomUUID());
-  const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState<{ action: AdsActionRef; covered: boolean } | null>(null);
+  const sent = half.done;
   if (row.decision !== 'earn' && row.decision !== 'earn_pay') return null;
 
   const why = row.reasons.some((r) => r.code === 'rival_leads')
@@ -51,17 +48,6 @@ export function AdsEarnCard({
       ? 'protect'
       : 'open';
   const action = sent?.action ?? earn.action;
-  const send = async () => {
-    setBusy(true);
-    try {
-      const res = await sendAdsEarn(brandId, row.promptId, key);
-      setSent({ action: res.action, covered: res.covered });
-    } catch {
-      toast.error(t('failed'));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <section data-slot="ads-earn" className="mt-5 space-y-2 rounded-xl border p-3">
@@ -87,8 +73,8 @@ export function AdsEarnCard({
             size="sm"
             variant="outline"
             data-action="ads.earnTask"
-            disabled={busy}
-            onClick={() => void send()}
+            disabled={half.busy}
+            onClick={() => void half.run()}
           >
             {t('send')}
           </Button>

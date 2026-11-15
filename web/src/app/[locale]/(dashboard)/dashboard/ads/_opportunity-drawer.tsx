@@ -4,11 +4,14 @@ import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslations } from 'next-intl';
 import { Dialog } from '@base-ui/react/dialog';
 import { XIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
+  createAdsDrafts,
   readAdsOpportunity,
+  sendAdsEarn,
   type AdsOpportunity,
   type AdsOpportunityDetail,
   type AdsReason,
@@ -16,7 +19,9 @@ import {
 import type { AdsPeriod } from '@/lib/ads/tabs';
 import { formatDate, formatNumber } from '@/lib/format';
 import { regionLabel } from '@/lib/region';
+import { AdsDoBoth, useAdsHalf } from './_do-both';
 import { AdsEarnCard } from './_earn-card';
+import { AdsPayCard } from './_pay-card';
 
 const num = (v: unknown) => (typeof v === 'number' ? formatNumber(v) : '');
 
@@ -32,9 +37,10 @@ function Heading({ children }: { children: ReactNode }) {
 /**
  * An opportunity's drawer (ADS-01 §3.2, mockup): the row's decision and why
  * at the top, then "What AI answers today", the latest answer on each
- * platform, with its fan-outs and keyword seeds, and the Earn card. Answer text is the AI's,
- * not ours: shown as quoted plain text only. It closes with ✕, the overlay
- * or Esc (`drawer.close`), and gives focus back to the row's Open.
+ * platform, with its fan-outs and keyword seeds, the Earn and Pay cards
+ * and "Do both". Answer text is the AI's, not ours: shown as quoted plain
+ * text only. It closes with ✕, the overlay or Esc (`drawer.close`), and gives
+ * focus back to the row's Open. The table keys it by prompt.
  */
 export function AdsOpportunityDrawer({
   row,
@@ -52,7 +58,7 @@ export function AdsOpportunityDrawer({
   period: AdsPeriod;
   /** The row's decision, as the table shows it. */
   decision: ReactNode;
-  /** Whether the person can send the Earn card's fix: as they can change the decision. */
+  /** Whether the person can send the fix and create drafts: as they can change the decision. */
   canSend: boolean;
   finalFocus: RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -60,6 +66,11 @@ export function AdsOpportunityDrawer({
   const t = useTranslations('ads.drawer');
   const tRows = useTranslations('ads.opportunities');
   const { promptId } = row;
+  const earn = useAdsHalf(
+    (k) => sendAdsEarn(brandId, promptId, k),
+    () => toast.error(t('earn.failed')),
+  );
+  const pay = useAdsHalf((k) => createAdsDrafts(brandId, promptId, k));
   const key = `${brandId}/${promptId}/${period}`;
   const [read, setRead] = useState<{ key: string; detail: AdsOpportunityDetail | null } | null>(
     null,
@@ -88,6 +99,7 @@ export function AdsOpportunityDrawer({
       : null;
   const reasons = (row.reasons ?? []).map(reason).filter(Boolean);
   const detail = read?.key === key ? read.detail : undefined;
+  const drafts = pay.done?.drafts ?? detail?.drafts ?? [];
 
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
@@ -188,16 +200,26 @@ export function AdsOpportunityDrawer({
               </>
             )}
             {detail && (
-              <AdsEarnCard
-                key={key}
-                row={row}
-                brandId={brandId}
-                earn={detail.earn}
-                canSend={canSend}
-              />
+              <>
+                <AdsEarnCard row={row} earn={detail.earn} canSend={canSend} half={earn} />
+                <AdsPayCard
+                  row={row}
+                  brandId={brandId}
+                  drafts={drafts}
+                  canCreate={canSend}
+                  half={pay}
+                  onLeave={onClose}
+                />
+              </>
             )}
-            {/* The Pay card (PR 11–12) goes here. */}
           </div>
+          {detail && canSend && (
+            <AdsDoBoth
+              decision={row.decision}
+              earn={{ done: !!(earn.done?.action ?? detail.earn.action), half: earn }}
+              pay={{ done: drafts.length > 0, half: pay }}
+            />
+          )}
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
