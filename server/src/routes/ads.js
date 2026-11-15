@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { ADS_THRESHOLDS, adsThresholds } from '../config/ads.js';
 import { MANAGER_ROLES, assertBrandAccess, assertRole, brandAccessOf } from '../lib/access.js';
 import { adsEnabled } from '../lib/ads-flag.js';
-import { readAdsActivity } from '../lib/ads/activity.js';
+import { logNotifyMe, readAdsActivity } from '../lib/ads/activity.js';
 import { AdDraftsError, createAdDrafts } from '../lib/ads/drafts.js';
 import { sendEarn } from '../lib/ads/earn.js';
 import { exportEditor, exportOpportunity } from '../lib/ads/export.js';
@@ -41,7 +41,8 @@ import { DEMO_BRAND } from '../middleware/demo-brand.js';
  * Nothing here reaches an ad platform. The writes are Ads' own rows (a
  * decision, the thresholds, the Pay card's ad drafts) and the Earn card's
  * Action Center action, each logged (lib/ads/activity.js), and the Google
- * Ads Editor exports, logged too, which a person imports themselves.
+ * Ads Editor exports, logged too, which a person imports themselves. Notify
+ * me is only logged, for any member on any plan.
  */
 
 const router = Router();
@@ -354,6 +355,27 @@ router.get('/export/opportunity/:promptId', async (req, res) => {
     return res.json(file);
   } catch (err) {
     return failed(req, res, err, 'ads opportunity export error');
+  }
+});
+
+// POST /api/ads/connections/notify { brandId, platform } — Notify me on an ad
+// platform that comes later (ADS-01 §3.5, `conn.notify`): any member who
+// sees Ads, on any plan, since nothing runs or costs; logged once per person
+// and platform in the workspace (201), asked again 200 with nothing logged.
+// Never on the demo brand (402 demo_brand), as every Ads write.
+router.post('/connections/notify', async (req, res) => {
+  const body = z
+    .object({ brandId: z.guid(), platform: z.enum(['meta', 'linkedin']) })
+    .safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    const { brand, orgId } = await assertBrandAccess(body.data.brandId, req.user.id);
+    if (brand?.is_demo) return res.status(402).json(DEMO_BRAND);
+    const { platform } = body.data;
+    const logged = await logNotifyMe({ orgId, brandId: brand.id, userId: req.user.id, platform });
+    return res.status(logged ? 201 : 200).json({ platform, logged });
+  } catch (err) {
+    return failed(req, res, err, 'ads notify error');
   }
 });
 

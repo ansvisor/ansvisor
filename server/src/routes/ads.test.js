@@ -14,6 +14,7 @@ const logError = vi.fn();
 const assertBrandAccess = vi.fn();
 const brandAccessOf = vi.fn();
 const readAdsActivity = vi.fn();
+const notifyMe = vi.fn();
 const ads = {
   readOpportunities: vi.fn(),
   setDecision: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock('../lib/access.js', async (importOriginal) => ({
 }));
 vi.mock('../lib/ads/activity.js', () => ({
   readAdsActivity: (...args) => readAdsActivity(...args),
+  logNotifyMe: (...args) => notifyMe(...args),
 }));
 const readOverview = vi.fn();
 vi.mock('../lib/ads/overview.js', () => ({ readOverview: (...a) => readOverview(...a) }));
@@ -91,6 +93,7 @@ beforeEach(async () => {
   readOpportunity.mockReset();
   sendEarn.mockReset();
   createAdDrafts.mockReset();
+  notifyMe.mockReset();
   for (const fn of [...Object.values(ads), ...Object.values(exporter)]) fn.mockReset();
   ads.readsEveryOpportunity.mockResolvedValue(true);
   ads.isDemoPrompt.mockResolvedValue(false);
@@ -141,6 +144,7 @@ const PATHS = [
   ['PATCH', '/settings'],
   ['GET', `/export/editor?brandId=${BRAND}`],
   ['GET', `/export/opportunity/${PROMPT}?brandId=${BRAND}`],
+  ['POST', '/connections/notify'],
   ['DELETE', '/anything/at/all'],
 ];
 
@@ -160,6 +164,7 @@ describe('/api/ads while ADS_ENABLED is off', () => {
       expect(readAdsActivity).not.toHaveBeenCalled();
       expect(readOpportunity).not.toHaveBeenCalled();
       expect(createAdDrafts).not.toHaveBeenCalled();
+      expect(notifyMe).not.toHaveBeenCalled();
       for (const fn of [...Object.values(ads), ...Object.values(exporter)]) {
         expect(fn).not.toHaveBeenCalled();
       }
@@ -801,6 +806,56 @@ describe('GET /api/ads/export/* while ADS_ENABLED is on', () => {
     exporter.exportEditor.mockRejectedValueOnce(new Error('ads activity write failed: x'));
     const failed = await editor();
     expect([failed.status, (await failed.json()).code]).toEqual([500, 'failed']);
+  });
+});
+
+describe('POST /api/ads/connections/notify while ADS_ENABLED is on', () => {
+  const notify = (body = { brandId: BRAND, platform: 'meta' }) =>
+    send('/connections/notify', { method: 'POST', body });
+
+  it('logs Notify me for any member, on any plan (201), and once: asked again, 200', async () => {
+    org = { id: 'o1', plan: 'starter', subscription_status: 'trialing' };
+    notifyMe.mockResolvedValue(true);
+    for (role of ['analyst', 'agency_partner', 'manager', 'admin']) {
+      const res = await notify();
+      expect([res.status, await res.json()], role).toEqual([
+        201,
+        { platform: 'meta', logged: true },
+      ]);
+    }
+    expect(notifyMe).toHaveBeenLastCalledWith({
+      orgId: 'o1',
+      brandId: BRAND,
+      userId: 'u1',
+      platform: 'meta',
+    });
+    notifyMe.mockResolvedValue(false);
+    const again = await notify();
+    expect([again.status, (await again.json()).logged]).toEqual([200, false]);
+  });
+
+  it('refuses the demo brand (402), and a brand of another workspace, before logging', async () => {
+    assertBrandAccess.mockResolvedValueOnce({ brand: { id: BRAND, is_demo: true }, orgId: 'o1' });
+    const demo = await notify();
+    expect([demo.status, (await demo.json()).code]).toEqual([402, 'demo_brand']);
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('Brand not found'), { status: 404 }),
+    );
+    const other = await notify();
+    expect([other.status, (await other.json()).code]).toEqual([404, 'not_found']);
+    expect(notifyMe).not.toHaveBeenCalled();
+  });
+
+  it('refuses a platform that has no Notify me, or a malformed brand', async () => {
+    for (const body of [
+      { brandId: BRAND, platform: 'google' },
+      { brandId: BRAND },
+      { brandId: 'b1', platform: 'meta' },
+    ]) {
+      expect((await notify(body)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect(assertBrandAccess).not.toHaveBeenCalled();
+    expect(notifyMe).not.toHaveBeenCalled();
   });
 });
 
