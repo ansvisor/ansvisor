@@ -7219,6 +7219,9 @@
       "fanout": "Fan-out gaps",
       "prompts": "Prompt portfolio",
       "plan": "30-day plan",
+      "content-plan": "Weekly content plan",
+      "seasonal": "Seasonal prompts",
+      "traffic": "AI traffic and sign-ups",
       "earn-or-pay": "Earn or pay",
       "ad-drafts": "Ad drafts"
     },
@@ -7655,12 +7658,9 @@
         "brand_access": "access by brand",
         "ads_data": "ads read from AI answers",
         "catalog_read": "a skill that reads your product catalog",
-        "seasonal_skill": "a seasonal demand skill",
         "app_store_data": "App Store and Google Play data",
         "review_sites": "review site data",
-        "local_listings": "local listings data",
-        "content_plan_skill": "a content plan skill",
-        "traffic_skill": "an AI traffic skill"
+        "local_listings": "local listings data"
       },
       "policyLock": "Your Admin turned Full auto off",
       "fallbackTip": "Use this agent opens it on Auto, ask before changes",
@@ -7820,7 +7820,7 @@
       },
       "ai-traffic-signups": {
         "name": "AI Traffic → Signups",
-        "description": "Shows the prompts and pages that bring AI visitors who sign up."
+        "description": "Each week, shows which AI assistants and pages bring visitors, and the sign-ups from AI visits that Google Analytics counts."
       },
       "unmet-needs-miner": {
         "name": "Unmet Needs Miner",

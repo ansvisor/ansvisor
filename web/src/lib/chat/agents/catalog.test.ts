@@ -94,17 +94,20 @@ describe('the preset files', () => {
       'onboarding-help',
       'paid-opportunity',
       'product-answer-pages',
+      'seasonal-prompt-planner',
       'feature-question-coverage',
       'alternatives-comparison-pages',
       'integration-questions',
       'social-proof-pages',
+      'content-plan-builder',
       'narrative-sentiment-watch',
       'source-outreach-list',
       'ceo-brief',
+      'ai-traffic-signups',
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(18);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(15);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -289,6 +292,90 @@ describe('a ready preset', () => {
     expect(body).toContain('`list_ready_agents`');
     expect(body).toContain('Never create, turn on or run an agent');
     expect(chatAgents.presets['onboarding-help'].description).toContain('3 to 5 agents');
+  });
+
+  it('plans the week’s pages as Content Plan Builder: /content-plan on Mondays, in Auto', () => {
+    // AGENTS plan §8.3, the content team's: its own skill, weekly. Auto, as the other agents that
+    // start drafts: a draft never goes live, and starting one asks unless allowed.
+    const preset = readyPreset('content-plan-builder')!;
+    expect(preset).toMatchObject({
+      goal: 'content',
+      roles: ['content'],
+      skills: ['content-plan'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'auto',
+      connections: [],
+      needs: [],
+    });
+    expect(presetGate(preset)).toBeNull();
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'content-plan')?.body ?? '';
+    for (const tool of [
+      'list_content_opportunities',
+      'get_fanout_gaps',
+      'list_action_center_tasks',
+      'list_drafts',
+      'create_draft',
+      'create_action',
+    ]) {
+      expect(body).toContain(`\`${tool}\``);
+    }
+    expect(body).toContain('Write a brief for each page');
+    expect(body).toContain('Lead with what changed since last week');
+    expect(chatAgents.presets['content-plan-builder'].description).toContain('a brief for each');
+  });
+
+  it('readies an online store for its seasons as Seasonal Prompt Planner: /seasonal monthly', () => {
+    // AGENTS plan §8.1, e-commerce's: the first of the month, in Auto. Every prompt it adds is
+    // a card; Search Console is Optional, read for the searches a season brings.
+    const preset = readyPreset('seasonal-prompt-planner')!;
+    expect(preset).toMatchObject({
+      goal: 'visibility',
+      businessTypes: ['ecommerce'],
+      skills: ['seasonal'],
+      triggers: [{ kind: 'schedule', repeat: 'month_first', time: '09:00' }],
+      mode: 'auto',
+      connections: [{ key: 'google_search_console', required: false }],
+      needs: [],
+    });
+    expect(presetGate(preset)).toBeNull();
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'seasonal')?.body ?? '';
+    expect(body).toContain('`add_prompts`');
+    expect(body).toContain('`get_gsc_queries`');
+    expect(body).toContain('These dates are fixed');
+    expect(body).toContain('Never give one of them a date, a week or a month yourself');
+    expect(body).toContain('Lead with what changed since last month');
+    // The card's own examples move every year: the skill gives them no date.
+    for (const moving of ['Black Friday', 'back-to-school']) {
+      expect(body).toContain(moving);
+      expect(chatAgents.presets['seasonal-prompt-planner'].description).toContain(moving);
+    }
+  });
+
+  it('reports AI visits and the sign-ups Analytics counts as AI Traffic → Signups, on Mondays', () => {
+    // AGENTS plan §8.3, the growth team's. Google Analytics is Optional: without it, sign-ups are
+    // "Not measured", and no read gives them by assistant, landing page or prompt.
+    const preset = readyPreset('ai-traffic-signups')!;
+    expect(preset).toMatchObject({
+      goal: 'reporting',
+      roles: ['growth'],
+      skills: ['traffic'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'auto',
+      connections: [{ key: 'google_analytics', required: false }],
+      needs: [],
+    });
+    expect(presetGate(preset)).toBeNull();
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'traffic')?.body ?? '';
+    expect(body).toContain('`get_ai_traffic_summary`');
+    expect(body).toContain('`get_ga_summary`');
+    expect(body).toContain('"Not measured: connect Google Analytics"');
+    expect(body).toContain('Sign-ups by assistant and by landing page: not measured');
+    expect(body).toContain('The prompt behind a visit: not measured');
+    expect(body).toContain('Lead with what changed since last week');
+    // The card promises only what the reads give: no prompts behind a visit.
+    const line = chatAgents.presets['ai-traffic-signups'].description ?? '';
+    expect(line).toContain('Google Analytics counts');
+    expect(line).not.toMatch(/prompt/i);
   });
 
   it('is found by its id; a soon one, or no id, is not', () => {
@@ -561,11 +648,12 @@ describe('the filters', () => {
   it('put the packs for an e-commerce brand and a product person first in the catalog', () => {
     const viewer = { siteType: 'ecommerce', workAreas: ['product'] };
     const ready = filterPresets(AGENT_PRESETS, {}, viewer).filter((p) => p.status === 'ready');
-    expect(ready.slice(0, 2).map((p) => [p.id, presetFit(p, viewer)])).toEqual([
+    expect(ready.slice(0, 3).map((p) => [p.id, presetFit(p, viewer)])).toEqual([
       ['product-answer-pages', 'siteType'],
+      ['seasonal-prompt-planner', 'siteType'],
       ['unmet-needs-miner', 'role'],
     ]);
-    expect(ready[2].id).toBe('visibility-watch');
+    expect(ready[3].id).toBe('visibility-watch');
   });
 });
 
@@ -593,6 +681,7 @@ describe('the agents setup recommends (AGENTS plan §8)', () => {
       ['content-freshness', 'role'],
       ['alternatives-comparison-pages', 'siteType'],
       ['integration-questions', 'siteType'],
+      ['content-plan-builder', 'role'],
     ]);
     // A B2B brand alone: its two packs, then the launch set's first to make three.
     expect(ids({ siteType: 'b2b', workAreas: [] })).toEqual([
@@ -609,8 +698,8 @@ describe('the agents setup recommends (AGENTS plan §8)', () => {
     // An e-commerce brand and a product person.
     expect(ids({ siteType: 'ecommerce', workAreas: ['product'] })).toEqual([
       ['product-answer-pages', 'siteType'],
+      ['seasonal-prompt-planner', 'siteType'],
       ['unmet-needs-miner', 'role'],
-      ['visibility-watch', null],
     ]);
     // Many fits: the first five.
     expect(ids({ siteType: 'b2b', workAreas: ['leaders', 'brand', 'bizdev', 'product'] })).toEqual([

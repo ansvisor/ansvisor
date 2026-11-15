@@ -36,6 +36,15 @@
  * it uses no connection. Its actions go to the Action Center with
  * create_action, once the person says yes.
  *
+ * Then the packs' (AGENTS plan §8.1, §8.3): /content-plan, the Content Plan
+ * Builder's, plans the week's pages from opportunities, fan-out gaps and
+ * open actions, all Ansvisor's own data, so it uses no connection.
+ * /seasonal, the Seasonal Prompt Planner's, reads Search Console's queries
+ * for a season's searches when it is connected: Optional, as for /prompts.
+ * /traffic, AI Traffic → Signups', reads Ansvisor's own AI visits, and the
+ * key events Google Analytics counts when it is connected: Optional too, and
+ * without it sign-ups are "Not measured".
+ *
  * A workspace's own skills (CHAT-13, W3-06) are instructions only: an
  * agent may name one by its /command, and it needs no connection (skillOf
  * gives none). Whether it may run now is the workspace's to say
@@ -112,6 +121,9 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'fanout', uses: [] },
   { id: 'prompts', uses: [optional('google_search_console')] },
   { id: 'plan', uses: [] },
+  { id: 'content-plan', uses: [] },
+  { id: 'seasonal', uses: [optional('google_search_console')] },
+  { id: 'traffic', uses: [optional('google_analytics')] },
   // Ads Phase 0 PR 15, only with Ads on: Ansvisor's own Ads reads, and drafts saved in it.
   { id: 'earn-or-pay', uses: [] },
   { id: 'ad-drafts', uses: [] },

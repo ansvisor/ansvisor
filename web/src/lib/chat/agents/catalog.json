@@ -560,7 +560,9 @@
       ],
       "industries": [],
       "roles": [],
-      "skills": [],
+      "skills": [
+        "seasonal"
+      ],
       "triggers": [
         {
           "kind": "schedule",
@@ -569,11 +571,14 @@
         }
       ],
       "mode": "auto",
-      "connections": [],
-      "status": "soon",
-      "needs": [
-        "seasonal_skill"
-      ]
+      "connections": [
+        {
+          "key": "google_search_console",
+          "required": false
+        }
+      ],
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "app-store-listing",
@@ -795,7 +800,9 @@
       "roles": [
         "content"
       ],
-      "skills": [],
+      "skills": [
+        "content-plan"
+      ],
       "triggers": [
         {
           "kind": "schedule",
@@ -805,10 +812,8 @@
       ],
       "mode": "auto",
       "connections": [],
-      "status": "soon",
-      "needs": [
-        "content_plan_skill"
-      ]
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "narrative-sentiment-watch",
@@ -898,7 +903,9 @@
       "roles": [
         "growth"
       ],
-      "skills": [],
+      "skills": [
+        "traffic"
+      ],
       "triggers": [
         {
           "kind": "schedule",
@@ -907,11 +914,14 @@
         }
       ],
       "mode": "auto",
-      "connections": [],
-      "status": "soon",
-      "needs": [
-        "traffic_skill"
-      ]
+      "connections": [
+        {
+          "key": "google_analytics",
+          "required": false
+        }
+      ],
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "unmet-needs-miner",

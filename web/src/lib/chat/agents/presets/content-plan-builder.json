@@ -6,7 +6,9 @@
   "roles": [
     "content"
   ],
-  "skills": [],
+  "skills": [
+    "content-plan"
+  ],
   "triggers": [
     {
       "kind": "schedule",
@@ -16,8 +18,6 @@
   ],
   "mode": "auto",
   "connections": [],
-  "status": "soon",
-  "needs": [
-    "content_plan_skill"
-  ]
+  "status": "ready",
+  "needs": []
 }

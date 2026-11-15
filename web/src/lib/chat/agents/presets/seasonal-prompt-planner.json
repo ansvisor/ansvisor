@@ -6,7 +6,9 @@
   ],
   "industries": [],
   "roles": [],
-  "skills": [],
+  "skills": [
+    "seasonal"
+  ],
   "triggers": [
     {
       "kind": "schedule",
@@ -15,9 +17,12 @@
     }
   ],
   "mode": "auto",
-  "connections": [],
-  "status": "soon",
-  "needs": [
-    "seasonal_skill"
-  ]
+  "connections": [
+    {
+      "key": "google_search_console",
+      "required": false
+    }
+  ],
+  "status": "ready",
+  "needs": []
 }

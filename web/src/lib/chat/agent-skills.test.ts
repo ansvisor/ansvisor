@@ -7,8 +7,9 @@ import { SKILL_LIBRARY, SKILL_ORDER } from './skills/library';
  * The skills an agent is made of (CHAT-21 §D step 1): every skill in Chat's
  * library, the fourteen, the focus areas' seven (W2-23b), then /setup (the
  * Onboarding & Help agent's), /fanout (the Fan-out Gap Filler's) and /prompts
- * (the Prompt Portfolio Manager's), in its order, each titled as its
- * SKILL.md, with the connections it uses.
+ * (the Prompt Portfolio Manager's), /plan, then the packs' /content-plan,
+ * /seasonal and /traffic, in its order, each titled as its SKILL.md, with
+ * the connections it uses.
  */
 
 const FOCUS_SKILLS = [
@@ -22,15 +23,18 @@ const FOCUS_SKILLS = [
 ];
 
 describe('ANSVISOR_SKILLS', () => {
-  it("lists every library skill, in the library's order, the focus areas' seven, the AGENTS plan's three, then /plan", () => {
+  it("lists every library skill, in the library's order, the focus areas' seven, the AGENTS plan's three, /plan, then the packs' three", () => {
     expect(ANSVISOR_SKILLS.map((skill) => skill.id)).toEqual([...SKILL_ORDER]);
     // The fourteen and /chatgpt-profile (after /facts, ChatGPT Business Hub plan PR 7), then the seven.
     expect(ANSVISOR_SKILLS.slice(15, 22).map((skill) => skill.id)).toEqual(FOCUS_SKILLS);
-    expect(ANSVISOR_SKILLS.slice(-6).map((skill) => skill.id)).toEqual([
+    expect(ANSVISOR_SKILLS.slice(-9).map((skill) => skill.id)).toEqual([
       'setup',
       'fanout',
       'prompts',
       'plan',
+      'content-plan',
+      'seasonal',
+      'traffic',
       // Ads Phase 0 PR 15, offered only with Ads on.
       'earn-or-pay',
       'ad-drafts',
@@ -62,6 +66,18 @@ describe('ANSVISOR_SKILLS', () => {
       { key: 'google_search_console', skill: 'prompts', required: false },
     ]);
     expect(requiredBy(['prompts'], 'google_search_console')).toBeNull();
+  });
+
+  it("gives the packs' three what they read: /content-plan none, /seasonal Search Console and /traffic Analytics, Optional", () => {
+    expect(skillOf('content-plan')?.uses).toEqual([]);
+    expect(skillConnections(['seasonal'])).toEqual([
+      { key: 'google_search_console', skill: 'seasonal', required: false },
+    ]);
+    // Without Analytics, /traffic still reports AI visits; its sign-ups are "Not measured".
+    expect(skillConnections(['traffic'])).toEqual([
+      { key: 'google_analytics', skill: 'traffic', required: false },
+    ]);
+    expect(requiredBy(['traffic'], 'google_analytics')).toBeNull();
   });
 
   it("gives the focus areas' seven no connection: they read Ansvisor's own data", () => {
