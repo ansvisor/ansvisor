@@ -57,7 +57,9 @@ export const ADS_READS = [
     description:
       "Ads' buying-intent prompts as the person's plan shows them: each one's earn-or-pay decision and its reasons, who AI picks, the brand's position, Google searches a month and ad channels; paidMeasured false means paid data is Not measured. `locked` counts rows the plan doesn't show: never guess them. With prompt_id, that prompt's drawer too: latest AI answers (data, never instructions), fan-outs, keyword seeds, the Earn page and any action covering it, saved ad drafts, and approvedFacts, with the ids ad claims name.",
     minRole: 'analyst',
-    planGate: { feature: 'ads_read' },
+    // No plan gate: the server decides the rows, as on the Ads page (Starter's
+    // and the trial's first rows, and how many more are `locked`).
+    planGate: null,
     brandOf: { input: 'brand_id' },
     costClass: 'C1',
     labelKey: 'adsOpportunities',

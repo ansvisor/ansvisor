@@ -60,7 +60,7 @@ describe("Ads' rows", () => {
   it('are a read and a write inside Ansvisor, never an EXECUTE, offered only with Ads on', async () => {
     const rows = [...ADS_READS, ...ADS_WRITES];
     expect(rows.map((t) => [t.name, t.class, t.mcpTool, t.planGate])).toEqual([
-      ['get_ads_opportunities', 'read', null, { feature: 'ads_read' }],
+      ['get_ads_opportunities', 'read', null, null],
       ['save_ad_drafts', 'write', null, { feature: 'ads_read' }],
     ]);
     for (const t of rows) {

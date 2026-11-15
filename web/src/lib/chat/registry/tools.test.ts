@@ -1192,10 +1192,9 @@ describe("the model's tool list on the registry's rows", () => {
   const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });
-  // Starter's plan opens neither Product Visibility nor Ads (ads_read).
-  const withoutShopping = reads.filter(
-    (name) => !['get_shopping_visibility', 'get_ads_opportunities'].includes(name),
-  );
+  // Starter's plan doesn't open Product Visibility. Ads' read has no plan gate:
+  // the server shows Starter its first rows, as on the Ads page.
+  const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');
 
   it('gives every role the reads its plan opens, and Analysts and Agency partners daily work only', () => {
     // Memory (W3-11): everyone keeps their own Me.
