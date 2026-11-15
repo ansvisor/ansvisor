@@ -60,6 +60,11 @@ vi.mock('../lib/ads/drafts.js', async (importOriginal) => ({
   ...(await importOriginal()),
   createAdDrafts: (...a) => createAdDrafts(...a),
 }));
+const exporter = { exportEditor: vi.fn(), exportOpportunity: vi.fn() };
+vi.mock('../lib/ads/export.js', () => ({
+  exportEditor: (...a) => exporter.exportEditor(...a),
+  exportOpportunity: (...a) => exporter.exportOpportunity(...a),
+}));
 const readOpportunity = vi.fn();
 vi.mock('../lib/ads/opportunity.js', () => ({
   readOpportunity: (...a) => readOpportunity(...a),
@@ -86,7 +91,7 @@ beforeEach(async () => {
   readOpportunity.mockReset();
   sendEarn.mockReset();
   createAdDrafts.mockReset();
-  for (const fn of Object.values(ads)) fn.mockReset();
+  for (const fn of [...Object.values(ads), ...Object.values(exporter)]) fn.mockReset();
   ads.readsEveryOpportunity.mockResolvedValue(true);
   ads.isDemoPrompt.mockResolvedValue(false);
   role = 'manager';
@@ -134,6 +139,8 @@ const PATHS = [
   ['POST', '/opportunities/x/earn'],
   ['POST', `/opportunities/${PROMPT}/drafts`],
   ['PATCH', '/settings'],
+  ['GET', `/export/editor?brandId=${BRAND}`],
+  ['GET', `/export/opportunity/${PROMPT}?brandId=${BRAND}`],
   ['DELETE', '/anything/at/all'],
 ];
 
@@ -153,7 +160,9 @@ describe('/api/ads while ADS_ENABLED is off', () => {
       expect(readAdsActivity).not.toHaveBeenCalled();
       expect(readOpportunity).not.toHaveBeenCalled();
       expect(createAdDrafts).not.toHaveBeenCalled();
-      for (const fn of Object.values(ads)) expect(fn).not.toHaveBeenCalled();
+      for (const fn of [...Object.values(ads), ...Object.values(exporter)]) {
+        expect(fn).not.toHaveBeenCalled();
+      }
     });
   }
 
@@ -706,6 +715,92 @@ describe('POST /api/ads/opportunities/:promptId/drafts while ADS_ENABLED is on',
     ]) {
       expect((await draft(body, prompt)).status, JSON.stringify(body)).toBe(400);
     }
+  });
+});
+
+describe('GET /api/ads/export/* while ADS_ENABLED is on', () => {
+  const FILE = { fileName: 'google-ads-editor-pay-2026-11-14.csv', csv: 'Campaign', rowCount: 0 };
+  const editor = (query = `brandId=${BRAND}&decision=pay&period=7d`) =>
+    send(`/export/editor?${query}`);
+  const one = (prompt = PROMPT) => send(`/export/opportunity/${prompt}?brandId=${BRAND}`);
+  beforeEach(() => {
+    exporter.exportEditor.mockResolvedValue(FILE);
+    exporter.exportOpportunity.mockResolvedValue(FILE);
+  });
+
+  it('gives admins and managers the file of the filter, or of one prompt, as JSON', async () => {
+    for (role of ['manager', 'admin']) {
+      const res = await editor();
+      expect(res.status, role).toBe(200);
+      expect(await res.json()).toEqual(FILE);
+    }
+    expect(assertBrandAccess).toHaveBeenLastCalledWith(BRAND, 'u1', { columns: 'name' });
+    expect(exporter.exportEditor).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      userId: 'u1',
+      decision: 'pay',
+      period: '7d',
+    });
+    await editor(`brandId=${BRAND}`);
+    expect(exporter.exportEditor.mock.calls.at(-1)[0]).toMatchObject({
+      decision: 'all',
+      period: '30d',
+    });
+    expect((await one()).status).toBe(200);
+    expect(exporter.exportOpportunity).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      userId: 'u1',
+      promptId: PROMPT,
+      period: '30d',
+    });
+  });
+
+  it('refuses analysts (403), the demo brand or its prompt (402), and Starter or the trial (403 plan_limit)', async () => {
+    for (role of ['analyst', 'agency_partner']) {
+      for (const res of [await editor(), await one()]) {
+        expect([res.status, (await res.json()).code], role).toEqual([403, 'forbidden']);
+      }
+    }
+    role = 'admin';
+    assertBrandAccess.mockResolvedValueOnce({ brand: { id: BRAND, is_demo: true }, orgId: 'o1' });
+    expect(await (await editor()).json()).toMatchObject({ code: 'demo_brand' });
+    ads.isDemoPrompt.mockResolvedValue(true);
+    const demo = await one();
+    expect([demo.status, (await demo.json()).code]).toEqual([402, 'demo_brand']);
+    ads.isDemoPrompt.mockResolvedValue(false);
+    vi.stubEnv('IS_CLOUD', 'true');
+    ads.readsEveryOpportunity.mockImplementation(actual.readsEveryOpportunity);
+    for (const plan of [
+      { plan: 'starter', subscription_status: 'active' },
+      { plan: 'growth', subscription_status: 'trialing' },
+    ]) {
+      org = { id: 'o1', ...plan };
+      for (const res of [await editor(), await one()]) {
+        expect([res.status, (await res.json()).code], plan.plan).toEqual([403, 'plan_limit']);
+      }
+    }
+    expect(exporter.exportEditor).not.toHaveBeenCalled();
+    expect(exporter.exportOpportunity).not.toHaveBeenCalled();
+  });
+
+  it("answers another brand's prompt as not found, and a malformed query as invalid", async () => {
+    exporter.exportOpportunity.mockRejectedValueOnce(
+      Object.assign(new Error('Prompt not found'), { status: 404 }),
+    );
+    const res = await one();
+    expect([res.status, (await res.json()).code]).toEqual([404, 'not_found']);
+    for (const res of [
+      await editor(`brandId=${BRAND}&decision=overlap`),
+      await editor('decision=pay'),
+      await one('nope'),
+    ]) {
+      expect(res.status).toBe(400);
+    }
+    exporter.exportEditor.mockRejectedValueOnce(new Error('ads activity write failed: x'));
+    const failed = await editor();
+    expect([failed.status, (await failed.json()).code]).toEqual([500, 'failed']);
   });
 });
 

@@ -88,6 +88,31 @@ function competitorNames(competitors, brandName) {
   });
 }
 
+/** The competitor a text names, by the gate's names, or undefined. */
+function rivalNaming(competitors, brandName) {
+  const rivals = competitorNames(competitors, brandName);
+  return (text) => rivals.find((r) => r.names.some((n) => namesScope(text, n)));
+}
+
+/**
+ * Keywords as the gate keeps them (a draft's, or an export's seeds and
+ * fan-outs): trimmed, each once whatever its case, and any naming a
+ * competitor dropped.
+ */
+export function keptKeywords(list, { brandName, competitors = [] }) {
+  const naming = rivalNaming(competitors, brandName);
+  const keywords = [];
+  const dropped = [];
+  for (const raw of list ?? []) {
+    const keyword = String(raw ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!keyword || keywords.some((k) => k.toLowerCase() === keyword.toLowerCase())) continue;
+    (naming(keyword) ? dropped : keywords).push(keyword);
+  }
+  return { keywords, dropped };
+}
+
 /** The draft's text, field by field: `headline`, `description`, `contextHint`, each one's place. */
 const textsOf = (draft) => [
   ...(draft.headlines ?? []).map((text, i) => ({ field: 'headline', at: `headlines[${i}]`, text })),
@@ -169,21 +194,15 @@ export function gateDraft(draft, { facts, brandName, competitors = [], limits = 
   }
 
   // 3. Competitors: blocked in the text, their keywords dropped.
-  const rivals = competitorNames(competitors, brandName);
-  const naming = (text) => rivals.find((r) => r.names.some((n) => namesScope(text, n)));
+  const naming = rivalNaming(competitors, brandName);
   for (const { at, text } of texts) {
     const rival = naming(text);
     if (rival) failures.push({ code: 'competitor_named', at, detail: rival.name });
   }
-  const keywords = [];
-  const droppedKeywords = [];
-  for (const raw of draft.keywords ?? []) {
-    const keyword = String(raw ?? '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!keyword || keywords.some((k) => k.toLowerCase() === keyword.toLowerCase())) continue;
-    (naming(keyword) ? droppedKeywords : keywords).push(keyword);
-  }
+  const { keywords, dropped: droppedKeywords } = keptKeywords(draft.keywords, {
+    brandName,
+    competitors,
+  });
 
   // 4. Lengths, where the channel's limit is confirmed.
   const channelLimits = limits[draft.channel] ?? {};

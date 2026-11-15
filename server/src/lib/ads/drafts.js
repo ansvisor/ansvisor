@@ -156,7 +156,7 @@ async function writeDrafts({ orgId, promptId, request }) {
 }
 
 /** The brand's competitors, within its organization. */
-async function readCompetitors(brandId, orgId) {
+export async function readCompetitors(brandId, orgId) {
   const { data, error } = await supabaseAdmin
     .from('competitors')
     .select('name, domain, brands!inner(organization_id)')
