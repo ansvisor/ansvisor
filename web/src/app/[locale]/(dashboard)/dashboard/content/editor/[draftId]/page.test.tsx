@@ -3194,6 +3194,8 @@ describe('the side panel', () => {
         expect.arrayContaining(['relative', 'min-h-0', 'flex-1', 'overflow-y-auto']),
       );
       expect(chatScroll!.className).not.toMatch(/\b(py|pb)-/);
+      // The box's strip is the panel's grey, not the page's black.
+      expect(classes(chatScroll)).toContain('[&_[data-slot=thread-composer]]:bg-card');
       expect(panel()!.querySelector('[role="tablist"]')!.compareDocumentPosition(chatScroll!)).toBe(
         Node.DOCUMENT_POSITION_FOLLOWING,
       );

@@ -565,12 +565,14 @@ export function EditorSidePanel({
           it the conversation grew the page and scrolled the editor away. Relative:
           the thread's screen-reader text is placed (and clipped) here, not on the
           page, where it made the window taller than the screen. No padding under
-          it: the box keeps its own. */}
+          it: the box keeps its own. The box's strip takes the panel's colour (card):
+          Chat fills it with the page's background, which showed as a black block on
+          this grey panel (the owner's report, 15 Nov). */}
       {chat && opened.has('chat') && (
         <div
           hidden={tab !== 'chat'}
           data-slot="editor-chat-scroll"
-          className="relative min-h-0 flex-1 overflow-y-auto px-2 pt-3"
+          className="relative min-h-0 flex-1 overflow-y-auto px-2 pt-3 [&_[data-slot=thread-composer]]:bg-card"
         >
           <EditorChat
             draftId={draft.id}
