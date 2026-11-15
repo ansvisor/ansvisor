@@ -90,6 +90,20 @@ export const DEMO_GUARDED = [
     brandIn('body'),
     rowIn('prompts', 'path', 'promptId'),
   ),
+  // The Earn card's Action Center action: the demo's actions are samples.
+  guard(
+    'POST /ads/opportunities/:promptId/earn',
+    brandIn('body'),
+    rowIn('prompts', 'path', 'promptId'),
+  ),
+  // The Pay card's ad drafts: a model call on the budget, for a sample brand.
+  guard(
+    'POST /ads/opportunities/:promptId/drafts',
+    brandIn('body'),
+    rowIn('prompts', 'path', 'promptId'),
+  ),
+  // Notify me on a later ad platform: logged, and the demo's log stays empty.
+  guard('POST /ads/connections/notify', brandIn('body')),
 
   // Site Audit (audits.js).
   guard('POST /audits', brandIn('body')),

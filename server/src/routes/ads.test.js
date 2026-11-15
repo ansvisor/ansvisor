@@ -14,6 +14,7 @@ const logError = vi.fn();
 const assertBrandAccess = vi.fn();
 const brandAccessOf = vi.fn();
 const readAdsActivity = vi.fn();
+const notifyMe = vi.fn();
 const ads = {
   readOpportunities: vi.fn(),
   setDecision: vi.fn(),
@@ -50,9 +51,22 @@ vi.mock('../lib/access.js', async (importOriginal) => ({
 }));
 vi.mock('../lib/ads/activity.js', () => ({
   readAdsActivity: (...args) => readAdsActivity(...args),
+  logNotifyMe: (...args) => notifyMe(...args),
 }));
 const readOverview = vi.fn();
 vi.mock('../lib/ads/overview.js', () => ({ readOverview: (...a) => readOverview(...a) }));
+const sendEarn = vi.fn();
+vi.mock('../lib/ads/earn.js', () => ({ sendEarn: (...a) => sendEarn(...a) }));
+const createAdDrafts = vi.fn();
+vi.mock('../lib/ads/drafts.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  createAdDrafts: (...a) => createAdDrafts(...a),
+}));
+const exporter = { exportEditor: vi.fn(), exportOpportunity: vi.fn() };
+vi.mock('../lib/ads/export.js', () => ({
+  exportEditor: (...a) => exporter.exportEditor(...a),
+  exportOpportunity: (...a) => exporter.exportOpportunity(...a),
+}));
 const readOpportunity = vi.fn();
 vi.mock('../lib/ads/opportunity.js', () => ({
   readOpportunity: (...a) => readOpportunity(...a),
@@ -65,6 +79,8 @@ vi.mock('../lib/ads/opportunities.js', async (importOriginal) => ({
 const { default: Middleware } = await import('../middleware/index.js');
 const { default: router } = await import('./ads.js');
 const actual = await vi.importActual('../lib/ads/opportunities.js');
+const { AdDraftsError } = await import('../lib/ads/drafts.js');
+const { PlanLimitError } = await import('../lib/plan-guard.js');
 
 let server;
 let baseUrl;
@@ -75,7 +91,10 @@ beforeEach(async () => {
   brandAccessOf.mockReset().mockResolvedValue({ orgId: 'o1', role: 'admin' });
   readAdsActivity.mockReset().mockResolvedValue({ entries: [], next: null });
   readOpportunity.mockReset();
-  for (const fn of Object.values(ads)) fn.mockReset();
+  sendEarn.mockReset();
+  createAdDrafts.mockReset();
+  notifyMe.mockReset();
+  for (const fn of [...Object.values(ads), ...Object.values(exporter)]) fn.mockReset();
   ads.readsEveryOpportunity.mockResolvedValue(true);
   ads.isDemoPrompt.mockResolvedValue(false);
   role = 'manager';
@@ -121,7 +140,11 @@ const PATHS = [
   ['GET', '/settings'],
   ['GET', `/activity?brandId=${BRAND}`],
   ['POST', '/opportunities/x/earn'],
+  ['POST', `/opportunities/${PROMPT}/drafts`],
   ['PATCH', '/settings'],
+  ['GET', `/export/editor?brandId=${BRAND}`],
+  ['GET', `/export/opportunity/${PROMPT}?brandId=${BRAND}`],
+  ['POST', '/connections/notify'],
   ['DELETE', '/anything/at/all'],
 ];
 
@@ -140,7 +163,11 @@ describe('/api/ads while ADS_ENABLED is off', () => {
       expect(assertBrandAccess).not.toHaveBeenCalled();
       expect(readAdsActivity).not.toHaveBeenCalled();
       expect(readOpportunity).not.toHaveBeenCalled();
-      for (const fn of Object.values(ads)) expect(fn).not.toHaveBeenCalled();
+      expect(createAdDrafts).not.toHaveBeenCalled();
+      expect(notifyMe).not.toHaveBeenCalled();
+      for (const fn of [...Object.values(ads), ...Object.values(exporter)]) {
+        expect(fn).not.toHaveBeenCalled();
+      }
     });
   }
 
@@ -505,6 +532,330 @@ describe('opportunities, decisions and settings while ADS_ENABLED is on', () => 
       expect((await send('/settings', change)).status, JSON.stringify(plan)).toBe(200);
     }
     expect(ads.saveAdsSettings).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('POST /api/ads/opportunities/:promptId/earn while ADS_ENABLED is on', () => {
+  const KEY = 'key-0001';
+  const earn = (body = { brandId: BRAND, idempotencyKey: KEY }, prompt = PROMPT) =>
+    send(`/opportunities/${prompt}/earn`, { method: 'POST', body });
+  const sent = { promptId: PROMPT, action: { id: 'a1', no: 1300 }, created: true, covered: false };
+
+  it('lets admins and managers send the fix (201), or answers the action covering it (200)', async () => {
+    sendEarn.mockResolvedValue(sent);
+    for (role of ['manager', 'admin']) {
+      const res = await earn();
+      expect(res.status, role).toBe(201);
+      expect(await res.json()).toEqual(sent);
+    }
+    expect(sendEarn).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      promptId: PROMPT,
+      userId: 'u1',
+      idempotencyKey: KEY,
+    });
+    sendEarn.mockResolvedValue({ ...sent, created: false, covered: true });
+    const res = await earn();
+    expect([res.status, (await res.json()).covered]).toEqual([200, true]);
+  });
+
+  it('refuses analysts (403), the demo brand or its prompt (402), and Starter or the trial (403)', async () => {
+    for (role of ['analyst', 'agency_partner']) {
+      const res = await earn();
+      expect([res.status, (await res.json()).code], role).toEqual([403, 'forbidden']);
+    }
+    role = 'admin';
+    assertBrandAccess.mockResolvedValueOnce({ brand: { id: BRAND, is_demo: true }, orgId: 'o1' });
+    for (const what of ['demo brand', 'demo prompt']) {
+      const res = await earn();
+      expect(res.status, what).toBe(402);
+      expect(await res.json(), what).toMatchObject({ code: 'demo_brand' });
+      ads.isDemoPrompt.mockResolvedValue(true);
+    }
+    ads.isDemoPrompt.mockResolvedValue(false);
+    // A locked prompt or an open one: writes are Growth's, as a decision.
+    ads.readsEveryOpportunity.mockResolvedValue(false);
+    const res = await earn();
+    expect([res.status, (await res.json()).code]).toEqual([403, 'plan_limit']);
+    expect(sendEarn).not.toHaveBeenCalled();
+  });
+
+  it("answers another brand's or workspace's prompt as not found, a cancelled send as a conflict", async () => {
+    sendEarn.mockRejectedValueOnce(Object.assign(new Error('Prompt not found'), { status: 404 }));
+    let res = await earn();
+    expect([res.status, (await res.json()).code]).toEqual([404, 'not_found']);
+    sendEarn.mockRejectedValueOnce(
+      Object.assign(new Error('The action this approval made was cancelled.'), { status: 409 }),
+    );
+    res = await earn();
+    expect([res.status, (await res.json()).code]).toEqual([409, 'conflict']);
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error('Brand not found'), { status: 404 }),
+    );
+    expect((await earn()).status).toBe(404);
+    for (const [body, prompt] of [
+      [{ brandId: BRAND }, PROMPT],
+      [{ brandId: BRAND, idempotencyKey: 'short' }, PROMPT],
+      [{ idempotencyKey: KEY }, PROMPT],
+      [{ brandId: BRAND, idempotencyKey: KEY }, 'nope'],
+    ]) {
+      expect((await earn(body, prompt)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect(sendEarn).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('POST /api/ads/opportunities/:promptId/drafts while ADS_ENABLED is on', () => {
+  const KEY = 'key-0001';
+  const draft = (body = { brandId: BRAND, idempotencyKey: KEY }, prompt = PROMPT) =>
+    send(`/opportunities/${prompt}/drafts`, { method: 'POST', body });
+  const READ = { promptId: PROMPT, text: 'best crm', answers: [], fanOuts: [], keywords: [] };
+  const made = {
+    promptId: PROMPT,
+    created: true,
+    drafts: [{ id: 'd1', channel: 'chatgpt' }],
+    rejected: [{ channel: 'google', failures: [{ code: 'competitor_named' }] }],
+    gate: { limits: 'unconfirmed', competitors: 'blocked' },
+  };
+  beforeEach(() => readOpportunity.mockResolvedValue(READ));
+
+  it('lets admins and managers write them (201) from the drawer’s read, the same key again 200', async () => {
+    createAdDrafts.mockResolvedValue(made);
+    for (role of ['manager', 'admin']) {
+      const res = await draft();
+      expect(res.status, role).toBe(201);
+      expect(await res.json()).toEqual(made);
+    }
+    expect(assertBrandAccess).toHaveBeenLastCalledWith(BRAND, 'u1', { columns: 'name' });
+    expect(readOpportunity).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      promptId: PROMPT,
+      period: '30d',
+    });
+    expect(createAdDrafts).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      opportunity: READ,
+      userId: 'u1',
+      idempotencyKey: KEY,
+      source: 'drawer',
+    });
+    createAdDrafts.mockResolvedValue({ ...made, created: false });
+    expect((await draft()).status).toBe(200);
+    await draft({ brandId: BRAND });
+    expect(createAdDrafts.mock.calls.at(-1)[0].idempotencyKey).toBeNull();
+  });
+
+  it('refuses analysts (403), the demo brand or its prompt (402 demo_brand), and Starter or the trial (403 plan_limit)', async () => {
+    for (role of ['analyst', 'agency_partner']) {
+      const res = await draft();
+      expect([res.status, (await res.json()).code], role).toEqual([403, 'forbidden']);
+    }
+    role = 'admin';
+    assertBrandAccess.mockResolvedValueOnce({ brand: { id: BRAND, is_demo: true }, orgId: 'o1' });
+    for (const what of ['demo brand', 'demo prompt']) {
+      const res = await draft();
+      expect(res.status, what).toBe(402);
+      expect(await res.json(), what).toMatchObject({ code: 'demo_brand' });
+      ads.isDemoPrompt.mockResolvedValue(true);
+    }
+    ads.isDemoPrompt.mockResolvedValue(false);
+    // The plan's own check, as the decision's and the Earn card's.
+    vi.stubEnv('IS_CLOUD', 'true');
+    ads.readsEveryOpportunity.mockImplementation(actual.readsEveryOpportunity);
+    for (const plan of [
+      { plan: 'starter', subscription_status: 'active' },
+      { plan: 'growth', subscription_status: 'trialing' },
+    ]) {
+      org = { id: 'o1', ...plan };
+      const res = await draft();
+      expect([res.status, (await res.json()).code], plan.plan).toEqual([403, 'plan_limit']);
+    }
+    expect(readOpportunity).not.toHaveBeenCalled();
+    expect(createAdDrafts).not.toHaveBeenCalled();
+  });
+
+  it("answers another brand's prompt as not found, and each refusal of the drafts as its own", async () => {
+    readOpportunity.mockRejectedValueOnce(
+      Object.assign(new Error('Prompt not found'), { status: 404 }),
+    );
+    let res = await draft();
+    expect([res.status, (await res.json()).code]).toEqual([404, 'not_found']);
+    readOpportunity.mockResolvedValueOnce(null);
+    res = await draft();
+    expect([res.status, (await res.json()).code]).toEqual([403, 'plan_limit']);
+    for (const [err, status, code] of [
+      [
+        new AdDraftsError('facts_needed', 'Approve your brand facts first.', 409, { why: 'none' }),
+        409,
+        'facts_needed',
+      ],
+      [
+        new AdDraftsError('gate_failed', 'No draft passed.', 422, { rejected: [] }),
+        422,
+        'gate_failed',
+      ],
+      [new AdDraftsError('model_failed', 'Not written.', 502), 502, 'model_failed'],
+      [new PlanLimitError('The budget is used up.', 429), 429, 'ai_budget'],
+      [new PlanLimitError('No plan.', 402), 402, 'no_subscription'],
+    ]) {
+      createAdDrafts.mockRejectedValueOnce(err);
+      res = await draft();
+      expect([res.status, (await res.json()).code], code).toEqual([status, code]);
+    }
+    createAdDrafts.mockRejectedValueOnce(
+      new AdDraftsError('facts_needed', 'Approve your brand facts first.', 409, { why: 'off' }),
+    );
+    expect(await (await draft()).json()).toEqual({
+      error: 'Approve your brand facts first.',
+      code: 'facts_needed',
+      why: 'off',
+    });
+    for (const [body, prompt] of [
+      [{ brandId: BRAND, idempotencyKey: 'short' }, PROMPT],
+      [{ idempotencyKey: KEY }, PROMPT],
+      [{ brandId: BRAND }, 'nope'],
+    ]) {
+      expect((await draft(body, prompt)).status, JSON.stringify(body)).toBe(400);
+    }
+  });
+});
+
+describe('GET /api/ads/export/* while ADS_ENABLED is on', () => {
+  const FILE = { fileName: 'google-ads-editor-pay-2026-11-14.csv', csv: 'Campaign', rowCount: 0 };
+  const editor = (query = `brandId=${BRAND}&decision=pay&period=7d`) =>
+    send(`/export/editor?${query}`);
+  const one = (prompt = PROMPT) => send(`/export/opportunity/${prompt}?brandId=${BRAND}`);
+  beforeEach(() => {
+    exporter.exportEditor.mockResolvedValue(FILE);
+    exporter.exportOpportunity.mockResolvedValue(FILE);
+  });
+
+  it('gives admins and managers the file of the filter, or of one prompt, as JSON', async () => {
+    for (role of ['manager', 'admin']) {
+      const res = await editor();
+      expect(res.status, role).toBe(200);
+      expect(await res.json()).toEqual(FILE);
+    }
+    expect(assertBrandAccess).toHaveBeenLastCalledWith(BRAND, 'u1', { columns: 'name' });
+    expect(exporter.exportEditor).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      userId: 'u1',
+      decision: 'pay',
+      period: '7d',
+    });
+    await editor(`brandId=${BRAND}`);
+    expect(exporter.exportEditor.mock.calls.at(-1)[0]).toMatchObject({
+      decision: 'all',
+      period: '30d',
+    });
+    expect((await one()).status).toBe(200);
+    expect(exporter.exportOpportunity).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      userId: 'u1',
+      promptId: PROMPT,
+      period: '30d',
+    });
+  });
+
+  it('refuses analysts (403), the demo brand or its prompt (402), and Starter or the trial (403 plan_limit)', async () => {
+    for (role of ['analyst', 'agency_partner']) {
+      for (const res of [await editor(), await one()]) {
+        expect([res.status, (await res.json()).code], role).toEqual([403, 'forbidden']);
+      }
+    }
+    role = 'admin';
+    assertBrandAccess.mockResolvedValueOnce({ brand: { id: BRAND, is_demo: true }, orgId: 'o1' });
+    expect(await (await editor()).json()).toMatchObject({ code: 'demo_brand' });
+    ads.isDemoPrompt.mockResolvedValue(true);
+    const demo = await one();
+    expect([demo.status, (await demo.json()).code]).toEqual([402, 'demo_brand']);
+    ads.isDemoPrompt.mockResolvedValue(false);
+    vi.stubEnv('IS_CLOUD', 'true');
+    ads.readsEveryOpportunity.mockImplementation(actual.readsEveryOpportunity);
+    for (const plan of [
+      { plan: 'starter', subscription_status: 'active' },
+      { plan: 'growth', subscription_status: 'trialing' },
+    ]) {
+      org = { id: 'o1', ...plan };
+      for (const res of [await editor(), await one()]) {
+        expect([res.status, (await res.json()).code], plan.plan).toEqual([403, 'plan_limit']);
+      }
+    }
+    expect(exporter.exportEditor).not.toHaveBeenCalled();
+    expect(exporter.exportOpportunity).not.toHaveBeenCalled();
+  });
+
+  it("answers another brand's prompt as not found, and a malformed query as invalid", async () => {
+    exporter.exportOpportunity.mockRejectedValueOnce(
+      Object.assign(new Error('Prompt not found'), { status: 404 }),
+    );
+    const res = await one();
+    expect([res.status, (await res.json()).code]).toEqual([404, 'not_found']);
+    for (const res of [
+      await editor(`brandId=${BRAND}&decision=overlap`),
+      await editor('decision=pay'),
+      await one('nope'),
+    ]) {
+      expect(res.status).toBe(400);
+    }
+    exporter.exportEditor.mockRejectedValueOnce(new Error('ads activity write failed: x'));
+    const failed = await editor();
+    expect([failed.status, (await failed.json()).code]).toEqual([500, 'failed']);
+  });
+});
+
+describe('POST /api/ads/connections/notify while ADS_ENABLED is on', () => {
+  const notify = (body = { brandId: BRAND, platform: 'meta' }) =>
+    send('/connections/notify', { method: 'POST', body });
+
+  it('logs Notify me for any member, on any plan (201), and once: asked again, 200', async () => {
+    org = { id: 'o1', plan: 'starter', subscription_status: 'trialing' };
+    notifyMe.mockResolvedValue(true);
+    for (role of ['analyst', 'agency_partner', 'manager', 'admin']) {
+      const res = await notify();
+      expect([res.status, await res.json()], role).toEqual([
+        201,
+        { platform: 'meta', logged: true },
+      ]);
+    }
+    expect(notifyMe).toHaveBeenLastCalledWith({
+      orgId: 'o1',
+      brandId: BRAND,
+      userId: 'u1',
+      platform: 'meta',
+    });
+    notifyMe.mockResolvedValue(false);
+    const again = await notify();
+    expect([again.status, (await again.json()).logged]).toEqual([200, false]);
+  });
+
+  it('refuses the demo brand (402), and a brand of another workspace, before logging', async () => {
+    assertBrandAccess.mockResolvedValueOnce({ brand: { id: BRAND, is_demo: true }, orgId: 'o1' });
+    const demo = await notify();
+    expect([demo.status, (await demo.json()).code]).toEqual([402, 'demo_brand']);
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('Brand not found'), { status: 404 }),
+    );
+    const other = await notify();
+    expect([other.status, (await other.json()).code]).toEqual([404, 'not_found']);
+    expect(notifyMe).not.toHaveBeenCalled();
+  });
+
+  it('refuses a platform that has no Notify me, or a malformed brand', async () => {
+    for (const body of [
+      { brandId: BRAND, platform: 'google' },
+      { brandId: BRAND },
+      { brandId: 'b1', platform: 'meta' },
+    ]) {
+      expect((await notify(body)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect(assertBrandAccess).not.toHaveBeenCalled();
+    expect(notifyMe).not.toHaveBeenCalled();
   });
 });
 

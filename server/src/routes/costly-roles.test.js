@@ -5,7 +5,8 @@ import express from 'express';
  * Who may start costly AI work (2026-10-29): generating prompt and topic
  * suggestions, opportunities, briefs and Improve sets, and sending Improve to
  * the Action Center, is for admins and managers; so are prompts from the
- * setup's topics and opportunities sent to the webhook (2026-11-03). An
+ * setup's topics and opportunities sent to the webhook (2026-11-03), and
+ * Ads' ad drafts (ADS-01 PR 11, with Ads on). An
  * analyst or an agency partner is refused before anything is generated,
  * queued or sent. Writing in the
  * Content Editor and running a Site Audit stay open (their own routes).
@@ -93,6 +94,10 @@ async function startApp() {
   vi.doMock('../lib/action-center/from-topic-gap.js', () => ({
     sendTopicGapToActionCenter: vi.fn(),
   }));
+  // The drawer's read the drafts are written from (lib/ads/opportunity.js): the prompt.
+  vi.doMock('../lib/ads/opportunity.js', () => ({
+    readOpportunity: async ({ promptId }) => ({ promptId, text: 'best crm', answers: [] }),
+  }));
   vi.doMock('../lib/logger.js', () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() };
     return { default: logger, logger };
@@ -101,6 +106,7 @@ async function startApp() {
   const { default: content } = await import('./content.js');
   const { default: prompts } = await import('./prompts.js');
   const { default: topics } = await import('./topics.js');
+  const { default: ads } = await import('./ads.js');
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -111,6 +117,7 @@ async function startApp() {
   app.use('/api/content', content);
   app.use('/api/prompts', prompts);
   app.use('/api/topics', topics);
+  app.use('/api/ads', ads);
   await new Promise((resolve) => {
     server = app.listen(0, resolve);
   });
@@ -118,6 +125,7 @@ async function startApp() {
 }
 
 const BRAND = '11111111-1111-4111-8111-111111111111';
+const PROMPT = '22222222-2222-4222-8222-222222222222';
 const setup = { brandName: 'Acme', industry: 'Coffee', description: 'Office coffee.' };
 const range = { preset: '7d', from: '2026-10-21T00:00:00.000Z', to: '2026-10-28T00:00:00.000Z' };
 
@@ -189,6 +197,12 @@ const ROUTES = [
     {},
     'Only admins and managers can generate topic suggestions.',
   ],
+  // Ads' ad drafts, a model call on the budget (ADS_ENABLED below).
+  [
+    `/ads/opportunities/${PROMPT}/drafts`,
+    { brandId: BRAND, idempotencyKey: 'key-000001' },
+    'Only admins and managers can write ad drafts.',
+  ],
 ];
 
 const post = (path, body) =>
@@ -201,6 +215,7 @@ const post = (path, body) =>
 beforeEach(async () => {
   vi.clearAllMocks();
   vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+  vi.stubEnv('ADS_ENABLED', 'true');
   assertBrandAccess.mockResolvedValue({ brand: { id: BRAND, organization_id: 'o1' }, orgId: 'o1' });
   assertOpportunityAccess.mockResolvedValue({ id: 'o1', brand_id: 'b1', source_data: {} });
   assertOpportunitiesAccess.mockResolvedValue([{ id: 'o1', brand_id: 'b1' }]);

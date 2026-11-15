@@ -11,9 +11,30 @@ import type { AdsPeriod } from './tabs';
 
 /** A read that hangs gives up after this, so the page can say so. */
 const READ_TIMEOUT_MS = 30_000;
+/** An export reads each prompt it holds first: past the proxy's 60s, whose 504 comes first. */
+const EXPORT_TIMEOUT_MS = 90_000;
 
-/** The JSON answer to a call to /api/ads/…; anything but a 2xx throws. */
-async function call<T>(path: string, init?: { method: 'PATCH'; body: unknown }): Promise<T> {
+/** A call to /api/ads/… answered with anything but a 2xx: its status and the body's code. */
+export class AdsApiError extends Error {
+  status: number;
+  /** The answer's `code` (facts_needed, gate_failed, ai_budget, …); null without one. */
+  code: string | null;
+  body: Record<string, unknown>;
+  constructor(message: string, status: number, body: Record<string, unknown>) {
+    super(message);
+    this.name = 'AdsApiError';
+    this.status = status;
+    this.code = typeof body.code === 'string' ? body.code : null;
+    this.body = body;
+  }
+}
+
+/** The JSON answer to a call to /api/ads/…; anything but a 2xx throws an AdsApiError. */
+async function call<T>(
+  path: string,
+  init?: { method: 'PATCH' | 'POST'; body: unknown },
+  timeout = READ_TIMEOUT_MS,
+): Promise<T> {
   const {
     data: { session },
   } = await createClient().auth.getSession();
@@ -26,9 +47,16 @@ async function call<T>(path: string, init?: { method: 'PATCH'; body: unknown }):
     },
     body: init && JSON.stringify(init.body),
     cache: 'no-store',
-    signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeout),
   });
-  if (!res.ok) throw new Error(`Ads ${path.split('?')[0]}: ${res.status}`);
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    throw new AdsApiError(
+      `Ads ${path.split('?')[0]}: ${res.status}`,
+      res.status,
+      body && typeof body === 'object' ? (body as Record<string, unknown>) : {},
+    );
+  }
   return (await res.json()) as T;
 }
 
@@ -133,6 +161,30 @@ export interface AdsOpportunityDetail {
   fanOuts: { query: string; platform: string }[];
   /** The prompt's keyword seeds (prompt_volumes.keywords). */
   keywords: string[];
+  /** The Earn card's: the prompt's target page, and the active action covering it. */
+  earn: { page: string | null; action: AdsActionRef | null };
+  /** The Pay card's: the prompt's latest saved draft of each channel, ChatGPT first. */
+  drafts: AdsAdDraft[];
+  /** The approved brand facts those drafts rest on (words and source page), for the brief. */
+  facts: { id: string; quote: string; sourceUrl: string }[];
+}
+
+/** A saved ad draft (server lib/ads/draft-rows.js), past the claims gate: the model's words. */
+export interface AdsAdDraft {
+  id: string;
+  channel: AdsChannel;
+  headlines: string[];
+  descriptions: string[];
+  /** ChatGPT's: when the ad fits the conversation. */
+  contextHint: string | null;
+  /** `limits` stays 'unconfirmed' until each channel's are confirmed (config/ad-limits.js). */
+  gate: { limits?: 'confirmed' | 'unconfirmed' };
+}
+
+/** An Action Center action, as AC-{no} names it. */
+export interface AdsActionRef {
+  id: string;
+  no: number;
 }
 
 export function readAdsOpportunity(brandId: string, promptId: string, period: AdsPeriod) {
@@ -151,6 +203,60 @@ export function setAdsDecision(
     `opportunities/${encodeURIComponent(promptId)}/decision`,
     { method: 'PATCH', body: { brandId, decision } },
   );
+}
+
+/**
+ * The Earn card's fix sent to the Action Center (Admin, Manager): the action
+ * made (`created`; the same key again answers it), or the active one that
+ * already covers the prompt (`covered`).
+ */
+export function sendAdsEarn(brandId: string, promptId: string, idempotencyKey: string) {
+  return call<{ action: AdsActionRef; created: boolean; covered: boolean }>(
+    `opportunities/${encodeURIComponent(promptId)}/earn`,
+    { method: 'POST', body: { brandId, idempotencyKey } },
+  );
+}
+
+/**
+ * The Pay card's ad drafts written and saved (Admin, Manager): those that
+ * pass the claims gate; the same key again answers them. Refused with 409
+ * facts_needed (`why`: 'none' approved, or 'off' here), 422 gate_failed or
+ * 429 ai_budget.
+ */
+export function createAdsDrafts(brandId: string, promptId: string, idempotencyKey: string) {
+  return call<{ promptId: string; created: boolean; drafts: AdsAdDraft[] }>(
+    `opportunities/${encodeURIComponent(promptId)}/drafts`,
+    { method: 'POST', body: { brandId, idempotencyKey } },
+  );
+}
+
+/**
+ * A Google Ads Editor CSV (server lib/ads/export.js), as JSON: the proxy
+ * passes on no Content-Disposition. `droppedUrls`: final URLs off the
+ * brand's domains, replaced with its home page.
+ */
+export interface AdsExportFile {
+  fileName: string;
+  csv: string;
+  rowCount: number;
+  prompts: number;
+  droppedUrls: number;
+}
+
+/** Opportunities' filters: every row, or a decision's. */
+export type AdsFilter = 'all' | AdsChosenDecision;
+
+/** The rows under a filter, for Google Ads Editor (Admin, Manager; Growth and up; not the demo brand). */
+export function exportAdsEditor(brandId: string, decision: AdsFilter, period: AdsPeriod) {
+  const query = new URLSearchParams({ brandId, decision, period });
+  return call<AdsExportFile>(`export/editor?${query}`, undefined, EXPORT_TIMEOUT_MS);
+}
+
+/** One prompt, for Google Ads Editor, as above. */
+export function exportAdsOpportunity(brandId: string, promptId: string, period: AdsPeriod) {
+  const path = `export/opportunity/${encodeURIComponent(promptId)}`;
+  const query = new URLSearchParams({ brandId, period });
+  return call<AdsExportFile>(`${path}?${query}`, undefined, EXPORT_TIMEOUT_MS);
 }
 
 /** The earn-or-pay thresholds (server config/ads.js). */
@@ -173,4 +279,30 @@ export function readAdsSettings() {
 /** Each threshold given, or null back to its default (Admins). */
 export function saveAdsSettings(thresholds: { [K in keyof AdsThresholds]?: number | null }) {
   return call<AdsSettings>('settings', { method: 'PATCH', body: { thresholds } });
+}
+
+/** The ad platforms that come later (ADS-01 §3.5), each with Notify me. */
+export type AdsLaterPlatform = 'meta' | 'linkedin';
+
+/** Notify me (`conn.notify`): logged once per person and platform; again, `logged` is false. */
+export function notifyAdsPlatform(brandId: string, platform: AdsLaterPlatform) {
+  return call<{ platform: AdsLaterPlatform; logged: boolean }>('connections/notify', {
+    method: 'POST',
+    body: { brandId, platform },
+  });
+}
+
+/** Google Analytics as Chat's Connections has it. */
+export interface AdsAnalytics {
+  status: 'connected' | 'failing' | 'not_connected';
+}
+
+/** Read by the web (app/api/ads/connections), from its one read of a brand's connections. */
+export async function readAdsAnalytics(brandId: string): Promise<AdsAnalytics> {
+  const res = await fetch(`/api/ads/connections?${new URLSearchParams({ brandId })}`, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new AdsApiError(`Ads connections: ${res.status}`, res.status, {});
+  return ((await res.json()) as { analytics: AdsAnalytics }).analytics;
 }

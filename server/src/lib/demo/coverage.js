@@ -70,6 +70,8 @@ export const SKIPPED = {
     "A person's decision on an Ads prompt (00531): made with their click, and refused on a demo brand, whose decisions are the rule's.",
   ads_opportunity_snapshots:
     "Each Ads prompt's weekly decision (00531): never written for a demo brand, whose sample data doesn't change week to week.",
+  ads_ad_drafts:
+    "Ads' ad drafts (00532): written by a model call a person starts, which is refused on a demo brand, so it has none.",
   chat_access_requests:
     "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
   chat_tool_cache:

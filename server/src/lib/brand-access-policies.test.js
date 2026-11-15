@@ -46,7 +46,8 @@ const migrations = files.map((file) => readFileSync(new URL(file, dir), 'utf8'))
 const SERVER_ONLY = [
   'action_candidates',
   'action_task_runs',
-  // Ads' decisions and weekly snapshots (00531): the API serves only the rows the plan reads.
+  // Ads' ad drafts (00532), decisions and weekly snapshots (00531): the API serves only the rows the plan reads.
+  'ads_ad_drafts',
   'ads_decision_overrides',
   'ads_opportunity_snapshots',
   'brand_fact_pages',

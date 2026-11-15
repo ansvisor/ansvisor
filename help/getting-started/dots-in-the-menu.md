@@ -1,11 +1,11 @@
 ---
 title: Dots in the menu
 route: /dashboard
-keywords: [menu dot, green dot, yellow dot, red dot, grey dot, new results, needs you, needs attention, working on it, action center count, settings dot, account menu dot]
+keywords: [menu dot, green dot, yellow dot, red dot, grey dot, new results, needs you, needs attention, working on it, settings dot, account menu dot]
 synonyms: [what does the dot mean, colored dot, notification dot, badge in the menu, unread]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -45,6 +45,6 @@ Admins and managers also see dots for **Settings**: on the account menu under yo
 
 The same dots show inside some pages, beside a title: on actions in **Actions**, on rows in **Content Plan** and **Library**, and on the **Auto-audit** line and **Opportunities** tab in **Audit**. They follow the same colours and rules, and never replace a row's status.
 
-## The Action Center's number
+## Who sees which dots
 
-The number beside **Action Center** is how many open actions are unassigned or yours. It is hidden once your plan or trial has ended. The demo brand shows green and grey dots only, a workspace whose plan ended shows no yellow, and a section off your menu shows none.
+The demo brand shows green and grey dots only, a workspace whose plan ended shows no yellow, and a section off your menu shows none. **Action Center** has no number beside it in the menu, nor do its **Actions** and **Signals** tabs: their dots say when something is new or waiting, and each list shows its own count.

@@ -612,8 +612,8 @@ async function holdCostUsd(orgId, modelId, since) {
  * each, as prompt_improve_usage.feature says (00242): the Content Editor's
  * quality checks ('quality', 00264) are its AI too, so they count in its
  * row. Chat's model steps have theirs (00405), with Chat on: Chat's runs,
- * then its agents, scheduled runs and images, as they come. 'other' is spend
- * whose feature isn't known.
+ * then its agents, scheduled runs and images, as they come. Ads' ad drafts
+ * have theirs (00532), with Ads on. 'other' is spend whose feature isn't known.
  */
 export const AI_USAGE_FEATURES = {
   improve: ['improve'],
@@ -623,6 +623,7 @@ export const AI_USAGE_FEATURES = {
   agent: ['agent'],
   schedule: ['schedule'],
   image: ['image'],
+  ads: ['ads'],
   other: ['other'],
 };
 

@@ -111,6 +111,7 @@ import {
 import { StartNowBlock } from './start-now';
 import { PlaySection } from './play-section';
 import { actionPlay } from '@/lib/action-center/play';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import {
@@ -487,12 +488,12 @@ export function ActionDrawer({
               />
               <span
                 className="whitespace-nowrap text-muted-foreground"
-                title={`${t('drawer.actionId')}: AC-${action.actionNo}`}
+                title={`${t('drawer.actionId')}: ${actionCode(action)}`}
               >
                 <span className="group-has-[[data-run-agent]]/top:sr-only">
                   {t('drawer.actionId')}:{' '}
                 </span>
-                AC-{action.actionNo}
+                {actionCode(action)}
               </span>
             </div>
           </div>

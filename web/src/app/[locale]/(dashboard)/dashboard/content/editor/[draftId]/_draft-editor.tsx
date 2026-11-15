@@ -2177,6 +2177,7 @@ export function DraftEditor({
               now: effect.now,
               met: effect.met,
               breaks: effect.broken.length ? ruleNames(effect.broken) : null,
+              broken: effect.broken.length,
             },
           }
         : {}),
@@ -4491,6 +4492,8 @@ export function DraftEditor({
             <AgentCard
               suggestions={suggestions}
               rules={cardRules}
+              // Its header chip links the draft's action: the card doesn't again.
+              actionInHeader={draft.action?.id ?? null}
               sourceCount={batchSources(suggestions).length}
               onSeeSources={() => openPanelTab('sources')}
               // Not while the HTML view holds the page: it would write over it.

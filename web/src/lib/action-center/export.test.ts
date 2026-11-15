@@ -278,7 +278,7 @@ describe('actionCsv', () => {
 
 describe('actionListCsv', () => {
   const listRow = {
-    number: 52,
+    number: 'AC-52',
     priorityScore: 84,
     priorityLevel: 'High',
     title: 'Recover lost citations on 3 prompts',
@@ -303,7 +303,7 @@ describe('actionListCsv', () => {
     expect(header).toContain('priority_score,priority_level,');
     expect(header).toContain(',signal_count,affected_count,affected_items,created');
     expect(row).toBe(
-      '52,84,High,Recover lost citations on 3 prompts,Recover,New,,,1 / 6,3,7,"Best coffee subscription?; Coffee, delivered",2026-10-15T00:00:00Z',
+      'AC-52,84,High,Recover lost citations on 3 prompts,Recover,New,,,1 / 6,3,7,"Best coffee subscription?; Coffee, delivered",2026-10-15T00:00:00Z',
     );
   });
 
@@ -312,7 +312,7 @@ describe('actionListCsv', () => {
       '\n',
     );
     expect(row).toBe(
-      '52,,,Recover lost citations on 3 prompts,Recover,New,,,1 / 6,3,0,,2026-10-15T00:00:00Z',
+      'AC-52,,,Recover lost citations on 3 prompts,Recover,New,,,1 / 6,3,0,,2026-10-15T00:00:00Z',
     );
   });
 });

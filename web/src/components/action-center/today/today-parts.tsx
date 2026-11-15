@@ -1,22 +1,19 @@
 'use client';
 
-import { useState, type FormEvent, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { dayIn } from '@/lib/time-zone';
 import type { TodayStanding } from '@/lib/action-center/focus';
 import type { FirstRun } from '@/hooks/use-first-run';
-import { useChatPanel } from '@/components/chat/panel/chat-panel-context';
-import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { TodayLoad } from './use-today';
 
 /**
- * Today's parts that read nothing of their own: the frame each
- * part sits in, the loop strip, Where you stand and the Ask Chat box. The
- * page reads, and hands each its answer.
+ * Today's parts that read nothing of their own: the frame each part sits
+ * in, the loop strip and Where you stand. The page reads, and hands each
+ * its answer.
  */
 
 /** A part of Today, named for screen readers by its title. */
@@ -210,18 +207,21 @@ export function ResultsValue({ standing }: { standing: TodayStanding }) {
 
 /**
  * Where you stand: the score, its change since yesterday, the brand's rank
- * among the brands its answers name, and the gap to the next one. Away
- * while it reads nothing: before the first run, or when the read failed.
+ * among the brands its answers name, and the gap to the next one. Without
+ * a score yet it says so, keeping its place in the summary row; away when
+ * the read failed.
  */
 export function StandSection({ load }: { load: TodayLoad<TodayStanding | null> }) {
   const t = useTranslations('actionCenter.today.stand');
   const { score, change } = useScore();
   const format = useFormatter();
-  if (load.status === 'failed' || (load.status === 'ready' && !load.data)) return null;
+  if (load.status === 'failed') return null;
   return (
     <TodaySection part="stand" title={t('title')}>
       {load.status === 'loading' ? (
-        <TodaySkeleton lines={2} />
+        <StandSkeleton />
+      ) : !load.data ? (
+        <p className="text-sm text-muted-foreground">{t('none')}</p>
       ) : (
         load.data && (
           <div className="space-y-2">
@@ -252,45 +252,12 @@ export function StandSection({ load }: { load: TodayLoad<TodayStanding | null> }
   );
 }
 
-/**
- * Ask Chat at the bottom of Today: with the new Chat on and its side panel
- * on this page, the question goes into the panel's box and the panel opens;
- * the person sends it there. Otherwise nothing.
- */
-export function AskChatBox({ placeholder }: { placeholder?: string }) {
-  const t = useTranslations('actionCenter.today.ask');
-  const panel = useChatPanel();
-  const chatOn = useChatAgentic();
-  const [text, setText] = useState('');
-  if (!chatOn || !panel?.available) return null;
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const question = text.trim();
-    if (!question) return;
-    panel.fill(question);
-    if (!panel.open) panel.toggle();
-    setText('');
-  };
+/** Where you stand reading: the score's line and the rank's, at their heights. */
+export function StandSkeleton() {
   return (
-    <form
-      aria-label={t('label')}
-      onSubmit={submit}
-      className="flex gap-2 rounded-xl border bg-card p-3.5"
-    >
-      <label htmlFor="today-ask" className="sr-only">
-        {t('label')}
-      </label>
-      <input
-        id="today-ask"
-        type="text"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        placeholder={placeholder ?? t('placeholder')}
-        className="h-11 min-w-0 flex-1 rounded-lg border bg-background px-3.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      />
-      <Button type="submit" className="h-11 px-5">
-        {t('button')}
-      </Button>
-    </form>
+    <div aria-hidden="true" data-skeleton="stand" className="space-y-2">
+      <Skeleton className="h-9 w-32" />
+      <Skeleton className="h-5 w-3/4" />
+    </div>
   );
 }

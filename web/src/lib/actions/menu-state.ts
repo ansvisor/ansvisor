@@ -1,7 +1,6 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { getMyOpenActionCount } from '@/lib/actions/action-center-counts';
 import { readBrandIntegrations } from '@/lib/brand-integrations';
 import {
   NIGHTLY_AREAS,
@@ -14,9 +13,8 @@ import {
 import { isoTime, isUuid, readNavSeen } from '@/lib/user-brand-state';
 
 /**
- * What the menu's dots and the Action Center's count compare
- * (lib/menu-dots.ts), in one read per brand: run on a brand
- * switch and at most every 5 minutes while the person moves around, never
+ * What the menu's dots compare (lib/menu-dots.ts), in one read per brand:
+ * run on a brand switch and at most every 5 minutes while the person moves around, never
  * at night. A handful of indexed single-row reads in parallel, as the
  * person (RLS), each only for an area the person's menu shows:
  *
@@ -26,7 +24,6 @@ import { isoTime, isUuid, readNavSeen } from '@/lib/user-brand-state';
  *   the newest new opportunity   content_opportunities (content_opportunities_brand_created_idx)
  *   AI traffic connected, when   the first AI visit (idx_ai_traffic_logs_brand_created);
  *                                the brand's Analytics property and the workspace's connection
- *   the open-action count        getMyOpenActionCount, the Actions tab's own read
  *   prompts waiting for a spot   a head count of the brand's prompts (idx_prompts_waiting,
  *                                00535), for admins and managers (PR 16)
  *   the person's visits          user_brand_state.nav_seen (00529)
@@ -60,10 +57,9 @@ import { isoTime, isUuid, readNavSeen } from '@/lib/user-brand-state';
  * and a part that couldn't be read is null, so its dot doesn't show.
  */
 
-/** What the menu asks for: the areas it shows a dot for, and whether it shows the count. */
+/** What the menu asks for: the areas it shows a dot for. */
 export interface MenuStateAsk {
   areas: DotArea[];
-  count: boolean;
   /**
    * Count the prompts waiting for a spot, for Tracked Prompts' yellow dot:
    * asked only for an admin or manager with Tracked Prompts on their menu.
@@ -343,7 +339,6 @@ export async function getMenuState(brandId: string, ask: MenuStateAsk): Promise<
       newActionAt,
       newOpportunityAt,
       traffic,
-      openActions,
       waitingPrompts,
       seen,
       google,
@@ -413,7 +408,6 @@ export async function getMenuState(brandId: string, ask: MenuStateAsk): Promise<
           )
         : none,
       areas.has('traffic') ? trafficOf(supabase, brandId) : Promise.resolve(undefined),
-      ask?.count ? getMyOpenActionCount(brandId) : none,
       ask?.waiting && areas.has('prompts/tracked') ? waitingCount(supabase, brandId) : none,
       supabase
         .from('user_brand_state')
@@ -435,7 +429,6 @@ export async function getMenuState(brandId: string, ask: MenuStateAsk): Promise<
       newSuggestionAt,
       newActionAt,
       newOpportunityAt,
-      openActions,
       navSeen: seen.error ? null : readNavSeen(seen.data?.nav_seen),
     };
     if (traffic) state.traffic = traffic;

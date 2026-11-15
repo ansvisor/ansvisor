@@ -331,3 +331,70 @@ describe('ActionTable and Chat’s side panel (W1-08)', () => {
     expect(container.textContent).toContain('In Progress');
   });
 });
+
+// Owner's feedback (14 Nov): Chat names actions by their code, so each row shows it.
+describe('ActionTable action code', () => {
+  it('shows the code Chat names an action by, muted, on the line under its title', () => {
+    render({ actions: [{ ...action, actionNo: 1497 }] });
+    const row = container.querySelector('tbody tr')!;
+    const code = [...row.querySelectorAll('span')].find((el) => el.textContent === 'AC-1497')!;
+    expect(code.className).toContain('text-muted-foreground');
+    expect(code.className).toContain('whitespace-nowrap');
+    // Beside the category, not inside the title that truncates.
+    expect(code.parentElement!.textContent).toContain('Recover');
+    expect(row.querySelector('p.truncate')!.textContent).not.toContain('AC-1497');
+  });
+});
+
+// Owner's feedback (14 Nov): the Updated column sorts the list on a click.
+describe('ActionTable sortable headers', () => {
+  const onSortChange = vi.fn();
+  const head = (label: string) =>
+    [...container.querySelectorAll<HTMLTableCellElement>('thead th')].find((th) =>
+      th.textContent?.startsWith(label),
+    )!;
+  const click = (label: string) => act(() => head(label).querySelector('button')!.click());
+
+  it('sorts by Updated most recent first, then oldest first, with its arrow state', () => {
+    render({ sort: 'priority', onSortChange });
+    expect(head('Updated').hasAttribute('aria-sort')).toBe(false);
+    expect(head('Priority Score').getAttribute('aria-sort')).toBe('descending');
+    expect(head('Updated').querySelector('button')!.title).toBe('Sort: Recently updated');
+    click('Updated');
+    expect(onSortChange).toHaveBeenLastCalledWith('updated');
+
+    render({ sort: 'updated', onSortChange });
+    expect(head('Updated').getAttribute('aria-sort')).toBe('descending');
+    expect(head('Priority Score').hasAttribute('aria-sort')).toBe(false);
+    expect(head('Updated').querySelector('button')!.title).toBe('Sort: Least recently updated');
+    click('Updated');
+    expect(onSortChange).toHaveBeenLastCalledWith('updated_asc');
+
+    render({ sort: 'updated_asc', onSortChange });
+    expect(head('Updated').getAttribute('aria-sort')).toBe('ascending');
+    click('Updated');
+    expect(onSortChange).toHaveBeenLastCalledWith('updated');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('sorts by Priority Score highest first, then lowest first', () => {
+    render({ sort: 'updated', onSortChange });
+    click('Priority Score');
+    expect(onSortChange).toHaveBeenLastCalledWith('priority');
+
+    render({ sort: 'priority', onSortChange });
+    click('Priority Score');
+    expect(onSortChange).toHaveBeenLastCalledWith('priority_asc');
+
+    render({ sort: 'priority_asc', onSortChange });
+    expect(head('Priority Score').getAttribute('aria-sort')).toBe('ascending');
+    click('Priority Score');
+    expect(onSortChange).toHaveBeenLastCalledWith('priority');
+  });
+
+  it('keeps plain headers where the list has no sort to set', () => {
+    render();
+    expect(head('Updated').querySelector('button')).toBeNull();
+    expect(container.querySelector('thead [aria-sort]')).toBeNull();
+  });
+});
