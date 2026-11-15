@@ -35,6 +35,13 @@ import {
  *     output (output_config.format), never the SDK's forced "json" tool;
  *   - max_tokens always sent: the SDK doesn't know 5.5 and would send 4,096,
  *     and 5.5's thinking, on by default, counts toward it.
+ *
+ * Claude Fable 5.2 (not offered yet, lib/chat/models.ts) has those rules and
+ * more, set on its entry there: no `thinking` is ever sent (it always
+ * thinks; disabled thinking or a budget is a 400), its effort is sent even
+ * at Normal (high, its default), a refusal ends the run in plain words, and
+ * only the thinking blocks still on an unchanged prefix are sent back
+ * (thinking-replay.ts).
  */
 
 /** Which half of a run a model step is: reading the data, or writing the answer and changes. */
@@ -65,6 +72,10 @@ export interface ChatModelChoice {
   providerOptions: ProviderOptions;
   /** A first-party Claude model: the read phase ends with a structured answer. */
   claude: boolean;
+  /** Thinking blocks go back only on an unchanged prefix (OfferedModel.boundThinking). */
+  boundThinking?: true;
+  /** A refusal stop reason ends the run in plain words (OfferedModel.refusalStop). */
+  refusalStop?: true;
 }
 
 export interface ChatModels {
@@ -99,25 +110,33 @@ export const EFFORT_OUTPUT_SCALE: Readonly<Record<ChatModelEffort, number>> = {
 /**
  * Claude's effort setting for each of ours (output_config.effort): Normal
  * leaves the model's own default (medium on Haiku 5.5 and Opus 5.5, high on
- * Sonnet 5.5); High is one level up from it; Max is max.
+ * Sonnet 5.5), or asks for `normal` explicitly where the model's entry says
+ * so (high on Fable 5.2); High is one level up from it; Max is max.
  */
 export function claudeEffort(
   api: string,
   effort: ChatModelEffort,
+  normal?: OfferedModel['normalEffort'],
 ): 'high' | 'xhigh' | 'max' | undefined {
-  if (effort === 'normal') return undefined;
+  if (effort === 'normal') return normal;
   if (effort === 'max') return 'max';
-  return api.startsWith('claude-sonnet-') ? 'xhigh' : 'high';
+  return api.startsWith('claude-sonnet-') || normal === 'high' ? 'xhigh' : 'high';
 }
+
+/** A Claude model as its steps are built: its ids, and its entry's rules. */
+type ClaudeStepModel = { api: string; catalog: string } & Pick<
+  OfferedModel,
+  'normalEffort' | 'boundThinking' | 'refusalStop'
+>;
 
 /** One Claude model's step: its id, its price's id, its output allowance and settings. */
 function claudeStep(
   anthropic: ReturnType<typeof createAnthropic>,
-  model: { api: string; catalog: string },
+  model: ClaudeStepModel,
   maxOutputTokens: number,
   effort: ChatModelEffort,
 ): ChatModelChoice {
-  const level = claudeEffort(model.api, effort);
+  const level = claudeEffort(model.api, effort, model.normalEffort);
   return {
     model: anthropic(model.api),
     budgetModel: model.catalog,
@@ -126,7 +145,18 @@ function claudeStep(
       ? { anthropic: { ...CLAUDE_OPTIONS.anthropic, effort: level } }
       : CLAUDE_OPTIONS,
     claude: true,
+    ...(model.boundThinking ? { boundThinking: true as const } : {}),
+    ...(model.refusalStop ? { refusalStop: true as const } : {}),
   };
+}
+
+/**
+ * Whether a step's model turned its request down: Claude's stop_reason
+ * "refusal" (the AI SDK's finish reason "content-filter"), for a model whose
+ * entry says a refusal ends the run (OfferedModel.refusalStop).
+ */
+export function refusedStep(choice: ChatModelChoice, finishReason: string | undefined): boolean {
+  return choice.refusalStop === true && finishReason === 'content-filter';
 }
 
 /** Auto on an Anthropic key: Haiku 5.5 reads, Sonnet 5.5 writes. */
@@ -148,15 +178,26 @@ export function autoModels(
   };
 }
 
-/** A Claude model picked in the menu, on an Anthropic key: it reads and writes, two phases. */
+/**
+ * A Claude model picked in the menu, on an Anthropic key: it reads and
+ * writes, two phases, with its entry's rules. `fetch`: the requests' own
+ * (the model eval's capture, a test's fake API); the product leaves it out.
+ */
 export function pickedClaudeModels(
   apiKey: string,
   source: ChatKeySource,
   picked: OfferedModel,
   effort: ChatModelEffort = 'normal',
+  { fetch }: { fetch?: typeof globalThis.fetch } = {},
 ): ChatModels {
-  const anthropic = createAnthropic({ apiKey });
-  const model = { api: picked.api, catalog: picked.id };
+  const anthropic = createAnthropic({ apiKey, ...(fetch ? { fetch } : {}) });
+  const model: ClaudeStepModel = {
+    api: picked.api,
+    catalog: picked.id,
+    normalEffort: picked.normalEffort,
+    boundThinking: picked.boundThinking,
+    refusalStop: picked.refusalStop,
+  };
   const read = claudeStep(anthropic, model, READ_MAX_OUTPUT_TOKENS, effort);
   const write = claudeStep(anthropic, model, WRITE_MAX_OUTPUT_TOKENS, effort);
   return {
@@ -238,6 +279,8 @@ export async function resolveChatModels(
     // Each provider's own key first, then the own OpenRouter key, then Ansvisor's (W4-06).
     const pickedKey = await resolvePickedModelKey(organizationId, picked.provider, {
       ansvisorOnly,
+      // Anthropic's API only: never an own OpenRouter key (OfferedModel.directOnly).
+      ...(picked.directOnly ? { directOnly: true } : {}),
     });
     if (pickedKey) {
       const failing =

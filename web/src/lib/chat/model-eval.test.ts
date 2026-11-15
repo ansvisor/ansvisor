@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
@@ -41,10 +42,14 @@ import {
  * the scenarios named; CHAT_MODEL_EVAL_PASSES runs the set that many times
  * in a row (a model is offered only after 2 passes, every `must` check
  * passing; a model that fails a pass has no next one);
- * CHAT_MODEL_EVAL_VIA=openrouter calls a Claude model through OpenRouter;
+ * CHAT_MODEL_EVAL_VIA=openrouter calls a Claude model through OpenRouter
+ * (never one called on Anthropic's API only, `directOnly`);
  * CHAT_MODEL_EVAL_MAX_USD stops starting scenarios once the run has cost
  * that much; CHAT_MODEL_EVAL_OUT is where the JSON report goes (the
- * system's temp folder by default). A Claude model runs on
+ * system's temp folder by default); CHAT_MODEL_EVAL_CAPTURE is a folder
+ * that keeps every Anthropic request's body (never a header, so never a
+ * key), one file per scenario and phase, one body a line: what preserved
+ * thinking's check diffs and replays (thinking-replay.ts). A Claude model runs on
  * ANTHROPIC_API_KEY, any other through OpenRouter on OPENROUTER_API_KEY, as
  * the product calls them (engine-model.ts); each is read from the
  * environment, else from web/.env.local, and never printed. A model without
@@ -541,12 +546,45 @@ function evalModels(asked: string): OfferedModel[] {
  * The model's run, called as the product calls it: Claude on Anthropic's
  * API, else OpenRouter. With CHAT_MODEL_EVAL_VIA=openrouter a Claude model
  * runs through OpenRouter too, in one phase: to compare it with the others
- * where no Anthropic key is at hand. The product's own routing is the same.
+ * where no Anthropic key is at hand; never one called on Anthropic's API
+ * only (directOnly: no verified OpenRouter id). The product's own routing
+ * is the same. `fetcher`: the capture's (capturingFetch).
  */
-function realModels(model: OfferedModel, key: string, via: 'product' | 'openrouter'): ChatModels {
-  return model.provider === 'anthropic' && via === 'product'
-    ? pickedClaudeModels(key, 'ansvisor', model)
+function realModels(
+  model: OfferedModel,
+  key: string,
+  via: 'product' | 'openrouter',
+  fetcher?: typeof globalThis.fetch,
+): ChatModels {
+  return onAnthropic(model, via)
+    ? pickedClaudeModels(key, 'ansvisor', model, 'normal', { fetch: fetcher })
     : openRouterModels(key, { ...model, api: model.id });
+}
+
+/** Whether the eval calls the model on Anthropic's API (realModels). */
+const onAnthropic = (model: OfferedModel, via: 'product' | 'openrouter') =>
+  model.provider === 'anthropic' && (via === 'product' || model.directOnly === true);
+
+/**
+ * A fetch that keeps each Anthropic request's body in `dir`, one line each,
+ * in a file per run and phase (the phase by its first system block, which
+ * a phase keeps for the whole run): for preserved thinking's three-step
+ * check (diff consecutive bodies; replay them). Never a header: no key.
+ */
+function capturingFetch(dir: string, run: string): typeof globalThis.fetch {
+  mkdirSync(dir, { recursive: true });
+  return async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.endsWith('/v1/messages') && typeof init?.body === 'string') {
+      const body = JSON.parse(init.body) as { system?: { text?: unknown }[] };
+      const phase = createHash('sha256')
+        .update(String(body.system?.[0]?.text ?? ''))
+        .digest('hex')
+        .slice(0, 8);
+      appendFileSync(join(dir, `${run}-${phase}.jsonl`), `${init.body}\n`);
+    }
+    return fetch(input, init);
+  };
 }
 
 const ASKED = process.env.CHAT_MODEL_EVAL?.trim() ?? '';
@@ -580,6 +618,7 @@ describe.skipIf(!ASKED)('the test set on a real model (CHAT_MODEL_EVAL)', () => 
   // EVAL_PASSES_TO_OFFER in a row (mayBeOffered).
   const passes = Math.max(1, Number(process.env.CHAT_MODEL_EVAL_PASSES) || 1);
   const via = process.env.CHAT_MODEL_EVAL_VIA === 'openrouter' ? 'openrouter' : 'product';
+  const capture = process.env.CHAT_MODEL_EVAL_CAPTURE?.trim() || null;
   /** model → pass → its scenarios' results. */
   const results: Record<string, EvalResult[][]> = {};
   // CHAT_MODEL_EVAL_MAX_USD: no scenario starts once the run has cost this much.
@@ -606,9 +645,10 @@ describe.skipIf(!ASKED)('the test set on a real model (CHAT_MODEL_EVAL)', () => 
           cost: evalCost(model, tokens),
         };
       });
+      const listed = CHAT_MODELS.find((m) => m.id === model);
       return {
         model,
-        via: CHAT_MODELS.find((m) => m.id === model)?.provider === 'anthropic' ? via : 'openrouter',
+        via: listed && onAnthropic(listed, via) ? 'product' : 'openrouter',
         // Every scenario of the whole set, EVAL_PASSES_TO_OFFER passes in a row.
         mayBeOffered: !only && mayBeOffered(done),
         passes: done,
@@ -642,7 +682,7 @@ describe.skipIf(!ASKED)('the test set on a real model (CHAT_MODEL_EVAL)', () => 
 
   // A skipped describe still collects its tests: no models without CHAT_MODEL_EVAL.
   for (const model of ASKED ? evalModels(ASKED) : []) {
-    const anthropic = model.provider === 'anthropic' && via === 'product';
+    const anthropic = onAnthropic(model, via);
     const key = evalKey(anthropic ? 'ANTHROPIC_API_KEY' : 'OPENROUTER_API_KEY');
     describe(model.id, () => {
       for (let pass = 1; pass <= passes; pass++) {
@@ -653,7 +693,9 @@ describe.skipIf(!ASKED)('the test set on a real model (CHAT_MODEL_EVAL)', () => 
               if (maxUsd !== null && spentUsd >= maxUsd) skip(`$${spentUsd.toFixed(2)} spent`);
               // Stopped early: a pass with a failed `must` check already rules the model out.
               if (failedBefore(model.id, pass)) skip('failed an earlier pass');
-              fakes.resolveModels.mockResolvedValue(realModels(model, key!, via));
+              const run = `${model.id.replace(/\W+/g, '_')}-p${pass}-${scenario.id}`;
+              const fetcher = capture && anthropic ? capturingFetch(capture, run) : undefined;
+              fakes.resolveModels.mockResolvedValue(realModels(model, key!, via, fetcher));
               const result = await runScenario(scenario);
               const byPass = (results[model.id] ??= []);
               (byPass[pass - 1] ??= []).push(result);

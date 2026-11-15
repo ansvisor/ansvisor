@@ -416,6 +416,9 @@ const { readRunEvents } = await import('./engine-store');
 const { runFromEvents } = await import('./run-state');
 const { toClientStep } = await import('./steps');
 const { CHAT_TOOLS } = await import('./registry/tools');
+const { CHAT_MODELS, runChoiceOf } = await import('./models');
+const { pickedClaudeModels } = await import('./engine-model');
+const { fakeAnthropic } = await import('./testing/fake-anthropic');
 const { readPrecedenceContext } = await import('./precedence-context');
 const { ANSWER_NOTE, INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ATTACHMENTS_NOTE, ATTACHMENTS_ONLY, IMAGE_TOKENS, PDF_PAGE_TOKENS, earlierFilesLine } =
@@ -9862,5 +9865,313 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     expect(runRow(runId).status).toBe('done');
     expect(await cardsOf(runId)).toEqual([]);
     expect(readInput()).toMatchObject({ date_from: day(-29) });
+  });
+});
+
+// ─── Claude Fable 5.2 (lib/chat/models.ts: listed, not offered until its test set passes) ──────
+
+describe('Claude Fable 5.2 on Anthropic’s API, through its SDK, against a fake of the API', () => {
+  const FABLE = CHAT_MODELS.find((model) => model.id === 'anthropic/claude-fable-5-2')!;
+  type Body = import('./testing/fake-anthropic').WireBody;
+  type Reply = import('./testing/fake-anthropic').FakeReply;
+
+  /** Fable 5.2 for both phases, as the engine resolves a pick of it, through the fake API. */
+  function useFable(replies: Reply[], options: { source?: 'own' | 'ansvisor' } = {}) {
+    const api = fakeAnthropic(replies);
+    fakes.resolveModels.mockResolvedValue(
+      pickedClaudeModels('sk-test', options.source ?? 'ansvisor', FABLE, 'normal', {
+        fetch: api.fetch,
+      }),
+    );
+    return api;
+  }
+  const READ = (id: string) => ({
+    tools: [{ id, name: 'read_visibility', input: { brand_id: BRAND } }],
+  });
+  const READY_REPLY = { text: '{"ready":true}' };
+  /** A body's parts as the check compares them: no cache marks. */
+  const unmarked = (value: unknown): unknown =>
+    JSON.parse(JSON.stringify(value), (key, item) => (key === 'cache_control' ? undefined : item));
+  const thinkingOf = (body: Body) =>
+    body.messages.flatMap((m) =>
+      typeof m.content === 'string'
+        ? []
+        : m.content.filter((b) => b.type === 'thinking').map((b) => b.signature),
+    );
+  /** The run's requests in a phase: its system prompt's first block is the phase's rules. */
+  const phases = (bodies: Body[]) => {
+    const by = new Map<string, Body[]>();
+    for (const body of bodies) {
+      const rules = String(body.system?.[0]?.text ?? '');
+      by.set(rules, [...(by.get(rules) ?? []), body]);
+    }
+    return [...by.values()];
+  };
+
+  it('is listed, not offered: a run that asks for it runs Auto', () => {
+    expect(FABLE).toMatchObject({ api: 'claude-fable-5-2', tested: false, directOnly: true });
+    expect(runChoiceOf({ model: FABLE.id, effort: 'high' }, true)).toEqual({
+      model: 'auto',
+      effort: 'high',
+    });
+  });
+
+  it('sends no sampling setting, no thinking setting, no prefill, tool_choice auto and its effort', async () => {
+    const api = useFable([
+      READ('toolu_r1'),
+      READY_REPLY,
+      {
+        tools: [
+          {
+            id: 'toolu_r2',
+            name: 'read_visibility',
+            input: { brand_id: BRAND, platform: 'chatgpt-web' },
+          },
+        ],
+      },
+      { text: 'Visibility is up 12%.' },
+    ]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(api.rejected).toEqual([]);
+    expect(runRow(runId).status).toBe('done');
+    expect(api.bodies).toHaveLength(4);
+    for (const body of api.bodies) {
+      expect(body.model).toBe('claude-fable-5-2');
+      for (const key of ['temperature', 'top_p', 'top_k', 'thinking']) {
+        expect(body, key).not.toHaveProperty(key);
+      }
+      expect(JSON.stringify(body)).not.toContain('budget_tokens');
+      expect([undefined, 'auto']).toContain((body.tool_choice as { type?: string })?.type);
+      expect(body.output_config).toMatchObject({ effort: 'high' });
+      // No prefill: the last message is always the person's turn or the tools' results.
+      expect(body.messages.at(-1)!.role).toBe('user');
+    }
+  });
+
+  it('keeps the history append-only inside the tool loop, its thinking sent back as it came', async () => {
+    const api = useFable([
+      READ('toolu_r1'),
+      READ('toolu_r2'),
+      READY_REPLY,
+      {
+        tools: [
+          {
+            id: 'toolu_r3',
+            name: 'read_visibility',
+            input: { brand_id: BRAND, platform: 'chatgpt-web' },
+          },
+        ],
+      },
+      {
+        tools: [
+          {
+            id: 'toolu_r4',
+            name: 'read_visibility',
+            input: { brand_id: BRAND, platform: 'perplexity' },
+          },
+        ],
+      },
+      { text: 'Up 12%.' },
+    ]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(api.rejected).toEqual([]);
+    expect(runRow(runId).status).toBe('done');
+    const [read, write] = phases(api.bodies);
+    expect(read).toHaveLength(3);
+    expect(write).toHaveLength(3);
+    for (const requests of [read, write]) {
+      for (let i = 1; i < requests.length; i++) {
+        const [before, after] = [requests[i - 1], requests[i]];
+        // The same system prompt and tools for the loop's every request.
+        expect(unmarked(after.system)).toEqual(unmarked(before.system));
+        expect(unmarked(after.tools)).toEqual(unmarked(before.tools));
+        // Earlier messages byte for byte; the reply and its results only appended.
+        expect(JSON.stringify(unmarked(after.messages.slice(0, before.messages.length)))).toBe(
+          JSON.stringify(unmarked(before.messages)),
+        );
+        expect(after.messages.length).toBe(before.messages.length + 2);
+        // Each earlier reply's thinking block goes back, unchanged.
+        expect(thinkingOf(after)).toEqual([...thinkingOf(before), expect.stringMatching(/^sig-/)]);
+      }
+    }
+  });
+
+  /** The same run on Fable 5.2 without its preserved-thinking rule: what it would send. */
+  function useFableUnbound(replies: Reply[]) {
+    const api = fakeAnthropic(replies);
+    fakes.resolveModels.mockResolvedValue(
+      pickedClaudeModels('sk-test', 'ansvisor', { ...FABLE, boundThinking: false }, 'normal', {
+        fetch: api.fetch,
+      }),
+    );
+    return api;
+  }
+
+  it('leaves out the thinking made before the system prompt changed, so the API takes the request', async () => {
+    // A skill loaded mid-run adds its body below the rules from the next step (CHAT-13 item 6).
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    const replies = (): Reply[] => [
+      { tools: [{ id: 'toolu_s1', name: USE_SKILL_TOOL, input: { name: 'winback' } }] },
+      READ('toolu_r1'),
+      READY_REPLY,
+      { text: 'Two pages lost most of it.' },
+    ];
+    const api = useFable(replies());
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(api.rejected).toEqual([]);
+    expect(runRow(runId).status).toBe('done');
+    const [read] = phases(api.bodies);
+    expect(read).toHaveLength(3);
+    expect(JSON.stringify(read[1].system)).toContain('<skill name=\\"winback\\">');
+    expect(JSON.stringify(read[0].system)).not.toContain('<skill name=');
+    // The block made on the old prompt is left out; the one made on the new prompt goes back.
+    expect(thinkingOf(read[1])).toEqual([]);
+    expect(thinkingOf(read[2])).toHaveLength(1);
+    // Nothing else changed: the messages are the same, less that block.
+    expect(read[1].messages).toHaveLength(3);
+
+    // Without the rule, the same run sends the stale block back and the API refuses it.
+    const unsafe = useFableUnbound(replies());
+    await turn(ADMIN, 'Why did citations fall?');
+    expect(unsafe.rejected[0]).toContain('bound to a different conversation');
+  });
+
+  it('leaves out the thinking made before the tools changed, so the API takes the request', async () => {
+    // A reply with next moves and no words: one more step, without the next moves tool (modelLoop).
+    const move = {
+      label: 'See the pages',
+      prompt: 'Which pages lost citations?',
+      kind: 'deepen',
+      class: 'read',
+    };
+    const replies = (): Reply[] => [
+      READY_REPLY,
+      { tools: [{ id: 'toolu_m1', name: NEXT_MOVES_TOOL, input: { moves: [move] } }] },
+      { text: 'Two pages lost most of it.' },
+    ];
+    const api = useFable(replies());
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(api.rejected).toEqual([]);
+    expect(runRow(runId).status).toBe('done');
+    const [, write] = phases(api.bodies);
+    expect(write).toHaveLength(2);
+    const names = (body: Body) => (body.tools ?? []).map((tool) => tool.name);
+    expect(names(write[0])).toContain(NEXT_MOVES_TOOL);
+    expect(names(write[1])).not.toContain(NEXT_MOVES_TOOL);
+    expect(thinkingOf(write[1])).toEqual([]);
+
+    const unsafe = useFableUnbound(replies());
+    await turn(ADMIN, 'Why did citations fall?');
+    expect(unsafe.rejected[0]).toContain('bound to a different conversation');
+  });
+
+  it('ends on a refusal in plain words, the refused words taken back, the step charged', async () => {
+    const api = useFable([READY_REPLY, { text: 'Here is how to', stop: 'refusal' }]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(api.bodies).toHaveLength(2);
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'failed' });
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'run.error')[0].data.reason).toBe(
+      "Fable 5.2 turned this request down, so Chat stopped here. What's done so far is kept. Ask another way, or pick another model.",
+    );
+    expect(ofType(events, 'text.replaced').at(-1)!.data.text).toBe('');
+    expect(runFromEvents(events).text).toBe('');
+    expect(holds.at(-1)!.charge).toHaveBeenCalled();
+    expectClean(events);
+  });
+
+  it('stops at a refusal while reading, without a writing step', async () => {
+    const api = useFable([{ stop: 'refusal' }, { text: 'never' }]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(api.bodies).toHaveLength(1);
+    expect(runRow(runId).status).toBe('error');
+    expect(ofType(await eventsOf(runId), 'run.error')[0].data.reason).toContain(
+      'Fable 5.2 turned this request down',
+    );
+  });
+
+  it('says plainly when the Anthropic account has zero data retention, and leaves the key working', async () => {
+    const zdr = {
+      error: {
+        status: 400,
+        type: 'invalid_request_error',
+        message:
+          'In order to access this model, your organization or workspace must have data retention enabled.',
+      },
+    };
+    useFable([zdr], { source: 'own' });
+    const own = await turn(ADMIN, 'Why did citations fall?');
+    expect(runRow(own)).toMatchObject({ status: 'error', error: 'failed' });
+    expect(ofType(await eventsOf(own), 'run.error')[0].data.reason).toBe(
+      "Fable 5.2 needs 30-day data retention, and your workspace's Anthropic key is on an account with zero data retention, so Chat stopped here. Pick another model, or an Admin can turn on 30-day retention for that key's workspace in the Anthropic Console.",
+    );
+    expect(fakes.markFailing).not.toHaveBeenCalled();
+
+    useFable([zdr]);
+    const ours = await turn(ADMIN, 'Why did citations fall?');
+    expect(ofType(await eventsOf(ours), 'run.error')[0].data.reason).toContain(
+      'Fable 5.2 needs 30-day data retention on the Anthropic account it runs on',
+    );
+  });
+
+  it('goes on after its card on the same model, the thinking made before it still taken', async () => {
+    const api = useFable([
+      READY_REPLY,
+      {
+        tools: [
+          {
+            id: 'toolu_w1',
+            name: 'publish_page',
+            input: { brand_id: BRAND, title: 'Pricing FAQ' },
+          },
+        ],
+      },
+      { text: 'Published.' },
+    ]);
+    const runId = await turn(ADMIN, 'Publish the pricing FAQ', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    // The run picks up in another request: its prompt is rendered again, the same.
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(api.rejected).toEqual([]);
+    expect(runRow(runId).status).toBe('done');
+    expect(thinkingOf(api.bodies.at(-1)!)).toEqual(['sig-2']);
+  });
+
+  it('goes on without failing when the chat moves to another model, mid-run or the next turn', async () => {
+    useFable([
+      READY_REPLY,
+      {
+        tools: [
+          {
+            id: 'toolu_w1',
+            name: 'publish_page',
+            input: { brand_id: BRAND, title: 'Pricing FAQ' },
+          },
+        ],
+      },
+    ]);
+    const runId = await turn(ADMIN, 'Publish the pricing FAQ', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+
+    // Resumed on another model (Fable dropped while the card waited): its thinking goes as it is,
+    // for that model's API to leave out unread; nothing is stripped, and the request runs.
+    const { sonnet } = useModels([READY], [text('Published.')]);
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(runRow(runId).status).toBe('done');
+    const kept = JSON.stringify(sonnet.seen[0].prompt);
+    expect(kept).toContain('"type":"reasoning"');
+    expect(kept).toContain('sig-2');
+
+    // The chat's next turn on another model: the chat so far is words, no Fable thinking.
+    const next = useModels([READY], [text('Still published.')]);
+    const again = await engine.startChatRun(ADMIN, {
+      message: 'Is it live?',
+      conversationId: runRow(runId).conversation_id as string,
+    });
+    if (!again.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, again.runId);
+    expect(runRow(again.runId).status).toBe('done');
+    expect(JSON.stringify(next.sonnet.seen[0].prompt)).not.toContain('"type":"reasoning"');
   });
 });

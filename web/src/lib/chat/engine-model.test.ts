@@ -20,9 +20,10 @@ const {
   estimateInputTokens,
   openRouterModels,
   pickedClaudeModels,
+  refusedStep,
   resolveChatModels,
 } = await import('./engine-model');
-const { OFFERED_MODELS } = await import('./models');
+const { CHAT_MODELS, OFFERED_MODELS } = await import('./models');
 
 const modelId = (choice: { model: unknown }) => (choice.model as { modelId: string }).modelId;
 
@@ -253,6 +254,111 @@ describe('the run models', () => {
     expect(openRouterModels('or-key', picked).pick('read').providerOptions).not.toHaveProperty(
       'openai.reasoningEffort',
     );
+  });
+
+  it('run Claude Fable 5.2 with its rules: its effort always sent, no thinking or sampling setting', () => {
+    const fable = CHAT_MODELS.find((m) => m.id === 'anthropic/claude-fable-5-2')!;
+    // Normal is its default, high, sent explicitly; High one level up; Max is max.
+    expect(claudeEffort('claude-fable-5-2', 'normal', 'high')).toBe('high');
+    expect(claudeEffort('claude-fable-5-2', 'high', 'high')).toBe('xhigh');
+    expect(claudeEffort('claude-fable-5-2', 'max', 'high')).toBe('max');
+    for (const [effort, level] of [
+      ['normal', 'high'],
+      ['high', 'xhigh'],
+      ['max', 'max'],
+    ] as const) {
+      const models = pickedClaudeModels('k', 'ansvisor', fable, effort);
+      expect(models).toMatchObject({ model: 'anthropic/claude-fable-5-2', phases: 'auto' });
+      for (const phase of ['read', 'write'] as const) {
+        const step = models.pick(phase);
+        expect(modelId(step)).toBe('claude-fable-5-2');
+        expect(step.budgetModel).toBe('anthropic/claude-fable-5-2');
+        // Never `thinking` (always on; disabled or a budget is a 400), never a sampling setting.
+        expect(step.providerOptions).toEqual({
+          anthropic: { structuredOutputMode: 'outputFormat', effort: level },
+        });
+        expect(step).toMatchObject({ claude: true, boundThinking: true, refusalStop: true });
+      }
+    }
+    // The other Claude models keep theirs: Normal sends no effort, no Fable rule.
+    const sonnet = pickedClaudeModels('k', 'ansvisor', OFFERED_MODELS[1]).pick('write');
+    expect(sonnet).not.toHaveProperty('boundThinking');
+    expect(sonnet).not.toHaveProperty('refusalStop');
+    expect(sonnet.providerOptions).toEqual({ anthropic: { structuredOutputMode: 'outputFormat' } });
+  });
+
+  it('never run Fable 5.2 in Auto, nor for a pick of it while it isn’t offered', async () => {
+    for (const effort of ['normal', 'high', 'max'] as const) {
+      const auto = autoModels('k', 'ansvisor', effort);
+      expect([modelId(auto.pick('read')), modelId(auto.pick('write'))]).toEqual([
+        'claude-haiku-5-5',
+        'claude-sonnet-5-5',
+      ]);
+    }
+    key.picked.mockClear();
+    key.resolve.mockResolvedValueOnce({
+      source: 'ansvisor',
+      config: { provider: 'anthropic', apiKey: 'k', settings: {} },
+    });
+    const asked = await resolveChatModels('org', {
+      model: 'anthropic/claude-fable-5-2',
+      effort: 'normal',
+    });
+    expect(key.picked).not.toHaveBeenCalled();
+    expect(asked?.model).toBe('auto');
+  });
+
+  it('run a tested Fable 5.2 on Anthropic’s keys only, as its flip to tested would', async () => {
+    vi.resetModules();
+    vi.doMock('./models', async (importOriginal) => {
+      const real = await importOriginal<typeof import('./models')>();
+      const listed = real.CHAT_MODELS.map((m) =>
+        m.id === 'anthropic/claude-fable-5-2' ? { ...m, tested: true } : m,
+      );
+      const offered = listed.filter((m) => m.tested);
+      return {
+        ...real,
+        CHAT_MODELS: listed,
+        OFFERED_MODELS: offered,
+        offeredModel: (id: string) => offered.find((m) => m.id === id) ?? null,
+      };
+    });
+    try {
+      const flipped = await import('./engine-model');
+      key.picked.mockResolvedValueOnce({
+        source: 'own',
+        config: { provider: 'anthropic', apiKey: 'own', settings: {} },
+      });
+      const models = await flipped.resolveChatModels('org', {
+        model: 'anthropic/claude-fable-5-2',
+        effort: 'normal',
+      });
+      expect(key.picked).toHaveBeenLastCalledWith('org', 'anthropic', {
+        ansvisorOnly: false,
+        directOnly: true,
+      });
+      expect(models).toMatchObject({ model: 'anthropic/claude-fable-5-2', source: 'own' });
+      expect(models!.pick('write')).toMatchObject({
+        boundThinking: true,
+        refusalStop: true,
+        providerOptions: { anthropic: { effort: 'high' } },
+      });
+    } finally {
+      vi.doUnmock('./models');
+      vi.resetModules();
+    }
+  });
+
+  it('call a step refused only on Claude’s refusal, for a model whose entry says so', () => {
+    const fable = pickedClaudeModels(
+      'k',
+      'ansvisor',
+      CHAT_MODELS.find((m) => m.id === 'anthropic/claude-fable-5-2')!,
+    ).pick('write');
+    expect(refusedStep(fable, 'content-filter')).toBe(true);
+    expect(refusedStep(fable, 'stop')).toBe(false);
+    expect(refusedStep(fable, undefined)).toBe(false);
+    expect(refusedStep(autoModels('k', 'ansvisor').pick('write'), 'content-filter')).toBe(false);
   });
 
   it('count a prompt’s tokens up, not down', () => {
