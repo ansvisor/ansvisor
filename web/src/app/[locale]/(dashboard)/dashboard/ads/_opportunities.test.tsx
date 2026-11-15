@@ -11,7 +11,8 @@ import type { AdsDecision, AdsOpportunities, AdsOpportunity } from '@/lib/ads/ap
  * and Open, the decision filters, Starter's rows and lock row from the
  * server, a decision changed by Admins and Managers only (put back when the
  * server refuses it), and the thresholds for Admins only, on a plan that
- * changes them.
+ * changes them. Export for Google Ads Editor, by the filter, where the
+ * server allows it.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -28,8 +29,11 @@ const api = vi.hoisted(() => ({
   setAdsDecision: vi.fn(),
   readAdsSettings: vi.fn(),
   saveAdsSettings: vi.fn(),
+  exportAdsEditor: vi.fn(),
 }));
 vi.mock('@/lib/ads/api', () => api);
+const download = vi.hoisted(() => ({ saveBlob: vi.fn() }));
+vi.mock('@/lib/download', () => download);
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
@@ -84,7 +88,9 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
-  for (const fn of [...Object.values(api), toast.error, toast.success]) fn.mockReset();
+  for (const fn of [...Object.values(api), toast.error, toast.success, download.saveBlob]) {
+    fn.mockReset();
+  }
   api.readAdsOpportunity.mockResolvedValue({
     promptId: 'p3',
     answers: [],
@@ -254,15 +260,16 @@ describe('AdsOpportunities', () => {
     expect(container.querySelector('[data-slot="ads-lock-row"]')).toBeNull();
   });
 
-  it('offers the decision menu to Admins and Managers, never to an Analyst or past the plan', async () => {
-    const menus = () => all('ads.overrideDecision').length;
+  it('offers the decision menu and Export to Admins and Managers, never to an Analyst or past the plan', async () => {
+    const menus = () => all('ads.overrideDecision').length + all('ads.export').length;
     for (const role of ['admin', 'manager'] as const) {
       await render(page(), { role });
-      expect(menus(), role).toBe(6);
+      expect(menus(), role).toBe(7);
     }
     await render(page(), { role: 'analyst' });
     expect(menus()).toBe(0);
     expect(rows()[0].querySelector('[data-decision]')?.textContent).toBe('Earn + pay');
+    // Not writable on Starter, the trial or the demo brand (_ads-view.test.tsx): the server refuses.
     await render(page(), { writable: false });
     expect(menus()).toBe(0);
   });
@@ -354,5 +361,46 @@ describe('AdsOpportunities', () => {
     expect(container.querySelector('[data-slot="ads-empty"] h2')?.textContent).toBe(
       'No buying-intent prompts yet',
     );
+  });
+});
+
+describe('the Export menu', () => {
+  const FILE = { fileName: 'google-ads-editor-pay.csv', csv: 'Campaign\nCRM', rowCount: 4 };
+  const exportEditor = async () => {
+    await click(all('ads.export')[0]);
+    await click(all('ads.exportEditor')[0]);
+  };
+
+  it('exports the rows under the filter and period, saved as the server names it, with a BOM', async () => {
+    api.exportAdsEditor.mockResolvedValue({ ...FILE, prompts: 1, droppedUrls: 0 });
+    await render();
+    await click(filter('Pay · 1'));
+    expect(all('ads.export')[0].textContent).toBe('Export');
+    await exportEditor();
+    expect(api.exportAdsEditor).toHaveBeenCalledWith('b1', 'pay', '30d');
+    const [blob, name] = download.saveBlob.mock.lastCall as [Blob, string];
+    expect(name).toBe(FILE.fileName);
+    // The BOM is kept, so a spreadsheet reads it as UTF-8.
+    const reader = new FileReader();
+    await new Promise((done) => ((reader.onload = done), reader.readAsArrayBuffer(blob)));
+    const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(reader.result as ArrayBuffer);
+    expect(text).toBe(`\uFEFF${FILE.csv}`);
+    expect(toast.success).toHaveBeenCalledWith('Exported 4 rows from 1 prompt', {
+      description: undefined,
+    });
+  });
+
+  it('says how many links outside your domains were replaced with your home page', async () => {
+    api.exportAdsEditor.mockResolvedValue({ ...FILE, rowCount: 12, prompts: 6, droppedUrls: 2 });
+    await render();
+    await exportEditor();
+    expect(api.exportAdsEditor).toHaveBeenCalledWith('b1', 'all', '30d');
+    expect(toast.success).toHaveBeenCalledWith('Exported 12 rows from 6 prompts', {
+      description: '2 links outside your domains were replaced with your home page',
+    });
+    api.exportAdsEditor.mockRejectedValue(new Error('Ads export/editor: 504'));
+    await exportEditor();
+    expect(toast.error).toHaveBeenCalledWith("The export couldn't be made. Try again.");
+    expect(download.saveBlob).toHaveBeenCalledTimes(1);
   });
 });

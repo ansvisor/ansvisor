@@ -224,12 +224,16 @@ describe('AdsView', () => {
     const exportButton = container.querySelector<HTMLButtonElement>('[data-action="ads.export"]')!;
     expect(exportButton.textContent).toBe('Export');
     expect(exportButton.disabled).toBe(true);
-    // Opportunities reads over it too; the other tabs have no data for a period yet.
+    // Opportunities reads over it too, with its own Export; the other tabs have no data for a period yet.
     await act(async () => tab('Opportunities').click());
     expect(opportunities()?.dataset.period).toBe('7d');
     expect(periods().some((b) => b.disabled)).toBe(false);
+    expect(container.querySelector('[data-action="ads.export"]')).toBeNull();
     await act(async () => tab('Campaigns').click());
     expect(periods().every((b) => b.disabled)).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('[data-action="ads.export"]')?.disabled).toBe(
+      true,
+    );
   });
 
   it('tells Chat’s side panel the page, its period and three questions', async () => {

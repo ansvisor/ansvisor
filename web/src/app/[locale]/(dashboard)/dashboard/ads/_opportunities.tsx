@@ -33,6 +33,7 @@ import {
   setAdsDecision,
   type AdsChosenDecision,
   type AdsDecision,
+  type AdsFilter as Filter,
   type AdsOpportunities as Page,
   type AdsOpportunity,
 } from '@/lib/ads/api';
@@ -41,12 +42,12 @@ import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { useUpgradeWallShown } from '@/lib/friction-events';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AdsExportMenu } from './_export';
 import { AdsOpportunityDrawer } from './_opportunity-drawer';
 import { AdsThresholds } from './_thresholds';
 
 /** The filters (§3.2), in the mockup's order; overlap rows show under All. */
-const FILTERS = ['all', 'earn_pay', 'pay', 'earn'] as const;
-type Filter = (typeof FILTERS)[number];
+const FILTERS: Filter[] = ['all', 'earn_pay', 'pay', 'earn'];
 const CHOICES: AdsChosenDecision[] = ['earn', 'pay', 'earn_pay'];
 
 /** The mockup's pills: earn green, pay grey, earn + pay dark. */
@@ -183,8 +184,9 @@ function LockRow({ locked }: { locked: number }) {
  * prompt with its decision, who AI picks, Google searches and its ad
  * channels, filtered by decision. The rows come from the server: Starter and
  * the trial get theirs and a lock row for the rest. Admins and Managers
- * change a decision where the plan reads every row (`writable`), and Admins
- * set the thresholds. Open (`ads.openOpportunity`) opens the prompt's
+ * change a decision where the plan reads every row (`writable`), and export
+ * the filter's rows for Google Ads Editor, as the server allows; Admins set
+ * the thresholds. Open (`ads.openOpportunity`) opens the prompt's
  * drawer; the last one opened stays while it slides away.
  */
 export function AdsOpportunities({
@@ -309,6 +311,9 @@ export function AdsOpportunities({
           ))}
         </div>
         <span className="flex-1" />
+        {canManage && writable && (
+          <AdsExportMenu brandId={brandId} decision={filter} period={period} />
+        )}
         {canAdmin && thresholds && <AdsThresholds onSaved={() => setReads((n) => n + 1)} />}
       </div>
       {page.rows.some((r) => !r.paidMeasured) && (

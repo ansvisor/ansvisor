@@ -14,7 +14,8 @@ import type { ChatPanelState } from '@/components/chat/panel/chat-panel-context'
  * ✕, the overlay or Esc with focus back on Open. The Earn card on Earn and
  * Earn + pay: what to fix, and Send to Action Center for Admins and Managers
  * where they can change the decision, then the action it made or found. The
- * Pay card's drafts and the primary button that follows the decision.
+ * Pay card's drafts and the primary button that follows the decision. The
+ * footer's "Copy as campaign brief", for everyone, and Export this prompt.
  */
 
 vi.mock('@/i18n/navigation', () => ({
@@ -30,9 +31,12 @@ const api = vi.hoisted(() => ({
   readAdsOpportunity: vi.fn(),
   sendAdsEarn: vi.fn(),
   createAdsDrafts: vi.fn(),
+  exportAdsOpportunity: vi.fn(),
   AdsApiError: class extends Error {},
 }));
 vi.mock('@/lib/ads/api', () => api);
+const download = vi.hoisted(() => ({ saveBlob: vi.fn() }));
+vi.mock('@/lib/download', () => download);
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
@@ -97,6 +101,7 @@ const DETAIL: AdsOpportunityDetail = {
   keywords: ['best crm', 'crm small team'],
   earn: { page: 'https://northwind.example/small-teams/', action: null },
   drafts: [],
+  facts: [],
 };
 
 let container: HTMLDivElement;
@@ -403,6 +408,8 @@ describe('the Pay card and "Do both"', () => {
     const [[, , earnKey]] = api.sendAdsEarn.mock.calls;
     expect(api.createAdsDrafts.mock.calls).toEqual([['b1', 'p1', expect.any(String)]]);
     expect(api.createAdsDrafts.mock.calls[0][2]).not.toBe(earnKey);
+    // Read again once the drafts are made, for the facts they rest on.
+    expect(api.readAdsOpportunity).toHaveBeenCalledTimes(2);
     // The two Ads routes only (lib/ads/api.test.ts), and no other request: no ad platform.
     expect(network).not.toHaveBeenCalled();
     network.mockRestore();
@@ -502,7 +509,7 @@ describe('the Pay card and "Do both"', () => {
     expect(panel.fill.mock.lastCall?.[0]).toMatch(/^\/ad-drafts Rewrite the ChatGPT ad draft/);
   });
 
-  it('is read-only for an analyst and on the demo brand, Starter or the trial: Copy only', async () => {
+  it('is read-only for an analyst and on the demo brand, Starter or the trial: Copy and the brief only', async () => {
     for (const [role, writable] of [
       ['analyst', true],
       ['admin', false],
@@ -511,7 +518,14 @@ describe('the Pay card and "Do both"', () => {
       await remount(role, ROW, writable);
       await open();
       expect(q('ads.copyAd')).toHaveLength(1);
-      for (const action of ['ads.editAd', 'ads.createDrafts', 'ads.earnTask', 'ads.doBoth']) {
+      expect(q('ads.copyBrief')).toHaveLength(1);
+      for (const action of [
+        'ads.editAd',
+        'ads.createDrafts',
+        'ads.earnTask',
+        'ads.doBoth',
+        'ads.exportOne',
+      ]) {
         expect(q(action), `${role} ${action}`).toEqual([]);
       }
       api.readAdsOpportunity.mockResolvedValue(DETAIL);
@@ -519,5 +533,102 @@ describe('the Pay card and "Do both"', () => {
       await open();
       expect(pay()!.textContent).toBe('Pay · win it nowNo ad drafts for this prompt yet.');
     }
+  });
+});
+
+describe('the footer: Export this prompt and "Copy as campaign brief"', () => {
+  const q = (action: string) => [
+    ...(drawer()?.querySelectorAll<HTMLElement>(`[data-action="${action}"]`) ?? []),
+  ];
+  const click = (el: HTMLElement) => act(async () => el.click());
+  const writeText = vi.fn<(text: string) => Promise<void>>(async () => {});
+  beforeEach(() => {
+    for (const fn of [writeText, toast.success, api.exportAdsOpportunity, download.saveBlob]) {
+      fn.mockReset();
+    }
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  });
+
+  it('exports this prompt for Admins and Managers, saved as the server names it', async () => {
+    const file = { fileName: 'prompt-p1.csv', csv: 'Campaign', rowCount: 3, prompts: 1 };
+    api.exportAdsOpportunity.mockResolvedValue({ ...file, droppedUrls: 1 });
+    await remount('manager');
+    await open();
+    expect(q('ads.exportOne')[0].textContent).toBe('Export this prompt');
+    await click(q('ads.exportOne')[0]);
+    expect(api.exportAdsOpportunity).toHaveBeenCalledWith('b1', 'p1', '30d');
+    expect(download.saveBlob).toHaveBeenCalledWith(expect.any(Blob), file.fileName);
+    expect(toast.success).toHaveBeenCalledWith('Exported 3 rows from 1 prompt', {
+      description: '1 link outside your domains was replaced with your home page',
+    });
+  });
+
+  it('copies the brief as plain text, for an analyst too: decision, why, seeds, fan-outs, drafts, facts', async () => {
+    api.readAdsOpportunity.mockResolvedValue({
+      ...DETAIL,
+      drafts: [
+        {
+          id: 'd1',
+          channel: 'chatgpt',
+          headlines: ['Pipeline live in one afternoon'],
+          descriptions: ['Set up in a day, Outlook sync included.'],
+          contextHint: 'Asked for a CRM for a small team',
+          gate: { limits: 'unconfirmed' },
+        },
+        {
+          id: 'd2',
+          channel: 'google',
+          headlines: ['Northwind CRM', 'Live in one afternoon'],
+          descriptions: ['Set up in a day.', 'Outlook sync included.'],
+          contextHint: null,
+          gate: {},
+        },
+      ],
+      facts: [
+        {
+          id: 'f1',
+          quote: 'Teams set up in one afternoon.',
+          sourceUrl: 'https://nw.example/setup',
+        },
+        { id: 'f2', quote: 'Two-way Outlook sync', sourceUrl: 'https://nw.example/outlook' },
+      ],
+    });
+    await remount('analyst');
+    await open();
+    await click(q('ads.copyBrief')[0]);
+    const brief = writeText.mock.lastCall?.[0] ?? '';
+    expect(brief).toBe(`Prompt: Best CRM for small teams
+Decision: Earn + pay (recommended: Earn)
+
+Why:
+• Kestrel leads the AI answer
+• 14,000 Google searches a month, at least 1,000
+• Who pays isn't measured yet
+
+Keyword seeds:
+• best crm
+• crm small team
+
+Fan-out queries:
+• best crm 2026
+
+Ad draft: ChatGPT · contextual
+Headline 1: Pipeline live in one afternoon
+Description 1: Set up in a day, Outlook sync included.
+Fits when: Asked for a CRM for a small team
+
+Ad draft: Google · search, eligible for AI Overviews and AI Mode
+Headline 1: Northwind CRM
+Headline 2: Live in one afternoon
+Description 1: Set up in a day.
+Description 2: Outlook sync included.
+
+Facts used:
+• "Teams set up in one afternoon." Source: https://nw.example/setup
+• "Two-way Outlook sync" Source: https://nw.example/outlook`);
+    // No markdown or HTML: no heading, list, quote or table marks, emphasis, code, links or tags.
+    expect(brief).not.toMatch(/^\s*(#|[-*+] |>|\|)/m);
+    expect(brief).not.toMatch(/\*\*|__|`|\]\(|<\/?[a-z]/i);
+    expect(toast.success).toHaveBeenCalledWith('Campaign brief copied');
   });
 });

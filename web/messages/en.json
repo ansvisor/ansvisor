@@ -13846,6 +13846,13 @@
     "period": "Period",
     "export": "Export",
     "noDataYet": "Available once Ads has data",
+    "exports": {
+      "editor": "Export for Google Ads Editor",
+      "one": "Export this prompt",
+      "done": "Exported {rows, plural, one {# row} other {# rows}} from {prompts, plural, one {# prompt} other {# prompts}}",
+      "dropped": "{count, plural, one {# link outside your domains was replaced with your home page} other {# links outside your domains were replaced with your home page}}",
+      "failed": "The export couldn't be made. Try again."
+    },
     "chat": {
       "pay": "Which buying-intent prompts should we pay for?",
       "rivals": "Where do competitors lead the AI answer on our buying-intent prompts?",
@@ -13999,6 +14006,21 @@
         "retryPay": "Retry the ad drafts",
         "earnFailed": "The ad drafts are saved, but the task didn't reach the Action Center.",
         "payFailed": "The task is in the Action Center, but the ad drafts weren't written."
+      },
+      "brief": {
+        "copy": "Copy as campaign brief",
+        "copied": "Campaign brief copied",
+        "copyFailed": "Couldn't copy the campaign brief. Try again.",
+        "prompt": "Prompt: {text}",
+        "decision": "Decision: {decision}{recommended, select, none {} other { (recommended: {recommended})}}",
+        "why": "Why:",
+        "keywords": "Keyword seeds:",
+        "fanOuts": "Fan-out queries:",
+        "draft": "Ad draft: {channel}",
+        "headline": "Headline {n}: {text}",
+        "description": "Description {n}: {text}",
+        "facts": "Facts used:",
+        "fact": "\"{quote}\" Source: {url}"
       }
     },
     "empty": {

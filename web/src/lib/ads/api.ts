@@ -11,6 +11,8 @@ import type { AdsPeriod } from './tabs';
 
 /** A read that hangs gives up after this, so the page can say so. */
 const READ_TIMEOUT_MS = 30_000;
+/** An export reads each prompt it holds first: past the proxy's 60s, whose 504 comes first. */
+const EXPORT_TIMEOUT_MS = 90_000;
 
 /** A call to /api/ads/… answered with anything but a 2xx: its status and the body's code. */
 export class AdsApiError extends Error {
@@ -31,6 +33,7 @@ export class AdsApiError extends Error {
 async function call<T>(
   path: string,
   init?: { method: 'PATCH' | 'POST'; body: unknown },
+  timeout = READ_TIMEOUT_MS,
 ): Promise<T> {
   const {
     data: { session },
@@ -44,7 +47,7 @@ async function call<T>(
     },
     body: init && JSON.stringify(init.body),
     cache: 'no-store',
-    signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeout),
   });
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null);
@@ -162,6 +165,8 @@ export interface AdsOpportunityDetail {
   earn: { page: string | null; action: AdsActionRef | null };
   /** The Pay card's: the prompt's latest saved draft of each channel, ChatGPT first. */
   drafts: AdsAdDraft[];
+  /** The approved brand facts those drafts rest on (words and source page), for the brief. */
+  facts: { id: string; quote: string; sourceUrl: string }[];
 }
 
 /** A saved ad draft (server lib/ads/draft-rows.js), past the claims gate: the model's words. */
@@ -223,6 +228,35 @@ export function createAdsDrafts(brandId: string, promptId: string, idempotencyKe
     `opportunities/${encodeURIComponent(promptId)}/drafts`,
     { method: 'POST', body: { brandId, idempotencyKey } },
   );
+}
+
+/**
+ * A Google Ads Editor CSV (server lib/ads/export.js), as JSON: the proxy
+ * passes on no Content-Disposition. `droppedUrls`: final URLs off the
+ * brand's domains, replaced with its home page.
+ */
+export interface AdsExportFile {
+  fileName: string;
+  csv: string;
+  rowCount: number;
+  prompts: number;
+  droppedUrls: number;
+}
+
+/** Opportunities' filters: every row, or a decision's. */
+export type AdsFilter = 'all' | AdsChosenDecision;
+
+/** The rows under a filter, for Google Ads Editor (Admin, Manager; Growth and up; not the demo brand). */
+export function exportAdsEditor(brandId: string, decision: AdsFilter, period: AdsPeriod) {
+  const query = new URLSearchParams({ brandId, decision, period });
+  return call<AdsExportFile>(`export/editor?${query}`, undefined, EXPORT_TIMEOUT_MS);
+}
+
+/** One prompt, for Google Ads Editor, as above. */
+export function exportAdsOpportunity(brandId: string, promptId: string, period: AdsPeriod) {
+  const path = `export/opportunity/${encodeURIComponent(promptId)}`;
+  const query = new URLSearchParams({ brandId, period });
+  return call<AdsExportFile>(`${path}?${query}`, undefined, EXPORT_TIMEOUT_MS);
 }
 
 /** The earn-or-pay thresholds (server config/ads.js). */
