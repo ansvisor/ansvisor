@@ -33,6 +33,16 @@ Explain whether the brand should earn the AI answer to a buying-intent prompt wi
    - Overlap: the brand earns the answer and pays for it too; whether the ad saves anything is checked once an ad account is connected.
 5. Name every action by its title with its code, which the app links: **Fix the pricing comparison on /pricing** (AC-12). Never a code alone.
 
+## Each week
+
+In an agent's scheduled run, or when the person asks what changed:
+
+1. Read `get_ads_opportunities` for the brand over 30 days, its default. Its `sinceLastWeek` compares the rows the plan shows with the week it names.
+2. Lead with what changed, one line each with why from its reasons: a rival that now pays on a prompt the brand leads ("a rival pays on your name", rivalPays with rule `defend`), any other rivalPays, a decision that moved (Earn to Pay, say), then new buying-intent prompts.
+3. Nothing changed: say so in one line. `sinceLastWeek` is null: there is no earlier week to compare yet, so give the table only. Who pays isn't measured yet while rivalPays stays empty: say "Not measured", never guess it.
+4. Changes count only the rows the plan shows. Locked rows are never compared: say how many more the plan doesn't show, and never guess them.
+5. Then the next steps above, the prompts that changed first. Write ad drafts only for prompts that moved to Pay or Earn + pay, or that a rival now pays on.
+
 ## Output
 
 1. A table: Prompt, Decision, Why, Who AI picks, Your position, Searches a month.

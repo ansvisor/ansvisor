@@ -125,13 +125,15 @@ const brandPeriod = z.object({
 
 // GET /api/ads/opportunities?brandId=…&period=7d|30d|90d — each buying-intent
 // prompt's standing and decision (lib/ads/opportunities.js). Starter and the
-// trial get the first rows and how many more are locked, decided here.
+// trial get the first rows and how many more are locked, decided here; at
+// 30 days, what moved in those rows since the last week compared.
 router.get('/opportunities', async (req, res) => {
   const parsed = brandPeriod.safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {
     const { brand, orgId } = await assertBrandAccess(parsed.data.brandId, req.user.id);
-    return res.json(await readOpportunities({ brand, orgId, period: parsed.data.period }));
+    const { period } = parsed.data;
+    return res.json(await readOpportunities({ brand, orgId, period, compareWeeks: true }));
   } catch (err) {
     return failed(req, res, err, 'ads opportunities read error');
   }

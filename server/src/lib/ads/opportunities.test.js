@@ -26,6 +26,8 @@ function from(table) {
     range: () => q,
     eq: (col, v) => (filters.push([col, v]), (rows = rows.filter((r) => at(r, col) === v)), q),
     in: (col, vs) => ((rows = rows.filter((r) => vs.includes(at(r, col)))), q),
+    lt: (col, v) => ((rows = rows.filter((r) => at(r, col) < v)), q),
+    limit: (n) => ((rows = rows.slice(0, n)), q),
     maybeSingle: () => ((one = true), q),
     upsert: (row, options) => ((write = ['upsert', table, row, options]), q),
     delete: () => ((write = ['delete', table]), q),
@@ -283,6 +285,50 @@ describe('readOpportunities', () => {
       '2020-W53',
       '2025-W01',
     ]);
+  });
+});
+
+describe('readOpportunities since last week', () => {
+  const read = (over = {}) =>
+    readOpportunities({ brand: BRAND, orgId: 'o1', period: '30d', now: NOW, ...over });
+  const snap = (prompt_id, decision, brand_id = 'b1') => ({
+    prompt_id,
+    brand_id,
+    iso_week: '2026-W45',
+    decision,
+    inputs: { rivalPays: null },
+  });
+
+  beforeEach(() => {
+    db.ads_opportunity_snapshots = [
+      snap('p2', 'earn'),
+      snap('p1', 'earn'),
+      snap('p5', 'earn'),
+      // p8 moved too, but Starter's plan locks its row.
+      snap('p8', 'earn_pay'),
+      snap('p6', 'pay', 'b2'),
+    ];
+  });
+
+  it('says what moved in the rows the plan shows, and nothing of a locked one', async () => {
+    const moved = (page) => page.sinceLastWeek.moved.map((m) => [m.promptId, m.from, m.decision]);
+    const growth = await read({ compareWeeks: true });
+    expect(growth.sinceLastWeek).toMatchObject({ since: '2026-W45', newPrompts: [] });
+    expect(moved(growth)).toEqual([
+      ['p2', 'earn', 'earn_pay'],
+      ['p8', 'earn_pay', 'earn'],
+    ]);
+    db.organizations = [{ id: 'o1', plan: 'starter', subscription_status: 'active' }];
+    const starter = await read({ compareWeeks: true });
+    expect(starter.locked).toBe(1);
+    expect(moved(starter)).toEqual([['p2', 'earn', 'earn_pay']]);
+  });
+
+  it("compares only when asked, over the snapshot's period, and never for the demo brand", async () => {
+    expect((await read()).sinceLastWeek).toBeNull();
+    expect((await read({ compareWeeks: true, period: '7d' })).sinceLastWeek).toBeNull();
+    const demo = { ...BRAND, is_demo: true };
+    expect((await read({ compareWeeks: true, brand: demo })).sinceLastWeek).toBeNull();
   });
 });
 

@@ -5,8 +5,9 @@ import type { RunActor } from './access';
 
 /**
  * A Chat run's write through the API server for its person (the routes of
- * the server's ACTING_USER_ROUTES, middleware/acting-user.js), when no
- * session of theirs is behind the run (a schedule's or a signal's run,
+ * the server's ACTING_USER_ROUTES, middleware/acting-user.js), or its read
+ * of what only the API serves (ACTING_USER_READS: Ads' Opportunities), when
+ * no session of theirs is behind the run (a schedule's or a signal's run,
  * CHAT-12): CHAT_ACTING_SECRET with X-Acting-User: their id, which the
  * server checks as their session would be (their workspace with Chat on,
  * the brand, the route's role). Never a session or a cookie: the engine
@@ -71,15 +72,16 @@ export interface ApiAnswer {
 
 /**
  * Sends `body` to the API server's `path` as `actor`, with the acting
- * secret. Throws ActingRefusedError when the way is closed here (nothing
- * sent), or the server answers 401 (no one to act as: the web's and the
- * server's secrets differ, or the person can't sign in) or 403 chat_off;
- * any other answer is the caller's to read, as with the person's session.
+ * secret (a GET sends none). Throws ActingRefusedError when the way is
+ * closed here (nothing sent), or the server answers 401 (no one to act as:
+ * the web's and the server's secrets differ, or the person can't sign in)
+ * or 403 chat_off; any other answer is the caller's to read, as with the
+ * person's session.
  */
 export async function apiAs(
   actor: RunActor,
   path: `/api/${string}`,
-  init: { method: 'POST' | 'PATCH'; body?: unknown },
+  init: { method: 'GET' | 'POST' | 'PATCH'; body?: unknown; signal?: AbortSignal },
 ): Promise<ApiAnswer> {
   const secret = actingSecret();
   if (!secret) throw new ActingRefusedError(refusal('acting_refused'));
@@ -91,6 +93,7 @@ export async function apiAs(
       [ACTING_USER_HEADER]: actor.userId,
     },
     ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+    ...(init.signal ? { signal: init.signal } : {}),
     cache: 'no-store',
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;

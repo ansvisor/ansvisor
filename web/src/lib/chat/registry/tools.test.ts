@@ -184,7 +184,8 @@ const { CHAT_TOOLS, chatTool, chatToolByKey, listedTools, registryCatalog } =
 const chatTool_ = (name: string) => chatTool(name)!;
 const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool, runsWithoutSession } =
   await import('./define-tool');
-const { DEFAULT_CHAT_SETTINGS, allowedRoles, allowedTools } = await import('../precedence');
+const { DEFAULT_CHAT_SETTINGS, allowedRoles, allowedTools, decideToolCall } =
+  await import('../precedence');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 
 const ctx = {
@@ -1342,5 +1343,78 @@ describe('add_prompts over the plan limit (Simplify PR 15)', () => {
     expect(PROMPT_TOOLS.find((tool) => tool.name === 'add_prompts')!.description).toContain(
       "When the plan's prompt locations run out, the rest are saved waiting for a spot: listed in `waiting`, not in `added`",
     );
+  });
+});
+
+/**
+ * The Paid Opportunity agent (Ads Phase 0 PR 18; ADS-01 §7a.2 rules 2 and 3):
+ * its run gets only the rows its skills name that the plan opens, never an
+ * EXECUTE, and its ad drafts wait on a card when no one's session is behind it.
+ */
+describe("the Paid Opportunity agent's run", () => {
+  const named = async () => {
+    const { SKILL_LIBRARY: library } = await import('../skills/library');
+    const bodies = ['earn-or-pay', 'ad-drafts'].map(
+      (name) => library.find((skill) => skill.name === name)?.body ?? '',
+    );
+    const names = bodies.flatMap((body) => [...body.matchAll(/`([a-z_]+)`/g)].map((m) => m[1]));
+    return CHAT_TOOLS.filter((tool) => names.includes(tool.name));
+  };
+  const plan = (row: { plan: string; subscription_status: string }) => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    try {
+      return planFactsFromOrgRow(row);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  };
+  const agentRun = (
+    row: { plan: string; subscription_status: string },
+    mode: 'auto' | 'full_auto',
+  ) => ({
+    organizationId: 'org-1',
+    role: 'admin' as const,
+    plan: plan(row),
+    settings: DEFAULT_CHAT_SETTINGS,
+    mode,
+    surface: 'chat' as const,
+    autoChoices: new Set<string>(),
+    brandAccess: 'all' as const,
+    injectionDetected: false,
+    agentRun: true,
+  });
+  const scope = { brandId: FIXTURE_IDS.brand as string, brandIsDemo: false };
+
+  it('names reads and writes inside Ansvisor only: no EXECUTE, and nothing that goes live', async () => {
+    const tools = await named();
+    expect(tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['get_ads_opportunities', 'save_ad_drafts', 'create_action']),
+    );
+    for (const tool of tools) {
+      expect(tool.class, tool.name).not.toBe('execute');
+      expect(tool.goLive, tool.name).toBeUndefined();
+    }
+    expect(CHAT_TOOLS.filter((tool) => tool.area === 'ads' && tool.class === 'execute')).toEqual(
+      [],
+    );
+  });
+
+  it("gets what the plan opens: Starter reads its rows, Growth's drafts ask, and wait with no session", async () => {
+    const tools = await named();
+    const names = (ctx: ReturnType<typeof agentRun>) =>
+      allowedTools(tools, ctx, scope).map((tool) => tool.name);
+    const starter = names(agentRun({ plan: 'starter', subscription_status: 'active' }, 'auto'));
+    expect(starter).toContain('get_ads_opportunities');
+    expect(starter).not.toContain('save_ad_drafts');
+    const growth = agentRun({ plan: 'growth', subscription_status: 'active' }, 'auto');
+    expect(names(growth)).toContain('save_ad_drafts');
+    const save = chatTool('save_ad_drafts')!;
+    const call = { ...scope, tainted: false };
+    // Auto, ask before changes: a card. A draft written from an AI answer asks in Full auto too.
+    expect(decideToolCall(save, growth, call).kind).toBe('ask');
+    const fullAuto = agentRun({ plan: 'growth', subscription_status: 'active' }, 'full_auto');
+    expect(decideToolCall(save, fullAuto, { ...call, tainted: true }).kind).toBe('ask');
+    // A scheduled run has no one's session: the engine holds the save for its card.
+    expect(runsWithoutSession(save)).toBe(false);
   });
 });

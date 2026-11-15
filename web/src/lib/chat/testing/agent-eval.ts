@@ -113,6 +113,8 @@ const AGENT_PROMISES: Readonly<
   'fanout-gap-filler': { must: ['draft'] },
   'prompt-portfolio': { must: ['list', 'prompt_change'] },
   'onboarding-help': { must: ['list'] },
+  // Ads Phase 0 PR 18: the decisions and what changed; its ad drafts wait on a card.
+  'paid-opportunity': { must: ['list'] },
   'product-answer-pages': { must: ['draft'] },
   'feature-question-coverage': { must: ['draft'] },
   'alternatives-comparison-pages': { must: ['draft'] },

@@ -7746,6 +7746,10 @@
         "name": "Agency Client Reporter",
         "description": "A monthly report for each client brand, for agencies."
       },
+      "paid-opportunity": {
+        "name": "Paid Opportunity",
+        "description": "Each week, says which buying prompts to earn with content or pay for, flags what changed, like a rival now paying on your name, and drafts ads in Ansvisor."
+      },
       "ai-ads-watch": {
         "name": "AI Ads Watch",
         "description": "Shows who advertises inside AI answers on your prompts, and where."

@@ -13,8 +13,9 @@
  * and role checks) runs as it would for them. Only the identity comes from
  * here instead of a token.
  *
- * Only the routes of ACTING_USER_ROUTES take it. The secret is never a
- * session: elsewhere it is refused (401) and never sent to Supabase Auth.
+ * Only the routes of ACTING_USER_ROUTES, and the reads of
+ * ACTING_USER_READS, take it. The secret is never a session: elsewhere it is
+ * refused (401) and never sent to Supabase Auth.
  * Without the secret, a request with X-Acting-User is refused (401) by
  * decodeToken before its token reaches Supabase Auth (a web whose value
  * differs from this server's would send its secret there), so only the
@@ -34,7 +35,13 @@ import { assertBrandAccess, brandAccessOf, NOT_IN_WORKSPACE } from '../lib/acces
 import { chatAgenticDeployed, chatAgenticEnabled } from '../lib/chat-flag.js';
 import logger from '../lib/logger.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
-import { BadPathParam, TooManyIds, brandsNamedBy, demoRouteFor } from './demo-brand.js';
+import {
+  BadPathParam,
+  TooManyIds,
+  brandsNamedBy,
+  compileRoute,
+  demoRouteFor,
+} from './demo-brand.js';
 import { markActingUserVerified } from './verified-tokens.js';
 
 /** The header naming the member an internal request acts for (Express lower-cases it). */
@@ -64,6 +71,27 @@ export const ACTING_USER_ROUTES = Object.freeze([
 
 const ALLOWED = new Set(ACTING_USER_ROUTES);
 
+/**
+ * The reads, under /api, an internal request may act as a member on: what
+ * only this API serves, which the web's Chat reads for a run with no
+ * session (web/src/lib/chat/actor), and no others. Each names its brand in
+ * the query (`brandId`), checked here as a write's brand is; the route
+ * checks it again and decides the rest as for the member's session, the
+ * plan's rows among them.
+ */
+export const ACTING_USER_READS = Object.freeze([
+  // Ads' Opportunities and one prompt's drawer (web lib/mcp/ads-reads.ts).
+  'GET /ads/opportunities',
+  'GET /ads/opportunities/:promptId',
+]);
+
+const BRAND_IN_QUERY = { where: 'query', key: 'brandId' };
+const READS = ACTING_USER_READS.map((route) => ({
+  route,
+  sources: [BRAND_IN_QUERY],
+  ...compileRoute(route),
+}));
+
 const UNAUTHORIZED = { message: 'Unauthorized API Request' };
 const CHAT_OFF = 'Chat is off for this workspace';
 
@@ -88,6 +116,8 @@ export function carriesActingSecret(req) {
 
 /** The allowed route a request reaches, as demoRouteFor reads it, or null. */
 export function actingRouteFor(req) {
+  const read = READS.find((entry) => entry.method === req.method && entry.regex.test(req.path));
+  if (read) return { guarded: false, entry: read, match: read.regex.exec(req.path) };
   const route = demoRouteFor(req);
   return route?.guarded && ALLOWED.has(route.entry.route) ? route : null;
 }
