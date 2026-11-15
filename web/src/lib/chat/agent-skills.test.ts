@@ -26,11 +26,14 @@ describe('ANSVISOR_SKILLS', () => {
     expect(ANSVISOR_SKILLS.map((skill) => skill.id)).toEqual([...SKILL_ORDER]);
     // The fourteen and /chatgpt-profile (after /facts, ChatGPT Business Hub plan PR 7), then the seven.
     expect(ANSVISOR_SKILLS.slice(15, 22).map((skill) => skill.id)).toEqual(FOCUS_SKILLS);
-    expect(ANSVISOR_SKILLS.slice(-4).map((skill) => skill.id)).toEqual([
+    expect(ANSVISOR_SKILLS.slice(-6).map((skill) => skill.id)).toEqual([
       'setup',
       'fanout',
       'prompts',
       'plan',
+      // Ads Phase 0 PR 15, offered only with Ads on.
+      'earn-or-pay',
+      'ad-drafts',
     ]);
   });
 

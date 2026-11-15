@@ -721,6 +721,24 @@ describe('POST /api/ads/opportunities/:promptId/drafts while ADS_ENABLED is on',
       expect((await draft(body, prompt)).status, JSON.stringify(body)).toBe(400);
     }
   });
+
+  it('gates copy given in Chat as it is (source chat), one draft a channel', async () => {
+    createAdDrafts.mockResolvedValue(made);
+    const copy = { channel: 'google', headlines: ['Pro'], descriptions: ['Plain.'] };
+    const claims = [{ text: 'Pro', factId: PROMPT }];
+    expect((await draft({ brandId: BRAND, drafts: [{ ...copy, claims }] })).status).toBe(201);
+    expect(createAdDrafts.mock.calls.at(-1)[0]).toMatchObject({
+      source: 'chat',
+      given: [{ ...copy, contextHint: null, keywords: [], claims }],
+    });
+    for (const drafts of [
+      [copy, copy],
+      [{ ...copy, claims: [{ text: 'Pro', factId: 'F1' }] }],
+      [],
+    ]) {
+      expect((await draft({ brandId: BRAND, drafts })).status, JSON.stringify(drafts)).toBe(400);
+    }
+  });
 });
 
 describe('GET /api/ads/export/* while ADS_ENABLED is on', () => {

@@ -112,6 +112,9 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'fanout', uses: [] },
   { id: 'prompts', uses: [optional('google_search_console')] },
   { id: 'plan', uses: [] },
+  // Ads Phase 0 PR 15, only with Ads on: Ansvisor's own Ads reads, and drafts saved in it.
+  { id: 'earn-or-pay', uses: [] },
+  { id: 'ad-drafts', uses: [] },
 ];
 
 /** Connections any agent may add as Optional (mockup: Google Analytics). */

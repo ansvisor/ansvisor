@@ -164,6 +164,18 @@ const generateImage: UndoRule = {
   href: () => '/dashboard/chat/files',
 };
 
+// ─── save_ad_drafts: recorded, no Undo (a newer draft takes its place on the Pay card) ─
+
+const saveAdDrafts: UndoRule = {
+  ...NO_UNDO,
+  targetType: 'prompt',
+  async record(input): Promise<WriteRecord> {
+    const target = { type: 'prompt', id: textOf(asObject(input).prompt_id) };
+    return { target, summaryParams: {}, undo: null };
+  },
+  href: () => '/dashboard/ads',
+};
+
 /** The output rows' records and Undo, by tool name (undo.ts UNDO_RULES). */
 export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   build_report: buildReport,
@@ -179,4 +191,6 @@ export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   run_site_audit: runSiteAudit,
   run_agent: runAgent,
   generate_image: generateImage,
+  // Ad drafts saved through the claims gate (Ads Phase 0 PR 15).
+  save_ad_drafts: saveAdDrafts,
 };

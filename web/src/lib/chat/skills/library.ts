@@ -82,6 +82,9 @@ export const SKILL_ORDER = [
   'prompts',
   // A 30-day plan whose actions go to the Action Center (create_action).
   'plan',
+  // Ads Phase 0 PR 15: only with Ads on (flagged.ts ADS_SKILLS).
+  'earn-or-pay',
+  'ad-drafts',
 ] as const;
 
 export interface LibrarySkill {

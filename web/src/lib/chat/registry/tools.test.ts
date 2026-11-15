@@ -80,6 +80,12 @@ vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
 vi.mock('@/lib/mcp/ready-agents', async (importOriginal) =>
   tracked.all('mcp/ready-agents', await importOriginal<Record<string, unknown>>()),
 );
+vi.mock('@/lib/mcp/ads-reads', () => ({
+  getAdsOpportunitiesFor: tracked.track('mcp/ads-reads.getAdsOpportunitiesFor'),
+}));
+vi.mock('@/lib/actions/ads-drafts', () => ({
+  saveAdDrafts: tracked.track('actions/ads-drafts.saveAdDrafts'),
+}));
 // A page's check against its rules (W4-12b part 2): Chat's own, over the editor's rule functions.
 vi.mock('@/lib/chat/page-check', async (importOriginal) =>
   tracked.all('chat/page-check', await importOriginal<Record<string, unknown>>()),
@@ -173,7 +179,8 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
   checkChatActionCover: tracked.track('actions/chat-action-center.checkChatActionCover'),
 }));
 
-const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
+const { CHAT_TOOLS, chatTool, chatToolByKey, listedTools, registryCatalog } =
+  await import('./tools');
 const chatTool_ = (name: string) => chatTool(name)!;
 const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool, runsWithoutSession } =
   await import('./define-tool');
@@ -833,6 +840,8 @@ describe('approval policies', () => {
       forget_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
       // An agent running another agent (CHAT-27 phase 2): Admins and Managers, as agents are.
       run_agent: ['admin', 'manager'],
+      // Ad drafts (Ads Phase 0 PR 15): Admins and Managers, as the Pay card's route.
+      save_ad_drafts: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
@@ -1077,7 +1086,7 @@ describe('approval policies', () => {
 
 describe('registryCatalog', () => {
   it('lists every row as plain data, in registry order, with no code in it', () => {
-    const catalog = registryCatalog();
+    const catalog = registryCatalog(CHAT_TOOLS);
     expect(catalog.map((entry) => entry.key)).toEqual(CHAT_TOOLS.map((tool) => tool.labelKey));
     expect(JSON.parse(JSON.stringify(catalog))).toEqual(catalog);
     for (const entry of catalog) {
@@ -1107,11 +1116,23 @@ describe('registryCatalog', () => {
       if (value && typeof value === 'object') Object.values(value).forEach(walk);
       else values.push(value);
     };
-    const catalog = registryCatalog();
+    const catalog = registryCatalog(CHAT_TOOLS);
     walk(catalog);
     expect(values.filter((value) => typeof value === 'string' && names.has(value))).toEqual([]);
     const asEvent = { type: 'next_moves', seq: 1, data: { catalog } } as unknown as ChatEvent;
     expect(clientEventProblems(asEvent)).toEqual([]);
+  });
+
+  it("lists Ads' rows on no page until ADS_ENABLED is on (Ads Phase 0 PR 15)", () => {
+    const ads = ['adsOpportunities', 'adDrafts'];
+    const keys = () => registryCatalog().map((entry) => entry.key);
+    vi.stubEnv('ADS_ENABLED', '');
+    expect(keys().filter((key) => ads.includes(key))).toEqual([]);
+    expect(listedTools().length).toBe(CHAT_TOOLS.length - 2);
+    vi.stubEnv('ADS_ENABLED', 'true');
+    expect(keys().filter((key) => ads.includes(key))).toEqual(ads);
+    expect(listedTools()).toBe(CHAT_TOOLS);
+    vi.unstubAllEnvs();
   });
 
   it('leads a key from the browser back to its row on the server', () => {
@@ -1171,7 +1192,10 @@ describe("the model's tool list on the registry's rows", () => {
   const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });
-  const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');
+  // Starter's plan opens neither Product Visibility nor Ads (ads_read).
+  const withoutShopping = reads.filter(
+    (name) => !['get_shopping_visibility', 'get_ads_opportunities'].includes(name),
+  );
 
   it('gives every role the reads its plan opens, and Analysts and Agency partners daily work only', () => {
     // Memory (W3-11): everyone keeps their own Me.
@@ -1189,10 +1213,10 @@ describe("the model's tool list on the registry's rows", () => {
       'request_access',
       ...memory,
     ]);
-    // Running another agent is Growth and up (CHAT-27 decision 4).
+    // Running another agent and saving ad drafts are Growth and up (CHAT-27 decision 4, ADS-01 §8).
     expect(list('manager', starter)).toEqual([
       ...withoutShopping,
-      ...writes.filter((name) => name !== 'run_agent'),
+      ...writes.filter((name) => !['run_agent', 'save_ad_drafts'].includes(name)),
     ]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
     expect(list('analyst', facts(null, false))).toEqual([

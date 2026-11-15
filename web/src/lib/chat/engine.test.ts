@@ -4379,6 +4379,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'forget_memory',
     // W4-26: an agent's run only, for the agents its Can call names.
     'run_agent',
+    // Ads Phase 0 PR 15: Admins and Managers, only with Ads on (off here).
+    'save_ad_drafts',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -4449,8 +4451,11 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     }
     // The explainer comes with something left out, to say why: nothing is, for Admins and Managers.
     expect(explains).toEqual({ admin: false, manager: false, analyst: true, agency_partner: true });
-    // Suggestions in the editor come only with the page open there beside the chat (W4-14).
-    const anyPage = CHANGES.filter((name) => name !== 'suggest_draft_changes');
+    // Suggestions in the editor come only with the page open there beside the chat (W4-14);
+    // ad drafts only with Ads on (ADS_ENABLED, off here).
+    const anyPage = CHANGES.filter(
+      (name) => name !== 'suggest_draft_changes' && name !== 'save_ad_drafts',
+    );
     expect(offered).toEqual({
       // Admins have no one to ask: no request to the Admins, and nothing to explain about it.
       // run_agent only in an agent's run with an agent to call: never a person's own chat.
