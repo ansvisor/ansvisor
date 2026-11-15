@@ -90,6 +90,7 @@ beforeEach(() => {
     answers: [],
     fanOuts: [],
     keywords: [],
+    earn: { page: null, action: null },
   });
   useBrandStore.setState({ brands: [], activeBrandId: 'b1' });
   container = document.createElement('div');

@@ -16,6 +16,7 @@ import {
 import type { AdsPeriod } from '@/lib/ads/tabs';
 import { formatDate, formatNumber } from '@/lib/format';
 import { regionLabel } from '@/lib/region';
+import { AdsEarnCard } from './_earn-card';
 
 const num = (v: unknown) => (typeof v === 'number' ? formatNumber(v) : '');
 
@@ -31,7 +32,7 @@ function Heading({ children }: { children: ReactNode }) {
 /**
  * An opportunity's drawer (ADS-01 §3.2, mockup): the row's decision and why
  * at the top, then "What AI answers today", the latest answer on each
- * platform, with its fan-outs and keyword seeds. Answer text is the AI's,
+ * platform, with its fan-outs and keyword seeds, and the Earn card. Answer text is the AI's,
  * not ours: shown as quoted plain text only. It closes with ✕, the overlay
  * or Esc (`drawer.close`), and gives focus back to the row's Open.
  */
@@ -41,6 +42,7 @@ export function AdsOpportunityDrawer({
   brandId,
   period,
   decision,
+  canSend,
   finalFocus,
   onClose,
 }: {
@@ -50,6 +52,8 @@ export function AdsOpportunityDrawer({
   period: AdsPeriod;
   /** The row's decision, as the table shows it. */
   decision: ReactNode;
+  /** Whether the person can send the Earn card's fix: as they can change the decision. */
+  canSend: boolean;
   finalFocus: RefObject<HTMLElement | null>;
   onClose: () => void;
 }) {
@@ -183,7 +187,16 @@ export function AdsOpportunityDrawer({
                 </ul>
               </>
             )}
-            {/* The Earn and Pay cards (PR 10–12) go here. */}
+            {detail && (
+              <AdsEarnCard
+                key={key}
+                row={row}
+                brandId={brandId}
+                earn={detail.earn}
+                canSend={canSend}
+              />
+            )}
+            {/* The Pay card (PR 11–12) goes here. */}
           </div>
         </Dialog.Popup>
       </Dialog.Portal>

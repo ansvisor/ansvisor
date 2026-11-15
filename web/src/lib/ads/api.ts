@@ -13,7 +13,10 @@ import type { AdsPeriod } from './tabs';
 const READ_TIMEOUT_MS = 30_000;
 
 /** The JSON answer to a call to /api/ads/…; anything but a 2xx throws. */
-async function call<T>(path: string, init?: { method: 'PATCH'; body: unknown }): Promise<T> {
+async function call<T>(
+  path: string,
+  init?: { method: 'PATCH' | 'POST'; body: unknown },
+): Promise<T> {
   const {
     data: { session },
   } = await createClient().auth.getSession();
@@ -133,6 +136,14 @@ export interface AdsOpportunityDetail {
   fanOuts: { query: string; platform: string }[];
   /** The prompt's keyword seeds (prompt_volumes.keywords). */
   keywords: string[];
+  /** The Earn card's: the prompt's target page, and the active action covering it. */
+  earn: { page: string | null; action: AdsActionRef | null };
+}
+
+/** An Action Center action, as AC-{no} names it. */
+export interface AdsActionRef {
+  id: string;
+  no: number;
 }
 
 export function readAdsOpportunity(brandId: string, promptId: string, period: AdsPeriod) {
@@ -150,6 +161,18 @@ export function setAdsDecision(
   return call<{ promptId: string; override: AdsOpportunity['override'] }>(
     `opportunities/${encodeURIComponent(promptId)}/decision`,
     { method: 'PATCH', body: { brandId, decision } },
+  );
+}
+
+/**
+ * The Earn card's fix sent to the Action Center (Admin, Manager): the action
+ * made (`created`; the same key again answers it), or the active one that
+ * already covers the prompt (`covered`).
+ */
+export function sendAdsEarn(brandId: string, promptId: string, idempotencyKey: string) {
+  return call<{ action: AdsActionRef; created: boolean; covered: boolean }>(
+    `opportunities/${encodeURIComponent(promptId)}/earn`,
+    { method: 'POST', body: { brandId, idempotencyKey } },
   );
 }
 
