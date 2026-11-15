@@ -31,7 +31,7 @@ const ROW_ACTION =
 
 /**
  * The chat menu's Connections row (agentic plan §6, CHAT-01 item 169;
- * W4-25): "Connections", Manage (the Connections page) and an arrow-only
+ * W4-25): "Connections" (a link to the Connections page) and an arrow-only
  * ▾/▴ that opens the brand's tools under the row: connected first (green
  * dot and ✓), then the ones to connect (grey dot and Connect, which opens
  * the tool's card in Settings › Integrations; others than Admins ask their
@@ -68,15 +68,14 @@ export function ConnectionsMenu({
           active && 'bg-sidebar-accent font-medium text-foreground',
         )}
       >
-        <span className="min-w-0 truncate">{t('menu.label')}</span>
         <Link
           href="/dashboard/chat/connections"
-          data-action="chatMenu.manageConnections"
+          data-action="chatMenu.openConnections"
           aria-current={active ? 'page' : undefined}
           onClick={onNavigate}
-          className="ml-auto rounded-md px-1 text-[11.5px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="min-w-0 flex-1 truncate rounded-md outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          {t('menu.manage')}
+          {t('menu.label')}
         </Link>
         <button
           type="button"

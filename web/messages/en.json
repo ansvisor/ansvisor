@@ -5614,13 +5614,11 @@
       "allChats": "All chats · {count} ›",
       "archivedLink": "Archived · {count} ›",
       "settings": "Settings",
-      "usageTip": "AI usage this month",
       "files": "Files",
       "scheduled": "Scheduled",
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
       "agents": "Agents",
       "agentsShort": "Agents",
-      "agentsWhere": "in Action Center",
       "agentsLabel": "Agents · in Action Center"
     },
     "actions": {
@@ -18050,7 +18048,6 @@
     },
     "menu": {
       "label": "Connections",
-      "manage": "Manage",
       "show": "Show connections",
       "hide": "Hide connections",
       "listLabel": "The brand’s connections",

@@ -2,13 +2,10 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { ArrowUpRight } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
 import { NewPill } from '@/components/agentic/new-pill';
-import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { Skeleton } from '@/components/ui/skeleton';
-import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import { countChatSchedules } from '@/lib/actions/chat-schedules';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
@@ -144,56 +141,6 @@ function MenuItem({
     >
       {children}
     </Link>
-  );
-}
-
-/**
- * The workspace's AI usage this month beside Settings (mockup `.usg2`): a
- * 30px bar and its percent, amber from 80%, red when used up. In the free
- * trial it names no share, as the header's meter (AI usage spec §3.1):
- * "Trial credit", "Almost used" from 80%, then "Used up". Nothing where
- * there is no allowance to meter (self-hosted) or before it is read.
- */
-function UsageMeter() {
-  const t = useTranslations('chatShell.menu');
-  const tMeter = useTranslations('aiUsage.meter');
-  const { usage } = useAiUsage();
-  if (!usage || usage.percentUsed === null) return null;
-  const tone = aiUsageTone(usage);
-  if (usage.trial && tone !== 'unlimited') {
-    return (
-      <span
-        title={tMeter(`trialLabel.${tone}`)}
-        className={cn(
-          'ml-auto text-[11.5px] font-normal text-muted-foreground',
-          tone === 'warning' && 'text-amber-700 dark:text-amber-400',
-          tone === 'exhausted' && 'text-red-700 dark:text-red-400',
-        )}
-      >
-        {tMeter(`trial.${tone}`)}
-      </span>
-    );
-  }
-  return (
-    <span
-      title={t('usageTip')}
-      className="ml-auto inline-flex items-center gap-[5px] text-[11.5px] font-normal text-muted-foreground tabular-nums"
-    >
-      <span aria-hidden className="h-1 w-[30px] overflow-hidden rounded bg-foreground/10">
-        <i
-          className={cn(
-            'block h-full rounded',
-            tone === 'exhausted'
-              ? 'bg-red-600 dark:bg-red-400'
-              : tone === 'warning'
-                ? 'bg-amber-600 dark:bg-amber-400'
-                : 'bg-foreground',
-          )}
-          style={{ width: `${Math.min(100, usage.percentUsed)}%` }}
-        />
-      </span>
-      {percentLabel(usage.percentUsed)}
-    </span>
   );
 }
 
@@ -408,7 +355,7 @@ export function ChatMenuView({
               </span>
             )}
           </MenuItem>
-          {/* Action Center › Agents, out of Chat: never the one open here. "Agents · in Action Center ↗". */}
+          {/* Action Center › Agents, out of Chat: never the one open here (named so for screen readers). */}
           <MenuItem
             href="/dashboard/agents"
             action="chatMenu.openAgents"
@@ -418,13 +365,6 @@ export function ChatMenuView({
           >
             {t('agentsShort')}
             {agentsNew && <NewPill />}
-            <span
-              data-slot="agents-where"
-              className="ml-auto flex shrink-0 items-center gap-1 text-[11.5px] text-muted-foreground"
-            >
-              {t('agentsWhere')}
-              <ArrowUpRight className="size-3" aria-hidden />
-            </span>
           </MenuItem>
           <MenuItem
             href="/dashboard/chat/skills"
@@ -448,7 +388,6 @@ export function ChatMenuView({
             onNavigate={onNavigate}
           >
             {t('settings')}
-            <UsageMeter />
           </MenuItem>
           <MenuItem
             href="/dashboard/chat/scheduled"
