@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [focus, chat focus, focus areas, your focus, choose focus, suggestions for me, start with a question, starter questions, default view, simple start]
 synonyms: [interests, what I work on, tailor chat, personalize chat home, clean chat home, simpler chat home]
 plan: all
-updated: 2026-11-09
-last_checked: 2026-11-09
+updated: 2026-11-15
+last_checked: 2026-11-15
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -41,7 +41,7 @@ With **Competitors** picked, the line under the greeting can say when a competit
 
 Under the greeting on Chat Home, a line shows your focus, such as **Focused on Product and Markets and sources**, or **Default view**. Select **Edit** to open the picker with your areas ticked; **Cancel** leaves everything as it was.
 
-You can also change it in **Settings** in the chat menu, under **Your focus**. Tick **Default view**, or tick the areas you work on. Each change is kept at once and follows you to every device. Clearing every area goes back to the Default view.
+You can also change it in **Settings › General** in the chat menu, under **Your focus**. Tick **Default view**, or tick the areas you work on. Each change is kept at once and follows you to every device. Clearing every area goes back to the Default view.
 
 ## What focus doesn't change
 

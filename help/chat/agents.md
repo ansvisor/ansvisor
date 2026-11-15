@@ -15,7 +15,7 @@ An agent is a saved skill, mode, connections and model that runs in Chat again a
 
 ## Open Agents
 
-Click **Agents** under **Action Center** on the left menu. It is also in the chat menu, under **Inbox**, as **Agents · in Action Center**, with **New** until you first open it. Old links to Agent Center still open it.
+Click **Agents** under **Action Center** on the left menu. It is also in the chat menu, under **Inbox**, as **Agents**, with **New** until you first open it. Old links to Agent Center still open it.
 
 **Your agents** comes first, with **Ready to use** under it. **Ask Chat to make one** opens Chat with a request filled in for you to send; **New agent** opens the form. In **Your agents**, the filters above the list show how many agents each holds:
 

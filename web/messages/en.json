@@ -5568,8 +5568,6 @@
       "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
       "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
       "skills": "Skills",
-      "governance": "Governance",
-      "toggleGovernance": "Show or hide Governance",
       "activity": "Activity",
       "capabilities": "What Chat can do",
       "policy": "Tool policy",
@@ -5614,13 +5612,13 @@
       "allChats": "All chats · {count} ›",
       "archivedLink": "Archived · {count} ›",
       "settings": "Settings",
-      "usageTip": "AI usage this month",
+      "toggleSettings": "Show or hide the pages under Settings",
+      "general": "General",
       "files": "Files",
       "scheduled": "Scheduled",
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
       "agents": "Agents",
       "agentsShort": "Agents",
-      "agentsWhere": "in Action Center",
       "agentsLabel": "Agents · in Action Center"
     },
     "actions": {
@@ -18050,7 +18048,6 @@
     },
     "menu": {
       "label": "Connections",
-      "manage": "Manage",
       "show": "Show connections",
       "hide": "Hide connections",
       "listLabel": "The brand’s connections",
