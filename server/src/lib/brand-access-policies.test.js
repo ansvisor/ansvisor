@@ -65,6 +65,9 @@ const SERVER_ONLY = [
   'mentions_terms_daily',
   // Perception's terms over every platform (00536), as mentions_terms_daily.
   'mentions_terms_daily_all',
+  // The same terms packed per entity and day (00540), and the brands reading them.
+  'mentions_terms_daily_packed',
+  'mentions_terms_packed_ready',
   'prompt_improve_suggestions',
   'signal_runs',
   // What was posted to a brand's Slack channel (00515, #2139): its dedupe and error codes.

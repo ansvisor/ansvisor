@@ -31,62 +31,12 @@
  */
 
 import 'dotenv/config';
-import { parseArgs } from 'node:util';
 import supabaseAdmin from '../config/supabase.js';
-import {
-  backfillFastRollups,
-  FAST_ROLLUPS_CHUNK_DAYS,
-  FAST_ROLLUPS_PAUSE_MS,
-} from '../lib/fast-rollups-backfill.js';
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
-function count(value, name, fallback, min) {
-  if (value === undefined) return fallback;
-  const n = Number(value);
-  if (!Number.isInteger(n) || n < min) throw new Error(`${name} must be a whole number >= ${min}`);
-  return n;
-}
-
-function options() {
-  const { values } = parseArgs({
-    options: {
-      'chunk-days': { type: 'string' },
-      'pause-ms': { type: 'string' },
-      brand: { type: 'string' },
-      'from-brand': { type: 'string' },
-      'from-day': { type: 'string' },
-      'last-days': { type: 'string' },
-      'dry-run': { type: 'boolean' },
-    },
-  });
-  for (const name of ['brand', 'from-brand']) {
-    if (values[name] !== undefined && !UUID.test(values[name])) {
-      throw new Error(`--${name} must be a brand id (lower-case uuid)`);
-    }
-  }
-  if (values['from-day'] !== undefined) {
-    if (!DAY.test(values['from-day'])) throw new Error('--from-day must be YYYY-MM-DD');
-    if (!values['from-brand'] && !values.brand) {
-      throw new Error('--from-day needs --from-brand or --brand');
-    }
-  }
-  return {
-    chunkDays: count(values['chunk-days'], '--chunk-days', FAST_ROLLUPS_CHUNK_DAYS, 1),
-    pauseMs: count(values['pause-ms'], '--pause-ms', FAST_ROLLUPS_PAUSE_MS, 0),
-    brand: values.brand ?? null,
-    fromBrand: values['from-brand'] ?? null,
-    fromDay: values['from-day'] ?? null,
-    lastDays:
-      values['last-days'] === undefined ? null : count(values['last-days'], '--last-days', 0, 1),
-    dryRun: values['dry-run'] ?? false,
-  };
-}
+import { backfillFastRollups, backfillOptions } from '../lib/fast-rollups-backfill.js';
 
 async function main() {
   const done = await backfillFastRollups({
-    ...options(),
+    ...backfillOptions(),
     rpc: (fn, args) => supabaseAdmin.rpc(fn, args),
   });
   console.log(
