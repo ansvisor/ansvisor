@@ -94,6 +94,18 @@ describe('getActions', () => {
     // Not through the user's client, which returns only their own profile.
     expect(queries.some((q) => q.table === 'profiles')).toBe(false);
   });
+
+  it('reads the brand’s actions in the list’s default order, so the cap keeps the same ones', async () => {
+    await getActions('b1');
+
+    const calls = queries.find((q) => q.table === 'actions')!.calls;
+    expect(calls).toContainEqual(['eq', 'brand_id', 'b1']);
+    expect(calls.filter(([method]) => method === 'order' || method === 'limit')).toEqual([
+      ['order', 'updated_at', { ascending: false }],
+      ['order', 'action_no', { ascending: false }],
+      ['limit', 1000],
+    ]);
+  });
 });
 
 describe('getActionDetail', () => {

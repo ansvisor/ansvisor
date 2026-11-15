@@ -4,8 +4,8 @@ import { DOT_AREAS, type DotArea } from '@/lib/menu-dots';
 
 /**
  * The menu's one read per brand (SIMPLE_NAV, PR 13): a handful of indexed
- * single-row reads as the person, each only for an area the menu shows, the
- * Actions tab's own count, and the person's visits. A part that fails is
+ * single-row reads as the person, each only for an area the menu shows, and
+ * the person's visits. A part that fails is
  * null and lights nothing; nothing throws.
  */
 
@@ -24,10 +24,8 @@ const db = vi.hoisted(() => ({
   calls: {} as Record<string, [string, ...unknown[]][]>,
   /** Answers given in turn, before `answers`, for a table read more than once. */
   queue: {} as Record<string, { data: unknown; error: { message: string } | null }[]>,
-  count: vi.fn(async () => 4),
 }));
 
-vi.mock('@/lib/actions/action-center-counts', () => ({ getMyOpenActionCount: db.count }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: db.user } }) },
@@ -69,7 +67,6 @@ beforeEach(() => {
   db.user = { id: USER };
   db.calls = {};
   db.queue = {};
-  db.count.mockClear();
   db.answers = {
     tracking_runs: { data: { completed_at: '2026-11-11T03:10:00+00:00' }, error: null },
     prompt_suggestions: { data: { generated_at: '2026-11-10T22:00:00Z' }, error: null },
@@ -87,7 +84,7 @@ beforeEach(() => {
 });
 afterEach(() => errorLog.mockRestore());
 
-const everything = { areas: [...DOT_AREAS], count: true };
+const everything = { areas: [...DOT_AREAS] };
 
 describe('getMenuState, red and grey', () => {
   const now = () => new Date().toISOString();
@@ -98,7 +95,7 @@ describe('getMenuState, red and grey', () => {
       data: { id: 'a1', status: 'completed', created_at: now() },
       error: null,
     };
-    const member = await getMenuState(BRAND, { areas: status, count: false });
+    const member = await getMenuState(BRAND, { areas: status });
     const read = Object.keys(db.calls);
     for (const table of ['site_audits', 'chat_agent_runs', 'content_agent_runs'])
       expect(read).toContain(table);
@@ -107,7 +104,7 @@ describe('getMenuState, red and grey', () => {
     expect(member?.broken).toBeUndefined();
 
     db.calls = {};
-    await getMenuState(BRAND, { areas: ['mentions'], count: false, red: true });
+    await getMenuState(BRAND, { areas: ['mentions'], red: true });
     expect(Object.keys(db.calls).sort()).toEqual(['tracking_runs', 'user_brand_state']);
   });
 
@@ -139,7 +136,7 @@ describe('getMenuState, red and grey', () => {
         error: null,
       },
     ];
-    const state = await getMenuState(BRAND, { areas: status, count: false, red: true });
+    const state = await getMenuState(BRAND, { areas: status, red: true });
     expect(state?.broken).toEqual({
       traffic: 'searchConsole',
       audit: 'aiBotsBlocked',
@@ -166,9 +163,7 @@ describe('getMenuState, red and grey', () => {
     ];
     db.answers.audit_signal_results = { data: { status: 'warn' }, error: null };
     db.answers.brand_integrations = { data: [], error: null };
-    expect((await getMenuState(BRAND, { areas: status, count: false, red: true }))?.broken).toEqual(
-      {},
-    );
+    expect((await getMenuState(BRAND, { areas: status, red: true }))?.broken).toEqual({});
   });
 
   it('lights grey while a job runs, and not for a run left open for hours', async () => {
@@ -184,7 +179,6 @@ describe('getMenuState, red and grey', () => {
     db.answers.content_agent_runs = { data: { id: 'c1' }, error: null };
     const state = await getMenuState(BRAND, {
       areas: ['insights', 'agents', 'content/editor', 'audit'],
-      count: false,
     });
     expect(state?.working).toEqual({
       insights: 'trackingRunning',
@@ -206,23 +200,21 @@ describe('getMenuState, red and grey', () => {
       error: null,
     };
     // Once the run completed (the answer's completed_at), the grey goes.
-    const later = await getMenuState(BRAND, { areas: ['insights', 'audit'], count: false });
+    const later = await getMenuState(BRAND, { areas: ['insights', 'audit'] });
     expect(later?.working).toBeUndefined();
   });
 });
 
 describe('getMenuState', () => {
-  it('reads each newest time, the count and the person’s visits', async () => {
+  it('reads each newest time and the person’s visits, and no open-action count', async () => {
     expect(await getMenuState(BRAND, everything)).toEqual({
       nightlyRunAt: '2026-11-11T03:10:00.000Z',
       newSuggestionAt: '2026-11-10T22:00:00.000Z',
       newActionAt: '2026-11-11T04:00:00.000Z',
       newOpportunityAt: '2026-11-11T05:00:00.000Z',
       traffic: { connectedAt: null },
-      openActions: 4,
       navSeen: { insights: '2026-11-10T09:00:00.000Z' },
     });
-    expect(db.count).toHaveBeenCalledWith(BRAND);
   });
 
   it('asks for single rows on the indexes it names', async () => {
@@ -264,9 +256,9 @@ describe('getMenuState', () => {
     ]);
   });
 
-  it('reads only for the areas asked, and the count only when asked', async () => {
+  it('reads only for the areas asked', async () => {
     const areas: DotArea[] = ['mentions', 'traffic'];
-    const state = await getMenuState(BRAND, { areas, count: false });
+    const state = await getMenuState(BRAND, { areas });
     expect(Object.keys(db.calls).sort()).toEqual([
       'ai_traffic_logs',
       'brands',
@@ -274,15 +266,13 @@ describe('getMenuState', () => {
       'tracking_runs',
       'user_brand_state',
     ]);
-    expect(db.count).not.toHaveBeenCalled();
     expect(state).toMatchObject({
       newSuggestionAt: null,
       newActionAt: null,
       newOpportunityAt: null,
-      openActions: null,
     });
     db.calls = {};
-    await getMenuState(BRAND, { areas: ['content', 'nope' as DotArea], count: false });
+    await getMenuState(BRAND, { areas: ['content', 'nope' as DotArea] });
     expect(Object.keys(db.calls).sort()).toEqual(['content_opportunities', 'user_brand_state']);
   });
 
@@ -334,7 +324,7 @@ describe('getMenuState', () => {
 
     // Not on the menu: not counted.
     db.calls = {};
-    await getMenuState(BRAND, { areas: ['mentions'], count: false, waiting: true });
+    await getMenuState(BRAND, { areas: ['mentions'], waiting: true });
     expect(db.calls.prompts).toBeUndefined();
 
     db.answers.prompts = { data: null, error: { message: 'boom' } };

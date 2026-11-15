@@ -31,13 +31,8 @@ import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { menuSectionOf } from '@/lib/menu-access';
-import { ACTION_CENTER_ITEM, NEW_RESULTS_ITEM } from '@/lib/menu-dots';
-import {
-  MenuDot,
-  NewResultsWords,
-  OpenActionsCount,
-  useMenuDots,
-} from '@/components/layout/menu-dots';
+import { NEW_RESULTS_ITEM } from '@/lib/menu-dots';
+import { MenuDot, NewResultsWords, useMenuDots } from '@/components/layout/menu-dots';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { Crown, Menu, MessageSquareText } from 'lucide-react';
 import Image from 'next/image';
@@ -187,7 +182,6 @@ export function MobileNav() {
                 const itemDot = dots.itemDot(item);
                 const words = itemDot?.colour === 'green' && item.href === NEW_RESULTS_ITEM;
                 const dot = children.length === 0 || words ? itemDot : null;
-                const openActions = item.href === ACTION_CENTER_ITEM ? dots.openActions : null;
                 const link = (
                   <Link
                     key={item.href}
@@ -209,7 +203,6 @@ export function MobileNav() {
                       <span className={dot ? undefined : 'flex-1'}>{label}</span>
                       {dot && <MenuDot dot={dot} className="mr-auto" />}
                       {words && <NewResultsWords />}
-                      {openActions !== null && <OpenActionsCount count={openActions} />}
                       {effectiveBadge && (
                         <Badge
                           variant="secondary"

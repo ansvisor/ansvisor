@@ -17,7 +17,6 @@ import {
   groupDot,
   itemDot,
   menuDots,
-  openActionCount,
   strongest,
   withOpened,
   type DotArea,
@@ -49,7 +48,6 @@ function night(over: Partial<MenuState> = {}): MenuState {
     newActionAt: RUN,
     newOpportunityAt: RUN,
     traffic: { connectedAt: null },
-    openActions: 3,
     navSeen: Object.fromEntries(DOT_AREAS.map((area) => [area, BEFORE])),
     ...over,
   };
@@ -167,17 +165,12 @@ describe('who sees which', () => {
     expect(menuDots(night(), { ...manager, demo: true }, ALL)).toEqual(greens);
   });
 
-  it('gives green dots only, and no count, once the plan or trial ended', () => {
+  it('gives green dots only once the plan or trial ended', () => {
     const ended = { ...manager, ended: true };
     expect(menuDots(night({ traffic: { connectedAt: RUN } }), ended, ALL)).toEqual({
       ...greens,
       traffic: 'green',
     });
-    expect(openActionCount(night(), ended)).toBeNull();
-    expect(openActionCount(night(), manager)).toBe(3);
-    expect(openActionCount(night(), { ...manager, demo: true })).toBe(3);
-    expect(openActionCount(night({ openActions: 0 }), manager)).toBeNull();
-    expect(openActionCount(night({ openActions: null }), manager)).toBeNull();
   });
 
   it('lights nothing off the menu', () => {
