@@ -233,10 +233,10 @@ describe('Ready to use', () => {
       '/dashboard/agents/new?preset=prompt-portfolio',
     );
 
-    // The packs' three made ready: each its own skill, on its schedule, in Auto.
+    // The packs' three made ready: each its own skill, on its schedule; Seasonal asks first, as Prompt Portfolio does.
     for (const [id, formula, trigger] of [
       ['content-plan-builder', '/content-planAuto, ask before changes', 'TriggerEvery Mon 09:00'],
-      ['seasonal-prompt-planner', '/seasonalAuto, ask before changes', null],
+      ['seasonal-prompt-planner', '/seasonalAsk me first', null],
       ['ai-traffic-signups', '/trafficAuto, ask before changes', 'TriggerEvery Mon 09:00'],
     ] as const) {
       const ready = card(id);

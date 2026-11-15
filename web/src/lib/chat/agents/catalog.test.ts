@@ -325,15 +325,16 @@ describe('a ready preset', () => {
   });
 
   it('readies an online store for its seasons as Seasonal Prompt Planner: /seasonal monthly', () => {
-    // AGENTS plan §8.1, e-commerce's: the first of the month, in Auto. Every prompt it adds is
-    // a card; Search Console is Optional, read for the searches a season brings.
+    // AGENTS plan §8.1, e-commerce's: the first of the month, on Ask me first (the owner's
+    // choice, as Prompt Portfolio Manager): every prompt it adds is a card; Search Console is
+    // Optional, read for the searches a season brings.
     const preset = readyPreset('seasonal-prompt-planner')!;
     expect(preset).toMatchObject({
       goal: 'visibility',
       businessTypes: ['ecommerce'],
       skills: ['seasonal'],
       triggers: [{ kind: 'schedule', repeat: 'month_first', time: '09:00' }],
-      mode: 'auto',
+      mode: 'ask_first',
       connections: [{ key: 'google_search_console', required: false }],
       needs: [],
     });

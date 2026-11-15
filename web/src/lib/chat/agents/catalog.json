@@ -570,7 +570,7 @@
           "time": "09:00"
         }
       ],
-      "mode": "auto",
+      "mode": "ask_first",
       "connections": [
         {
           "key": "google_search_console",

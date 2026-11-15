@@ -57,7 +57,7 @@ Agents made for the site type of the brand you have open are marked **For your s
 
 ## Seasonal Prompt Planner
 
-**Seasonal Prompt Planner** runs on the 1st of each month at 09:00 on **Auto, ask before changes**. It is made for **E-commerce** brands. It looks at the events and seasons coming in the next three months for your markets and products, and proposes prompts to track before them and the pages to prepare, with the evidence from your data, such as Search Console queries. It dates only fixed days, such as Christmas Day. Events that move, such as Black Friday or back-to-school, get a date only when you give one: add it to the agent's instructions. Each prompt it adds is a card you approve. Search Console is optional. In Chat, the same skill is **/seasonal**.
+**Seasonal Prompt Planner** runs on the 1st of each month at 09:00 on **Ask me first**. It is made for **E-commerce** brands. It looks at the events and seasons coming in the next three months for your markets and products, and proposes prompts to track before them and the pages to prepare, with the evidence from your data, such as Search Console queries. It dates only fixed days, such as Christmas Day. Events that move, such as Black Friday or back-to-school, get a date only when you give one: add it to the agent's instructions. Each prompt it adds is a card you approve. Search Console is optional. In Chat, the same skill is **/seasonal**.
 
 ## AI Traffic → Signups
 

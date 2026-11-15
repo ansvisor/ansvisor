@@ -550,7 +550,9 @@ describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan 
           expect(['ask', 'ask_full_auto'], at).toContain(tool.defaultPolicy);
         }
       }
-      expect(preset.mode, agent).toBe('auto');
+      // Auto, or Ask me first for Seasonal (the owner's choice, as Prompt Portfolio Manager):
+      // either way each write is a card.
+      expect(preset.mode, agent).toBe(agent === 'seasonal-prompt-planner' ? 'ask_first' : 'auto');
     }
   });
 
