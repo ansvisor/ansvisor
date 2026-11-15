@@ -39,6 +39,9 @@ vi.mock('./opportunities.js', () => ({
   readOpportunities: (...a) => plan.readOpportunities(...a),
 }));
 
+const readEarn = vi.fn(async () => ({ page: null, action: null }));
+vi.mock('./earn.js', () => ({ readEarn: (...a) => readEarn(...a) }));
+
 const { answerExcerpt, readOpportunity } = await import('./opportunity.js');
 
 const NOW = new Date('2026-11-14T12:00:00Z');
@@ -117,6 +120,9 @@ const read = (promptId, over = {}) =>
 describe('readOpportunity', () => {
   it('gives the latest answer per platform in the period, newest first, with who it names and cites', async () => {
     const got = await read('p1');
+    // The Earn card's part (earn.js), within the brand and organization.
+    expect(got.earn).toEqual({ page: null, action: null });
+    expect(readEarn).toHaveBeenCalledWith('b1', 'o1', 'p1');
     expect(got.answers.map((a) => [a.platform, a.at])).toEqual([
       ['perplexity-web', '2026-11-13T08:00:00Z'],
       ['chatgpt-web', '2026-11-12T08:00:00Z'],

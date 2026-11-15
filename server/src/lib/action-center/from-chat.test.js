@@ -535,6 +535,34 @@ describe('sendChatAction', () => {
     expect(db.inserts).toEqual([]);
   });
 
+  it("sends Ads' Earn card with source ads, naming no conversation or run whatever it's given", async () => {
+    const key = `ads:${PROMPT_A}:key-0001`;
+    await expect(send({ source: 'ads', idempotencyKey: key })).resolves.toMatchObject({
+      created: true,
+    });
+    const none = { conversationId: null, runId: null, execution: null };
+    expect(inserted('actions')[0].payload).toMatchObject({ source: 'ads', ...none });
+    expect(inserted('action_tasks')[0][0].details.source).toBe('ads');
+    expect(inserted('action_events')[0].data).toMatchObject({ source: 'ads', ...none });
+    // The same key again answers what it made (the fake keeps no insert: a row stands in).
+    db.tables.actions.push({
+      id: 'act-new',
+      action_no: 1300,
+      brand_id: BRAND,
+      kind: CHAT_ACTION_KIND,
+      status: 'new',
+      payload: { idempotencyKey: key },
+      deleted_at: null,
+    });
+    await expect(send({ source: 'ads', idempotencyKey: key })).resolves.toEqual({
+      actionId: 'act-new',
+      actionNo: 1300,
+      created: false,
+    });
+    expect(inserted('actions')).toHaveLength(1);
+    await expect(send({ source: 'email' })).rejects.toThrow('Unknown source: email');
+  });
+
   it('takes the action back when its tasks could not be kept, so the approval can go again', async () => {
     db.tasksError = { message: 'statement timeout' };
     await expect(send()).rejects.toThrow("The action's tasks couldn't be kept: statement timeout");

@@ -4,6 +4,7 @@ import { ADS_THRESHOLDS, adsThresholds } from '../config/ads.js';
 import { MANAGER_ROLES, assertBrandAccess, assertRole, brandAccessOf } from '../lib/access.js';
 import { adsEnabled } from '../lib/ads-flag.js';
 import { readAdsActivity } from '../lib/ads/activity.js';
+import { sendEarn } from '../lib/ads/earn.js';
 import {
   SNAPSHOT_PERIOD,
   isDemoPrompt,
@@ -35,7 +36,8 @@ import { DEMO_BRAND } from '../middleware/demo-brand.js';
  *     self-hosted has no plans): Starter and the trial get 403 plan_limit.
  *
  * Nothing here reaches an ad platform. The writes are Ads' own rows (a
- * decision, the thresholds), each logged (lib/ads/activity.js).
+ * decision, the thresholds) and the Earn card's Action Center action, each
+ * logged (lib/ads/activity.js).
  */
 
 const router = Router();
@@ -45,13 +47,14 @@ const off = (res) => res.status(404).json({ error: 'Not available', code: 'off' 
 // Before every route, so a path added later is hidden with the rest.
 router.use((req, res, next) => (adsEnabled() ? next() : off(res)));
 
-/** A brand-access refusal as it is (403 or 404); anything else is a failure. */
+/** A brand-access refusal as it is (403 or 404), a conflict (409); anything else is a failure. */
 function failed(req, res, err, what) {
   if (err?.status === 403 || err?.status === 404) {
     return res
       .status(err.status)
       .json({ error: err.message, code: err.status === 404 ? 'not_found' : 'forbidden' });
   }
+  if (err?.status === 409) return res.status(409).json({ error: err.message, code: 'conflict' });
   req.log.error({ err: { name: err?.name, message: err?.message, stack: err?.stack } }, what);
   return res.status(500).json({ error: 'Failed to read Ads', code: 'failed' });
 }
@@ -194,6 +197,43 @@ router.patch('/opportunities/:promptId/decision', async (req, res) => {
     return res.json({ promptId: promptId.data, override });
   } catch (err) {
     return failed(req, res, err, 'ads decision error');
+  }
+});
+
+// POST /api/ads/opportunities/:promptId/earn { brandId, idempotencyKey } — the
+// Earn card's fix as one Action Center action (lib/ads/earn.js), or the active
+// action that already covers the prompt: as a decision is set (admins and
+// managers, a plan that reads every opportunity, never the demo brand). The
+// same key again answers what it made. Logged.
+router.post('/opportunities/:promptId/earn', async (req, res) => {
+  const promptId = z.guid().safeParse(req.params.promptId);
+  const body = z
+    .object({ brandId: z.guid(), idempotencyKey: z.string().trim().min(8).max(100) })
+    .safeParse(req.body);
+  if (!promptId.success || !body.success) {
+    return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  }
+  try {
+    const { brand, orgId } = await assertBrandAccess(body.data.brandId, req.user.id);
+    if (brand?.is_demo || (await isDemoPrompt(orgId, promptId.data))) {
+      return res.status(402).json(DEMO_BRAND);
+    }
+    await assertRole(
+      req.user.id,
+      MANAGER_ROLES,
+      'Only admins and managers can send a fix to the Action Center.',
+    );
+    if (!(await readsEveryOpportunity(orgId, brand))) return planLimit(res);
+    const sent = await sendEarn({
+      brand,
+      orgId,
+      promptId: promptId.data,
+      userId: req.user.id,
+      idempotencyKey: body.data.idempotencyKey,
+    });
+    return res.status(sent.created ? 201 : 200).json(sent);
+  } catch (err) {
+    return failed(req, res, err, 'ads earn error');
   }
 });
 

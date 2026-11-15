@@ -53,6 +53,8 @@ vi.mock('../lib/ads/activity.js', () => ({
 }));
 const readOverview = vi.fn();
 vi.mock('../lib/ads/overview.js', () => ({ readOverview: (...a) => readOverview(...a) }));
+const sendEarn = vi.fn();
+vi.mock('../lib/ads/earn.js', () => ({ sendEarn: (...a) => sendEarn(...a) }));
 const readOpportunity = vi.fn();
 vi.mock('../lib/ads/opportunity.js', () => ({
   readOpportunity: (...a) => readOpportunity(...a),
@@ -75,6 +77,7 @@ beforeEach(async () => {
   brandAccessOf.mockReset().mockResolvedValue({ orgId: 'o1', role: 'admin' });
   readAdsActivity.mockReset().mockResolvedValue({ entries: [], next: null });
   readOpportunity.mockReset();
+  sendEarn.mockReset();
   for (const fn of Object.values(ads)) fn.mockReset();
   ads.readsEveryOpportunity.mockResolvedValue(true);
   ads.isDemoPrompt.mockResolvedValue(false);
@@ -505,6 +508,77 @@ describe('opportunities, decisions and settings while ADS_ENABLED is on', () => 
       expect((await send('/settings', change)).status, JSON.stringify(plan)).toBe(200);
     }
     expect(ads.saveAdsSettings).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('POST /api/ads/opportunities/:promptId/earn while ADS_ENABLED is on', () => {
+  const KEY = 'key-0001';
+  const earn = (body = { brandId: BRAND, idempotencyKey: KEY }, prompt = PROMPT) =>
+    send(`/opportunities/${prompt}/earn`, { method: 'POST', body });
+  const sent = { promptId: PROMPT, action: { id: 'a1', no: 1300 }, created: true, covered: false };
+
+  it('lets admins and managers send the fix (201), or answers the action covering it (200)', async () => {
+    sendEarn.mockResolvedValue(sent);
+    for (role of ['manager', 'admin']) {
+      const res = await earn();
+      expect(res.status, role).toBe(201);
+      expect(await res.json()).toEqual(sent);
+    }
+    expect(sendEarn).toHaveBeenLastCalledWith({
+      brand: { id: BRAND },
+      orgId: 'o1',
+      promptId: PROMPT,
+      userId: 'u1',
+      idempotencyKey: KEY,
+    });
+    sendEarn.mockResolvedValue({ ...sent, created: false, covered: true });
+    const res = await earn();
+    expect([res.status, (await res.json()).covered]).toEqual([200, true]);
+  });
+
+  it('refuses analysts (403), the demo brand or its prompt (402), and Starter or the trial (403)', async () => {
+    for (role of ['analyst', 'agency_partner']) {
+      const res = await earn();
+      expect([res.status, (await res.json()).code], role).toEqual([403, 'forbidden']);
+    }
+    role = 'admin';
+    assertBrandAccess.mockResolvedValueOnce({ brand: { id: BRAND, is_demo: true }, orgId: 'o1' });
+    for (const what of ['demo brand', 'demo prompt']) {
+      const res = await earn();
+      expect(res.status, what).toBe(402);
+      expect(await res.json(), what).toMatchObject({ code: 'demo_brand' });
+      ads.isDemoPrompt.mockResolvedValue(true);
+    }
+    ads.isDemoPrompt.mockResolvedValue(false);
+    // A locked prompt or an open one: writes are Growth's, as a decision.
+    ads.readsEveryOpportunity.mockResolvedValue(false);
+    const res = await earn();
+    expect([res.status, (await res.json()).code]).toEqual([403, 'plan_limit']);
+    expect(sendEarn).not.toHaveBeenCalled();
+  });
+
+  it("answers another brand's or workspace's prompt as not found, a cancelled send as a conflict", async () => {
+    sendEarn.mockRejectedValueOnce(Object.assign(new Error('Prompt not found'), { status: 404 }));
+    let res = await earn();
+    expect([res.status, (await res.json()).code]).toEqual([404, 'not_found']);
+    sendEarn.mockRejectedValueOnce(
+      Object.assign(new Error('The action this approval made was cancelled.'), { status: 409 }),
+    );
+    res = await earn();
+    expect([res.status, (await res.json()).code]).toEqual([409, 'conflict']);
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error('Brand not found'), { status: 404 }),
+    );
+    expect((await earn()).status).toBe(404);
+    for (const [body, prompt] of [
+      [{ brandId: BRAND }, PROMPT],
+      [{ brandId: BRAND, idempotencyKey: 'short' }, PROMPT],
+      [{ idempotencyKey: KEY }, PROMPT],
+      [{ brandId: BRAND, idempotencyKey: KEY }, 'nope'],
+    ]) {
+      expect((await earn(body, prompt)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect(sendEarn).toHaveBeenCalledTimes(2);
   });
 });
 
