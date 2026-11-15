@@ -1,6 +1,7 @@
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import { toCsv } from '@/lib/csv';
 import { assigneeLabel } from '@/lib/action-center/display';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { withTemplateCheck } from '@/lib/action-center/task-details';
 import { locationName, platformName } from '@/lib/signals/names';
 import { dayIn } from '@/lib/time-zone';
@@ -188,7 +189,7 @@ export function buildActionExport(
 ): ActionExport {
   const day = (iso: string | null | undefined) => dayOf(iso, timeZone);
   return {
-    ref: `AC-${action.actionNo}`,
+    ref: actionCode(action),
     title: texts.title,
     priority: texts.priority,
     category: texts.category,
@@ -475,7 +476,8 @@ export const ACTION_LIST_CSV_HEADERS = [
 
 /** One action of the list, labelled in the reader's language. */
 export interface ActionListRow {
-  number: number;
+  /** Its code, "AC-52", as the list shows it (actionCode). */
+  number: string;
   priorityScore: number | null;
   /** "High"; empty before the action is scored. */
   priorityLevel: string;

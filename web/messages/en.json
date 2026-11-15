@@ -692,8 +692,7 @@
       "agentWorking": "it is running now",
       "agentNeedsOk": "it is waiting for your OK",
       "agentRunFailed": "its last run failed"
-    },
-    "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
+    }
   },
   "pageDots": {
     "reasons": {
@@ -846,12 +845,8 @@
         "noChange": "no change since yesterday",
         "behind": "#{rank} of {count} brands. {gap} points behind {name}.",
         "ahead": "#1 of {count} brands. {gap} points ahead of {name}.",
-        "alone": "No competitor scored on your prompts yet."
-      },
-      "ask": {
-        "label": "Ask Chat",
-        "placeholder": "Ask Chat, e.g. why did my score change?",
-        "button": "Ask"
+        "alone": "No competitor scored on your prompts yet.",
+        "none": "No score yet. It shows here once your latest AI answers are scored."
       },
       "summary": {
         "changes": "{title}: {count, plural, =0 {no big changes} one {# change} other {# changes}}",
@@ -1891,10 +1886,11 @@
       },
       "sort": {
         "label": "Sort",
+        "updated": "Recently updated",
+        "updated_asc": "Least recently updated",
         "priority": "Priority",
-        "newest": "Newest",
-        "due_date": "Due date",
-        "updated": "Recently updated"
+        "priority_asc": "Lowest priority first",
+        "due_date": "Due date"
       },
       "table": {
         "priority": "Priority Score",
@@ -1903,6 +1899,7 @@
         "assignee": "Assignee",
         "dueDate": "Due date",
         "updated": "Updated",
+        "sortTo": "Sort: {sort}",
         "actions": "Actions"
       },
       "status": {
@@ -10507,6 +10504,7 @@
         "careful": "Keeping its changes small for rules people here mostly reject: {rules}.",
         "live": "Keeping what the live page earns: cited {citations, plural, one {# time} other {# times}} in {days} days ({before, number} before){lost, plural, =0 {} one {, # prompt lost} other {, # prompts lost}}.",
         "breaks": "would break {names}",
+        "breaksCount": "{count, plural, one {# rule} other {# rules}}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
         "stillFinishing": "Still finishing…",

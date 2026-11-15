@@ -16,8 +16,10 @@ import messages from '../../../../../../../messages/en.json';
 /**
  * Action Center › Today (SIMPLE_NAV): not found while the simplified layout
  * is off; with it on, the Action Center's header with the day, brand and
- * when answers came in, the loop strip, Today's focus, Where you stand, the
- * parts still being built, and Ask Chat. Each part reads on its own.
+ * when answers came in, the loop strip, the summary row (Waiting for you,
+ * Where you stand), then Since yesterday and Today's focus across the page.
+ * Ask Chat is the header's. The reads start together (getTodayStart, run
+ * here as it is), and each part shows when its own read is in.
  */
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -379,6 +381,10 @@ async function draw() {
 }
 
 const text = (selector: string) => container.querySelector(selector)?.textContent;
+const summaryRow = () =>
+  [...container.querySelectorAll('[data-today-row="summary"] > section')].map((section) =>
+    section.getAttribute('data-today-part'),
+  );
 const titles = () => [...container.querySelectorAll('section h2')].map((h) => h.textContent);
 const button = (label: string) =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === label);
@@ -418,15 +424,19 @@ describe('Action Center › Today', () => {
     expect(text('[data-loop-step="answers"]')).toBe('2 · AI answers7 of 44 in');
   });
 
-  it('lays out the parts as the mockup does, each named by its title', async () => {
+  it('puts Waiting for you and Where you stand in a summary row, the rest across the page', async () => {
     await draw();
     expect(titles()).toEqual([
+      'Waiting for you',
+      'Where you stand',
       'Since yesterday',
       "Today's focus",
-      'Waiting for you',
       'Finish setting up',
-      'Where you stand',
     ]);
+    expect(summaryRow()).toEqual(['waiting', 'stand']);
+    expect(text('[data-today-part="waiting"] a[href="/dashboard/content/library"]')).toBe(
+      'Review 2 drafts',
+    );
     for (const section of container.querySelectorAll('section')) {
       const id = section.getAttribute('aria-labelledby');
       expect(id && container.querySelector(`[id="${id}"]`)).toBeTruthy();
@@ -588,7 +598,7 @@ describe('Action Center › Today', () => {
     reads.getTodayFocus.mockRejectedValue(new Error('down'));
     reads.getTodayStanding.mockRejectedValue(new Error('down'));
     await draw();
-    expect(titles()).toEqual(['Since yesterday', 'Waiting for you', 'Finish setting up']);
+    expect(titles()).toEqual(['Waiting for you', 'Since yesterday', 'Finish setting up']);
     expect(text('[data-loop-step="results"]')).toBe('5 · Results—');
     expect(text('[data-loop-step="prompts"]')).toBe('1 · Prompts12 tracked');
   });
@@ -599,26 +609,105 @@ describe('Action Center › Today', () => {
     expect(text('[data-today-part="focus"]')).toContain('Nothing to focus on right now.');
   });
 
-  it('hands a question to Chat’s side panel with Chat on, and has no box without it', async () => {
+  it('has no Ask Chat bar of its own: Ask Chat is in the header on every page', async () => {
     await draw();
-    const input = container.querySelector<HTMLInputElement>('#today-ask')!;
-    await act(async () => {
-      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
-      setValue.call(input, 'why did my score change?');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await act(async () => {
-      input.form?.requestSubmit();
-    });
-    expect(panel.fill).toHaveBeenCalledWith('why did my score change?');
-    expect(panel.toggle).toHaveBeenCalled();
+    expect(container.querySelector('form')).toBeNull();
+    expect(container.querySelector('input')).toBeNull();
+    expect(container.textContent).not.toContain('Ask Chat');
+    expect(panel.fill).not.toHaveBeenCalled();
 
     act(() => root.unmount());
     root = createRoot(container);
     chatOn = false;
     await draw();
-    expect(container.querySelector('#today-ask')).toBeNull();
     expect(container.querySelector('[data-testid="gear"]')).toBeNull();
+  });
+
+  describe('the summary row', () => {
+    const stand = () => text('[data-today-part="stand"]');
+
+    it('keeps both cards with nothing waiting and no score yet, and says so', async () => {
+      const none = { drafts: [], actions: [], reviews: null, ideas: null };
+      reads.getTodayWaiting.mockResolvedValue({ ...waiting, ...none });
+      reads.getTodayStanding.mockResolvedValue(null);
+      chats = [];
+      await draw();
+      expect(summaryRow()).toEqual(['waiting', 'stand']);
+      expect(text('[data-today-part="waiting"]')).toContain('Nothing is waiting for you.');
+      expect(stand()).toContain('No score yet.');
+    });
+
+    it('shows both on the demo brand, which is the normal day while read-only', async () => {
+      upgrade = {
+        isLocked: true,
+        isDemo: true,
+        reason: 'ended',
+        adminName: null,
+        openUpgrade: vi.fn(),
+      };
+      await draw();
+      expect(summaryRow()).toEqual(['waiting', 'stand']);
+      expect(stand()).toContain('#2 of 5 brands.');
+    });
+  });
+
+  describe('while it reads', () => {
+    const pending = () => new Promise<never>(() => {});
+    const rows = (part: string) =>
+      [...container.querySelectorAll(`[data-skeleton="${part}"] > li`)].map((li) => li.className);
+
+    it('shows the normal day at its final shape before the overview is in', async () => {
+      reads.getTodayOverview.mockImplementation(pending);
+      await draw();
+      expect(titles()).toEqual([
+        'Waiting for you',
+        'Where you stand',
+        'Since yesterday',
+        "Today's focus",
+      ]);
+      expect(summaryRow()).toEqual(['waiting', 'stand']);
+      // Nothing of the normal day is read before the overview says it is one.
+      expect(reads.getTodayFocus).not.toHaveBeenCalled();
+      expect(reads.getTodayWaiting).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('gives each part rows shaped as its answer, so nothing moves when it comes', async () => {
+      reads.getTodayOverview.mockImplementation(pending);
+      await draw();
+      expect(rows('since')).toEqual(Array(3).fill('flex items-center gap-3 border-t py-3'));
+      expect(rows('focus')).toEqual(Array(3).fill('flex items-center gap-3.5 border-t py-3.5'));
+      expect(rows('waiting')).toEqual(['flex flex-col gap-1.5']);
+      // The score's line (text-3xl) and the rank's (text-sm), at their heights.
+      const bars = container.querySelectorAll('[data-skeleton="stand"] > *');
+      expect([...bars].map((bar) => bar.className.match(/ (h-\d+) /)?.[1])).toEqual(['h-9', 'h-5']);
+    });
+
+    it('starts every part together, and shows each as soon as its own read is in', async () => {
+      let focusIn: (cards: FocusCard[]) => void = () => {};
+      reads.getTodayFocus.mockImplementation(
+        () => new Promise<FocusCard[]>((resolve) => (focusIn = resolve)),
+      );
+      await draw();
+      for (const read of [
+        reads.getTodayOverview,
+        reads.readUserBrandState,
+        reads.getTodayFocus,
+        reads.getTodayChanges,
+        reads.getTodayWaiting,
+        reads.getGettingStarted,
+        reads.getTodayStanding,
+      ]) {
+        expect(read).toHaveBeenCalledTimes(1);
+      }
+      // The focus still reads; the parts that are in show.
+      expect(container.querySelector('[data-skeleton="focus"]')).not.toBeNull();
+      expect(text('[data-today-part="since"]')).toContain('Up');
+      expect(text('[data-today-part="waiting"]')).toContain('Review 2 drafts');
+      await act(async () => focusIn([card('a1')]));
+      expect(container.querySelector('[data-skeleton="focus"]')).toBeNull();
+      expect(container.querySelector('[data-focus-id="a1"]')).not.toBeNull();
+    });
   });
 
   it('lists what waits for the person, each row with its link, and counts them in the header', async () => {
@@ -649,7 +738,7 @@ describe('Action Center › Today', () => {
   it('lists what broke first, "Fix this", from the menu’s own read', async () => {
     useMenuStateStore.setState({
       read: {
-        key: 'b1|traffic|count||red',
+        key: 'b1|traffic||red',
         brandId: 'b1',
         at: Date.now(),
         state: {
@@ -657,7 +746,6 @@ describe('Action Center › Today', () => {
           newSuggestionAt: null,
           newActionAt: null,
           newOpportunityAt: null,
-          openActions: null,
           navSeen: null,
           broken: { traffic: 'searchConsole' },
         },
@@ -965,9 +1053,12 @@ describe('Action Center › Today', () => {
       expect(text('[data-today-part="worth"]')).toContain(
         'From your website. 28 of 50 spots left on Starter.',
       );
-      // No normal day's parts, and no reads for them.
+      // No normal day's parts, no summary row, and no reads for them.
+      expect(container.querySelector('[data-today-row="summary"]')).toBeNull();
       expect(reads.getTodayFocus).not.toHaveBeenCalled();
       expect(reads.getTodayStanding).not.toHaveBeenCalled();
+      expect(reads.getTodayWaiting).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
       expect(track).toHaveBeenCalledWith('today_viewed', { state: 'day1' });
       expect(reads.markSeen).toHaveBeenCalledWith('b1', 'today');
     });
@@ -1181,11 +1272,11 @@ describe('Action Center › Today', () => {
       reads.trackTopicPrompts.mockResolvedValue({ ok: true, added: 3, waiting: 1 });
     });
 
-    it("offers a topic on the person's Monday, under Waiting for you, with why and the spots", async () => {
+    it("offers a topic on the person's Monday, under Today's focus, with why and the spots", async () => {
       await draw();
       expect(reads.getTodayTopic).toHaveBeenCalledWith('b1');
-      const aside = titles();
-      expect(aside.indexOf('Cold brew')).toBe(aside.indexOf('Waiting for you') + 1);
+      const parts = titles();
+      expect(parts.indexOf('Cold brew')).toBe(parts.indexOf("Today's focus") + 1);
       expect(card()!.className).toContain('border-dashed');
       expect(card()!.textContent).toContain('New area to track');
       expect(card()!.textContent).toContain(

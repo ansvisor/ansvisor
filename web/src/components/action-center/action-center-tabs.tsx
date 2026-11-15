@@ -3,9 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
-import { useBrandStore } from '@/stores/use-brand-store';
-import { getNewSignalCount } from '@/lib/actions/signals';
-import { getMyOpenActionCount } from '@/lib/actions/action-center-counts';
 import { cn } from '@/lib/utils';
 import {
   ACTION_CENTER_TABS,
@@ -20,50 +17,28 @@ import { useHiddenMenuSections } from '@/components/providers/menu-access-provid
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { FirstRunNote } from './first-run-note';
 
-/** A count kept with its brand: another brand's isn't shown while this one's loads. */
-type BrandCount = { brandId: string; count: number } | null;
-
-const countOf = (value: BrandCount, brandId: string | null) =>
-  value && value.brandId === brandId ? value.count : 0;
-
 /**
  * The Action Center's section nav: Today | Actions | Signals | Agents |
  * History, each a page of its own, so each is linkable and the browser's
  * back button works across them. History is the tab on
  * KPIs, one of its views; Needs review is reached from Today. Agents is
  * Agent Center, there only with the new Chat on, a plan with agents and its
- * section on the person's menu (menu access). The counts are best-effort,
- * read on each page change, and a failed one shows nothing: Actions, the
- * open actions Today ranks for the person; Signals, the untriaged ones, as
- * before; Agents, the person's agents whose newest run waits on them, as
- * Agents › Your agents shows them. Plain numbers, as in the mockup: the
- * menu's green and yellow dots keep their colours to themselves. The first
- * run's note sits under it while a new brand's first analysis goes on.
+ * section on the person's menu (menu access). Actions and Signals carry no
+ * count: a number that differed from their lists' read as wrong, and the
+ * menu's dots say when something is new or waiting. Agents counts the
+ * person's agents whose newest run waits on them, as Agents › Your agents
+ * shows them: best-effort, read on each page change, a failed read showing
+ * nothing. A plain number, as in the mockup: the menu's green and yellow
+ * dots keep their colours to themselves. The first run's note sits under
+ * it while a new brand's first analysis goes on.
  */
 export function ActionCenterTabs() {
   const pathname = usePathname();
   const t = useTranslations('actionCenter.tabs');
-  const brandId = useBrandStore((s) => s.activeBrandId);
   const chatAgentic = useChatAgentic();
   const { canUse } = useFeatureGate();
   const hiddenSections = useHiddenMenuSections();
   const agentsOn = chatAgentic && canUse('ai_agent') && !hiddenSections.has(AGENTS_SECTION);
-
-  const [openActions, setOpenActions] = useState<BrandCount>(null);
-  const [newSignals, setNewSignals] = useState<BrandCount>(null);
-  useEffect(() => {
-    if (!brandId) return;
-    let cancelled = false;
-    getMyOpenActionCount(brandId)
-      .then((count) => !cancelled && setOpenActions({ brandId, count }))
-      .catch(() => {});
-    getNewSignalCount(brandId)
-      .then((count) => !cancelled && setNewSignals({ brandId, count }))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, pathname]);
 
   // The person's agents, as Agents › Your agents lists them: those whose run waits on them.
   const [agentsWaiting, setAgentsWaiting] = useState(0);
@@ -84,8 +59,6 @@ export function ActionCenterTabs() {
   }, [agentsOn, pathname]);
 
   const counts: Partial<Record<ActionCenterTabKey, number>> = {
-    actions: countOf(openActions, brandId),
-    signals: countOf(newSignals, brandId),
     agents: agentsOn ? agentsWaiting : 0,
   };
   const current = actionCenterTabOf(pathname);

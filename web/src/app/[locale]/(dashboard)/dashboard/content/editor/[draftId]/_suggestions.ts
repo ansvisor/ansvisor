@@ -523,19 +523,12 @@ function button(
 
 /**
  * The card's top line: the agent and why, then its buttons or what was
- * decided. An open one that would break a rule met now says which.
+ * decided. Only the label shrinks, cut short.
  */
-function head(
-  s: DraftSuggestion & { breaks?: string },
-  labels: SuggestionLabels,
-  controls: HTMLElement[],
-): HTMLElement {
+function head(s: DraftSuggestion, labels: SuggestionLabels, controls: HTMLElement[]): HTMLElement {
   const line = el('div', 'flex items-center gap-2 text-xs text-muted-foreground');
   const who = fromChat(s) && labels.agentFromChat ? labels.agentFromChat : labels.agent;
   line.append(el('span', 'min-w-0 truncate', `${who} · ${s.reason}`));
-  if (s.status === 'open' && s.breaks && labels.breaks) {
-    line.append(el('span', 'shrink-0 text-amber-700 dark:text-amber-400', labels.breaks(s.breaks)));
-  }
   const right = el('span', 'ml-auto flex shrink-0 items-center gap-1.5');
   right.append(...controls);
   line.append(right);
@@ -591,6 +584,18 @@ function card(
       button(PRIMARY, labels.accept, () => decide(s.id, 'accept'), blocked !== null),
     ]),
   );
+  // A rule met now that it would break: on a line of its own under the top line,
+  // wrapping, so the label and the buttons keep theirs (the owner, 2026-11-14).
+  const breaks = (s as { breaks?: string }).breaks;
+  if (breaks && labels.breaks) {
+    const warning = el(
+      'p',
+      'mt-0.5 text-xs text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400',
+      labels.breaks(breaks),
+    );
+    warning.dataset.suggestionBreaks = '';
+    box.append(warning);
+  }
   const change = el('div', 'mt-1.5');
   if (s.kind === 'replace') {
     change.append(

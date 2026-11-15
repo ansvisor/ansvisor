@@ -9,16 +9,16 @@ import { isReminderKind } from '@/lib/action-center/focus';
 import { ACTION_CENTER_REVIEW } from '@/lib/action-center/tabs';
 import { waitingRows, type WaitingAction, type WaitingRow } from '@/lib/action-center/waiting';
 import { brokenReasons, type BrokenReason } from '@/lib/menu-dots';
-import { getTodayWaiting } from '@/lib/actions/today-waiting';
+import type { TodayWaiting } from '@/lib/actions/today-waiting';
 import type { FocusCard } from '@/lib/actions/today-focus';
 import type { ChatListItem } from '@/lib/chat/conversations';
-import { viewerTimeZone } from '@/lib/time-zone';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { useMenuStateStore } from '@/stores/use-menu-state-store';
+import { Skeleton } from '@/components/ui/skeleton';
 import { actionHref } from './focus-section';
-import { TodaySection, TodaySkeleton } from './today-parts';
-import { useTodayRead, type TodayVisit } from './use-today';
+import { TodaySection } from './today-parts';
+import { useTodayPart, useTodayRead, type TodayVisit } from './use-today';
 
 /**
  * The person's own chats on this brand whose agent run waits for them, from
@@ -45,15 +45,19 @@ async function readAgentsWaiting(brandId: string): Promise<{ id: string; title: 
  * review, prompts waiting for a spot and new prompt ideas, each for a role
  * that can act on it and only while its section is on the person's menu
  * (lib/action-center/waiting.ts). With nothing waiting, the action in their
- * focus furthest along. Stays away when its read fails.
+ * focus furthest along. Read with Today's other parts, its agent runs
+ * beside them; stays away when its read fails.
  */
 export function WaitingSection({
   brandId,
+  read,
   visit,
   focus,
   onSummary,
 }: {
   brandId: string;
+  /** The part's read, started with Today's others; null until the day is known. */
+  read: Promise<TodayWaiting | null> | null;
   visit: TodayVisit;
   /** Today's focus as read, for "A good day to finish one". */
   focus: FocusCard | null;
@@ -63,8 +67,10 @@ export function WaitingSection({
   const chatOn = useChatAgentic();
   const hidden = useHiddenMenuSections();
   const readAgents = chatOn && !hidden.has('agent');
-  const load = useTodayRead(brandId, () => getTodayWaiting(brandId, viewerTimeZone()));
-  const agents = useTodayRead(readAgents ? brandId : null, () => readAgentsWaiting(brandId));
+  const load = useTodayPart(read);
+  const agents = useTodayRead(readAgents && read ? brandId : null, () =>
+    readAgentsWaiting(brandId),
+  );
   // What broke: the menu's own read, shared, never read again here.
   const menuRead = useMenuStateStore((s) => s.read);
   const brokenKey = brokenReasons(menuRead?.brandId === brandId ? menuRead.state : null).join(',');
@@ -100,7 +106,7 @@ export function WaitingSection({
   return (
     <TodaySection part="waiting" title={t('title')}>
       {rows === null ? (
-        <TodaySkeleton lines={2} />
+        <WaitingSkeleton />
       ) : rows.length === 0 ? (
         <NothingWaiting focus={focus} />
       ) : (
@@ -117,6 +123,22 @@ export function WaitingSection({
         </ul>
       )}
     </TodaySection>
+  );
+}
+
+/**
+ * Waiting for you reading: one row shaped as its rows, a line and its link,
+ * as tall as Where you stand beside it, so the summary row keeps its height
+ * when one thing or nothing waits.
+ */
+export function WaitingSkeleton() {
+  return (
+    <ul aria-hidden="true" data-skeleton="waiting">
+      <li className="flex flex-col gap-1.5">
+        <Skeleton className="h-5 w-4/5" />
+        <Skeleton className="h-5 w-28" />
+      </li>
+    </ul>
   );
 }
 
