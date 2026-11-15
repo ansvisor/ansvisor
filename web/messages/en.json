@@ -16124,6 +16124,7 @@
         "agent": "Agents",
         "schedule": "Scheduled runs",
         "image": "Images",
+        "ads": "Ad drafts",
         "other": "Other"
       },
       "none": "No AI usage yet this period.",

@@ -211,7 +211,7 @@ describe('refuseDemoBrandWrites', () => {
     );
   });
 
-  it("refuses an Ads decision or Earn send on a demo brand or its prompt; the thresholds aren't a brand's", async () => {
+  it("refuses an Ads decision, Earn send or ad drafts on a demo brand or its prompt; the thresholds aren't a brand's", async () => {
     const decision = (promptId, brandId) =>
       run({ method: 'PATCH', path: `/ads/opportunities/${promptId}/decision`, body: { brandId } });
     expectRefused(await decision(MISSING, DEMO), 'demo brand');
@@ -222,6 +222,11 @@ describe('refuseDemoBrandWrites', () => {
     expectRefused(await earn(MISSING, DEMO), 'earn, demo brand');
     expectRefused(await earn(DEMO_PROMPT, REAL), 'earn, demo prompt');
     expectPassed(await earn(MISSING, REAL), 'earn, real brand');
+    const drafts = (promptId, brandId) =>
+      run({ path: `/ads/opportunities/${promptId}/drafts`, body: { brandId } });
+    expectRefused(await drafts(MISSING, DEMO), 'drafts, demo brand');
+    expectRefused(await drafts(DEMO_PROMPT, REAL), 'drafts, demo prompt');
+    expectPassed(await drafts(MISSING, REAL), 'drafts, real brand');
     expectPassed(await run({ method: 'PATCH', path: '/ads/settings' }), 'settings');
   });
 
