@@ -31,7 +31,7 @@ When approvedFacts is empty, stop and ask the person to approve their facts in t
 
 ## Steps
 
-1. A rewrite starts from the saved draft the person means, or the text their message carries, and changes only what they asked.
+1. A rewrite starts from the saved draft the person means, or the text their message carries, and changes only what they asked. In an agent's weekly run, write drafts only for the prompts the Earn or pay step found changed this week; none changed, write none.
 2. Write each draft in the prompt's language, plain and short: what the product does for this question, and only facts from approvedFacts. A fact with a scope goes only in an ad for a prompt about that place.
 3. List every fact a draft states as a claim: its words in the ad and its fact id. Add up to 10 keywords from the prompt, its fan-outs and keyword seeds.
 4. Show the drafts, then save them with `save_ad_drafts`: only the channels written or changed. The app shows its card first where the person's mode needs one. In an agent's run nobody is there to ask: call the tool anyway, and the app holds it for approval where the agent's mode needs it.

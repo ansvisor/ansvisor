@@ -83,10 +83,11 @@ describe('get_ads_opportunities', () => {
     expect(read).toHaveProperty('lockedNote', expect.stringContaining('5 more prompts'));
   });
 
-  it("reads nothing of a brand outside the person's scope, or without their session", async () => {
+  it("reads nothing of a brand outside the person's scope, or without their session or the acting way", async () => {
     data.brandAllowed.mockResolvedValueOnce(false);
     expect(await getAdsOpportunitiesFor(auth, { brandId: BRAND })).toBeNull();
     session.value = { access_token: 'token-2', user: { id: 'someone-else' } };
+    vi.stubEnv('CHAT_ACTING_SECRET', '');
     expect(await getAdsOpportunitiesFor(auth, { brandId: BRAND })).toHaveProperty('note');
     expect(fetchMock).not.toHaveBeenCalled();
     // The server's own refusal of the brand reads as not found.
@@ -118,6 +119,62 @@ describe('get_ads_opportunities', () => {
         ['is', 'gone_at', null],
       ]),
     );
+  });
+});
+
+describe('get_ads_opportunities in a run with no session (an agent schedule, PR 18)', () => {
+  const SECRET = 'a'.repeat(64);
+  const OTHER_BRAND = '22222222-2222-4222-8222-222222222222';
+  const tool = () => ADS_READS[0];
+  beforeEach(() => {
+    session.value = null;
+    vi.stubEnv('CHAT_ACTING_SECRET', SECRET);
+  });
+
+  it("reads the server's rows for the run's own brand, as the run's person, and what moved", async () => {
+    const sinceLastWeek = {
+      since: '2026-W46',
+      newPrompts: [],
+      moved: [{ promptId: 'p1', text: 'Best ferry 1', decision: 'pay', from: 'earn' }],
+      rivalPays: [],
+    };
+    answer(200, { period: '30d', rows: [1, 2, 3].map(row), total: 5, locked: 2, sinceLastWeek });
+    // The person is the run's (the context's), never the model's input.
+    const input = tool().inputSchema.parse({ brand_id: BRAND, user_id: 'u9' });
+    const read = await tool().run(auth, input);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toMatch(`/api/ads/opportunities?brandId=${BRAND}&period=30d`);
+    expect(init).toMatchObject({ method: 'GET', cache: 'no-store' });
+    expect(init.headers).toEqual({ Authorization: `Bearer ${SECRET}`, 'X-Acting-User': 'u1' });
+    expect(read).toMatchObject({ rows: [row(1), row(2), row(3)], locked: 2, sinceLastWeek });
+    expect(read).toHaveProperty('lockedNote', expect.stringContaining('never guess them'));
+  });
+
+  it("acts as the run's person, never a session of someone else's behind the request", async () => {
+    session.value = { access_token: 'token-2', user: { id: 'someone-else' } };
+    answer(200, { period: '30d', rows: [], total: 0, locked: 0 });
+    await getAdsOpportunitiesFor(auth, { brandId: BRAND });
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({
+      Authorization: `Bearer ${SECRET}`,
+      'X-Acting-User': 'u1',
+    });
+  });
+
+  it("reads nothing of another organization's brand: not sent, or the server's refusal", async () => {
+    data.brandAllowed.mockImplementation(async (_auth: unknown, brand: string) => brand === BRAND);
+    expect(await getAdsOpportunitiesFor(auth, { brandId: OTHER_BRAND })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    answer(403, { code: 'not_in_workspace' });
+    expect(await getAdsOpportunitiesFor(auth, { brandId: BRAND })).toBeNull();
+  });
+
+  it("says the server's refusal of the way in the person's words, with no rows", async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    answer(401, { message: 'Unauthorized API Request' });
+    const read = await getAdsOpportunitiesFor(auth, { brandId: BRAND });
+    expect(read).toEqual({ note: expect.stringMatching(/\w/) });
+    expect(read).not.toHaveProperty('rows');
+    warn.mockRestore();
   });
 });
 

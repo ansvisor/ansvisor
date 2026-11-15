@@ -302,6 +302,7 @@ describe('opportunities, decisions and settings while ADS_ENABLED is on', () => 
       brand: { id: BRAND },
       orgId: 'o1',
       period: '30d',
+      compareWeeks: true,
     });
     expect((await send(`/opportunities?brandId=${BRAND}&period=7d`)).status).toBe(200);
     expect(ads.readOpportunities.mock.lastCall[0].period).toBe('7d');

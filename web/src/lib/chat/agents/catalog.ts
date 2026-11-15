@@ -135,6 +135,7 @@ export const PRESET_ORDER = [
   'revenue-attribution',
   'ticket-loop',
   'agency-reporter',
+  'paid-opportunity',
   'ai-ads-watch',
   'product-answer-pages',
   'shopping-feed-advisor',
@@ -253,9 +254,31 @@ export function presetOnInstall(preset: AgentPreset): AgentPreset {
   return skills.length === preset.skills.length ? preset : { ...preset, skills };
 }
 
-/** A preset "Use this agent" may open: a ready one, by its id. */
+/**
+ * Whether this install offers a preset at all: not one whose primary skill
+ * waits on a flag that is off, such as the Paid Opportunity agent's
+ * /earn-or-pay before ADS_ENABLED (Ads Phase 0 PR 18). Without its primary
+ * skill it would be another agent, so it is in no list: not Ready to use,
+ * New agent, the recommendations or their plan locks. A follow-on skill
+ * that is off is only left out (presetOnInstall). Read on the server too.
+ */
+export function presetOffered(preset: Pick<AgentPreset, 'skills'>): boolean {
+  const primary = preset.skills[0];
+  return primary === undefined || skillFlagOn(primary);
+}
+
+/** The catalog as this install offers it, in its order: Ready to use's cards. */
+export function presetsOnInstall(presets: readonly AgentPreset[] = AGENT_PRESETS): AgentPreset[] {
+  return presets.filter(presetOffered).map(presetOnInstall);
+}
+
+/** A preset "Use this agent" may open: a ready one this install offers, by its id. */
 export function readyPreset(id: string | null | undefined): AgentPreset | null {
-  return AGENT_PRESETS.find((preset) => preset.id === id && preset.status === 'ready') ?? null;
+  return (
+    AGENT_PRESETS.find(
+      (preset) => preset.id === id && preset.status === 'ready' && presetOffered(preset),
+    ) ?? null
+  );
 }
 
 /**
@@ -384,16 +407,19 @@ export const RECOMMENDED_MAX = 5;
  * in Ready to use's own order for them (filterPresets, presetFit): those
  * made for the brand's site type or one of their work areas first, up to 5,
  * then, while fewer than 3 fit, the launch set's agents for every brand.
- * Ready ones only, never the onboarding agent itself; each with why it
- * fits, null for one made for every brand. Only a list: turning one on
- * stays the person's click in Agent Center.
+ * Ready ones this install offers only (presetOffered), never the onboarding
+ * agent itself; each with why it fits, null for one made for every brand.
+ * Only a list: turning one on stays the person's click in Agent Center.
  */
 export function recommendedPresets(
   viewer: PresetViewer,
   presets: readonly AgentPreset[] = AGENT_PRESETS,
 ): { preset: AgentPreset; fit: PresetFit | null }[] {
   const ordered = filterPresets(presets, {}, viewer)
-    .filter((preset) => preset.status === 'ready' && preset.id !== ONBOARDING_PRESET)
+    .filter(
+      (preset) =>
+        preset.status === 'ready' && preset.id !== ONBOARDING_PRESET && presetOffered(preset),
+    )
     .map((preset) => ({ preset, fit: presetFit(preset, viewer) }));
   const fitting = ordered.filter((entry) => entry.fit !== null).length;
   return ordered.slice(0, Math.min(Math.max(fitting, RECOMMENDED_MIN), RECOMMENDED_MAX));

@@ -24,6 +24,7 @@ import {
   presetCardHref,
   presetGate,
   presetSameness,
+  presetsOnInstall,
   readyPreset,
   recommendedPresets,
   type AgentPreset,
@@ -91,6 +92,7 @@ describe('the preset files', () => {
       'fanout-gap-filler',
       'prompt-portfolio',
       'onboarding-help',
+      'paid-opportunity',
       'product-answer-pages',
       'feature-question-coverage',
       'alternatives-comparison-pages',
@@ -294,6 +296,50 @@ describe('a ready preset', () => {
     expect(readyPreset('localization')).toBeNull();
     expect(readyPreset('nope')).toBeNull();
     expect(readyPreset(null)).toBeNull();
+  });
+});
+
+describe('the Paid Opportunity agent (Ads Phase 0 PR 18)', () => {
+  const PAID = 'paid-opportunity';
+  const paid = AGENT_PRESETS.find((preset) => preset.id === PAID)!;
+  const viewer = { siteType: null, workAreas: [] };
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('reads earn or pay, then drafts ads, on Mondays as AI Ads Watch would, asking before changes', () => {
+    expect(paid).toMatchObject({
+      goal: 'visibility',
+      skills: ['earn-or-pay', 'ad-drafts'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'auto',
+      connections: [],
+      status: 'ready',
+      needs: [],
+    });
+    expect(presetGate(paid)).toBeNull();
+    // AI Ads Watch still waits for ads read from AI answers.
+    expect(AGENT_PRESETS.find((p) => p.id === 'ai-ads-watch')).toMatchObject({
+      status: 'soon',
+      needs: ['ads_data'],
+      triggers: paid.triggers,
+    });
+    expect(JSON.stringify(chatAgents.presets[PAID])).not.toMatch(/phase|\d/i);
+  });
+
+  it('is in no list while Ads is off: Ready to use, New agent, the recommendations', () => {
+    vi.stubEnv('ADS_ENABLED', '');
+    const ids = presetsOnInstall().map((preset) => preset.id);
+    expect(ids).toEqual(AGENT_PRESETS.map((p) => p.id).filter((id) => id !== PAID));
+    expect(readyPreset(PAID)).toBeNull();
+    expect(recommendedPresets(viewer, [paid])).toEqual([]);
+    expect(recommendedPresets(viewer).map(({ preset }) => preset.id)).not.toContain(PAID);
+  });
+
+  it('is in each with Ads on, with both its skills', () => {
+    vi.stubEnv('ADS_ENABLED', 'true');
+    expect(presetsOnInstall().map((preset) => preset.id)).toEqual([...PRESET_ORDER]);
+    expect(presetsOnInstall().find((p) => p.id === PAID)?.skills).toEqual(paid.skills);
+    expect(readyPreset(PAID)).toBe(paid);
+    expect(recommendedPresets(viewer, [paid])).toEqual([{ preset: paid, fit: null }]);
   });
 });
 

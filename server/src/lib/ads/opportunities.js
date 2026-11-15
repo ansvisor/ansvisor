@@ -6,6 +6,7 @@ import { applyPlanOverrides } from '../plan-guard.js';
 import { logAdsActivity } from './activity.js';
 import { channelsFor } from './decision.js';
 import { NotFound, readStanding } from './standing.js';
+import { readSinceLastWeek } from './week-changes.js';
 
 /**
  * Ads' Opportunities (ADS-01 §3.2, §8; 00531): each prompt's standing and
@@ -192,9 +193,18 @@ export async function snapshotWeek(brandId, rows, now) {
  * The brand's opportunities for the period: every buying-intent prompt's
  * row, a person's decision over the rule's (`recommended` keeps the rule's),
  * the most searched first. Starter and the trial get the first OPEN_ROWS and
- * how many more are `locked`, decided here, not in the browser.
+ * how many more are `locked`, decided here, not in the browser. With
+ * `compareWeeks` (the list's own read), over the snapshot's period,
+ * `sinceLastWeek` says what moved in the rows shown since the last week
+ * compared (week-changes.js); null otherwise.
  */
-export async function readOpportunities({ brand, orgId, period, now = new Date() }) {
+export async function readOpportunities({
+  brand,
+  orgId,
+  period,
+  now = new Date(),
+  compareWeeks = false,
+}) {
   const settings = await readAdsSettings(orgId);
   const { rows, notAnalysed } = await readStanding({
     brandId: brand.id,
@@ -209,7 +219,8 @@ export async function readOpportunities({ brand, orgId, period, now = new Date()
   const overrides = new Map(
     (must(await set.eq('brand_id', brand.id), 'decisions') ?? []).map((o) => [o.prompt_id, o]),
   );
-  if (period === SNAPSHOT_PERIOD && !brand.is_demo) await snapshotWeek(brand.id, rows, now);
+  const weekly = period === SNAPSHOT_PERIOD && !brand.is_demo;
+  if (weekly) await snapshotWeek(brand.id, rows, now);
 
   const all = rows
     .map(({ standing, ...row }) => {
@@ -239,5 +250,7 @@ export async function readOpportunities({ brand, orgId, period, now = new Date()
     locked: all.length - open.length,
     notAnalysed,
     thresholds: adsThresholds(settings.thresholds),
+    sinceLastWeek:
+      weekly && compareWeeks ? await readSinceLastWeek(brand.id, open, isoWeek(now)) : null,
   };
 }

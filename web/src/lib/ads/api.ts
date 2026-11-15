@@ -127,6 +127,22 @@ export interface AdsReason {
 }
 
 /** Opportunities (GET /api/ads/opportunities): Starter's rows end where `locked` starts. */
+/** A row that moved since the last week compared, by the rule's decision. */
+export interface AdsWeekChange {
+  promptId: string;
+  text: string;
+  decision: AdsDecision;
+}
+
+/** What moved in the rows shown since the last week compared (server lib/ads/week-changes.js). */
+export interface AdsSinceLastWeek {
+  /** The ISO week compared with, as 2026-W46. */
+  since: string;
+  newPrompts: AdsWeekChange[];
+  moved: (AdsWeekChange & { from: AdsDecision })[];
+  rivalPays: (AdsWeekChange & { rule: string | null })[];
+}
+
 export interface AdsOpportunities {
   period: AdsPeriod;
   rows: AdsOpportunity[];
@@ -134,6 +150,8 @@ export interface AdsOpportunities {
   /** Rows past the plan's (Starter, the trial), decided on the server. */
   locked: number;
   notAnalysed: number;
+  /** At 30 days; null with no earlier week, or another period. */
+  sinceLastWeek?: AdsSinceLastWeek | null;
 }
 
 export function readAdsOpportunities(brandId: string, period: AdsPeriod) {

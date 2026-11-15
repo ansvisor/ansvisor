@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
-import type { PresetLock } from '@/lib/chat/agents/catalog';
+import { AGENT_PRESETS, type AgentPreset, type PresetLock } from '@/lib/chat/agents/catalog';
 import { NOW, listResult } from '@/lib/chat/testing/agent-fixtures';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
@@ -67,12 +67,19 @@ async function render(
   role: TeamRole = 'manager',
   locks: Record<string, PresetLock> = {},
   workAreas: string[] = [],
+  presets?: readonly AgentPreset[],
 ) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role={role}>
-          <AgentCenter locks={locks} workAreas={workAreas} now={NOW} timeZone="UTC" />
+          <AgentCenter
+            locks={locks}
+            workAreas={workAreas}
+            presets={presets}
+            now={NOW}
+            timeZone="UTC"
+          />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -160,6 +167,15 @@ describe('Ready to use', () => {
     expect(shown).toHaveLength(39);
     // No brand on screen and no work areas: nothing is marked.
     expect(all('[data-slot="preset-fit"]')).toHaveLength(0);
+  });
+
+  it('shows the Paid Opportunity agent only when the page hands it in (Ads on)', async () => {
+    await render();
+    expect(ids()).not.toContain('paid-opportunity');
+    await render('manager', {}, [], AGENT_PRESETS);
+    expect(card('paid-opportunity').querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
+      '/earn-or-pay/ad-draftsAuto, ask before changes',
+    );
   });
 
   it('gives a ready card its line, skills, mode and triggers, and Use this agent into New agent', async () => {
