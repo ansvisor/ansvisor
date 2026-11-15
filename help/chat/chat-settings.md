@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, web/src/lib/chat/range.ts]
 ---
-Click **Settings** in the chat menu, then **General**, for your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so. The bar next to **Settings** shows how much of this month's AI usage your workspace has used.
+Click **Settings** in the chat menu, then **General**, for your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so.
 
 ## Default mode
 

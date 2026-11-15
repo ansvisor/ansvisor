@@ -151,9 +151,9 @@ describe('ChatMenuView', () => {
     await render(menu([]));
     const skills = action('chatMenu.openSkills')[0];
     const row = skills.nextElementSibling as HTMLElement;
-    expect(row.textContent).toBe('ConnectionsManage▾');
+    expect(row.textContent).toBe('Connections▾');
     expect(
-      row.querySelector('[data-action="chatMenu.manageConnections"]')?.getAttribute('href'),
+      row.querySelector('[data-action="chatMenu.openConnections"]')?.getAttribute('href'),
     ).toBe('/dashboard/chat/connections');
     expect(action('chatMenu.toggleConnections')[0].getAttribute('aria-expanded')).toBe('false');
     expect(host.querySelector('#chat-menu-connections')).toBeNull();
@@ -180,13 +180,13 @@ describe('ChatMenuView', () => {
       '/dashboard/chat/settings',
     );
     expect(action('chatMenu.openSettings')[0].textContent).toBe('General');
-    // No allowance to meter: no usage beside Settings, only its ▴.
+    // Settings alone: no usage beside it, only its ▴.
     expect(action('chatMenu.toggleSettings')[0].textContent).toBe('Settings▴');
     expect(action('chatMenu.openInbox')[0].getAttribute('href')).toBe('/dashboard/chat/inbox');
     expect(action('chatMenu.openFiles')[0].getAttribute('href')).toBe('/dashboard/chat/files');
     // Action Center › Agents, out of Chat, with "New" until it is first opened (governance mockup #cnav).
     expect(action('chatMenu.openAgents')[0].getAttribute('href')).toBe('/dashboard/agents');
-    expect(action('chatMenu.openAgents')[0].textContent).toBe('AgentsNewin Action Center');
+    expect(action('chatMenu.openAgents')[0].textContent).toBe('AgentsNew');
     // Skills (W3-07).
     expect(action('chatMenu.openSkills')[0].getAttribute('href')).toBe('/dashboard/chat/skills');
     // Scheduled (W3-03), with no count while no job is on.
@@ -430,18 +430,17 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openChat')).toHaveLength(4);
   });
 
-  it('names Agents "Agents · in Action Center", and keeps Agents at work', async () => {
+  it('names Agents for screen readers "Agents · in Action Center", and keeps Agents at work', async () => {
     const chats = [
       chat('a', { state: 'needsYou', progress: { done: 3, total: 6 } }),
       chat('b', { state: 'running' }),
     ];
     await render(menu(chats));
     const agents = action('chatMenu.openAgents')[0];
-    // The same page, its New pill until it is first opened, and where it is now.
+    // The same page, its New pill until it is first opened; where it is now only for screen readers.
     expect(agents.getAttribute('href')).toBe('/dashboard/agents');
-    expect(agents.textContent).toBe('AgentsNewin Action Center');
+    expect(agents.textContent).toBe('AgentsNew');
     expect(agents.getAttribute('aria-label')).toBe('Agents · in Action Center');
-    expect(agents.querySelector('[data-slot="agents-where"] svg')).not.toBeNull();
     expect(text()).toContain('Agents at work2');
     expect(text()).toContain('Waiting for your OK · step 4 of 6');
   });
@@ -635,38 +634,24 @@ describe('ChatShell', () => {
     expect(document.body.querySelector('[data-action="search.input"]')).toBeNull();
   });
 
-  it("shows the month's AI usage beside Settings, amber from 80%", async () => {
-    usage.percentUsed = 18;
-    await render(menu([]));
-    const settings = action('chatMenu.toggleSettings')[0];
-    expect(settings.textContent).toBe('Settings18%▾');
-    expect(settings.querySelector('[title="AI usage this month"]')).not.toBeNull();
-    act(() => root.unmount());
-    root = createRoot(host);
-    usage.percentUsed = 85;
-    await render(menu([]));
-    expect(action('chatMenu.toggleSettings')[0].querySelector('i')?.className).toContain('amber');
-  });
-
-  it('names the free trial’s credit in words beside Settings, as the header’s meter', async () => {
-    usage.trial = true;
-    const shown = async (percent: number) => {
+  it('shows nothing beside Settings, whatever the AI usage: only its name and ▾', async () => {
+    for (const [percent, trial] of [
+      [18, false],
+      [85, false],
+      [85, true],
+      [100, true],
+    ] as const) {
       act(() => root.unmount());
       root = createRoot(host);
       usage.percentUsed = percent;
+      usage.trial = trial;
       await render(menu([]));
-      return action('chatMenu.toggleSettings')[0];
-    };
-    let settings = await shown(18);
-    expect(settings.textContent).toBe('SettingsTrial credit▾');
-    expect(settings.querySelector('i')).toBeNull();
-    expect(settings.querySelector('[title="AI: the free trial\'s AI credit"]')).not.toBeNull();
-    settings = await shown(85);
-    expect(settings.textContent).toBe('SettingsAlmost used▾');
-    expect(settings.innerHTML).toContain('text-amber-700');
-    settings = await shown(100);
-    expect(settings.textContent).toBe('SettingsUsed up▾');
-    expect(settings.innerHTML).toContain('text-red-700');
+      const settings = action('chatMenu.toggleSettings')[0];
+      expect(settings.textContent).toBe('Settings▾');
+      // No meter: no bar, no percent, no trial words.
+      expect(settings.querySelector('i')).toBeNull();
+      expect(settings.querySelector('[title]')).toBeNull();
+    }
   });
 
   it('gives a Chat page Back to Chat and the breadcrumb, back to the last conversation', async () => {
@@ -714,7 +699,7 @@ describe('ChatShell', () => {
       host.querySelector<HTMLAnchorElement>('#chat-menu [data-action="chatMenu.openAgents"]')!;
     expect(item().getAttribute('href')).toBe('/dashboard/agents');
     expect(item().getAttribute('aria-current')).toBeNull();
-    expect(item().textContent).toBe('AgentsNewin Action Center');
+    expect(item().textContent).toBe('AgentsNew');
     // Its pages have no Chat header: the shell names none of them.
     expect(host.querySelector('header nav')?.textContent).toBe('Chat›Inbox');
 
@@ -726,7 +711,7 @@ describe('ChatShell', () => {
     root = createRoot(host);
     nav.pathname = '/dashboard/chat/all';
     await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
-    expect(item().textContent).toBe('Agentsin Action Center');
+    expect(item().textContent).toBe('Agents');
     vi.unstubAllGlobals();
   });
 
