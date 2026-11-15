@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { AD_CHANNELS } from '../config/ad-limits.js';
 import { ADS_THRESHOLDS, adsThresholds } from '../config/ads.js';
 import { MANAGER_ROLES, assertBrandAccess, assertRole, brandAccessOf } from '../lib/access.js';
 import { adsEnabled } from '../lib/ads-flag.js';
 import { logNotifyMe, readAdsActivity } from '../lib/ads/activity.js';
-import { AdDraftsError, createAdDrafts } from '../lib/ads/drafts.js';
+import {
+  AdDraftsError,
+  SEARCH_DESCRIPTIONS,
+  SEARCH_HEADLINES,
+  createAdDrafts,
+} from '../lib/ads/drafts.js';
 import { sendEarn } from '../lib/ads/earn.js';
 import { exportEditor, exportOpportunity } from '../lib/ads/export.js';
 import {
@@ -242,17 +248,46 @@ router.post('/opportunities/:promptId/earn', async (req, res) => {
   }
 });
 
-// POST /api/ads/opportunities/:promptId/drafts { brandId, idempotencyKey? } —
+/** A channel's copy given to gate (Chat's /ad-drafts): at most Ansvisor's draft size. */
+const givenDraft = z
+  .object({
+    channel: z.enum(AD_CHANNELS),
+    headlines: z.array(z.string().max(300)).min(1).max(SEARCH_HEADLINES),
+    descriptions: z.array(z.string().max(500)).min(1).max(SEARCH_DESCRIPTIONS),
+    contextHint: z.string().max(1000).nullable().default(null),
+    keywords: z.array(z.string().max(200)).max(20).default([]),
+    claims: z
+      .array(z.object({ text: z.string().max(200), factId: z.guid().nullable() }))
+      .max(20)
+      .default([]),
+  })
+  .refine(
+    // A ChatGPT ad is one headline and one description, as the model writes it.
+    (d) => d.channel !== 'chatgpt' || (d.headlines.length === 1 && d.descriptions.length === 1),
+  );
+
+// POST /api/ads/opportunities/:promptId/drafts { brandId, idempotencyKey?, drafts? } —
 // the Pay card's ad drafts, one per channel (lib/ads/drafts.js): a model call
 // on the workspace's AI budget as 'ads', so admins and managers only, on a
-// plan that reads every opportunity, never the demo brand. Only drafts that
-// pass the claims gate are saved (none: 422 gate_failed); no approved brand
+// plan that reads every opportunity, never the demo brand. With `drafts`
+// (Chat's /ad-drafts, written or rewritten in Chat), that copy is gated as
+// it is, one per channel given, with no model call. Only drafts that pass
+// the claims gate are saved (none: 422 gate_failed); no approved brand
 // fact, or brand facts off below Quality's phase 2, is 409 facts_needed. The
 // same key again answers the drafts it saved. Logged.
 router.post('/opportunities/:promptId/drafts', async (req, res) => {
   const promptId = z.guid().safeParse(req.params.promptId);
   const body = z
-    .object({ brandId: z.guid(), idempotencyKey: z.string().trim().min(8).max(100).optional() })
+    .object({
+      brandId: z.guid(),
+      idempotencyKey: z.string().trim().min(8).max(100).optional(),
+      drafts: z
+        .array(givenDraft)
+        .min(1)
+        .max(AD_CHANNELS.length)
+        .refine((list) => new Set(list.map((d) => d.channel)).size === list.length)
+        .optional(),
+    })
     .safeParse(req.body);
   if (!promptId.success || !body.success) {
     return res.status(400).json({ error: 'invalid', code: 'invalid' });
@@ -279,7 +314,7 @@ router.post('/opportunities/:promptId/drafts', async (req, res) => {
       opportunity,
       userId: req.user.id,
       idempotencyKey: body.data.idempotencyKey ?? null,
-      source: 'drawer',
+      ...(body.data.drafts ? { given: body.data.drafts, source: 'chat' } : { source: 'drawer' }),
     });
     return res.status(made.created ? 201 : 200).json(made);
   } catch (err) {

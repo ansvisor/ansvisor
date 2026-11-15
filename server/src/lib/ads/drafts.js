@@ -177,7 +177,9 @@ const clean = (list, max) =>
  * that reads every opportunity, never the demo brand: checked by the route).
  * `opportunity` is the drawer's read of the prompt (readOpportunity). The
  * same key again answers the drafts it saved, with no model call. Logged; a
- * save the log can't hold is taken back.
+ * save the log can't hold is taken back. `given`: copy written in Chat
+ * (/ad-drafts), each claim on a fact's own id, gated as the model's is, for
+ * the channels given only, with no model call and nothing charged.
  *
  * @returns {Promise<{ promptId: string, created: boolean, drafts: object[],
  *   rejected: { channel: string, failures: object[] }[],
@@ -190,6 +192,7 @@ export async function createAdDrafts({
   userId,
   idempotencyKey = null,
   source = 'drawer',
+  given = null,
 }) {
   const { promptId } = opportunity;
   // The drafts this key saved already, as made then; null when it saved none.
@@ -209,11 +212,13 @@ export async function createAdDrafts({
   if (!facts.length) throw factsNeeded('none');
   const competitors = await readCompetitors(brand.id, orgId);
 
-  const written = await writeDrafts({
-    orgId,
-    promptId,
-    request: draftRequest({ brandName: brand.name ?? '', opportunity, facts }),
-  });
+  const written =
+    given ??
+    (await writeDrafts({
+      orgId,
+      promptId,
+      request: draftRequest({ brandName: brand.name ?? '', opportunity, facts }),
+    }));
   if (!written) throw new AdDraftsError('model_failed', 'The drafts could not be written.', 502);
 
   // The model's short ids are the facts' own; one it made up stays as it is, and fails.
@@ -224,14 +229,16 @@ export async function createAdDrafts({
   for (const channel of AD_CHANNELS) {
     const draft = written.find((d) => d.channel === channel);
     if (!draft) {
-      rejected.push({ channel, failures: [{ code: 'missing' }] });
+      if (!given) rejected.push({ channel, failures: [{ code: 'missing' }] });
       continue;
     }
     const search = channel !== 'chatgpt';
+    // The model's copy is cut to Ansvisor's draft size; copy given is gated as it is.
+    const size = (n) => (given ? undefined : n);
     const copy = {
       channel,
-      headlines: clean(draft.headlines, search ? SEARCH_HEADLINES : 1),
-      descriptions: clean(draft.descriptions, search ? SEARCH_DESCRIPTIONS : 1),
+      headlines: clean(draft.headlines, size(search ? SEARCH_HEADLINES : 1)),
+      descriptions: clean(draft.descriptions, size(search ? SEARCH_DESCRIPTIONS : 1)),
       contextHint: draft.contextHint?.trim() || null,
       keywords: clean(draft.keywords, MAX_KEYWORDS),
       claims: (draft.claims ?? []).slice(0, MAX_CLAIMS).map((c) => ({

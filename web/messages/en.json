@@ -4236,7 +4236,9 @@
     "splitWork": { "name": "Split work into parts", "step": "Worked on parts" },
     "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" },
     "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" },
-    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agents" }
+    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agents" },
+    "adsOpportunities": { "name": "Read Ads opportunities", "step": "Read Ads opportunities" },
+    "adDrafts": { "name": "Save ad drafts", "step": "Saved ad drafts" }
   },
   "agentic": {
     "avatar": {
@@ -6753,7 +6755,8 @@
         "scheduling": "Scheduling",
         "skills": "Skills",
         "memory": "Memory",
-        "agents": "Agents"
+        "agents": "Agents",
+        "ads": "Ads"
       }
     }
   },
@@ -6831,7 +6834,8 @@
       "modelProviderOn": "Turned on {provider} models in Chat",
       "modelProviderOff": "Turned off {provider} models in Chat",
       "outsideEmailSent": "Sent “{title}” to {to}, outside the workspace",
-      "outsideEmailCancelled": "Cancelled the e-mail of “{title}” to {to}"
+      "outsideEmailCancelled": "Cancelled the e-mail of “{title}” to {to}",
+      "adDrafts": "Saved ad drafts"
     },
     "undo": {
       "ok": "Undone.",
@@ -7214,7 +7218,9 @@
       "setup": "Setup guide",
       "fanout": "Fan-out gaps",
       "prompts": "Prompt portfolio",
-      "plan": "30-day plan"
+      "plan": "30-day plan",
+      "earn-or-pay": "Earn or pay",
+      "ad-drafts": "Ad drafts"
     },
     "form": {
       "titleNew": "New agent",
@@ -13855,6 +13861,13 @@
       "pay": "Which buying-intent prompts should we pay for?",
       "rivals": "Where do competitors lead the AI answer on our buying-intent prompts?",
       "earn": "Which open prompts can we win with content?"
+    },
+    "chatDrafts": {
+      "managers": "Only Admins and Managers can save ad drafts.",
+      "failed": "The ad drafts couldn't be saved. Try again.",
+      "gateFailed": "No ad draft passed the claims check, so none was saved.",
+      "factsNeeded": "Approve your brand facts first: ad drafts only state facts you approved.",
+      "planLimit": "Saving ad drafts needs a paid Growth plan or above."
     },
     "overview": {
       "failed": "The Overview couldn't be read. Reload the page to try again.",

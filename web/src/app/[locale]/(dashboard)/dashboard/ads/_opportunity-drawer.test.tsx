@@ -509,6 +509,30 @@ describe('the Pay card and "Do both"', () => {
     expect(panel.fill.mock.lastCall?.[0]).toMatch(/^\/ad-drafts Rewrite the ChatGPT ad draft/);
   });
 
+  it("asks Chat with /ad-drafts once Ads is on, as the / menu then lists Chat's skill (PR 15)", async () => {
+    const { enabledSkills } = await import('@/lib/chat/skills/library');
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    api.readAdsOpportunity.mockResolvedValue({ ...DETAIL, drafts: [draft('google')] });
+    for (const [ads, slash] of [
+      ['', false],
+      ['true', true],
+    ] as const) {
+      vi.stubEnv('ADS_ENABLED', ads);
+      // The panel's skills, as the dashboard's layout reads them (skillMenuFor).
+      panel.setup.skills = enabledSkills('org-1').map(({ name, title }) => ({
+        name,
+        title,
+      })) as never;
+      await remount('manager');
+      await open();
+      await click(q('ads.editAd')[0]);
+      expect(panel.fill.mock.lastCall?.[0].startsWith('/ad-drafts Rewrite'), ads).toBe(slash);
+    }
+    panel.setup.skills = [];
+    vi.unstubAllEnvs();
+  });
+
   it('is read-only for an analyst and on the demo brand, Starter or the trial: Copy and the brief only', async () => {
     for (const [role, writable] of [
       ['analyst', true],

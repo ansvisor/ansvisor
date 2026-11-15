@@ -374,6 +374,33 @@ describe('createAdDrafts', () => {
     expect(db.ads_ad_drafts).toEqual([]);
   });
 
+  it("gates copy given in Chat as the model's, with no model call: one that fails isn't saved", async () => {
+    const google = {
+      ...PASSING[1],
+      claims: [
+        { text: 'Pro from $49/month', factId: 'f-pro' },
+        { text: '14-day free trial', factId: 'f-trial' },
+      ],
+    };
+    const rival = { ...PASSING[2], headlines: ['Better than Northwind', 'Rated 4.9'], claims: [] };
+    const made = await make({ given: [google, rival], source: 'chat' });
+    expect(generateObject).not.toHaveBeenCalled();
+    expect(reserveAiBudget).not.toHaveBeenCalled();
+    // Only the channels given: ChatGPT's isn't missing.
+    expect(made.drafts.map((d) => [d.channel, d.source, d.factIds])).toEqual([
+      ['google', 'chat', ['f-pro', 'f-trial']],
+    ]);
+    expect(made.rejected.map((r) => [r.channel, r.failures.map((f) => f.code)])).toEqual([
+      ['microsoft', ['number_without_fact', 'number_without_fact', 'competitor_named']],
+    ]);
+    // A fact of another place, or not approved, is no fact; none passes: nothing saved.
+    const pending = { ...google, claims: [{ text: 'Pro from $49/month', factId: 'f-pending' }] };
+    await expect(
+      make({ given: [pending, rival], source: 'chat', idempotencyKey: 'key-0002' }),
+    ).rejects.toMatchObject({ status: 422, code: 'gate_failed' });
+    expect(db.ads_ad_drafts.map((d) => d.channel)).toEqual(['google']);
+  });
+
   it('answers model_failed for an answer that missed the schema, charged', async () => {
     generateObject.mockRejectedValue(
       Object.assign(new Error('no object'), {
