@@ -1,11 +1,11 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range above the box, add date range, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, open action from answer, action link]
+keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range above the box, add date range, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, settings in the chat menu, general settings, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, open action from answer, action link]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-15
+last_checked: 2026-11-15
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -101,7 +101,7 @@ Each range covers the same days as on the app's pages: **Last 30 days** is today
 
 ## Change the date range
 
-Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings** in the chat menu has it too.
+Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings › General** in the chat menu has it too.
 
 Or send a short range as your message, such as "last 7d", "last 24h" or "use 90 days by default". Chat changes your default at once, says so, and answers your last question again over the new range.
 
@@ -322,7 +322,7 @@ Tabs on top, each with its count, show **All**, your **Daily suggestions**, what
 
 ## The chat menu
 
-The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Governance**, closed until you click it, holds the **Activity** log, **What Chat can do** and the **Tool policy**.
+The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Settings**, closed until you click it, holds **General** (your own Chat settings), the **Activity** log, **What Chat can do** and the **Tool policy**.
 
 **Agents at work** lists the chats that need your OK, the ones still working, and finished results you haven't opened yet, with the step each one is on. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.
 
@@ -332,9 +332,9 @@ The chat menu on the left of Chat lists your chats. **New chat** starts a new on
 
 Chats have the same dots as the main menu. A grey dot that pulses means Chat is working in that chat. Yellow means it waits for your answer or OK. Green means it finished while you were away, until you open the chat. Red with a **!** means its last run stopped with an error, and it stays until the next run. A chat you have seen, with nothing running, has no dot. Point at a dot to read what it means.
 
-## Open and close Governance
+## Open and close Settings in the chat menu
 
-Click the **▾** beside **Governance** in the chat menu to show or hide **Activity**, **What Chat can do** and **Tool policy**, as beside **Menu** and **Chats**. It turns to **▴** while Governance is open. It stays closed until you open it, and it opens by itself while you are on **Activity** or **What Chat can do**. Chat remembers whether you left it open or closed, in this browser.
+Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on **General**, **Activity** or **What Chat can do**. Chat remembers whether you left them open or closed, in this browser. The bar next to **Settings** shows this month's AI usage.
 
 ## Hide the chat menu
 
