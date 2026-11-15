@@ -15,10 +15,10 @@ import {
 } from '@/lib/actions/getting-started';
 import { hideCard } from '@/lib/actions/user-brand-state';
 import { isCardHidden } from '@/lib/user-brand-state';
-import type { GettingStartedStep } from '@/lib/getting-started/steps';
+import type { GettingStartedStatus, GettingStartedStep } from '@/lib/getting-started/steps';
 import { Button } from '@/components/ui/button';
 import { TodaySection } from './today-parts';
-import { useTodayRead, type TodayVisit } from './use-today';
+import { useTodayPart, type TodayVisit } from './use-today';
 
 /** Steps the card lists at a time; Show all steps lists the 7. */
 const NEXT_STEPS = 2;
@@ -36,15 +36,19 @@ const SETUP_CARD = 'setup';
  * person otherwise (or when the brand can't be changed: read-only, demo).
  * A brand added beside others asks its admins and managers first, as
  * Actions did ("Run Getting started for this brand?"). Every brand with
- * steps left sees it, unless Getting started was skipped before.
+ * steps left sees it, unless Getting started was skipped before. Read
+ * with Today's other parts, and again after an answer.
  */
 export function SetupSection({
   brandId,
+  read,
   brandName,
   visit,
   onDone,
 }: {
   brandId: string;
+  /** The steps' read, started with Today's others; null until the day is known. */
+  read: Promise<GettingStartedStatus | null> | null;
   brandName: string | null;
   visit: TodayVisit;
   /** Steps done, for today_viewed. */
@@ -57,7 +61,7 @@ export function SetupSection({
   const [expanded, setExpanded] = useState(false);
   const [hiddenNow, setHiddenNow] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = useTodayRead(brandId, () => getGettingStarted(brandId), version);
+  const load = useTodayPart(read, () => getGettingStarted(brandId), version);
 
   const status = load.status === 'ready' ? load.data : null;
   const done = status ? status.done : null;

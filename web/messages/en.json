@@ -845,12 +845,8 @@
         "noChange": "no change since yesterday",
         "behind": "#{rank} of {count} brands. {gap} points behind {name}.",
         "ahead": "#1 of {count} brands. {gap} points ahead of {name}.",
-        "alone": "No competitor scored on your prompts yet."
-      },
-      "ask": {
-        "label": "Ask Chat",
-        "placeholder": "Ask Chat, e.g. why did my score change?",
-        "button": "Ask"
+        "alone": "No competitor scored on your prompts yet.",
+        "none": "No score yet. It shows here once your latest AI answers are scored."
       },
       "summary": {
         "changes": "{title}: {count, plural, =0 {no big changes} one {# change} other {# changes}}",
