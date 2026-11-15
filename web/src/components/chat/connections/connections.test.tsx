@@ -157,9 +157,9 @@ describe('ConnectionsMenu', () => {
     await render(<ConnectionsMenu open={false} onToggle={() => undefined} active={false} />);
     expect(fetched).toEqual([]);
     expect(q('#chat-menu-connections')).toBeNull();
-    expect(q('[data-action="chatMenu.manageConnections"]')?.getAttribute('href')).toBe(
-      '/dashboard/chat/connections',
-    );
+    const label = q('[data-action="chatMenu.openConnections"]');
+    expect(label?.getAttribute('href')).toBe('/dashboard/chat/connections');
+    expect(label?.textContent).toBe('Connections');
     expect(q('[data-action="chatMenu.toggleConnections"]')?.getAttribute('aria-expanded')).toBe(
       'false',
     );
