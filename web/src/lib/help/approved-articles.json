@@ -1348,6 +1348,8 @@
         "chat menu",
         "governance",
         "open governance",
+        "settings in the chat menu",
+        "general settings",
         "agents at work",
         "hide menu",
         "inbox",
@@ -1499,7 +1501,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -1555,7 +1557,7 @@
         },
         {
           "heading": "Change the date range",
-          "text": "Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings** in the chat menu has it too.\n\nOr send a short range as your message, such as \"last 7d\", \"last 24h\" or \"use 90 days by default\". Chat changes your default at once, says so, and answers your last question again over the new range.\n\nA period inside a question, such as \"How was last week?\", is used for that answer only: your default stays as it is."
+          "text": "Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings › General** in the chat menu has it too.\n\nOr send a short range as your message, such as \"last 7d\", \"last 24h\" or \"use 90 days by default\". Chat changes your default at once, says so, and answers your last question again over the new range.\n\nA period inside a question, such as \"How was last week?\", is used for that answer only: your default stays as it is."
         },
         {
           "heading": "Change what you track",
@@ -1695,15 +1697,15 @@
         },
         {
           "heading": "The chat menu",
-          "text": "The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Governance**, closed until you click it, holds the **Activity** log, **What Chat can do** and the **Tool policy**.\n\n**Agents at work** lists the chats that need your OK, the ones still working, and finished results you haven't opened yet, with the step each one is on. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.\n\n**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat."
+          "text": "The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Settings**, closed until you click it, holds **General** (your own Chat settings), the **Activity** log, **What Chat can do** and the **Tool policy**.\n\n**Agents at work** lists the chats that need your OK, the ones still working, and finished results you haven't opened yet, with the step each one is on. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.\n\n**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat."
         },
         {
           "heading": "Dots on chats",
           "text": "Chats have the same dots as the main menu. A grey dot that pulses means Chat is working in that chat. Yellow means it waits for your answer or OK. Green means it finished while you were away, until you open the chat. Red with a **!** means its last run stopped with an error, and it stays until the next run. A chat you have seen, with nothing running, has no dot. Point at a dot to read what it means."
         },
         {
-          "heading": "Open and close Governance",
-          "text": "Click the **▾** beside **Governance** in the chat menu to show or hide **Activity**, **What Chat can do** and **Tool policy**, as beside **Menu** and **Chats**. It turns to **▴** while Governance is open. It stays closed until you open it, and it opens by itself while you are on **Activity** or **What Chat can do**. Chat remembers whether you left it open or closed, in this browser."
+          "heading": "Open and close Settings in the chat menu",
+          "text": "Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on **General**, **Activity** or **What Chat can do**. Chat remembers whether you left them open or closed, in this browser."
         },
         {
           "heading": "Hide the chat menu",
@@ -1745,6 +1747,7 @@
       "route": "/dashboard/chat/settings",
       "keywords": [
         "chat settings",
+        "general settings",
         "date range",
         "default date range",
         "time range",
@@ -1770,11 +1773,11 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
-          "text": "**Settings** in the chat menu holds your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so."
+          "text": "Click **Settings** in the chat menu, then **General**, for your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so."
         },
         {
           "heading": "Default mode",
@@ -1806,7 +1809,7 @@
         },
         {
           "heading": "Product tour",
-          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**; only Admins change them."
+          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**, also under **Settings** in the chat menu; only Admins change them."
         }
       ]
     },
@@ -1935,7 +1938,7 @@
         "storage limit"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -1943,7 +1946,7 @@
         },
         {
           "heading": "Open Files",
-          "text": "Click **Files** in the chat menu, under **Settings**. You can also press Ctrl K (⌘K on a Mac) in Chat and type \"Files\". The newest files come first, 50 at a time; click **Show more** at the bottom to see older ones.\n\nEach row shows:\n\n- The file's name and the formats it comes in, and **Used in Content draft** when it was opened in the Content Editor.\n- **Made by**: you, a teammate, **Agent** (an Action Center task) or **Scheduled** (a scheduled job).\n- **From chat**: the chat it was made in. Click it to open that chat. It shows only for chats you can open.\n- **Updated**: when it was made, and **Data as of** when it used your workspace data. Hover over it to see the time zone."
+          "text": "Click **Files** in the chat menu, under **Scheduled**. You can also press Ctrl K (⌘K on a Mac) in Chat and type \"Files\". The newest files come first, 50 at a time; click **Show more** at the bottom to see older ones.\n\nEach row shows:\n\n- The file's name and the formats it comes in, and **Used in Content draft** when it was opened in the Content Editor.\n- **Made by**: you, a teammate, **Agent** (an Action Center task) or **Scheduled** (a scheduled job).\n- **From chat**: the chat it was made in. Click it to open that chat. It shows only for chats you can open.\n- **Updated**: when it was made, and **Data as of** when it used your workspace data. Hover over it to see the time zone."
         },
         {
           "heading": "Find a file",
@@ -1984,7 +1987,7 @@
         "simpler chat home"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -2004,7 +2007,7 @@
         },
         {
           "heading": "Change it later",
-          "text": "Under the greeting on Chat Home, a line shows your focus, such as **Focused on Product and Markets and sources**, or **Default view**. Select **Edit** to open the picker with your areas ticked; **Cancel** leaves everything as it was.\n\nYou can also change it in **Settings** in the chat menu, under **Your focus**. Tick **Default view**, or tick the areas you work on. Each change is kept at once and follows you to every device. Clearing every area goes back to the Default view."
+          "text": "Under the greeting on Chat Home, a line shows your focus, such as **Focused on Product and Markets and sources**, or **Default view**. Select **Edit** to open the picker with your areas ticked; **Cancel** leaves everything as it was.\n\nYou can also change it in **Settings › General** in the chat menu, under **Your focus**. Tick **Default view**, or tick the areas you work on. Each change is kept at once and follows you to every device. Clearing every area goes back to the Default view."
         },
         {
           "heading": "What focus doesn't change",
@@ -2275,7 +2278,7 @@
         "tour again"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -2311,7 +2314,7 @@
         },
         {
           "heading": "Take the tour again",
-          "text": "The tour is kept as a chat named **Ansvisor tour** in your chats, so you can read it again. To take it again, open **Settings** in the chat menu and click **Take the tour** under **Product tour**. It starts from the first topic and adds to the same chat."
+          "text": "The tour is kept as a chat named **Ansvisor tour** in your chats, so you can read it again. To take it again, open **Settings › General** in the chat menu and click **Take the tour** under **Product tour**. It starts from the first topic and adds to the same chat."
         },
         {
           "heading": "When the tour isn't offered",
@@ -5718,7 +5721,7 @@
         "ai used up"
       ],
       "plan": "starter",
-      "updated": "2026-10-31",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -5726,7 +5729,7 @@
         },
         {
           "heading": "Where you see it",
-          "text": "- The **AI** button at the top right of each page reads **Trial credit**, then **Almost used** from 80%, and **Used up** once it's spent. Click it to see what the credit covers and when the trial ends.\n- The AI usage card in **Settings › Billing** shows the same, and so does the usage next to **Settings** in Chat's menu.\n- From 80%, a note under the page header says the credit is almost used."
+          "text": "- The **AI** button at the top right of each page reads **Trial credit**, then **Almost used** from 80%, and **Used up** once it's spent. Click it to see what the credit covers and when the trial ends.\n- The AI usage card in **Settings › Billing** shows the same.\n- From 80%, a note under the page header says the credit is almost used."
         },
         {
           "heading": "Start your plan now",

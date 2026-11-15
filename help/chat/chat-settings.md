@@ -1,17 +1,17 @@
 ---
 title: Change your Chat settings
 route: /dashboard/chat/settings
-keywords: [chat settings, date range, default date range, time range, ask me before the first analysis, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, slack when an agent waits, thought for, thinking time, ask chat on every page, full auto]
+keywords: [chat settings, general settings, date range, default date range, time range, ask me before the first analysis, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, slack when an agent waits, thought for, thinking time, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-15
+last_checked: 2026-11-15
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, web/src/lib/chat/range.ts]
 ---
-**Settings** in the chat menu holds your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so.
+Click **Settings** in the chat menu, then **General**, for your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so.
 
 ## Default mode
 
@@ -45,4 +45,4 @@ When one of your agents stops to ask you something or to wait for your OK on a c
 
 **Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.
 
-Workspace rules, such as which tools Chat may use on its own, are in **Tool policy**; only Admins change them.
+Workspace rules, such as which tools Chat may use on its own, are in **Tool policy**, also under **Settings** in the chat menu; only Admins change them.
