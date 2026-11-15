@@ -183,4 +183,13 @@ describe('save_ad_drafts', () => {
       items: [{ title: 'ChatGPT', body: 'A\nB\nC' }],
     });
   });
+
+  it('takes one headline and one description for ChatGPT, as the model writes it', () => {
+    const tool = ADS_WRITES[0];
+    const chatgpt = { channel: 'chatgpt', headlines: ['A', 'B'], descriptions: ['C'] };
+    const input = { brand_id: BRAND, prompt_id: BRAND, drafts: [chatgpt] };
+    expect(tool.inputSchema.safeParse(input).success).toBe(false);
+    const google = { ...chatgpt, channel: 'google' };
+    expect(tool.inputSchema.safeParse({ ...input, drafts: [google] }).success).toBe(true);
+  });
 });

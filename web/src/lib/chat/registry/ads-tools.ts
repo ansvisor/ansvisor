@@ -27,22 +27,27 @@ const promptId = contentUuid.describe('The prompt, from its get_ads_opportunitie
 const text = (max: number) => z.string().trim().min(1).max(max);
 const offerIn = async () => adsEnabled();
 
-const draft = z.object({
-  channel: z.enum(['chatgpt', 'google', 'microsoft']),
-  headlines: z.array(text(300)).min(1).max(3).describe('ChatGPT: 1. Google, Microsoft: up to 3.'),
-  descriptions: z
-    .array(text(500))
-    .min(1)
-    .max(2)
-    .describe('ChatGPT: 1. Google, Microsoft: up to 2.'),
-  context_hint: text(300).nullable().default(null).describe('ChatGPT only: when the ad fits.'),
-  keywords: z.array(text(100)).max(10).default([]),
-  claims: z
-    .array(z.object({ text: text(200), fact_id: contentUuid }))
-    .max(20)
-    .default([])
-    .describe('Each fact the ad states, with its id from approvedFacts.'),
-});
+const draft = z
+  .object({
+    channel: z.enum(['chatgpt', 'google', 'microsoft']),
+    headlines: z.array(text(300)).min(1).max(3).describe('ChatGPT: 1. Google, Microsoft: up to 3.'),
+    descriptions: z
+      .array(text(500))
+      .min(1)
+      .max(2)
+      .describe('ChatGPT: 1. Google, Microsoft: up to 2.'),
+    context_hint: text(300).nullable().default(null).describe('ChatGPT only: when the ad fits.'),
+    keywords: z.array(text(100)).max(10).default([]),
+    claims: z
+      .array(z.object({ text: text(200), fact_id: contentUuid }))
+      .max(20)
+      .default([])
+      .describe('Each fact the ad states, with its id from approvedFacts.'),
+  })
+  .refine(
+    (d) => d.channel !== 'chatgpt' || (d.headlines.length === 1 && d.descriptions.length === 1),
+    { message: 'A ChatGPT draft has exactly 1 headline and 1 description.' },
+  );
 
 export const ADS_READS = [
   defineTool({

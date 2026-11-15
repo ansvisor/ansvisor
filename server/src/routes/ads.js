@@ -249,17 +249,22 @@ router.post('/opportunities/:promptId/earn', async (req, res) => {
 });
 
 /** A channel's copy given to gate (Chat's /ad-drafts): at most Ansvisor's draft size. */
-const givenDraft = z.object({
-  channel: z.enum(AD_CHANNELS),
-  headlines: z.array(z.string().max(300)).min(1).max(SEARCH_HEADLINES),
-  descriptions: z.array(z.string().max(500)).min(1).max(SEARCH_DESCRIPTIONS),
-  contextHint: z.string().max(1000).nullable().default(null),
-  keywords: z.array(z.string().max(200)).max(20).default([]),
-  claims: z
-    .array(z.object({ text: z.string().max(200), factId: z.guid().nullable() }))
-    .max(20)
-    .default([]),
-});
+const givenDraft = z
+  .object({
+    channel: z.enum(AD_CHANNELS),
+    headlines: z.array(z.string().max(300)).min(1).max(SEARCH_HEADLINES),
+    descriptions: z.array(z.string().max(500)).min(1).max(SEARCH_DESCRIPTIONS),
+    contextHint: z.string().max(1000).nullable().default(null),
+    keywords: z.array(z.string().max(200)).max(20).default([]),
+    claims: z
+      .array(z.object({ text: z.string().max(200), factId: z.guid().nullable() }))
+      .max(20)
+      .default([]),
+  })
+  .refine(
+    // A ChatGPT ad is one headline and one description, as the model writes it.
+    (d) => d.channel !== 'chatgpt' || (d.headlines.length === 1 && d.descriptions.length === 1),
+  );
 
 // POST /api/ads/opportunities/:promptId/drafts { brandId, idempotencyKey?, drafts? } —
 // the Pay card's ad drafts, one per channel (lib/ads/drafts.js): a model call

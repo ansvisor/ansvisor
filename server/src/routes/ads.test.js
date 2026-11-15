@@ -733,6 +733,7 @@ describe('POST /api/ads/opportunities/:promptId/drafts while ADS_ENABLED is on',
     });
     for (const drafts of [
       [copy, copy],
+      [{ ...copy, channel: 'chatgpt', headlines: ['Pro', 'Plain'] }],
       [{ ...copy, claims: [{ text: 'Pro', factId: 'F1' }] }],
       [],
     ]) {
