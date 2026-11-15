@@ -280,3 +280,29 @@ export function readAdsSettings() {
 export function saveAdsSettings(thresholds: { [K in keyof AdsThresholds]?: number | null }) {
   return call<AdsSettings>('settings', { method: 'PATCH', body: { thresholds } });
 }
+
+/** The ad platforms that come later (ADS-01 §3.5), each with Notify me. */
+export type AdsLaterPlatform = 'meta' | 'linkedin';
+
+/** Notify me (`conn.notify`): logged once per person and platform; again, `logged` is false. */
+export function notifyAdsPlatform(brandId: string, platform: AdsLaterPlatform) {
+  return call<{ platform: AdsLaterPlatform; logged: boolean }>('connections/notify', {
+    method: 'POST',
+    body: { brandId, platform },
+  });
+}
+
+/** Google Analytics as Chat's Connections has it. */
+export interface AdsAnalytics {
+  status: 'connected' | 'failing' | 'not_connected';
+}
+
+/** Read by the web (app/api/ads/connections), from its one read of a brand's connections. */
+export async function readAdsAnalytics(brandId: string): Promise<AdsAnalytics> {
+  const res = await fetch(`/api/ads/connections?${new URLSearchParams({ brandId })}`, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new AdsApiError(`Ads connections: ${res.status}`, res.status, {});
+  return ((await res.json()) as { analytics: AdsAnalytics }).analytics;
+}

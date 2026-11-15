@@ -102,6 +102,8 @@ export const DEMO_GUARDED = [
     brandIn('body'),
     rowIn('prompts', 'path', 'promptId'),
   ),
+  // Notify me on a later ad platform: logged, and the demo's log stays empty.
+  guard('POST /ads/connections/notify', brandIn('body')),
 
   // Site Audit (audits.js).
   guard('POST /audits', brandIn('body')),

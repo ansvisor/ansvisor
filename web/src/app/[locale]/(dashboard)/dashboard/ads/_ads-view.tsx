@@ -32,6 +32,8 @@ import { rangeChipLabel } from '@/lib/chat/page-context';
 import { isDemoSelected } from '@/lib/demo/demo-brand';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AdsCampaigns } from './_campaigns';
+import { AdsConnections } from './_connections';
 import { AdsOpportunities } from './_opportunities';
 import { AdsOverview } from './_overview';
 
@@ -102,9 +104,10 @@ function useAdsAccess(): { readable: boolean; trial: boolean; demo: boolean; thr
  * Ads (ADS-01 §3, mockup): the header every app page has, then the tab row
  * with the period and Export on its right, then the open tab. The Overview
  * and Opportunities read their data for the period, on every plan (§8:
- * Starter and the trial too, their lock from the server). The other tabs say
- * what they will show, the period waits for their data and Export for any,
- * and Starter and the trial see their lock.
+ * Starter and the trial too, their lock from the server). Campaigns and
+ * Connections show what comes before an ad account can be connected, Paid
+ * SoV what it will show; the period waits for their data and Export for
+ * any, and Starter and the trial see their lock.
  */
 export function AdsView() {
   const t = useTranslations('ads');
@@ -222,13 +225,15 @@ export function AdsView() {
           <AdsOverview period={period} onOpenTab={openTab} />
         ) : tab === 'op' ? (
           <AdsOpportunities period={period} writable={readable && !demo} thresholds={thresholds} />
+        ) : readable && tab === 'cmp' ? (
+          <AdsCampaigns />
+        ) : readable && tab === 'con' ? (
+          <AdsConnections />
         ) : readable ? (
           <div data-slot="ads-empty" className="rounded-xl border border-dashed py-12 text-center">
             <Icon aria-hidden className="mx-auto h-10 w-10 text-muted-foreground/40" />
             <h2 className="mt-3 text-sm font-medium">{t('empty.title')}</h2>
-            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-              {t(`empty.${tab}`)}
-            </p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{t('empty.sov')}</p>
           </div>
         ) : (
           <UpgradeCard
