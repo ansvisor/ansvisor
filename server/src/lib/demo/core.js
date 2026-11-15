@@ -550,6 +550,7 @@ export const core = {
     'mentions_answer_terms',
     'mentions_terms_daily',
     'mentions_terms_daily_all', // 00536, with mentions_terms_daily
+    'mentions_terms_daily_packed', // 00540, with mentions_terms_daily_all
     'mentions_perception_snapshots',
     // Queued by the prompt and domain triggers while the demo is rewritten;
     // cleared once the rollups above are rebuilt.
