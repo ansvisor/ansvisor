@@ -31,7 +31,8 @@ export function runClock(ms: number): string {
  * person (a question, an approval), "Waiting for your OK" by a yellow dot,
  * never "Working on it". Once done, it folds to
  * "Worked for 1m 12s" and "{N} steps · {M} sources"; a run of one step (not
- * counting thinking) shows that step's own line and its rows instead. Stopped:
+ * counting thinking) shows that step's own line instead, with its items or
+ * parts, never a read's rows. Stopped:
  * "Stopped after 41s"; failed: "Stopped: something went wrong"; while its
  * stream reconnects, "Reconnecting…" (W1-15). A click opens and closes it
  * (aria-expanded). Screen readers hear each new step as it
@@ -85,10 +86,9 @@ export function RunSteps({
     end = t('stepsClock', { steps: count, clock: runClock(workingMs) });
   } else if (single) {
     title = single.detail ? `${single.label} · ${single.detail}` : single.label;
-    end =
-      single.rowCount !== undefined
-        ? t(single.scope?.unit ?? 'rows', { count: single.rowCount })
-        : '';
+    // Saved notes or parts are counted; a read's rows never are, 0 or 50.
+    const unit = single.scope?.unit;
+    end = unit && single.rowCount !== undefined ? t(unit, { count: single.rowCount }) : '';
   } else if (status === 'done') {
     title = t('workedFor', { duration });
     end = sources > 0 ? t('stepsSources', { steps: count, sources }) : t('steps', { count });

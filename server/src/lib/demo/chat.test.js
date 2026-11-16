@@ -55,6 +55,9 @@ describe('chatRows', () => {
       for (const step of steps) {
         expect(step).toMatchObject({ kind: 'read', status: 'done' });
         expect(step.label).toMatch(/^Read /);
+        // Its period and platforms, as the engine words them: its rows counted, never shown.
+        expect(step.detail).not.toMatch(/\brows?\b/);
+        expect(step.row_count).toBeGreaterThanOrEqual(0);
       }
       const [end] = rows.events.filter((e) => e.run_id === run.id);
       expect(end).toMatchObject({ seq: 1, type: 'run.finished' });
