@@ -934,6 +934,13 @@ async function runScenario(scenario: AgentEvalScenario): Promise<EvalResult> {
       message: scenario.message ?? '',
       brandId: BRAND,
       mode: scenario.mode,
+      // Asked beside a page: the side panel's context, as it posts it.
+      ...(scenario.page
+        ? {
+            origin: 'panel' as const,
+            context: { route: scenario.page.route, chips: [...scenario.page.chips] },
+          }
+        : {}),
     });
     if (!startedRun.ok) throw new Error(`${scenario.id}: not started: ${startedRun.code}`);
     chatRunId = startedRun.runId;
@@ -1388,6 +1395,47 @@ describe('the agents’ test set harness, on a scripted model', () => {
       'reads the actions by their codes': 'AC-481, AC-63 not read by its code',
       'names each action asked by its title and code': 'AC-481 without its title and code',
       'names no other action in their place': 'also names AC-53',
+    });
+    expect(result.passed).toBe(false);
+  });
+
+  it("reads Citations' top domains over the page's 24 hours, on ChatGPT and Brand sources", async () => {
+    const scenario = skillOf('citations-page-scope');
+    scripted([
+      calls(toolCall('r1', 'list_citations', { brand_id: BRAND })),
+      text(
+        'Last 24 hours, ChatGPT, Brand sources, as on the page: your subscriptions page leads with 31 citations, then the freshness guide with 26 and the subscriptions blog post with 21.',
+      ),
+    ]);
+    const result = await runScenario(scenario);
+    // No range card: the page's range is read, and kept as nobody's default.
+    expect(result.run.questions).toBe(0);
+    expect(result.run.reads).toEqual(['list_citations']);
+    const input = result.run.readInputs[0];
+    expect(input).toMatchObject({ model: 'chatgpt-web', source_filter: 'owned' });
+    expect(Date.now() - Date.parse(String(input.date_from))).toBeLessThanOrEqual(
+      24 * 60 * 60 * 1000 + 60_000,
+    );
+    expect(db.tables.chat_user_prefs ?? []).toEqual([]);
+    expect(
+      result.checks.find((c) => c.name === "reads with the page's period and filters"),
+    ).toEqual({ name: "reads with the page's period and filters", must: true, ok: true });
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails a read that leaves the page's platform out", async () => {
+    scripted([
+      calls(toolCall('r1', 'list_citations', { brand_id: BRAND, model: '' })),
+      text('Last 24 hours, all platforms: your subscriptions page leads with 31 citations.'),
+    ]);
+    const result = await runScenario(skillOf('citations-page-scope'));
+    expect(
+      result.checks.find((c) => c.name === "reads with the page's period and filters"),
+    ).toEqual({
+      name: "reads with the page's period and filters",
+      must: true,
+      ok: false,
+      detail: 'model null',
     });
     expect(result.passed).toBe(false);
   });

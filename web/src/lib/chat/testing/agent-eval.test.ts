@@ -9,6 +9,7 @@ import {
   checkLabel,
   inventedNumbers,
   numbersIn,
+  pageScopeMissed,
   readByCodes,
   skillReads,
   substituteActions,
@@ -273,5 +274,50 @@ describe('the safety rules (safety-checks.ts)', () => {
       ['no promised outcome', true, true],
     ]);
     expect(checks[0].detail).toContain('cures insomnia');
+  });
+});
+
+// The owner's rule (2026-11-16): Chat opened on a page reads what that page shows.
+describe("the page's period and filters", () => {
+  const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'citations-page-scope')!;
+  const NOW = Date.parse('2026-11-02T13:00:00.000Z');
+  const run = (input: Record<string, unknown>) => ({
+    reads: ['list_citations'],
+    readInputs: [input],
+  });
+
+  it('asks on Citations, on its 24 hours, ChatGPT and Brand sources', () => {
+    expect(scenario).toMatchObject({
+      message: 'What are my top cited domains?',
+      page: {
+        route: '/dashboard/citations',
+        read: { tool: 'list_citations', days: 1, input: { model: 'chatgpt-web' } },
+      },
+    });
+    expect(scenario.page!.chips.map((c) => c.key)).toEqual([
+      'page',
+      'brand',
+      'dates',
+      'filter:platform',
+      'filter:sources',
+    ]);
+  });
+
+  it("checks a read took the page's inputs over its window", () => {
+    const read = scenario.page!.read;
+    const scoped = {
+      date_from: '2026-11-01T13:00:00.000Z',
+      date_to: '2026-11-02',
+      model: 'chatgpt-web',
+      source_filter: 'owned',
+    };
+    expect(pageScopeMissed(run(scoped), read, NOW)).toBeNull();
+    expect(pageScopeMissed(run({ ...scoped, date_from: '2026-10-04' }), read, NOW)).toBe(
+      'date_from "2026-10-04"',
+    );
+    expect(pageScopeMissed(run({ ...scoped, model: undefined }), read, NOW)).toBe('model null');
+    expect(pageScopeMissed({ reads: [], readInputs: [] }, read, NOW)).toBe(
+      'list_citations not read',
+    );
   });
 });

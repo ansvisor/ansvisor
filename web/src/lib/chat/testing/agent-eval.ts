@@ -107,6 +107,17 @@ export interface AgentEvalScenario {
    * name no other action in their place (the owner's report, 2026-11-16).
    */
   askedActions?: readonly { ref: string; title: string }[];
+  /**
+   * The page the question is asked beside, in the side panel (its context's
+   * route and chips), and the read that must take its period and filters:
+   * that read, with these inputs, over a window that starts no more than
+   * `days` back (the owner's rule, 2026-11-16: Chat reads what the page shows).
+   */
+  page?: {
+    route: string;
+    chips: readonly { key: string; label: string; value?: string }[];
+    read: { tool: string; days: number; input: Readonly<Record<string, unknown>> };
+  };
 }
 
 const presetT = (id: string) =>
@@ -301,6 +312,32 @@ export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
       ref: a.number,
       title: a.title,
     })),
+  },
+  {
+    // Citations opens on the last 24 hours; filtered to ChatGPT, its table on Brand sources.
+    id: 'citations-page-scope',
+    group: 'skills',
+    name: 'Top cited domains, as Citations shows them',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'What are my top cited domains?',
+    promises: [],
+    page: {
+      route: '/dashboard/citations',
+      chips: [
+        { key: 'page', label: 'Citations' },
+        { key: 'brand', label: EVAL_BRAND.name, value: EVAL_BRAND.id },
+        { key: 'dates', label: 'Last 24 hours', value: '24h/' },
+        { key: 'filter:platform', label: 'ChatGPT', value: 'chatgpt-web' },
+        { key: 'filter:sources', label: 'Brand', value: 'own' },
+      ],
+      read: {
+        tool: 'list_citations',
+        days: 1,
+        input: { model: 'chatgpt-web', source_filter: 'owned' },
+      },
+    },
   },
 ];
 
@@ -663,6 +700,35 @@ export function unnamedActionRefs(markdown: string): string[] {
   return found;
 }
 
+// ─── The page's period and filters ──────────────────────────────────────────
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Why no read of the page's took its period and filters: null when one did
+ * (its inputs, and a window starting no more than `days` back, an hour's
+ * grace for the run's own time).
+ */
+export function pageScopeMissed(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  read: NonNullable<AgentEvalScenario['page']>['read'],
+  now: number = Date.now(),
+): string | null {
+  const reads = run.readInputs.filter((_, i) => run.reads[i] === read.tool);
+  if (reads.length === 0) return `${read.tool} not read`;
+  const misses = reads.map((input) => {
+    const off = Object.entries(read.input)
+      .filter(([key, value]) => input[key] !== value)
+      .map(([key]) => `${key} ${JSON.stringify(input[key] ?? null)}`);
+    const from = typeof input.date_from === 'string' ? Date.parse(input.date_from) : NaN;
+    if (Number.isNaN(from) || from < now - read.days * 24 * HOUR_MS - HOUR_MS) {
+      off.push(`date_from ${JSON.stringify(input.date_from ?? null)}`);
+    }
+    return off;
+  });
+  return misses.some((off) => off.length === 0) ? null : misses[0].join(', ');
+}
+
 // ─── Actions asked for by their codes ───────────────────────────────────────
 
 /** Whether a run read these codes' actions by their codes (list_action_center_tasks' codes). */
@@ -1005,6 +1071,12 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
       ),
     );
   }
+  if (scenario.page) {
+    const missed = pageScopeMissed(run, scenario.page.read);
+    checks.push(
+      check("reads with the page's period and filters", true, missed === null, missed ?? ''),
+    );
+  }
   if (scenario.group === 'skills' && scenario.skill) {
     const named = skillReads(scenario.skill);
     const read = named.filter((tool) => run.reads.includes(tool));
@@ -1112,6 +1184,7 @@ const CHECK_TR: Readonly<Record<string, string>> = {
   'reads the actions by their codes': 'aksiyonları koduyla okudu',
   'names each action asked by its title and code': 'sorulan her aksiyonu başlığı ve koduyla andı',
   'names no other action in their place': 'yerlerine başka aksiyon saymadı',
+  "reads with the page's period and filters": 'sayfanın dönemi ve filtreleriyle okudu',
   'no emoji': 'emoji yok',
   'stays on its brand': 'marka kapsamında kaldı',
   'no network call but the model’s': 'modelinki dışında ağ çağrısı yok',

@@ -9874,8 +9874,8 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     expect(readInput()).toMatchObject({ date_from: day(-89), date_to: day(0) });
   });
 
-  it("offers the page's own range first in the side panel, so the numbers match the screen", async () => {
-    useModels([read(), READY], [text('Up 12%.')]);
+  it("reads the page's own range in the side panel without asking, and keeps no default", async () => {
+    const { sonnet } = useModels([read(), READY], [text('Up 12%.')]);
     const started = await engine.startChatRun(ADMIN, {
       message: 'Why did visibility drop?',
       brandId: BRAND,
@@ -9891,18 +9891,19 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     });
     if (!started.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, started.runId);
-    expect((await cardsOf(started.runId))[0].options).toEqual([
-      { label: "This page's range: last 7 days", recommended: true },
-      { label: 'Last 24 hours', recommended: false },
-      { label: 'Last 30 days', recommended: false },
-      { label: 'Last 90 days', recommended: false },
-    ]);
-    expect(await pick(ADMIN, started.runId, { selected: [0] })).toMatchObject({ ok: true });
-    expect(savedRange()).toBe('7d');
+    expect(await cardsOf(started.runId)).toEqual([]);
     expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
+    expect(stepsOf(started.runId)[0]).toMatchObject({ kind: 'read', detail: 'Last 7 days' });
+    expect(savedRange()).toBeNull();
+    expect(runRow(started.runId).status).toBe('done');
+    // The writer is told the period is the page's, to say once what the answer covers.
+    const written = promptOf(sonnet.seen[0]);
+    expect(written).toContain('\\"from_page\\":[\\"period\\"]');
+    expect(written).toContain('as on the page');
+    expect(written).toContain('with any filter of the page no read took');
+    expect(written).toContain('never how many rows were read');
 
-    // A page's custom range is the first of five.
-    db.tables.chat_user_prefs = [];
+    // A page's custom range, and its All time: read as the page shows them.
     useModels([read(), READY], [text('Up 12%.')]);
     const custom = await engine.startChatRun(ADMIN, {
       message: 'Why did visibility drop?',
@@ -9912,30 +9913,129 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     });
     if (!custom.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, custom.runId);
-    const options = (await cardsOf(custom.runId))[0].options;
-    expect(options).toHaveLength(5);
-    expect(options[0]).toMatchObject({ recommended: true });
-    expect(options[0].label).toMatch(/^This page's range: \w{3} \d+ – \w{3} \d+$/);
-    expect((asksOf(custom.runId)[0].options_json as unknown[])[0]).toMatchObject({
-      range: `${day(-14)}/${day(-1)}`,
-    });
-  });
+    expect(await cardsOf(custom.runId)).toEqual([]);
+    expect(readInput()).toMatchObject({ date_from: day(-14), date_to: day(-1) });
 
-  it("doesn't take the page's range as dates: the reader is told the app sets the period", async () => {
-    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
-    const { haiku } = useModels([read(), READY], [text('Up 12%.')]);
-    const started = await engine.startChatRun(ADMIN, {
-      message: 'How are we doing?',
+    useModels([read(), READY], [text('Up 12%.')]);
+    const all = await engine.startChatRun(ADMIN, {
+      message: 'Why did visibility drop?',
       brandId: BRAND,
       origin: 'panel',
-      context: { chips: [{ key: 'dates', label: 'Last 7 days', value: '7d/' }] },
+      context: { chips: [{ key: 'dates', label: 'All time', value: 'all/' }] },
     });
-    if (!started.ok) throw new Error('not started');
-    await engine.driveRun(ADMIN, started.runId);
+    if (!all.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, all.runId);
+    expect(await cardsOf(all.runId)).toEqual([]);
+    expect(readInput()).not.toHaveProperty('date_from');
+    expect(savedRange()).toBeNull();
+
+    // A page with no dates still asks.
+    useModels([read(), READY], [text('Up 12%.')]);
+    const plain = await engine.startChatRun(ADMIN, {
+      message: 'Why did visibility drop?',
+      brandId: BRAND,
+      origin: 'panel',
+      context: { chips: [{ key: 'page', label: 'Actions' }] },
+    });
+    if (!plain.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, plain.runId);
+    expect(await cardsOf(plain.runId)).toHaveLength(1);
+  });
+
+  it("reads the page's range before the person's default; a period the message names wins", async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
+    const ask = async (message: string, dates?: string) => {
+      const started = await engine.startChatRun(ADMIN, {
+        message,
+        brandId: BRAND,
+        origin: 'panel',
+        context: {
+          chips: [
+            { key: 'page', label: 'Visibility' },
+            ...(dates ? [{ key: 'dates', label: 'Page range', value: dates }] : []),
+          ],
+        },
+      });
+      if (!started.ok) throw new Error('not started');
+      await engine.driveRun(ADMIN, started.runId);
+    };
+    const { haiku } = useModels([read(), READY], [text('Up 12%.')]);
+    await ask('How are we doing?', '7d/');
     const seen = promptOf(haiku.seen[0]);
+    expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
+    expect(seen).toContain("the page's dates when the question came from a page");
+    expect(seen).toContain("applies the page's filters (platform, region, topic, status");
     expect(seen).toContain('give dates only when the person');
-    expect(seen).toContain("except its date range: the app sets each read's period");
+    expect(seen).toContain('the app reads over its date range and applies its filters');
+    expect(seen).not.toContain("except its date range: the app sets each read's period");
+
+    useModels([read(), READY], [text('Up 12%.')]);
+    await ask('How did we do in the last 90 days?', '7d/');
+    expect(readInput()).toMatchObject({ date_from: day(-89), date_to: day(0) });
+    expect(savedRange()).toBe('30d');
+
+    useModels([read(), READY], [text('Up 12%.')]);
+    await ask('How are we doing?');
     expect(readInput()).toMatchObject({ date_from: day(-29), date_to: day(0) });
+  });
+
+  it("applies the page's filters to the reads that take them; the person's own words win", async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
+    const reads = (call: Record<string, unknown> = {}) => [
+      calls(toolCall('r1', 'read_visibility', { brand_id: BRAND, ...call })),
+      READY,
+    ];
+    const ask = async (
+      message: string,
+      brand: { label: string; value: string } = { label: 'Northwind', value: BRAND },
+    ) => {
+      const started = await engine.startChatRun(ADMIN, {
+        message,
+        brandId: BRAND,
+        origin: 'panel',
+        context: {
+          route: '/dashboard/mentions',
+          chips: [
+            { key: 'page', label: 'Mentions & Sentiment' },
+            { key: 'brand', ...brand },
+            { key: 'filter:platform', label: 'ChatGPT', value: 'chatgpt-web' },
+            { key: 'filter:priority', label: 'High', value: 'high' },
+          ],
+        },
+      });
+      if (!started.ok) throw new Error('not started');
+      await engine.driveRun(ADMIN, started.runId);
+      return started.runId;
+    };
+    // None given: the page's platform, and the writer told it came from the page.
+    const { sonnet } = useModels(reads(), [text('Up 12%.')]);
+    const runId = await ask('How are we doing?');
+    expect(readInput()).toMatchObject({ brand_id: BRAND, platform: 'chatgpt-web' });
+    expect(stepsOf(runId)[0]).toMatchObject({ detail: 'Last 30 days · ChatGPT' });
+    expect(promptOf(sonnet.seen[0])).toContain('\\"from_page\\":[\\"platform\\"]');
+
+    // The model's own platform, or "" for all of them, wins.
+    useModels(reads({ platform: 'gemini-web' }), [text('Up 12%.')]);
+    await ask('How are we doing on Gemini?');
+    expect(readInput()).toMatchObject({ platform: 'gemini-web' });
+    useModels(reads({ platform: '' }), [text('Up 12%.')]);
+    await ask('How are we doing?');
+    expect(readInput()).not.toHaveProperty('platform');
+    // A question for all platforms drops the chip.
+    useModels(reads(), [text('Up 12%.')]);
+    await ask('How are we doing on all platforms?');
+    expect(readInput()).not.toHaveProperty('platform');
+    // Posted from a page of another brand: its filters are words only.
+    useModels(reads(), [text('Up 12%.')]);
+    await ask('How are we doing?', { label: 'Elsewhere', value: OTHER_BRAND });
+    expect(readInput()).not.toHaveProperty('platform');
+    const question = db.tables.chat_messages.findLast((m) => m.content_md === 'How are we doing?');
+    expect((question?.context_json as { context: { chips: unknown[] } }).context.chips).toEqual([
+      { key: 'page', label: 'Mentions & Sentiment' },
+      { key: 'brand', label: 'Northwind', value: BRAND },
+      { key: 'filter:platform', label: 'ChatGPT' },
+      { key: 'filter:priority', label: 'High' },
+    ]);
   });
 
   it('changes the default at once on a short range, and answers the chat’s question again', async () => {
