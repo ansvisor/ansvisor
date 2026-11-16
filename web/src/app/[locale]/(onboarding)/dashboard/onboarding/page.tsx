@@ -319,6 +319,11 @@ export default function OnboardingPage() {
 
   // Plan step (cloud only)
   const [organizationId, setOrganizationId] = useState<string | null>(null);
+  // A choice on the first screen waiting for its organization to be made:
+  // the plan's button (and how it starts), or the sample brand.
+  const [preparing, setPreparing] = useState<
+    { planId: PlanId; mode: CheckoutMode } | 'demo' | null
+  >(null);
   // The plan step as onboarding's first screen, the choice: the trial (or a
   // plan bought), then setup after purchase; or the sample brand, no setup.
   const [startFirst, setStartFirst] = useState(false);
@@ -328,7 +333,9 @@ export default function OnboardingPage() {
   // How the plan starts, as on the plan dialog: one choice above the cards,
   // the first-month offer shown from the first frame (the person setting up
   // the workspace is its admin), its code checked once the step is reached.
-  // Asked once the organization exists: the route reads its customer.
+  // Asked once the organization exists: the route reads its customer. On the
+  // first screen, before a choice makes it, the configured offer shows, and
+  // Checkout checks the code.
   const [offer, setOffer] = useFirstMonthOffer(
     firstMonthOfferOn(),
     step === PLAN_STEP && organizationId != null,
@@ -353,6 +360,7 @@ export default function OnboardingPage() {
   });
 
   // Asked once the organization exists: the trial is its first subscription's.
+  // A new person on the first screen, with none yet, may have it.
   useEffect(() => {
     if (step !== PLAN_STEP || !organizationId) return;
     let cancelled = false;
@@ -616,9 +624,11 @@ export default function OnboardingPage() {
         }
 
         // A new admin on the cloud: the choice first. Its organization is
-        // made now (the trial's check, the first-month offer, the demo brand
-        // and Checkout all read it), named for now; the brand step names it
-        // after the brand. A reload finds it and makes no other.
+        // made once a choice is made (choiceOrganization), not on opening, so
+        // someone who opens onboarding and leaves (before accepting an
+        // invitation, say) leaves no workspace behind. Until then the screen
+        // needs none: a new person may have the free trial, and the demo
+        // brand's setup starts ahead once the organization exists.
         if (
           profile &&
           !profile.organization_id &&
@@ -626,13 +636,6 @@ export default function OnboardingPage() {
         ) {
           setStartFirst(true);
           setStep(PLAN_STEP);
-          try {
-            const { id } = await ensureOrganization(supabase, user.id, workspacePlaceholder);
-            setOrganizationId(id);
-          } catch (err) {
-            console.error('Could not make the organization:', err);
-            toast.error(workspaceFailed);
-          }
           return;
         }
 
@@ -763,7 +766,7 @@ export default function OnboardingPage() {
       }
     }
     checkResume();
-  }, [router, addBrand, setActiveBrand, workspacePlaceholder, workspaceFailed]);
+  }, [router, addBrand, setActiveBrand]);
 
   // Fire `onboarding_step_viewed` whenever the wizard advances (or resumes).
   // This is the funnel surface — PostHog will compute drop-off between any
@@ -1267,14 +1270,43 @@ export default function OnboardingPage() {
     window.location.href = SETUP_BILLING_HREF;
   };
 
+  // The organization a choice goes on with (Checkout or the sample brand):
+  // the person's, or made now with their own session, named for now (the
+  // brand step names it after the brand). ensureOrganization makes one only:
+  // a second click, another tab or a reload finds it. Null, with the error
+  // said, when it couldn't be made: the choice stays, and nothing else is
+  // written.
+  const choiceOrganization = async (): Promise<string | null> => {
+    if (organizationId) return organizationId;
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error(tSetup('setup.notAuthenticated'));
+      const { id } = await ensureOrganization(supabase, user.id, workspacePlaceholder);
+      setOrganizationId(id);
+      return id;
+    } catch (err) {
+      console.error('Could not make the organization:', err);
+      toast.error(workspaceFailed);
+      return null;
+    }
+  };
+
   // ── Plan step: Stripe checkout ──
 
   // The choice made above the cards: the free trial, or bought now (monthly
   // with the first-month offer while it's on, or a year); a card either way.
   // The events carry the choice (trial, monthly, yearly), and position:
   // 'first' on the first screen.
-  const handleCheckout = (planId: PlanId, mode: CheckoutMode) => {
-    if (!organizationId || checkout) return;
+  const handleCheckout = async (planId: PlanId, mode: CheckoutMode) => {
+    if (checkout || preparing) return;
+    // The first screen makes the organization now, for Checkout.
+    setPreparing({ planId, mode });
+    const orgId = await choiceOrganization();
+    setPreparing(null);
+    if (!orgId) return;
     const chosen = { choice: startChoiceName(choice), ...startPositionProps(startFirst) };
     track('onboarding_step_completed', {
       step: PLAN_STEP,
@@ -1286,16 +1318,26 @@ export default function OnboardingPage() {
     setPersonProperties({
       intended_plan: planId,
     });
-    void start(planId, mode, mode === 'buy' && choice === 'month' ? offer?.code : undefined);
+    void start(planId, mode, mode === 'buy' && choice === 'month' ? offer?.code : undefined, orgId);
   };
 
   // The sample brand, the plan step's other way in (choice: 'demo'). From the
   // first screen it needs no setup: onboarding is marked completed first, so
   // the dashboard opens on the demo, read-only (a workspace that never had a
   // plan, with its demo brand). Its own brand is set up once a plan is bought.
+  // Only with the organization, made now if need be: without one the demo
+  // can't be made, and an onboarding marked completed with no organization
+  // would bounce between the dashboard and here. Then the error is said, the
+  // choice stays, and nothing is written.
   const handleExploreDemo = async () => {
-    if (exploreDemo.opening) return;
+    if (exploreDemo.opening || preparing) return;
     if (startFirst) {
+      setPreparing('demo');
+      const orgId = await choiceOrganization();
+      if (!orgId) {
+        setPreparing(null);
+        return;
+      }
       const supabase = createClient();
       const done = await supabase.auth
         .getUser()
@@ -1309,6 +1351,7 @@ export default function OnboardingPage() {
           return !error;
         })
         .catch(() => false);
+      setPreparing(null);
       if (!done) {
         toast.error(tExplore('failed'));
         return;
@@ -2139,7 +2182,7 @@ export default function OnboardingPage() {
             <ExploreDemoChoice
               brandName={startFirst ? null : planBrandName}
               hasOwnBrand={!startFirst}
-              opening={exploreDemo.opening}
+              opening={exploreDemo.opening || preparing === 'demo'}
               onExplore={() => void handleExploreDemo()}
             />
           ) : (
@@ -2159,8 +2202,19 @@ export default function OnboardingPage() {
                       choice={choice}
                       offer={offer}
                       trialOffered={trialOffered}
-                      opening={checkout?.planId === planId ? checkout.mode : null}
-                      disabled={!organizationId || checkout != null}
+                      opening={
+                        checkout?.planId === planId
+                          ? checkout.mode
+                          : preparing !== null &&
+                              preparing !== 'demo' &&
+                              preparing.planId === planId
+                            ? preparing.mode
+                            : null
+                      }
+                      // The first screen makes its organization on the click.
+                      disabled={
+                        (!organizationId && !startFirst) || checkout != null || preparing !== null
+                      }
                       error={failed?.planId === planId ? failed.message : null}
                       onStart={(mode) => handleCheckout(planId, mode)}
                     />
@@ -2181,7 +2235,7 @@ export default function OnboardingPage() {
               {/* Not ready for a card: the demo, straight from one line. */}
               <ExploreDemoLine
                 className="mt-5"
-                opening={exploreDemo.opening}
+                opening={exploreDemo.opening || preparing === 'demo'}
                 onExplore={() => void handleExploreDemo()}
               />
             </>

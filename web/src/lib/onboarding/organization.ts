@@ -13,8 +13,9 @@ const pending = new Map<string, Promise<{ id: string; created: boolean }>>();
  * The person's organization, made with their own session when they have
  * none yet, as onboarding has always made it (row-level security lets a
  * signed-in person insert one, and join it while their profile has none):
- * the choice screen makes it before Checkout and the demo brand, and the
- * brand step reuses it, named `name` when made. `created` says whether it
+ * the choice screen makes it once a choice is made, for Checkout or the
+ * demo brand (never on opening it), and the brand step reuses it, named
+ * `name` when made. `created` says whether it
  * was made now. Never a second one: the profile is read first, and an
  * organization joined meanwhile (another tab) is the one returned.
  */
