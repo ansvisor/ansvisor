@@ -2090,6 +2090,10 @@ export default function OnboardingPage() {
                 snippetCopied.current = true;
                 track('onboarding_snippet_copied', setupFlowProps(true));
               }}
+              onEmailed={() => track('onboarding_snippet_emailed', setupFlowProps(true))}
+              onMessageCopied={() =>
+                track('onboarding_snippet_message_copied', setupFlowProps(true))
+              }
               onChecked={(outcome) =>
                 track('onboarding_snippet_checked', { outcome, ...setupFlowProps(true) })
               }

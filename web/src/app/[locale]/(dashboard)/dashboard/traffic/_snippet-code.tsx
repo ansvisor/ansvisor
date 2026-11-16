@@ -2,14 +2,18 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, Code, Copy, Loader2, RefreshCw } from 'lucide-react';
+import { Check, Code, Copy, Loader2, Mail, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getPublicApiBaseUrl } from '@/config/api';
+import { track } from '@/lib/analytics';
 import { trackingSnippetTag, type ConversionsConsent } from '@/lib/conversion-tracking';
 import { formatRelative } from '@/lib/format-relative';
+import { cn } from '@/lib/utils';
 import { checkTrackingSnippet, type SnippetCheckStatus } from '@/lib/traffic-snippet-client';
+import { snippetMailto, snippetMessage } from '@/lib/traffic-snippet-message';
 
 /**
  * The tracking snippet tag for a brand, with conversions when it has them on
@@ -23,9 +27,21 @@ function snippetTag(trackingCode?: string, conversions?: ConversionsConsent | nu
  * Where the tag goes, the tag, and a copy button. The tag wraps inside its
  * box, and the block can shrink below the tag's width: in the dialog's grid
  * it would otherwise widen the dialog past the screen. Onboarding's "Connect
- * your site" shows it too, and counts the copies (`onCopy`).
+ * your site" shows it too, and counts the copies (`onCopy`). Under the tag,
+ * the message for the developer who edits the site (DeveloperMessage).
  */
-export function SnippetCode({ snippet, onCopy }: { snippet: string; onCopy?: () => void }) {
+export function SnippetCode({
+  snippet,
+  domain,
+  onCopy,
+  onEmailed,
+  onMessageCopied,
+}: {
+  snippet: string;
+  /** The brand's domain, which the message names; none: "our website". */
+  domain?: string;
+  onCopy?: () => void;
+} & SnippetMessageEvents) {
   const t = useTranslations('traffic');
   const [copied, setCopied] = useState(false);
 
@@ -48,6 +64,12 @@ export function SnippetCode({ snippet, onCopy }: { snippet: string; onCopy?: () 
         <pre className="mt-2 rounded-md bg-muted/50 px-3 py-2 font-mono text-[11px] break-all whitespace-pre-wrap">
           {snippet}
         </pre>
+        <DeveloperMessage
+          snippet={snippet}
+          domain={domain}
+          onEmailed={onEmailed}
+          onMessageCopied={onMessageCopied}
+        />
       </div>
       <Button
         variant="ghost"
@@ -61,6 +83,68 @@ export function SnippetCode({ snippet, onCopy }: { snippet: string; onCopy?: () 
         ) : (
           <Copy className="h-3.5 w-3.5" />
         )}
+      </Button>
+    </div>
+  );
+}
+
+/** The message's analytics: onboarding's own events, or AI Traffic's (trafficMessageEvents). */
+interface SnippetMessageEvents {
+  /** "Email this to my developer" opened the person's mail app. */
+  onEmailed?: () => void;
+  /** "Copy message" copied the message. */
+  onMessageCopied?: () => void;
+}
+
+/** AI Traffic's Install (the banner and the dialog) counts the message as its own. */
+const trafficMessageEvents: Required<SnippetMessageEvents> = {
+  onEmailed: () => track('traffic_snippet_emailed'),
+  onMessageCopied: () => track('traffic_snippet_message_copied'),
+};
+
+/**
+ * "Email this to my developer" and "Copy message" (traffic-snippet-message.ts):
+ * most owners don't edit their site's code. The link opens the person's own
+ * mail app with the tag and the steps, no recipient; nothing is sent from
+ * here. Copy gives the same text, for someone without a mail app.
+ */
+function DeveloperMessage({
+  snippet,
+  domain,
+  onEmailed,
+  onMessageCopied,
+}: { snippet: string; domain?: string } & SnippetMessageEvents) {
+  const t = useTranslations('traffic.snippetMessage');
+  const [copied, setCopied] = useState(false);
+  const message = snippetMessage((key, values) => t(key, values), snippet, domain);
+  const mailto = snippetMailto(message);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.body);
+    setCopied(true);
+    onMessageCopied?.();
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div data-slot="snippet-message" className="mt-2 flex flex-wrap items-center gap-2">
+      {mailto && (
+        <a
+          href={mailto}
+          onClick={() => onEmailed?.()}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 gap-1.5 text-xs')}
+        >
+          <Mail className="h-3 w-3" aria-hidden />
+          {t('email')}
+        </a>
+      )}
+      <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={handleCopy}>
+        {copied ? (
+          <Check className="h-3 w-3 text-green-500" aria-hidden />
+        ) : (
+          <Copy className="h-3 w-3" aria-hidden />
+        )}
+        {copied ? t('copied') : t('copy')}
       </Button>
     </div>
   );
@@ -200,7 +284,7 @@ export function SnippetBanner({
               <li>{t('snippetCheck.stepCheck')}</li>
             </ol>
           )}
-          <SnippetCode snippet={snippet} />
+          <SnippetCode snippet={snippet} domain={check?.domain} {...trafficMessageEvents} />
           {check && (
             <>
               <CheckAgain {...check} />
@@ -217,12 +301,15 @@ export function SnippetBanner({
 export function SnippetDialog({
   trackingCode,
   conversions,
+  domain,
   open,
   onOpenChange,
 }: {
   trackingCode?: string;
   /** The brand's consent mode when it has conversions on, else null. */
   conversions?: ConversionsConsent | null;
+  /** The brand's primary domain, which the developer's message names. */
+  domain?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -236,7 +323,7 @@ export function SnippetDialog({
         <DialogHeader>
           <DialogTitle>{t('snippetTitle')}</DialogTitle>
         </DialogHeader>
-        <SnippetCode snippet={snippet} />
+        <SnippetCode snippet={snippet} domain={domain} {...trafficMessageEvents} />
       </DialogContent>
     </Dialog>
   );

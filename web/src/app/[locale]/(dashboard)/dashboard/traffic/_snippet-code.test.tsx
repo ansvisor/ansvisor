@@ -15,6 +15,8 @@ const checkTrackingSnippet = vi.fn();
 vi.mock('@/lib/traffic-snippet-client', () => ({
   checkTrackingSnippet: (...a: unknown[]) => checkTrackingSnippet(...a),
 }));
+const track = vi.fn();
+vi.mock('@/lib/analytics', () => ({ track: (...a: unknown[]) => track(...a) }));
 
 const { SnippetBanner, SnippetDialog } = await import('./_snippet-code');
 
@@ -29,6 +31,7 @@ beforeEach(() => {
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
   writeText.mockReset();
   checkTrackingSnippet.mockReset();
+  track.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -75,6 +78,73 @@ describe('SnippetDialog', () => {
     expect(document.body.querySelector('pre')!.textContent).toMatch(
       /window\.ansvisor=window\.ansvisor\|\|[\s\S]*<script src="https:\/\/api\.example\.com\/t\.js" data-t="t_abc123" data-c="1" data-consent="wait" defer><\/script>$/,
     );
+  });
+});
+
+describe('the message for the developer', () => {
+  const tag = '<script src="https://api.example.com/t.js" data-t="t_abc123" defer></script>';
+  const email = () =>
+    [...document.body.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Email this to my developer',
+    )!;
+  const copyMessage = () =>
+    [...document.body.querySelectorAll('button')].find((b) =>
+      ['Copy message', 'Message copied'].includes(b.textContent ?? ''),
+    )!;
+  /** The subject and body the mail app opens with. */
+  const mail = () => {
+    const url = new URL(email().getAttribute('href')!);
+    return {
+      to: url.pathname,
+      subject: url.searchParams.get('subject'),
+      body: url.searchParams.get('body'),
+    };
+  };
+
+  it('opens the mail app with the tag and the steps for the domain, and counts it', async () => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <SnippetDialog trackingCode="t_abc123" domain="acme.com" open onOpenChange={() => {}} />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(mail().to).toBe('');
+    expect(mail().subject).toBe('Please add the Ansvisor tracking code to acme.com');
+    expect(mail().body).toContain('Could you add the Ansvisor tracking code to acme.com?');
+    expect(mail().body).toContain(`\r\n\r\n${tag}\r\n\r\n`);
+    expect(mail().body).toContain('just before the closing </head> tag on every page');
+
+    email().addEventListener('click', (e) => e.preventDefault());
+    await act(async () => email().click());
+    expect(track).toHaveBeenCalledWith('traffic_snippet_emailed');
+  });
+
+  it('copies the same message, and counts the copy', async () => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <SnippetDialog trackingCode="t_abc123" domain="acme.com" open onOpenChange={() => {}} />
+        </NextIntlClientProvider>,
+      );
+    });
+    await act(async () => copyMessage().click());
+    expect(writeText).toHaveBeenCalledWith(mail().body!.replace(/\r\n/g, '\n'));
+    expect(writeText.mock.calls[0][0]).toMatch(/^Hi,\n\nCould you add/);
+    expect(copyMessage().textContent).toBe('Message copied');
+    expect(track).toHaveBeenCalledWith('traffic_snippet_message_copied');
+  });
+
+  it('shows on the banner too, naming "our website" when the domain is unknown', async () => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <SnippetBanner trackingCode="t_abc123" />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(mail().subject).toBe('Please add the Ansvisor tracking code to our website');
+    expect(copyMessage()).toBeDefined();
   });
 });
 

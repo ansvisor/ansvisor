@@ -13090,6 +13090,14 @@
       "failed": "The check didn't run. Try again."
     },
     "copySnippet": "Copy tracking script",
+    "snippetMessage": {
+      "email": "Email this to my developer",
+      "copy": "Copy message",
+      "copied": "Message copied",
+      "subject": "Please add the Ansvisor tracking code to {domain}",
+      "ourSite": "our website",
+      "body": "Hi,\n\nCould you add the Ansvisor tracking code to {domain}? It counts visits from AI assistants like ChatGPT, Gemini and Perplexity, and the pages they land on.\n\nHere's the code:\n\n{snippet}\n\nPaste it just before the closing {tag} tag on every page, the 404 page included, then publish the change.\n\nUsing a tag manager? Add it there instead, as a Custom HTML tag on all pages.\n\nIt loads with defer and doesn't change how the page looks.\n\nThanks!"
+    },
     "export": {
       "button": "Export",
       "exporting": "Exporting…",
