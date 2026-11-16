@@ -3,7 +3,6 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { businessHubEnabled } from '@/lib/business-hub/flag';
-import { actionRefHref } from '@/lib/action-center/action-ref';
 
 /**
  * ChatGPT Business Hub in Settings › Integrations (BUSINESS_HUB_ENABLED,
@@ -43,7 +42,7 @@ export async function readBusinessHubSetup(brandId: string | null): Promise<Busi
     const supabase = await createClient();
     const { data, error } = await supabase
       .from('actions')
-      .select('id, action_no')
+      .select('id')
       .eq('brand_id', brandId)
       .eq('dedup_key', `business_hub_setup:${brandId}`)
       .order('created_at', { ascending: false })
@@ -51,9 +50,8 @@ export async function readBusinessHubSetup(brandId: string | null): Promise<Busi
     if (error) return { enabled: true, actionHref: null, failed: true };
     const action = data?.[0];
     if (!action) return { enabled: true, actionHref: null, failed: false };
-    const href =
-      (action.action_no ? actionRefHref(String(action.action_no)) : null) ??
-      `${ACTIONS_PAGE}/${encodeURIComponent(action.id)}`;
+    // By id: a code may be an old number or a brand's (00534).
+    const href = `${ACTIONS_PAGE}/${encodeURIComponent(action.id)}`;
     return { enabled: true, actionHref: href, failed: false };
   } catch {
     return { enabled: true, actionHref: null, failed: true };

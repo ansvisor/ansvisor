@@ -2132,6 +2132,7 @@
       },
       "drawer": {
         "actionId": "Action ID",
+        "previousCode": "Previously {code}",
         "tabs": {
           "overview": "Overview",
           "affected": "Affected",
@@ -4077,7 +4078,7 @@
     "date": "Date",
     "answer": "Answer",
     "openAnswer": "Open the answer for {prompt}",
-    "partial": "Some answers couldn't be read, so this covers the answers that could.",
+    "partial": "Causes are drawn only from prompts whose answers were all compared.",
     "notCited": "not cited",
     "noRows": "No single prompt explains this part.",
     "detection": "Detection from stored snapshots, no model reads",
@@ -4716,8 +4717,8 @@
       "skipped": "Skipped",
       "auto": "Done automatically",
       "failed": "Something went wrong",
-      "readFailed": "Couldn't read this",
-      "timedOut": "Timed out",
+      "readFailed": "Not available right now",
+      "timedOut": "Took too long this time",
       "stoppedAtLimit": "Stopped at its limit",
       "actionClosed": "This action was closed. Nothing more was changed.",
       "limit": "Over this run's limit",
@@ -6190,8 +6191,6 @@
       "pages": {
         "inbox": "Inbox",
         "allChats": "All chats",
-        "activity": "Activity",
-        "capabilities": "What Chat can do",
         "files": "Files",
         "scheduled": "Scheduled",
         "settings": "Settings",
@@ -6210,9 +6209,6 @@
       },
       "title": "Settings",
       "intro": "How Chat works for you and your team.",
-      "tabs": {
-        "general": "General"
-      },
       "general": {
         "title": "General",
         "intro": "Your own preferences. Workspace rules are in <policy>Tool policy</policy>."

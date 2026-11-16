@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { countChatSchedules } from '@/lib/actions/chat-schedules';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
+import { CHAT_SETTINGS_TABS } from '@/lib/chat/settings-tabs';
 import { cn } from '@/lib/utils';
 import { readAgentsSeen } from './agents/agents-seen';
 import { ConnectionsMenu } from './connections/connections-menu';
@@ -35,14 +36,10 @@ const FOLDED: Record<Section, boolean> = {
 };
 
 /**
- * Settings' pages in Chat: on one, Settings' list is open. Tool policy is
- * in the app's Settings, out of Chat.
+ * Settings' pages in Chat, the Settings page's tabs (CHAT_SETTINGS_TABS):
+ * on one, Settings' list is open.
  */
-const SETTINGS_PAGES = [
-  '/dashboard/chat/settings',
-  '/dashboard/chat/activity',
-  '/dashboard/chat/capabilities',
-];
+const SETTINGS_PAGES: string[] = CHAT_SETTINGS_TABS.map((tab) => tab.href);
 
 function readFolded(): Record<Section, boolean> {
   const none = FOLDED;
@@ -178,7 +175,8 @@ function MenuItem({
  * Settings in the menu (owner decision, 15 Nov 2026): a plain row that
  * shows or hides its list, only the menu's ▾ / ▴ on its right, as
  * Connections' row. Under it, General (Chat's Settings page), then what
- * was Governance: Activity, What Chat can do and Tool policy.
+ * was Governance: Activity, What Chat can do and Tool policy, the Settings
+ * page's tabs, each marked while it is the page shown.
  */
 function SettingsMenu({
   open,
@@ -210,43 +208,18 @@ function SettingsMenu({
       </button>
       {open && (
         <div id="chat-menu-settings" className="flex flex-col gap-0.5 pt-0.5 pb-1">
-          <MenuItem
-            sub
-            href="/dashboard/chat/settings"
-            action="chatMenu.openSettings"
-            active={pathname === '/dashboard/chat/settings'}
-            onNavigate={onNavigate}
-          >
-            {t('general')}
-          </MenuItem>
-          <MenuItem
-            sub
-            href="/dashboard/chat/activity"
-            action="chatMenu.openActivity"
-            active={pathname === '/dashboard/chat/activity'}
-            onNavigate={onNavigate}
-          >
-            {t('activity')}
-          </MenuItem>
-          <MenuItem
-            sub
-            href="/dashboard/chat/capabilities"
-            action="chatMenu.openCapabilities"
-            active={pathname === '/dashboard/chat/capabilities'}
-            onNavigate={onNavigate}
-          >
-            {t('capabilities')}
-          </MenuItem>
-          {/* The app's Settings › Chat, out of Chat: never the one open here. */}
-          <MenuItem
-            sub
-            href="/dashboard/settings/chat"
-            action="chatMenu.openPolicy"
-            active={false}
-            onNavigate={onNavigate}
-          >
-            {t('policy')}
-          </MenuItem>
+          {CHAT_SETTINGS_TABS.map((tab) => (
+            <MenuItem
+              key={tab.id}
+              sub
+              href={tab.href}
+              action={tab.menuAction}
+              active={pathname === tab.href}
+              onNavigate={onNavigate}
+            >
+              {t(tab.id)}
+            </MenuItem>
+          ))}
         </div>
       )}
     </div>

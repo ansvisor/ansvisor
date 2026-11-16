@@ -239,6 +239,7 @@ export type Database = {
           assignee_id: string | null
           baseline: Json
           brand_id: string
+          brand_no: number | null
           category: string
           completed_at: string | null
           created_at: string
@@ -269,6 +270,7 @@ export type Database = {
           assignee_id?: string | null
           baseline?: Json
           brand_id: string
+          brand_no?: number | null
           category: string
           completed_at?: string | null
           created_at?: string
@@ -299,6 +301,7 @@ export type Database = {
           assignee_id?: string | null
           baseline?: Json
           brand_id?: string
+          brand_no?: number | null
           category?: string
           completed_at?: string | null
           created_at?: string
@@ -8076,6 +8079,7 @@ export type Database = {
         Row: {
           action_id: string | null
           brand_id: string
+          brand_no: number | null
           category: string
           change_value: number | null
           created_at: string
@@ -8097,6 +8101,7 @@ export type Database = {
         Insert: {
           action_id?: string | null
           brand_id: string
+          brand_no?: number | null
           category: string
           change_value?: number | null
           created_at?: string
@@ -8118,6 +8123,7 @@ export type Database = {
         Update: {
           action_id?: string | null
           brand_id?: string
+          brand_no?: number | null
           category?: string
           change_value?: number | null
           created_at?: string

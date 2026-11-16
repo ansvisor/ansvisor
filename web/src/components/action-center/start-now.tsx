@@ -28,6 +28,7 @@ import {
 } from '@/lib/content/action-drafts';
 import { actionLibraryPath, contentEditorPath, startedDraftPath } from '@/lib/content/drafts';
 import { pagePath } from '@/lib/content/overlap';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useShowChat } from './use-show-chat';
 
@@ -35,6 +36,7 @@ import { useShowChat } from './use-show-chat';
 export interface StartNowAction {
   id: string;
   actionNo: number;
+  brandNo?: number | null;
   title: string;
 }
 
@@ -209,7 +211,7 @@ function useChatStart(action: StartNowAction) {
         else toast.error(answer.message ?? tStart('chatFailed'));
         return;
       }
-      const words = { no: action.actionNo };
+      const words = { no: actionCodeNo(action) };
       toast(
         answer.repeated
           ? t('toast.repeated')

@@ -18,6 +18,7 @@ import type {
 import { PAGE_OPENS } from '@/lib/chat/page-open';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { RANGE_PRESETS, customDays, isRangePreset, rangeWords } from '@/lib/chat/range';
+import { CHAT_POLICY_HREF } from '@/lib/chat/settings-tabs';
 import { cn } from '@/lib/utils';
 import { useFocusLabel } from './focus-picker';
 import { CustomRangeFields, useRangeT } from './range/range-picker';
@@ -31,8 +32,8 @@ import { useChatTour } from './tour/chat-tour';
  * that can't be kept goes back and says so. Default mode is for the roles
  * that change things; Full auto says why it's locked. Your focus (CHAT-24
  * §3 item 2) is for everyone: it only changes what Chat suggests. Product
- * tour takes the tour again, where Chat opens on pages (00486). The
- * mockup's other tabs come with their pages.
+ * tour takes the tour again, where Chat opens on pages (00486). The title
+ * and the tabs around it are the Settings frame's (ChatSettingsFrame).
  */
 
 const MODES: ChatMode[] = ['ask_first', 'auto', 'full_auto'];
@@ -231,225 +232,205 @@ export function ChatSettings({
         : undefined;
 
   return (
-    <div className="max-w-[920px]">
-      <div className="mb-3.5">
-        <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title')}</h1>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">{t('intro')}</p>
-      </div>
-      <div className="flex items-start gap-6 max-[900px]:flex-col">
-        <nav
-          aria-label={t('title')}
-          className="sticky top-0 grid w-[200px] shrink-0 gap-0.5 max-[900px]:static max-[900px]:flex max-[900px]:w-full max-[900px]:flex-wrap"
-        >
+    <section className="max-w-[680px]">
+      <h2 className="mb-1 text-base font-semibold">{t('general.title')}</h2>
+      <p className="mb-3.5 text-[13px] text-muted-foreground">
+        {t.rich('general.intro', {
+          policy: (chunks) => (
+            <Link
+              href={CHAT_POLICY_HREF}
+              data-action="policy.open"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              {chunks}
+            </Link>
+          ),
+        })}
+      </p>
+
+      {access.modes && (
+        <Row label={t('defaultMode.label')} note={t('defaultMode.note')}>
           <span
-            data-action="chatSettings.tab"
-            aria-current="page"
-            className="rounded-lg bg-muted px-2.5 py-[7px] text-[13px] font-medium text-foreground"
+            role="radiogroup"
+            aria-label={t('defaultMode.label')}
+            className="inline-flex shrink-0 rounded-[9px] border bg-muted/60 p-0.5"
           >
-            {t('tabs.general')}
-          </span>
-        </nav>
-        <section className="max-w-[680px] min-w-0 flex-1">
-          <h2 className="mb-1 text-base font-semibold">{t('general.title')}</h2>
-          <p className="mb-3.5 text-[13px] text-muted-foreground">
-            {t.rich('general.intro', {
-              policy: (chunks) => (
-                <Link
-                  href="/dashboard/settings/chat"
-                  data-action="policy.open"
-                  className="underline underline-offset-2 hover:text-foreground"
+            {MODES.map((mode) => {
+              const locked = mode === 'full_auto' && !!access.fullAutoLock;
+              const on = settings.defaultMode === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  aria-disabled={locked || undefined}
+                  data-action="chatSettings.defaultMode"
+                  title={locked ? lockTip : undefined}
+                  onClick={() => {
+                    if (!locked && !on) void change({ defaultMode: mode });
+                  }}
+                  className={cn(
+                    'inline-flex items-center rounded-[7px] px-[9px] py-[3px] text-xs whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                    on &&
+                      'bg-background font-medium text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]',
+                    locked && 'cursor-not-allowed text-muted-foreground/60',
+                  )}
                 >
-                  {chunks}
-                </Link>
-              ),
+                  {t(`defaultMode.${mode}`)}
+                </button>
+              );
             })}
-          </p>
+          </span>
+        </Row>
+      )}
 
-          {access.modes && (
-            <Row label={t('defaultMode.label')} note={t('defaultMode.note')}>
-              <span
-                role="radiogroup"
-                aria-label={t('defaultMode.label')}
-                className="inline-flex shrink-0 rounded-[9px] border bg-muted/60 p-0.5"
-              >
-                {MODES.map((mode) => {
-                  const locked = mode === 'full_auto' && !!access.fullAutoLock;
-                  const on = settings.defaultMode === mode;
-                  return (
-                    <button
-                      key={mode}
-                      type="button"
-                      role="radio"
-                      aria-checked={on}
-                      aria-disabled={locked || undefined}
-                      data-action="chatSettings.defaultMode"
-                      title={locked ? lockTip : undefined}
-                      onClick={() => {
-                        if (!locked && !on) void change({ defaultMode: mode });
-                      }}
-                      className={cn(
-                        'inline-flex items-center rounded-[7px] px-[9px] py-[3px] text-xs whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                        on &&
-                          'bg-background font-medium text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]',
-                        locked && 'cursor-not-allowed text-muted-foreground/60',
-                      )}
-                    >
-                      {t(`defaultMode.${mode}`)}
-                    </button>
-                  );
-                })}
-              </span>
-            </Row>
-          )}
-
-          <Row label={t('focus.label')} note={t('focus.note')}>
-            <span
-              role="group"
-              aria-label={t('focus.label')}
-              className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]"
-            >
-              <label className="col-span-2 flex items-center gap-[7px] whitespace-nowrap">
-                <input
-                  type="checkbox"
-                  data-action="chatSettings.focusDefault"
-                  checked={view === 'default'}
-                  onChange={() => void chooseDefault()}
-                  className="accent-foreground"
-                />
-                {tf('default.name')}
-              </label>
-              {FOCUS_AREAS.map((area) => (
-                <label key={area} className="flex items-center gap-[7px] whitespace-nowrap">
-                  <input
-                    type="checkbox"
-                    data-action="chatSettings.focus"
-                    value={area}
-                    checked={shown.includes(area)}
-                    onChange={(event) => void changeFocus(area, event.target.checked)}
-                    className="accent-foreground"
-                  />
-                  {tf(`areas.${area}.name`)}
-                </label>
-              ))}
-            </span>
-          </Row>
-
-          <Row label={t('language.label')} note={t('language.note')}>
-            <select
-              data-action="chatSettings.answerLanguage"
-              aria-label={t('language.label')}
-              value={settings.answerLanguage ?? ''}
-              onChange={(event) =>
-                void change({
-                  answerLanguage: (event.target.value || null) as AnswerLanguage | null,
-                })
-              }
-              className={SELECT}
-            >
-              <option value="">{t('language.same')}</option>
-              {LANGUAGES.map((language) => (
-                <option key={language} value={language}>
-                  {t(`language.${language}`)}
-                </option>
-              ))}
-            </select>
-          </Row>
-
-          <RangeRow />
-
-          <Row label={t('notify.label')} note={t('notify.note')}>
-            <select
-              data-action="chatSettings.notifyChannel"
-              aria-label={t('notify.label')}
-              value={settings.notifyVia}
-              onChange={(event) => void change({ notifyVia: event.target.value as NotifyChannel })}
-              className={SELECT}
-            >
-              {CHANNELS.map((channel) => (
-                <option
-                  key={channel}
-                  value={channel}
-                  disabled={channel === 'inbox_slack' && !access.slack}
-                >
-                  {channel === 'inbox_slack' && !access.slack
-                    ? t('notify.slackSoon')
-                    : t(`notify.${channel}`)}
-                </option>
-              ))}
-            </select>
-          </Row>
-
-          <Row label={t('thought.label')} note={t('thought.note')}>
-            <Switch
-              checked={settings.showThought}
-              label={t('thought.label')}
-              action="chatSettings.toggleThinking"
-              onChange={(next) => void change({ showThought: next })}
+      <Row label={t('focus.label')} note={t('focus.note')}>
+        <span
+          role="group"
+          aria-label={t('focus.label')}
+          className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]"
+        >
+          <label className="col-span-2 flex items-center gap-[7px] whitespace-nowrap">
+            <input
+              type="checkbox"
+              data-action="chatSettings.focusDefault"
+              checked={view === 'default'}
+              onChange={() => void chooseDefault()}
+              className="accent-foreground"
             />
-          </Row>
+            {tf('default.name')}
+          </label>
+          {FOCUS_AREAS.map((area) => (
+            <label key={area} className="flex items-center gap-[7px] whitespace-nowrap">
+              <input
+                type="checkbox"
+                data-action="chatSettings.focus"
+                value={area}
+                checked={shown.includes(area)}
+                onChange={(event) => void changeFocus(area, event.target.checked)}
+                className="accent-foreground"
+              />
+              {tf(`areas.${area}.name`)}
+            </label>
+          ))}
+        </span>
+      </Row>
 
-          <Row label={t('everyPage.label')} note={t('everyPage.note')}>
-            <Switch
-              checked={settings.panelOnPages}
-              label={t('everyPage.label')}
-              action="chatSettings.toggleAskChatEverywhere"
-              onChange={(next) => void change({ panelOnPages: next })}
-            />
-          </Row>
+      <Row label={t('language.label')} note={t('language.note')}>
+        <select
+          data-action="chatSettings.answerLanguage"
+          aria-label={t('language.label')}
+          value={settings.answerLanguage ?? ''}
+          onChange={(event) =>
+            void change({
+              answerLanguage: (event.target.value || null) as AnswerLanguage | null,
+            })
+          }
+          className={SELECT}
+        >
+          <option value="">{t('language.same')}</option>
+          {LANGUAGES.map((language) => (
+            <option key={language} value={language}>
+              {t(`language.${language}`)}
+            </option>
+          ))}
+        </select>
+      </Row>
 
-          {/* The product tour again, from its first topic: it runs in the side panel. */}
-          {tour?.available && settings.panelOnPages && (
-            <Row label={t('tour.label')} note={t('tour.note')}>
-              <Button
+      <RangeRow />
+
+      <Row label={t('notify.label')} note={t('notify.note')}>
+        <select
+          data-action="chatSettings.notifyChannel"
+          aria-label={t('notify.label')}
+          value={settings.notifyVia}
+          onChange={(event) => void change({ notifyVia: event.target.value as NotifyChannel })}
+          className={SELECT}
+        >
+          {CHANNELS.map((channel) => (
+            <option
+              key={channel}
+              value={channel}
+              disabled={channel === 'inbox_slack' && !access.slack}
+            >
+              {channel === 'inbox_slack' && !access.slack
+                ? t('notify.slackSoon')
+                : t(`notify.${channel}`)}
+            </option>
+          ))}
+        </select>
+      </Row>
+
+      <Row label={t('thought.label')} note={t('thought.note')}>
+        <Switch
+          checked={settings.showThought}
+          label={t('thought.label')}
+          action="chatSettings.toggleThinking"
+          onChange={(next) => void change({ showThought: next })}
+        />
+      </Row>
+
+      <Row label={t('everyPage.label')} note={t('everyPage.note')}>
+        <Switch
+          checked={settings.panelOnPages}
+          label={t('everyPage.label')}
+          action="chatSettings.toggleAskChatEverywhere"
+          onChange={(next) => void change({ panelOnPages: next })}
+        />
+      </Row>
+
+      {/* The product tour again, from its first topic: it runs in the side panel. */}
+      {tour?.available && settings.panelOnPages && (
+        <Row label={t('tour.label')} note={t('tour.note')}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-action="chatSettings.takeTour"
+            disabled={tour.busy}
+            onClick={() => {
+              track('chat_tour_restarted');
+              void tour.show('visibility', 'everything');
+            }}
+            className="shrink-0"
+          >
+            {t('tour.take')}
+          </Button>
+        </Row>
+      )}
+
+      {/* Where a page Chat writes opens (CHAT-25 §3, W4-11; Open here, W4-15b). */}
+      <Row label={t('pageOpen.label')} note={t('pageOpen.note')}>
+        <span
+          role="radiogroup"
+          aria-label={t('pageOpen.label')}
+          className="inline-flex shrink-0 rounded-[9px] border bg-muted/60 p-0.5"
+        >
+          {PAGE_OPENS.map((where) => {
+            const on = settings.pageOpen === where;
+            return (
+              <button
+                key={where}
                 type="button"
-                variant="outline"
-                size="sm"
-                data-action="chatSettings.takeTour"
-                disabled={tour.busy}
+                role="radio"
+                aria-checked={on}
+                data-action="chatSettings.pageOpen"
                 onClick={() => {
-                  track('chat_tour_restarted');
-                  void tour.show('visibility', 'everything');
+                  if (!on) void change({ pageOpen: where });
                 }}
-                className="shrink-0"
+                className={cn(
+                  'inline-flex items-center rounded-[7px] px-[9px] py-[3px] text-xs whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                  on &&
+                    'bg-background font-medium text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]',
+                )}
               >
-                {t('tour.take')}
-              </Button>
-            </Row>
-          )}
-
-          {/* Where a page Chat writes opens (CHAT-25 §3, W4-11; Open here, W4-15b). */}
-          <Row label={t('pageOpen.label')} note={t('pageOpen.note')}>
-            <span
-              role="radiogroup"
-              aria-label={t('pageOpen.label')}
-              className="inline-flex shrink-0 rounded-[9px] border bg-muted/60 p-0.5"
-            >
-              {PAGE_OPENS.map((where) => {
-                const on = settings.pageOpen === where;
-                return (
-                  <button
-                    key={where}
-                    type="button"
-                    role="radio"
-                    aria-checked={on}
-                    data-action="chatSettings.pageOpen"
-                    onClick={() => {
-                      if (!on) void change({ pageOpen: where });
-                    }}
-                    className={cn(
-                      'inline-flex items-center rounded-[7px] px-[9px] py-[3px] text-xs whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                      on &&
-                        'bg-background font-medium text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]',
-                    )}
-                  >
-                    {t(`pageOpen.${where}`)}
-                  </button>
-                );
-              })}
-            </span>
-          </Row>
-        </section>
-      </div>
-    </div>
+                {t(`pageOpen.${where}`)}
+              </button>
+            );
+          })}
+        </span>
+      </Row>
+    </section>
   );
 }

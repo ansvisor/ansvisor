@@ -4,7 +4,7 @@ import { capturePostHog, captureForSessionUser } from './posthog-server';
 const fetchMock = vi.fn();
 
 beforeEach(() => {
-  fetchMock.mockReset().mockResolvedValue({ ok: true });
+  fetchMock.mockReset().mockResolvedValue({ ok: true, status: 200 });
   vi.stubGlobal('fetch', fetchMock);
   vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
   vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', 'https://eu.i.posthog.com/');
@@ -15,8 +15,11 @@ afterEach(() => {
 });
 
 describe('capturePostHog', () => {
-  it("posts the event to the project's capture endpoint as the person", async () => {
-    await capturePostHog('signed_up', 'u1', { source: 'email' });
+  it("posts the event to the project's capture endpoint as the person, and says it was accepted", async () => {
+    await expect(capturePostHog('signed_up', 'u1', { source: 'email' })).resolves.toEqual({
+      result: 'accepted',
+      reason: 'accepted',
+    });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://eu.i.posthog.com/capture/');
     expect(JSON.parse(init.body)).toMatchObject({
@@ -27,15 +30,49 @@ describe('capturePostHog', () => {
     });
   });
 
-  it('sends nothing without a key', async () => {
+  it('sends nothing without a key or an id, and says which', async () => {
+    await expect(capturePostHog('signed_up', '')).resolves.toEqual({
+      result: 'refused',
+      reason: 'no_id',
+    });
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', '');
-    await capturePostHog('signed_up', 'u1');
+    await expect(capturePostHog('signed_up', 'u1')).resolves.toEqual({
+      result: 'refused',
+      reason: 'no_key',
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('never throws when the capture fails', async () => {
-    fetchMock.mockRejectedValue(new Error('network'));
-    await expect(capturePostHog('signed_up', 'u1')).resolves.toBeUndefined();
+  it('never throws: a 4xx is refused; a 5xx, a timeout or a network error is unknown', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401 });
+    await expect(capturePostHog('signed_up', 'u1')).resolves.toEqual({
+      result: 'refused',
+      reason: 'refused:401',
+    });
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 502 });
+    await expect(capturePostHog('signed_up', 'u1')).resolves.toEqual({
+      result: 'unknown',
+      reason: 'unknown:502',
+    });
+    fetchMock.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+    await expect(capturePostHog('signed_up', 'u1')).resolves.toEqual({
+      result: 'unknown',
+      reason: 'unknown:TimeoutError',
+    });
+    fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+    await expect(capturePostHog('signed_up', 'u1')).resolves.toEqual({
+      result: 'unknown',
+      reason: 'unknown:TypeError',
+    });
+  });
+
+  it('sends nothing to a relative host, a proxy path only the browser can use, and says so', async () => {
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', '/ingest');
+    await expect(capturePostHog('signed_up', 'u1')).resolves.toEqual({
+      result: 'refused',
+      reason: 'bad_host',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

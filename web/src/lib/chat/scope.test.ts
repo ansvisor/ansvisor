@@ -15,11 +15,15 @@ vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { rpc: vi.fn() } }));
 
 const {
   DEFAULT_RANGE_DAYS,
+  NAMED_ROWS,
+  PAGED_READS,
   ROW_CAP,
   ROW_LIMITS,
   asksAllTime,
   capRows,
   givesDates,
+  namesRows,
+  pagedRead,
   planPlatforms,
   resolveDates,
   scopeRead,
@@ -296,20 +300,83 @@ describe('rows', () => {
   const listed = readTool({ limit: z.number().int().min(1).max(100).optional() });
 
   it("reads the tool's default, the model's count up to the max, and one more to see if there are more", async () => {
-    const named = { ...listed, name: 'list_signals' };
+    const named = { ...listed, name: 'get_gsc_queries' };
     expect(await scopeRead(named, { brand_id: BRAND }, facts())).toMatchObject({
-      input: { limit: 11 },
-      cap: { rows: 10, probe: 11 },
+      input: { limit: 26 },
+      cap: { rows: 25, probe: 26 },
     });
     expect(await scopeRead(named, { brand_id: BRAND, limit: 500 }, facts())).toMatchObject({
-      input: { limit: ROW_CAP + 1 },
-      cap: { rows: ROW_CAP, probe: ROW_CAP + 1 },
+      input: { limit: 50 },
+      cap: { rows: 49, probe: 50 },
     });
     // A schema that can't take one more: no probe.
     const tight = readTool({ limit: z.number().int().min(1).max(10).optional() });
     expect(
       await scopeRead({ ...tight, name: 'x' }, { brand_id: BRAND, limit: 10 }, facts()),
     ).toMatchObject({ input: { limit: 10 }, cap: { rows: 10, probe: null } });
+  });
+
+  it('reads a page of 50 actions, not 10, and no extra row: the read counts them all itself', async () => {
+    const actions = CHAT_TOOLS.find((t) => t.name === 'list_action_center_tasks')!;
+    expect(ROW_LIMITS.list_action_center_tasks).toEqual({ default: ROW_CAP, max: ROW_CAP });
+    expect(await scopeRead(actions, { brand_id: BRAND }, facts())).toMatchObject({
+      input: { limit: 50 },
+      used: { rows: 50 },
+      cap: { rows: 50, probe: null },
+    });
+    // The next page keeps its offset; a bigger page is held to 50.
+    expect(
+      await scopeRead(actions, { brand_id: BRAND, limit: 200, offset: 50 }, facts()),
+    ).toMatchObject({ input: { limit: 50, offset: 50 }, cap: { rows: 50, probe: null } });
+    expect([...PAGED_READS].every((name) => CHAT_TOOLS.some((t) => t.name === name))).toBe(true);
+  });
+
+  it('never cuts the actions a read names by their codes, whatever limit came with them', async () => {
+    // The owner's report (2026-11-16): a code can name two actions, and both come back.
+    const actions = CHAT_TOOLS.find((t) => t.name === 'list_action_center_tasks')!;
+    const scoped = await scopeRead(
+      actions,
+      { brand_id: BRAND, codes: ['AC-59', 'AC 481'], limit: 1 },
+      facts(),
+    );
+    expect(scoped).toMatchObject({
+      input: { brand_id: BRAND, codes: ['AC-59', 'AC 481'] },
+      cap: { rows: ROW_CAP, probe: null },
+    });
+    expect(scoped.kind === 'read' && 'limit' in scoped.input).toBe(false);
+    for (const [name, fields] of Object.entries(NAMED_ROWS)) {
+      const tool = CHAT_TOOLS.find((t) => t.name === name)!;
+      for (const field of fields) expect(field in tool.inputSchema.shape, name).toBe(true);
+    }
+  });
+
+  // The owner's plan (2026-11-16, item 2): "what is X?" never depends on X being on the first page.
+  it.each([
+    ['list_signals', { codes: ['S-07', 's12'] }],
+    ['list_signals', { ids: ['a8e00000-0000-4000-8000-000000000001'] }],
+    ['list_prompts', { search: 'cold brew' }],
+    ['list_prompts', { ids: ['a1e00000-0000-4000-8000-000000000001'] }],
+    ['get_prompt_performance', { prompt_ids: ['a1e00000-0000-4000-8000-000000000001'] }],
+    ['list_citations', { domains: ['www.example.com'] }],
+    ['list_citations', { urls: ['https://example.com/a/'] }],
+    ['list_content_opportunities', { search: 'storage guide' }],
+    ['list_drafts', { search: 'gift boxes' }],
+    ['get_reports', { ids: ['a4e00000-0000-4000-8000-000000000001'] }],
+  ])('never cuts a lookup by %s %j to a limit given beside it', async (name, lookup) => {
+    const tool = CHAT_TOOLS.find((t) => t.name === name)!;
+    const scoped = await scopeRead(tool, { brand_id: BRAND, ...lookup, limit: 1 }, facts());
+    expect(scoped).toMatchObject({ kind: 'read', input: lookup, cap: { rows: ROW_CAP } });
+    expect(scoped.kind === 'read' && 'limit' in scoped.input, name).toBe(false);
+    // The same read without a lookup keeps its page.
+    const page = await scopeRead(tool, { brand_id: BRAND, limit: 1 }, facts());
+    expect(page.kind === 'read' && page.input.limit, name).toBe(1);
+  });
+
+  it('reads blank words or an empty list as no lookup', () => {
+    expect(namesRows('list_prompts', { search: '  ' })).toBe(false);
+    expect(namesRows('list_signals', { codes: [] })).toBe(false);
+    expect(namesRows('list_signals', { codes: ['S-07'] })).toBe(true);
+    expect(namesRows('list_topics', { search: 'x' })).toBe(false);
   });
 
   it('cuts every list to its rows and says how many were left out', () => {
@@ -361,8 +428,11 @@ describe('rows', () => {
       const shape = tool.inputSchema.shape as Record<string, unknown>;
       const limits = ROW_LIMITS[tool.name];
       if ('limit' in shape) {
-        expect(limits, tool.name).toBeDefined();
-        const input = { ...tool.fixture.input, limit: limits.max + 1 };
+        // A list read pages ROW_CAP at a time; any other read has its own limit.
+        expect(limits !== undefined || pagedRead(tool), tool.name).toBe(true);
+        // One more for the probe, unless the read counts its rows itself.
+        const probe = pagedRead(tool) ? 0 : 1;
+        const input = { ...tool.fixture.input, limit: (limits?.max ?? ROW_CAP) + probe };
         expect(tool.inputSchema.safeParse(input).success, tool.name).toBe(true);
       }
       expect(limits ? limits.max <= ROW_CAP : true, tool.name).toBe(true);
@@ -373,5 +443,40 @@ describe('rows', () => {
         name,
       ).toBe(true);
     }
+  });
+
+  // The owner's rule (2026-11-16): Chat reads all a page shows, a page of 50 at a time.
+  const LIST_READS = [
+    'list_brands',
+    'list_prompts',
+    'get_prompt_performance',
+    'list_prompt_suggestions',
+    'get_prompt_volumes',
+    'list_topics',
+    'list_mentions',
+    'list_citations',
+    'list_competitors',
+    'get_site_audit_summary',
+    'list_action_center_tasks',
+    'list_signals',
+    'get_action_history',
+    'list_content_opportunities',
+    'list_drafts',
+    'get_reports',
+    'get_ads_opportunities',
+  ];
+
+  it.each(LIST_READS)('pages %s: 50 by default, its offset kept, no extra row', async (name) => {
+    const tool = CHAT_TOOLS.find((t) => t.name === name)!;
+    expect(pagedRead(tool)).toBe(true);
+    expect(ROW_LIMITS[name]?.max ?? ROW_CAP).toBe(ROW_CAP);
+    expect(await scopeRead(tool, { ...tool.fixture.input }, facts())).toMatchObject({
+      input: { limit: ROW_CAP },
+      cap: { rows: ROW_CAP, probe: null },
+    });
+    expect(
+      await scopeRead(tool, { ...tool.fixture.input, limit: 200, offset: 100 }, facts()),
+    ).toMatchObject({ input: { limit: ROW_CAP, offset: 100 }, cap: { probe: null } });
+    expect(tool.description).toContain('next_offset');
   });
 });

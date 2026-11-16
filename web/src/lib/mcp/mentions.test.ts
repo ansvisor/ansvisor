@@ -431,6 +431,17 @@ describe('listMentionsFor', () => {
     });
     await expect(listMentionsFor(auth, { brandId: 'b1' })).rejects.toThrow('statement timeout');
   });
+
+  it('reads 100 a page for the MCP tool, and any answer by offset for Chat', async () => {
+    rpc.mockResolvedValue({ data: { total: 0, prompts: 0, rows: [] }, error: null });
+    await listMentionsFor(auth, { brandId: 'b1', page: 3 });
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_limit: 100, p_offset: 200 });
+    // Chat's page: answers 21–100 of every 100 are reachable, not only the first 20.
+    await listMentionsFor(auth, { brandId: 'b1', offset: 70, limit: 50 });
+    expect(rpc.mock.calls[1][1]).toMatchObject({ p_limit: 50, p_offset: 70 });
+    await listMentionsFor(auth, { brandId: 'b1', offset: -5, limit: 500 });
+    expect(rpc.mock.calls[2][1]).toMatchObject({ p_limit: 100, p_offset: 0 });
+  });
 });
 
 describe('getMentionFor', () => {

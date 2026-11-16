@@ -146,7 +146,8 @@ timestamps (`date_from` / `date_to`).
 - **`list_citations`** — which domains and URLs AI cites alongside the
   brand, classified by source type (news, review, owned, social, forum,
   competitor, you). Filter with `source_filter`: `all`, `owned`,
-  `competitor` or `external`.
+  `competitor` or `external`. `domains` or `urls` read the ones the
+  user names, in every source type, with the prompts citing each.
 - **`get_ai_traffic`** — visits referred by AI engines: per platform,
   top landing pages, countries. Read `tracking` first: `not_detected`
   (the tracking snippet isn't seen on the brand's site, so 0 visits
@@ -155,7 +156,8 @@ timestamps (`date_from` / `date_to`).
   the last 7 days) or `active`.
 - **`list_reports`** — the brand's saved reports, newest first: `id`,
   `title`, `template`, `date_from` / `date_to` and `created_at`.
-  `limit` (default 50, max 100).
+  `limit` (default 50, max 100). `search` (title words) or `ids` read
+  the ones the user names.
 - **`get_report`** — one saved report in full, with its stored
   `payload`. It doesn't regenerate: the numbers are its own window's,
   as they were when it was made, so don't quote them as today's.
@@ -196,11 +198,13 @@ answers; no LLM is called.
   coverage audits.
 - **`list_prompts`** — tracked prompts with text, topic, platforms,
   models, regions and active flag. Filters: `topic_id`, `is_active`,
-  `limit` (default 100, max 500).
+  `limit` (default 100, max 500). `search` (words of the prompt) or
+  `ids` read the ones the user names, active and paused.
 - **`get_prompt_performance`** — per-prompt visibility, mentions,
   citations and competitor score for a window. Sort with `sort_by`
   (`visibility`, `mentions`, `citations`, `appearances`) and `order`.
-  Use for "best / worst prompt this week?".
+  Use for "best / worst prompt this week?". `prompt_ids` reads the
+  prompts the user names, whatever their topic.
 - **`get_prompt_volumes`** — per-prompt search demand: Google volumes,
   `est_ai_volume` with its range (`est_ai_volume_low` / `_high`) and
   `volume_confidence`, and competition. Use to prioritise, quoting the
@@ -241,7 +245,8 @@ answers; no LLM is called.
 **Content & pages**
 
 - **`list_content_opportunities`** — content gaps ranked by opportunity
-  score. Filters: `status`, `impact`, `type`.
+  score. Filters: `status`, `impact`, `type`. `search` (title words) or
+  `ids` read the ones the user names, archived too.
 - **`get_content_opportunity`** — one gap in full, including an
   existing brief. Its `source_data.estAiVolume` is a kept estimate.
 - **`generate_content_brief`** — writes a fresh AI brief, overwriting
@@ -270,7 +275,8 @@ accepts it.
   `published`), `method` (`create` a new page, or `optimize` the live
   page at `source_url`), `page_type`, `author` (`user` or `agent`),
   `open_suggestions` (how many wait for review) and `editor_path`.
-  Filter: `status`.
+  Filter: `status`. `search` (title words) or `ids` read the ones the
+  user names, archived too.
 - **`get_content_draft`** — one draft: `body_html`, the page as
   numbered `passages` (`locked: true` = AI answers quote it today),
   `published_url` and `published_at` (where and since when the page is
@@ -360,6 +366,9 @@ accepts it.
   - `evidence`: when it was detected, and app paths to the answers
     behind it;
   - `used_by_actions`: the actions built on it.
+
+  `codes` (`S-07`) or `ids` read the signals the user names, in every
+  status and date.
 - **`list_action_history`** — closed actions with their measured
   `outcome` (improved, mixed, no_meaningful_change, declined,
   not_measurable, pending_measurement) and before/after `results`. An
@@ -746,6 +755,10 @@ When the user asks how AI describes the brand, why sentiment moved
   tracking snippet isn't installed instead.
 - **Don't call a write tool to "check" something.** Read tools exist
   for every write; use them.
+- **Don't call something missing because a list didn't show it.** When
+  the user names a signal code, a prompt, a domain or page, an
+  opportunity, a draft or a report, read it by that first; one in
+  `not_found` gets a plain "not found", never the closest one.
 - **Don't recommend "improve SEO" — this is not SEO.** AEO is about
   being cited inside AI-generated answers. Recommendations should be
   about content structure (definition-first paragraphs, FAQ blocks,

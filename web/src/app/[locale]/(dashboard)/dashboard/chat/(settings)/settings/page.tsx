@@ -7,7 +7,7 @@ import {
   type ChatGeneralAccess,
 } from '@/lib/chat/general-settings';
 import { createClient } from '@/lib/supabase/server';
-import { chatFocusState } from '../_chat-page-access';
+import { chatFocusState } from '../../_chat-page-access';
 
 /** What a person whose settings can't be read may pick: nothing that changes things. */
 const CAREFUL_ACCESS: ChatGeneralAccess = { modes: false, fullAutoLock: 'plan', slack: false };

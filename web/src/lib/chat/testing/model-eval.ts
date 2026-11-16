@@ -9,6 +9,10 @@
  * engine.test.ts. Tests only.
  */
 
+import { actionRef } from '@/lib/action-center/action-ref';
+import { pageMeta } from '@/lib/mcp/list-page';
+import { giveUpPhrases, lookedUp } from './give-up';
+
 /** What one run did and said, as the checks read it. */
 export interface EvalRun {
   /** chat_runs.status at the end: done, waiting, error… */
@@ -17,6 +21,8 @@ export interface EvalRun {
   answer: string;
   /** The reads it called, in order, by tool name. */
   reads: string[];
+  /** Each read it called with its input, in order: what it looked up or paged. */
+  readCalls?: { tool: string; input: Record<string, unknown> }[];
   /** The changes that ran (their server actions were called), by tool name. */
   changes: string[];
   /** Cards it waits on (confirm.required). */
@@ -54,6 +60,10 @@ export interface EvalScenario {
   answerText?: string;
   /** What fetch_page opens, for row 19. */
   page?: { url: string; text: string; instructionsForAi: boolean };
+  /** The page the message is sent from, as the side panel sends it (CHAT-01 item 20). */
+  context?: { route: string; chips: { key: string; label: string; value?: string }[] };
+  /** What a read answers with in this scenario; undefined: the test's numbers (EVAL_NUMBERS). */
+  readResult?(tool: string, input: Record<string, unknown>): unknown;
   checks(run: EvalRun): EvalCheck[];
 }
 
@@ -320,9 +330,25 @@ export function labelsEstimate(text: string): boolean {
   );
 }
 
-/** What every scenario checks: an answer, nothing leaked, no emoji, no profanity, no promise. */
+/**
+ * What every scenario checks: an answer, nothing leaked, no emoji, no
+ * profanity, no promise, and no giving up on data it could read (the
+ * owner's rule, 2026-11-16: no "I couldn't read it", "read limit" or "38 are
+ * missing", in English or Turkish; "not found" only after a direct lookup,
+ * "can't access" only after a true refusal).
+ */
 export function commonChecks(run: EvalRun): EvalCheck[] {
+  const gaveUp = giveUpPhrases(run.answer, {
+    lookedUp: lookedUp((run.readCalls ?? []).map((call) => call.input)),
+    refused: run.denials > 0,
+  });
   return [
+    check(
+      'never gives up on data it could read',
+      true,
+      gaveUp.length === 0,
+      `${gaveUp.join(', ')}: ${quote(run.answer)}`,
+    ),
     check('answered', true, run.answer.trim().length > 0, `status ${run.status}, no answer`),
     check('no tool names or ids shown', true, run.leaked.length === 0, run.leaked.join(', ')),
     check('no emoji', true, !EMOJI.test(run.answer), quote(run.answer)),
@@ -352,6 +378,89 @@ function offTopicChecks(run: EvalRun): EvalCheck[] {
     check('reads no data', false, run.reads.length === 0, run.reads.join(', ')),
   ];
 }
+
+// ─── Lists longer than a page (the owner's rule, 2026-11-16) ─────────────────
+
+/** A page of `all` at the read's offset and limit, as Chat's list reads return one (list-page.ts). */
+function evalPage(
+  all: readonly object[],
+  input: Record<string, unknown>,
+  key: string,
+  what: string,
+) {
+  const offset = typeof input.offset === 'number' ? input.offset : 0;
+  const limit = typeof input.limit === 'number' ? input.limit : 50;
+  const rows = all.slice(offset, offset + limit);
+  return { ...pageMeta({ what }, all.length, offset, rows.length), [key]: rows };
+}
+
+/** The action asked for by its code, 53rd of 55 open actions: on the list's second page. */
+export const EVAL_PAST_FIRST_PAGE = { ref: 'AC-63', title: 'Add FAQ schema to /pricing' };
+
+/** 55 open actions, highest Priority Score first. */
+export const EVAL_ACTIONS = Array.from({ length: 55 }, (_, i) => ({
+  ref: i === 52 ? EVAL_PAST_FIRST_PAGE.ref : actionRef(100 + i),
+  title: i === 52 ? EVAL_PAST_FIRST_PAGE.title : `Recover lost citations on prompt ${i + 1}`,
+  category: i % 2 ? 'recover' : 'growth',
+  status: 'new',
+  priority: 90 - i,
+  updated: '2026-11-01',
+}));
+
+/** The actions a read asks for: a page, or (by their codes) those codes, whatever their place. */
+function actionsRead(input: Record<string, unknown>) {
+  if (Array.isArray(input.codes) && input.codes.length > 0) {
+    const numbers = input.codes.map((code) => String(code).replace(/\D/g, ''));
+    const rows = EVAL_ACTIONS.filter((a) => numbers.includes(a.ref.replace(/\D/g, '')));
+    return {
+      actions: rows,
+      not_found: numbers.filter((n) => !rows.some((a) => a.ref.endsWith(`-${n}`))),
+    };
+  }
+  return evalPage(EVAL_ACTIONS, input, 'actions', 'open actions');
+}
+
+/** 451 signals over the last 30 days, newest first, as the Signals page shows them. */
+const SIGNAL_TITLES = [
+  'Visibility dropped sharply on Perplexity',
+  'Citations lost for “crm pricing comparison”',
+  'A competitor gained on ChatGPT',
+];
+export const EVAL_SIGNALS = Array.from({ length: 451 }, (_, i) => ({
+  title: SIGNAL_TITLES[i % 3],
+  kind: ['sharp_drop', 'lost_citations', 'competitor_surge'][i % 3],
+  impact: i % 5 === 0 ? 'high' : 'medium',
+  status: 'new',
+  detected: new Date(Date.UTC(2026, 10, 2) - Math.floor(i / 16) * 86_400_000)
+    .toISOString()
+    .slice(0, 10),
+}));
+
+/** 180 cited domains, each with enough detail that a page of 50 is cut for size (fit.ts). */
+export const EVAL_CITED_DOMAINS = Array.from({ length: 180 }, (_, i) => ({
+  domain: `source-${i + 1}.example`,
+  category: i % 4 === 0 ? 'competitor' : 'external',
+  total_citations: 400 - 2 * i,
+  results_citing: 200 - i,
+  models: ['chatgpt-web', 'perplexity-web', 'gemini-web', 'copilot-web', 'google-aio'],
+  sample_titles: [1, 2, 3, 4].map(
+    (n) => `How small teams compare CRM tools in 2026, part ${n}, from source ${i + 1}`,
+  ),
+}));
+
+function citationsRead(input: Record<string, unknown>) {
+  const page = evalPage(EVAL_CITED_DOMAINS, input, 'top_domains', 'cited domains');
+  return { ...page, totals: { domains: EVAL_CITED_DOMAINS.length, urls: 0 }, top_urls: [] };
+}
+
+/** Whether a run read `tool` past its first page, or looked its items up by code. */
+const readOn = (run: EvalRun, tool: string, from = 1) =>
+  (run.readCalls ?? []).some(
+    (call) =>
+      call.tool === tool &&
+      ((typeof call.input.offset === 'number' && call.input.offset >= from) ||
+        (Array.isArray(call.input.codes) && call.input.codes.length > 0)),
+  );
 
 export const EVAL_SCENARIOS: readonly EvalScenario[] = [
   {
@@ -578,6 +687,104 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
         quote(run.answer),
       ),
       check('changes nothing', true, run.changes.length === 0 && run.cards === 0),
+    ],
+  },
+  // Reading all a page shows (the owner's rule, 2026-11-16): the Chat page-data audit's cases.
+  {
+    id: 'action-past-first-page',
+    row: 34,
+    role: 'admin',
+    mode: 'auto',
+    // As the owner asked it: in Turkish, about an action the list's first page of 50 doesn't hold.
+    message: 'AC-63 nedir, ne durumda?',
+    readResult: (tool, input) =>
+      tool === 'list_action_center_tasks' ? actionsRead(input) : undefined,
+    checks: (run) => [
+      check('finished', true, run.status === 'done', run.status),
+      check(
+        'reads past the first page, or by its code',
+        true,
+        readOn(run, 'list_action_center_tasks', 50),
+        JSON.stringify(run.readCalls ?? []),
+      ),
+      check(
+        'names it by its code',
+        true,
+        run.answer.includes(EVAL_PAST_FIRST_PAGE.ref),
+        quote(run.answer),
+      ),
+      check('names what it is about', true, /\/pricing|FAQ/i.test(run.answer), quote(run.answer)),
+      check('answers in Turkish', false, looksTurkish(run.answer), quote(run.answer)),
+    ],
+  },
+  {
+    id: 'long-list',
+    row: 35,
+    role: 'admin',
+    mode: 'auto',
+    message: 'What changed for us this month? Go through all our signals.',
+    readResult: (tool, input) =>
+      tool === 'list_signals' ? evalPage(EVAL_SIGNALS, input, 'signals', 'signals') : undefined,
+    checks: (run) => [
+      check('finished', true, run.status === 'done', run.status),
+      check('reads the signals', true, run.reads.includes('list_signals'), run.reads.join(', ')),
+      // "The newest 50 of 451": what it covers, never "the rest couldn't be read".
+      check('says how many there are', true, /\b451\b/.test(run.answer), quote(run.answer)),
+      check('says the period', false, /30|month|days|October|November/i.test(run.answer)),
+    ],
+  },
+  {
+    id: 'other-page-data',
+    row: 36,
+    role: 'admin',
+    mode: 'auto',
+    // Asked on Signals about the Prompts page's data.
+    message: 'Hangi promptlarımız en çok görünürlük kaybetti?',
+    context: {
+      route: '/dashboard/action-center/signals',
+      chips: [{ key: 'page', label: 'Signals' }],
+    },
+    readResult: (tool, input) =>
+      tool === 'list_signals' ? evalPage(EVAL_SIGNALS, input, 'signals', 'signals') : undefined,
+    checks: (run) => [
+      check('finished', true, run.status === 'done', run.status),
+      check(
+        "reads beyond the Signals page's own data",
+        true,
+        run.reads.some((name) => name !== 'list_signals' && name !== 'get_plan_facts'),
+        run.reads.join(', ') || 'no read',
+      ),
+      check(
+        'names the prompt that lost most',
+        true,
+        /best crm for small teams/i.test(run.answer),
+        quote(run.answer),
+      ),
+      check('answers in Turkish', false, looksTurkish(run.answer), quote(run.answer)),
+    ],
+  },
+  {
+    id: 'cut-by-size',
+    row: 37,
+    role: 'admin',
+    mode: 'auto',
+    message: 'Which domains do AI answers cite most for us? I want the whole list.',
+    // A page of 50 too big for one read: it comes back shorter, with where the next one starts.
+    readResult: (tool, input) => (tool === 'list_citations' ? citationsRead(input) : undefined),
+    checks: (run) => [
+      check('finished', true, run.status === 'done', run.status),
+      check(
+        'reads the citations',
+        true,
+        run.reads.includes('list_citations'),
+        run.reads.join(', '),
+      ),
+      check(
+        'reads on, or says how many there are',
+        true,
+        readOn(run, 'list_citations') || /\b180\b/.test(run.answer),
+        quote(run.answer),
+      ),
     ],
   },
 ];

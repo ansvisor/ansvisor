@@ -23,6 +23,7 @@ import { priorityOnCreate } from './priority-data.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
 import { getTask } from './tasks/registry.js';
+import { brandNoOf } from './action-code.js';
 
 export const PRODUCT_ACTION_KIND = 'shopping_product';
 export const CATEGORY_ACTION_KIND = 'shopping_category';
@@ -126,7 +127,7 @@ export async function sendProductActions(brandId, { target, work, promptIds, use
   const openAction = async () => {
     const { data } = await supabaseAdmin
       .from('actions')
-      .select('id, action_no')
+      .select('id, action_no, brand_no')
       .eq('brand_id', brandId)
       .eq('dedup_key', dedupKey)
       .in('status', ACTIVE)
@@ -134,7 +135,13 @@ export async function sendProductActions(brandId, { target, work, promptIds, use
     return data;
   };
   const open = await openAction();
-  if (open) return { actionId: open.id, actionNo: Number(open.action_no), created: false };
+  if (open)
+    return {
+      actionId: open.id,
+      actionNo: Number(open.action_no),
+      ...brandNoOf(open),
+      created: false,
+    };
 
   // Only the brand's own questions are kept.
   const ids = [...new Set(promptIds)].slice(0, MAX_PROMPTS);
@@ -185,14 +192,19 @@ export async function sendProductActions(brandId, { target, work, promptIds, use
       dedup_key: dedupKey,
       ...(await priorityOnCreate({ kind, category, impact, payload })),
     })
-    .select('id, action_no')
+    .select('id, action_no, brand_no')
     .single();
   if (error) {
     // Two sends at once: the other one opened it (the open-action dedup index, 00084).
     if (error.code === '23505') {
       const winner = await openAction();
       if (winner) {
-        return { actionId: winner.id, actionNo: Number(winner.action_no), created: false };
+        return {
+          actionId: winner.id,
+          actionNo: Number(winner.action_no),
+          ...brandNoOf(winner),
+          created: false,
+        };
       }
     }
     throw new Error(error.message);
@@ -222,5 +234,10 @@ export async function sendProductActions(brandId, { target, work, promptIds, use
     data: { source: 'shopping', target: payload.target, taskCount: plan.length },
   });
 
-  return { actionId: action.id, actionNo: Number(action.action_no), created: true };
+  return {
+    actionId: action.id,
+    actionNo: Number(action.action_no),
+    ...brandNoOf(action),
+    created: true,
+  };
 }

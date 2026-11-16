@@ -128,6 +128,8 @@ describe('createChatAction (Send to Action Center)', () => {
       ok: true,
       action_id: ACTION,
       action_no: 1271,
+      brand_no: null,
+      code: 'AC-1271',
       created: true,
       href: `/dashboard/action-center/actions/${ACTION}`,
     });
@@ -157,6 +159,8 @@ describe('createChatAction (Send to Action Center)', () => {
       ok: true,
       action_id: ACTION,
       action_no: 1275,
+      brand_no: null,
+      code: 'AC-1275',
       created: true,
       href: `/dashboard/action-center/actions/${ACTION}`,
       daily_limit_reached: true,
@@ -211,6 +215,8 @@ describe('createChatAction (Send to Action Center)', () => {
       message: 'AC-1258 already covers this.',
       action_id: ACTION,
       action_no: 1258,
+      brand_no: null,
+      code: 'AC-1258',
       can_create_anyway: true,
     });
     expect(sent().createAnyway).toBe(true);

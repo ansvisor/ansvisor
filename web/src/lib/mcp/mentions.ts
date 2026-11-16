@@ -375,6 +375,12 @@ export interface MentionListParams extends MentionsFilterParams {
   sort?: MentionSort;
   /** 1-based, 100 rows a page. */
   page?: number;
+  /**
+   * Chat's pages: answers before this page and how many it holds (at most
+   * MENTIONS_PAGE_SIZE), in place of `page`.
+   */
+  offset?: number;
+  limit?: number;
 }
 
 export interface MentionListItem {
@@ -444,13 +450,21 @@ export async function listMentionsFor(
   const brand = await ownedBrand(auth, params.brandId);
   if (!brand) return null;
   const page = Math.max(1, Math.floor(params.page ?? 1));
+  const pageSize = Math.min(
+    Math.max(Math.floor(params.limit ?? MENTIONS_PAGE_SIZE), 1),
+    MENTIONS_PAGE_SIZE,
+  );
+  const offset =
+    params.offset === undefined
+      ? (page - 1) * MENTIONS_PAGE_SIZE
+      : Math.max(0, Math.floor(params.offset));
   const { data, error } = await supabaseAdmin.rpc('mentions_list', {
     ...filterArgs(params),
     p_sentiment: params.sentiment,
     p_competitor_id: params.competitorId || undefined,
     p_sort: params.sort ?? 'newest',
-    p_limit: MENTIONS_PAGE_SIZE,
-    p_offset: (page - 1) * MENTIONS_PAGE_SIZE,
+    p_limit: pageSize,
+    p_offset: offset,
   });
   if (error) throw new Error(error.message);
   const list = parseMentionsList(data, (response) => mentionExcerpt(response, brand.terms));
@@ -459,7 +473,7 @@ export async function listMentionsFor(
     total: list.total,
     prompts: list.prompts,
     page,
-    pageSize: MENTIONS_PAGE_SIZE,
+    pageSize,
     mentions: list.rows.map(listItem),
   };
 }

@@ -38,11 +38,18 @@ async function targetPage(brandId, orgId, promptId) {
   return data?.[0]?.url ?? null;
 }
 
-/** The brand's active action that covers the prompt, as { id, no }, or null. */
+/**
+ * An action as the card names it: its id, its old global number, and its
+ * number in its brand once the brand is numbered (00534), so the card shows
+ * the code the Action Center shows ("AC-03"; actionCodeNo on the web).
+ */
+const cardAction = (id, no, brandNo) => ({ id, no, ...(brandNo ? { brandNo } : {}) });
+
+/** The brand's active action that covers the prompt, as { id, no, brandNo? }, or null. */
 async function coveringAction(brandId, promptId) {
   const entities = { prompts: [promptId], pages: [], competitors: [], platforms: [] };
   const found = (await findCoveringActions(brandId, entities)).covering[0];
-  return found ? { id: found.actionId, no: found.actionNo } : null;
+  return found ? cardAction(found.actionId, found.actionNo, found.brandNo) : null;
 }
 
 /**
@@ -104,7 +111,7 @@ export function earnProposal(row, page) {
  * answers the active action that already covers it (`covered`). A prompt
  * that isn't one of the brand's opportunities reads as not found.
  *
- * @returns {Promise<{ promptId: string, action: { id: string, no: number },
+ * @returns {Promise<{ promptId: string, action: { id: string, no: number, brandNo?: number },
  *   created: boolean, covered: boolean }>}
  */
 export async function sendEarn({ brand, orgId, promptId, userId, idempotencyKey }) {
@@ -123,10 +130,10 @@ export async function sendEarn({ brand, orgId, promptId, userId, idempotencyKey 
     });
   } catch (err) {
     if (err?.code !== 'duplicate') throw err;
-    const { id, no } = err.extra.action;
-    return { promptId, action: { id, no }, created: false, covered: true };
+    const { id, no, brandNo } = err.extra.action;
+    return { promptId, action: cardAction(id, no, brandNo), created: false, covered: true };
   }
-  const action = { id: sent.actionId, no: sent.actionNo };
+  const action = cardAction(sent.actionId, sent.actionNo, sent.brandNo);
   if (sent.created) {
     try {
       await logAdsActivity({

@@ -111,7 +111,7 @@ import {
 import { StartNowBlock } from './start-now';
 import { PlaySection } from './play-section';
 import { actionPlay } from '@/lib/action-center/play';
-import { actionCode } from '@/lib/action-center/action-ref';
+import { actionCode, previousActionCode } from '@/lib/action-center/action-ref';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import {
@@ -300,7 +300,12 @@ export function ActionDrawer({
   const startNowBlock = startNow ? (
     <StartNowBlock
       brandId={brandId}
-      action={{ id: action.id, actionNo: action.actionNo, title: texts.title }}
+      action={{
+        id: action.id,
+        actionNo: action.actionNo,
+        brandNo: action.brandNo,
+        title: texts.title,
+      }}
       work={startNow}
       drafts={drafts}
     />
@@ -495,6 +500,11 @@ export function ActionDrawer({
                 </span>
                 {actionCode(action)}
               </span>
+              {previousActionCode(action) && (
+                <span className="whitespace-nowrap text-xs text-muted-foreground/70">
+                  {t('drawer.previousCode', { code: previousActionCode(action)! })}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-start gap-3">

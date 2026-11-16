@@ -87,6 +87,8 @@ export interface ActionAssignee {
 export interface ActionItem {
   id: string;
   actionNo: number;
+  /** Its number in its brand ("AC-03", 00534); null until its brand is numbered (actionCode). */
+  brandNo?: number | null;
   category: ActionCategory;
   /**
    * The server definition's id. Not narrowed to the kinds this build has copy

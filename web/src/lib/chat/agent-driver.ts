@@ -2,12 +2,14 @@ import { after } from 'next/server';
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { actionCode, actionCodeNo } from '@/lib/action-center/action-ref';
 import type { Json } from '@/types/supabase';
 import {
   actionClosed,
   actionScopeOf,
   categoryName,
   logActionRunEvent,
+  snapshotNumbers,
   type ActionSnapshot,
 } from './agent-action';
 import {
@@ -268,7 +270,10 @@ export function agentRunMessage(input: {
   // outside, so they go in the scope as data (runScope), never in the message.
   if (input.action) {
     lines.push(
-      runnerT('action', { no: input.action.no, category: categoryName(input.action.category) }),
+      runnerT('action', {
+        no: actionCodeNo(snapshotNumbers(input.action)),
+        category: categoryName(input.action.category),
+      }),
     );
   }
   if (input.evidence.earlier.length > 0) {
@@ -318,14 +323,12 @@ function runScope(
   ];
   // "Action · {title}" (§F item 28): its number on screen, its id for the run alone.
   const { action } = input;
+  const code = action ? actionCode(snapshotNumbers(action)) : '';
   if (action) {
     chips.push({
       key: 'action',
       label: runnerT('chip.action'),
-      value: (withIds ? `AC-${action.no} ${action.id}` : `AC-${action.no} · ${action.title}`).slice(
-        0,
-        200,
-      ),
+      value: (withIds ? `${code} ${action.id}` : `${code} · ${action.title}`).slice(0, 200),
     });
   }
   if (withIds) {
@@ -362,7 +365,7 @@ function runScope(
       ? {
           references: [{ type: 'task' as const, id: action.id, label: action.title.slice(0, 200) }],
           action: {
-            number: `AC-${action.no}`,
+            number: code,
             title: action.title,
             category: action.category,
             open_tasks: action.tasks,
