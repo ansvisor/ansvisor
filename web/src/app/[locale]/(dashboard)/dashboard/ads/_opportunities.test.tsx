@@ -211,6 +211,34 @@ describe('AdsOpportunities', () => {
     );
   });
 
+  it("tells Chat's side panel the prompts on screen under the filter, and none once gone (item 8)", async () => {
+    api.readAdsOpportunities.mockResolvedValue(page());
+    const onChatView = vi.fn();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <RoleProvider role="manager">
+            <Opportunities period="30d" writable thresholds onChatView={onChatView} />
+          </RoleProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    const view = onChatView.mock.lastCall![0];
+    expect(view.total).toBe(ROWS.length);
+    expect(view.rows.map((r: { ref: string }) => r.ref)).toEqual(ROWS.map((r) => r.promptId));
+    expect(view.rows[0].label).toBe(ROWS[0].text);
+    await click(filter('Pay · 1'));
+    expect(onChatView).toHaveBeenLastCalledWith({
+      rows: [{ ref: 'p3', label: ROWS[2].text }],
+      total: 1,
+    });
+    act(() => root.unmount());
+    expect(onChatView).toHaveBeenLastCalledWith(null);
+    root = createRoot(container);
+  });
+
   it('filters by decision: All, Earn + pay, Pay, Earn', async () => {
     await render();
     expect(all('ads.filterDecision').map((b) => b.textContent)).toEqual([

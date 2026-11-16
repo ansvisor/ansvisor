@@ -97,6 +97,7 @@ vi.mock('@/hooks/use-first-run', () => ({
 }));
 
 const { default: ContentPage } = await import('./page');
+const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -462,5 +463,52 @@ describe('Content Opportunities while the first tracking run goes on', () => {
     root = createRoot(container);
     await render(false);
     expect(firstRun.asked.at(-1)).toBe(false);
+  });
+});
+
+// The owner's plan (2026-11-16, item 8): Chat's side panel sees the sort, the search and the
+// page of opportunities on screen, with how many match.
+describe("what Chat's side panel sees", () => {
+  async function renderWithPanel(setPage: (page: unknown) => void) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatPageSetterContext.Provider value={setPage}>
+            <UpgradeDialogContext.Provider
+              value={{ isLocked: false, reason: 'ended', adminName: null, openUpgrade }}
+            >
+              <ContentPage />
+            </UpgradeDialogContext.Provider>
+          </ChatPageSetterContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+    await act(async () => {});
+  }
+
+  it('tells the sort the URL names, and once read the opportunities on screen and the total', async () => {
+    window.history.replaceState(null, '', '/dashboard/content?sort=oldest&opportunity=o1');
+    content.getOpportunities.mockResolvedValue({
+      opportunities: [OPPORTUNITY, { ...OPPORTUNITY, id: 'o2', title: 'Decaf guide' }],
+      total: 140,
+      aggregates: { avgScore: 74, highImpactCount: 1, sentCount: 0, signalCount: 0 },
+    });
+    const setPage = vi.fn();
+    await renderWithPanel(setPage);
+    expect(setPage.mock.lastCall![0].view).toEqual({
+      sort: { key: 'oldest', dir: 'asc' },
+      rows: [
+        { ref: 'o1', label: 'Office coffee subscriptions' },
+        { ref: 'o2', label: 'Decaf guide' },
+      ],
+      total: 140,
+    });
+  });
+
+  it('sends no rows or count while the list is read', async () => {
+    content.getOpportunities.mockReturnValue(new Promise(() => {}));
+    const setPage = vi.fn();
+    await renderWithPanel(setPage);
+    expect(setPage.mock.lastCall![0].view).toEqual({ sort: { key: 'newest', dir: 'desc' } });
   });
 });

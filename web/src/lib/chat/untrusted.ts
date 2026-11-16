@@ -75,13 +75,15 @@ export const taintsRun = (toolName: string) =>
 
 /**
  * The block names the model reads data in; never left whole inside the data.
- * saved_notes: the person's, brand's and workspace's memory (memory/rules.ts).
+ * saved_notes: the person's, brand's and workspace's memory (memory/rules.ts);
+ * page_view: what the page showed, from the browser (page-view-scope.ts).
  */
 export const DATA_TAGS = [
   'untrusted_data',
   'app_data',
   'read_results',
   'page_context',
+  'page_view',
   'saved_notes',
 ] as const;
 

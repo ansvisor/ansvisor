@@ -418,6 +418,37 @@ describe('ChatThreadView', () => {
     });
   });
 
+  it("sends the page's view with its chips, read as the message goes (the owner's plan, item 8)", async () => {
+    const view = {
+      tab: 'mentions',
+      sort: { key: 'oldest', dir: 'asc' as const },
+      rows: [{ ref: '11111111-1111-4111-8111-111111111111', label: 'Best coffee · ChatGPT' }],
+      total: 1,
+      query: { sort: 'oldest' },
+    };
+    const pageView = vi.fn((route?: string) =>
+      route === '/dashboard/mentions' ? view : undefined,
+    );
+    await render({
+      variant: 'panel',
+      onConversation: vi.fn(),
+      chips: [{ key: 'page', label: 'Mentions & Sentiment' }],
+      pageRoute: '/dashboard/mentions',
+      pageView,
+    });
+    // Nothing is read before the message goes.
+    expect(pageView).not.toHaveBeenCalled();
+    await type('What are these?');
+    await enter();
+    const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+    expect(JSON.parse(String(sent.init!.body)).context).toEqual({
+      route: '/dashboard/mentions',
+      chips: [{ key: 'page', label: 'Mentions & Sentiment' }],
+      view,
+    });
+    expect(pageView).toHaveBeenCalledWith('/dashboard/mentions');
+  });
+
   it('puts its actions under a finished answer, In Files once filed, and what it made as cards', async () => {
     const thread = {
       conversationId: CHAT,

@@ -1139,13 +1139,24 @@ const ANSWER_SCORES = [48, 41, 63, 70, 66, 37, 52, 44];
  */
 function evalPromptPerformance(input: Record<string, unknown>) {
   const byAnswer = input.sort_by === 'answer_score';
+  // A lookup: by every word of a search, in any order and case (list_prompts), or by ids.
+  const words =
+    typeof input.search === 'string' ? input.search.toLowerCase().split(/\s+/).filter(Boolean) : [];
+  const ids = Array.isArray(input.prompt_ids ?? input.ids)
+    ? ((input.prompt_ids ?? input.ids) as unknown[]).map(String)
+    : null;
   const prompts = PROMPTS.map((prompt, i) => ({
     ...prompt,
     ai_visibility_score: prompt.visibility_pct,
     avg_visibility: ANSWER_SCORES[i],
-  })).sort((a, b) =>
-    byAnswer ? b.avg_visibility - a.avg_visibility : b.ai_visibility_score - a.ai_visibility_score,
-  );
+  }))
+    .filter((prompt) => words.every((word) => prompt.text.toLowerCase().includes(word)))
+    .filter((prompt) => !ids || ids.includes(prompt.id))
+    .sort((a, b) =>
+      byAnswer
+        ? b.avg_visibility - a.avg_visibility
+        : b.ai_visibility_score - a.ai_visibility_score,
+    );
   const order = byAnswer
     ? 'by average answer score'
     : 'by AI Visibility Score, as the Prompts page lists them';
@@ -1163,6 +1174,21 @@ function evalPromptPerformance(input: Record<string, unknown>) {
 export const EVAL_PAGE_TOP_PROMPTS: readonly string[] = evalPromptPerformance({})
   .prompts.slice(0, 5)
   .map((prompt) => prompt.text);
+
+/**
+ * The Actions page sorted by Priority Score and filtered to New (the
+ * owner's plan of 2026-11-16, item 8): the three rows on screen, in order.
+ */
+export const EVAL_PAGE_VIEW_ACTIONS: readonly { ref: string; title: string }[] = ACTIONS.filter(
+  (action) => action.status === 'new',
+)
+  .sort((a, b) => b.priority_score - a.priority_score)
+  .map((action) => ({ ref: action.number, title: action.title }));
+
+/** The Prompts page's search, and the prompts it shows, by Visibility. */
+export const EVAL_PAGE_SEARCH = 'coffee subscription';
+export const EVAL_PAGE_SEARCH_PROMPTS: readonly { id: string; text: string }[] =
+  evalPromptPerformance({ search: EVAL_PAGE_SEARCH }).prompts.map(({ id, text }) => ({ id, text }));
 
 export function evalReadResult(
   tool: string,

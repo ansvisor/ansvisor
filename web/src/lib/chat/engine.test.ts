@@ -5926,6 +5926,51 @@ describe('starting', () => {
     );
   });
 
+  it("gives both models the page's view as untrusted data, with its chosen sort (the owner's plan, item 8)", async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Your three actions.')]);
+    const view = {
+      sort: { key: 'priority', dir: 'desc' },
+      rows: [
+        { ref: 'AC-41', label: 'Win back citations' },
+        { ref: 'AC-42', label: 'Close the gift box gap' },
+      ],
+      total: 2,
+      query: { status: 'new', token: 'tok-9f8e7d' },
+    };
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What are these?',
+      brandId: BRAND,
+      context: {
+        route: '/dashboard/action-center/actions',
+        chips: [{ key: 'page', label: 'Actions' }],
+        view,
+      },
+    });
+    if (!started.ok) throw new Error('not started');
+    const question = db.tables.chat_messages.find((m) => m.content_md === 'What are these?');
+    // Kept with the message, its URL keys the page's own.
+    expect(question?.context_json).toMatchObject({
+      context: { view: { ...view, query: { status: 'new' } } },
+    });
+    await engine.driveRun(ADMIN, started.runId);
+    for (const prompt of [haiku.seen[0].prompt, sonnet.seen[0].prompt]) {
+      const seen = JSON.stringify(prompt);
+      expect(seen).toContain('<page_view>\\n<untrusted_data source=\\"page_view\\">');
+      expect(seen).toContain('AC-41 — Win back citations\\nAC-42 — Close the gift box gap');
+      expect(seen).not.toContain('tok-9f8e7d');
+      // The context block itself no longer carries the view.
+      const context = seen.slice(seen.indexOf('<page_context>'), seen.indexOf('</page_context>'));
+      expect(context).not.toContain('AC-41');
+      // The person's sort over the page's default.
+      expect(seen).toContain('highest Priority Score first, as the person sorted it');
+      expect(seen).toContain('status \\"all\\" and sort \\"priority\\"');
+    }
+    expect(JSON.stringify(haiku.seen[0].prompt)).toContain('read those rows by their refs');
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain(
+      'Never say how many rows were read or sent',
+    );
+  });
+
   it('starts a server’s run tainted, its scope read as untrusted data (Run with Chat, W2-17)', async () => {
     const { haiku } = useModels([READY], [text('On it.')]);
     const started = await engine.startChatRun(

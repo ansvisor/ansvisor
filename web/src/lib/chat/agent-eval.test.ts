@@ -938,7 +938,11 @@ async function runScenario(scenario: AgentEvalScenario): Promise<EvalResult> {
       ...(scenario.page
         ? {
             origin: 'panel' as const,
-            context: { route: scenario.page.route, chips: [...scenario.page.chips] },
+            context: {
+              route: scenario.page.route,
+              chips: [...scenario.page.chips],
+              ...(scenario.page.view ? { view: scenario.page.view } : {}),
+            },
           }
         : {}),
     });
@@ -1062,6 +1066,7 @@ function scripted(script: Step[]) {
     phases: 'single',
     pick: () => choice,
   } satisfies ChatModels);
+  return model;
 }
 
 const REPORT =
@@ -1578,6 +1583,109 @@ describe('the agents’ test set harness, on a scripted model', () => {
     const result = await runScenario(skillOf('prompts-page-top'));
     const failed = result.checks.filter((check) => check.must && !check.ok).map((c) => c.name);
     expect(failed).toContain("names the page's top rows in its order");
+    expect(result.passed).toBe(false);
+  });
+
+  // The owner's plan (2026-11-16, item 8): "these" are the rows on screen, read by their refs.
+  it('reads the three actions on screen by their codes and names them, in the page’s order', async () => {
+    const { EVAL_PAGE_VIEW_ACTIONS } = await import('./testing/agent-eval-data');
+    const [a, b, c] = EVAL_PAGE_VIEW_ACTIONS;
+    const model = scripted([
+      calls(
+        toolCall('r1', 'list_action_center_tasks', {
+          brand_id: BRAND,
+          codes: [a.ref, b.ref, c.ref],
+        }),
+      ),
+      text(
+        `The three on the page, highest Priority Score first:\n1. **${a.title}** (${a.ref})\n2. **${b.title}** (${b.ref})\n3. **${c.title}** (${c.ref})`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('actions-page-view'));
+    expect(result.run.reads).toEqual(['list_action_center_tasks']);
+    // The reader saw the rows on screen, as untrusted data, and the page's chosen sort.
+    const seen = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(seen).toContain('<untrusted_data source=\\"page_view\\">');
+    expect(seen).toContain(`${a.ref} — ${a.title}`);
+    expect(seen).toContain('highest Priority Score first, as the person sorted it');
+    expect(seen).toContain('read those rows by their refs');
+    for (const name of [
+      'reads the actions by their codes',
+      'names each action asked by its title and code',
+      'names no other action in their place',
+      'no invented numbers',
+    ]) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails "these" answered from a list read, guessing which they are', async () => {
+    scripted([
+      calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+      text(
+        'These are your open actions: **Correct the cancellation fee claim on Gemini** (AC-43).',
+      ),
+    ]);
+    const result = await runScenario(skillOf('actions-page-view'));
+    const failed = result.checks.filter((check) => check.must && !check.ok).map((c) => c.name);
+    expect(failed).toEqual(
+      expect.arrayContaining([
+        'reads the actions by their codes',
+        'names each action asked by its title and code',
+        'names no other action in their place',
+      ]),
+    );
+    expect(result.passed).toBe(false);
+  });
+
+  it('reads the prompts a search shows with that search, and names each', async () => {
+    const { EVAL_PAGE_SEARCH, EVAL_PAGE_SEARCH_PROMPTS, EVAL_PROMPTS } =
+      await import('./testing/agent-eval-data');
+    const shown = EVAL_PAGE_SEARCH_PROMPTS.map(
+      (p) => EVAL_PROMPTS.find((prompt) => prompt.id === p.id)!,
+    );
+    scripted([
+      calls(toolCall('r1', 'list_prompts', { brand_id: BRAND, search: EVAL_PAGE_SEARCH })),
+      calls(
+        toolCall('r2', 'get_prompt_performance', {
+          brand_id: BRAND,
+          prompt_ids: shown.map((p) => p.id),
+        }),
+      ),
+      text(
+        `By Visibility, highest first:\n${shown.map((p) => `- ${p.text}: ${p.visibility_pct}`).join('\n')}`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('prompts-page-search'));
+    expect(result.run.reads).toEqual(['list_prompts', 'get_prompt_performance']);
+    for (const name of [
+      "reads with the page's search",
+      'names the rows on screen',
+      'no invented numbers',
+    ]) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails a read that leaves the page's search out", async () => {
+    scripted([
+      calls(toolCall('r1', 'get_prompt_performance', { brand_id: BRAND })),
+      text('Your prompts are doing fine.'),
+    ]);
+    const result = await runScenario(skillOf('prompts-page-search'));
+    const failed = Object.fromEntries(
+      result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(failed).toMatchObject({ "reads with the page's search": 'list_prompts not read' });
+    expect(failed['names the rows on screen']).toContain('missing');
     expect(result.passed).toBe(false);
   });
 

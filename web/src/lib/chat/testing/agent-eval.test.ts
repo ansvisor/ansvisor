@@ -11,6 +11,7 @@ import {
   numbersIn,
   pageScopeMissed,
   pageScopeUnsaid,
+  pageSearchMissed,
   pageTopMissed,
   readByCodes,
   readCitationsByDomain,
@@ -23,11 +24,15 @@ import {
   unnamedAskedActions,
   unnamedAskedDomains,
   unnamedAskedSignals,
+  unnamedPageRows,
 } from './agent-eval';
 import {
   EVAL_CITED_DOMAIN,
   EVAL_CODE_SIGNAL,
+  EVAL_PAGE_SEARCH,
+  EVAL_PAGE_SEARCH_PROMPTS,
   EVAL_PAGE_TOP_PROMPTS,
+  EVAL_PAGE_VIEW_ACTIONS,
   evalReadResult,
 } from './agent-eval-data';
 import { safetyChecks, safetyFindings } from './safety-checks';
@@ -416,7 +421,7 @@ describe("the page's period and filters", () => {
   });
 
   it("checks a read took the page's inputs over its window", () => {
-    const read = scenario.page!.read;
+    const read = scenario.page!.read!;
     const scoped = {
       date_from: '2026-11-01T13:00:00.000Z',
       date_to: '2026-11-02',
@@ -488,5 +493,46 @@ describe("the Prompts page's top rows", () => {
     expect(pageTopMissed(`1. ${a}\n2. ${b}`, scenario.pageTop!)).toBe(
       `missing "${c}", "${d}", "${e}"`,
     );
+  });
+});
+
+// The owner's plan (2026-11-16, item 8): the page's view, its rows on screen and its search.
+describe("the page's view", () => {
+  it('asks "what are these?" on Actions by Priority Score, three rows on screen, by their codes', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'actions-page-view')!;
+    expect(scenario.message).toBe('What are these?');
+    expect(scenario.page!.view).toMatchObject({ sort: { key: 'priority', dir: 'desc' }, total: 3 });
+    expect(scenario.page!.view!.rows!.map((row) => row.ref)).toEqual(['AC-41', 'AC-42', 'AC-44']);
+    expect(scenario.askedActions).toEqual(EVAL_PAGE_VIEW_ACTIONS);
+    // No period on Actions: no period check.
+    expect(scenario.page!.read).toBeUndefined();
+  });
+
+  it('asks "how are these doing?" on Prompts with a search, whose prompts it lists', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'prompts-page-search')!;
+    expect(scenario.page!.view!.search).toBe(EVAL_PAGE_SEARCH);
+    expect(scenario.pageSearch).toEqual({ tool: 'list_prompts', search: EVAL_PAGE_SEARCH });
+    // Every prompt holding the words, and only those; the read by that search finds them.
+    expect(EVAL_PAGE_SEARCH_PROMPTS.length).toBeGreaterThan(2);
+    for (const prompt of EVAL_PAGE_SEARCH_PROMPTS) {
+      expect(prompt.text.toLowerCase()).toContain('coffee subscription');
+    }
+    const read = evalReadResult('list_prompts', { search: EVAL_PAGE_SEARCH }) as {
+      prompts: { id: string }[];
+    };
+    expect(read.prompts.map((p) => p.id)).toEqual(EVAL_PAGE_SEARCH_PROMPTS.map((p) => p.id));
+  });
+
+  it("checks a read took the page's search, and the answer names every row", () => {
+    const page = { tool: 'list_prompts', search: 'coffee subscription' };
+    const run = (search?: string) => ({
+      reads: ['list_prompts'],
+      readInputs: [search === undefined ? {} : { search }],
+    });
+    expect(pageSearchMissed(run(' Coffee Subscription '), page)).toBeNull();
+    expect(pageSearchMissed(run('coffee'), page)).toBe('search "coffee"');
+    expect(pageSearchMissed(run(), page)).toBe('search null');
+    expect(pageSearchMissed({ reads: [], readInputs: [] }, page)).toBe('list_prompts not read');
+    expect(unnamedPageRows('A and b.', ['a', 'B', 'c'])).toEqual(['c']);
   });
 });

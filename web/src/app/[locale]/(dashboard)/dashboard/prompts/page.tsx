@@ -128,6 +128,7 @@ import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state
 import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
+import { viewRows, type ChatPageView } from '@/lib/chat/page-view';
 import {
   startPromptVolumeAnalysis,
   getVolumeAnalysisStatus,
@@ -1460,6 +1461,8 @@ export default function PromptsPage() {
     return 'tracked';
   })();
   const [view, setView] = useState<PromptsView>(initialView);
+  // What Chat's side panel sees of the Tracked table, which keeps its own sort and search.
+  const [tableView, setTableView] = useState<ChatPageView | null>(null);
 
   const initialRange: PromptRangePreset = (() => {
     const raw = searchParams.get('range');
@@ -2041,6 +2044,7 @@ export default function PromptsPage() {
   // Chat's side panel sees the page (W1-08): its range, its location where
   // the tab reads one, and a tracked prompt the brand doesn't show up for
   // (the one asked most).
+  const tracked = tab === 'all' && view === 'tracked';
   const unseen = allPrompts
     .filter((prompt) => (visibility[prompt.id]?.runs ?? 0) > 0)
     .filter((prompt) => visibility[prompt.id].visibleRuns === 0)
@@ -2064,6 +2068,12 @@ export default function PromptsPage() {
             tChat('promptsNext'),
             tChat('actions'),
           ],
+          // And what else it shows (the owner's plan, item 8): the open tab, and on Tracked
+          // the table's sort, search, the prompts on screen and how many match.
+          view: {
+            tab: tab === 'all' ? view : tab,
+            ...(tracked && tableView ? tableView : {}),
+          },
         }
       : null,
   );
@@ -2335,6 +2345,7 @@ export default function PromptsPage() {
                     : undefined
                 }
                 onChanged={reloadAfterChange}
+                onChatView={setTableView}
               />
             </>
           )}
@@ -3081,6 +3092,7 @@ function AllPromptsTab({
   onAddPrompt,
   onEditPrompt,
   onChanged,
+  onChatView,
 }: {
   loading: boolean;
   /** The last read failed: say so and offer to read again, never "No prompts yet". */
@@ -3116,6 +3128,8 @@ function AllPromptsTab({
   onEditPrompt?: (prompt: Prompt) => void;
   /** Reloads the page data after a row is paused, resumed or deleted from its menu. */
   onChanged: () => void;
+  /** What Chat's side panel sees of the table (its sort, search and rows on screen); null when gone. */
+  onChatView?: (view: ChatPageView | null) => void;
 }) {
   const tCommon = useTranslations('common');
   const failureToast = useFailureToast();
@@ -3867,6 +3881,28 @@ function AllPromptsTab({
   // usage cards until a delete actually lands after its Undo window.
   const statusCounts = useMemo(() => countByStatus(allRows, now), [allRows, now]);
   const promptsPager = usePagination(filtered.length, promptsResetKey);
+
+  // What Chat's side panel sees of the table (the owner's plan, item 8): the sort picked (none
+  // until a header is), the search, the page of prompts on screen and how many match.
+  const chatView = loading
+    ? null
+    : JSON.stringify({
+        ...(isAllPromptsSortKey(rawSort)
+          ? { sort: { key: activeSort, dir } }
+          : latenessOrder
+            ? { sort: { key: 'behind', dir: 'desc' } }
+            : {}),
+        ...(search.trim() ? { search: search.trim() } : {}),
+        rows: viewRows(filtered.slice(promptsPager.start, promptsPager.end), (p) => ({
+          ref: p.id,
+          label: p.text,
+        })),
+        total: filtered.length,
+      } satisfies ChatPageView);
+  useEffect(() => {
+    onChatView?.(chatView ? (JSON.parse(chatView) as ChatPageView) : null);
+  }, [onChatView, chatView]);
+  useEffect(() => () => onChatView?.(null), [onChatView]);
 
   // Rows ticked for the bulk action bar. Only rows on screen can be ticked,
   // so the selection starts over whenever the rows on screen change.

@@ -14,11 +14,15 @@ import {
   EVAL_CODE_ACTIONS,
   EVAL_CODE_SIGNAL,
   EVAL_OTHER_BRAND,
+  EVAL_PAGE_SEARCH,
+  EVAL_PAGE_SEARCH_PROMPTS,
   EVAL_PAGE_TOP_PROMPTS,
+  EVAL_PAGE_VIEW_ACTIONS,
   EVAL_SIGNAL_BACKLOG,
   evalActions,
   type EvalWorkspace,
 } from './agent-eval-data';
+import type { ChatPageView } from '../page-view';
 import { SAFETY_CHECK_NAMES, safetyChecks } from './safety-checks';
 import { giveUpPhrases, lookedUp } from './give-up';
 
@@ -128,15 +132,22 @@ export interface AgentEvalScenario {
   askedDomains?: readonly { domain: string; citations: number }[];
   /**
    * The page the question is asked beside, in the side panel (its context's
-   * route and chips), and the read that must take its period and filters:
-   * that read, with these inputs, over a window that starts no more than
-   * `days` back (the owner's rule, 2026-11-16: Chat reads what the page shows).
+   * route and chips, and what else it shows: its view, the owner's plan of
+   * 2026-11-16, item 8), and the read that must take its period and
+   * filters: that read, with these inputs, over a window that starts no
+   * more than `days` back (the owner's rule, 2026-11-16: Chat reads what
+   * the page shows).
    */
   page?: {
     route: string;
     chips: readonly { key: string; label: string; value?: string }[];
-    read: { tool: string; days: number; input: Readonly<Record<string, unknown>> };
+    view?: ChatPageView;
+    read?: { tool: string; days: number; input: Readonly<Record<string, unknown>> };
   };
+  /** The page's search, which a read of its list must take as its search input (item 8). */
+  pageSearch?: { tool: string; search: string };
+  /** The rows on screen the question means ("these"): the answer names each (item 8). */
+  pageRows?: readonly string[];
   /**
    * The page's top rows, in its order (the owner's plan of 2026-11-16, item
    * 7: "the top ones" are the rows on screen): the answer names each, in
@@ -384,6 +395,59 @@ export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
       read: { tool: 'get_prompt_performance', days: 1, input: {} },
     },
     pageTop: EVAL_PAGE_TOP_PROMPTS,
+  },
+  // The owner's plan (2026-11-16, item 8): "these" are the rows on screen. On Actions sorted by
+  // Priority Score and filtered to New, three rows: read by their codes, each named.
+  {
+    id: 'actions-page-view',
+    group: 'skills',
+    name: 'The actions on screen',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'What are these?',
+    promises: [],
+    page: {
+      route: '/dashboard/action-center/actions',
+      chips: [
+        { key: 'page', label: 'Actions' },
+        { key: 'brand', label: EVAL_BRAND.name, value: EVAL_BRAND.id },
+        { key: 'filter:status', label: 'New', value: 'new' },
+      ],
+      view: {
+        sort: { key: 'priority', dir: 'desc' },
+        rows: EVAL_PAGE_VIEW_ACTIONS.map((a) => ({ ref: a.ref, label: a.title })),
+        total: EVAL_PAGE_VIEW_ACTIONS.length,
+        query: { status: 'new', sort: 'priority' },
+      },
+    },
+    askedActions: EVAL_PAGE_VIEW_ACTIONS,
+  },
+  // On Prompts searched for a few words: "these" are the search's prompts, read with it.
+  {
+    id: 'prompts-page-search',
+    group: 'skills',
+    name: 'The prompts a search shows',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'How are these doing?',
+    promises: [],
+    page: {
+      route: '/dashboard/prompts/tracked',
+      chips: [
+        { key: 'page', label: 'Prompts' },
+        { key: 'brand', label: EVAL_BRAND.name, value: EVAL_BRAND.id },
+      ],
+      view: {
+        tab: 'tracked',
+        search: EVAL_PAGE_SEARCH,
+        rows: EVAL_PAGE_SEARCH_PROMPTS.map((p) => ({ ref: p.id, label: p.text })),
+        total: EVAL_PAGE_SEARCH_PROMPTS.length,
+      },
+    },
+    pageSearch: { tool: 'list_prompts', search: EVAL_PAGE_SEARCH },
+    pageRows: EVAL_PAGE_SEARCH_PROMPTS.map((p) => p.text),
   },
   {
     // Citations opens on the last 24 hours; filtered to ChatGPT, its table on Brand sources.
@@ -783,7 +847,7 @@ const HOUR_MS = 60 * 60 * 1000;
  */
 export function pageScopeMissed(
   run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
-  read: NonNullable<AgentEvalScenario['page']>['read'],
+  read: NonNullable<NonNullable<AgentEvalScenario['page']>['read']>,
   now: number = Date.now(),
 ): string | null {
   const reads = run.readInputs.filter((_, i) => run.reads[i] === read.tool);
@@ -831,6 +895,30 @@ export function pageTopMissed(answer: string, names: readonly string[]): string 
   if (missing.length > 0) return `missing ${missing.map((name) => `"${name}"`).join(', ')}`;
   const out = at.findIndex((position, i) => i > 0 && position < at[i - 1]);
   return out > 0 ? `"${names[out]}" before "${names[out - 1]}"` : null;
+}
+
+/**
+ * Why no read of the page's list took its search (the owner's plan of
+ * 2026-11-16, item 8): null when one did, as typed, any case.
+ */
+export function pageSearchMissed(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  page: NonNullable<AgentEvalScenario['pageSearch']>,
+): string | null {
+  const wanted = page.search.trim().toLowerCase();
+  const searches = run.readInputs
+    .filter((_, i) => run.reads[i] === page.tool)
+    .map((input) => (typeof input.search === 'string' ? input.search.trim().toLowerCase() : null));
+  if (searches.length === 0) return `${page.tool} not read`;
+  return searches.includes(wanted)
+    ? null
+    : `search ${searches.map((search) => JSON.stringify(search)).join(', ')}`;
+}
+
+/** The rows on screen an answer doesn't name (as written, any case). */
+export function unnamedPageRows(answer: string, names: readonly string[]): string[] {
+  const text = answer.toLowerCase();
+  return names.filter((name) => !text.includes(name.toLowerCase()));
 }
 
 // ─── Actions asked for by their codes ───────────────────────────────────────
@@ -1329,7 +1417,7 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
       ),
     );
   }
-  if (scenario.page) {
+  if (scenario.page?.read) {
     const said = pageScopeUnsaid(run.answer, scenario.page.chips);
     checks.push(
       check('says what the answer covers, as on the page', true, said === null, said ?? ''),
@@ -1337,6 +1425,21 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
     const missed = pageScopeMissed(run, scenario.page.read);
     checks.push(
       check("reads with the page's period and filters", true, missed === null, missed ?? ''),
+    );
+  }
+  if (scenario.pageSearch) {
+    const missed = pageSearchMissed(run, scenario.pageSearch);
+    checks.push(check("reads with the page's search", true, missed === null, missed ?? ''));
+  }
+  if (scenario.pageRows) {
+    const unnamed = unnamedPageRows(run.answer, scenario.pageRows);
+    checks.push(
+      check(
+        'names the rows on screen',
+        true,
+        unnamed.length === 0,
+        `missing ${unnamed.map((name) => `"${name}"`).join(', ')}`,
+      ),
     );
   }
   if (scenario.pageTop) {

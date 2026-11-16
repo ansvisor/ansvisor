@@ -1,52 +1,160 @@
+import type { ChatPageSort, ChatPageView } from './page-view';
+
 /**
- * Each page's list in the order the page opens on (the owner's plan of
- * 2026-11-16, item 7: "the first ones on the page" are the rows on screen).
- * Where a page's default order is not its read's, the reader is told the
- * inputs that read the page's rows in the page's order. The panel doesn't
- * send the page's chosen sort yet (plan item 8), so this is the page's
- * default. "What should I do first" keeps the read's own order (priority,
- * score). Plain module: the engine adds the line beside <page_context>.
+ * Each page's list in the order it shows (the owner's plan of 2026-11-16,
+ * item 7: "the first ones on the page" are the rows on screen). Where a
+ * page's order is not its read's, the reader is told the inputs that read
+ * the page's rows in the page's order: the page's default, or the sort the
+ * person chose there once the panel sends it (item 8, page-view.ts). A
+ * sort the read doesn't take stays words, and the rows on screen are read
+ * by their refs. A search on the page is the read's search where it has
+ * one. The search's text and an unknown sort's name are the browser's, so
+ * they stay in the untrusted page_view block: this line only points there.
+ * "What should I do first" keeps the read's own order (priority, score).
+ * Plain module: the engine adds the line beside <page_context>.
  */
+
+/** A sort of the page as its read takes it: its inputs, or none when the read has no such order. */
+export interface PageSortRead {
+  input?: Readonly<Record<string, string>>;
+  /** The order, in words ("highest Priority Score first"). */
+  words: string;
+}
 
 export interface PageOrder {
   /** The read of the page's list. */
   tool: string;
-  /** The inputs that read it as the page lists it. */
+  /** What the page lists ("its actions"). */
+  noun: string;
+  /** The inputs that read it as the page lists it by default. */
   input: Readonly<Record<string, string>>;
   /**
    * Inputs for what the page shows while it has no filter of that key
    * (Actions: every status); with one, the page's filter fills it (page-scope.ts).
    */
   unfiltered?: Readonly<Record<string, string>>;
-  /** What the page lists, and in which order, in words. */
+  /** The default order, in words. */
   words: string;
   /** What the read's own default is, when it is another order. */
   readDefault?: string;
+  /** The page's sorts, by its own key and direction; null for one it doesn't have. */
+  sort?: (sort: ChatPageSort) => PageSortRead | null;
+  /** The read and input that take the page's search, then what reads the rows it finds. */
+  search?: { tool: string; field: string; then?: string };
+  /** Said only once the page sends a sort or a search: its read's default is the page's. */
+  quiet?: boolean;
+}
+
+const way = (sort: ChatPageSort, desc: string, asc: string) => (sort.dir === 'asc' ? asc : desc);
+
+/** The Actions list's sorts (action-center/sort.ts): Updated and Priority Score both ways, Due date. */
+function actionSort(sort: ChatPageSort): PageSortRead | null {
+  switch (`${sort.key}:${sort.dir}`) {
+    case 'updated:desc':
+      return { input: { sort: 'updated' }, words: 'most recently updated first' };
+    case 'priority:desc':
+      return { input: { sort: 'priority' }, words: 'highest Priority Score first' };
+    case 'updated:asc':
+      return { words: 'least recently updated first' };
+    case 'priority:asc':
+      return { words: 'lowest Priority Score first' };
+    case 'due_date:asc':
+      return { words: 'by due date, soonest first' };
+    default:
+      return null;
+  }
+}
+
+/** Content's Sort (content/opportunity-list.ts): newest, score, oldest. */
+function opportunitySort(sort: ChatPageSort): PageSortRead | null {
+  switch (sort.key) {
+    case 'newest':
+      return { input: { sort: 'newest' }, words: 'newest first' };
+    case 'score':
+      return { input: { sort: 'score' }, words: 'highest score first' };
+    case 'oldest':
+      return { input: { sort: 'oldest' }, words: 'oldest first' };
+    default:
+      return null;
+  }
+}
+
+/** The Prompts table's columns (prompts/prompt-sort.ts): the read sorts by three of them. */
+const PROMPT_COLUMNS: Readonly<Record<string, { sortBy?: string; words: string }>> = {
+  visibility: { sortBy: 'visibility', words: 'by Visibility (the AI Visibility Score)' },
+  mentions: { sortBy: 'mentions', words: 'by mentions' },
+  citations: { sortBy: 'citations', words: 'by citations' },
+  position: { words: 'by average position' },
+  volume: { words: 'by AI search volume' },
+  runs: { words: 'by runs' },
+  added: { words: 'by when each was added' },
+  lastRun: { words: 'by last run' },
+};
+
+function promptSort(sort: ChatPageSort): PageSortRead | null {
+  const column = Object.hasOwn(PROMPT_COLUMNS, sort.key) ? PROMPT_COLUMNS[sort.key] : null;
+  if (!column) return null;
+  const words = `${column.words}, ${way(sort, 'highest first', 'lowest first')}`;
+  return column.sortBy ? { input: { sort_by: column.sortBy, order: sort.dir }, words } : { words };
+}
+
+/** The Mentions table's Sort (mentions-list.ts MENTION_SORTS), which list_mentions takes. */
+const MENTION_SORT_WORDS: Readonly<Record<string, string>> = {
+  newest: 'newest first',
+  oldest: 'oldest first',
+  co_mentions: 'most competitors named alongside first',
+  negative: 'negative first',
+};
+
+function mentionSort(sort: ChatPageSort): PageSortRead | null {
+  const words = Object.hasOwn(MENTION_SORT_WORDS, sort.key) ? MENTION_SORT_WORDS[sort.key] : null;
+  return words ? { input: { sort: sort.key }, words } : null;
 }
 
 const PROMPTS: PageOrder = {
   tool: 'get_prompt_performance',
+  noun: 'its prompts',
   input: { sort_by: 'visibility' },
-  words: 'its prompts by Visibility (the AI Visibility Score), highest first',
+  words: 'by Visibility (the AI Visibility Score), highest first',
+  sort: promptSort,
+  search: {
+    tool: 'list_prompts',
+    field: 'search',
+    then: 'then get_prompt_performance with their ids as prompt_ids',
+  },
 };
 
 /** By the page's path, as the side panel sends it. */
 export const PAGE_ORDERS: Readonly<Record<string, PageOrder>> = {
   '/dashboard/action-center/actions': {
     tool: 'list_action_center_tasks',
+    noun: 'its actions',
     input: { sort: 'updated' },
     unfiltered: { status: 'all' },
-    words: 'its actions, most recently updated first',
+    words: 'most recently updated first',
     readDefault: 'open actions, highest Priority Score first',
+    sort: actionSort,
   },
   '/dashboard/content': {
     tool: 'list_content_opportunities',
+    noun: 'its content opportunities',
     input: { sort: 'newest' },
-    words: 'its content opportunities newest first',
+    words: 'newest first',
     readDefault: 'highest score first',
+    sort: opportunitySort,
+    search: { tool: 'list_content_opportunities', field: 'search' },
   },
   '/dashboard/prompts': PROMPTS,
   '/dashboard/prompts/tracked': PROMPTS,
+  '/dashboard/mentions': {
+    tool: 'list_mentions',
+    noun: 'the answers naming the brand',
+    input: {},
+    words: 'newest first',
+    sort: mentionSort,
+    search: { tool: 'list_mentions', field: 'search' },
+    quiet: true,
+  },
 };
 
 /** The page's order, by its path (a trailing slash aside); null for a page with none listed. */
@@ -55,23 +163,60 @@ export function pageOrderOf(route: string | null | undefined): PageOrder | null 
   return (path && PAGE_ORDERS[path]) || null;
 }
 
+/** "read list_action_center_tasks with status "all" and sort "updated"", or the read alone. */
+const readWith = (tool: string, input: readonly [string, string][]) =>
+  input.length > 0
+    ? `read ${tool} with ${input.map(([key, value]) => `${key} "${value}"`).join(' and ')}`
+    : `read ${tool}`;
+
 /**
  * What the models are told of the page's order, given the keys of the
- * filters it has set (`status` for a `filter:status` chip); null on a page
- * with none listed.
+ * filters it has set (`status` for a `filter:status` chip) and the sort and
+ * search the person chose (the page's view); null on a page with none
+ * listed, or on a quiet one with neither.
  */
 export function pageOrderLine(
   route: string | null | undefined,
   filters: readonly string[] = [],
+  view?: Pick<ChatPageView, 'sort' | 'search'> | null,
 ): string | null {
   const order = pageOrderOf(route);
   if (!order) return null;
+  const sort = view?.sort ?? null;
+  const searched = !!view?.search;
+  if (order.quiet && !sort && !searched) return null;
   const whole = Object.entries(order.unfiltered ?? {}).filter(([key]) => !filters.includes(key));
-  const input = [...whole, ...Object.entries(order.input)]
-    .map(([key, value]) => `${key} "${value}"`)
-    .join(' and ');
-  const own = order.readDefault
-    ? ` For "what matters most" or "what should I do first", its own order (${order.readDefault}) stays right.`
-    : '';
-  return `The page lists ${order.words}. When the person means the rows on the page ("the first ones", "the top 5 on the page", "the third one"), read ${order.tool} with ${input}, so they are the rows on screen, in its order.${own} Say which order a list is in when you give it.`;
+  const chosen = sort ? (order.sort?.(sort) ?? null) : null;
+  const rowsOnPage = `When the person means the rows on the page ("the first ones", "the top 5 on the page", "the third one")`;
+  const lines: string[] = [];
+  if (!sort) {
+    lines.push(
+      `The page lists ${order.noun}, ${order.words}. ${rowsOnPage}, ${readWith(order.tool, [...whole, ...Object.entries(order.input)])}, so they are the rows on screen, in its order.`,
+    );
+  } else if (chosen?.input) {
+    lines.push(
+      `The page lists ${order.noun}, ${chosen.words}, as the person sorted it. ${rowsOnPage}, ${readWith(order.tool, [...whole, ...Object.entries(chosen.input)])}, so they are the rows on screen, in its order.`,
+    );
+  } else {
+    const how = chosen
+      ? `The page lists ${order.noun}, ${chosen.words}, as the person sorted it`
+      : `The page lists ${order.noun} in the order page_view's sort names, as the person sorted it`;
+    lines.push(
+      `${how}, an order ${order.tool} doesn't take. ${rowsOnPage}, read the rows page_view lists by their refs, in its order.`,
+    );
+  }
+  if (searched) {
+    lines.push(
+      order.search
+        ? `The page is searched (page_view's search): for its rows, read ${order.search.tool} with ${order.search.field} set to that search${order.search.then ? `, ${order.search.then}` : ''}.`
+        : `The page is searched (page_view's search), which ${order.tool} doesn't take: its rows are the ones page_view lists.`,
+    );
+  }
+  if (order.readDefault) {
+    lines.push(
+      `For "what matters most" or "what should I do first", its own order (${order.readDefault}) stays right.`,
+    );
+  }
+  lines.push('Say which order a list is in when you give it.');
+  return lines.join(' ');
 }
