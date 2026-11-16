@@ -563,6 +563,25 @@ const MAX_CONTEXT_CHIPS = 12;
 const MAX_REFERENCE_SCOPE = 8;
 
 // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
+/** The most a page's chip or reference label keeps (CHAT-01 item 20): the composer shows less. */
+export const PAGE_LABEL_CHARS = 200;
+
+/**
+ * A label or value the page sent, cut to PAGE_LABEL_CHARS rather than
+ * refused: a prompt's text is up to 500 characters, and a Citations prompt
+ * chip or Prompts' Ask about this sends it whole, which failed the message
+ * (the Chat page-data audit's G8, 2026-11-16). Far longer is still refused.
+ */
+const pageText = (min: number) =>
+  z
+    .string()
+    .trim()
+    .min(min)
+    .max(2_000)
+    .transform((text) =>
+      text.length > PAGE_LABEL_CHARS ? `${cutText(text, PAGE_LABEL_CHARS - 1).trimEnd()}…` : text,
+    );
+
 const startRunFields = z.object({
   /** Empty only with files attached: an image alone is a message (startRunInput). */
   message: z.string().trim().max(20_000),
@@ -584,8 +603,8 @@ const startRunFields = z.object({
         .array(
           z.object({
             key: z.string().trim().min(1).max(64),
-            label: z.string().trim().min(1).max(200),
-            value: z.string().trim().max(200).optional(),
+            label: pageText(1),
+            value: pageText(0).optional(),
           }),
         )
         .max(MAX_CONTEXT_CHIPS),
@@ -604,7 +623,7 @@ const startRunFields = z.object({
       z.object({
         type: z.enum(CHAT_REFERENCE_TYPES),
         id: z.string().trim().min(1).max(200),
-        label: z.string().trim().min(1).max(200),
+        label: pageText(1),
         scope: z
           .record(z.string().max(64), z.string().max(200))
           .refine((scope) => Object.keys(scope).length <= MAX_REFERENCE_SCOPE)

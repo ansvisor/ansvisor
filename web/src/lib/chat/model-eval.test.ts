@@ -114,8 +114,10 @@ const fakes = vi.hoisted(() => ({
   scenario: null as null | {
     answerText?: string;
     page?: { text: string; instructionsForAi: boolean };
+    readResult?: (tool: string, input: Record<string, unknown>) => unknown;
   },
   reads: [] as string[],
+  readCalls: [] as { tool: string; input: Record<string, unknown> }[],
   changes: [] as string[],
   /** The tokens the run now running used, as its steps were charged. */
   tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as Required<EvalTokens>,
@@ -170,7 +172,11 @@ vi.mock('./registry/tools', async (importOriginal) => {
         return tool.run(ctx, input);
       }
       fakes.reads.push(tool.name);
+      fakes.readCalls.push({ tool: tool.name, input: { ...(input as Record<string, unknown>) } });
       if (AS_IS.has(tool.name)) return tool.run(ctx, input);
+      // The scenario's own data (a list longer than a page), else the test's numbers.
+      const own = fakes.scenario?.readResult?.(tool.name, input as Record<string, unknown>);
+      if (own !== undefined) return own;
       return evalReadResult(isUntrustedRead(tool.name), fakes.scenario?.answerText);
     },
   }));
@@ -277,6 +283,7 @@ beforeEach(() => {
   seed();
   fakes.scenario = null;
   fakes.reads = [];
+  fakes.readCalls = [];
   fakes.changes = [];
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
   vi.mocked(createContentDraftFor).mockImplementation((_actor, brandId, start) =>
@@ -320,6 +327,7 @@ async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
       text: scenario.page.text,
       instructionsForAi: scenario.page.instructionsForAi,
     },
+    readResult: scenario.readResult,
   };
   fakes.openPage.mockImplementation(async (_ctx: unknown, url: string) => ({
     ok: true,
@@ -341,6 +349,7 @@ async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
     message: scenario.message,
     brandId: BRAND,
     mode: scenario.mode,
+    ...(scenario.context ? { context: scenario.context, origin: 'panel' } : {}),
   });
   if (!started.ok) throw new Error(`not started: ${started.code}`);
   await engine.driveRun(actor, started.runId);
@@ -353,6 +362,7 @@ async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
     status: String(run.status),
     answer: typeof message?.content_md === 'string' ? message.content_md : '',
     reads: [...fakes.reads],
+    readCalls: [...fakes.readCalls],
     changes: [...fakes.changes],
     cards: count('confirm.required'),
     asks: count('ask.created'),
@@ -388,11 +398,13 @@ const text = (answer: string) => [
   { type: 'finish', finishReason: { unified: 'stop', raw: 'end_turn' }, usage },
 ];
 
-/** One scripted model doing both halves, as a model through OpenRouter does. */
-function scripted(script: Step[]) {
+/** One scripted model doing both halves, as a model through OpenRouter does; what each step was sent. */
+function scripted(script: Step[]): string[] {
+  const sent: string[] = [];
   const model = new MockLanguageModelV3({
     modelId: 'scripted',
-    doStream: async () => {
+    doStream: async (options) => {
+      sent.push(JSON.stringify(options.prompt));
       const next = script.shift();
       if (!next) throw new Error('the script has no more steps');
       return {
@@ -416,6 +428,7 @@ function scripted(script: Step[]) {
       claude: false,
     }),
   } satisfies ChatModels);
+  return sent;
 }
 
 describe('the test set’s harness (W4-35), on a scripted model', () => {
@@ -490,6 +503,85 @@ describe('the test set’s harness (W4-35), on a scripted model', () => {
     const result = await runScenario(scenarioOf('analyst-denied'));
     expect(result.run).toMatchObject({ status: 'done', changes: [], cards: 0, denials: 1 });
     expect(result.passed).toBe(true);
+  });
+
+  it('reads the next page for an action past the first, and passes naming it', async () => {
+    scripted([
+      calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+      calls(toolCall('r2', 'list_action_center_tasks', { brand_id: BRAND, offset: 50 })),
+      text(
+        '**/pricing sayfasına FAQ şeması ekle** (AC-63): yeni, açık bir aksiyon; öncelik puanı 38.',
+      ),
+    ]);
+    const result = await runScenario(scenarioOf('action-past-first-page'));
+    expect(result.run.readCalls).toEqual([
+      { tool: 'list_action_center_tasks', input: expect.objectContaining({ limit: 50 }) },
+      {
+        tool: 'list_action_center_tasks',
+        input: expect.objectContaining({ limit: 50, offset: 50 }),
+      },
+    ]);
+    expect(result.checks.filter((c) => !c.ok)).toEqual([]);
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails an answer that gives up on the first page, in Turkish or English', async () => {
+    for (const answer of [
+      'Okuma sınırına takıldım; 38 aksiyon eksik, AC-63’ü bulamadım.',
+      "I hit the read limit, so I couldn't read AC-63: 5 actions are missing.",
+    ]) {
+      // The second text: the engine's rewrite of an English answer to a Turkish question.
+      scripted([
+        calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+        text(answer),
+        text(answer),
+      ]);
+      const result = await runScenario(scenarioOf('action-past-first-page'));
+      expect(result.passed, answer).toBe(false);
+      expect(
+        result.checks.find((c) => c.name === 'never gives up on data it could read'),
+      ).toMatchObject({ ok: false, must: true });
+      expect(
+        result.checks.find((c) => c.name === 'reads past the first page, or by its code')?.ok,
+      ).toBe(false);
+    }
+  });
+
+  it('passes a long list answered for what it covers, with its total', async () => {
+    scripted([
+      calls(toolCall('r1', 'list_signals', { brand_id: BRAND })),
+      text('The newest 50 of 451 signals this month: most are citations lost on Perplexity.'),
+    ]);
+    const result = await runScenario(scenarioOf('long-list'));
+    expect(result.checks.filter((c) => !c.ok)).toEqual([]);
+  });
+
+  it('sends the page it was asked on, and passes reading the other page’s data', async () => {
+    scripted([
+      calls(toolCall('r1', 'get_prompt_performance', { brand_id: BRAND })),
+      text('En çok görünürlük kaybeden prompt "best crm for small teams": 12 puan düştü.'),
+    ]);
+    const result = await runScenario(scenarioOf('other-page-data'));
+    expect(result.checks.filter((c) => !c.ok)).toEqual([]);
+    const message = db.tables.chat_messages.find((m) => m.role === 'user');
+    expect(JSON.stringify(message)).toContain('Signals');
+  });
+
+  it('gets a page cut for size back as a shorter page that says where to read on', async () => {
+    const sent = scripted([
+      calls(toolCall('r1', 'list_citations', { brand_id: BRAND })),
+      text('The top domains of 180, most cited first: source-1.example leads.'),
+    ]);
+    const result = await runScenario(scenarioOf('cut-by-size'));
+    expect(result.checks.filter((c) => !c.ok)).toEqual([]);
+    // What the model read of it: fewer than 50, the next page's offset, and no "{list}_more".
+    const read = sent[1];
+    expect(read).toMatch(/\\"next_offset\\":(\d+)/);
+    const next = Number(/\\"next_offset\\":(\d+)/.exec(read)![1]);
+    expect(next).toBeGreaterThan(0);
+    expect(next).toBeLessThan(50);
+    expect(read).not.toContain('top_domains_more');
+    expect(read).toContain('Read the next page with offset');
   });
 
   it('finds a tool name, an id or an id field in what the person was sent', () => {

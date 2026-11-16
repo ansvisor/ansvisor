@@ -1363,6 +1363,7 @@ describe('the agents’ test set harness, on a scripted model', () => {
       'reads the actions by their codes',
       'names each action asked by its title and code',
       'names no other action in their place',
+      'never gives up on data it could read',
     ]) {
       expect(
         result.checks.find((c) => c.name === name),
