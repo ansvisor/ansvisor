@@ -10,6 +10,7 @@ import {
 } from './content-delivery';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { brandAllowed, mayUseBrand } from '@/lib/mcp/data';
+import { pageRows } from '@/lib/mcp/list-page';
 import {
   draftPassages,
   keepAgentSuggestions,
@@ -177,31 +178,49 @@ export async function listContentDraftsFor(
   brandId: string,
   status?: string,
 ): Promise<McpDraftSummary[] | null> {
+  return (await contentDraftsPageFor(auth, brandId, status))?.rows ?? null;
+}
+
+/** The brand's drafts from `offset`, latest changed first, with how many match in all. */
+export async function contentDraftsPageFor(
+  auth: McpAuthContext,
+  brandId: string,
+  status?: string,
+  page: { limit?: number; offset?: number } = {},
+): Promise<{ rows: McpDraftSummary[]; total: number } | null> {
   if (!(await brandAllowed(auth, brandId))) return null;
-  let query = supabaseAdmin
-    .from('content_drafts')
-    .select(
-      `id, title, status, method, page_type, author, source_url, updated_at, ${SHOPPING_COLUMNS}`,
-    )
-    .eq('brand_id', brandId)
-    // Archived drafts (00233) are set aside in the Library, and here.
-    .is('archived_at', null)
-    .order('updated_at', { ascending: false })
-    .limit(LIST_LIMIT);
-  if (status) query = query.eq('status', status);
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  const rows = data ?? [];
+  const limit = Math.min(Math.max(Math.trunc(page.limit ?? LIST_LIMIT), 1), LIST_LIMIT);
+  const offset = Math.max(Math.trunc(page.offset ?? 0), 0);
+  const matching = (head = false) => {
+    const query = supabaseAdmin
+      .from('content_drafts')
+      .select(
+        `id, title, status, method, page_type, author, source_url, updated_at, ${SHOPPING_COLUMNS}`,
+        { count: 'exact', head },
+      )
+      .eq('brand_id', brandId)
+      // Archived drafts (00233) are set aside in the Library, and here.
+      .is('archived_at', null);
+    return status ? query.eq('status', status) : query;
+  };
+  const { rows, total } = await pageRows(
+    await matching()
+      .order('updated_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
   const ids = rows.map((r) => r.id);
   const [open, sends] = await Promise.all([openSuggestionCounts(ids), lastSendsOf(ids)]);
-  return rows.map(({ shopping_built, content_shopping_checks, ...row }) => ({
+  const drafts = rows.map(({ shopping_built, content_shopping_checks, ...row }) => ({
     ...row,
     open_suggestions: open.get(row.id) ?? 0,
     editor_path: contentEditorPath(row.id),
     last_send: sends.get(row.id) ?? null,
     shopping_links: mcpShoppingLinks(shopping_built, content_shopping_checks),
   }));
+  return { rows: drafts, total };
 }
 
 export interface McpDraft {

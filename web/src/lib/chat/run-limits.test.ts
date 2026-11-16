@@ -8,6 +8,7 @@ const {
   RUNS_PER_USER,
   readBudget,
   readCap,
+  PAGE_CHARS,
   resultCharsFor,
   startDecision,
   workspaceRunLimit,
@@ -58,6 +59,11 @@ describe('run limits', () => {
     expect(resultCharsFor(readBudget('normal'), 'list_action_center_tasks')).toBe(20_000);
     expect(resultCharsFor(readBudget('max'), 'list_action_center_tasks')).toBe(36_000);
     expect(resultCharsFor(readBudget('normal'), 'list_citations')).toBe(12_000);
+  });
+
+  it('give a page of any list read the same room (PAGE_CHARS), never less than the run’s own', () => {
+    expect(resultCharsFor(readBudget('normal'), 'list_signals', true)).toBe(PAGE_CHARS);
+    expect(resultCharsFor(readBudget('max'), 'list_signals', true)).toBe(36_000);
   });
 
   it('give an agent’s run room for its skills’ reads, scaled by effort the same way', () => {

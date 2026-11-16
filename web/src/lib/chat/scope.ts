@@ -29,28 +29,20 @@ export const ROW_CAP = 50;
  * Rows per read, by tool: `default` when the model names none, `max` the
  * most it may ask for. A tool with a `limit` input reads `default` (or what
  * the model asked, up to `max`); one without has its lists cut to `default`
- * after it runs. Tools not named here: ROW_CAP.
+ * after it runs. Tools not named here: ROW_CAP. Every list read pages by
+ * `offset` (pagedRead): ROW_CAP a page, with its total and the next page,
+ * so none is named here for its length (the owner's rule, 2026-11-16).
  */
 export const ROW_LIMITS: Readonly<Record<string, { default: number; max: number }>> = {
-  list_prompts: { default: 25, max: ROW_CAP },
-  get_prompt_performance: { default: 10, max: ROW_CAP },
-  get_prompt_volumes: { default: 25, max: ROW_CAP },
   get_prompt_insights: { default: 10, max: 24 },
   get_fanout_gaps: { default: 20, max: 49 },
   get_gsc_queries: { default: 25, max: 49 },
   list_ai_answers: { default: 5, max: 9 },
-  list_citations: { default: 20, max: ROW_CAP },
   // A page of all the brand's open actions, ranked on the server, with their total; the next by
   // its offset (registry/read-tools.ts): "most important" judges them all, not the first 10.
   list_action_center_tasks: { default: ROW_CAP, max: ROW_CAP },
-  list_signals: { default: 10, max: ROW_CAP },
-  get_action_history: { default: 10, max: ROW_CAP },
-  list_content_opportunities: { default: 10, max: ROW_CAP },
-  get_reports: { default: 5, max: 20 },
   // What's new shows 3 updates at most (CHAT-11 item 10).
   get_whats_new: { default: 3, max: 3 },
-  // No `limit` input: a page of up to 100 answers, cut after the read (CHAT-04 §B 20 / 100).
-  list_mentions: { default: 20, max: 20 },
 };
 
 /**
@@ -310,6 +302,15 @@ function hasField(tool: Pick<ChatTool, 'inputSchema'>, field: string): boolean {
   return field in (tool.inputSchema.shape as Record<string, unknown>);
 }
 
+/**
+ * A list read that pages by `offset` (lib/mcp/list-page.ts): it counts what
+ * matches and says where the next page starts, so no extra row is read to
+ * see if there are more, and a result cut for size stays a page (fit.ts).
+ */
+export function pagedRead(tool: Pick<ChatTool, 'name' | 'inputSchema'>): boolean {
+  return PAGED_READS.has(tool.name) || hasField(tool, 'offset');
+}
+
 /** Whether the tool's input takes these values (its schema's own limits). */
 const accepts = (tool: Pick<ChatTool, 'inputSchema'>, input: Record<string, unknown>) =>
   tool.inputSchema.safeParse(input).success;
@@ -418,7 +419,7 @@ export async function scopeRead(
     const asked = typeof input.limit === 'number' ? input.limit : null;
     const rows = Math.max(1, Math.min(asked ?? limits?.default ?? ROW_CAP, max));
     const probe = rows + 1;
-    const probes = !PAGED_READS.has(tool.name) && accepts(tool, { ...input, limit: probe });
+    const probes = !pagedRead(tool) && accepts(tool, { ...input, limit: probe });
     input.limit = probes ? probe : rows;
     cap = { rows, probe: probes ? probe : null };
   }

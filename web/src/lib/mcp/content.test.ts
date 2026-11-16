@@ -33,6 +33,7 @@ vi.mock('@/lib/supabase/admin', () => ({
         or: () => chain,
         order: () => chain,
         limit: () => chain,
+        range: () => chain,
         insert: (value: unknown) => (db.writes.push({ table, op: 'insert', value }), chain),
         update: (value: unknown) => (db.writes.push({ table, op: 'update', value }), chain),
         upsert: async (value: unknown) => (

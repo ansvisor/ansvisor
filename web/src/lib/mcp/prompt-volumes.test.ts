@@ -22,6 +22,7 @@ function builder(table: string) {
         : { data: demandRows.filter((r) => ids.includes(r.prompt_id as string)), error: null },
     order: () => chain,
     limit: async () => ({ data: rows, error: null }),
+    range: async () => ({ data: rows, count: rows.length, error: null }),
     maybeSingle: async () => ({ data: table === 'brands' ? { id: 'b1' } : null, error: null }),
   };
   return chain;
