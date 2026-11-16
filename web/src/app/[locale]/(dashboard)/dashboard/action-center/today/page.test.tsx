@@ -75,6 +75,13 @@ const { toast } = vi.hoisted(() => ({
 }));
 vi.mock('sonner', () => ({ toast }));
 
+// A fixed Tuesday for the whole file, fixtures included: on a real Monday
+// Today also reads Monday's parts (Last week, the topic card), which most
+// tests here don't mock. The Monday tests below set their own Monday.
+const TUESDAY = new Date('2026-11-17T09:00:00Z');
+vi.useFakeTimers({ toFake: ['Date'] });
+vi.setSystemTime(TUESDAY);
+
 const reads = vi.hoisted(() => ({
   getTodayOverview: vi.fn(),
   getTodayStanding: vi.fn(),
@@ -297,6 +304,8 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(TUESDAY);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
