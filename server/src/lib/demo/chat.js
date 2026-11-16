@@ -28,7 +28,6 @@ export const MAX_PEOPLE = 50;
 
 const MINUTE_MS = 60 * 1000;
 const LATEST = RUNS - 1;
-const ROWS = (n) => `${n} ${n === 1 ? 'row' : 'rows'}`;
 const pct = (n) => `${n}%`;
 /** "up from", "down from" or "the same as" the figure before. */
 const trend = (now, before) =>
@@ -61,14 +60,15 @@ function actionTitle(action) {
 
 const actionHref = (action) => `/dashboard/action-center/actions/${action.id}`;
 
-/** A read step, as the engine words one: "Read Visibility", "Last 7 days · ChatGPT, … · 216 rows". */
+/**
+ * A read step, as the engine words one: "Read Visibility", "Last 7 days · ChatGPT, …".
+ * Its rows are counted (row_count), never shown.
+ */
 function read(label, { dateRange, platforms = ALL_PLATFORMS, rows, subject, tool }) {
   return {
     kind: 'read',
     label,
-    detail: [dateRange, platforms.join(', '), rows !== undefined ? ROWS(rows) : null]
-      .filter(Boolean)
-      .join(' · '),
+    detail: [dateRange, platforms.join(', ')].filter(Boolean).join(' · '),
     scope: {
       ...(subject ? { subject } : {}),
       dateRange,

@@ -120,7 +120,7 @@ export const RUN_STEPS = {
   done: [
     step(1, 'done', 'Thinking · 3s', '3 tasks are due this week.', 'thinking'),
     step(2, 'done', 'Read Action Center', '4 tasks due this week'),
-    step(3, 'done', 'Read Citations', 'Pricing prompts · Last 30 days · ChatGPT, Gemini · 42 rows'),
+    step(3, 'done', 'Read Citations', 'Pricing prompts · Last 30 days · ChatGPT, Gemini'),
     step(4, 'done', 'Opened ansvisor.com/pricing', undefined, 'open_page'),
     step(5, 'done', 'Read Prompts', '12 prompts'),
     step(6, 'done', 'Checked facts', 'Plan names and prices match your Billing page', 'check'),

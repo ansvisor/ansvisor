@@ -761,7 +761,7 @@ describe('a turn', () => {
       status: 'done',
       rowCount: 3,
       dataAsOf: DATA_AS_OF,
-      detail: 'Last 30 days · ChatGPT · 3 rows',
+      detail: 'Last 30 days · ChatGPT',
       scope: { dateRange: 'Last 30 days', platforms: ['ChatGPT'] },
     });
     expect(
@@ -806,7 +806,7 @@ describe('a turn', () => {
     const rebuilt = runFromEvents(await eventsOf(runId));
     const stored = stepsOf(runId).map((row) => toClientStep(row as never));
     expect(rebuilt.steps).toEqual(stored);
-    expect(rebuilt.steps[0].detail).toBe('Oct 1 – Oct 15 · 3 rows');
+    expect(rebuilt.steps[0].detail).toBe('Oct 1 – Oct 15');
     expect(rebuilt.text).toBe('Done.');
     expect(rebuilt.status).toBe('done');
     // Replaying twice, or from the middle, changes nothing.
@@ -855,7 +855,85 @@ describe("a read's scope (W1-17)", () => {
     const runId = await turn(ADMIN, 'How have we done since we started?');
     expect(readInput().date_from).toBeUndefined();
     expect(readInput().date_to).toBeUndefined();
-    expect(stepsOf(runId)[0].detail).toBe('All time · 3 rows');
+    expect(stepsOf(runId)[0].detail).toBe('All time');
+  });
+
+  describe('no row count shown', () => {
+    /** What the person can see of the run: its steps' words and its events' steps. */
+    const shown = async (runId: string) => {
+      const events = await eventsOf(runId);
+      return JSON.stringify([
+        stepsOf(runId).map((row) => [row.label, row.detail]),
+        [...ofType(events, 'step.started'), ...ofType(events, 'step.finished')].map((e) => [
+          e.data.step.label,
+          e.data.step.detail,
+        ]),
+      ]);
+    };
+
+    it('shows a read that found nothing as a normal step, with no 0 anywhere', async () => {
+      fakes.readRun.mockResolvedValue({ rows: [], data_as_of: DATA_AS_OF });
+      const { sonnet } = useModels(
+        [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+        [text('Nothing yet.')],
+      );
+      const runId = await turn(ADMIN, 'How are we doing?');
+      const step = stepsOf(runId)[0];
+      expect(step).toMatchObject({
+        kind: 'read',
+        status: 'done',
+        label: 'Read Visibility',
+        detail: 'Last 30 days',
+        // Still counted, for the app: never in its words.
+        row_count: 0,
+      });
+      const words = await shown(runId);
+      expect(words).not.toMatch(/\brows?\b/);
+      expect(words).not.toMatch(/\b0\b/);
+      // The model's note is what it was: the period and dates, beside the empty list.
+      const sent = JSON.stringify(sonnet.seen[0].prompt);
+      expect(sent).toContain(
+        `\\"scope\\":{\\"period\\":\\"Last 30 days\\",\\"dates\\":{\\"from\\":\\"${day(-29)}\\",\\"to\\":\\"${day(0)}\\"}}`,
+      );
+      expect(sent).toContain('\\"rows\\":[]');
+    });
+
+    it('shows a read of 50 rows with its period and platform only, and keeps the count for the run', async () => {
+      fakes.readRun.mockResolvedValue({
+        rows: Array.from({ length: 60 }, (_, i) => ({ prompt: `prompt ${i}` })),
+        data_as_of: DATA_AS_OF,
+      });
+      const { sonnet } = useModels(
+        [
+          calls(toolCall('r1', 'read_visibility', { brand_id: BRAND, platform: 'chatgpt-web' })),
+          READY,
+        ],
+        [text('Ok.')],
+      );
+      const runId = await turn(ADMIN, 'Which prompts on ChatGPT?');
+      expect(stepsOf(runId)[0]).toMatchObject({
+        status: 'done',
+        detail: 'Last 30 days · ChatGPT',
+        row_count: 50,
+      });
+      const words = await shown(runId);
+      expect(words).not.toMatch(/\brows?\b/);
+      expect(words).not.toContain('50');
+      const events = await eventsOf(runId);
+      expect(ofType(events, 'step.finished')[0].data.step).toMatchObject({
+        detail: 'Last 30 days · ChatGPT',
+        rowCount: 50,
+      });
+      // The run's own count of what it read, and the model's note and rows, as before.
+      expect(ofType(events, 'run.finished')[0].data.sources).toEqual([
+        { label: 'Visibility', count: 50 },
+      ]);
+      const sent = JSON.stringify(sonnet.seen[0].prompt);
+      expect(sent).toContain('\\"period\\":\\"Last 30 days\\"');
+      expect(sent).toContain('\\"platforms\\":[\\"ChatGPT\\"]');
+      expect(sent).toContain('\\"rows_more\\":10');
+      expect(sent).toContain('prompt 49');
+    });
   });
 
   it("doesn't read a platform the plan doesn't track, and tells the model why", async () => {
@@ -9598,7 +9676,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
         label: 'Which time range should I use?',
         detail: 'Last 7 days · your default from now on',
       },
-      { kind: 'read', status: 'done', detail: 'Last 7 days · 3 rows' },
+      { kind: 'read', status: 'done', detail: 'Last 7 days' },
     ]);
     // The reading went on where it stopped: its second step has the first's read.
     expect(haiku.seen).toHaveLength(2);
@@ -9740,7 +9818,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     expect(savedRange()).toBe('7d');
     expect(await cardsOf(runId)).toEqual([]);
     // No Help answer for it: it reads the earlier question again over the new range.
-    expect(stepsOf(runId)[0]).toMatchObject({ kind: 'read', detail: 'Last 7 days · 3 rows' });
+    expect(stepsOf(runId)[0]).toMatchObject({ kind: 'read', detail: 'Last 7 days' });
     expect(stepsOf(runId).map((s) => s.label)).not.toContain('Read Ansvisor Help');
     expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
     expect(promptOf(haiku.seen[0])).toContain('only changes their default date range');
