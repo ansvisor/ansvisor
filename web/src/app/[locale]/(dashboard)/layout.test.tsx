@@ -204,9 +204,14 @@ beforeEach(() => {
     error: null,
   }));
   auth.admin.updateUserById.mockImplementation(
-    async (_id: string, { app_metadata }: { app_metadata: object }) => {
-      const meta = auth.account!.app_metadata as object;
-      auth.account = { ...auth.account, app_metadata: { ...meta, ...app_metadata } };
+    // As the Auth server does: app_metadata's keys merged, a null one removed.
+    async (_id: string, { app_metadata }: { app_metadata: Record<string, unknown> }) => {
+      const meta: Record<string, unknown> = { ...(auth.account!.app_metadata as object) };
+      for (const [key, value] of Object.entries(app_metadata)) {
+        if (value === null) delete meta[key];
+        else meta[key] = value;
+      }
+      auth.account = { ...auth.account, app_metadata: meta };
       return { data: { user: auth.account }, error: null };
     },
   );
@@ -411,10 +416,19 @@ describe('the dashboard layout and the sign-up event', () => {
     resend.mock.calls
       .filter(([url]) => url === 'https://eu.i.posthog.com/capture/')
       .map(([, init]) => JSON.parse((init as RequestInit).body as string));
-  /** The page's after() work, as Next runs it once the response is sent. */
-  async function runLater() {
-    const tasks = later.tasks.splice(0);
-    await Promise.all(tasks.map((task) => task()));
+  /**
+   * The page's after() work, as Next runs it once the response is sent, with
+   * the claim's wait (lib/signup-event.ts) run through.
+   */
+  async function runLater(tasks = later.tasks.splice(0)) {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const done = Promise.all(tasks.map((task) => task()));
+      await vi.runAllTimersAsync();
+      await done;
+    } finally {
+      vi.useRealTimers();
+    }
   }
 
   beforeEach(() => {
@@ -444,7 +458,10 @@ describe('the dashboard layout and the sign-up event', () => {
         properties: expect.objectContaining({ source: 'email' }),
       }),
     ]);
-    expect(auth.account!.app_metadata).toMatchObject({ signup_event_at: expect.any(String) });
+    expect(auth.account!.app_metadata).toMatchObject({
+      signup_event_at: expect.any(String),
+      signup_posthog_at: expect.any(String),
+    });
 
     // The next page, onboarded or not: nothing more, and no read for it.
     auth.admin.getUserById.mockClear();
@@ -466,11 +483,43 @@ describe('the dashboard layout and the sign-up event', () => {
     // Another server's page, its session read before this one claimed it.
     auth.account = { ...auth.account, app_metadata: { provider: 'email' } };
     await open();
-    const [first] = later.tasks.splice(0);
+    const first = later.tasks.splice(0);
     await open();
-    await first();
+    await runLater(first);
     await runLater();
     expect(sent()).toHaveLength(2);
+  });
+
+  it('tries again from a later page when Resend refuses it or does not answer', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    resend.mockResolvedValueOnce({ ok: false, status: 500 });
+    await open();
+    await runLater();
+    expect(auth.account!.app_metadata).toMatchObject({ signup_event_tries: 1 });
+    expect(auth.account!.app_metadata).not.toHaveProperty('signup_event_at');
+
+    resend.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+    await open();
+    await runLater();
+    await open();
+    await runLater();
+    expect(sent()).toHaveLength(3);
+    expect(auth.account!.app_metadata).toMatchObject({
+      signup_event_at: expect.any(String),
+      signup_event_tries: 3,
+    });
+    await open();
+    await runLater();
+    expect(sent()).toHaveLength(3);
+    vi.mocked(console.error).mockRestore();
+  });
+
+  it('claims nothing for the welcome where the web has no RESEND_API_KEY', async () => {
+    vi.stubEnv('RESEND_API_KEY', '');
+    await open();
+    await runLater();
+    expect(sent()).toEqual([]);
+    expect(auth.admin.updateUserById).not.toHaveBeenCalled();
   });
 
   it('never sends it for an account made before the welcome e-mail started', async () => {

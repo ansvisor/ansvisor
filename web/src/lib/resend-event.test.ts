@@ -15,8 +15,10 @@ afterEach(() => {
 });
 
 describe('sendResendEvent', () => {
-  it('posts the event to Resend with the key', async () => {
-    await sendResendEvent('user.signed_up', 'a@b.co', { first_name: 'Ada' });
+  it('posts the event to Resend with the key, and says it was accepted', async () => {
+    await expect(sendResendEvent('user.signed_up', 'a@b.co', { first_name: 'Ada' })).resolves.toBe(
+      true,
+    );
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://api.resend.com/events/send');
     expect(init.method).toBe('POST');
@@ -32,28 +34,45 @@ describe('sendResendEvent', () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it('does nothing without a key', async () => {
+  it('does nothing without a key or an address, and says it was not accepted', async () => {
     vi.stubEnv('RESEND_API_KEY', '');
-    await sendResendEvent('user.signed_up', 'a@b.co', {});
+    await expect(sendResendEvent('user.signed_up', 'a@b.co', {})).resolves.toBe(false);
+    vi.stubEnv('RESEND_API_KEY', 're_test');
+    await expect(sendResendEvent('user.signed_up', '', {})).resolves.toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('swallows a network error and a refusal, logging neither key nor address', async () => {
-    fetchMock.mockRejectedValueOnce(new Error('down re_test a@b.co'));
-    await expect(sendResendEvent('e', 'a@b.co', {})).resolves.toBeUndefined();
+  it('says a refusal, a failure and a timeout were not accepted, logging neither key nor address', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 422 });
+    await expect(sendResendEvent('e', 'a@b.co', {})).resolves.toBe(false);
     fetchMock.mockResolvedValueOnce({ ok: false, status: 500 });
-    await expect(sendResendEvent('e', 'a@b.co', {})).resolves.toBeUndefined();
+    await expect(sendResendEvent('e', 'a@b.co', {})).resolves.toBe(false);
+    fetchMock.mockRejectedValueOnce(new Error('down re_test a@b.co'));
+    await expect(sendResendEvent('e', 'a@b.co', {})).resolves.toBe(false);
+    fetchMock.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+    await expect(sendResendEvent('e', 'a@b.co', {})).resolves.toBe(false);
     const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
     expect(logged).not.toMatch(/re_test|a@b\.co/);
-    expect(console.error).toHaveBeenCalledTimes(2);
+    expect(logged).toContain('HTTP 422');
+    expect(logged).toContain('TimeoutError');
+    expect(console.error).toHaveBeenCalledTimes(4);
   });
 });
 
 describe('sendSignedUpEvent', () => {
   it('sends the first word of the name, or an empty string', async () => {
-    await sendSignedUpEvent({ email: 'a@b.co', user_metadata: { full_name: ' Ada Lovelace ' } });
+    await expect(
+      sendSignedUpEvent({ email: 'a@b.co', user_metadata: { full_name: ' Ada Lovelace ' } }),
+    ).resolves.toBe(true);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).payload).toEqual({ first_name: 'Ada' });
     await sendSignedUpEvent({ email: 'a@b.co', user_metadata: {} });
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).payload).toEqual({ first_name: '' });
+  });
+
+  it('says whether Resend accepted it, and sends nothing without an address', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 503 });
+    await expect(sendSignedUpEvent({ email: 'a@b.co' })).resolves.toBe(false);
+    await expect(sendSignedUpEvent({ email: null })).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

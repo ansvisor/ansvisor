@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { after } from 'next/server';
 import type { User } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -11,11 +12,26 @@ import { capturePostHog } from '@/lib/posthog-server';
  * on `user.signed_up`; PostHog's `signed_up` is the core-loop funnel's first
  * step (docs/analytics/core-loop-funnel.md).
  *
+ * Each event has its own claim in the account's app_metadata, written before
+ * it is sent, and only where this server has the event's key:
+ * - the welcome (RESEND_API_KEY): `signup_event_at`. It stays only once
+ *   Resend accepted the event (a 2xx answer). A refusal or a failed call
+ *   releases it, so a later page tries again, up to WELCOME_MAX_TRIES
+ *   (counted in `signup_event_tries`).
+ * - PostHog's `signed_up` (NEXT_PUBLIC_POSTHOG_KEY): `signup_posthog_at`,
+ *   kept whatever PostHog does (its capture never says).
+ *
+ * An e-mail sign-up whose address is never confirmed never reaches a
+ * signed-in page, so it never gets either: no welcome to an unconfirmed
+ * address, by design. server/src/scripts/send-missed-welcome.js sends the
+ * welcome, by hand, to the accounts that missed it, with the same claim
+ * (server/src/lib/welcome-claim.js; its test checks the two agree).
+ *
  * Not from the sign-in links: the e-mail sign-up's confirmation link doesn't
  * come through /auth/confirm (the template links to {{ .ConfirmationURL }}),
  * so only Google and GitHub sign-ups were sent from there (#2375).
  *
- * Plain module, server only (not 'use server': it exports a constant).
+ * Plain module, server only (not 'use server': it exports constants).
  */
 
 /**
@@ -25,28 +41,87 @@ import { capturePostHog } from '@/lib/posthog-server';
  */
 export const SIGNUP_EVENT_SINCE = Date.parse('2026-11-13T00:00:00+03:00');
 
-/** Where the claim is kept, in the account's app_metadata: when it was claimed. */
-const CLAIM_KEY = 'signup_event_at';
-
 /**
- * A Google or GitHub account is made at its first sign-in, which goes
- * straight on to the dashboard, so its first page comes seconds later. Until
- * this change the sign-in callback sent the event then, keeping no claim: a
- * Google or GitHub account first seen here later than this has had it.
+ * Until the claim went live, the Google and GitHub sign-in callback sent the
+ * welcome itself at an account's first sign-in, keeping no claim (#2375). The
+ * claim came with commit 40931db52 (#2383, merged 14 Nov 2026 11:30 UTC) and
+ * reached production with the first deployment that held it (d12dc19a5,
+ * live 14 Nov 2026 15:42 UTC); this is that, rounded up to 16:00 UTC (19:00
+ * Istanbul time) for requests still on the old deployment.
+ *
+ * A Google or GitHub account made before it is sent the events only from a
+ * page within OAUTH_FIRST_PAGE_WITHIN_MS of being made: a later page's
+ * account may have had the welcome from the callback. One made from it on
+ * never had anything from the callback, so a later page may try again.
  */
+export const OAUTH_CALLBACK_SENT_UNTIL = Date.parse('2026-11-14T19:00:00+03:00');
+
+/** How many times the welcome is claimed before the pages stop trying. */
+export const WELCOME_MAX_TRIES = 3;
+
+/** A Google or GitHub account's first page comes seconds after it is made. */
 const OAUTH_FIRST_PAGE_WITHIN_MS = 10 * 60_000;
 
-type SessionUser = Pick<User, 'id' | 'created_at' | 'invited_at' | 'app_metadata'>;
+// Where the claims are kept, in the account's app_metadata.
+/** The welcome: when it was claimed. Kept once Resend accepted it. */
+const WELCOME_CLAIM_KEY = 'signup_event_at';
+/** How many times the welcome was claimed. */
+const WELCOME_TRIES_KEY = 'signup_event_tries';
+/** PostHog's signed_up: when it was claimed. */
+const POSTHOG_CLAIM_KEY = 'signup_posthog_at';
+/** A new id with every claim written: the one read back is the one that stayed. */
+const CLAIM_ID_KEY = 'signup_claim_id';
 
-/** Whether the account is still owed the event: from the user record alone, no reads. */
-function owed(user: SessionUser, now: number): boolean {
-  const meta = user.app_metadata ?? {};
-  if (meta[CLAIM_KEY]) return false;
+/**
+ * How long a written claim is left before it is read back. Two servers that
+ * read the account before either claimed it both write a claim, and the one
+ * written last stays. A write is one Auth round trip, well under this, so
+ * each reads back after the other's write has landed: only one finds its own.
+ */
+const CLAIM_SETTLE_MS = 1500;
+
+type SessionUser = Pick<User, 'id' | 'email' | 'created_at' | 'invited_at' | 'app_metadata'>;
+type Meta = Record<string, unknown>;
+
+const metaOf = (user: Pick<User, 'app_metadata'>): Meta => user.app_metadata ?? {};
+const triesOf = (meta: Meta): number => Number(meta[WELCOME_TRIES_KEY]) || 0;
+
+/** Whether the account is a sign-up the events are for: from the user record alone. */
+function signUp(user: SessionUser, now: number): boolean {
   // Invited to a workspace: an invitation, not a sign-up (never sent before either).
   if (user.invited_at) return false;
   const made = Date.parse(user.created_at ?? '');
   if (!(made >= SIGNUP_EVENT_SINCE)) return false;
-  return meta.provider === 'email' || now - made <= OAUTH_FIRST_PAGE_WITHIN_MS;
+  if (metaOf(user).provider === 'email' || made >= OAUTH_CALLBACK_SENT_UNTIL) return true;
+  return now - made <= OAUTH_FIRST_PAGE_WITHIN_MS;
+}
+
+/** Whether this server can send the welcome and the account is still owed it. */
+function welcomeOwed(user: SessionUser, now: number): boolean {
+  const meta = metaOf(user);
+  return (
+    Boolean(process.env.RESEND_API_KEY) &&
+    Boolean(user.email) &&
+    !meta[WELCOME_CLAIM_KEY] &&
+    triesOf(meta) < WELCOME_MAX_TRIES &&
+    signUp(user, now)
+  );
+}
+
+/**
+ * Whether this server can send PostHog's signed_up and the account is still
+ * owed it. A welcome claim with no count of tries is from before the two had
+ * their own claims, when one claim sent both: PostHog had it then.
+ */
+function posthogOwed(user: SessionUser, now: number): boolean {
+  const meta = metaOf(user);
+  const before = Boolean(meta[WELCOME_CLAIM_KEY]) && meta[WELCOME_TRIES_KEY] == null;
+  return (
+    Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY) &&
+    !meta[POSTHOG_CLAIM_KEY] &&
+    !before &&
+    signUp(user, now)
+  );
 }
 
 /** Accounts this server is claiming right now: two of its pages at once claim once. */
@@ -65,29 +140,63 @@ async function readUser(id: string): Promise<User | null> {
   return error ? null : (data?.user ?? null);
 }
 
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, CLAIM_SETTLE_MS));
+
+/**
+ * Send the welcome. When Resend didn't accept it, release the claim so a
+ * later page tries again (the count of tries stays).
+ */
+async function sendWelcome(user: User): Promise<void> {
+  if (await sendSignedUpEvent(user)) return;
+  const left = WELCOME_MAX_TRIES - triesOf(metaOf(user));
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+    app_metadata: { [WELCOME_CLAIM_KEY]: null },
+  });
+  console.error(
+    error
+      ? '[signup-event] welcome not accepted, and its claim could not be released'
+      : `[signup-event] welcome not accepted; claim released, ${left} ${left === 1 ? 'try' : 'tries'} left`,
+  );
+}
+
 /**
  * Claim, then send. The account is read again first (another page may have
- * claimed it since this one's session was read), the claim is written, and
- * read back: of two servers that claimed at once, only the one whose claim
- * stayed sends. A failed read or write sends nothing; a rare missed event is
- * better than a second welcome e-mail.
+ * claimed it since this one's session was read), the claims are written with
+ * a new claim id, left to settle and read back: of two servers that claimed
+ * at once, only the one whose claim stayed sends. A failed read or write
+ * sends nothing; a rare missed event is better than a second welcome e-mail.
  */
 async function claimAndSend(id: string): Promise<void> {
   if (claiming.has(id)) return;
   claiming.add(id);
   try {
     const current = await readUser(id);
-    if (!current || !owed(current, Date.now())) return;
-    const claim = new Date().toISOString();
+    if (!current) return;
+    const now = Date.now();
+    const welcome = welcomeOwed(current, now);
+    const posthog = posthogOwed(current, now);
+    if (!welcome && !posthog) return;
+    const at = new Date(now).toISOString();
+    const claimId = randomUUID();
     const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
-      app_metadata: { [CLAIM_KEY]: claim },
+      app_metadata: {
+        [CLAIM_ID_KEY]: claimId,
+        ...(welcome
+          ? { [WELCOME_CLAIM_KEY]: at, [WELCOME_TRIES_KEY]: triesOf(metaOf(current)) + 1 }
+          : {}),
+        ...(posthog ? { [POSTHOG_CLAIM_KEY]: at } : {}),
+      },
     });
     if (error) return;
+    await settle();
     const claimed = await readUser(id);
-    if (claimed?.app_metadata?.[CLAIM_KEY] !== claim) return;
+    const meta = claimed ? metaOf(claimed) : {};
+    if (!claimed || meta[CLAIM_ID_KEY] !== claimId) return;
     await Promise.all([
-      sendSignedUpEvent(claimed),
-      capturePostHog('signed_up', id, signupSource(claimed)),
+      welcome && meta[WELCOME_CLAIM_KEY] === at ? sendWelcome(claimed) : null,
+      posthog && meta[POSTHOG_CLAIM_KEY] === at
+        ? capturePostHog('signed_up', id, signupSource(claimed))
+        : null,
     ]);
   } catch (err) {
     console.error('[signup-event] failed:', err instanceof Error ? err.name : 'error');
@@ -96,18 +205,30 @@ async function claimAndSend(id: string): Promise<void> {
   }
 }
 
+/** Whether this server process has said it has no RESEND_API_KEY. */
+let toldNoResendKey = false;
+
 /**
  * Sends the sign-up events if the signed-in person's account is owed them,
  * in the background (after()): the page never waits, and this never throws.
  * `user` is the session's own (supabase.auth.getUser()); every admin read and
  * write is keyed by its id. An account that has had them, or never will,
- * costs no read at all. Does nothing without RESEND_API_KEY or
- * NEXT_PUBLIC_POSTHOG_KEY (each event needs its own).
+ * costs no read at all. Each event needs its own key (RESEND_API_KEY,
+ * NEXT_PUBLIC_POSTHOG_KEY); without RESEND_API_KEY the server says so once
+ * in its log, so a missing key shows.
  */
 export function sendSignupEventOnce(user: SessionUser): void {
   try {
-    const anyKey = process.env.RESEND_API_KEY || process.env.NEXT_PUBLIC_POSTHOG_KEY;
-    if (!anyKey || !user?.id || !owed(user, Date.now())) return;
+    if (!process.env.RESEND_API_KEY && !toldNoResendKey) {
+      toldNoResendKey = true;
+      console.warn(
+        '[signup-event] RESEND_API_KEY is not set on this server: the welcome e-mail event ' +
+          '(user.signed_up) is not sent, and no account is claimed for it (web/.env.example)',
+      );
+    }
+    if (!user?.id) return;
+    const now = Date.now();
+    if (!welcomeOwed(user, now) && !posthogOwed(user, now)) return;
     after(() => claimAndSend(user.id));
   } catch (err) {
     console.error('[signup-event] not scheduled:', err instanceof Error ? err.name : 'error');
