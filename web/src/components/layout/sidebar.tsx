@@ -38,6 +38,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
+import { NavIcon } from '@/components/layout/nav-icon';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { NewPill } from '@/components/agentic/new-pill';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
@@ -560,7 +561,7 @@ export function Sidebar() {
                               iconDot && 'relative',
                             )}
                           >
-                            <item.icon className="h-4 w-4 shrink-0" />
+                            <NavIcon icon={item.icon} />
                             <span className={nameDot ? 'truncate' : 'flex-1 truncate'}>
                               {label}
                             </span>
@@ -689,7 +690,7 @@ export function Sidebar() {
                               : undefined)
                           }
                         >
-                          <item.icon className="h-4 w-4 shrink-0" />
+                          <NavIcon icon={item.icon} />
                           {iconName && dot && (
                             <MenuDot dot={dot} className={cn(ICON_DOT, 'left-7')} />
                           )}

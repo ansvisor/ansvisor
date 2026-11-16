@@ -407,3 +407,179 @@
     }
   }
 }
+
+/*
+ * The left menu's icon motions. nav-icon.tsx pairs each main item's icon with
+ * one; hovering or focusing the item (data-nav-item) plays it once, and the
+ * icon then rests as before, hover or not.
+ *
+ * They run on transitions, not keyframes, so they never snap. --nav-t is a
+ * motion's clock, 0 at rest and 1 once played, and every motion is at rest at
+ * both ends. --nav-k is its strength: when the pointer leaves, it fades to 0
+ * in 200ms, so a motion cut short eases back to rest, and only then does the
+ * clock go back to 0, unseen. A part's --nav-b is its own swing, 0 → 1 → 0,
+ * eased out over its share of the clock (from --nav-from, for --nav-span), so
+ * a motion's parts can move one after another. Reduced motion turns it off.
+ */
+@property --nav-t {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+@property --nav-k {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+[data-nav-item]:is(:hover, :focus-visible) {
+  --nav-t: 1;
+  --nav-k: 1;
+}
+[data-nav-motion] {
+  --nav-duration: 600ms;
+  transition:
+    --nav-k 200ms ease-out,
+    --nav-t 0s linear 200ms;
+}
+[data-nav-item]:is(:hover, :focus-visible) [data-nav-motion] {
+  transition:
+    --nav-k 100ms linear,
+    --nav-t var(--nav-duration) linear;
+}
+[data-nav-motion],
+[data-nav-motion] > * {
+  --nav-p: clamp(0, (var(--nav-t) - var(--nav-from, 0)) / var(--nav-span, 1), 1);
+  --nav-e: calc(1 - (1 - var(--nav-p)) * (1 - var(--nav-p)));
+  --nav-b: calc(4 * var(--nav-e) * (1 - var(--nav-e)) * var(--nav-k));
+}
+[data-nav-motion] > * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Chat (Sparkles): the small stars twinkle, one after the other, as the big one turns a little. */
+[data-nav-motion='twinkle'] > :nth-child(1) {
+  transform: rotate(calc(var(--nav-b) * 20deg)) scale(calc(1 - var(--nav-b) * 0.12));
+}
+[data-nav-motion='twinkle'] > :nth-child(n + 2) {
+  --nav-span: 0.65;
+  transform: scale(calc(1 - var(--nav-b) * 0.85));
+}
+[data-nav-motion='twinkle'] > :nth-child(4) {
+  --nav-from: 0.3;
+}
+
+/* Action Center (Target): one pulse through the rings, from the centre out. */
+[data-nav-motion='pulse'] {
+  --nav-duration: 650ms;
+}
+[data-nav-motion='pulse'] > * {
+  --nav-span: 0.6;
+}
+[data-nav-motion='pulse'] > :nth-child(3) {
+  transform: scale(calc(1 + var(--nav-b) * 0.5));
+}
+[data-nav-motion='pulse'] > :nth-child(2) {
+  --nav-from: 0.2;
+  transform: scale(calc(1 + var(--nav-b) * 0.15));
+}
+[data-nav-motion='pulse'] > :nth-child(1) {
+  --nav-from: 0.4;
+  transform: scale(calc(1 + var(--nav-b) * 0.06));
+}
+
+/* Prompts (Globe): the globe turns once, its meridian narrowing and widening. */
+[data-nav-motion='turn'] {
+  --nav-duration: 700ms;
+}
+[data-nav-motion='turn'] > :nth-child(2) {
+  transform: scaleX(calc(1 - var(--nav-k) * (1 - cos(var(--nav-e) * 360deg))));
+}
+
+/* Visibility (BarChart3): the bars dip and grow back, left to right. */
+[data-nav-motion='bars'] {
+  --nav-duration: 650ms;
+}
+[data-nav-motion='bars'] > :nth-child(n + 2) {
+  --nav-span: 0.6;
+  transform-origin: bottom;
+  transform: scaleY(calc(1 - var(--nav-b) * 0.6));
+}
+[data-nav-motion='bars'] > :nth-child(3) {
+  --nav-from: 0.2;
+}
+[data-nav-motion='bars'] > :nth-child(2) {
+  --nav-from: 0.4;
+}
+
+/* AI Referral Traffic (LineChart): the trend line draws in from the left. Its path is 17 long. */
+[data-nav-motion='draw'] {
+  --nav-duration: 650ms;
+}
+[data-nav-motion='draw'] > :nth-child(2) {
+  stroke-dasharray: 18;
+  stroke-dashoffset: calc(-18 * var(--nav-k) * (1 - var(--nav-e)));
+}
+
+/* Ads (Megaphone): the megaphone tips up. */
+[data-nav-motion='call'] {
+  --nav-duration: 550ms;
+  transform-origin: 25% 70%;
+  transform: rotate(calc(var(--nav-b) * -12deg));
+}
+
+/* Content (FileText): the lines write in, one after another. */
+[data-nav-motion='write'] {
+  --nav-duration: 650ms;
+}
+[data-nav-motion='write'] > :nth-child(n + 3) {
+  --nav-span: 0.6;
+  transform-origin: left;
+  transform: scaleX(calc(1 - var(--nav-b) * 0.8));
+}
+[data-nav-motion='write'] > :nth-child(4) {
+  --nav-from: 0.2;
+}
+[data-nav-motion='write'] > :nth-child(5) {
+  --nav-from: 0.4;
+}
+
+/* Reports (FileBarChart): the page lifts a little. */
+[data-nav-motion='lift'] {
+  --nav-duration: 500ms;
+  transform: translateY(calc(var(--nav-b) * -1.5px));
+}
+
+/* Site Audit (Gauge): the needle swings back and settles on its reading. */
+[data-nav-motion='swing'] {
+  --nav-duration: 700ms;
+}
+[data-nav-motion='swing'] > :nth-child(1) {
+  transform-origin: 0 100%;
+  transform: rotate(calc(var(--nav-b) * -60deg));
+}
+
+/* Competitors (Users): the two people shift a little, the one behind first. */
+[data-nav-motion='nudge'] {
+  --nav-duration: 550ms;
+}
+[data-nav-motion='nudge'] > * {
+  --nav-span: 0.7;
+}
+[data-nav-motion='nudge'] > :is(:nth-child(2), :nth-child(3)) {
+  transform: translateX(calc(var(--nav-b) * -1.5px));
+}
+[data-nav-motion='nudge'] > :is(:nth-child(1), :nth-child(4)) {
+  --nav-from: 0.25;
+  transform: translateX(calc(var(--nav-b) * -1px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-nav-motion],
+  [data-nav-motion] > * {
+    transition: none !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
