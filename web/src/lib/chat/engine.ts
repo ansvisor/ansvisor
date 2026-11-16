@@ -991,8 +991,11 @@ export async function startChatRun(
 
 /** What picks a waiting run up again: the card's Approve (or the click), or Skip. */
 export type ResumeAction =
-  /** input: what an editable card's edits made, checked (card-form.ts); else the call's own. */
-  | { kind: 'approve'; dontAskAgain: boolean; input?: Record<string, unknown> }
+  /**
+   * input: what an editable card's edits made, checked (card-form.ts); else the call's own.
+   * via: the OK came from Slack's Approve (slack-approval.ts), which its Activity row says.
+   */
+  | { kind: 'approve'; dontAskAgain: boolean; input?: Record<string, unknown>; via?: 'slack' }
   | { kind: 'skip' }
   /** A question card's answer (CHAT-07 §A), already kept on its row. */
   | { kind: 'answer'; answer: AskAnswer };
@@ -5211,7 +5214,12 @@ async function resumePending(
       }
       // The person's OK on the card, or their click: whatever the precedence says now.
       const approval =
-        pending.kind === 'click' ? { kind: 'click' as const } : { kind: 'ask' as const };
+        pending.kind === 'click'
+          ? { kind: 'click' as const }
+          : {
+              kind: 'ask' as const,
+              ...(action.kind === 'approve' && action.via ? { via: action.via } : {}),
+            };
       const outcome = await writeCall(rc, tool, call, input, facts, ctx, approval, pending.stepId);
       if (outcome.kind === 'ended') return 'ended';
       if (outcome.kind === 'pause') {

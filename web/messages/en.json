@@ -6658,6 +6658,7 @@
       "approval": {
         "denied": "Not allowed",
         "card": "Approved on its card",
+        "slack": "Approved in Slack",
         "click": "Your click",
         "always": "Auto · policy Always",
         "full_auto": "Auto · Full auto",
@@ -16858,7 +16859,7 @@
         },
         "needsYou": {
           "label": "Agents that need someone",
-          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned"
+          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned, and on Growth and up can approve or reject the step from Slack"
         }
       },
       "test": "Send a test message",

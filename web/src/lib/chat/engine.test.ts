@@ -4667,6 +4667,40 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       expect(updateOpportunityStatusFor).not.toHaveBeenCalled();
     });
 
+    it('makes it on Slack’s Approve as the run’s person, with no session, once, logged from Slack', async () => {
+      const asked = await driven(ADMIN, 'ask_first', null, [calls(draft), text('Saved.')]);
+      expect(asked).toMatchObject({ status: 'waiting' });
+      const card = asked.cards[0] as { n: number; digest: string };
+      const prepared = await engine.prepareResume(ADMIN, asked.runId, 'approve', card);
+      if (!prepared.ok) throw new Error(prepared.code);
+      if (prepared.resume.kind !== 'approve') throw new Error(prepared.resume.kind);
+      // slack-approval.ts: the app's own Approve, marked as Slack's, driven with no session.
+      await engine.driveRun(
+        ADMIN,
+        asked.runId,
+        { ...prepared.resume, via: 'slack' },
+        { sessionUserId: null },
+      );
+      expect(createContentDraft).not.toHaveBeenCalled();
+      expect(createContentDraftFor).toHaveBeenCalledTimes(1);
+      expect(runRow(asked.runId).status).toBe('done');
+      const logged = db.tables.chat_activity_log.filter((r) => r.kind === 'change');
+      expect(logged).toEqual([
+        expect.objectContaining({
+          user_id: PEOPLE.admin,
+          approval_kind: 'ask',
+          tool_key: 'saveDraft',
+        }),
+      ]);
+      expect(logged[0].summary_params).toMatchObject({ via: 'slack' });
+      // A second click on the same card: one decision only.
+      expect(await engine.prepareResume(ADMIN, asked.runId, 'approve', card)).toMatchObject({
+        ok: false,
+        code: 'not_waiting',
+      });
+      expect(createContentDraftFor).toHaveBeenCalledTimes(1);
+    });
+
     describe('through the API server as the run’s person (CHAT_ACTING_SECRET)', () => {
       const dismiss = toolCall('w1', 'update_opportunity', {
         opportunity_id: OPPORTUNITY,

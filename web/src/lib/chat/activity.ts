@@ -21,10 +21,11 @@ import type { ChatTool, ToolClass } from './registry/define-tool';
  * click, `auto` it ran without a card (via Always, Full auto or the person's
  * "Don't ask again", or an EXECUTE an allowed agent took live on its own:
  * go_live, AUTONOMOUS-GO-LIVE §6.4), `run` the person's own action, which
- * needs no card (an Undo, §10b).
+ * needs no card (an Undo, §10b). A card's OK given in Slack (#2139) says so:
+ * `via: 'slack'`, kept in the row's summary_params, which the page reads.
  */
 export type ActivityApproval =
-  | { kind: 'ask' }
+  | { kind: 'ask'; via?: 'slack' }
   | { kind: 'click' }
   | { kind: 'auto'; via: 'always' | 'full_auto' | 'dont_ask_again' | 'go_live' }
   | { kind: 'run' };
@@ -118,7 +119,10 @@ export async function logActivity(entry: ActivityEntry): Promise<string> {
       target_type: entry.target.type,
       target_id: entry.target.id,
       summary_key: entry.summary.key,
-      summary_params: entry.summary.params,
+      summary_params:
+        entry.approval.kind === 'ask' && entry.approval.via === 'slack'
+          ? { ...entry.summary.params, via: 'slack' }
+          : entry.summary.params,
       undo_json: entry.undo?.data ?? null,
       undo_until: entry.undo?.until.toISOString() ?? null,
       undoes_id: entry.undoesId ?? null,

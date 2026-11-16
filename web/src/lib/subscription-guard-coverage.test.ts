@@ -202,6 +202,10 @@ const OPEN_ROUTES: Record<string, string> = {
   // The API server's daily suggestions job (CRON_SECRET): words an action for its Slack post (#2139).
   'internal/slack/suggestion:POST':
     "words an action for the API server's Slack post; reads only, nothing written",
+  // The API server's Slack message for an agent run that waits (#2139): reads the card only.
+  // Its Approve and Reject (internal/chat/slack/decide) check the plan.
+  'internal/chat/slack/card:POST':
+    "reads the card an agent run waits on for the API server's Slack message; nothing written",
 };
 
 /** What checks a route's plan before it writes. */

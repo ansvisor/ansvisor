@@ -66,6 +66,7 @@ import { sweepHubspotPublished } from './lib/cms/hubspot-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
+import slackInteractivityRoutes from './routes/slack-interactivity.js';
 import { sendImproveActionForKeyUser } from './routes/prompts.js';
 import { liveAddress, publishDraftForKeyUser } from './lib/content-published.js';
 import {
@@ -115,6 +116,8 @@ const server = http.createServer(app);
 // payload exactly as sent, and express.json()'s parse/re-serialize would break it.
 // Mounted first so the global JSON parser skips this path (body already consumed).
 app.use('/cloro/callback', express.raw({ type: 'application/json', limit: '50mb' }));
+// Slack's clicks (/webhooks/slack/interactivity) are signed over the raw form body too.
+app.use('/webhooks/slack', express.raw({ type: () => true, limit: '256kb' }));
 // AI-bot requests from brands' Cloudflare / Vercel / Fastly (AT-010): authenticated by
 // each connection's secret, server to server. Mounted before the JSON and form
 // parsers: the route checks the secret first, then reads the Worker's JSON,
@@ -856,6 +859,9 @@ app.use('/cloro/callback', cloroCallbackRoutes);
 // It is mounted outside /api so no dashboard JWT is required; the router has its own stricter limiter.
 app.use('/webhooks/content', webhookContentCallbackRoutes);
 app.use('/webhooks/content-drafts', webhookContentDraftCallbackRoutes);
+// The Slack app's Interactivity Request URL: Approve and Reject on an agent's card (#2139),
+// each request checked against SLACK_SIGNING_SECRET, its body raw from the top.
+app.use('/webhooks/slack', slackInteractivityRoutes);
 
 // --- Authenticated API routes ---
 // The demo brand is read-only (middleware/demo-brand.js), and so is a
