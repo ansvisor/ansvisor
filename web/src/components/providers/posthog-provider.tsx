@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import posthog from 'posthog-js';
 import { REPLAY_OPTIONS, scrubEvent } from '@/lib/analytics-privacy';
+import { isAutomatedBrowser } from '@/lib/automated-browser';
 
 /**
  * Initialise PostHog once on mount when the env key is configured.
@@ -22,6 +23,9 @@ import { REPLAY_OPTIONS, scrubEvent } from '@/lib/analytics-privacy';
  *    element's text. Dead clicks aren't sent as events of their own, which
  *    would carry the clicked element's text; set here, so the PostHog
  *    project can't change either.
+ *  - A browser a program drives (a crawler, a headless browser, an
+ *    automation tool: lib/automated-browser.ts) starts no PostHog at all,
+ *    so its page views, replays and heatmaps never reach the funnels.
  */
 export function PostHogProvider() {
   const initialised = useRef(false);
@@ -30,6 +34,7 @@ export function PostHogProvider() {
     if (initialised.current) return;
     const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
     if (!key) return;
+    if (isAutomatedBrowser()) return;
 
     posthog.init(key, {
       api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com',
