@@ -82,6 +82,7 @@ import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { toast } from 'sonner';
 import { suggestedDate } from '@/lib/suggested-date';
 import { formatNumber } from '@/lib/format';
+import { actionCode } from '@/lib/action-center/action-ref';
 
 export const IMPACT_COLORS: Record<string, string> = {
   high: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
@@ -1079,7 +1080,9 @@ function FromTaskCard({
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">
-          {from.actionNo !== null ? t('title', { ref: `AC-${from.actionNo}` }) : t('titleNoRef')}
+          {from.actionNo !== null
+            ? t('title', { ref: actionCode({ ...from, actionNo: from.actionNo }) })
+            : t('titleNoRef')}
         </CardTitle>
       </CardHeader>
       <CardContent>

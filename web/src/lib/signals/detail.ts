@@ -1300,6 +1300,8 @@ function apiValue(value: WhereValue): unknown {
 export interface SignalActionRef {
   id: string;
   action_no: number;
+  /** "AC-03", as the app shows it (actionCode). */
+  code?: string;
   kind: string;
   status: string;
 }

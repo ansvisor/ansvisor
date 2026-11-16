@@ -16,6 +16,7 @@ import type { Signal } from '@/lib/actions/signals';
 import { SIGNAL_KINDS, type SignalStatus } from '@/lib/signals/registry';
 import { signalTexts } from '@/lib/signals/display';
 import { isKpiKey } from '@/lib/kpis/registry';
+import { signalCode } from '@/lib/signals/signal-code';
 import {
   ImpactDots,
   isSuperseded,
@@ -73,6 +74,9 @@ export function SignalDrawer({
             <div className="min-w-0">
               <SheetTitle>{texts.title}</SheetTitle>
               <SheetDescription>{texts.description}</SheetDescription>
+              {signalCode(signal) && (
+                <p className="mt-1 text-xs text-muted-foreground/70">{signalCode(signal)}</p>
+              )}
             </div>
           </div>
         </SheetHeader>

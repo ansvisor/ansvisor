@@ -100,11 +100,11 @@ const view = (over: Partial<ChatSettingsView> = {}): ChatSettingsView => ({
   ...over,
 });
 
-async function render() {
+async function render(heading?: 'chat' | 'policy') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatSettingsSection />
+        <ChatSettingsSection heading={heading} />
       </NextIntlClientProvider>,
     );
   });
@@ -335,5 +335,32 @@ describe('model providers (W4-34)', () => {
     await render();
     expect(providers().querySelector('[role="switch"]')).toBeNull();
     expect(providers().querySelector('[data-provider="deepseek"]')?.textContent).toContain('Off');
+  });
+});
+
+describe('as the Tool policy tab of Chat’s Settings', () => {
+  const title = () => container.querySelector('h2')?.textContent;
+
+  it('is titled Chat in the app’s Settings, and Tool policy in Chat', async () => {
+    actions.getChatSettingsView.mockResolvedValue({ ok: true, view: view() });
+    await render();
+    expect(title()).toBe('Chat');
+    await render('policy');
+    expect(title()).toBe('Tool policy');
+  });
+
+  it('keeps the same rules in Chat: an Admin changes them, anyone else only reads them', async () => {
+    actions.getChatSettingsView.mockResolvedValue({ ok: true, view: view() });
+    await render('policy');
+    expect(button('Never')).toBeDefined();
+    expect(container.querySelector('[role="switch"][aria-label="OpenAI"]')).not.toBeNull();
+
+    actions.getChatSettingsView.mockResolvedValue({ ok: true, view: view({ role: 'manager' }) });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render('policy');
+    expect(text()).toContain('Read-only · only Admins change the Chat tool policy');
+    expect(button('Never')).toBeUndefined();
+    expect(container.querySelector('[role="switch"][aria-label="OpenAI"]')).toBeNull();
   });
 });

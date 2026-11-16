@@ -27,6 +27,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import type { Json } from '@/types/supabase';
 import type { ChatWritePlace } from '@/lib/chat/registry/define-tool';
+import { actionCode } from '@/lib/action-center/action-ref';
 
 /**
  * Chat's changes to the Action Center (CHAT-09 §D–E, CHAT-20 §9 rows 43–46,
@@ -64,6 +65,9 @@ export type ChatActionDuplicate = {
   message: string;
   action_id: string;
   action_no: number;
+  /** Its number in its brand (00534), null before its brand is numbered; `code` names it ("AC-03"). */
+  brand_no?: number | null;
+  code?: string;
   /** Create anyway may still go: the action shares only some of the finding's entities. */
   can_create_anyway: boolean;
 };
@@ -103,6 +107,9 @@ export type CreateChatActionResult =
       ok: true;
       action_id: string;
       action_no: number;
+      brand_no?: number | null;
+      /** "AC-03", as Chat names it. */
+      code?: string;
       created: boolean;
       /** Open in Actions (CHAT-09 item 19). */
       href: `/dashboard/action-center/actions/${string}`;
@@ -268,19 +275,27 @@ async function canUseBrand(
   return data === true;
 }
 
+type OpenAction = {
+  id: string;
+  brand_id: string;
+  action_no: number;
+  brand_no: number | null;
+  status: string;
+};
+
 /** An action the person's workspace has, open: its brand, number and status. */
 async function openAction(
   supabase: Awaited<ReturnType<typeof createClient>>,
   actionId: string,
-): Promise<{ id: string; brand_id: string; action_no: number; status: string } | null> {
+): Promise<OpenAction | null> {
   // The member's own read: another workspace's action, or a deleted one, isn't found (RLS).
   const { data, error } = await supabase
     .from('actions')
-    .select('id, brand_id, action_no, status')
+    .select('id, brand_id, action_no, brand_no, status')
     .eq('id', actionId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return (data as { id: string; brand_id: string; action_no: number; status: string }) ?? null;
+  return (data as OpenAction) ?? null;
 }
 
 const CLOSED: ChatActionFailure = {
@@ -301,7 +316,15 @@ export async function attachToAction(
   evidence: { finding: string; note?: string; sources?: string[] },
   place?: Place,
 ): Promise<
-  | { ok: true; action_id: string; action_no: number; event_id: string; href: string }
+  | {
+      ok: true;
+      action_id: string;
+      action_no: number;
+      brand_no: number | null;
+      code: string;
+      event_id: string;
+      href: string;
+    }
   | ChatActionFailure
 > {
   try {
@@ -315,6 +338,8 @@ export async function attachToAction(
       ok: true as const,
       action_id: action.id,
       action_no: Number(action.action_no),
+      brand_no: action.brand_no,
+      code: actionCode({ actionNo: Number(action.action_no), brandNo: action.brand_no }),
       event_id: eventId,
       href: actionHref(action.id),
     });

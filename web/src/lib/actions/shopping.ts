@@ -1937,7 +1937,7 @@ async function readActionResults(
   if (!wanted.size) return {};
   const { data, error } = await supabase
     .from('actions')
-    .select('id, action_no, completed_at, payload')
+    .select('id, action_no, brand_no, completed_at, payload')
     .eq('brand_id', brandId)
     .in('kind', [...FROM_PRODUCTS_KINDS])
     .eq('status', 'completed')
@@ -1962,6 +1962,7 @@ async function readActionResults(
     actions.set(key, {
       id: row.id,
       actionNo: Number(row.action_no),
+      ...(row.brand_no ? { brandNo: row.brand_no } : {}),
       target,
       completedAt: row.completed_at,
       promptIds: Array.isArray(payload.promptIds)
@@ -2092,7 +2093,10 @@ export async function sendShoppingActions(
   target: { type: 'product' | 'category'; id: string },
   work: ShoppingWork[],
   promptIds: string[],
-): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+): Promise<
+  | { actionId: string; actionNo: number; brandNo?: number | null; created: boolean }
+  | { error: string }
+> {
   const supabase = await createClient();
   const {
     data: { session },

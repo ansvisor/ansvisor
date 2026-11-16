@@ -10,6 +10,7 @@ import { getGenerationJobStatus, suggestContentForPrompt } from '@/lib/actions/c
 import { sendMentionsToActionCenter } from '@/lib/actions/mentions';
 import { suggestForPrompt } from '@/lib/content-job';
 import type { MentionRow } from '@/lib/mentions-list';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 
 /** The server calls behind "Suggest content", as on the Prompts page (PROMPT-006). */
 const SUGGEST_CALLS = { start: suggestContentForPrompt, getStatus: getGenerationJobStatus };
@@ -51,14 +52,14 @@ export function useMentionActions(brandId: string) {
         if (result.created) {
           toast.success(t('sent'), {
             id: toastId,
-            description: t('sentDescription', { number: result.actionNo, count: rows.length }),
+            description: t('sentDescription', { number: actionCodeNo(result), count: rows.length }),
             duration: 10_000,
             action: open,
           });
         } else {
           toast.info(t('alreadySent'), {
             id: toastId,
-            description: t('alreadySentDescription', { number: result.actionNo }),
+            description: t('alreadySentDescription', { number: actionCodeNo(result) }),
             duration: 10_000,
             action: open,
           });

@@ -25,6 +25,8 @@ export interface RecheckCard {
 export interface RecheckAction {
   id: string;
   actionNo: number;
+  /** Its number in its brand (00534), for its code (actionCode). */
+  brandNo?: number | null;
   target: { type: 'product' | 'category'; id: string };
   completedAt: string;
   /** The shopping questions it's measured on. */
@@ -42,6 +44,7 @@ export interface ShelfPresence {
 export interface ActionResult {
   actionId: string;
   actionNo: number;
+  brandNo?: number | null;
   completedAt: string;
   /** When the 7 days after end: the result shows from then. */
   readyAt: string;
@@ -92,6 +95,7 @@ export function actionResult(
   return {
     actionId: action.id,
     actionNo: action.actionNo,
+    ...(action.brandNo ? { brandNo: action.brandNo } : {}),
     completedAt: action.completedAt,
     readyAt: new Date(ready).toISOString(),
     before: shelfPresence(cards, action, done - RECHECK_DAYS * DAY_MS, done),

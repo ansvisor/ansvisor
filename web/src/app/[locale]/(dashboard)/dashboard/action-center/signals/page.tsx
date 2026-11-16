@@ -58,6 +58,7 @@ import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { exportFileName } from '@/lib/white-label/export-name';
 import type { KpiTrendPoint } from '@/lib/actions/kpis';
 import { signalChangeTone, signedPercent, type SignalMetric } from '@/lib/signals/metrics';
+import { matchesSignalCode } from '@/lib/signals/signal-code';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
@@ -249,7 +250,8 @@ function SignalsContent({ brand }: { brand: Brand }) {
       if (status !== 'all' && signal.status !== status) return false;
       if (source !== 'all' && !signal.source.includes(source)) return false;
       if (platform !== 'all' && !isOnPlatform(signal.where.platforms, platform)) return false;
-      if (needle) {
+      // "S-12", "s12" or "12" finds the signal by its code (00534).
+      if (needle && !matchesSignalCode(signal, needle)) {
         const texts = signalTexts(signal, tTexts);
         const affected = signalAffected(signal, t);
         const where = [

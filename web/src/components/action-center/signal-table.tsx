@@ -56,6 +56,7 @@ import type { SignalWhere } from '@/lib/signals/where';
 import { groupLead, groupStatus, groupWhere, type SignalGroup } from '@/lib/signals/group';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
+import { signalCode } from '@/lib/signals/signal-code';
 
 // Kept here for the pages that import it with the table.
 export { isSuperseded };
@@ -433,7 +434,14 @@ export function SignalTable({
                       <SignalKindIcon kind={lead.kind} category={lead.category} />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{texts.title}</p>
+                      <p className="flex min-w-0 items-baseline gap-1.5 text-sm font-medium">
+                        <span className="truncate">{texts.title}</span>
+                        {signalCode(lead) && (
+                          <span className="shrink-0 text-[11px] font-normal text-muted-foreground/70">
+                            {signalCode(lead)}
+                          </span>
+                        )}
+                      </p>
                       <p className="truncate text-xs text-muted-foreground">{texts.description}</p>
                       {isGroup && (
                         <button

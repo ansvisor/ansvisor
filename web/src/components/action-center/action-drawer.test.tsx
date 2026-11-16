@@ -167,6 +167,19 @@ describe('ActionDrawer', () => {
     expect(id.closest('.group\\/top')).not.toBeNull();
   });
 
+  // The owner's ask (14 Nov): each brand numbers its actions from AC-01 (00534).
+  it('names its brand code, and the old code it had as "Previously", small and muted', async () => {
+    await renderDrawer({ ...action, actionNo: 648, brandNo: 3 });
+    const drawer = document.body.querySelector('[role="dialog"]')!;
+    expect(drawer.querySelector<HTMLElement>('[title^="Action ID"]')!.title).toBe(
+      'Action ID: AC-03',
+    );
+    const previous = [...drawer.querySelectorAll('span')].find(
+      (el) => el.textContent === 'Previously AC-648',
+    );
+    expect(previous?.className).toContain('text-muted-foreground');
+  });
+
   it("gives the Why the demand of a signal's prompt the action didn't keep", async () => {
     const lost = (id: string, promptId: string, promptText: string) =>
       ({

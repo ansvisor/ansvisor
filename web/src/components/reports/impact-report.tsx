@@ -27,6 +27,7 @@ import {
   type ImpactOutcome,
   type ImpactRow,
 } from '@/lib/impact/report';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { OUTCOME_PILL, PILL, outcomeLabel, signed, type ImpactWords } from './impact-parts';
@@ -493,7 +494,7 @@ function sourceLine(row: ImpactRow, t: T): string {
           ? t('by.teammate', { name: row.by.name })
           : t('by.teammateUnnamed');
   return [
-    row.actionNo !== null ? `AC-${row.actionNo}` : null,
+    row.actionNo !== null ? actionCode({ ...row, actionNo: row.actionNo }) : null,
     t(`source.${row.source}`),
     `${t(`kind.${row.kind}`)} ${by}`,
   ]

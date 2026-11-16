@@ -16,6 +16,7 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { ActionItem } from '@/lib/actions/action-center';
 import type { CompatibleAgents } from '@/lib/chat/agent-action';
 import type { ChatDenialCard } from '@/lib/chat/events';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import { PickerLoading } from './run-agent-button';
 import { useShowChat } from './use-show-chat';
 
@@ -49,7 +50,7 @@ export function RunAgentPicker({
   action,
   onClose,
 }: {
-  action: Pick<ActionItem, 'id' | 'actionNo'>;
+  action: Pick<ActionItem, 'id' | 'actionNo' | 'brandNo'>;
   /** Closes the popover. */
   onClose: () => void;
 }) {
@@ -60,6 +61,7 @@ export function RunAgentPicker({
   const { openUpgrade } = useUpgradeGate();
   const [picker, setPicker] = useState<Picker>({ kind: 'loading' });
   const [busy, setBusy] = useState<Busy>(null);
+  const no = actionCodeNo(action);
 
   // Read each time it opens: agents change, and so does what was last used. A
   // workspace gone read-only since the page loaded gets the upgrade dialog.
@@ -105,7 +107,7 @@ export function RunAgentPicker({
         if (!answer.ok) return refused(answer);
         onClose();
         const run = answer.runs[0];
-        const words = { agent: agent.name, no: action.actionNo };
+        const words = { agent: agent.name, no };
         // Ended before it started (the action closed meanwhile): say why, not "queued".
         if (run && ENDED.includes(run.status)) {
           toast.error(t('toast.didntStart', { reason: answer.stopReason ?? 'other' }));
@@ -123,7 +125,7 @@ export function RunAgentPicker({
         setBusy(null);
       }
     },
-    [busy, action.id, action.actionNo, refused, onClose, showChat, t],
+    [busy, action.id, no, refused, onClose, showChat, t],
   );
 
   const runChat = useCallback(async () => {
@@ -134,7 +136,7 @@ export function RunAgentPicker({
       const answer = await runChatOnAction(action.id, timezone);
       if (!answer.ok) return refused(answer);
       onClose();
-      const words = { no: action.actionNo };
+      const words = { no };
       toast(
         answer.repeated
           ? t('toast.repeated')
@@ -146,7 +148,7 @@ export function RunAgentPicker({
     } finally {
       setBusy(null);
     }
-  }, [busy, action.id, action.actionNo, refused, onClose, showChat, t]);
+  }, [busy, action.id, no, refused, onClose, showChat, t]);
 
   if (picker.kind === 'denied') return <AgentDenial denial={picker.denial} onClose={onClose} />;
 

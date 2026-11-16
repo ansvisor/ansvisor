@@ -14,6 +14,7 @@ import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { targetKeys } from '../target-ids.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
+import { brandNoOf } from './action-code.js';
 
 export const TOPIC_GAP_ACTION_KIND = 'topic_competitor_gap';
 
@@ -104,7 +105,7 @@ export async function sendTopicGapToActionCenter(
   const openAction = async () => {
     const { data } = await supabaseAdmin
       .from('actions')
-      .select('id, action_no')
+      .select('id, action_no, brand_no')
       .eq('brand_id', brandId)
       .eq('dedup_key', dedupKey)
       .in('status', ACTIVE)
@@ -112,7 +113,13 @@ export async function sendTopicGapToActionCenter(
     return data;
   };
   const open = await openAction();
-  if (open) return { actionId: open.id, actionNo: Number(open.action_no), created: false };
+  if (open)
+    return {
+      actionId: open.id,
+      actionNo: Number(open.action_no),
+      ...brandNoOf(open),
+      created: false,
+    };
 
   const { data: map, error: mapErr } = await supabaseAdmin.rpc('insights_topic_competitors_daily', {
     p_brand_id: brandId,
@@ -172,14 +179,19 @@ export async function sendTopicGapToActionCenter(
       baseline: { yourScore: you, competitorScore: them, gap },
       dedup_key: dedupKey,
     })
-    .select('id, action_no')
+    .select('id, action_no, brand_no')
     .single();
   if (error) {
     // Two sends at once: the other one opened it (the open-action dedup index, 00084).
     if (error.code === '23505') {
       const winner = await openAction();
       if (winner) {
-        return { actionId: winner.id, actionNo: Number(winner.action_no), created: false };
+        return {
+          actionId: winner.id,
+          actionNo: Number(winner.action_no),
+          ...brandNoOf(winner),
+          created: false,
+        };
       }
     }
     throw new Error(error.message);
@@ -220,5 +232,10 @@ export async function sendTopicGapToActionCenter(
     },
   });
 
-  return { actionId: action.id, actionNo: Number(action.action_no), created: true };
+  return {
+    actionId: action.id,
+    actionNo: Number(action.action_no),
+    ...brandNoOf(action),
+    created: true,
+  };
 }

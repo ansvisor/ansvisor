@@ -26,6 +26,7 @@ import { DRAFT_CHIP } from '@/lib/chat/editor-page';
 import { menuTitleOf } from '@/lib/chat/page-context';
 import { PAGE_PARAM, SPLIT_MIN, openPageOf, withOpenPage } from '@/lib/chat/page-pane';
 import { PANEL_FROM_PARAM, panelReturnOf } from '@/lib/chat/panel';
+import { chatSettingsTabOf } from '@/lib/chat/settings-tabs';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
 import { ChatDebugProvider } from './chat-debug';
@@ -118,15 +119,17 @@ function searchAnchor(): Element | null {
 const SUB_PAGES: Record<string, string> = {
   '/dashboard/chat/inbox': 'inbox',
   '/dashboard/chat/all': 'allChats',
-  '/dashboard/chat/activity': 'activity',
-  '/dashboard/chat/capabilities': 'capabilities',
   '/dashboard/chat/files': 'files',
   '/dashboard/chat/scheduled': 'scheduled',
   '/dashboard/chat/memory': 'memory',
   '/dashboard/chat/connections': 'connections',
 };
-/** Chat's own pages the header names (mockup: Settings, right under Home). */
-const TITLED_PAGES: Record<string, string> = { '/dashboard/chat/settings': 'settings' };
+/**
+ * Chat's own pages the header names (mockup: Settings, right under Home):
+ * Settings on each of its tabs (CHAT_SETTINGS_TABS), so the header stays
+ * from tab to tab as the Settings frame under it does.
+ */
+const titleOf = (pathname: string) => (chatSettingsTabOf(pathname) ? 'settings' : undefined);
 
 /** The last conversation open in this browser tab, for Back to Chat (CHAT-01 4b, 4c). */
 const LAST_CHAT_KEY = 'ansvisor.chat.lastConversation';
@@ -369,7 +372,7 @@ function ChatShellFrame({
       ? 'scheduled'
       : undefined;
   const subPage = SUB_PAGES[pathname] ?? detailOf;
-  const titled = TITLED_PAGES[pathname];
+  const titled = titleOf(pathname);
   const current = chatId ? chats.find((chat) => chat.id === chatId) : undefined;
   const pill = current ? PILL_OF[current.state] : undefined;
   // A chat, Home or a suggestion's page (a chat to be) fills the page itself;

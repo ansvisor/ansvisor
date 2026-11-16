@@ -42,6 +42,7 @@ import { HistoryDrawer } from '@/components/action-center/history-drawer';
 import { ScorecardTable } from '@/components/action-center/scorecard-table';
 import { HistoryViews } from '@/components/action-center/history-views';
 import { cn } from '@/lib/utils';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const RANGE_DAYS = { '7d': 7, '30d': 30, '90d': 90, all: null } as const;
@@ -201,7 +202,7 @@ export default function ActionCenterHistoryPage() {
           { kind: item.kind, payload: item.payload } as Parameters<typeof actionTexts>[0],
           tTexts,
         );
-        const haystack = `${texts.title} ${texts.description} AC-${item.actionNo}`.toLowerCase();
+        const haystack = `${texts.title} ${texts.description} ${actionCode(item)}`.toLowerCase();
         if (!haystack.includes(needle)) return false;
       }
       return true;

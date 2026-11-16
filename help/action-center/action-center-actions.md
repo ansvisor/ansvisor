@@ -1,7 +1,7 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number]
+keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number, action code, previously]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work, order actions, newest first, oldest first]
 plan: all
 updated: 2026-11-14
@@ -55,7 +55,11 @@ The cards at the top count and filter the list, all but **Highest Priority**. Cl
 - **In Progress**: actions someone is working on.
 - **Highest Priority**: the highest level among open actions; it doesn't filter.
 
-Below them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's number under its title, such as AC-251, the number Chat uses for it: search for AC-251 or 251 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products.
+Below them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products.
+
+## Action codes
+
+Each brand numbers its own actions from AC-01, in the order they were made, and an action keeps its code for good. A number is never used again, so the list has gaps where actions were done, dismissed or removed. Actions made before this had an older code, such as AC-648: the drawer shows it as "Previously AC-648" beside the new code, searching for it still finds the action, and links made with it still open it.
 
 ## Sort the list
 

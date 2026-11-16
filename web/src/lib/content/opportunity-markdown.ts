@@ -1,3 +1,4 @@
+import { actionCode } from '@/lib/action-center/action-ref';
 import type { ContentBrief, ContentOpportunity } from '@/types';
 import {
   formatEstimateRange,
@@ -92,7 +93,7 @@ export function opportunityDocument(
   sections.push(
     section(
       sd.fromAction?.actionNo != null
-        ? `From a task in AC-${sd.fromAction.actionNo}`
+        ? `From a task in ${actionCode({ ...sd.fromAction, actionNo: sd.fromAction.actionNo })}`
         : 'From an Action Center task',
       [
         task?.url && field('URL', task.url),
