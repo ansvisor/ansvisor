@@ -6,6 +6,7 @@ import type { TeamRole } from '@/components/providers/role-provider';
 import type { ChatTool } from './define-tool';
 import { clientEventProblems, type ChatEvent } from '../events';
 import { pageExists } from '@/lib/app-pages';
+import { actionRef } from '@/lib/action-center/action-ref';
 
 /**
  * The registry's rows (CHAT-20 §9, §21): each has its label and a fixture,
@@ -753,6 +754,44 @@ describe('the Chat tool registry', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it('reads the actions a page at a time, all of them ranked, and asks for titles (owner, 2026-11-14)', async () => {
+    const tool = chatTool_('list_action_center_tasks');
+    const brand = FIXTURE_IDS.brand;
+    await tool.run(ctx, tool.inputSchema.parse({ brand_id: brand, offset: 50 }));
+    expect(calls.map((call) => [call.from, call.args])).toEqual([
+      [
+        'mcp/action-center-reads.listActionsPageFor',
+        [
+          ctx,
+          {
+            brandId: brand,
+            status: undefined,
+            category: undefined,
+            sort: undefined,
+            limit: undefined,
+            offset: 50,
+          },
+        ],
+      ],
+    ]);
+    // A page is at most 50 rows; the rest come by offset. Open actions unless one status is asked.
+    expect(tool.inputSchema.safeParse({ brand_id: brand, limit: 50 }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ brand_id: brand, limit: 51 }).success).toBe(false);
+    expect(tool.inputSchema.safeParse({ brand_id: brand, status: 'open' }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ brand_id: brand, offset: -1 }).success).toBe(false);
+    // What the model is told: judge the whole page, say "N of M", and name actions by title.
+    expect(tool.description).toContain(
+      'every one that matches is counted and ranked on the server',
+    );
+    expect(tool.description).toContain('read the default page (50 rows) before you judge');
+    expect(tool.description).toContain('say how many you judged ("the top 50 of 53")');
+    expect(tool.description).toContain('or read the next page with next_offset');
+    expect(tool.description).toContain(`ref (its number, as ${actionRef(12)})`);
+    expect(tool.description).toContain(
+      'Name each action by its title, with its ref after it: never a ref alone.',
+    );
   });
 
   it('never offers a tool that marks a task done (CHAT-09 item 15)', () => {

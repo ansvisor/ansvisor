@@ -1520,7 +1520,11 @@
         "action number",
         "ac number",
         "open action from answer",
-        "action link"
+        "action link",
+        "most important actions",
+        "what should i do first",
+        "top actions",
+        "action title"
       ],
       "synonyms": [
         "assistant",
@@ -1594,6 +1598,10 @@
         {
           "heading": "Send a finding to Action Center",
           "text": "Admins and Managers see **Send to Action Center** under Chat's latest answer. Chat proposes the finding as an action: its title, category, the prompts, pages and competitors it is about, and its tasks. Each task names its page and says when it is done. You approve it on its card, except in **Full auto**. Action Center sets its Priority Score, and **Open in Actions** opens it.\n\nIf an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.\n\nChat can also attach a file or draft to a task, and set a task it finished to **Ready for review**. It never marks a task done: you do that in Action Center. Each change has **Undo** in the **Activity** log."
+        },
+        {
+          "heading": "Ask about your actions",
+          "text": "Ask \"What are the most important actions?\" or \"What should I do first?\" and Chat reads the brand's open actions (New, In progress and On hold) in Priority Score order, up to 50 at a time, with how many there are in all. When there are more than it read, it reads the next ones too, or says how many it judged, such as \"the top 50 of 53\".\n\nChat names each action by its title, with its number after it as a link: **Recover lost citations on 3 prompts** (AC-12). Actions that are alike are grouped by what they share, each with its own number."
         },
         {
           "heading": "Work through your Action Center tasks",
@@ -1697,7 +1705,7 @@
         },
         {
           "heading": "Watch the work",
-          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names, such as AC-1497, is a link: click it to open that action in Action Center in a new tab."
+          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its number, such as AC-1497, is a link: click it to open that action in Action Center in a new tab."
         },
         {
           "heading": "Big requests in parts",

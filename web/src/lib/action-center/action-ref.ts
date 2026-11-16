@@ -18,9 +18,18 @@ const NUMBER = /^[1-9]\d{0,11}$/;
  */
 const ACTION_REF = /(?<![\p{L}\p{N}_/-])AC-([1-9]\d{0,11})(?![\p{L}\p{N}_]|[.,-][\p{L}\p{N}])/gu;
 
+/**
+ * An action's number as the app shows and links it: "AC-1497". Every action
+ * code Chat shows, links to or uses as an example comes from here, so a
+ * change of numbering changes only what is passed in.
+ */
+export function actionRef(no: number | string): string {
+  return `AC-${no}`;
+}
+
 /** The address that opens action number `no`, or null unless `no` is a real number's digits. */
 export function actionRefHref(no: string): string | null {
-  return NUMBER.test(no) ? `${ACTIONS_PAGE}/AC-${no}` : null;
+  return NUMBER.test(no) ? `${ACTIONS_PAGE}/${actionRef(no)}` : null;
 }
 
 /** The number in a one-action path's "AC-1497", or null for anything else (an id). */
@@ -38,7 +47,7 @@ type Numbered = { actionNo: number };
  * action's drawer and exports, all read it here.
  */
 export function actionCode(action: Numbered): string {
-  return `AC-${action.actionNo}`;
+  return actionRef(action.actionNo);
 }
 
 /**

@@ -3222,7 +3222,8 @@ export async function mayUseBrand(
   return access === 'all' || (Boolean(brandId) && hasBrandAccess(access, brandId as string));
 }
 
-async function assigneeNames(ids: (string | null)[]): Promise<Map<string, string | null>> {
+/** Each assignee's name, by their profile id: shared with Chat's own list of actions. */
+export async function assigneeNames(ids: (string | null)[]): Promise<Map<string, string | null>> {
   const unique = [...new Set(ids.filter(Boolean))] as string[];
   if (unique.length === 0) return new Map();
   const { data, error } = await supabaseAdmin
@@ -3294,7 +3295,7 @@ function priorityFor(row: {
 }
 
 /** Stale (00432) only while New: the stamp waits for the nightly pass to clear it. */
-function staleFor(row: { status?: string | null; stale_at?: string | null }) {
+export function staleFor(row: { status?: string | null; stale_at?: string | null }) {
   const stale = row.status === 'new' && Boolean(row.stale_at);
   return { stale, stale_at: stale ? (row.stale_at ?? null) : null };
 }

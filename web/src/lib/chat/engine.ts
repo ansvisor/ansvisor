@@ -196,6 +196,7 @@ import {
   readBudget,
   readCap,
   readRunCounts,
+  resultCharsFor,
   startDecision,
   writeCap,
   type ReadBudget,
@@ -4497,7 +4498,10 @@ async function readCall(
   }
   const rows = read.rows ?? undefined;
   const asOf = read.dataAsOf;
-  const room = Math.min(rc.budget.resultChars, rc.budget.dataChars - rc.progress.dataChars);
+  const room = Math.min(
+    resultCharsFor(rc.budget, tool.name),
+    rc.budget.dataChars - rc.progress.dataChars,
+  );
   const fitted = fitResult(
     withScope(read.value, scopeForModel(scope, scoped.used)),
     Math.max(500, room),
