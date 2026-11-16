@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from 'react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
-import { Check, ChevronRight, User, X } from 'lucide-react';
+import { Check, ChevronRight, TriangleAlert, User, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
@@ -77,10 +77,10 @@ export interface CardRules {
   /**
    * What accepting the open result would do, checked on a copy of the page
    * (editor test 2026-10-25): the rules met then, and those met now it would
-   * break, named. Without it, the gain is read from what each change says
-   * it fixes (rulesAfter).
+   * break, named, and how many. Without it, the gain is read from what each
+   * change says it fixes (rulesAfter).
    */
-  after?: { now: number; met: number; breaks: string | null };
+  after?: { now: number; met: number; breaks: string | null; broken?: number };
 }
 
 /**
@@ -294,6 +294,7 @@ export function AgentCard({
   lastRunFailed = false,
   stillFinishing = false,
   pageChars = null,
+  actionInHeader = null,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -353,6 +354,8 @@ export function AgentCard({
   stillFinishing?: boolean;
   /** A rewrite's characters, before and after, as the toolbar counts them (the editor's count). */
   pageChars?: { before: number; after: number } | null;
+  /** The action the editor's header already links ("From Action AC-…"): not linked again here. */
+  actionInHeader?: string | null;
   /**
    * The page's Length rule (its target and band) and what a rewrite keeps
    * as it is: a rewrite's result is read against it, never the agent's say.
@@ -558,10 +561,27 @@ export function AgentCard({
       0,
     );
     const first = sentence(openOnes[0]?.reason ?? '', locale);
-    // What it changes truncates; a warning, See sources and the action's link stay in sight.
+    // One run of text, the only part that shrinks: what it changes, the rules, the
+    // sources and an action the header doesn't link, cut short at the end. A rule
+    // it would break stays in sight as an icon and a count, named on hover (the
+    // owner, 2026-11-14: a warning that couldn't shrink ran under the buttons).
+    const breaking = rules.after?.breaks
+      ? tSuggestions('breaks', { names: rules.after.breaks })
+      : null;
+    const linkAction = action && action.actionId !== actionInHeader ? action : null;
+    // Its whole text on hover: what the ellipsis cut, the rules' count with it.
+    const runTitle = [
+      openOnes.length > 1 ? `${first}, ${t('more', { count: openOnes.length - 1 })}` : first,
+      batchLeft > 0 && t('placeholders', { count: batchLeft }),
+      after !== from && t('gain', { met: from, after, total: rules.total }),
+      sourceCount > 0 && t('builtFrom', { count: sourceCount }),
+      linkAction && tSuggestions('fromAction', { no: linkAction.actionNo! }),
+    ]
+      .filter(Boolean)
+      .join(' · ');
     line = (
       <>
-        <span title={first} className="min-w-12 truncate">
+        <span title={runTitle} className="min-w-0 truncate">
           {first}
           {openOnes.length > 1 && `, ${t('more', { count: openOnes.length - 1 })}`}
           {batchLeft > 0 && ` · ${t('placeholders', { count: batchLeft })}`}
@@ -580,22 +600,31 @@ export function AgentCard({
               </span>
             </>
           )}
-        </span>
-        <span className="min-w-0 shrink-[0.1] truncate">
-          {breaks}
           {builtFrom}
-          {action && (
+          {linkAction && (
             <>
               {' · '}
               <Link
-                href={`/dashboard/action-center/actions?action=${action.actionId}`}
+                href={`/dashboard/action-center/actions?action=${linkAction.actionId}`}
                 className="underline underline-offset-2 hover:no-underline"
               >
-                {tSuggestions('fromAction', { no: action.actionNo! })}
+                {tSuggestions('fromAction', { no: linkAction.actionNo! })}
               </Link>
             </>
           )}
         </span>
+        {breaking && (
+          <span
+            role="img"
+            aria-label={breaking}
+            title={breaking}
+            data-slot="agent-card-breaks"
+            className="inline-flex shrink-0 items-center gap-1 self-center font-medium text-amber-700 dark:text-amber-400"
+          >
+            <TriangleAlert aria-hidden className="h-3.5 w-3.5" />
+            {rules.after?.broken !== undefined && t('breaksCount', { count: rules.after.broken })}
+          </span>
+        )}
       </>
     );
   } else if (stillFinishing) {
@@ -669,10 +698,10 @@ export function AgentCard({
       {/* Room for a line of text first: on a narrow page the buttons go under it. */}
       <div className="min-w-0 flex-1 basis-56">
         {oneLine ? (
-          <div className="flex min-w-0 items-baseline gap-2">
+          <div className="flex min-w-0 items-baseline gap-2 overflow-hidden">
             <span className="shrink-0 text-sm font-semibold">{title}</span>
             {/* A flex item's first space goes: the gap stands in for the tail's. */}
-            <span className="flex min-w-0 gap-1 text-[12.5px] text-muted-foreground">{line}</span>
+            <span className="flex min-w-0 gap-1.5 text-[12.5px] text-muted-foreground">{line}</span>
           </div>
         ) : (
           <div className="text-sm font-semibold [overflow-wrap:anywhere]">{title}</div>
@@ -703,7 +732,7 @@ export function AgentCard({
         </span>
       )}
       {!working && (
-        <span className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
+        <span className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5">
           {page ? (
             <>
               <Button

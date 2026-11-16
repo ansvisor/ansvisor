@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import SHARED from './__fixtures__/fact-mismatches.json';
 import {
   brandFactsPath,
   factMismatches,
@@ -368,5 +369,31 @@ describe('factMismatches', () => {
       compared: 0,
       mismatches: [],
     });
+  });
+});
+
+/** The server's port (server/src/lib/fact-mismatches.js, Ads' claims gate) reads the same fixtures. */
+describe('factMismatches, the fixtures shared with the server', () => {
+  it('reads every case as the server does', () => {
+    const { brandName, competitorDomains, facts, cases } = SHARED;
+    for (const { sentences, compared, mismatches } of cases) {
+      const got = factMismatches({
+        sentences,
+        facts: facts as BrandFact[],
+        brandName,
+        competitorDomains,
+      });
+      const read = got.mismatches.map(({ kind, page, fact, source }) => ({
+        kind,
+        page,
+        fact,
+        source,
+      }));
+      expect({ compared: got.compared, mismatches: read }, sentences.join(' | ')).toEqual({
+        compared,
+        mismatches,
+      });
+      for (const m of got.mismatches) expect(sentences).toContain(m.sentence);
+    }
   });
 });

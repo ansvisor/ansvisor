@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { track } from '@/lib/analytics';
-import { markSeen, readUserBrandState } from '@/lib/actions/user-brand-state';
+import { markSeen } from '@/lib/actions/user-brand-state';
 import type { UserBrandState } from '@/lib/user-brand-state';
 
 /** One of Today's reads: loading, its answer, or failed (its part then stays away). */
@@ -13,15 +13,16 @@ export type TodayLoad<T> =
 
 /**
  * Reads one of Today's parts on its own: again when `key` changes (the
- * brand; null waits), or when `version` goes up, keeping the last answer on
- * screen until the next one comes. An answer for an older key is dropped.
+ * brand, or a read already started, such as a part of getTodayStart; null
+ * waits), or when `version` goes up, keeping the last answer on screen
+ * until the next one comes. An answer for an older key is dropped.
  */
 export function useTodayRead<T>(
-  key: string | null,
+  key: string | object | null,
   read: () => Promise<T>,
   version = 0,
 ): TodayLoad<T> {
-  const [result, setResult] = useState<{ key: string; load: TodayLoad<T> } | null>(null);
+  const [result, setResult] = useState<{ key: string | object; load: TodayLoad<T> } | null>(null);
   useEffect(() => {
     if (key === null) return;
     let live = true;
@@ -43,6 +44,23 @@ export function useTodayRead<T>(
   return result.load;
 }
 
+/**
+ * One of Today's parts from a read already started (getTodayStart): loading
+ * while `read` is null or reading, and failed when it fails or answers null
+ * (a part the day doesn't read). Once `version` goes up, the part reads
+ * `again` on its own, keeping the last answer on screen meanwhile.
+ */
+export function useTodayPart<T>(
+  read: Promise<T | null> | null,
+  again?: () => Promise<T | null>,
+  version = 0,
+): TodayLoad<T> {
+  const load = useTodayRead(read, () => (version > 0 && again ? again() : read!), version);
+  return load.status === 'ready' && load.data === null
+    ? { status: 'failed' }
+    : (load as TodayLoad<T>);
+}
+
 /** The parts a visit waits on before it counts as seen, with what each counted. */
 export type TodayVisitPart = 'since' | 'focus' | 'waiting' | 'prompts';
 
@@ -57,17 +75,18 @@ export interface TodayVisit {
 
 /**
  * A visit to Today on a brand: the person's state as it was when they came
- * (their last visit, for "Since yesterday" and the New tags), and, once
- * each part in `waitFor` has read, the visit kept (markSeen) and
- * today_viewed sent, once per brand. Kept after the reads, so a slot the
- * focus filled on this visit isn't New again on the next.
+ * (`load`, read with Today's other parts: their last visit, for "Since
+ * yesterday" and the New tags), and, once each part in `waitFor` has read,
+ * the visit kept (markSeen) and today_viewed sent, once per brand. Kept
+ * after the reads, so a slot the focus filled on this visit isn't New
+ * again on the next.
  */
 export function useTodayVisit(
   brandId: string | null,
+  load: TodayLoad<UserBrandState | null>,
   waitFor: readonly TodayVisitPart[],
   extra: () => Record<string, unknown> = () => ({}),
 ): TodayVisit {
-  const load = useTodayRead(brandId, () => readUserBrandState(brandId!));
   const visit = useRef<{ brandId: string | null; counts: Map<TodayVisitPart, number | null> }>({
     brandId: null,
     counts: new Map(),

@@ -52,6 +52,15 @@ vi.mock('./_opportunities', () => ({
   ),
 }));
 
+// Connections' reads and Notify me.
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
+const api = vi.hoisted(() => ({ notifyAdsPlatform: vi.fn(), readAdsAnalytics: vi.fn() }));
+vi.mock('@/lib/ads/api', async (original) => ({
+  ...(await original<typeof import('@/lib/ads/api')>()),
+  ...api,
+}));
+
 // The brand store keeps its state in localStorage, which this jsdom lacks.
 const stored = new Map<string, string>();
 vi.stubGlobal('localStorage', {
@@ -64,6 +73,8 @@ const { AdsView } = await import('./_ads-view');
 const { PlanProvider } = await import('@/components/providers/plan-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
+const { UpgradeDialogContext } = await import('@/components/providers/upgrade-gate');
+const { AdsApiError } = await import('@/lib/ads/api');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -71,9 +82,12 @@ const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-pan
 let container: HTMLDivElement;
 let root: Root;
 const setPage = vi.fn();
+const openUpgrade = vi.fn();
 
 beforeEach(() => {
   analytics.track.mockClear();
+  for (const fn of [...Object.values(api), ...Object.values(toast), openUpgrade]) fn.mockReset();
+  api.readAdsAnalytics.mockResolvedValue({ status: 'connected' });
   setPage.mockClear();
   window.history.replaceState(null, '', '/dashboard/ads');
   useBrandStore.setState({ brands: [], activeBrandId: null });
@@ -93,15 +107,19 @@ async function render({
   plan = 'growth',
   status = 'active',
   cloud = true,
-}: { plan?: PlanId; status?: string | null; cloud?: boolean } = {}) {
+  locked = false,
+}: { plan?: PlanId; status?: string | null; cloud?: boolean; locked?: boolean } = {}) {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', cloud ? 'true' : '');
+  const dialog = { isLocked: locked, reason: 'ended' as const, adminName: null, openUpgrade };
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <PlanProvider planId={plan} subscriptionStatus={status}>
-          <ChatPageSetterContext.Provider value={setPage}>
-            <AdsView />
-          </ChatPageSetterContext.Provider>
+          <UpgradeDialogContext.Provider value={dialog}>
+            <ChatPageSetterContext.Provider value={setPage}>
+              <AdsView />
+            </ChatPageSetterContext.Provider>
+          </UpgradeDialogContext.Provider>
         </PlanProvider>
       </NextIntlClientProvider>,
     );
@@ -115,6 +133,9 @@ const empty = () => container.querySelector('[data-slot="ads-empty"]');
 const lock = () => container.querySelector('[data-slot="upgrade-card"]');
 const overview = () => container.querySelector<HTMLElement>('[data-slot="ads-overview"]');
 const opportunities = () => container.querySelector<HTMLElement>('[data-slot="ads-opportunities"]');
+const slot = (name: string) => container.querySelector<HTMLElement>(`[data-slot="ads-${name}"]`);
+const action = (id: string, within: ParentNode = container) =>
+  within.querySelector<HTMLElement>(`[data-action="${id}"]`);
 const periods = () => [
   ...container.querySelectorAll<HTMLButtonElement>('[data-action="ads.period"]'),
 ];
@@ -168,7 +189,7 @@ describe('AdsView', () => {
     expect(tab('Campaigns').getAttribute('aria-selected')).toBe('true');
     expect(tab('Overview').getAttribute('aria-selected')).toBe('false');
     expect(panel().dataset.tab).toBe('cmp');
-    expect(empty()?.textContent).toContain('Campaigns will list your ad campaigns');
+    expect(slot('campaigns')).not.toBeNull();
 
     await act(async () => tab('Opportunities').click());
     expect(window.location.hash).toBe('#op');
@@ -183,6 +204,7 @@ describe('AdsView', () => {
     });
     expect(tab('Connections').getAttribute('aria-selected')).toBe('true');
     expect(panel().dataset.tab).toBe('con');
+    expect(slot('connections')).not.toBeNull();
   });
 
   it('says what Paid SoV stands for on hover', async () => {
@@ -224,12 +246,16 @@ describe('AdsView', () => {
     const exportButton = container.querySelector<HTMLButtonElement>('[data-action="ads.export"]')!;
     expect(exportButton.textContent).toBe('Export');
     expect(exportButton.disabled).toBe(true);
-    // Opportunities reads over it too; the other tabs have no data for a period yet.
+    // Opportunities reads over it too, with its own Export; the other tabs have no data for a period yet.
     await act(async () => tab('Opportunities').click());
     expect(opportunities()?.dataset.period).toBe('7d');
     expect(periods().some((b) => b.disabled)).toBe(false);
+    expect(container.querySelector('[data-action="ads.export"]')).toBeNull();
     await act(async () => tab('Campaigns').click());
     expect(periods().every((b) => b.disabled)).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('[data-action="ads.export"]')?.disabled).toBe(
+      true,
+    );
   });
 
   it('tells Chat’s side panel the page, its period and three questions', async () => {
@@ -254,15 +280,25 @@ describe('AdsView', () => {
     expect(panel().dataset.tab).toBe('op');
   });
 
-  it('shows an honest empty state on each other tab: no numbers, no sample data', async () => {
+  it('shows an honest empty state on Paid SoV: no numbers, no sample data', async () => {
     await render();
     expect(overview()).not.toBeNull();
-    for (const name of ['Paid SoV', 'Campaigns', 'Connections']) {
-      await act(async () => tab(name).click());
-      expect(empty()?.querySelector('h2')?.textContent).toBe('Coming soon in this preview');
-      expect(empty()?.textContent).not.toMatch(/\d/);
-    }
+    await act(async () => tab('Paid SoV').click());
+    expect(empty()?.querySelector('h2')?.textContent).toBe('Coming soon in this preview');
+    expect(empty()?.textContent).not.toMatch(/\d/);
     expect(lock()).toBeNull();
+  });
+
+  it('never says "Phase" to customers: what comes later is "coming soon" or plain words', () => {
+    const strings = (value: unknown): string[] =>
+      typeof value === 'string'
+        ? [value]
+        : value && typeof value === 'object'
+          ? Object.values(value).flatMap(strings)
+          : [];
+    const ads = strings(messages.ads);
+    expect(ads.length).toBeGreaterThan(100);
+    expect(ads.filter((text) => /\bphase\b/i.test(text))).toEqual([]);
   });
 
   describe('the plan gate (ADS-01 §8, owner A2)', () => {
@@ -297,6 +333,9 @@ describe('AdsView', () => {
       await act(async () => tab('Campaigns').click());
       expect(panel().dataset.tab).toBe('cmp');
       expect(lock()).not.toBeNull();
+      expect(slot('campaigns')).toBeNull();
+      await act(async () => tab('Connections').click());
+      expect([lock() !== null, slot('connections')]).toEqual([true, null]);
       // Opportunities: the server's rows and lock row, no decision changes.
       await act(async () => tab('Opportunities').click());
       expect(lock()).toBeNull();
@@ -374,6 +413,132 @@ describe('AdsView', () => {
       expect(empty()).not.toBeNull();
       await act(async () => tab('Opportunities').click());
       expect(opportunities()?.dataset.writable).toBe('true');
+    });
+  });
+
+  describe('Campaigns (ADS-01 §3.4)', () => {
+    beforeEach(() => window.history.replaceState(null, '', '/dashboard/ads#cmp'));
+
+    it('shows Growth read-only, with Compare plans and the add-on, which opens the contact form', async () => {
+      await render();
+      const strip = slot('plan')!;
+      expect(strip.textContent).toContain('Your planGrowthRead-only: see spend and results');
+      expect(strip.textContent).toContain('needs Enterprise or the Ads add-on');
+      expect(action('plan.compare')?.getAttribute('href')).toBe('/dashboard/settings/billing');
+      const addon = action('plan.addAdsAddon')!;
+      expect(addon.textContent).toBe('Add Ads add-on');
+      expect(addon.getAttribute('href')).toBe('https://www.ansvisor.com/contact-us');
+      expect(addon.getAttribute('target')).toBe('_blank');
+      expect(addon.title).toContain('Talk to us');
+      // Read-only or on the demo brand, Compare plans opens the plan dialog.
+      await render({ locked: true });
+      await act(async () => action('plan.compare')!.click());
+      expect(openUpgrade).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives Enterprise and self-hosted one line and no upsell', async () => {
+      for (const over of [{ plan: 'enterprise' as const }, { cloud: false }]) {
+        await render(over);
+        expect(slot('plan')?.textContent).toContain('Build and change campaigns once');
+        expect(slot('plan')?.querySelectorAll('a, button')).toHaveLength(0);
+      }
+    });
+
+    it('lists no campaign yet and states the Safety rules and billing, with no payment control', async () => {
+      await render();
+      const table = slot('campaigns')!.querySelector('table')!;
+      expect([...table.querySelectorAll('th')].map((th) => th.textContent)).toEqual([
+        'Campaign',
+        'Channel',
+        'Status',
+        'Spend',
+        'AI-assisted signups',
+        'Cost per signup',
+      ]);
+      expect(table.querySelector('tbody')?.textContent).toContain(
+        'Connect an ad account · coming soon',
+      );
+      expect(slot('safety')?.querySelectorAll('li')).toHaveLength(4);
+      expect(slot('safety')?.textContent).toContain(
+        'Ansvisor never sees or changes payment methods.',
+      );
+      expect(slot('campaigns')?.querySelectorAll('input, select, textarea')).toHaveLength(0);
+      // No dead control: each one says what it is and goes somewhere.
+      for (const control of slot('campaigns')!.querySelectorAll('a, button')) {
+        expect(control.getAttribute('data-action')).toMatch(/^plan\./);
+        expect(control.getAttribute('href')).toBeTruthy();
+      }
+    });
+  });
+
+  describe('Connections (ADS-01 §3.5)', () => {
+    const card = (id: string) => container.querySelector<HTMLElement>(`[data-platform="${id}"]`)!;
+    beforeEach(() => {
+      window.history.replaceState(null, '', '/dashboard/ads#con');
+      useBrandStore.setState({ activeBrandId: 'b1' });
+    });
+
+    it('shows ChatGPT, Google and Microsoft coming soon with nothing to click, each billing on its own', async () => {
+      await render();
+      for (const id of ['chatgpt', 'google', 'microsoft']) {
+        expect(card(id).textContent).toMatch(/Billing stays in .+Coming soon$/);
+        expect(card(id).querySelectorAll('a, button')).toHaveLength(0);
+      }
+      expect(card('microsoft').textContent).toContain('Microsoft Advertising');
+    });
+
+    it('logs Notify me once for Meta or LinkedIn, then says "We\'ll tell you"', async () => {
+      api.notifyAdsPlatform.mockResolvedValueOnce({ platform: 'meta', logged: true });
+      await render();
+      expect(card('meta').textContent).toContain('Coming later');
+      await act(async () => action('conn.notify', card('meta'))!.click());
+      expect(api.notifyAdsPlatform).toHaveBeenCalledWith('b1', 'meta');
+      expect(toast.success).toHaveBeenCalledWith("We'll tell you when Meta Ads is ready.");
+      expect(action('conn.notify', card('meta'))).toBeNull();
+      expect(card('meta').textContent).toContain("We'll tell you");
+      // Asked on an earlier visit: the server logs nothing more, and nothing more is said.
+      api.notifyAdsPlatform.mockResolvedValueOnce({ platform: 'linkedin', logged: false });
+      await act(async () => action('conn.notify', card('linkedin'))!.click());
+      expect(card('linkedin').textContent).toContain("We'll tell you");
+      expect(toast.success).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens the plan dialog on the demo brand, and says so when the ask fails', async () => {
+      api.notifyAdsPlatform.mockRejectedValueOnce(
+        new AdsApiError('x', 402, { code: 'demo_brand' }),
+      );
+      await render();
+      await act(async () => action('conn.notify', card('meta'))!.click());
+      expect(openUpgrade).toHaveBeenCalledTimes(1);
+      api.notifyAdsPlatform.mockRejectedValueOnce(new Error('offline'));
+      await act(async () => action('conn.notify', card('meta'))!.click());
+      expect(toast.error).toHaveBeenCalledWith("Couldn't save that. Try again.");
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('shows Google Analytics as the app has it, managed in Settings › Integrations', async () => {
+      const href = '/dashboard/settings/integrations#google-analytics';
+      await render();
+      expect(api.readAdsAnalytics).toHaveBeenCalledWith('b1');
+      expect(card('analytics').textContent).toContain('ConnectedManage');
+      expect(action('conn.manage', card('analytics'))?.getAttribute('href')).toBe(href);
+      api.readAdsAnalytics.mockResolvedValueOnce({ status: 'not_connected' });
+      await act(async () => useBrandStore.setState({ activeBrandId: 'b2' }));
+      expect(card('analytics').textContent).toContain('Not connectedConnect');
+      expect(action('conn.connect', card('analytics'))?.getAttribute('href')).toBe(href);
+      api.readAdsAnalytics.mockRejectedValueOnce(new Error('offline'));
+      await act(async () => useBrandStore.setState({ activeBrandId: 'b3' }));
+      expect(card('analytics').textContent).toContain("Couldn't checkManage");
+    });
+
+    it('has no dead control: each one has its id and does something', async () => {
+      await render();
+      const controls = [...slot('connections')!.querySelectorAll('a, button')];
+      expect(controls.map((c) => c.getAttribute('data-action'))).toEqual([
+        'conn.notify',
+        'conn.notify',
+        'conn.manage',
+      ]);
     });
   });
 });

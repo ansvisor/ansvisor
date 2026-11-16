@@ -134,6 +134,26 @@ describe('chatModelMenu', () => {
     expect(menu.catalogCount).toBe(0);
   });
 
+  it("offers a model on its maker's API only without the catalog, at the price the budget charges", () => {
+    setSyncedPrices(CATALOG);
+    const FABLE = 'anthropic/claude-fable-5-2';
+    // 3 × $8 + $40 = 64 against Auto's 6.88: 9.3x, amber.
+    expect(menuModel(FABLE, { now: NOW })).toEqual({
+      id: FABLE,
+      name: FABLE,
+      multiplier: '9.3x',
+      tone: 'high',
+      variesByHour: false,
+      removed: false,
+    });
+    const menu = chatModelMenu({ ids: [...OFFERED, FABLE], selected: FABLE, now: NOW });
+    expect(menu.models.map((m) => m.id)).toEqual([...OFFERED, FABLE]);
+    expect(menu.selected).toMatchObject({ id: FABLE, removed: false });
+    // Before any sync: offered still, with no multiplier until Auto's prices are in.
+    setSyncedPrices([]);
+    expect(menuModel(FABLE, { now: NOW })).toMatchObject({ removed: false, multiplier: null });
+  });
+
   it('flags a model whose price moves by the hour', () => {
     setSyncedPrices(CATALOG);
     expect(menuModel('deepseek/deepseek-v4.1-flash', { now: NOW }).variesByHour).toBe(true);

@@ -845,12 +845,8 @@
         "noChange": "no change since yesterday",
         "behind": "#{rank} of {count} brands. {gap} points behind {name}.",
         "ahead": "#1 of {count} brands. {gap} points ahead of {name}.",
-        "alone": "No competitor scored on your prompts yet."
-      },
-      "ask": {
-        "label": "Ask Chat",
-        "placeholder": "Ask Chat, e.g. why did my score change?",
-        "button": "Ask"
+        "alone": "No competitor scored on your prompts yet.",
+        "none": "No score yet. It shows here once your latest AI answers are scored."
       },
       "summary": {
         "changes": "{title}: {count, plural, =0 {no big changes} one {# change} other {# changes}}",
@@ -2286,7 +2282,7 @@
         "dueDate": "Due date",
         "statusLabel": "Status",
         "events": {
-          "created": "{source, select, chat {Action created from Chat} other {Action created}}",
+          "created": "{source, select, chat {Action created from Chat} ads {Action created from Ads} other {Action created}}",
           "evidence_attached": "Finding added from Chat: “{finding}”",
           "evidence_withdrawn": "Finding from Chat withdrawn with Undo: “{finding}”",
           "file_attached": "Attached from Chat to {task}{title}: “{file}”",
@@ -4241,7 +4237,9 @@
     "splitWork": { "name": "Split work into parts", "step": "Worked on parts" },
     "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" },
     "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" },
-    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agents" }
+    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agents" },
+    "adsOpportunities": { "name": "Read Ads opportunities", "step": "Read Ads opportunities" },
+    "adDrafts": { "name": "Save ad drafts", "step": "Saved ad drafts" }
   },
   "agentic": {
     "avatar": {
@@ -4819,6 +4817,9 @@
       "queueTimeout": "Too many runs are working at once in this workspace, so this one didn't start. Try again in a moment.",
       "failed": "Something went wrong, so Chat stopped here. What's done so far is kept.",
       "providerDown": "{provider} didn't answer, so Chat stopped here. What's done so far is kept. Try again in a moment.",
+      "refused": "{model} turned this request down, so Chat stopped here. What's done so far is kept. Ask another way, or pick another model.",
+      "retention": "{model} needs 30-day data retention on the Anthropic account it runs on, and that account doesn't have it, so Chat stopped here. Pick another model and send again.",
+      "retentionOwnKey": "{model} needs 30-day data retention, and your workspace's Anthropic key is on an account with zero data retention, so Chat stopped here. Pick another model, or an Admin can turn on 30-day retention for that key's workspace in the Anthropic Console.",
       "keyStopped": "So Chat stopped here. What's done so far is kept.",
       "key": {
         "invalid": "{provider} turned down your workspace's key.",
@@ -5571,8 +5572,6 @@
       "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
       "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
       "skills": "Skills",
-      "governance": "Governance",
-      "toggleGovernance": "Show or hide Governance",
       "activity": "Activity",
       "capabilities": "What Chat can do",
       "policy": "Tool policy",
@@ -5617,13 +5616,13 @@
       "allChats": "All chats · {count} ›",
       "archivedLink": "Archived · {count} ›",
       "settings": "Settings",
-      "usageTip": "AI usage this month",
+      "toggleSettings": "Show or hide the pages under Settings",
+      "general": "General",
       "files": "Files",
       "scheduled": "Scheduled",
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
       "agents": "Agents",
       "agentsShort": "Agents",
-      "agentsWhere": "in Action Center",
       "agentsLabel": "Agents · in Action Center"
     },
     "actions": {
@@ -6660,6 +6659,7 @@
       "approval": {
         "denied": "Not allowed",
         "card": "Approved on its card",
+        "slack": "Approved in Slack",
         "click": "Your click",
         "always": "Auto · policy Always",
         "full_auto": "Auto · Full auto",
@@ -6758,7 +6758,8 @@
         "scheduling": "Scheduling",
         "skills": "Skills",
         "memory": "Memory",
-        "agents": "Agents"
+        "agents": "Agents",
+        "ads": "Ads"
       }
     }
   },
@@ -6836,7 +6837,8 @@
       "modelProviderOn": "Turned on {provider} models in Chat",
       "modelProviderOff": "Turned off {provider} models in Chat",
       "outsideEmailSent": "Sent “{title}” to {to}, outside the workspace",
-      "outsideEmailCancelled": "Cancelled the e-mail of “{title}” to {to}"
+      "outsideEmailCancelled": "Cancelled the e-mail of “{title}” to {to}",
+      "adDrafts": "Saved ad drafts"
     },
     "undo": {
       "ok": "Undone.",
@@ -7219,7 +7221,12 @@
       "setup": "Setup guide",
       "fanout": "Fan-out gaps",
       "prompts": "Prompt portfolio",
-      "plan": "30-day plan"
+      "plan": "30-day plan",
+      "content-plan": "Weekly content plan",
+      "seasonal": "Seasonal prompts",
+      "traffic": "AI traffic and sign-ups",
+      "earn-or-pay": "Earn or pay",
+      "ad-drafts": "Ad drafts"
     },
     "form": {
       "titleNew": "New agent",
@@ -7654,12 +7661,9 @@
         "brand_access": "access by brand",
         "ads_data": "ads read from AI answers",
         "catalog_read": "a skill that reads your product catalog",
-        "seasonal_skill": "a seasonal demand skill",
         "app_store_data": "App Store and Google Play data",
         "review_sites": "review site data",
-        "local_listings": "local listings data",
-        "content_plan_skill": "a content plan skill",
-        "traffic_skill": "an AI traffic skill"
+        "local_listings": "local listings data"
       },
       "policyLock": "Your Admin turned Full auto off",
       "fallbackTip": "Use this agent opens it on Auto, ask before changes",
@@ -7745,6 +7749,10 @@
         "name": "Agency Client Reporter",
         "description": "A monthly report for each client brand, for agencies."
       },
+      "paid-opportunity": {
+        "name": "Paid Opportunity",
+        "description": "Each week, says which buying prompts to earn with content or pay for, flags what changed, like a rival now paying on your name, and drafts ads in Ansvisor."
+      },
       "ai-ads-watch": {
         "name": "AI Ads Watch",
         "description": "Shows who advertises inside AI answers on your prompts, and where."
@@ -7815,7 +7823,7 @@
       },
       "ai-traffic-signups": {
         "name": "AI Traffic → Signups",
-        "description": "Shows the prompts and pages that bring AI visitors who sign up."
+        "description": "Each week, shows which AI assistants and pages bring visitors, and the sign-ups from AI visits that Google Analytics counts."
       },
       "unmet-needs-miner": {
         "name": "Unmet Needs Miner",
@@ -10503,6 +10511,7 @@
         "careful": "Keeping its changes small for rules people here mostly reject: {rules}.",
         "live": "Keeping what the live page earns: cited {citations, plural, one {# time} other {# times}} in {days} days ({before, number} before){lost, plural, =0 {} one {, # prompt lost} other {, # prompts lost}}.",
         "breaks": "would break {names}",
+        "breaksCount": "{count, plural, one {# rule} other {# rules}}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
         "stillFinishing": "Still finishing…",
@@ -13848,10 +13857,24 @@
     "period": "Period",
     "export": "Export",
     "noDataYet": "Available once Ads has data",
+    "exports": {
+      "editor": "Export for Google Ads Editor",
+      "one": "Export this prompt",
+      "done": "Exported {rows, plural, one {# row} other {# rows}} from {prompts, plural, one {# prompt} other {# prompts}}",
+      "dropped": "{count, plural, one {# link outside your domains was replaced with your home page} other {# links outside your domains were replaced with your home page}}",
+      "failed": "The export couldn't be made. Try again."
+    },
     "chat": {
       "pay": "Which buying-intent prompts should we pay for?",
       "rivals": "Where do competitors lead the AI answer on our buying-intent prompts?",
       "earn": "Which open prompts can we win with content?"
+    },
+    "chatDrafts": {
+      "managers": "Only Admins and Managers can save ad drafts.",
+      "failed": "The ad drafts couldn't be saved. Try again.",
+      "gateFailed": "No ad draft passed the claims check, so none was saved.",
+      "factsNeeded": "Approve your brand facts first: ad drafts only state facts you approved.",
+      "planLimit": "Saving ad drafts needs a paid Growth plan or above."
     },
     "overview": {
       "failed": "The Overview couldn't be read. Reload the page to try again.",
@@ -13960,13 +13983,129 @@
       "cites": "Cites: {domains}",
       "fanOuts": "Fan-out queries",
       "keywords": "Keyword seeds",
-      "failed": "The answers couldn't be read. Close this and open it again."
+      "failed": "The answers couldn't be read. Close this and open it again.",
+      "earn": {
+        "title": "Earn · fix the answer",
+        "fix": "{page, select, none {Write a page that answers this prompt} other {Refresh {page} to answer this prompt}}{why, select, rival {, so AI picks you over {name, select, none {the competitor it names} other {{name}}}} protect {, so AI keeps picking you} other {, so AI has a page of yours to pick}}.",
+        "send": "Send to Action Center",
+        "sent": "Sent · Open AC-{no}",
+        "open": "Open AC-{no}",
+        "failed": "The fix couldn't be sent to the Action Center. Try again."
+      },
+      "pay": {
+        "title": "Pay · win it now",
+        "intro": "Ad drafts for ChatGPT, Google and Microsoft, from this prompt and your approved brand facts. Nothing is sent to an ad account.",
+        "none": "No ad drafts for this prompt yet.",
+        "create": "Create ad drafts",
+        "creating": "Writing ad drafts…",
+        "retry": "Try again",
+        "see": "See the {channel} ad",
+        "channel": "{channel, select, chatgpt {ChatGPT · contextual} google {Google · search, eligible for AI Overviews and AI Mode} other {Microsoft · search, eligible for Copilot}}",
+        "hint": "Fits when: {hint}",
+        "checked": "Claims checked against your brand facts",
+        "limits": "Character limits not confirmed yet",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyFailed": "Couldn't copy the ad. Try again.",
+        "edit": "Edit",
+        "editAsk": "Rewrite the {channel} ad draft for \"{prompt}\" using only my approved brand facts:\n\n{ad}",
+        "factsNeeded": "Approve your brand facts first: ad drafts only state facts you approved.",
+        "factsLink": "Open Brand facts",
+        "factsOff": "Brand facts aren't available here, so ad drafts can't be written.",
+        "gateFailed": "No draft passed the claims check. Try again for new drafts.",
+        "aiBudget": "This month's AI usage is spent, so no ad drafts were written. Try again once it resets.",
+        "failed": "The ad drafts couldn't be written. Try again."
+      },
+      "doBoth": {
+        "both": "Do both",
+        "earn": "Send to Action Center",
+        "pay": "Create ad drafts",
+        "retryEarn": "Retry the Action Center task",
+        "retryPay": "Retry the ad drafts",
+        "earnFailed": "The ad drafts are saved, but the task didn't reach the Action Center.",
+        "payFailed": "The task is in the Action Center, but the ad drafts weren't written."
+      },
+      "brief": {
+        "copy": "Copy as campaign brief",
+        "copied": "Campaign brief copied",
+        "copyFailed": "Couldn't copy the campaign brief. Try again.",
+        "prompt": "Prompt: {text}",
+        "decision": "Decision: {decision}{recommended, select, none {} other { (recommended: {recommended})}}",
+        "why": "Why:",
+        "keywords": "Keyword seeds:",
+        "fanOuts": "Fan-out queries:",
+        "draft": "Ad draft: {channel}",
+        "headline": "Headline {n}: {text}",
+        "description": "Description {n}: {text}",
+        "facts": "Facts used:",
+        "fact": "\"{quote}\" Source: {url}"
+      }
     },
     "empty": {
       "title": "Coming soon in this preview",
-      "sov": "Paid SoV will show your share of the sponsored ads in AI answers, only on the platforms where Ansvisor can see them.",
-      "cmp": "Campaigns will list your ad campaigns once an ad account is connected.",
-      "con": "Connections will let you connect ChatGPT Ads, Google Ads and Microsoft Advertising, read-only to start."
+      "sov": "Paid SoV will show your share of the sponsored ads in AI answers, only on the platforms where Ansvisor can see them."
+    },
+    "campaigns": {
+      "yourPlan": "Your plan",
+      "readOnly": "Read-only: see spend and results once an ad account is connected. Building and changing campaigns needs {plan} or the Ads add-on.",
+      "full": "Build and change campaigns once an ad account is connected. Every enable, budget or bid change still needs your click.",
+      "compare": "Compare plans",
+      "addon": "Add Ads add-on",
+      "addonHint": "Talk to us: we set up the Ads add-on with you for now.",
+      "columns": {
+        "campaign": "Campaign",
+        "channel": "Channel",
+        "status": "Status",
+        "spend": "Spend",
+        "signups": "AI-assisted signups",
+        "cost": "Cost per signup"
+      },
+      "empty": "Connect an ad account · coming soon",
+      "emptyNote": "Your campaigns will be listed here, read-only to start.",
+      "safety": {
+        "title": "Safety",
+        "note": "Enforced by Ansvisor, not by an agent. Nothing reaches an ad account today.",
+        "click": "Every enable, pause, budget or bid change needs a person's click and confirmation, in every mode.",
+        "agents": "Agents never spend: an agent can suggest a change, and only a person can make it.",
+        "cap": "Admins set a monthly cap for each channel. A change over the cap is blocked, counting the changes of the last 24 hours.",
+        "billing": "Ad spend is paid to Google, Microsoft and OpenAI from your own ad accounts. Ansvisor never sees or changes payment methods."
+      }
+    },
+    "connections": {
+      "soon": "Coming soon",
+      "later": "Coming later",
+      "notify": "Notify me",
+      "notified": "We'll tell you",
+      "notifiedToast": "We'll tell you when {name} is ready.",
+      "notifyFailed": "Couldn't save that. Try again.",
+      "status": {
+        "connected": "Connected",
+        "failing": "Sign-in failed",
+        "not_connected": "Not connected",
+        "unknown": "Couldn't check"
+      },
+      "manage": "Manage",
+      "connect": "Connect",
+      "platforms": {
+        "chatgpt": {
+          "name": "ChatGPT Ads",
+          "note": "Ads in ChatGPT conversations. Billing stays in ChatGPT Ads Manager."
+        },
+        "google": {
+          "name": "Google Ads",
+          "note": "Includes ads in AI Overviews and AI Mode. Billing stays in Google Ads."
+        },
+        "microsoft": {
+          "name": "Microsoft Advertising",
+          "note": "Includes ads in Copilot. Billing stays in Microsoft Advertising."
+        },
+        "meta": { "name": "Meta Ads", "note": "Facebook and Instagram" },
+        "linkedin": { "name": "LinkedIn Ads", "note": "B2B campaigns" },
+        "analytics": {
+          "name": "Google Analytics",
+          "note": "Signups and key events from AI answers and ads"
+        }
+      }
     },
     "locked": {
       "title": "Ads is included from the {plan} plan",
@@ -16118,6 +16257,7 @@
         "agent": "Agents",
         "schedule": "Scheduled runs",
         "image": "Images",
+        "ads": "Ad drafts",
         "other": "Other"
       },
       "none": "No AI usage yet this period.",
@@ -16720,7 +16860,7 @@
         },
         "needsYou": {
           "label": "Agents that need someone",
-          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned"
+          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned, and on Growth and up can approve or reject the step from Slack"
         }
       },
       "test": "Send a test message",
@@ -17913,7 +18053,6 @@
     },
     "menu": {
       "label": "Connections",
-      "manage": "Manage",
       "show": "Show connections",
       "hide": "Hide connections",
       "listLabel": "The brand’s connections",

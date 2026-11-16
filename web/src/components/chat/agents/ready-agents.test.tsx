@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
-import type { PresetLock } from '@/lib/chat/agents/catalog';
+import { AGENT_PRESETS, type AgentPreset, type PresetLock } from '@/lib/chat/agents/catalog';
 import { NOW, listResult } from '@/lib/chat/testing/agent-fixtures';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
@@ -67,12 +67,19 @@ async function render(
   role: TeamRole = 'manager',
   locks: Record<string, PresetLock> = {},
   workAreas: string[] = [],
+  presets?: readonly AgentPreset[],
 ) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <RoleProvider role={role}>
-          <AgentCenter locks={locks} workAreas={workAreas} now={NOW} timeZone="UTC" />
+          <AgentCenter
+            locks={locks}
+            workAreas={workAreas}
+            presets={presets}
+            now={NOW}
+            timeZone="UTC"
+          />
         </RoleProvider>
       </NextIntlClientProvider>,
     );
@@ -151,15 +158,25 @@ describe('Ready to use', () => {
       'brand-facts-guardian',
     ]);
     // Fan-out Gap Filler, Prompt Portfolio Manager and Onboarding & Help, the next core
-    // agents ready, then the packs.
+    // agents ready, then the packs, Content Plan Builder, Seasonal Prompt Planner and
+    // AI Traffic → Signups among them.
     expect(shown[8].getAttribute('data-preset')).toBe('fanout-gap-filler');
     expect(shown[9].getAttribute('data-preset')).toBe('prompt-portfolio');
     expect(shown[10].getAttribute('data-preset')).toBe('onboarding-help');
-    expect(shown.slice(8, 21).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
-    expect(shown.slice(21).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
+    expect(shown.slice(8, 24).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
+    expect(shown.slice(24).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
     expect(shown).toHaveLength(39);
     // No brand on screen and no work areas: nothing is marked.
     expect(all('[data-slot="preset-fit"]')).toHaveLength(0);
+  });
+
+  it('shows the Paid Opportunity agent only when the page hands it in (Ads on)', async () => {
+    await render();
+    expect(ids()).not.toContain('paid-opportunity');
+    await render('manager', {}, [], AGENT_PRESETS);
+    expect(card('paid-opportunity').querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
+      '/earn-or-pay/ad-draftsAuto, ask before changes',
+    );
   });
 
   it('gives a ready card its line, skills, mode and triggers, and Use this agent into New agent', async () => {
@@ -184,7 +201,7 @@ describe('Ready to use', () => {
     expect(card('ready-to-publish').querySelector('[data-cell="trigger"]')?.textContent).toBe(
       'TriggerManual only',
     );
-    expect(action('agents.usePreset')).toHaveLength(21);
+    expect(action('agents.usePreset')).toHaveLength(24);
 
     // Fan-out Gap Filler: its skills on Mondays, in its mode.
     const added = card('fanout-gap-filler');
@@ -215,6 +232,24 @@ describe('Ready to use', () => {
     expect(portfolio.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
       '/dashboard/agents/new?preset=prompt-portfolio',
     );
+
+    // The packs' three made ready: each its own skill, on its schedule; Seasonal asks first, as Prompt Portfolio does.
+    for (const [id, formula, trigger] of [
+      ['content-plan-builder', '/content-planAuto, ask before changes', 'TriggerEvery Mon 09:00'],
+      ['seasonal-prompt-planner', '/seasonalAsk me first', null],
+      ['ai-traffic-signups', '/trafficAuto, ask before changes', 'TriggerEvery Mon 09:00'],
+    ] as const) {
+      const ready = card(id);
+      expect(ready.getAttribute('data-status'), id).toBe('ready');
+      expect(ready.querySelector('[data-slot="agent-formula"]')?.textContent, id).toBe(formula);
+      if (trigger) {
+        expect(ready.querySelector('[data-cell="trigger"]')?.textContent, id).toBe(trigger);
+      }
+      expect(ready.querySelector('[data-slot="preset-soon"]'), id).toBeNull();
+      expect(ready.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
+        `/dashboard/agents/new?preset=${id}`,
+      );
+    }
   });
 
   it('says what a Soon card waits for, and opens nothing from it', async () => {
@@ -313,9 +348,9 @@ describe('Ready to use', () => {
     expect(ids()).toEqual([
       'weekly-report',
       'ceo-brief',
+      'ai-traffic-signups',
       'revenue-attribution',
       'agency-reporter',
-      'ai-traffic-signups',
     ]);
 
     await click(header('goal'));
@@ -425,10 +460,11 @@ describe('Ready to use', () => {
   it('puts the agents for the brand’s site type and the person’s work areas first, marked', async () => {
     onBrand('b2b');
     await render('manager', {}, ['product', 'content']);
-    expect(ids().slice(0, 5)).toEqual([
+    expect(ids().slice(0, 6)).toEqual([
       'content-freshness',
       'alternatives-comparison-pages',
       'integration-questions',
+      'content-plan-builder',
       'unmet-needs-miner',
       'visibility-watch',
     ]);
@@ -436,14 +472,12 @@ describe('Ready to use', () => {
     expect(fit('alternatives-comparison-pages')).toBe('For your site type');
     expect(fit('unmet-needs-miner')).toBe('For your role');
     expect(fit('content-freshness')).toBe('For your role');
+    expect(fit('content-plan-builder')).toBe('For your role');
     expect(fit('visibility-watch')).toBeUndefined();
     expect(fit('product-answer-pages')).toBeUndefined();
     // The Soon ones still come last, theirs first among them.
     const soon = cards().filter((c) => c.getAttribute('data-status') === 'soon');
-    expect(soon.slice(0, 2).map((c) => c.getAttribute('data-preset'))).toEqual([
-      'review-site-presence',
-      'content-plan-builder',
-    ]);
+    expect(soon[0].getAttribute('data-preset')).toBe('review-site-presence');
     expect(cards()).toHaveLength(39);
   });
 

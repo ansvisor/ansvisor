@@ -41,7 +41,7 @@ export function AgentCenter({
   locks?: Record<string, PresetLock>;
   /** The person's work areas: Ready to use puts the agents made for them first. */
   workAreas?: readonly string[];
-  /** The ready-to-use agents as this install offers them (presetOnInstall); the catalog's otherwise. */
+  /** The ready-to-use agents as this install offers them (presetsOnInstall), from the server. */
   presets?: readonly AgentPreset[];
   now?: Date;
   timeZone?: string;

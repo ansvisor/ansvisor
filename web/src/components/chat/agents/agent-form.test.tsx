@@ -437,8 +437,10 @@ describe('AgentForm: new agent', () => {
   it("offers the focus areas' seven skills after the fourteen, needing no connection", async () => {
     await render();
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
-    // The fourteen and /chatgpt-profile after /facts (ChatGPT Business Hub plan, PR 7), then the seven, and /plan last.
-    expect(skills).toHaveLength(26);
+    // The fourteen and /chatgpt-profile after /facts (ChatGPT Business Hub plan, PR 7), then the
+    // seven, /plan, the packs' three (/content-plan, /seasonal, /traffic) and Ads' two (Ads
+    // Phase 0 PR 15), each offered here while its flag is on.
+    expect(skills).toHaveLength(31);
     expect(skills.slice(15, 22)).toEqual([
       'questions',
       'features',
@@ -465,10 +467,11 @@ describe('AgentForm: new agent', () => {
   });
 
   it('leaves out a skill this install does not offer now, as a pick and as a follow-on', async () => {
-    await render({ ...SETUP, offSkills: ['chatgpt-profile'] });
+    await render({ ...SETUP, offSkills: ['chatgpt-profile', 'earn-or-pay', 'ad-drafts'] });
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
-    expect(skills).toHaveLength(25);
+    expect(skills).toHaveLength(28);
     expect(skills).not.toContain('chatgpt-profile');
+    expect(skills).not.toContain('ad-drafts');
     await click(one('[data-skill="wrongclaim"]')!);
     const options = [
       ...one('[data-action="agentNew.addFollowOn"]')!.querySelectorAll('option'),

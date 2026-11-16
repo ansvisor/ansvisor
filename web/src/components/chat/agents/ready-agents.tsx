@@ -15,11 +15,11 @@ import {
 import { Link } from '@/i18n/navigation';
 import { presetTriggerDraft, triggerInputOf } from '@/lib/chat/agent-form';
 import {
-  AGENT_PRESETS,
   filterPresets,
   presetAnchor,
   presetFilterOptions,
   presetFit,
+  presetsOnInstall,
   type AgentPreset,
   type PresetFilter,
   type PresetFit,
@@ -249,12 +249,15 @@ function PresetCard({
   );
 }
 
+/** The catalog as the browser reads the flags, all off: the page hands the server's own. */
+const OFFERED = presetsOnInstall();
+
 export function ReadyAgents({
   locks,
   writer,
   words,
   workAreas = [],
-  presets = AGENT_PRESETS,
+  presets = OFFERED,
 }: {
   locks: Record<string, PresetLock>;
   /** Admins and Managers: they make agents. */
@@ -262,7 +265,7 @@ export function ReadyAgents({
   words: AgentWords;
   /** The person's work areas (Settings › Menu access). */
   workAreas?: readonly string[];
-  /** The catalog; a test's own list otherwise. */
+  /** The catalog as this install offers it (presetsOnInstall); a test's own list otherwise. */
   presets?: readonly AgentPreset[];
 }) {
   const options = useMemo(() => presetFilterOptions(presets), [presets]);

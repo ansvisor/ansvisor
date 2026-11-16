@@ -113,6 +113,22 @@ describe('resolvePickedModelKey', () => {
     );
   });
 
+  it('never takes the own OpenRouter key for a model on its provider’s API only (Fable 5.2)', async () => {
+    keys = { openrouter: { key_encrypted: 'or', settings: { useFor: ['chat'] } } };
+    // No verified OpenRouter id: Ansvisor's Anthropic key, never the own OpenRouter one.
+    expect(await resolvePickedModelKey(ORG, 'anthropic', { directOnly: true })).toEqual({
+      source: 'ansvisor',
+      config: { provider: 'anthropic', apiKey: 'ansvisor-anthropic', settings: {} },
+    });
+    keys.anthropic = { key_encrypted: 'ant', settings: { useFor: ['chat'] } };
+    expect(await resolvePickedModelKey(ORG, 'anthropic', { directOnly: true })).toMatchObject({
+      source: 'own',
+      config: { provider: 'anthropic', apiKey: 'plain(ant)' },
+    });
+    expect(pickedModelOwnKey('anthropic', ['openrouter'], true)).toBeNull();
+    expect(pickedModelOwnKey('anthropic', ['openrouter', 'anthropic'], true)).toBe('anthropic');
+  });
+
   it('runs an OpenRouter model on Ansvisor’s OpenRouter key only where it is set', async () => {
     expect(await resolvePickedModelKey(ORG, 'openrouter')).toBeNull();
     vi.stubEnv('OPENROUTER_API_KEY', 'ansvisor-or');

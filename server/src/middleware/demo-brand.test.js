@@ -211,12 +211,25 @@ describe('refuseDemoBrandWrites', () => {
     );
   });
 
-  it("refuses an Ads decision on a demo brand or its prompt; the thresholds aren't a brand's", async () => {
+  it("refuses an Ads decision, Earn send, ad drafts or Notify me on a demo brand or its prompt; the thresholds aren't a brand's", async () => {
     const decision = (promptId, brandId) =>
       run({ method: 'PATCH', path: `/ads/opportunities/${promptId}/decision`, body: { brandId } });
     expectRefused(await decision(MISSING, DEMO), 'demo brand');
     expectRefused(await decision(DEMO_PROMPT, REAL), 'demo prompt');
     expectPassed(await decision(MISSING, REAL), 'real brand');
+    const earn = (promptId, brandId) =>
+      run({ path: `/ads/opportunities/${promptId}/earn`, body: { brandId } });
+    expectRefused(await earn(MISSING, DEMO), 'earn, demo brand');
+    expectRefused(await earn(DEMO_PROMPT, REAL), 'earn, demo prompt');
+    expectPassed(await earn(MISSING, REAL), 'earn, real brand');
+    const drafts = (promptId, brandId) =>
+      run({ path: `/ads/opportunities/${promptId}/drafts`, body: { brandId } });
+    expectRefused(await drafts(MISSING, DEMO), 'drafts, demo brand');
+    expectRefused(await drafts(DEMO_PROMPT, REAL), 'drafts, demo prompt');
+    expectPassed(await drafts(MISSING, REAL), 'drafts, real brand');
+    const notify = (brandId) => run({ path: '/ads/connections/notify', body: { brandId } });
+    expectRefused(await notify(DEMO), 'notify, demo brand');
+    expectPassed(await notify(REAL), 'notify, real brand');
     expectPassed(await run({ method: 'PATCH', path: '/ads/settings' }), 'settings');
   });
 
@@ -482,6 +495,9 @@ describe('coverage of the write routes', () => {
       'internal-trigger-tracking.js',
       // The free report card's form on www.ansvisor.com: no sign-in and no brand (00472).
       'public-report-card.js',
+      // The Slack app's clicks (SLACK_SIGNING_SECRET): its post's demo brand is refused before
+      // anything, and the web decides with the app's own demo check.
+      'slack-interactivity.js',
       'traffic.js',
       'webhook-content-callback.js',
       'webhook-content-draft-callback.js',
