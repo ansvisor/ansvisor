@@ -45,6 +45,11 @@ import {
   IMPROVE_PRESETS,
   IMPROVE_SOURCE_TYPES,
   createImproveActionFor,
+  lookUpCitationsFor,
+  lookUpOpportunitiesFor,
+  lookUpPromptPerformanceFor,
+  lookUpPromptsFor,
+  lookUpReportsFor,
 } from './data';
 import { exportActionFor } from './action-export';
 import {
@@ -54,6 +59,7 @@ import {
   getContentImpactFor,
   getContentSourcesFor,
   listContentDraftsFor,
+  lookUpDraftsFor,
   setContentDraftReadyFor,
   suggestContentChangesFor,
 } from './content';
@@ -96,6 +102,12 @@ import {
   listTaskReviewsFor,
   taskReviewEditShape,
 } from './task-reviews';
+import { listActionsByCodeFor } from './action-center-reads';
+import { actionRef } from '@/lib/action-center/action-ref';
+import { ACTION_CODES_MAX } from '@/lib/action-center/action-codes';
+import { PAGE_ROWS } from './list-page';
+import { LOOKUP_MAX, SEARCH_MAX_CHARS } from './lookup';
+import { lookUpSignalsFor } from './signal-page';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -110,6 +122,32 @@ const relaxedUuid = z
     /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
     'Invalid UUID format',
   );
+
+/**
+ * A lookup's inputs, as Chat's reads take them (#2460): the ids, or a few
+ * words, of what the person named. With one, a list tool answers from
+ * Chat's lookup ({ note, rows, not_found }) instead of its page, so "what
+ * is X?" never depends on X being on the page.
+ */
+const lookupIds = (what: string) =>
+  z.array(relaxedUuid).min(1).max(LOOKUP_MAX).optional().describe(what);
+const lookupSearch = (what: string) =>
+  z.string().trim().max(SEARCH_MAX_CHARS).optional().describe(what);
+/** A search's next page: the lookup's next_offset. */
+const lookupOffset = z
+  .number()
+  .int()
+  .min(0)
+  .optional()
+  .describe(
+    "With `search`: where its next page starts, the result's next_offset. Nothing else uses it.",
+  );
+/** Whether a tool's input names what it looks up (an empty search doesn't). */
+const looksUp = (...fields: (readonly unknown[] | string | undefined)[]) =>
+  fields.some((field) => (typeof field === 'string' ? field !== '' : Boolean(field?.length)));
+/** What every lookup's description says of what it didn't find. */
+const LOOKUP_NOT_FOUND =
+  'Each one asked is in the result or in `not_found`: say "not found" plainly for those, with where you looked, and never offer others as the closest or similar. Never say one doesn\'t exist because a page of this list didn\'t show it.';
 
 /** Brand Visibility's Mentions tab's filters, the same on every mentions tool. */
 const mentionFilters = {
@@ -290,7 +328,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Tracked prompts',
       description:
-        'List the prompts tracked for a brand, optionally filtered by topic or active status. Returns each prompt with its text, topic, platforms, models, regions, and active flag. Use this when the user asks what is being tracked, wants to drill into a specific topic, or wants to spot inactive / mis-targeted prompts.',
+        'List the prompts tracked for a brand, optionally filtered by topic or active status. Returns each prompt with its text, topic, platforms, models, regions, and active flag. Use this when the user asks what is being tracked, wants to drill into a specific topic, or wants to spot inactive / mis-targeted prompts. ' +
+        `When the person names a prompt by its words or its id, read that first with \`search\` (a few distinctive words of its text, in any order and case; a stem such as "subscri" finds "subscription" and "subscriptions") or \`ids\`. It returns { note, prompts, not_found } in place of the list, with total and next_offset for a search (read on with \`offset\`): every topic and state, active and paused, of this brand only; topic_id, is_active and limit don't apply. No prompt has the words: search once more with fewer or shorter words before you say the brand doesn't track it. ${LOOKUP_NOT_FOUND}`,
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         topic_id: relaxedUuid
@@ -307,16 +346,29 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .max(500)
           .optional()
           .describe('Optional row cap (default 100, max 500). Newest prompts come first.'),
+        search: lookupSearch(
+          `Prompts whose text holds every one of these words, in any order and case: a lookup, every topic and state; ${PAGE_ROWS} a page, read on with offset.`,
+        ),
+        ids: lookupIds('Prompts by their ids: a lookup, every topic and state.'),
+        offset: lookupOffset,
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const prompts = await listPromptsFor(auth, {
-        brandId: args.brand_id,
-        topicId: args.topic_id,
-        isActive: args.is_active,
-        limit: args.limit,
-      });
+      // By words or ids: Chat's read (list_prompts' search and ids), the same rows and note.
+      const prompts = looksUp(args.ids, args.search)
+        ? await lookUpPromptsFor(auth, {
+            brandId: args.brand_id,
+            ids: args.ids,
+            search: args.search,
+            offset: args.offset,
+          })
+        : await listPromptsFor(auth, {
+            brandId: args.brand_id,
+            topicId: args.topic_id,
+            isActive: args.is_active,
+            limit: args.limit,
+          });
       if (prompts === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -549,7 +601,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Reports',
       description:
-        'List saved report snapshots for a brand, newest first. Returns report ids, titles, templates, date ranges, and creation timestamps without loading the full report payload. Use get_report to read one report in full.',
+        'List saved report snapshots for a brand, newest first. Returns report ids, titles, templates, date ranges, and creation timestamps without loading the full report payload. Use get_report to read one report in full. ' +
+        `When the person names a report by its title or id, read that first with \`search\` (a few distinctive words of its title, in any order and case) or \`ids\`. It returns { note, reports, not_found } in place of the list, with total and next_offset for a search (read on with \`offset\`), of this brand only; limit doesn't apply. ${LOOKUP_NOT_FOUND}`,
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         limit: z
@@ -559,11 +612,24 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .max(100)
           .optional()
           .describe('Maximum number of reports to return (default 50, max 100).'),
+        search: lookupSearch(
+          `Reports whose title holds every one of these words, in any order and case: a lookup; ${PAGE_ROWS} a page, read on with offset.`,
+        ),
+        ids: lookupIds('Reports by their ids: a lookup.'),
+        offset: lookupOffset,
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const reports = await listReportsFor(auth, args.brand_id, args.limit);
+      // By words or ids: Chat's read (get_reports' search and ids), the same rows and note.
+      const reports = looksUp(args.ids, args.search)
+        ? await lookUpReportsFor(auth, {
+            brandId: args.brand_id,
+            ids: args.ids,
+            search: args.search,
+            offset: args.offset,
+          })
+        : await listReportsFor(auth, args.brand_id, args.limit);
       if (reports === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -583,7 +649,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Get the full saved snapshot for one report, including its stored payload and metrics. This is read-only and does not regenerate the report. Use a report id from list_reports.',
       inputSchema: {
-        report_id: relaxedUuid.describe('Saved report UUID, from list_reports.'),
+        report_id: relaxedUuid.describe(
+          'Saved report UUID, from list_reports (a report named by its title: its `search` input).',
+        ),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -606,7 +674,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Content opportunities',
       description:
-        'List content opportunities / gaps for a brand, showing which prompts represent the highest-impact areas where the brand is currently losing visibility. Sorts by opportunity score descending by default. Use this to audit open gaps, see what content needs to be written, or list open strategy priorities.',
+        'List content opportunities / gaps for a brand, showing which prompts represent the highest-impact areas where the brand is currently losing visibility. Sorts by opportunity score descending by default. Use this to audit open gaps, see what content needs to be written, or list open strategy priorities. ' +
+        `When the person names an opportunity by its title or id, read that first with \`search\` (a few distinctive words of its title, in any order and case; a year isn't matched, as Content shows past years as this one) or \`ids\`. It returns { note, opportunities, not_found } in place of the list, with total and next_offset for a search (read on with \`offset\`): every status, archived included, of this brand only; status, impact, type and limit don't apply. ${LOOKUP_NOT_FOUND}`,
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z
@@ -632,17 +701,30 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .max(200)
           .optional()
           .describe('Row cap limit (default 50, max 200).'),
+        search: lookupSearch(
+          `Opportunities whose title holds every one of these words, in any order and case: a lookup, every status; ${PAGE_ROWS} a page, read on with offset.`,
+        ),
+        ids: lookupIds('Opportunities by their ids: a lookup, every status.'),
+        offset: lookupOffset,
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const opportunities = await listContentOpportunitiesFor(auth, {
-        brandId: args.brand_id,
-        status: args.status,
-        impact: args.impact,
-        type: args.type,
-        limit: args.limit,
-      });
+      // By words or ids: Chat's read (list_content_opportunities' search and ids), the same rows and note.
+      const opportunities = looksUp(args.ids, args.search)
+        ? await lookUpOpportunitiesFor(auth, {
+            brandId: args.brand_id,
+            ids: args.ids,
+            search: args.search,
+            offset: args.offset,
+          })
+        : await listContentOpportunitiesFor(auth, {
+            brandId: args.brand_id,
+            status: args.status,
+            impact: args.impact,
+            type: args.type,
+            limit: args.limit,
+          });
       if (opportunities === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -663,7 +745,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         "Get full details of a specific content opportunity, including raw AI visibility gap metrics, intent, competitor references, and the generated content brief if one already exists. `volume` is its estimated AI searches a month as the Content page shows it: its question's (prompt_text), with its range, confidence, source and date, `of_prompts` (the question is one of them) and, for a long question, `from_head_terms` with `closest_phrase` (its related keyword closest to its words, with that keyword's own estimate); null when the prompt has no volume. It is an estimate, not a measurement: quote it as a range with its source. source_data.estAiVolume is the sum of its prompts' estimates the score's demand weighs, not its volume; get_prompt_volumes has each prompt's. Use this when the user picks a specific opportunity from the list and wants to inspect it further or start writing.",
       inputSchema: {
         opportunity_id: relaxedUuid.describe(
-          'Content opportunity UUID, from list_content_opportunities.',
+          'Content opportunity UUID, from list_content_opportunities (one named by its title: its `search` input).',
         ),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
@@ -957,7 +1039,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Citations',
       description:
-        'List the URLs and domains AI engines cite alongside a brand, classified by source type (news / review / owned / social / forum / competitor / you). Returns totals, a source-type breakdown, and the top cited domains + URLs (each with citation count, results citing, usage %, and article-type guess where available). Use this for "which sources cite me?", "which competitor sites get pulled?", or "what kinds of pages does AI cite?" questions. Snapshot for the given window — call again with an earlier window to compute a delta.',
+        'List the URLs and domains AI engines cite alongside a brand, classified by source type (news / review / owned / social / forum / competitor / you). Returns totals, a source-type breakdown, and the top cited domains + URLs (each with citation count, results citing, usage %, and article-type guess where available). Use this for "which sources cite me?", "which competitor sites get pulled?", or "what kinds of pages does AI cite?" questions. Snapshot for the given window — call again with an earlier window to compute a delta. ' +
+        'When the person names a domain or a page\'s address, read that first with `domains` ("example.com", "www.example.com" and "https://example.com/" are the same; each finds the domain, its subdomains and its most cited pages) or `urls` (scheme, "www." and a trailing slash don\'t matter), every one of the message in one read. It returns { note, domains, urls, not_found, period } in place of the list: every source type over the same window, model, region and topic, each with the prompts whose answers cite it; source_filter and limit don\'t apply. One in `not_found` isn\'t cited in that window: say so plainly, with the window, and never offer other domains or pages as the closest. Never say one isn\'t cited because the top domains or URLs didn\'t show it.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
@@ -988,20 +1071,42 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .describe(
             'Scope by source category: "owned" = the brand\'s own domains only, "competitor" = tracked competitor domains only, "external" = everything else (editorial / forum / social / review / etc.), "all" = no filter (default). Use "owned" to answer "which of OUR URLs did AI cite?".',
           ),
+        domains: z
+          .array(z.string().trim().min(1).max(253))
+          .min(1)
+          .max(LOOKUP_MAX)
+          .optional()
+          .describe(
+            'Cited domains, as the person wrote them: "example.com", "www.example.com", "https://example.com/". A lookup: each with its subdomains, pages and prompts, every source type.',
+          ),
+        urls: z
+          .array(z.string().trim().min(1).max(2048))
+          .min(1)
+          .max(LOOKUP_MAX)
+          .optional()
+          .describe(
+            'Cited pages by their address, with or without "https://" and "www.": a lookup, every source type, with the prompts whose answers cite each.',
+          ),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const result = await listCitationsFor(auth, {
+      const filters = {
         brandId: args.brand_id,
         dateFrom: args.date_from,
         dateTo: args.date_to,
         model: args.model,
         region: args.region,
         topicId: args.topic_id,
-        limit: args.limit,
-        sourceFilter: args.source_filter,
-      });
+      };
+      // By domain or address: Chat's read (list_citations' domains and urls), the same rows and note.
+      const result = looksUp(args.domains, args.urls)
+        ? await lookUpCitationsFor(auth, { ...filters, domains: args.domains, urls: args.urls })
+        : await listCitationsFor(auth, {
+            ...filters,
+            limit: args.limit,
+            sourceFilter: args.source_filter,
+          });
       if (!result) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -1235,7 +1340,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Prompt performance',
       description:
-        'Get aggregate performance metrics (average visibility, total mentions, citations, appearances, and competitor score) grouped by prompt over a date range. Use to answer questions like "what is the best-performing prompt today?" or "which prompts dropped this week?".',
+        'Get aggregate performance metrics (average visibility, total mentions, citations, appearances, and competitor score) grouped by prompt over a date range. Use to answer questions like "what is the best-performing prompt today?" or "which prompts dropped this week?". ' +
+        `For one prompt or a few the person names, read \`prompt_ids\` first (ids from list_prompts; by its words: list_prompts' \`search\`). It returns those prompts only, every one of them, over the same window, model and region, whatever their topic, with { note, no_results, not_found }; topic_id, sort_by, order and limit don't apply. A tracked prompt with no answers in that window is in no_results: say so, it is tracked. ${LOOKUP_NOT_FOUND}`,
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
@@ -1265,21 +1371,34 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
             'Optional model slug filter, or comma-separated list of slugs to filter a provider family.',
           ),
         region: z.string().optional().describe('Optional region code filter (e.g. "US", "TR").'),
+        prompt_ids: lookupIds(
+          'These prompts only, by id (list_prompts): a lookup, whatever their topic; never cut by limit.',
+        ),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const result = await getPromptPerformanceFor(auth, {
-        brandId: args.brand_id,
-        dateFrom: args.date_from,
-        dateTo: args.date_to,
-        topicId: args.topic_id,
-        sortBy: args.sort_by,
-        order: args.order,
-        limit: args.limit,
-        model: args.model,
-        region: args.region,
-      });
+      // By id: Chat's read (get_prompt_performance's prompt_ids), the same rows and note.
+      const result = looksUp(args.prompt_ids)
+        ? await lookUpPromptPerformanceFor(auth, {
+            brandId: args.brand_id,
+            dateFrom: args.date_from,
+            dateTo: args.date_to,
+            model: args.model,
+            region: args.region,
+            promptIds: args.prompt_ids!,
+          })
+        : await getPromptPerformanceFor(auth, {
+            brandId: args.brand_id,
+            dateFrom: args.date_from,
+            dateTo: args.date_to,
+            topicId: args.topic_id,
+            sortBy: args.sort_by,
+            order: args.order,
+            limit: args.limit,
+            model: args.model,
+            region: args.region,
+          });
       if (result === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -1297,7 +1416,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Action Center actions',
       description:
-        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, priority (a 0–100 score, its level — critical, high, medium or low — the facts it rests on, and `confidence`: low, medium or high with `confidence_note` saying why, the raw factor in `confidence_score`; null until scored), status, `stale` (New for 30 days or more with no one working on it, since `stale_at`: not closed, ask whether it still matters), outcome, assignee, due date and task progress, highest priority first (unscored last), or most recently updated first with sort "updated". `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress.',
+        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, priority (a 0–100 score, its level — critical, high, medium or low — the facts it rests on, and `confidence`: low, medium or high with `confidence_note` saying why, the raw factor in `confidence_score`; null until scored), status, `stale` (New for 30 days or more with no one working on it, since `stale_at`: not closed, ask whether it still matters), outcome, assignee, due date and task progress, highest priority first (unscored last), or most recently updated first with sort "updated". `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress. ' +
+        `When the person names an action by its code (${actionRef(481)}, "AC 481", "#481", or a number they clearly mean as one), read that code first with \`codes\`, every code of the message in one read. It returns { note, actions, not_found } in place of the list: every status, Completed and Dismissed included, of this brand only; status, category, sort and limit don't apply. Each row has id (for get_action), ref (its code), title, status, priority, priority_level, tasks, \`asked\`, \`matched\` ("its code" or "its previous code") and \`previous_ref\` when it had another code. A code that names two actions returns both: name both and say which is which, never pick one. A code in \`not_found\`: this brand has no action with that code (codes are per brand); say so, and never offer the closest actions instead. Never say an action doesn't exist because a page of this list didn't show it.`,
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z
@@ -1321,17 +1441,28 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .describe(
             'Order: "priority" (default) highest priority score first — the order to work on them; "updated" most recently updated first.',
           ),
+        codes: z
+          .array(z.string().trim().min(1).max(40))
+          .min(1)
+          .max(ACTION_CODES_MAX)
+          .optional()
+          .describe(
+            `Actions by their codes, as the person wrote them: "${actionRef(481)}", "AC 481", "ac481", "#481", "481", "${actionRef('07')}". Reads only these, in any status; the other inputs don't apply.`,
+          ),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const actions = await listActionsFor(auth, {
-        brandId: args.brand_id,
-        status: args.status,
-        category: args.category,
-        limit: args.limit,
-        sort: args.sort,
-      });
+      // By code: Chat's read (list_action_center_tasks' codes), the same rows and note.
+      const actions = args.codes?.length
+        ? await listActionsByCodeFor(auth, { brandId: args.brand_id, codes: args.codes })
+        : await listActionsFor(auth, {
+            brandId: args.brand_id,
+            status: args.status,
+            category: args.category,
+            limit: args.limit,
+            sort: args.sort,
+          });
       if (actions === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -1351,7 +1482,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Get one Action Center action in full: its outcome, its change net of the control (`net_of_control`: per metric, its move minus that of the brand\u2019s prompts it didn\u2019t touch; null when not netted) and why it was dismissed (`dismiss_reason`), its priority (score, level, the facts it rests on and its confidence, as on list_actions), whether it is `stale` (as on list_actions), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`. `details` says what the task carries beyond that, or null: `url` (the exact page), `where` (the page, prompt, platform, domain or competitor), `why` (the evidence), `change` (`before`, null when it adds text, and `after`), `how` (the steps), `done_when` (the check that closes it), `check` (how it is checked: auto, the page fetched again; rerun, the prompts run again; manual, a person confirms), `type` (content, on_page, technical, outreach, pr or product), `effort` and `role`; a task sent from the Improve tab also carries `body`, `platform`, `platform_label` and `sources`; `sent_to_content` (the opportunity it became) and `sent_to_webhook` say where it was sent. With `format` "markdown" or "csv" it returns the action as the dashboard\'s Copy Data and Export CSV write it instead (everything its tabs show, labelled in English, dates in UTC): Markdown to paste into a doc, ticket or another agent, CSV with a row per affected item, task and signal.',
       inputSchema: {
-        action_id: relaxedUuid.describe('Action UUID, from list_actions or list_action_history.'),
+        action_id: relaxedUuid.describe(
+          'Action UUID, from list_actions (an action named by its code: its `codes` input) or list_action_history.',
+        ),
         format: z
           .enum(['json', 'markdown', 'csv'])
           .optional()
@@ -1388,7 +1521,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Action Center signals',
       description:
-        "List the signals the Action Center detected for a brand: measured changes such as a visibility drop, a competitor gaining citations or a page losing AI traffic. Newest first. Each signal carries its raw row (previous_value, current_value, change_value, payload, action_id) and, read from it: `where` (the prompt, topic, platforms with names, locations, domain, competitor or pages it is about; a field is null when no detector records it yet), `change` (labelled figures: metric, role such as before/after or you/competitor, value, unit and the period it covers, e.g. 'week_over_week', given per figure since one finding can mix windows; null when the signal records no figures), `evidence` (first and last detection, and app paths that show the underlying answers) and `used_by_actions` (every action built on it, closed ones too, the latest first). Prefer `change` over the raw value columns: their meaning differs per signal kind. Use this to explain why an action exists or what has changed recently.",
+        "List the signals the Action Center detected for a brand: measured changes such as a visibility drop, a competitor gaining citations or a page losing AI traffic. Newest first. Each signal carries its raw row (previous_value, current_value, change_value, payload, action_id) and, read from it: `where` (the prompt, topic, platforms with names, locations, domain, competitor or pages it is about; a field is null when no detector records it yet), `change` (labelled figures: metric, role such as before/after or you/competitor, value, unit and the period it covers, e.g. 'week_over_week', given per figure since one finding can mix windows; null when the signal records no figures), `evidence` (first and last detection, and app paths that show the underlying answers) and `used_by_actions` (every action built on it, closed ones too, the latest first). Prefer `change` over the raw value columns: their meaning differs per signal kind. Use this to explain why an action exists or what has changed recently. " +
+        `When the person names a signal by its code (S-07, "S 7", "s7", "#7", or a number they clearly mean as one) or its id, read that first with \`codes\` or \`ids\`, every one of the message in one read. It returns { note, signals, not_found } in place of the list: every status and every date, of this brand only; status, kind and limit don't apply. Each row is compact, as the Signals page lists it: id, code, title and description in the page's words, kind, category, impact, status, detected (its day), where, actions (the codes of those built on it), \`asked\` and \`matched\` ("its code" or "its id"). A code that names two signals returns both: name both and say which is which, never pick one. A code in \`not_found\`: this brand has no signal with that code (codes are per brand); say so plainly, and never offer other signals as the closest. Never say a signal doesn't exist because a page of this list didn't show it. Name each signal by its title, with its code.`,
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z
@@ -1406,16 +1540,28 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .max(200)
           .optional()
           .describe('Row cap limit (default 50, max 200).'),
+        codes: z
+          .array(z.string().trim().min(1).max(40))
+          .min(1)
+          .max(LOOKUP_MAX)
+          .optional()
+          .describe(
+            'Signals by their codes, as the person wrote them: "S-07", "S 7", "s7", "#7", "7". A lookup, every status and date; the other inputs don\'t apply.',
+          ),
+        ids: lookupIds('Signals by their ids. A lookup, every status and date.'),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const signals = await listSignalsFor(auth, {
-        brandId: args.brand_id,
-        status: args.status,
-        kind: args.kind,
-        limit: args.limit,
-      });
+      // By code or id: Chat's read (list_signals' codes and ids), the same rows and note.
+      const signals = looksUp(args.codes, args.ids)
+        ? await lookUpSignalsFor(auth, { brandId: args.brand_id, codes: args.codes, ids: args.ids })
+        : await listSignalsFor(auth, {
+            brandId: args.brand_id,
+            status: args.status,
+            kind: args.kind,
+            limit: args.limit,
+          });
       if (signals === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -1773,12 +1919,28 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Content drafts',
       description:
-        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path. Also `last_send` (its last Send to CMS: status queued, sent, failed or published, target webhook, webflow, wordpress, framer or wix, when, the webhook's HTTP status, the error, and where the CMS says it went live; null when never sent) and `shopping_links` (on a shop's page with a shopping path: whether its links still sell — state ok or attention, the category pages and products linked, and the linked products that no longer sell: sold out, refused by Merchant Center or gone; none or unchecked otherwise).",
-      inputSchema: listDraftsShape,
+        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path. Also `last_send` (its last Send to CMS: status queued, sent, failed or published, target webhook, webflow, wordpress, framer or wix, when, the webhook's HTTP status, the error, and where the CMS says it went live; null when never sent) and `shopping_links` (on a shop's page with a shopping path: whether its links still sell — state ok or attention, the category pages and products linked, and the linked products that no longer sell: sold out, refused by Merchant Center or gone; none or unchecked otherwise). " +
+        `When the person names a draft by its title or id, read that first with \`search\` (a few distinctive words of its title, in any order and case) or \`ids\`. It returns { note, drafts, not_found } in place of the list, with total and next_offset for a search (read on with \`offset\`): every status, archived drafts included and marked archived, of this brand only; status doesn't apply. ${LOOKUP_NOT_FOUND}`,
+      inputSchema: {
+        ...listDraftsShape,
+        search: lookupSearch(
+          `Drafts whose title holds every one of these words, in any order and case: a lookup, every status, archived too; ${PAGE_ROWS} a page, read on with offset.`,
+        ),
+        ids: lookupIds('Drafts by their ids: a lookup, every status, archived too.'),
+        offset: lookupOffset,
+      },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const drafts = await listContentDraftsFor(auth, args.brand_id, args.status);
+      // By words or ids: Chat's read (list_drafts' search and ids), the same rows and note.
+      const drafts = looksUp(args.ids, args.search)
+        ? await lookUpDraftsFor(auth, {
+            brandId: args.brand_id,
+            ids: args.ids,
+            search: args.search,
+            offset: args.offset,
+          })
+        : await listContentDraftsFor(auth, args.brand_id, args.status);
       return drafts ? json(drafts) : notFound('Brand');
     },
   );
@@ -1790,7 +1952,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also where and since when the page is live (published_url, published_at; null until then), the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations). With them, `last_send` and `shopping_links` as list_content_drafts gives them, and `shopping_path`: on a page of an online shop, the category pages and catalog products it should link (with price and stock) and those left out and why, as its Brief tab shows them; null for none.',
       inputSchema: {
-        draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
+        draft_id: relaxedUuid.describe(
+          'Draft UUID, from list_content_drafts (a draft named by its title: its `search` input).',
+        ),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },

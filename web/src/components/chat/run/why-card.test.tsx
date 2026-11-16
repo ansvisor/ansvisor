@@ -211,10 +211,10 @@ describe('WhyCard', () => {
     expect(container.textContent).not.toContain('days');
   });
 
-  it('says when some answers couldn’t be read', async () => {
+  it('says causes come only from prompts whose answers were all compared', async () => {
     await render({ ...why, partial: true });
     expect(container.textContent).toContain(
-      "Some answers couldn't be read, so this covers the answers that could.",
+      'Causes are drawn only from prompts whose answers were all compared.',
     );
   });
 

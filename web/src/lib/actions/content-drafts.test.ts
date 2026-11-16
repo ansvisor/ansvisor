@@ -1094,7 +1094,8 @@ describe('agent suggestions', () => {
       id: 's1',
       batchId: 'new',
       actionId: 'a1',
-      actionNo: 214,
+      // The number its code shows: the old one until its brand is numbered (00534).
+      actionNo: '214',
       kind: 'replace',
       blockText: 'Our forecasting is very accurate.',
       beforeText: 'very accurate',

@@ -26,6 +26,7 @@ function builder(table: string) {
     in: () => chain,
     order: () => chain,
     limit: () => chain,
+    range: () => chain,
     maybeSingle: async () => ({ data: { id: 'brand-1' }, error: null }),
     then: (resolve: (v: { data: unknown; error: unknown }) => void) =>
       resolve(

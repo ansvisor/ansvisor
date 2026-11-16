@@ -352,8 +352,19 @@ vi.mock('./registry/tools', async (importOriginal) => {
   const citations = { ...readVisibility, name: 'list_citations' };
   // One Site Audit in full, whose result shows as its card.
   const audit = { ...readVisibility, name: 'list_site_audit_issues' };
+  // A list read a page at a time (scope.ts pagedRead): its next pages count lightly.
+  const pages = {
+    ...readVisibility,
+    name: 'read_pages',
+    inputSchema: z.object({
+      brand_id: z.string(),
+      limit: z.number().int().min(1).max(50).optional(),
+      offset: z.number().int().min(0).optional(),
+    }),
+  };
   const tools = [
     readVisibility,
+    pages,
     ownNumbers,
     citations,
     audit,
@@ -420,6 +431,8 @@ const { CHAT_MODELS, runChoiceOf } = await import('./models');
 const { pickedClaudeModels } = await import('./engine-model');
 const { fakeAnthropic } = await import('./testing/fake-anthropic');
 const { readPrecedenceContext } = await import('./precedence-context');
+const { READ_FAILED, READ_TIMED_OUT, READ_TIMED_OUT_AGAIN } = await import('./read-attempt');
+const { MAX_NEXT_PAGES, READS_USED_UP, TOOL_READS_USED_UP } = await import('./run-limits');
 const { ANSWER_NOTE, INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ATTACHMENTS_NOTE, ATTACHMENTS_ONLY, IMAGE_TOKENS, PDF_PAGE_TOKENS, earlierFilesLine } =
   await import('./attachments');
@@ -715,6 +728,7 @@ describe('a turn', () => {
     const read = haiku.seen[0];
     expect(read.tools?.map((t) => t.name)).toEqual([
       'read_visibility',
+      'read_pages',
       'get_visibility_summary',
       'list_citations',
       'list_site_audit_issues',
@@ -1152,25 +1166,93 @@ describe('a read that runs out of time (2026-11-11)', () => {
     readLimits.short = false;
   });
 
-  it("isn't read again, and the writer is told what couldn't be read", async () => {
+  it('is tried once more, narrower, and the writer is told what to say, never "couldn\'t read"', async () => {
     readLimits.short = true;
     fakes.readRun.mockImplementation(() => new Promise(() => {}));
+    const narrower = { brand_id: BRAND, date_from: '2026-11-09' };
     const { haiku, sonnet } = useModels(
-      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
-      [text("Visibility couldn't be read just now.")],
+      [
+        calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })),
+        calls(toolCall('r2', 'read_visibility', narrower)),
+        calls(toolCall('r3', 'read_visibility', { brand_id: BRAND, date_from: '2026-11-15' })),
+        READY,
+      ],
+      [text("Visibility isn't available right now: ask again in a moment.")],
     );
     const runId = await turn(ADMIN, 'Make me a 30-day plan to raise visibility');
 
     expect(runRow(runId).status).toBe('done');
-    // Once: the same read would take as long again, while the first still runs.
-    expect(fakes.readRun).toHaveBeenCalledTimes(1);
-    expect(stepsOf(runId)).toHaveLength(1);
-    expect(stepsOf(runId)[0]).toMatchObject({ status: 'error', detail: 'Timed out' });
-    // The reader is told not to read it again, and the writer that it wasn't read.
-    expect(JSON.stringify(haiku.seen[1].prompt)).toContain('took too long and was stopped');
+    // Twice: the first, then one narrower try. A third isn't run.
+    expect(fakes.readRun).toHaveBeenCalledTimes(2);
+    expect(stepsOf(runId)).toHaveLength(2);
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'error', detail: 'Took too long this time' });
+    const told = (i: number) => JSON.stringify(haiku.seen[i].prompt);
+    expect(told(1)).toContain(READ_TIMED_OUT);
+    expect(told(2)).toContain(READ_TIMED_OUT_AGAIN);
+    expect(told(3).split(READ_TIMED_OUT_AGAIN)).toHaveLength(3);
+    // The writer reads both, and the rule for what to say.
     const written = JSON.stringify(sonnet.seen[0].prompt);
     expect(written).toContain('read_visibility');
-    expect(written).toContain('took too long and was stopped');
+    expect(written).toContain("isn't available right now");
+    for (const said of [READ_TIMED_OUT, READ_TIMED_OUT_AGAIN]) {
+      expect(said).not.toMatch(/couldn't be read now|say in the answer that this data/);
+    }
+  });
+
+  it('tells the model what to do after a read that failed, and the writer which figure it was', async () => {
+    readLimits.short = true;
+    fakes.readRun.mockRejectedValue(new Error('connection reset'));
+    const { haiku, sonnet } = useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text("Visibility isn't available right now.")],
+    );
+    const runId = await turn(ADMIN, 'How visible are we?');
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'error', detail: 'Not available right now' });
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain(READ_FAILED);
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain(READ_FAILED);
+  });
+
+  it('reads the next pages of a list lightly, and stops paging at its ceiling', async () => {
+    const page = (id: string, offset: number) =>
+      toolCall(id, 'read_pages', { brand_id: BRAND, offset });
+    const nextPages = Array.from({ length: MAX_NEXT_PAGES }, (_, i) => page(`n${i}`, 50 * (i + 1)));
+    const { haiku } = useModels(
+      [
+        calls(page('p0', 0)),
+        // 12 next pages cost 3 of the run's 6 reads, not 12.
+        calls(...nextPages),
+        // Past the ceiling: no more pages; a read of another kind still runs.
+        calls(
+          page('past', 50 * (MAX_NEXT_PAGES + 1)),
+          toolCall('v1', 'read_visibility', { brand_id: BRAND }),
+        ),
+        READY,
+      ],
+      [text('The newest 650 of 900 signals.')],
+    );
+    await turn(ADMIN, 'Go through all our signals');
+    expect(fakes.readRun).toHaveBeenCalledTimes(1 + MAX_NEXT_PAGES + 1);
+    const told = JSON.stringify(haiku.seen[3].prompt);
+    expect(told).toContain(READS_USED_UP.split(' (')[0]);
+    expect(READS_USED_UP).not.toMatch(/Reading is done/);
+  });
+
+  it('counts a first page as a read, and pages past the reads left are refused', async () => {
+    const reads = [1, 2, 3, 4, 5].map((i) =>
+      toolCall(`v${i}`, 'read_visibility', { brand_id: BRAND, date_from: `2026-11-0${i}` }),
+    );
+    const { haiku } = useModels(
+      [
+        calls(toolCall('p0', 'read_pages', { brand_id: BRAND }), ...reads),
+        calls(toolCall('p1', 'read_pages', { brand_id: BRAND, offset: 50 })),
+        READY,
+      ],
+      [text('Ok.')],
+    );
+    await turn(ADMIN, 'Go through all our signals');
+    // Six reads: the run's budget is used, so even a light next page waits for another run.
+    expect(fakes.readRun).toHaveBeenCalledTimes(6);
+    expect(JSON.stringify(haiku.seen[2].prompt)).toContain(READS_USED_UP.split(' (')[0]);
   });
 
   it('still reads a failed read once more', async () => {
@@ -3494,7 +3576,7 @@ describe('opening a page (W2-08)', () => {
     await engine.driveRun(ADMIN, started.runId);
 
     expect(fakes.openPage).toHaveBeenCalledTimes(10);
-    expect(JSON.stringify(haiku.seen[1].prompt)).toContain('No more of these in this run.');
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain(TOOL_READS_USED_UP);
   });
 
   it('is off when an Admin switched it off', async () => {

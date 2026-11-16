@@ -170,6 +170,24 @@ describe('sendEarn', () => {
     expect(logAdsActivity).not.toHaveBeenCalled();
   });
 
+  it("answers the action's number in its brand once the brand is numbered (00534)", async () => {
+    chat.sendChatAction.mockResolvedValue({
+      actionId: 'a1',
+      actionNo: 1300,
+      brandNo: 12,
+      created: true,
+    });
+    await expect(send()).resolves.toMatchObject({ action: { id: 'a1', no: 1300, brandNo: 12 } });
+    chat.sendChatAction.mockRejectedValue(
+      Object.assign(new Error('AC-03 already covers this.'), {
+        status: 409,
+        code: 'duplicate',
+        extra: { action: { id: 'a9', no: 1258, brandNo: 3, covers: 'all' } },
+      }),
+    );
+    await expect(send()).resolves.toMatchObject({ action: { id: 'a9', no: 1258, brandNo: 3 } });
+  });
+
   it("reads a prompt that isn't one of the brand's opportunities as not found", async () => {
     readOpportunities.mockResolvedValue({ rows: [{ ...ROW, promptId: P2 }] });
     await expect(send()).rejects.toMatchObject({ status: 404 });
@@ -197,6 +215,12 @@ describe('readEarn', () => {
       pages: [],
       competitors: [],
       platforms: [],
+    });
+    chat.findCoveringActions.mockResolvedValue({
+      covering: [{ actionId: 'a9', actionNo: 1258, brandNo: 3, covers: 'all' }],
+    });
+    await expect(readEarn('b1', 'o1', P1)).resolves.toMatchObject({
+      action: { id: 'a9', no: 1258, brandNo: 3 },
     });
     chat.findCoveringActions.mockResolvedValue({ covering: [] });
     await expect(readEarn('b1', 'o1', P2)).resolves.toEqual({ page: null, action: null });

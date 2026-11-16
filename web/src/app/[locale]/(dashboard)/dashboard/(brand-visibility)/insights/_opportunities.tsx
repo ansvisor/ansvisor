@@ -30,6 +30,7 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { NO_TOPICS } from '@/lib/topics-required';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 
 /** Items shown, as in the mockup; "See all" opens the rest. */
@@ -138,8 +139,8 @@ export function Opportunities({
         }
         toast.success(
           result.created
-            ? t('sent', { no: result.actionNo })
-            : t('alreadySent', { no: result.actionNo }),
+            ? t('sent', { no: actionCodeNo(result) })
+            : t('alreadySent', { no: actionCodeNo(result) }),
           {
             action: {
               label: t('openAction'),

@@ -84,9 +84,41 @@ describe('the onboarding layout', () => {
     expect(await open()).toBe(true);
   });
 
+  it.each(['past_due', 'unpaid', 'canceled', 'incomplete_expired', 'incomplete'])(
+    'sends someone whose onboarding is not finished to the read-only dashboard once a plan is %s after a subscription',
+    async (status) => {
+      // A trial started from the choice, then canceled or unpaid before setup's Finish.
+      profile = { ...profile, onboarding_completed: false };
+      org = { subscription_status: status, stripe_subscription_id: 'sub_1' };
+      expect(await open()).toBe('/dashboard');
+    },
+  );
+
+  it('lets someone whose onboarding is not finished through with a plan on, or never subscribed', async () => {
+    profile = { ...profile, onboarding_completed: false };
+    org = { subscription_status: 'trialing', stripe_subscription_id: 'sub_1' };
+    expect(await open()).toBe(true);
+    org = { subscription_status: 'incomplete', stripe_subscription_id: null };
+    expect(await open()).toBe(true);
+    // An organization that couldn't be read decides nothing.
+    org = null;
+    expect(await open()).toBe(true);
+  });
+
+  it('never sends anyone on a self-hosted install', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    profile = { ...profile, onboarding_completed: false };
+    expect(await open()).toBe(true);
+  });
+
   it("hands the signed-in account to the sign-up event, for a new account's first page", async () => {
     profile = { organization_id: null, onboarding_completed: false, role: 'admin' };
     expect(await open()).toBe(true);
+    expect(sendSignupEventOnce).toHaveBeenCalledWith({ id: 'u1' });
+  });
+
+  it('hands it over before a redirect too: Next runs after() work once that response closes', async () => {
+    expect(await open()).toBe('/dashboard');
     expect(sendSignupEventOnce).toHaveBeenCalledWith({ id: 'u1' });
   });
 });

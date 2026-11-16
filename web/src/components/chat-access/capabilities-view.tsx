@@ -32,7 +32,10 @@ const MARK_ICON: Record<ApprovalMark, typeof Unlock> = {
 const FILTERS = ['all', 'write', 'execute', 'read'] as const;
 type Filter = (typeof FILTERS)[number];
 
-/** "What Chat can do": the registry by area, searchable, with the plan card on top. */
+/**
+ * "What Chat can do": the registry by area, searchable, with the plan card on
+ * top. A tab of Chat's Settings: the frame holds the page's title.
+ */
 export function CapabilitiesView({
   access,
   areas,
@@ -102,12 +105,12 @@ export function CapabilitiesView({
     <div className="space-y-5">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+          <h2 className="text-lg font-semibold">{t('title')}</h2>
           <Badge variant="secondary" className="tabular-nums">
             {t('areas', { count: areas.length })}
           </Badge>
         </div>
-        <p className="text-muted-foreground">{t('lead')}</p>
+        <p className="text-sm text-muted-foreground">{t('lead')}</p>
       </div>
 
       {access.plan && <YourPlanCard plan={access.plan} isAdmin={access.role === 'admin'} />}
@@ -195,7 +198,7 @@ export function CapabilitiesUnavailable() {
   const router = useRouter();
   return (
     <div role="status" className="space-y-2 text-sm text-muted-foreground">
-      <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+      <h2 className="text-lg font-semibold text-foreground">{t('title')}</h2>
       <p>{t('loadError')}</p>
       <Button size="sm" variant="outline" onClick={() => router.refresh()}>
         {t('retry')}

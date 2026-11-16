@@ -15,6 +15,7 @@ import { FINAL_READING_DAY, type ActionHistoryItem } from '@/lib/action-center/h
 import type { ActionStatus } from '@/lib/action-center/registry';
 import { ActionIcon, PriorityBadge } from './action-table';
 import { cn } from '@/lib/utils';
+import { actionCode } from '@/lib/action-center/action-ref';
 
 /** Low-saturation per type, the way the Signals table tints its categories —
  *  enough to group at a glance, not enough to colour the row. */
@@ -181,7 +182,7 @@ export function HistoryTable({
                       <p className="truncate text-sm font-medium">{texts.title}</p>
                       <p className="truncate text-xs text-muted-foreground">{texts.description}</p>
                       <p className="mt-0.5 text-[11px] text-muted-foreground/70">
-                        AC-{item.actionNo}
+                        {actionCode(item)}
                       </p>
                     </div>
                   </div>

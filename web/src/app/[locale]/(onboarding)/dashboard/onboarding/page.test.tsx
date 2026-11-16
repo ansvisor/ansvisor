@@ -33,6 +33,9 @@ const db = vi.hoisted(() => ({
   } | null,
   // The person's organization: none yet for a new account.
   orgId: 'org-1' as string | null,
+  // The own brand's competitors (saved by Finish) and runs (tracking_runs).
+  competitors: [] as unknown[],
+  runs: [] as unknown[],
   // The person's role.
   role: 'admin',
   // The organization's own brands, whatever this person sees (org_brand_count);
@@ -71,6 +74,8 @@ vi.mock('@/lib/supabase/client', () => {
       role: db.role,
     }),
     organizations: () => db.org,
+    competitors: () => db.competitors,
+    tracking_runs: () => db.runs,
     brands: () =>
       db.ownBrand
         ? [
@@ -214,6 +219,8 @@ beforeEach(() => {
   db.role = 'admin';
   db.orgBrandCount = 1;
   db.orgId = 'org-1';
+  db.competitors = [];
+  db.runs = [];
   db.log = [];
   db.profileWriteFails = false;
   exploreDemo.opening = false;
@@ -1183,8 +1190,8 @@ describe('setup after purchase', () => {
     await act(async () => button('Continue')!.click());
     await act(async () => button('Continue')!.click());
     await act(async () => {});
-    // Onboarding is open again before the brand is made: left half-way, setup resumes.
-    expect(db.log).toEqual([{ profiles: { onboarding_completed: false } }, 'createBrand']);
+    // Onboarding stays as it is: left half-way, setup resumes from the brand's own data.
+    expect(db.log).toEqual(['createBrand']);
     expect(text()).toContain('Choose topics to monitor');
     await act(async () => button('Looks good')!.click());
     expect(text()).toContain('Choose your prompts');
@@ -1208,8 +1215,8 @@ describe('setup after purchase', () => {
     expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
     expect(toast.success).toHaveBeenCalledWith('Setup complete! Your first tracking is starting.');
     expect(text()).not.toContain('Choose how to start');
-    // The server marks onboarding completed, not the page.
-    expect(db.log).toHaveLength(2);
+    // The page writes nothing to the profile: the server marks onboarding completed.
+    expect(db.log).toEqual(['createBrand']);
     // Today's events and step names, with the property.
     expect(flowEvents()).toEqual(
       expect.arrayContaining([
@@ -1265,11 +1272,8 @@ describe('setup after purchase', () => {
     await act(async () => button('Continue')!.click());
     await act(async () => {});
     // The workspace takes the brand's name, once the brand is there.
-    expect(db.log).toEqual([
-      { profiles: { onboarding_completed: false } },
-      'createBrand',
-      { organizations: { name: 'Acme' } },
-    ]);
+    // Onboarding stays open as it was: nothing written to the profile before Finish.
+    expect(db.log).toEqual(['createBrand', { organizations: { name: 'Acme' } }]);
     await act(async () => button('Looks good')!.click());
     await act(async () => button('Continue')!.click());
     await act(async () => {});
@@ -1295,16 +1299,18 @@ describe('setup after purchase', () => {
     await type('website', 'acme.com');
     await act(async () => button('Continue')!.click());
     await act(async () => button('Continue')!.click());
-    expect(db.log).toEqual([{ profiles: { onboarding_completed: false } }]);
+    expect(db.log).toEqual([]);
   });
 
   it('resumes a setup left half-way, and its Finish still skips the plan step', async () => {
-    // Onboarding open again, the brand and its prompts saved.
-    db.onboarded = false;
+    // Onboarded, the brand and its prompts saved, no competitor yet and never
+    // tracked: the brand's own data says setup was left, as the dashboard reads it.
     db.ownBrand = true;
     db.orgBrandCount = 1;
     db.promptSets = [{ id: 's1' }];
+    const push = vi.spyOn(stable.router, 'push');
     await render();
+    expect(push).not.toHaveBeenCalled();
     expect(text()).toContain('Add your competitors');
     expect(stepDots()).toHaveLength(5);
     expect(track).toHaveBeenCalledWith('onboarding_step_viewed', {
@@ -1316,6 +1322,101 @@ describe('setup after purchase', () => {
     await act(async () => button('Start tracking with 1 competitor')!.click());
     expect(finishSetup).toHaveBeenCalledWith('b1');
     expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+  });
+
+  it('resumes it the same for an onboarding not finished (a new account back from Checkout)', async () => {
+    db.onboarded = false;
+    db.ownBrand = true;
+    db.promptSets = [{ id: 's1' }];
+    await render();
+    expect(text()).toContain('Add your competitors');
+    expect(stepDots()).toHaveLength(5);
+  });
+
+  it.each([
+    ['its competitors are saved (Finish pressed)', () => (db.competitors = [{ id: 'c1' }])],
+    ['it was tracked already', () => (db.runs = [{ id: 'r1' }])],
+    ['the organization has another brand', () => (db.orgBrandCount = 2)],
+  ])('sends someone onboarded with a brand to the dashboard when %s', async (_, given) => {
+    db.ownBrand = true;
+    db.orgBrandCount = 1;
+    db.promptSets = [{ id: 's1' }];
+    given();
+    const push = vi.spyOn(stable.router, 'push');
+    await render();
+    expect(push).toHaveBeenCalledWith('/dashboard');
+  });
+
+  describe('a plan that lapsed after the subscription', () => {
+    const lapse = () => {
+      db.org = { subscription_status: 'canceled', plan: 'growth', stripe_subscription_id: 'sub_1' };
+    };
+
+    it('opens the read-only dashboard instead of setup, for an onboarding not finished', async () => {
+      db.onboarded = false;
+      db.ownBrand = true;
+      db.promptSets = [{ id: 's1' }];
+      lapse();
+      const push = vi.spyOn(stable.router, 'push');
+      await render();
+      expect(push).toHaveBeenCalledWith('/dashboard');
+      expect(text()).not.toContain('Add your competitors');
+    });
+
+    it('writes nothing at Finish: Billing opens for its admin, saying why', async () => {
+      db.ownBrand = true;
+      db.orgBrandCount = 1;
+      db.promptSets = [{ id: 's1' }];
+      await render();
+      expect(text()).toContain('Add your competitors');
+      lapse();
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Start tracking with 1 competitor')!.click());
+      const { addCompetitor } = await import('@/lib/actions/competitor');
+      expect(addCompetitor).not.toHaveBeenCalled();
+      expect(finishSetup).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith(
+        "Your plan isn't active any more, so setup is paused. Choose a plan in Billing, then set up your brand.",
+      );
+      expect(window.location.href).toBe('/dashboard/settings/billing');
+    });
+
+    it('makes no brand: the read-only dashboard for a manager', async () => {
+      db.role = 'manager';
+      await render();
+      expect(text()).toContain('Set up your brand');
+      await type('brandName', 'Acme');
+      await type('website', 'acme.com');
+      await act(async () => button('Continue')!.click());
+      lapse();
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Continue')!.click());
+      expect(createBrand).not.toHaveBeenCalled();
+      expect(window.location.href).toBe('/dashboard');
+    });
+
+    it('saves no topics or prompts', async () => {
+      db.ownBrand = true;
+      db.orgBrandCount = 1;
+      await render();
+      expect(text()).toContain('Choose topics to monitor');
+      lapse();
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Looks good')!.click());
+      const { createTopics } = await import('@/lib/actions/topic');
+      expect(createTopics).not.toHaveBeenCalled();
+      expect(window.location.href).toBe('/dashboard/settings/billing');
+    });
+  });
+
+  it('falls through to the choice for an admin onboarded with no organization, never to the dashboard', async () => {
+    // The dashboard sends anyone with no organization here: pushing it back would loop.
+    db.orgId = null;
+    db.org = null;
+    const push = vi.spyOn(stable.router, 'push');
+    await render();
+    expect(push).not.toHaveBeenCalled();
+    expect(text()).toContain('How do you want to start?');
   });
 
   it('lands on the dashboard without a job when no run could be started', async () => {

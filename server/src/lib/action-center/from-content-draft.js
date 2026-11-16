@@ -15,6 +15,7 @@ import { assetTasks } from './from-opportunity.js';
 import { priorityOnCreate } from './priority-data.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
+import { brandNoOf } from './action-code.js';
 
 export const CONTENT_DRAFT_ACTION_KIND = 'content_draft';
 
@@ -60,7 +61,7 @@ export async function sendContentDraftToActionCenter(brandId, { draftId, userId 
   const openAction = async () => {
     const { data } = await supabaseAdmin
       .from('actions')
-      .select('id, action_no')
+      .select('id, action_no, brand_no')
       .eq('brand_id', brandId)
       .eq('dedup_key', dedupKey)
       .in('status', ACTIVE)
@@ -68,7 +69,13 @@ export async function sendContentDraftToActionCenter(brandId, { draftId, userId 
     return data;
   };
   const open = await openAction();
-  if (open) return { actionId: open.id, actionNo: Number(open.action_no), created: false };
+  if (open)
+    return {
+      actionId: open.id,
+      actionNo: Number(open.action_no),
+      ...brandNoOf(open),
+      created: false,
+    };
 
   const promptIds = [...new Set(draft.prompt_ids ?? [])];
   const { data: prompts, error: promptsErr } = promptIds.length
@@ -118,14 +125,19 @@ export async function sendContentDraftToActionCenter(brandId, { draftId, userId 
         payload,
       })),
     })
-    .select('id, action_no')
+    .select('id, action_no, brand_no')
     .single();
   if (error) {
     // Two sends at once: the other one opened it (the open-action dedup index, 00084).
     if (error.code === '23505') {
       const winner = await openAction();
       if (winner) {
-        return { actionId: winner.id, actionNo: Number(winner.action_no), created: false };
+        return {
+          actionId: winner.id,
+          actionNo: Number(winner.action_no),
+          ...brandNoOf(winner),
+          created: false,
+        };
       }
     }
     throw new Error(error.message);
@@ -172,5 +184,10 @@ export async function sendContentDraftToActionCenter(brandId, { draftId, userId 
     .eq('id', draft.id);
   if (linkErr) throw new Error(linkErr.message);
 
-  return { actionId: action.id, actionNo: Number(action.action_no), created: true };
+  return {
+    actionId: action.id,
+    actionNo: Number(action.action_no),
+    ...brandNoOf(action),
+    created: true,
+  };
 }

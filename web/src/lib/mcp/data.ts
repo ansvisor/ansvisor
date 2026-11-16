@@ -58,6 +58,24 @@ import {
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
+import { PAGE_ROWS, pageRows } from './list-page';
+import {
+  CITED_TOP,
+  LOOKUP_MAX,
+  LOOKUP_WORDS,
+  askedIds,
+  containsPattern,
+  idAndSearchLookup,
+  keysOf,
+  lookUpCited,
+  lookUpKeys,
+  lookupEnd,
+  periodWords,
+  searchWords,
+  type CitedLookup,
+  type IdAndSearchLookup,
+  type LookupWords,
+} from './lookup';
 import { getOrgLocationUsage, placeNewPrompt, waitingPromptColumns } from '@/lib/prompt-locations';
 import { NO_TOPICS, brandHasTopics } from '@/lib/topics-required';
 import {
@@ -78,6 +96,8 @@ import {
 import { refreshYears } from '@/lib/content/current-year';
 import { readPageComparison, type RangedAuditRow } from '@/lib/audit/page-trend';
 import type { ScoreRange } from '@/lib/audit/score-range';
+import { actionCode } from '@/lib/action-center/action-ref';
+import { signalCode } from '@/lib/signals/signal-code';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -1023,6 +1043,15 @@ export interface ListPromptsParams {
   topicId?: string;
   isActive?: boolean;
   limit?: number;
+  /** Rows before this page (Chat's pages). */
+  offset?: number;
+  /** Chat's lookup: these prompts only, by id (checked ids), whatever their topic or state. */
+  ids?: readonly string[];
+  /**
+   * Chat's lookup: the prompts whose text holds every word of this, in any
+   * order and case (lookup.ts searchWords), whatever their topic or state.
+   */
+  search?: string;
 }
 
 const PROMPT_LIST_DEFAULT_LIMIT = 100;
@@ -1032,6 +1061,14 @@ export async function listPromptsFor(
   auth: McpAuthContext,
   params: ListPromptsParams,
 ): Promise<PromptRow[] | null> {
+  return (await promptsPageFor(auth, params))?.rows ?? null;
+}
+
+/** The brand's prompts from `offset`, newest first, with how many match in all. */
+export async function promptsPageFor(
+  auth: McpAuthContext,
+  params: ListPromptsParams,
+): Promise<{ rows: PromptRow[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   const { data: brand } = await supabaseAdmin
@@ -1047,22 +1084,44 @@ export async function listPromptsFor(
     PROMPT_LIST_MAX_LIMIT,
   );
 
-  let query = supabaseAdmin
-    .from('prompts')
-    .select(
-      'id, text, topic_id, platforms, models, regions, is_active, created_at, prompt_sets!inner(brand_id), topics(name)',
-    )
-    .eq('prompt_sets.brand_id', params.brandId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (params.topicId) query = query.eq('topic_id', params.topicId);
-  if (typeof params.isActive === 'boolean') {
-    query = query.eq('is_active', params.isActive);
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
+  // A lookup (Chat's ids or search) reads every topic and state, its organization joined on the rows.
+  const lookup = params.ids !== undefined || params.search !== undefined;
+  const words = searchWords(params.search);
+  if (lookup && (params.ids?.length === 0 || (params.search !== undefined && !words.length))) {
+    return { rows: [], total: 0 };
   }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
+  const organizationId = auth.organizationId;
+  const matching = (head = false) => {
+    let query = supabaseAdmin
+      .from('prompts')
+      .select(
+        lookup
+          ? 'id, text, topic_id, platforms, models, regions, is_active, created_at, prompt_sets!inner(brand_id, brands!inner(organization_id)), topics(name)'
+          : 'id, text, topic_id, platforms, models, regions, is_active, created_at, prompt_sets!inner(brand_id), topics(name)',
+        { count: 'exact', head },
+      )
+      .eq('prompt_sets.brand_id', params.brandId);
+    if (lookup) {
+      query = query.eq('prompt_sets.brands.organization_id', organizationId);
+      if (params.ids) query = query.in('id', [...params.ids]);
+      // Each word as an escaped pattern: the text is data, never part of the filter's syntax.
+      for (const word of words) query = query.ilike('text', containsPattern(word));
+      return query;
+    }
+    if (params.topicId) query = query.eq('topic_id', params.topicId);
+    if (typeof params.isActive === 'boolean') {
+      query = query.eq('is_active', params.isActive);
+    }
+    return query;
+  };
+  const { rows: data, total } = await pageRows(
+    await matching()
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
   // Supabase's generated types model the prompts→topics FK as an array (it
   // can't tell single vs many from the schema alone), so the join returns
@@ -1081,7 +1140,7 @@ export async function listPromptsFor(
       topics: Array<{ name: string }> | { name: string } | null;
     }> | null) ?? [];
 
-  return rows.map((r) => {
+  const page = rows.map((r) => {
     const topic = Array.isArray(r.topics) ? (r.topics[0] ?? null) : r.topics;
     return {
       id: r.id,
@@ -1095,6 +1154,80 @@ export async function listPromptsFor(
       created_at: r.created_at,
     };
   });
+  return { rows: page, total };
+}
+
+/** What a lookup by ids and words found: its rows under the read's own key. */
+export type LookupResult<K extends string, T> = { note: string; not_found: string[] } & {
+  [key in K]: T[];
+} & { total?: number; offset?: number; next_offset?: number | null };
+
+/** The lookup's rows under `key`, with the search's page when there was a search. */
+function asLookup<K extends string, T extends { id: string }>(
+  key: K,
+  lookup: IdAndSearchLookup<T>,
+): LookupResult<K, T> {
+  return {
+    note: lookup.note,
+    ...lookup.page,
+    [key]: lookup.rows,
+    not_found: lookup.not_found,
+  } as LookupResult<K, T>;
+}
+
+/**
+ * Rows by the ids and words a person named, through a list's own read
+ * (`read`): the ids' rows (at most LOOKUP_MAX), and a page of the rows with
+ * every word, from `offset`. Null when the read is null (a brand outside
+ * the caller's organization or access).
+ */
+async function lookUpBy<T extends { id: string }>(
+  words: LookupWords,
+  params: { ids?: readonly string[]; search?: string; offset?: number },
+  read: (find: {
+    ids?: string[];
+    search?: string;
+    limit: number;
+    offset: number;
+  }) => Promise<{ rows: T[]; total: number } | null>,
+) {
+  const asked = askedIds(params.ids);
+  const ids = keysOf<string>(asked, 'id');
+  const terms = searchWords(params.search);
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
+  const [byIds, bySearch] = await Promise.all([
+    ids.length > 0 ? read({ ids, limit: LOOKUP_MAX, offset: 0 }) : { rows: [], total: 0 },
+    terms.length > 0
+      ? read({ search: params.search, limit: PAGE_ROWS, offset })
+      : { rows: [], total: 0 },
+  ]);
+  if (!byIds || !bySearch) return null;
+  return idAndSearchLookup(
+    words,
+    asked.length > 0 ? { asked, rows: byIds.rows } : null,
+    params.search !== undefined
+      ? { text: params.search, terms, rows: bySearch.rows, total: bySearch.total, offset }
+      : null,
+  );
+}
+
+/**
+ * The brand's prompts by the ids or words a person named, for Chat (the
+ * owner's plan of 2026-11-16, item 2): every topic and state, active and
+ * paused; the words matched in the prompt's text in any order and case.
+ * Every id's prompt, and a page of 50 of those with the words. Only this
+ * brand of the caller's organization: an id of another brand or workspace
+ * is not found. Null for a brand outside the caller's organization or access.
+ */
+export async function lookUpPromptsFor(
+  auth: McpAuthContext,
+  params: { brandId: string; ids?: readonly string[]; search?: string; offset?: number },
+): Promise<LookupResult<'prompts', PromptRow> | null> {
+  if (!(await brandAllowed(auth, params.brandId))) return null;
+  const lookup = await lookUpBy(LOOKUP_WORDS.prompts, params, (find) =>
+    promptsPageFor(auth, { brandId: params.brandId, ...find }),
+  );
+  return lookup ? asLookup('prompts', lookup) : null;
 }
 
 // ── Content Opportunities ───────────────────────────────────────────────────
@@ -1120,12 +1253,29 @@ export interface ListContentOpportunitiesParams {
   impact?: 'high' | 'medium' | 'low';
   type?: 'owned' | 'earned';
   limit?: number;
+  /** Rows before this page (Chat's pages). */
+  offset?: number;
+  /** Chat's lookup: these opportunities only, by id (checked ids), in any status, archived too. */
+  ids?: readonly string[];
+  /** Chat's lookup: the opportunities whose title holds every word of this, in any status, archived too. */
+  search?: string;
 }
+
+/** A year in a search: Content shows a past year in a title as this one (refreshYears), so it isn't matched. */
+const YEAR = /^(?:19|20)\d{2}$/;
 
 export async function listContentOpportunitiesFor(
   auth: McpAuthContext,
   params: ListContentOpportunitiesParams,
 ): Promise<ContentOpportunityRow[] | null> {
+  return (await contentOpportunitiesPageFor(auth, params))?.rows ?? null;
+}
+
+/** The opportunities from `offset`, highest score first, with how many match in all. */
+export async function contentOpportunitiesPageFor(
+  auth: McpAuthContext,
+  params: ListContentOpportunitiesParams,
+): Promise<{ rows: ContentOpportunityRow[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   // Ownership check
@@ -1138,24 +1288,49 @@ export async function listContentOpportunitiesFor(
   if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
+  // A lookup (Chat's ids or search) reads every status, archived too, its organization joined.
+  const lookup = params.ids !== undefined || params.search !== undefined;
+  const searched = searchWords(params.search);
+  const words = searched.some((w) => !YEAR.test(w))
+    ? searched.filter((w) => !YEAR.test(w))
+    : searched;
+  if (lookup && (params.ids?.length === 0 || (params.search !== undefined && !words.length))) {
+    return { rows: [], total: 0 };
+  }
+  const organizationId = auth.organizationId;
 
-  let query = supabaseAdmin
-    .from('content_opportunities')
-    .select(
-      'id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, brief, prompts(text)',
-    )
-    .eq('brand_id', params.brandId)
-    .order('opportunity_score', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  // The archived per-prompt backlog (#857) only when asked for by status.
-  query = params.status ? query.eq('status', params.status) : query.neq('status', 'archived');
-  if (params.impact) query = query.eq('impact', params.impact);
-  if (params.type) query = query.eq('type', params.type);
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
+  const matching = (head = false) => {
+    let query = supabaseAdmin
+      .from('content_opportunities')
+      .select(
+        lookup
+          ? 'id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, brief, prompts(text), brands!inner(organization_id)'
+          : 'id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, brief, prompts(text)',
+        { count: 'exact', head },
+      )
+      .eq('brand_id', params.brandId);
+    if (lookup) {
+      query = query.eq('brands.organization_id', organizationId);
+      if (params.ids) query = query.in('id', [...params.ids]);
+      // Each word as an escaped pattern: the text is data, never part of the filter's syntax.
+      for (const word of words) query = query.ilike('title', containsPattern(word));
+      return query;
+    }
+    // The archived per-prompt backlog (#857) only when asked for by status.
+    query = params.status ? query.eq('status', params.status) : query.neq('status', 'archived');
+    if (params.impact) query = query.eq('impact', params.impact);
+    if (params.type) query = query.eq('type', params.type);
+    return query;
+  };
+  const { rows: data, total } = await pageRows(
+    await matching()
+      .order('opportunity_score', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
   const rows =
     (data as unknown as Array<{
@@ -1173,7 +1348,7 @@ export async function listContentOpportunitiesFor(
       prompts: Array<{ text: string }> | { text: string } | null;
     }> | null) ?? [];
 
-  return rows.map((r) => {
+  const page = rows.map((r) => {
     const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
     return {
       id: r.id,
@@ -1191,6 +1366,26 @@ export async function listContentOpportunitiesFor(
       updated_at: r.updated_at ?? '',
     };
   });
+  return { rows: page, total };
+}
+
+/**
+ * The brand's content opportunities by the ids or title words a person
+ * named, for Chat (the owner's plan of 2026-11-16, item 2): every status,
+ * archived included, highest score first. A year in the words isn't matched,
+ * as Content shows a past year in a title as this one. Only this brand of
+ * the caller's organization: an id of another brand or workspace is not
+ * found. Null for a brand outside the caller's organization or access.
+ */
+export async function lookUpOpportunitiesFor(
+  auth: McpAuthContext,
+  params: { brandId: string; ids?: readonly string[]; search?: string; offset?: number },
+): Promise<LookupResult<'opportunities', ContentOpportunityRow> | null> {
+  if (!(await brandAllowed(auth, params.brandId))) return null;
+  const lookup = await lookUpBy(LOOKUP_WORDS.opportunities, params, (find) =>
+    contentOpportunitiesPageFor(auth, { brandId: params.brandId, ...find }),
+  );
+  return lookup ? asLookup('opportunities', lookup) : null;
 }
 
 export interface ContentOpportunityDetail {
@@ -1334,6 +1529,15 @@ export async function listSiteAuditsFor(
   auth: McpAuthContext,
   brandId: string,
 ): Promise<SiteAuditListRow[] | null> {
+  return (await siteAuditsPageFor(auth, brandId))?.rows ?? null;
+}
+
+/** The brand's Site Audits from `offset`, newest first, with how many there are in all. */
+export async function siteAuditsPageFor(
+  auth: McpAuthContext,
+  brandId: string,
+  page: { limit?: number; offset?: number } = {},
+): Promise<{ rows: SiteAuditListRow[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   const { data: brand } = await supabaseAdmin
@@ -1344,15 +1548,25 @@ export async function listSiteAuditsFor(
     .maybeSingle();
   if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
-  const { data, error } = await supabaseAdmin
-    .from('site_audits')
-    .select('id, url, status, total_score, signals_evaluated, signals_total, created_at')
-    .eq('brand_id', brandId)
-    .order('created_at', { ascending: false })
-    .limit(50);
-  if (error) throw new Error(error.message);
+  const limit = Math.min(Math.max(Math.trunc(page.limit ?? 50), 1), 50);
+  const offset = Math.max(Math.trunc(page.offset ?? 0), 0);
+  const matching = (head = false) =>
+    supabaseAdmin
+      .from('site_audits')
+      .select('id, url, status, total_score, signals_evaluated, signals_total, created_at', {
+        count: 'exact',
+        head,
+      })
+      .eq('brand_id', brandId);
+  const { rows, total } = await pageRows(
+    await matching()
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
-  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+  const audits = (rows as Array<Record<string, unknown>>).map((r) => ({
     id: r.id as string,
     url: r.url as string,
     status: r.status as string,
@@ -1361,6 +1575,7 @@ export async function listSiteAuditsFor(
     signalsTotal: r.signals_total == null ? null : Number(r.signals_total),
     createdAt: r.created_at as string,
   }));
+  return { rows: audits, total };
 }
 
 export interface SiteAuditQuota {
@@ -2075,6 +2290,8 @@ export interface ListCitationsParams {
   topicId?: string;
   /** Cap on the top_domains / top_urls arrays. Default 50, max 200. */
   limit?: number;
+  /** Domains and pages before this page, most cited first (Chat's pages). */
+  offset?: number;
   /** Restrict to owned / competitor / external citations. Default `all`. */
   sourceFilter?: CitationSourceFilter;
 }
@@ -2116,21 +2333,47 @@ export interface CitationsOverviewOutput {
 const CITATIONS_DEFAULT_LIMIT = 50;
 const CITATIONS_MAX_LIMIT = 200;
 
+interface CitedDomainAgg {
+  domain: string;
+  category: SourceCategory;
+  totalCitations: number;
+  resultsCiting: Set<string>;
+  models: Set<string>;
+  articleTypeCounts: Map<string, number>;
+}
+interface CitedUrlAgg {
+  url: string;
+  domain: string;
+  category: SourceCategory;
+  title: string;
+  totalCitations: number;
+  resultsCiting: Set<string>;
+  models: Set<string>;
+  articleType: string | null;
+}
+
+/** Every cited domain and page of the brand's answers in a window, most cited first. */
+interface CitationAggregates {
+  /** The answers read (chatgpt-shopping aside). */
+  results: number;
+  totalCitations: number;
+  resultsWithCitations: number;
+  domains: CitedDomainAgg[];
+  urls: CitedUrlAgg[];
+  /** Each answer's prompt, by the answer's id. */
+  promptOf: Map<string, string>;
+}
+
 /**
- * Return the URLs and domains AI engines cite alongside a brand, classified by
- * source type (news / review / owned / social / forum). Ports the JS-side
- * aggregation from `getCitationsOverview` in `actions/citations.ts` — citations
- * are stored as JSONB inside `prompt_results.citations` and each URL needs the
- * `classifyDomain` / `classifyArticleType` helpers, so this can't be folded
- * into a Postgres aggregate the way the competitor / SoV surfaces were in #114.
- *
+ * The scan both citation reads share: the brand's answers in the window
+ * and filters, each citation classified and counted by domain and by page.
  * Ownership-check first; the prompt_results scan only runs after the brand
- * belongs to the caller's org.
+ * belongs to the caller's org and access.
  */
-export async function listCitationsFor(
+async function readCitationAggregates(
   auth: McpAuthContext,
   params: ListCitationsParams,
-): Promise<CitationsOverviewOutput | null> {
+): Promise<CitationAggregates | null> {
   if (!auth.organizationId) return null;
 
   const { data: brand } = await supabaseAdmin
@@ -2195,32 +2438,15 @@ export async function listCitationsFor(
 
   const results = (rows ?? []) as Array<{
     id: string;
+    prompt_id: string | null;
     platform: string | null;
     model_used: string | null;
     citations: Citation[] | null;
   }>;
 
-  interface DomainAgg {
-    domain: string;
-    category: SourceCategory;
-    totalCitations: number;
-    resultsCiting: Set<string>;
-    models: Set<string>;
-    articleTypeCounts: Map<string, number>;
-  }
-  interface UrlAgg {
-    url: string;
-    domain: string;
-    category: SourceCategory;
-    title: string;
-    totalCitations: number;
-    resultsCiting: Set<string>;
-    models: Set<string>;
-    articleType: string | null;
-  }
-
-  const domainMap = new Map<string, DomainAgg>();
-  const urlMap = new Map<string, UrlAgg>();
+  const domainMap = new Map<string, CitedDomainAgg>();
+  const urlMap = new Map<string, CitedUrlAgg>();
+  const promptOf = new Map<string, string>();
   let totalCitations = 0;
   let resultsWithCitations = 0;
   const sourceFilter = params.sourceFilter ?? 'all';
@@ -2229,6 +2455,7 @@ export async function listCitationsFor(
   for (const result of results) {
     const citations = Array.isArray(result.citations) ? result.citations : [];
     if (citations.length === 0) continue;
+    if (result.prompt_id) promptOf.set(result.id, result.prompt_id);
     const modelKey = result.model_used || result.platform || '';
     // #297 — when a source_filter is set, a result only counts toward
     // results_with_citations if it contributes at least one matching citation.
@@ -2297,43 +2524,84 @@ export async function listCitationsFor(
     if (!hasSourceFilter || matchedInResult) resultsWithCitations += 1;
   }
 
-  const totalResults = results.length;
+  return {
+    results: results.length,
+    totalCitations,
+    resultsWithCitations,
+    domains: Array.from(domainMap.values()).sort((a, b) => b.totalCitations - a.totalCitations),
+    urls: Array.from(urlMap.values()).sort((a, b) => b.totalCitations - a.totalCitations),
+    promptOf,
+  };
+}
+
+/** A share of the answers read, in percent to one decimal. */
+const usagePct = (citing: number, results: number) =>
+  results > 0 ? Math.round((citing / results) * 1000) / 10 : 0;
+
+/** A cited domain as the citations reads give it. */
+function citedDomainRow(agg: CitedDomainAgg, results: number) {
+  const resultsCiting = agg.resultsCiting.size;
+  const articleTypes = Array.from(agg.articleTypeCounts.entries())
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+  return {
+    domain: agg.domain,
+    category: agg.category,
+    total_citations: agg.totalCitations,
+    results_citing: resultsCiting,
+    usage_pct: usagePct(resultsCiting, results),
+    models: Array.from(agg.models).sort(),
+    article_types: articleTypes,
+  };
+}
+
+/** A cited page as the citations reads give it. */
+function citedUrlRow(agg: CitedUrlAgg, results: number) {
+  const resultsCiting = agg.resultsCiting.size;
+  return {
+    url: agg.url,
+    domain: agg.domain,
+    category: agg.category,
+    title: agg.title,
+    total_citations: agg.totalCitations,
+    results_citing: resultsCiting,
+    usage_pct: usagePct(resultsCiting, results),
+    article_type: agg.articleType,
+  };
+}
+
+/**
+ * Return the URLs and domains AI engines cite alongside a brand, classified by
+ * source type (news / review / owned / social / forum). Ports the JS-side
+ * aggregation from `getCitationsOverview` in `actions/citations.ts` — citations
+ * are stored as JSONB inside `prompt_results.citations` and each URL needs the
+ * `classifyDomain` / `classifyArticleType` helpers, so this can't be folded
+ * into a Postgres aggregate the way the competitor / SoV surfaces were in #114.
+ *
+ * Ownership-check first; the prompt_results scan only runs after the brand
+ * belongs to the caller's org.
+ */
+export async function listCitationsFor(
+  auth: McpAuthContext,
+  params: ListCitationsParams,
+): Promise<CitationsOverviewOutput | null> {
+  const agg = await readCitationAggregates(auth, params);
+  if (!agg) return null;
+
+  const totalResults = agg.results;
   const limit = Math.min(Math.max(params.limit ?? CITATIONS_DEFAULT_LIMIT, 1), CITATIONS_MAX_LIMIT);
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
 
-  const allDomains = Array.from(domainMap.values()).sort(
-    (a, b) => b.totalCitations - a.totalCitations,
-  );
-  const topDomains = allDomains.slice(0, limit).map((agg) => {
-    const resultsCiting = agg.resultsCiting.size;
-    const articleTypes = Array.from(agg.articleTypeCounts.entries())
-      .map(([type, count]) => ({ type, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
-    return {
-      domain: agg.domain,
-      category: agg.category,
-      total_citations: agg.totalCitations,
-      results_citing: resultsCiting,
-      usage_pct: totalResults > 0 ? Math.round((resultsCiting / totalResults) * 1000) / 10 : 0,
-      models: Array.from(agg.models).sort(),
-      article_types: articleTypes,
-    };
-  });
+  const allDomains = agg.domains;
+  const topDomains = allDomains
+    .slice(offset, offset + limit)
+    .map((domain) => citedDomainRow(domain, totalResults));
 
-  const allUrls = Array.from(urlMap.values()).sort((a, b) => b.totalCitations - a.totalCitations);
-  const topUrls = allUrls.slice(0, limit).map((agg) => {
-    const resultsCiting = agg.resultsCiting.size;
-    return {
-      url: agg.url,
-      domain: agg.domain,
-      category: agg.category,
-      title: agg.title,
-      total_citations: agg.totalCitations,
-      results_citing: resultsCiting,
-      usage_pct: totalResults > 0 ? Math.round((resultsCiting / totalResults) * 1000) / 10 : 0,
-      article_type: agg.articleType,
-    };
-  });
+  const allUrls = agg.urls;
+  const topUrls = allUrls
+    .slice(offset, offset + limit)
+    .map((url) => citedUrlRow(url, totalResults));
 
   // Source breakdown counts each *domain* once (matches the existing UI),
   // not each citation, so news/review/owned/social/forum percentages reflect
@@ -2356,14 +2624,104 @@ export async function listCitationsFor(
     totals: {
       domains: totalDomains,
       urls: allUrls.length,
-      citations: totalCitations,
-      results_with_citations: resultsWithCitations,
+      citations: agg.totalCitations,
+      results_with_citations: agg.resultsWithCitations,
       avg_citations_per_result:
-        totalResults > 0 ? Math.round((totalCitations / totalResults) * 10) / 10 : 0,
+        totalResults > 0 ? Math.round((agg.totalCitations / totalResults) * 10) / 10 : 0,
     },
     source_type_breakdown: sourceTypeBreakdown,
     top_domains: topDomains,
     top_urls: topUrls,
+  };
+}
+
+/** A prompt whose answers cite a domain or page: its text and how many of its answers do. */
+export interface CitingPrompt {
+  prompt_id: string;
+  text: string;
+  answers: number;
+}
+
+type CitedDomainRow = ReturnType<typeof citedDomainRow>;
+type CitedUrlRow = ReturnType<typeof citedUrlRow>;
+
+/** What a citations lookup found: each named domain and page, with the prompts whose answers cite it. */
+export type CitationLookup = CitedLookup<
+  CitedDomainRow & { prompts: CitingPrompt[]; prompts_total: number },
+  CitedUrlRow & { prompts: CitingPrompt[]; prompts_total: number }
+> & { period: { date_from: string | null; date_to: string | null } };
+
+/**
+ * The cited domains and pages a person named (the Citations page's rows,
+ * the citation URL page's address), for Chat (the owner's plan of
+ * 2026-11-16, item 2): from the same scan as listCitationsFor, over the same
+ * window, platforms, region and topic, every source type (sourceFilter and
+ * the page don't apply). A domain finds itself and its subdomains, each with
+ * its most cited pages; an address finds its page however it is written
+ * (scheme, "www." and a trailing slash aside). Each comes with the prompts
+ * whose answers cite it, most answers first. What isn't cited in the window
+ * is in not_found. Null for a brand outside the caller's organization or
+ * access.
+ */
+export async function lookUpCitationsFor(
+  auth: McpAuthContext,
+  params: Omit<ListCitationsParams, 'sourceFilter' | 'limit' | 'offset'> & {
+    domains?: readonly string[];
+    urls?: readonly string[];
+  },
+): Promise<CitationLookup | null> {
+  const agg = await readCitationAggregates(auth, { ...params, sourceFilter: 'all' });
+  if (!agg) return null;
+  const domainAggs = new Map(agg.domains.map((d) => [d.domain, d]));
+  const urlAggs = new Map(agg.urls.map((u) => [u.url, u]));
+  const found = lookUpCited(
+    { domains: params.domains, urls: params.urls },
+    {
+      domains: agg.domains.map((d) => citedDomainRow(d, agg.results)),
+      urls: agg.urls.map((u) => citedUrlRow(u, agg.results)),
+    },
+    periodWords(params.dateFrom, params.dateTo),
+  );
+
+  // The prompts whose answers cite each: most answers first, the top CITED_TOP of each.
+  const citing = (results: Set<string> | undefined) => {
+    const counts = new Map<string, number>();
+    for (const id of results ?? []) {
+      const prompt = agg.promptOf.get(id);
+      if (prompt) counts.set(prompt, (counts.get(prompt) ?? 0) + 1);
+    }
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    return { top: ranked.slice(0, CITED_TOP), total: ranked.length };
+  };
+  const domainPrompts = found.domains.map((d) => citing(domainAggs.get(d.domain)?.resultsCiting));
+  const urlPrompts = found.urls.map((u) => citing(urlAggs.get(u.url)?.resultsCiting));
+  const promptIds = [
+    ...new Set([...domainPrompts, ...urlPrompts].flatMap((p) => p.top.map(([id]) => id))),
+  ];
+  const texts = new Map<string, string>();
+  if (promptIds.length > 0) {
+    // The brand's own prompts only, by the ids its answers carry.
+    const { data, error } = await supabaseAdmin
+      .from('prompts')
+      .select('id, text, prompt_sets!inner(brand_id)')
+      .in('id', promptIds)
+      .eq('prompt_sets.brand_id', params.brandId);
+    if (error) throw new Error(error.message);
+    for (const row of (data ?? []) as { id: string; text: string }[]) texts.set(row.id, row.text);
+  }
+  const withPrompts = (p: ReturnType<typeof citing>) => ({
+    prompts: p.top.flatMap(([id, answers]) => {
+      const text = texts.get(id);
+      return text === undefined ? [] : [{ prompt_id: id, text, answers }];
+    }),
+    prompts_total: p.total,
+  });
+
+  return {
+    ...found,
+    period: { date_from: params.dateFrom ?? null, date_to: params.dateTo ?? null },
+    domains: found.domains.map((d, i) => ({ ...d, ...withPrompts(domainPrompts[i]) })),
+    urls: found.urls.map((u, i) => ({ ...u, ...withPrompts(urlPrompts[i]) })),
   };
 }
 
@@ -2634,6 +2992,8 @@ export interface PromptVolumesParams {
   brandId: string;
   /** Row cap on the returned prompts. Default 100, max 500. */
   limit?: number;
+  /** Rows before this page (Chat's pages). */
+  offset?: number;
 }
 
 export interface PromptVolumeRow {
@@ -2689,6 +3049,14 @@ export async function getPromptVolumesFor(
   auth: McpAuthContext,
   params: PromptVolumesParams,
 ): Promise<PromptVolumeRow[] | null> {
+  return (await promptVolumesPageFor(auth, params))?.rows ?? null;
+}
+
+/** Per-prompt volumes from `offset`, most AI demand first, with how many there are in all. */
+export async function promptVolumesPageFor(
+  auth: McpAuthContext,
+  params: PromptVolumesParams,
+): Promise<{ rows: PromptVolumeRow[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   const { data: brand } = await supabaseAdmin
@@ -2704,19 +3072,25 @@ export async function getPromptVolumesFor(
     PROMPT_VOLUMES_MAX_LIMIT,
   );
 
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
   // prompt_volumes → prompts (1:1) → prompt_sets, filtered to this brand via
   // the nested inner joins. Sorted by AI demand so the highest-opportunity
   // prompts come first.
-  const { data, error } = await supabaseAdmin
-    .from('prompt_volumes')
-    .select(
-      'prompt_id, intent, keywords, google_volumes, total_google_volume, est_ai_volume, ai_volume_multiplier, competition_index, competition, fetched_at, prompts!inner(text, prompt_sets!inner(brand_id))',
-    )
-    .eq('prompts.prompt_sets.brand_id', params.brandId)
-    .order('est_ai_volume', { ascending: false })
-    .limit(limit);
-
-  if (error) throw new Error(error.message);
+  const matching = (head = false) =>
+    supabaseAdmin
+      .from('prompt_volumes')
+      .select(
+        'prompt_id, intent, keywords, google_volumes, total_google_volume, est_ai_volume, ai_volume_multiplier, competition_index, competition, fetched_at, prompts!inner(text, prompt_sets!inner(brand_id))',
+        { count: 'exact', head },
+      )
+      .eq('prompts.prompt_sets.brand_id', params.brandId);
+  const { rows: data, total } = await pageRows(
+    await matching()
+      .order('est_ai_volume', { ascending: false })
+      .order('prompt_id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
   const rows =
     (data as unknown as Array<{
@@ -2738,7 +3112,7 @@ export async function getPromptVolumesFor(
     rows.map((r) => r.prompt_id),
   );
   const now = new Date();
-  return rows.map((r) => {
+  const page = rows.map((r) => {
     const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
     const estimate = promptVolumeEstimate(
       {
@@ -2769,6 +3143,7 @@ export async function getPromptVolumesFor(
       measured_demand: demand.get(r.prompt_id) ?? null,
     };
   });
+  return { rows: page, total };
 }
 
 // ── Shopping Cards ────────────────────────────────────────────────────────────
@@ -3032,13 +3407,22 @@ export interface PromptPerformanceParams {
   sortBy?: 'visibility' | 'mentions' | 'citations' | 'appearances';
   order?: 'desc' | 'asc';
   limit?: number;
+  /** Prompts before this page, in the same order (Chat's pages). */
+  offset?: number;
   model?: string;
   region?: string;
+  /**
+   * Chat's lookup: these prompts only (checked ids), each that has results,
+   * whatever its topic; no page, and topicId doesn't apply.
+   */
+  promptIds?: readonly string[];
 }
 
 export interface PromptPerformanceOutput {
   brand: { id: string; name: string };
   window: { dateFrom: string | null; dateTo: string | null };
+  /** Every prompt with results in the window, not only this page's. */
+  total: number;
   prompts: Array<{
     prompt_id: string;
     prompt_text: string;
@@ -3094,12 +3478,16 @@ export async function getPromptPerformanceFor(
     p_region: params.region ?? null,
     p_date_from: params.dateFrom ?? null,
     p_date_to: expandDateToEndOfDay(params.dateTo) ?? null,
-    p_topic_id: params.topicId ?? null,
+    // Prompts named by id are read whatever their topic.
+    p_topic_id: params.promptIds ? null : (params.topicId ?? null),
   });
 
   if (error) throw new Error(error.message);
 
-  const raw = (data as unknown as PromptPerformanceRpcResult[]) ?? [];
+  const named = params.promptIds ? new Set(params.promptIds) : null;
+  const raw = ((data as unknown as PromptPerformanceRpcResult[]) ?? []).filter(
+    (item) => !named || named.has(item.prompt_id),
+  );
 
   let prompts = raw.map((item) => {
     const result_count = Number(item.result_count);
@@ -3151,9 +3539,12 @@ export async function getPromptPerformanceFor(
     return a.prompt_id.localeCompare(b.prompt_id);
   });
 
-  // Limiting
-  const limit = Math.min(Math.max(params.limit ?? 10, 1), 100);
-  prompts = prompts.slice(0, limit);
+  // Limiting: a page from `offset` (Chat's pages), with how many prompts there are in all;
+  // prompts named by id all come back.
+  const limit = named ? prompts.length : Math.min(Math.max(params.limit ?? 10, 1), 100);
+  const offset = named ? 0 : Math.max(Math.trunc(params.offset ?? 0), 0);
+  const total = prompts.length;
+  prompts = prompts.slice(offset, offset + limit);
 
   return {
     brand: {
@@ -3164,8 +3555,60 @@ export async function getPromptPerformanceFor(
       dateFrom: params.dateFrom ?? null,
       dateTo: params.dateTo ?? null,
     },
+    total,
     prompts,
   };
+}
+
+/** Prompt performance for prompts named by id: theirs, those with no results, and the ids not found. */
+export interface PromptPerformanceLookup extends PromptPerformanceOutput {
+  note: string;
+  /** Tracked prompts of this brand with no answers in the period, platforms and region read. */
+  no_results: { prompt_id: string; prompt_text: string }[];
+  /** Ids no prompt of this brand has, as written. */
+  not_found: string[];
+}
+
+/**
+ * Prompt performance for the prompts a person named (the prompt's page, or
+ * prompts found by their words), for Chat (the owner's plan of 2026-11-16,
+ * item 2): each one's figures over the period, platforms and region read,
+ * whatever its topic, never cut to a page. A tracked prompt with no answers
+ * in that window is in no_results; an id no prompt of this brand has (of
+ * another brand or workspace too) is in not_found. Null for a brand outside
+ * the caller's organization or access.
+ */
+export async function lookUpPromptPerformanceFor(
+  auth: McpAuthContext,
+  params: Omit<PromptPerformanceParams, 'promptIds' | 'topicId' | 'limit' | 'offset'> & {
+    promptIds: readonly string[];
+  },
+): Promise<PromptPerformanceLookup | null> {
+  if (!(await brandAllowed(auth, params.brandId))) return null;
+  const asked = askedIds(params.promptIds);
+  const ids = keysOf<string>(asked, 'id');
+  const read = await getPromptPerformanceFor(auth, { ...params, promptIds: ids });
+  if (!read) return null;
+  const withResults = new Set(read.prompts.map((p) => p.prompt_id));
+  const missing = ids.filter((id) => !withResults.has(id));
+  const tracked = missing.length
+    ? await promptsPageFor(auth, { brandId: params.brandId, ids: missing, limit: LOOKUP_MAX })
+    : { rows: [], total: 0 };
+  if (!tracked) return null;
+
+  const rows = [
+    ...read.prompts.map((p) => ({ id: p.prompt_id })),
+    ...tracked.rows.map((p) => ({ id: p.id })),
+  ];
+  const { not_found, lines } = lookUpKeys(LOOKUP_WORDS.prompts, asked, rows, (row) => row.id);
+  const noResults = tracked.rows.map((p) => ({ prompt_id: p.id, prompt_text: p.text }));
+  if (noResults.length > 0) {
+    lines.push(
+      `${noResults.length === 1 ? 'One prompt has' : `${noResults.length} prompts have`} no answers in this period on these platforms and region (no_results): say so for each, by its text; it is tracked.`,
+    );
+  }
+  lines.push(lookupEnd(LOOKUP_WORDS.prompts, not_found.length > 0));
+  return { ...read, note: lines.join(' '), no_results: noResults, not_found };
 }
 
 // ── Action Center ────────────────────────────────────────────────────────────
@@ -3186,7 +3629,7 @@ export type McpTaskStatus = (typeof MCP_TASK_STATUSES)[number];
 const UNCOUNTED_TASK_STATUSES = ['skipped', 'failed'];
 
 const MCP_SIGNAL_COLUMNS =
-  'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
+  'id, brand_no, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
 
 /**
  * Whether the person a key or a call acts for may use a brand now
@@ -3222,7 +3665,8 @@ export async function mayUseBrand(
   return access === 'all' || (Boolean(brandId) && hasBrandAccess(access, brandId as string));
 }
 
-async function assigneeNames(ids: (string | null)[]): Promise<Map<string, string | null>> {
+/** Each assignee's name, by their profile id: shared with Chat's own list of actions. */
+export async function assigneeNames(ids: (string | null)[]): Promise<Map<string, string | null>> {
   const unique = [...new Set(ids.filter(Boolean))] as string[];
   if (unique.length === 0) return new Map();
   const { data, error } = await supabaseAdmin
@@ -3236,6 +3680,8 @@ async function assigneeNames(ids: (string | null)[]): Promise<Map<string, string
 export interface ActionListRow {
   id: string;
   action_no: number;
+  /** Its code as the app shows it: "AC-03" (its number in its brand, 00534), or "AC-648" before its brand is numbered. */
+  code: string;
   category: string;
   kind: string;
   impact: string;
@@ -3294,7 +3740,7 @@ function priorityFor(row: {
 }
 
 /** Stale (00432) only while New: the stamp waits for the nightly pass to clear it. */
-function staleFor(row: { status?: string | null; stale_at?: string | null }) {
+export function staleFor(row: { status?: string | null; stale_at?: string | null }) {
   const stale = row.status === 'new' && Boolean(row.stale_at);
   return { stale, stale_at: stale ? (row.stale_at ?? null) : null };
 }
@@ -3321,7 +3767,7 @@ export async function listActionsFor(
   let query = supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, stale_at, target_entity:payload->>targetEntity, target_count:payload->targetCount',
+      'id, action_no, brand_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, stale_at, target_entity:payload->>targetEntity, target_count:payload->targetCount',
     )
     .eq('brand_id', params.brandId)
     // A deleted action (00168) is gone for everyone but the nightly generator.
@@ -3370,6 +3816,7 @@ export async function listActionsFor(
   return rows.map((r) => ({
     id: r.id,
     action_no: Number(r.action_no),
+    code: actionCode({ actionNo: Number(r.action_no), brandNo: r.brand_no }),
     category: r.category,
     kind: r.kind,
     impact: r.impact,
@@ -3399,6 +3846,8 @@ export async function listActionsFor(
 export interface ActionDetailForMcp {
   id: string;
   action_no: number;
+  /** Its code as the app shows it: "AC-03" (its number in its brand, 00534), or "AC-648" before its brand is numbered. */
+  code: string;
   brand_id: string;
   category: string;
   kind: string;
@@ -3481,6 +3930,7 @@ export function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
 interface ActionDetailRow {
   id: string;
   action_no: number;
+  brand_no: number | null;
   brand_id: string;
   category: string;
   kind: string;
@@ -3502,7 +3952,7 @@ interface ActionDetailRow {
 }
 
 const ACTION_DETAIL_COLUMNS =
-  'id, action_no, brand_id, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, stale_at, brands!inner(organization_id)';
+  'id, action_no, brand_no, brand_id, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, stale_at, brands!inner(organization_id)';
 
 export async function getActionFor(
   auth: McpAuthContext,
@@ -3562,6 +4012,7 @@ export async function getActionFor(
   return {
     id: action.id,
     action_no: Number(action.action_no),
+    code: actionCode({ actionNo: Number(action.action_no), brandNo: action.brand_no }),
     brand_id: action.brand_id,
     category: action.category,
     kind: action.kind,
@@ -3627,7 +4078,13 @@ export interface ListSignalsParams {
 /** Signal ids per action_signals read: 100 UUIDs keep the request line well under 8KB. */
 const SIGNAL_LINK_CHUNK = 100;
 
-type LinkedAction = { id: string; action_no: number; kind: string; status: string };
+type LinkedAction = {
+  id: string;
+  action_no: number;
+  brand_no: number | null;
+  kind: string;
+  status: string;
+};
 
 /**
  * The actions each signal has been used by, through action_signals (AC-007):
@@ -3635,7 +4092,7 @@ type LinkedAction = { id: string; action_no: number; kind: string; status: strin
  * link first. They only add used_by_actions, so a failed read is logged and
  * leaves every signal's list empty rather than taking the signals down.
  */
-async function signalActionRefs(
+export async function signalActionRefs(
   brandId: string,
   signalIds: string[],
 ): Promise<Map<string, SignalActionRef[]>> {
@@ -3647,7 +4104,7 @@ async function signalActionRefs(
     chunks.map((ids) =>
       supabaseAdmin
         .from('action_signals')
-        .select('signal_id, actions!inner(id, action_no, kind, status)')
+        .select('signal_id, actions!inner(id, action_no, brand_no, kind, status)')
         .in('signal_id', ids)
         .eq('actions.brand_id', brandId)
         .is('actions.deleted_at', null)
@@ -3672,7 +4129,13 @@ async function signalActionRefs(
       if (!a) continue;
       bySignal.set(link.signal_id, [
         ...(bySignal.get(link.signal_id) ?? []),
-        { id: a.id, action_no: Number(a.action_no), kind: a.kind, status: a.status },
+        {
+          id: a.id,
+          action_no: Number(a.action_no),
+          code: actionCode({ actionNo: Number(a.action_no), brandNo: a.brand_no }),
+          kind: a.kind,
+          status: a.status,
+        },
       ]);
     }
   }
@@ -3715,7 +4178,11 @@ export async function listSignalsFor(
   return rows.map((row) => {
     const used = currentActionFirst(actions.get(row.id) ?? [], row.action_id);
     const signal = known.get(row.id);
-    const lean = withoutTargetIds(row as unknown as Record<string, unknown>);
+    const lean = {
+      ...withoutTargetIds(row as unknown as Record<string, unknown>),
+      // "S-03", as the app shows it (00534); null until its brand is numbered.
+      code: signalCode({ brandNo: row.brand_no }),
+    };
     // A kind this build has no detail for still comes back, as it always did.
     return signal
       ? { ...lean, ...signalDetailForApi(signal, used) }
@@ -3726,6 +4193,8 @@ export async function listSignalsFor(
 export interface ActionHistoryRow {
   id: string;
   action_no: number;
+  /** Its code as the app shows it: "AC-03" (its number in its brand, 00534), or "AC-648" before its brand is numbered. */
+  code: string;
   category: string;
   kind: string;
   impact: string;
@@ -3783,6 +4252,7 @@ interface ValidationSnapshot {
 interface ActionHistoryDbRow {
   id: string;
   action_no: number;
+  brand_no: number | null;
   category: string;
   kind: string;
   impact: string;
@@ -3795,30 +4265,42 @@ interface ActionHistoryDbRow {
 }
 
 const ACTION_HISTORY_COLUMNS =
-  'id, action_no, category, kind, impact, status, outcome, validation, created_at, completed_at';
+  'id, action_no, brand_no, category, kind, impact, status, outcome, validation, created_at, completed_at';
 
 export async function listActionHistoryFor(
   auth: McpAuthContext,
   params: { brandId: string; limit?: number },
 ): Promise<ActionHistoryRow[] | null> {
+  return (await actionHistoryPageFor(auth, params))?.rows ?? null;
+}
+
+/** Closed actions from `offset`, latest first, with how many there are in all (Chat's pages). */
+export async function actionHistoryPageFor(
+  auth: McpAuthContext,
+  params: { brandId: string; limit?: number; offset?: number },
+): Promise<{ rows: ActionHistoryRow[]; total: number } | null> {
   if (!(await brandAllowed(auth, params.brandId))) return null;
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
-  const read = (columns: string) =>
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
+  const matching = (columns: string, head = false) =>
     supabaseAdmin
       .from('actions')
-      .select(columns)
+      .select(columns, { count: 'exact', head })
       .eq('brand_id', params.brandId)
       .in('status', ['completed', 'dismissed'])
-      .is('deleted_at', null)
+      .is('deleted_at', null);
+  const read = (columns: string) =>
+    matching(columns)
       .order('completed_at', { ascending: false, nullsFirst: false })
-      .limit(limit);
-  let { data, error } = await read(`${ACTION_HISTORY_COLUMNS}, dismiss_reason`);
+      .order('id')
+      .range(offset, offset + limit - 1);
+  let found = await read(`${ACTION_HISTORY_COLUMNS}, dismiss_reason`);
   // A database without 00366 has no dismiss_reason (42703): the rest is read, no reason given.
-  if (missingDismissReason(error)) ({ data, error } = await read(ACTION_HISTORY_COLUMNS));
-  if (error) throw new Error(error.message);
+  if (missingDismissReason(found.error)) found = await read(ACTION_HISTORY_COLUMNS);
+  const { rows: data, total } = await pageRows(found, () => matching('id', true));
 
-  return ((data ?? []) as unknown as ActionHistoryDbRow[]).map((r) => {
+  const rows = (data as unknown as ActionHistoryDbRow[]).map((r) => {
     const validation = r.validation as ValidationSnapshot | null;
     const metrics = validation?.metrics ?? [];
     const days = (Array.isArray(validation?.readings) ? validation.readings : [])
@@ -3828,6 +4310,7 @@ export async function listActionHistoryFor(
     return {
       id: r.id,
       action_no: Number(r.action_no),
+      code: actionCode({ actionNo: Number(r.action_no), brandNo: r.brand_no }),
       category: r.category,
       kind: r.kind,
       impact: r.impact,
@@ -3855,6 +4338,7 @@ export async function listActionHistoryFor(
       dismiss_reason: r.status === 'dismissed' ? dismissReasonOf(r.dismiss_reason) : null,
     };
   });
+  return { rows, total };
 }
 
 export interface UpdatedTaskStatus {
@@ -4100,6 +4584,18 @@ export async function listReportsFor(
   brandId: string,
   requestedLimit = 50,
 ): Promise<McpReportListItem[] | null> {
+  return (await reportsPageFor(auth, brandId, requestedLimit))?.rows ?? null;
+}
+
+/** Saved reports from `offset`, newest first, with how many there are in all (Chat's pages). */
+export async function reportsPageFor(
+  auth: McpAuthContext,
+  brandId: string,
+  requestedLimit = 50,
+  requestedOffset = 0,
+  /** Chat's lookup: these reports only, by id (checked ids), or those with every word in their title. */
+  find?: { ids?: readonly string[]; search?: string },
+): Promise<{ rows: McpReportListItem[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   const { data: brand, error: brandError } = await supabaseAdmin
@@ -4114,18 +4610,35 @@ export async function listReportsFor(
   const limit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
     : 50;
-  const { data, error } = await supabaseAdmin
-    .from('reports')
-    .select(
-      'id, brand_id, title, template, date_from, date_to, created_at, brands!inner(organization_id)',
-    )
-    .eq('brand_id', brandId)
-    .eq('brands.organization_id', auth.organizationId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) throw new Error(error.message);
+  const offset = Math.max(Math.trunc(requestedOffset), 0);
+  const organizationId = auth.organizationId;
+  const words = searchWords(find?.search);
+  if (find && (find.ids?.length === 0 || (find.search !== undefined && !words.length))) {
+    return { rows: [], total: 0 };
+  }
+  const matching = (head = false) => {
+    let query = supabaseAdmin
+      .from('reports')
+      .select(
+        'id, brand_id, title, template, date_from, date_to, created_at, brands!inner(organization_id)',
+        { count: 'exact', head },
+      )
+      .eq('brand_id', brandId)
+      .eq('brands.organization_id', organizationId);
+    if (find?.ids) query = query.in('id', [...find.ids]);
+    // Each word as an escaped pattern: the text is data, never part of the filter's syntax.
+    for (const word of words) query = query.ilike('title', containsPattern(word));
+    return query;
+  };
+  const { rows, total } = await pageRows(
+    await matching()
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
-  return (data ?? []).map((row) => ({
+  const page = rows.map((row) => ({
     id: row.id as string,
     brand_id: row.brand_id as string,
     title: row.title as string,
@@ -4134,6 +4647,27 @@ export async function listReportsFor(
     date_to: row.date_to as string,
     created_at: row.created_at as string,
   }));
+  return { rows: page, total };
+}
+
+/**
+ * The brand's saved reports by the ids or title words a person named, for
+ * Chat (the owner's plan of 2026-11-16, item 2), newest first. Only this
+ * brand of the caller's organization: an id of another brand or workspace
+ * is not found. Null for a brand outside the caller's organization or access.
+ */
+export async function lookUpReportsFor(
+  auth: McpAuthContext,
+  params: { brandId: string; ids?: readonly string[]; search?: string; offset?: number },
+): Promise<LookupResult<'reports', McpReportListItem> | null> {
+  if (!(await brandAllowed(auth, params.brandId))) return null;
+  const lookup = await lookUpBy(LOOKUP_WORDS.reports, params, (find) =>
+    reportsPageFor(auth, params.brandId, find.limit, find.offset, {
+      ids: find.ids,
+      search: find.search,
+    }),
+  );
+  return lookup ? asLookup('reports', lookup) : null;
 }
 
 export interface McpReportDetail extends McpReportListItem {

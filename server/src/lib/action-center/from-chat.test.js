@@ -377,6 +377,7 @@ describe('sendChatAction', () => {
     await expect(send()).resolves.toEqual({
       actionId: 'act-new',
       actionNo: 1300,
+      brandNo: null,
       created: true,
       dailyLimit: { used: 0, limit: 5, reached: false },
     });
@@ -499,7 +500,7 @@ describe('sendChatAction', () => {
     // A count it can't read says nothing: the action stands.
     db.countError = { message: 'timeout' };
     const made = await send({ idempotencyKey: 'chat:step-3' });
-    expect(made).toEqual({ actionId: 'act-new', actionNo: 1300, created: true });
+    expect(made).toEqual({ actionId: 'act-new', actionNo: 1300, brandNo: null, created: true });
   });
 
   it('records where it came from and how it was approved only as the database has them', async () => {
@@ -531,7 +532,12 @@ describe('sendChatAction', () => {
       payload: { idempotencyKey: 'chat:step-1' },
       deleted_at: null,
     });
-    await expect(send()).resolves.toEqual({ actionId: 'act-made', actionNo: 1290, created: false });
+    await expect(send()).resolves.toEqual({
+      actionId: 'act-made',
+      actionNo: 1290,
+      brandNo: null,
+      created: false,
+    });
     expect(db.inserts).toEqual([]);
   });
 
@@ -548,6 +554,7 @@ describe('sendChatAction', () => {
     db.tables.actions.push({
       id: 'act-new',
       action_no: 1300,
+      brand_no: 7,
       brand_id: BRAND,
       kind: CHAT_ACTION_KIND,
       status: 'new',
@@ -557,6 +564,7 @@ describe('sendChatAction', () => {
     await expect(send({ source: 'ads', idempotencyKey: key })).resolves.toEqual({
       actionId: 'act-new',
       actionNo: 1300,
+      brandNo: 7,
       created: false,
     });
     expect(inserted('actions')).toHaveLength(1);
@@ -605,6 +613,16 @@ describe('sendChatAction', () => {
       },
     });
     expect(db.inserts).toEqual([]);
+  });
+
+  it("names the covering action by its brand's code once its brand is numbered (00534)", async () => {
+    activeAction('act-all', 1258, { entities: [['prompts', PROMPT_A]] });
+    db.tables.actions.at(-1).brand_no = 3;
+    const refused = await send().catch((e) => e);
+    expect(refused).toMatchObject({
+      message: 'AC-03 already covers this.',
+      extra: { action: { id: 'act-all', no: 1258, brandNo: 3 } },
+    });
   });
 
   it('creates beside an action that shares only some entities, once the person chose to', async () => {

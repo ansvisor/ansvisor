@@ -1,10 +1,25 @@
 import messages from '../../../../messages/en.json';
+import { splitActionRefs } from '@/lib/action-center/action-ref';
 import { AGENT_PRESETS, type AgentPreset } from '../agents/catalog';
 import { PLACEHOLDER } from '../facts';
 import type { ChatMode } from '../precedence';
 import { SKILL_LIBRARY } from '../skills/library';
-import { EVAL_BRAND, EVAL_OTHER_BRAND } from './agent-eval-data';
+import { searchedActionNo } from '@/lib/action-center/action-ref';
+import { citedDomainKey } from '@/lib/mcp/lookup';
+import { searchedSignalNo } from '@/lib/signals/signal-code';
+import {
+  EVAL_BRAND,
+  EVAL_CITED_DOMAIN,
+  EVAL_CITED_DOMAINS,
+  EVAL_CODE_ACTIONS,
+  EVAL_CODE_SIGNAL,
+  EVAL_OTHER_BRAND,
+  EVAL_SIGNAL_BACKLOG,
+  evalActions,
+  type EvalWorkspace,
+} from './agent-eval-data';
 import { SAFETY_CHECK_NAMES, safetyChecks } from './safety-checks';
+import { giveUpPhrases, lookedUp } from './give-up';
 
 /**
  * The agents' and skills' test set (agent-eval.test.ts): every `ready`
@@ -90,6 +105,26 @@ export interface AgentEvalScenario {
   reviewPromises?: readonly OutputPromise[];
   /** The connections the agent uses (its preset's). */
   connections?: readonly { key: string; required: boolean }[];
+  /** The workspace it runs on (agent-eval-data.ts); the default one when left out. */
+  workspace?: EvalWorkspace;
+  /**
+   * Actions the person asks about by their codes, as the brand has them: the
+   * run must read them by their codes, name each by its title and code, and
+   * name no other action in their place (the owner's report, 2026-11-16).
+   */
+  askedActions?: readonly { ref: string; title: string }[];
+  /**
+   * Signals the person asks about by their codes (the owner's plan of
+   * 2026-11-16, item 2): the run must read them by their codes, name each
+   * by its title and code, and name no other signal in their place.
+   */
+  askedSignals?: readonly { code: string; title: string }[];
+  /**
+   * Cited domains the person asks about: the run must read them by their
+   * domain, say how often each is cited, and name no other domain in their
+   * place.
+   */
+  askedDomains?: readonly { domain: string; citations: number }[];
 }
 
 const presetT = (id: string) =>
@@ -262,8 +297,59 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
   },
 };
 
-/** Every skill of the library, called by its /name in a person's own chat, in Auto. */
-export const SKILL_SCENARIOS: readonly AgentEvalScenario[] = SKILL_LIBRARY.map((skill) => {
+/**
+ * Questions a person types with no skill, in their own chat, in Auto: kept
+ * with the skills, as each is a person's chat. "AC 481 ve AC-63 nedir" (the
+ * owner's report of 2026-11-16, in Turkish as it was asked) on a brand with
+ * 55 open actions, AC-481 past the list's first page of 50: it was answered
+ * "there is no AC-481" with the closest others.
+ */
+export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
+  {
+    id: 'action-by-code',
+    group: 'skills',
+    name: 'Actions by their code',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'AC 481 ve AC-63 nedir',
+    promises: [],
+    workspace: 'action_backlog',
+    askedActions: [EVAL_CODE_ACTIONS.pastFirstPage, EVAL_CODE_ACTIONS.onFirstPage].map((a) => ({
+      ref: a.number,
+      title: a.title,
+    })),
+  },
+  // The owner's plan (2026-11-16, item 2): an item named by its code or address is looked up,
+  // never answered from a page of the list. S-07 and decafdigest.example are past the first page.
+  {
+    id: 'signal-by-code',
+    group: 'skills',
+    name: 'A signal by its code',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'S-07 nedir',
+    promises: [],
+    workspace: 'long_lists',
+    askedSignals: [{ code: EVAL_CODE_SIGNAL.code, title: EVAL_CODE_SIGNAL.title }],
+  },
+  {
+    id: 'citation-by-domain',
+    group: 'skills',
+    name: 'A cited domain',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: `${EVAL_CITED_DOMAIN.domain} yapay zekâ yanıtlarında kaç kez kaynak gösterildi?`,
+    promises: [],
+    workspace: 'long_lists',
+    askedDomains: [{ domain: EVAL_CITED_DOMAIN.domain, citations: EVAL_CITED_DOMAIN.citations }],
+  },
+];
+
+/** Every skill of the library, called by its /name in a person's own chat, in Auto; then the questions. */
+const LIBRARY_SCENARIOS: readonly AgentEvalScenario[] = SKILL_LIBRARY.map((skill) => {
   const request = SKILL_REQUESTS[skill.name] ?? {
     message: skill.description,
     must: ['list'] as OutputPromise[],
@@ -280,6 +366,10 @@ export const SKILL_SCENARIOS: readonly AgentEvalScenario[] = SKILL_LIBRARY.map((
     promises: request.must,
   };
 });
+export const SKILL_SCENARIOS: readonly AgentEvalScenario[] = [
+  ...LIBRARY_SCENARIOS,
+  ...QUESTION_SCENARIOS,
+];
 
 // ─── What a run did ─────────────────────────────────────────────────────────
 
@@ -543,6 +633,236 @@ export function inventedNumbers(
   return { invented: [...invented], workedOut: [...worked] };
 }
 
+// ─── Action names ───────────────────────────────────────────────────────────
+
+/**
+ * A number followed by bare numbers ("AC-12, 13 and 14"; not a count, "AC-12, 3 tasks") or a
+ * range ("AC-12…AC-14").
+ */
+const REF_LIST =
+  /AC-\d+(?:\s*(?:,|;|\/|&|\band\b|\bor\b)\s*\d+\b(?!\s*(?!(?:and|or)\b)[\p{L}%]))+|AC-\d+\s*(?:…|\.{2,3}|–|—|-|\bto\b|\bthrough\b)\s*(?:AC-)?\d+\b/giu;
+/** Only numbers and what joins them, from a bracket to a number in it. */
+const REFS_ONLY = /^(?:\s|,|;|&|\band\b|\bor\b|AC-\d+)*$/i;
+/** A title after a number: "AC-12: Recover lost citations", "AC-12 · Recover lost citations". */
+const TITLE_AFTER = /^\s*[:·—–-]\s*\p{L}[\p{L}'’-]*\s+\p{L}/u;
+/** A title before a number: "Recover lost citations — AC-12". */
+const SEPARATOR_BEFORE = /[:·—–-]\s*$/;
+/** At least two words: a title or what a group of actions shares. */
+const hasWords = (text: string) => (text.match(/\p{L}[\p{L}'’-]*/gu) ?? []).length >= 2;
+
+/** Whether the number at `at` of `line` comes with a title (ACTION_NAME_RULES). */
+function named(line: string, at: number, ref: string): boolean {
+  const lead = line.slice(0, at);
+  // "**Recover lost citations** (AC-12)", "3 stale actions about sources (AC-12, AC-13)".
+  let depth = 0;
+  for (let i = lead.length - 1; i >= 0; i -= 1) {
+    if (lead[i] === ')') depth += 1;
+    else if (lead[i] === '(' && depth > 0) depth -= 1;
+    else if (lead[i] === '(') {
+      if (REFS_ONLY.test(lead.slice(i + 1)) && hasWords(lead.slice(0, i))) return true;
+      break;
+    }
+  }
+  if (TITLE_AFTER.test(line.slice(at + ref.length))) return true;
+  if (SEPARATOR_BEFORE.test(lead) && hasWords(lead.replace(SEPARATOR_BEFORE, ''))) return true;
+  // A table row: its title in another cell.
+  if (line.trim().startsWith('|')) {
+    return line
+      .split('|')
+      .filter((cell) => !cell.includes(ref))
+      .some(hasWords);
+  }
+  return false;
+}
+
+/**
+ * The Action Center numbers an answer gives without their action's title
+ * (ACTION_NAME_RULES, the owner's report of 2026-11-14): "assign an owner to
+ * AC-12", "AC-12, 13 and 14", "AC-12…AC-14". A number is named when it
+ * follows a title or what a group shares in brackets ("**Recover lost
+ * citations** (AC-12)", "3 stale actions about sources (AC-12, AC-13)"), when
+ * a title follows it ("AC-12: Recover lost citations") or when its table row
+ * has one. A link's address isn't read: "[AC-12](/dashboard/…)" is "AC-12".
+ */
+export function unnamedActionRefs(markdown: string): string[] {
+  const found: string[] = [];
+  for (const raw of markdown.split('\n')) {
+    const line = raw.replace(/\]\([^)\s]*\)/g, ']').replace(/[*_`[\]]/g, '');
+    const lists = [...line.matchAll(REF_LIST)].map((m) => ({
+      from: m.index ?? 0,
+      to: (m.index ?? 0) + m[0].length,
+    }));
+    for (const list of lists) found.push(line.slice(list.from, list.to));
+    let at = 0;
+    for (const part of splitActionRefs(line)) {
+      if (typeof part === 'string') {
+        at += part.length;
+        continue;
+      }
+      const inList = lists.some((list) => at >= list.from && at < list.to);
+      if (!inList && !named(line, at, part.ref)) found.push(part.ref);
+      at += part.ref.length;
+    }
+  }
+  return found;
+}
+
+// ─── Actions asked for by their codes ───────────────────────────────────────
+
+/** Whether a run read these codes' actions by their codes (list_action_center_tasks' codes). */
+export function readByCodes(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  refs: readonly string[],
+) {
+  const read = new Set<number>();
+  run.reads.forEach((tool, i) => {
+    const codes = run.readInputs[i]?.codes;
+    if (tool !== 'list_action_center_tasks' || !Array.isArray(codes)) return;
+    for (const code of codes) {
+      const no = searchedActionNo(String(code));
+      if (no !== null) read.add(no);
+    }
+  });
+  return refs.filter((ref) => !read.has(searchedActionNo(ref) ?? -1));
+}
+
+const folded = (text: string) =>
+  text
+    .toLocaleLowerCase('en')
+    .replace(/[“”„«»"]/g, '"')
+    .replace(/[‘’']/g, "'")
+    .replace(/\s+/g, ' ');
+
+/** The asked actions an answer doesn't name by both its title and its code. */
+export function unnamedAskedActions(
+  answer: string,
+  asked: readonly { ref: string; title: string }[],
+): string[] {
+  const text = folded(answer.replace(/\]\([^)\s]*\)/g, ']').replace(/[*_`[\]]/g, ''));
+  return asked
+    .filter(
+      (a) => !text.includes(folded(a.title)) || !new RegExp(`${a.ref}(?!\\d)`, 'i').test(text),
+    )
+    .map((a) => a.ref);
+}
+
+/**
+ * The other actions an answer names besides the ones asked for: by their
+ * code, or by their title (the owner's report: "the closest" in their place).
+ */
+export function substituteActions(
+  answer: string,
+  asked: readonly { ref: string; title: string }[],
+  workspace: EvalWorkspace = 'default',
+): string[] {
+  const refs = new Set(asked.map((a) => a.ref.toUpperCase()));
+  const text = answer.replace(/\]\([^)\s]*\)/g, ']').replace(/[*_`[\]]/g, '');
+  const byRef = splitActionRefs(text)
+    .flatMap((part) => (typeof part === 'string' ? [] : [part.ref.toUpperCase()]))
+    .filter((ref) => !refs.has(ref));
+  const plainText = folded(text);
+  const byTitle = evalActions(workspace)
+    .filter((a) => !refs.has(a.number) && plainText.includes(folded(a.title)))
+    .map((a) => a.number);
+  return [...new Set([...byRef, ...byTitle])];
+}
+
+// ─── Signals and cited domains asked for by name ────────────────────────────
+
+/** The answer's text, links and emphasis aside, folded for matching. */
+const answerText = (answer: string) =>
+  folded(answer.replace(/\]\([^)\s]*\)/g, ']').replace(/[*_`[\]]/g, ''));
+
+/** The asked signals' codes a run didn't read by code (list_signals' codes). */
+export function readSignalsByCodes(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  codes: readonly string[],
+): string[] {
+  const read = new Set<number>();
+  run.reads.forEach((tool, i) => {
+    const asked = run.readInputs[i]?.codes;
+    if (tool !== 'list_signals' || !Array.isArray(asked)) return;
+    for (const code of asked) {
+      const no = searchedSignalNo(String(code));
+      if (no !== null) read.add(no);
+    }
+  });
+  return codes.filter((code) => !read.has(searchedSignalNo(code) ?? -1));
+}
+
+/** The asked signals an answer doesn't name by both its title and its code. */
+export function unnamedAskedSignals(
+  answer: string,
+  asked: readonly { code: string; title: string }[],
+): string[] {
+  const text = answerText(answer);
+  return asked
+    .filter(
+      (s) =>
+        !text.includes(folded(s.title)) ||
+        !new RegExp(`(?<![\\p{L}\\p{N}])${s.code}(?!\\d)`, 'iu').test(text),
+    )
+    .map((s) => s.code);
+}
+
+/** The other signals an answer names besides the ones asked for: by code or by title. */
+export function substituteSignals(answer: string, asked: readonly { code: string }[]): string[] {
+  const codes = new Set(asked.map((s) => searchedSignalNo(s.code)));
+  const text = answerText(answer);
+  const byCode = [...text.matchAll(/(?<![\p{L}\p{N}])s-(\d{1,4})(?!\d)/giu)]
+    .map((m) => Number(m[1]))
+    .filter((no) => !codes.has(no))
+    .map((no) => `S-${String(no).padStart(2, '0')}`);
+  const byTitle = EVAL_SIGNAL_BACKLOG.filter(
+    (s) => !codes.has(searchedSignalNo(s.code)) && text.includes(folded(s.title)),
+  ).map((s) => s.code);
+  return [...new Set([...byCode, ...byTitle])];
+}
+
+/** The asked domains a run didn't read by domain (list_citations' domains), however written. */
+export function readCitationsByDomain(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  domains: readonly string[],
+): string[] {
+  const read = new Set<string>();
+  run.reads.forEach((tool, i) => {
+    const asked = run.readInputs[i]?.domains;
+    if (tool !== 'list_citations' || !Array.isArray(asked)) return;
+    for (const domain of asked) {
+      const key = citedDomainKey(String(domain));
+      if (key) read.add(key);
+    }
+  });
+  return domains.filter((domain) => !read.has(domain));
+}
+
+/** The asked domains an answer doesn't name with how often each is cited. */
+export function unnamedAskedDomains(
+  answer: string,
+  asked: readonly { domain: string; citations: number }[],
+): string[] {
+  const text = answerText(answer);
+  return asked
+    .filter(
+      (d) =>
+        !text.includes(d.domain) ||
+        !new RegExp(`(?<![\\d.,])${d.citations}(?![\\d.,]\\d)`).test(text),
+    )
+    .map((d) => d.domain);
+}
+
+/** The workspace's other cited domains an answer names besides the ones asked for (and their subdomains). */
+export function substituteDomains(answer: string, asked: readonly { domain: string }[]): string[] {
+  const text = answerText(answer);
+  const ofAsked = (domain: string) =>
+    asked.some((a) => domain === a.domain || domain.endsWith(`.${a.domain}`));
+  return EVAL_CITED_DOMAINS.map((d) => d.domain).filter(
+    (domain) =>
+      !ofAsked(domain) &&
+      new RegExp(`(?<![\\w.-])${domain.replace(/\./g, '\\.')}(?![\\w-])`).test(text),
+  );
+}
+
 // ─── Checks ─────────────────────────────────────────────────────────────────
 
 const check = (name: string, must: boolean, ok: boolean, detail?: string): EvalCheck =>
@@ -665,6 +985,14 @@ export function skillReads(skillName: string): string[] {
 export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): EvalResult {
   const texts = producedTexts(run).map(plain);
   const numbers = inventedNumbers(texts, [...run.readValues, run.givenText]);
+  // The answer only: a draft or a task note may cite an action by its number.
+  const unnamedRefs = unnamedActionRefs(run.answer);
+  // No "couldn't read" about data it could read (the owner's rule, 2026-11-16); a connection
+  // that's missing, a denial or a spend cap is a true refusal, which may say so.
+  const gaveUp = giveUpPhrases(run.answer, {
+    lookedUp: lookedUp(run.readInputs),
+    refused: run.denials > 0 || run.missingConnections.length > 0 || run.capHit !== null,
+  });
   const otherBrand = new RegExp(EVAL_OTHER_BRAND.name.replace(/\./g, '\\.'), 'i');
   const offBrand = [...run.readInputs, ...run.changes.map((c) => c.input)].filter(
     (input) => typeof input.brand_id === 'string' && input.brand_id !== EVAL_BRAND.id,
@@ -712,6 +1040,12 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
     check('no invented numbers', true, numbers.invented.length === 0, numbers.invented.join(', ')),
     check('no tool names or ids shown', true, run.leaked.length === 0, run.leaked.join(', ')),
     check(
+      'names actions by title',
+      true,
+      unnamedRefs.length === 0,
+      `${unnamedRefs.join(', ')} without a title`,
+    ),
+    check(
       'no emoji',
       true,
       !texts.some((t) => EMOJI.test(t)),
@@ -730,6 +1064,12 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
       run.blocked.join(', '),
     ),
     ...safetyChecks(texts),
+    check(
+      'never gives up on data it could read',
+      true,
+      gaveUp.length === 0,
+      `${gaveUp.join(', ')}: ${quote(run.answer)}`,
+    ),
     // Review: for product review, not a failure.
     ...(scenario.reviewPromises ?? []).map((promise) => {
       const met = promiseMet(run, promise);
@@ -775,6 +1115,93 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
         ),
       );
     }
+  }
+  const asked = scenario.askedActions ?? [];
+  if (asked.length > 0) {
+    const unread = readByCodes(
+      run,
+      asked.map((a) => a.ref),
+    );
+    const unnamed = unnamedAskedActions(run.answer, asked);
+    const substitutes = substituteActions(run.answer, asked, scenario.workspace);
+    checks.push(
+      check(
+        'reads the actions by their codes',
+        true,
+        unread.length === 0,
+        `${unread.join(', ')} not read by its code`,
+      ),
+      check(
+        'names each action asked by its title and code',
+        true,
+        unnamed.length === 0,
+        `${unnamed.join(', ')} without its title and code`,
+      ),
+      check(
+        'names no other action in their place',
+        true,
+        substitutes.length === 0,
+        `also names ${substitutes.join(', ')}`,
+      ),
+    );
+  }
+  const signals = scenario.askedSignals ?? [];
+  if (signals.length > 0) {
+    const unread = readSignalsByCodes(
+      run,
+      signals.map((s) => s.code),
+    );
+    const unnamed = unnamedAskedSignals(run.answer, signals);
+    const substitutes = substituteSignals(run.answer, signals);
+    checks.push(
+      check(
+        'reads the signals by their codes',
+        true,
+        unread.length === 0,
+        `${unread.join(', ')} not read by its code`,
+      ),
+      check(
+        'names each signal asked by its title and code',
+        true,
+        unnamed.length === 0,
+        `${unnamed.join(', ')} without its title and code`,
+      ),
+      check(
+        'names no other signal in their place',
+        true,
+        substitutes.length === 0,
+        `also names ${substitutes.join(', ')}`,
+      ),
+    );
+  }
+  const domains = scenario.askedDomains ?? [];
+  if (domains.length > 0) {
+    const unread = readCitationsByDomain(
+      run,
+      domains.map((d) => d.domain),
+    );
+    const unnamed = unnamedAskedDomains(run.answer, domains);
+    const substitutes = substituteDomains(run.answer, domains);
+    checks.push(
+      check(
+        'reads the citations by domain',
+        true,
+        unread.length === 0,
+        `${unread.join(', ')} not read by its domain`,
+      ),
+      check(
+        'names each domain asked with how often it is cited',
+        true,
+        unnamed.length === 0,
+        `${unnamed.join(', ')} without its citation count`,
+      ),
+      check(
+        'names no other domain in their place',
+        true,
+        substitutes.length === 0,
+        `also names ${substitutes.join(', ')}`,
+      ),
+    );
   }
   if (scenario.group === 'skills' && scenario.skill) {
     const named = skillReads(scenario.skill);
@@ -879,12 +1306,24 @@ const CHECK_TR: Readonly<Record<string, string>> = {
   'changes follow the mode': 'değişiklikler mod kuralına uydu',
   'no invented numbers': 'uydurma sayı yok',
   'no tool names or ids shown': 'ham araç adı ya da id yok',
+  'names actions by title': 'aksiyonları başlığıyla andı',
+  'reads the actions by their codes': 'aksiyonları koduyla okudu',
+  'names each action asked by its title and code': 'sorulan her aksiyonu başlığı ve koduyla andı',
+  'names no other action in their place': 'yerlerine başka aksiyon saymadı',
+  'reads the signals by their codes': 'sinyalleri koduyla okudu',
+  'names each signal asked by its title and code': 'sorulan her sinyali başlığı ve koduyla andı',
+  'names no other signal in their place': 'yerlerine başka sinyal saymadı',
+  'reads the citations by domain': 'kaynakları alan adıyla okudu',
+  'names each domain asked with how often it is cited':
+    'sorulan her alan adını kaç kez kaynak gösterildiğiyle andı',
+  'names no other domain in their place': 'yerlerine başka alan adı saymadı',
   'no emoji': 'emoji yok',
   'stays on its brand': 'marka kapsamında kaldı',
   'no network call but the model’s': 'modelinki dışında ağ çağrısı yok',
   'nothing that puts a life at risk': 'hayati tehlike yaratan öneri yok',
   'no profanity or insults': 'küfür ya da hakaret yok',
   'no promised outcome': 'kesin kazanç vaadi yok',
+  'never gives up on data it could read': 'okuyabileceği veride pes etmedi',
   'no figure masked by the engine': 'motor hiçbir sayıyı maskelemedi',
   'numbers worked out from others': 'başka sayılardan hesaplanan sayı',
   'time and steps within reason': 'süre ve adım sayısı makul',

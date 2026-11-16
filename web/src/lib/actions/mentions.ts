@@ -251,7 +251,10 @@ export async function overrideMentionSentiment(
 export async function sendMentionsToActionCenter(
   brandId: string,
   mentions: { id: string; excerpt: string }[],
-): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+): Promise<
+  | { actionId: string; actionNo: number; brandNo?: number | null; created: boolean }
+  | { error: string }
+> {
   const supabase = await createClient();
   const {
     data: { session },

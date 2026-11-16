@@ -125,7 +125,9 @@ const modes = () => [...action('chatSettings.defaultMode')];
 describe('ChatSettings', () => {
   it("shows the General settings as the mockup does, with the person's choices", async () => {
     await render();
-    expect(host.querySelector('h1')?.textContent).toBe('Settings');
+    // The title and the tabs are the Settings frame's (chat-settings-frame.test.tsx).
+    expect(host.querySelector('h1')).toBeNull();
+    expect(host.querySelector('nav')).toBeNull();
     expect(host.querySelector('h2')?.textContent).toBe('General');
     expect(modes().map((m) => m.textContent)).toEqual([
       'Ask me first',
@@ -136,7 +138,8 @@ describe('ChatSettings', () => {
     expect(action('chatSettings.toggleAskChatEverywhere')[0].getAttribute('aria-checked')).toBe(
       'true',
     );
-    expect(action('policy.open')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
+    // Tool policy, the Settings tab beside General.
+    expect(action('policy.open')[0].getAttribute('href')).toBe('/dashboard/chat/policy');
   });
 
   it('shows "Thought for N s" as a switch, on by default, and keeps a change at once', async () => {

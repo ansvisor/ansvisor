@@ -1,5 +1,6 @@
 import { readMemberEmails } from '@/lib/member-emails';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { summaryValue } from './activity';
 import type { UndoRule, WriteRecord } from './undo';
 import { DAY_MS, asObject, check, textOf } from './undo-parts';
@@ -57,6 +58,10 @@ const ok = (output: unknown) => {
   return result.ok === true ? result : null;
 };
 
+/** The code a send's or an attach's output names its action by ("AC-03"). */
+const madeCode = (made: Record<string, unknown>) =>
+  typeof made.code === 'string' ? made.code : actionCode({ actionNo: Number(made.action_no) });
+
 // ─── create_action: cancel it while nothing happened to it (§10b, 24 hours) ──
 
 /** Who clicked Undo, as History names them: their name, else their e-mail. */
@@ -89,7 +94,7 @@ const createAction: UndoRule = {
       target: { type: 'action', id },
       summaryParams: {
         title: summaryValue(asObject(input).title),
-        no: made ? `AC-${made.action_no}` : '',
+        no: made ? madeCode(made) : '',
       },
       // The same approval again made nothing new: nothing to cancel.
       undo: id && made?.created === true ? { after: { status: 'new' } } : null,
@@ -140,7 +145,7 @@ const attachToAction: UndoRule = {
     return {
       target: { type: 'action', id: textOf(made?.action_id) },
       summaryParams: {
-        no: made ? `AC-${made.action_no}` : '',
+        no: made ? madeCode(made) : '',
         finding: summaryValue(asObject(input).finding),
       },
       undo: eventId ? { after: { eventId } } : null,
@@ -182,7 +187,7 @@ const attachToAction: UndoRule = {
 async function readTask(taskId: string, brandId: string | null = null) {
   const { data, error } = await supabaseAdmin
     .from('action_tasks')
-    .select('id, action_id, task_key, title, status, actions!inner(action_no, brand_id)')
+    .select('id, action_id, task_key, title, status, actions!inner(action_no, brand_no, brand_id)')
     .eq('id', taskId)
     .maybeSingle();
   check(error, 'the task');
@@ -192,7 +197,7 @@ async function readTask(taskId: string, brandId: string | null = null) {
     task_key: string | null;
     title: string | null;
     status: string;
-    actions: { action_no: number; brand_id: string } | null;
+    actions: { action_no: number; brand_no: number | null; brand_id: string } | null;
   } | null;
   return row && (!brandId || row.actions?.brand_id === brandId) ? row : null;
 }
@@ -201,7 +206,9 @@ async function readTask(taskId: string, brandId: string | null = null) {
 const taskWords = (task: Awaited<ReturnType<typeof readTask>>) =>
   task
     ? [
-        task.actions ? `AC-${task.actions.action_no}` : null,
+        task.actions
+          ? actionCode({ actionNo: task.actions.action_no, brandNo: task.actions.brand_no })
+          : null,
         task.title?.trim() ? `“${task.title.trim()}”` : null,
       ]
         .filter(Boolean)

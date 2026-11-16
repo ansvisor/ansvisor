@@ -18,6 +18,7 @@ import {
 import { actingOpen } from '@/lib/chat/actor/api';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { FIXTURE_IDS, defineTool, type ChatToolContext, type ToolResultCard } from './define-tool';
 import { listWords, promptTexts } from './targets';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
@@ -130,29 +131,29 @@ function proposalOf(input: ProposalInput): ChatActionProposal {
   };
 }
 
-/** An action's number, by its id: "AC-1258"; null when it isn't there. */
+/** An action's code, by its id: "AC-03"; null when it isn't there. */
 async function actionNo(actionId: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin
     .from('actions')
-    .select('action_no')
+    .select('action_no, brand_no')
     .eq('id', actionId)
     .maybeSingle();
   if (error) throw new Error(`Could not read the action: ${error.message}`);
-  return data ? `AC-${data.action_no}` : null;
+  return data ? actionCode({ actionNo: data.action_no, brandNo: data.brand_no }) : null;
 }
 
 /** A task as its card names it: its own title, or its template's, and its action's number. */
 async function taskName(taskId: string, brandId: string): Promise<string | null> {
   const { data, error } = await supabaseAdmin
     .from('action_tasks')
-    .select('title, task_key, actions!inner(action_no, brand_id)')
+    .select('title, task_key, actions!inner(action_no, brand_no, brand_id)')
     .eq('id', taskId)
     .maybeSingle();
   if (error) throw new Error(`Could not read the task: ${error.message}`);
   const row = data as {
     title: string | null;
     task_key: string | null;
-    actions: { action_no: number; brand_id: string } | null;
+    actions: { action_no: number; brand_no: number | null; brand_id: string } | null;
   } | null;
   if (!row || row.actions?.brand_id !== brandId) return null;
   const tasks = messages.actionCenter.actionTasks as Record<string, unknown>;
@@ -161,7 +162,8 @@ async function taskName(taskId: string, brandId: string): Promise<string | null>
     (row.task_key && typeof tasks[row.task_key] === 'string'
       ? (tasks[row.task_key] as string)
       : '');
-  return [`AC-${row.actions.action_no}`, text ? `“${text}”` : null].filter(Boolean).join(' ');
+  const code = actionCode({ actionNo: row.actions.action_no, brandNo: row.actions.brand_no });
+  return [code, text ? `“${text}”` : null].filter(Boolean).join(' ');
 }
 
 /**
@@ -304,6 +306,7 @@ export const ACTION_CENTER_TOOLS = [
         ? {
             kind: 'action_created',
             actionNo: Number(made.action_no),
+            ...(typeof made.brand_no === 'number' ? { brandNo: made.brand_no } : {}),
             title: input.title,
             href: made.href as `/dashboard/${string}`,
           }
@@ -363,6 +366,7 @@ export const ACTION_CENTER_TOOLS = [
         ? {
             kind: 'action_added',
             actionNo: Number(made.action_no),
+            ...(typeof made.brand_no === 'number' ? { brandNo: made.brand_no } : {}),
             title: input.finding,
             href: made.href as `/dashboard/${string}`,
           }

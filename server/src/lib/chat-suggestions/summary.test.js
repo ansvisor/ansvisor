@@ -19,6 +19,7 @@ import {
 const action = {
   id: 'a1',
   action_no: 2841,
+  brand_no: 3,
   kind: 'optimize_product_pages',
   category: 'growth',
   impact: 'high',
@@ -49,6 +50,7 @@ describe('buildSummary', () => {
       version: SUMMARY_VERSION,
       action: {
         no: 2841,
+        brandNo: 3,
         kind: 'optimize_product_pages',
         category: 'growth',
         impact: 'high',

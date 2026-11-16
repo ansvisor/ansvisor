@@ -1,5 +1,6 @@
 import { isSubscriptionActive } from '@/config/plans';
 import { DASHBOARD_HOME } from '@/config/home';
+import { countPlanBrands } from '@/lib/plan-brand-count';
 
 /**
  * Setup after purchase (onboarding's new order, PR 1 of 3; the owner's
@@ -9,8 +10,14 @@ import { DASHBOARD_HOME } from '@/config/home';
  * setup ends, the prompts are aligned to the plan and the new brand's first
  * tracking run starts at once (lib/actions/setup-after-purchase.ts).
  *
- * A plain module: the dashboard's layout and the onboarding page both decide
- * with it.
+ * Whether setup is due, or resumes, is read from the organization's data
+ * (readSetupProgress), never from onboarding_completed, which setup after
+ * purchase leaves as it is. A plan that lapsed after a subscription never
+ * opens setup: the dashboard opens read-only, Billing included (planLapsed).
+ *
+ * A plain module: the dashboard's layout, the onboarding layout and the
+ * onboarding page all decide with it, so none of them sends the person back
+ * to where the other came from.
  */
 
 /**
@@ -60,7 +67,7 @@ export function isSetupDeferredValue(value: string | null | undefined): boolean 
  * Whether setup after purchase is put off for this person: the cookie set, on
  * the cloud, with the plan active or trialing, for an admin (who manages the
  * plan). Then the dashboard opens for them, as for a workspace with no brand
- * today, whether setup is due or was started and left (onboarding open).
+ * today, whether setup is due or was started and left (readSetupProgress).
  */
 export function isSetupDeferred({
   cloud,
@@ -78,6 +85,27 @@ export function isSetupDeferred({
 }
 
 /**
+ * A plan that lapsed after the organization had one: Stripe gave it a
+ * subscription (its stripe_subscription_id stays once given), which is now
+ * past_due, unpaid, canceled, incomplete_expired or anything else but active
+ * or trialing. On the cloud, the dashboard opens read-only for it, Billing
+ * included, whether onboarding was finished or not: never onboarding, whose
+ * writes such a plan refuses (assertWritable), so an admin can always pay.
+ */
+export function planLapsed({
+  cloud,
+  subscriptionStatus,
+  everSubscribed,
+}: {
+  cloud: boolean;
+  subscriptionStatus: string | null | undefined;
+  /** The organization has a Stripe subscription id. */
+  everSubscribed: boolean;
+}): boolean {
+  return cloud && everSubscribed && !isSubscriptionActive(subscriptionStatus);
+}
+
+/**
  * The organization's own brands among these: every one but the demo brand
  * (sample data, 00380), a paused one too. A paused brand means the
  * organization had one, so it is never sent to setup.
@@ -86,7 +114,18 @@ export function ownBrandCount(brands: readonly { isDemo?: boolean | null }[]): n
   return brands.filter((brand) => !brand.isDemo).length;
 }
 
-export interface SetupAfterPurchaseFacts {
+/**
+ * Where the organization's setup after purchase stands (readSetupProgress):
+ * - `due`: no brand of its own at all (a paused one counts, the demo brand
+ *   doesn't): setup opens at its first step;
+ * - `unfinished`: its one brand was set up part-way and left before Finish
+ *   (no competitor, which Finish saves first, and never tracked): setup
+ *   resumes on it, where it stopped;
+ * - null: neither, or it couldn't be read, which decides nothing.
+ */
+export type SetupProgress = 'due' | 'unfinished' | null;
+
+export interface SetupAfterPurchaseGate {
   /** Ansvisor Cloud (isCloud()); a self-hosted install has no plan. */
   cloud: boolean;
   /** The organization's Stripe subscription status. */
@@ -94,38 +133,117 @@ export interface SetupAfterPurchaseFacts {
   /** The person's role in the organization. */
   role: string | null | undefined;
   /**
-   * The organization's own brands, active or paused, the demo brand left
-   * out (org_brand_count); null when it couldn't be read, which decides
-   * nothing.
-   */
-  ownBrands: number | null;
-  /**
    * The setup-deferred cookie is set (isSetupDeferredValue). The dashboard
    * passes it; the onboarding page doesn't, so setup still opens there.
    */
   deferred?: boolean;
 }
 
+export interface SetupAfterPurchaseFacts extends SetupAfterPurchaseGate {
+  /** Where setup stands, from the organization's data (readSetupProgress). */
+  progress: SetupProgress;
+}
+
 /**
- * Whether the person goes to setup after purchase: on the cloud, the plan
- * active or trialing, no brand of the organization's own at all, and someone
- * who can set one up, unless they put it off (isSetupDeferred). Everyone else
- * keeps the way they go today.
+ * Whether setup after purchase may open for the person, before anything is
+ * read: on the cloud, the plan active or trialing, someone who can set up a
+ * brand, and not put off (isSetupDeferred). A plan that isn't active never
+ * opens it: a lapsed one opens the dashboard read-only (planLapsed).
  */
-export function needsSetupAfterPurchase({
+export function setupAfterPurchaseMayOpen({
   cloud,
   subscriptionStatus,
   role,
-  ownBrands,
   deferred = false,
-}: SetupAfterPurchaseFacts): boolean {
+}: SetupAfterPurchaseGate): boolean {
   return (
     cloud &&
     isSubscriptionActive(subscriptionStatus) &&
     canSetUpBrand(role) &&
-    ownBrands === 0 &&
     !isSetupDeferred({ cloud, subscriptionStatus, role, deferred })
   );
+}
+
+/**
+ * Whether the person goes to setup after purchase: it may open for them
+ * (setupAfterPurchaseMayOpen), and the organization's data says it is due or
+ * was left unfinished (readSetupProgress). Everyone else keeps the way they
+ * go today.
+ */
+export function needsSetupAfterPurchase({ progress, ...gate }: SetupAfterPurchaseFacts): boolean {
+  return setupAfterPurchaseMayOpen(gate) && progress !== null;
+}
+
+/** The reads readSetupProgress makes: the person's own session, browser or server. */
+type SetupReader = Parameters<typeof countPlanBrands>[0];
+
+/** A brand as the reads have it: the demo brand and a paused one told apart. */
+interface ProgressBrand {
+  id: string;
+  isDemo?: boolean | null;
+  isActive?: boolean | null;
+}
+
+/** Whether a read of a brand's rows found any; null when it failed. */
+async function hasAny(
+  read: PromiseLike<{ data: unknown[] | null; error: unknown }>,
+): Promise<boolean | null> {
+  const { data, error } = await read;
+  if (error) return null;
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Where the organization's setup after purchase stands (SetupProgress), from
+ * its data, through the person's own session: the dashboard's layout and the
+ * onboarding page read it the same way, so one never sends the person back to
+ * the other.
+ *
+ * `brands`: the brands the person sees, when read already (the layout's);
+ * else they are read here. With none of its own in sight, the organization's
+ * count has the last word (a Selected-brands manager may see none): 0 is
+ * `due`. With exactly one, active, in sight: setup was left unfinished when
+ * that brand has no competitor (Finish saves them before anything else),
+ * was never tracked (no run in its ledger, tracking_runs, kept for good) and
+ * is the organization's only one. Cheapest first: an established brand stops
+ * at its competitors. Never throws: a failed read is null.
+ */
+export async function readSetupProgress(
+  supabase: SetupReader,
+  organizationId: string,
+  brands?: readonly ProgressBrand[],
+): Promise<SetupProgress> {
+  try {
+    let seen = brands;
+    if (!seen) {
+      const { data, error } = await supabase
+        .from('brands')
+        .select('id, is_active')
+        .eq('organization_id', organizationId)
+        .eq('is_demo', false)
+        .limit(2);
+      if (error) return null;
+      seen = (data ?? []).map((row) => ({ id: row.id, isActive: row.is_active }));
+    }
+    const own = seen.filter((brand) => !brand.isDemo);
+    if (own.length === 0) {
+      return (await countPlanBrands(supabase, organizationId)) === 0 ? 'due' : null;
+    }
+    if (own.length > 1 || own[0].isActive === false) return null;
+    const brandId = own[0].id;
+
+    const competitors = await hasAny(
+      supabase.from('competitors').select('id').eq('brand_id', brandId).limit(1),
+    );
+    if (competitors !== false) return null;
+    const tracked = await hasAny(
+      supabase.from('tracking_runs').select('id').eq('brand_id', brandId).limit(1),
+    );
+    if (tracked !== false) return null;
+    return (await countPlanBrands(supabase, organizationId)) === 1 ? 'unfinished' : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

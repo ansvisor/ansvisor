@@ -9,6 +9,7 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useUserRole } from '@/hooks/use-user-role';
 import type { ActionItem } from '@/lib/actions/action-center';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import { OPEN_ACTION_STATUSES } from '@/lib/action-center/registry';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +29,7 @@ const RunAgentPicker = lazy(() =>
 );
 
 interface RunAgentProps {
-  action: Pick<ActionItem, 'id' | 'actionNo' | 'status'>;
+  action: Pick<ActionItem, 'id' | 'actionNo' | 'brandNo' | 'status'>;
   /** The action's title as the page names it. */
   title: string;
   /** On the row an icon button; in the drawer's header a labelled one. */
@@ -109,7 +110,7 @@ function RunAgentMenu({ action, title, variant, className }: RunAgentProps) {
         onKeyDown={moveFocus}
       >
         <div className="px-2 pt-1 pb-2">
-          <p className="text-sm font-semibold">{t('pickerTitle', { no: action.actionNo })}</p>
+          <p className="text-sm font-semibold">{t('pickerTitle', { no: actionCodeNo(action) })}</p>
           <p className="text-xs text-muted-foreground">{t('pickerHint')}</p>
         </div>
         <Suspense fallback={<PickerLoading />}>

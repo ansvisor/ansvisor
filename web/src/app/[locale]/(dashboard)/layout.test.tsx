@@ -36,6 +36,9 @@ const reads: string[] = [];
 // and the calls made for it.
 let orgBrandCount: { data: number | null; error: { code: string; message: string } | null };
 const rpcs: [string, unknown][] = [];
+// Where a brand's setup stands (readSetupProgress): its competitors, which
+// setup's Finish saves, and its runs (tracking_runs), as each read finds them.
+let brandRows: Record<'competitors' | 'tracking_runs', { data: unknown[] | null; error: unknown }>;
 
 // The signed-in account, as the Auth server has it: what getUser() and the
 // admin API read, and where the sign-up event's claim is written.
@@ -76,6 +79,15 @@ vi.mock('@/lib/supabase/server', () => ({
               ? { data: chatPrefs, error: null }
               : { data: owner },
       };
+      // A brand's competitors and runs, read as a list.
+      if (table === 'competitors' || table === 'tracking_runs') {
+        return {
+          ...query,
+          select: () => ({
+            eq: () => ({ limit: async () => brandRows[table] }),
+          }),
+        };
+      }
       return query;
     },
   }),
@@ -182,6 +194,10 @@ vi.mock('@/lib/actions/brand', () => ({
   getBrandById: vi.fn(),
 }));
 
+// The theme provider, as KeepCurrentTheme reads it: what it saves.
+const themes = vi.hoisted(() => ({ setTheme: vi.fn() }));
+vi.mock('next-themes', () => ({ useTheme: () => themes }));
+
 const { default: DashboardLayout } = await import('./layout');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
@@ -229,9 +245,14 @@ beforeEach(() => {
     error: null,
   }));
   auth.admin.updateUserById.mockImplementation(
-    async (_id: string, { app_metadata }: { app_metadata: object }) => {
-      const meta = auth.account!.app_metadata as object;
-      auth.account = { ...auth.account, app_metadata: { ...meta, ...app_metadata } };
+    // As the Auth server does: app_metadata's keys merged, a null one removed.
+    async (_id: string, { app_metadata }: { app_metadata: Record<string, unknown> }) => {
+      const meta: Record<string, unknown> = { ...(auth.account!.app_metadata as object) };
+      for (const [key, value] of Object.entries(app_metadata)) {
+        if (value === null) delete meta[key];
+        else meta[key] = value;
+      }
+      auth.account = { ...auth.account, app_metadata: meta };
       return { data: { user: auth.account }, error: null };
     },
   );
@@ -251,9 +272,13 @@ beforeEach(() => {
   reads.length = 0;
   rpcs.length = 0;
   jar.deferred = null;
-  // A workspace with its own brand, as most are.
+  // A workspace with its own brand, as most are: set up, and tracked.
   orgBrands = [{ id: 'b1' }];
   orgBrandCount = { data: 1, error: null };
+  brandRows = {
+    competitors: { data: [{ id: 'c1' }], error: null },
+    tracking_runs: { data: [{ id: 'r1' }], error: null },
+  };
   loaded = [];
   useBrandStore.setState({ loaded: true });
   container = document.createElement('div');
@@ -424,13 +449,79 @@ describe('the dashboard layout and setup after purchase', () => {
     expect(await open()).toBe('/dashboard/onboarding');
   });
 
-  it('opens the dashboard once a brand exists, a paused one too, with no extra read', async () => {
+  it('opens the dashboard once a brand is set up, with one read of its competitors', async () => {
     orgBrands = [{ id: 'b1' }];
+    reads.length = 0;
     expect(await open()).toBeNull();
     expect(container.textContent).toContain('Page content');
-    orgBrands = [{ id: 'b1', isActive: false }];
-    expect(await open()).toBeNull();
+    expect(reads.filter((t) => t === 'competitors' || t === 'tracking_runs')).toEqual([
+      'competitors',
+    ]);
     expect(rpcs).toEqual([]);
+  });
+
+  it('opens the dashboard with a paused brand, or two, with no extra read', async () => {
+    orgBrands = [{ id: 'b1', isActive: false }];
+    reads.length = 0;
+    expect(await open()).toBeNull();
+    orgBrands = [{ id: 'b1' }, { id: 'b2' }];
+    expect(await open()).toBeNull();
+    expect(reads).not.toContain('competitors');
+    expect(rpcs).toEqual([]);
+  });
+
+  describe('left part-way (its one brand, no competitor, never tracked)', () => {
+    beforeEach(() => {
+      orgBrands = [{ id: 'b1' }];
+      orgBrandCount = { data: 1, error: null };
+      brandRows = {
+        competitors: { data: [], error: null },
+        tracking_runs: { data: [], error: null },
+      };
+    });
+
+    it('resumes setup, onboarding finished or not: never from onboarding_completed', async () => {
+      expect(await open()).toBe('/dashboard/onboarding');
+      expect(rpcs).toEqual([['org_brand_count', { p_organization_id: 'org1' }]]);
+      profile = { ...profile, onboarding_completed: false };
+      expect(await open()).toBe('/dashboard/onboarding');
+    });
+
+    it('opens the dashboard once Finish saved its competitors, even before its run', async () => {
+      brandRows.competitors = { data: [{ id: 'c1' }], error: null };
+      expect(await open()).toBeNull();
+      expect(container.textContent).toContain('Page content');
+    });
+
+    it('opens the dashboard for a brand tracked already, with no competitor left', async () => {
+      brandRows.tracking_runs = { data: [{ id: 'r1' }], error: null };
+      expect(await open()).toBeNull();
+    });
+
+    it('opens the dashboard for a new brand beside others this person does not see', async () => {
+      profile = { ...profile, role: 'manager' };
+      orgBrandCount = { data: 2, error: null };
+      expect(await open()).toBeNull();
+    });
+
+    it('decides nothing when a read fails', async () => {
+      brandRows.competitors = { data: null, error: { message: 'timeout' } };
+      expect(await open()).toBeNull();
+      brandRows.competitors = { data: [], error: null };
+      brandRows.tracking_runs = { data: null, error: { message: 'timeout' } };
+      expect(await open()).toBeNull();
+      brandRows.tracking_runs = { data: [], error: null };
+      orgBrandCount = { data: null, error: { code: '57014', message: 'statement timeout' } };
+      expect(await open()).toBeNull();
+      expect(redirect).not.toHaveBeenCalled();
+    });
+
+    it('opens the dashboard while its admin has put setup off', async () => {
+      jar.deferred = '1';
+      expect(await open()).toBeNull();
+      jar.deferred = null;
+      expect(await open()).toBe('/dashboard/onboarding');
+    });
   });
 
   it("opens the dashboard for a Selected-brands manager who sees none of the organization's brands", async () => {
@@ -485,7 +576,8 @@ describe('the dashboard layout and setup after purchase', () => {
       expect(await open()).toBe('/dashboard/onboarding');
     });
 
-    it('opens the dashboard for a setup started and left (onboarding open again)', async () => {
+    it('opens the dashboard for an onboarding not finished yet, with its plan on', async () => {
+      // A new admin back from Checkout (onboarding open until Finish).
       profile = { ...profile, onboarding_completed: false };
       orgBrands = [{ id: 'b1' }];
       expect(await open()).toBeNull();
@@ -582,6 +674,136 @@ describe('the dashboard layout and the choice first (onboarding, card first)', (
     expect(redirect).not.toHaveBeenCalled();
     expect(rpcs).toEqual([]);
   });
+
+  it.each(['canceled', 'past_due', 'unpaid', 'incomplete_expired'])(
+    'opens read-only, Billing included, for a new admin whose trial is %s before setup is finished',
+    async (status) => {
+      // Onboarding open from sign-up until Finish; the trial started from the choice.
+      profile = { ...profile, onboarding_completed: false };
+      org = { ...org, subscription_status: status, stripe_subscription_id: 'sub_1' };
+      orgBrands = [];
+      orgBrandCount = { data: 0, error: null };
+      expect(await open(<p>Billing</p>)).toBeNull();
+      expect(redirect).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('Billing');
+      expect(band()).not.toBeNull();
+    },
+  );
+});
+
+describe('the dashboard layout and a plan that lapsed before setup was finished', () => {
+  // Stripe's statuses for a plan that ended or a payment that failed, after
+  // the workspace had a subscription.
+  const LAPSED = ['past_due', 'unpaid', 'canceled', 'incomplete_expired', 'incomplete', 'paused'];
+  // Where setup stands: due (no brand of its own), left part-way (its one
+  // brand with no competitor, never tracked), or finished.
+  const SETUPS = {
+    due: () => {
+      orgBrands = [];
+      orgBrandCount = { data: 0, error: null };
+    },
+    unfinished: () => {
+      orgBrands = [{ id: 'b1' }];
+      brandRows = {
+        competitors: { data: [], error: null },
+        tracking_runs: { data: [], error: null },
+      };
+    },
+    finished: () => {},
+  } as const;
+  const cases = LAPSED.flatMap((status) =>
+    (Object.keys(SETUPS) as (keyof typeof SETUPS)[]).flatMap((setup) =>
+      [true, false].map((onboarded) => ({ status, setup, onboarded })),
+    ),
+  );
+
+  it.each(cases)(
+    'opens read-only, Billing included, for an admin: plan $status, setup $setup, onboarded $onboarded',
+    async ({ status, setup, onboarded }) => {
+      SETUPS[setup]();
+      profile = { ...profile, onboarding_completed: onboarded };
+      org = { ...org, subscription_status: status, stripe_subscription_id: 'sub_1' };
+      expect(await open(<p>Billing</p>)).toBeNull();
+      expect(redirect).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('Billing');
+      expect(band()).not.toBeNull();
+      // Nothing read for setup: it never opens with a plan that isn't active.
+      expect(reads).not.toContain('competitors');
+      expect(rpcs).toEqual([]);
+    },
+  );
+
+  it.each(['manager', 'analyst'])(
+    'opens read-only for a %s too, onboarded or not',
+    async (role) => {
+      SETUPS.due();
+      profile = { ...profile, role, onboarding_completed: false };
+      org = { ...org, subscription_status: 'canceled' };
+      expect(await open()).toBeNull();
+      expect(band()).not.toBeNull();
+    },
+  );
+
+  it('keeps the put-off cookie from mattering: read-only either way', async () => {
+    SETUPS.unfinished();
+    profile = { ...profile, onboarding_completed: false };
+    org = { ...org, subscription_status: 'past_due' };
+    jar.deferred = '1';
+    expect(await open()).toBeNull();
+    jar.deferred = null;
+    expect(await open()).toBeNull();
+    expect(band()).not.toBeNull();
+  });
+
+  it('still sends an onboarding never subscribed, or an organization unread, to onboarding', async () => {
+    profile = { ...profile, onboarding_completed: false };
+    org = { ...org, subscription_status: 'incomplete', stripe_subscription_id: null };
+    expect(await open()).toBe('/dashboard/onboarding');
+    org = { ...org, subscription_status: 'canceled', stripe_subscription_id: null };
+    expect(await open()).toBe('/dashboard/onboarding');
+    org = null;
+    orgError = { message: 'timeout' };
+    expect(await open()).toBe('/dashboard/onboarding');
+  });
+
+  it('opens setup again once the plan is active again', async () => {
+    SETUPS.unfinished();
+    org = { ...org, subscription_status: 'canceled' };
+    expect(await open()).toBeNull();
+    org = { ...org, subscription_status: 'active' };
+    expect(await open()).toBe('/dashboard/onboarding');
+  });
+});
+
+describe('the dashboard layout and the theme', () => {
+  beforeEach(() => window.localStorage.removeItem('theme'));
+  afterEach(() => window.localStorage.removeItem('theme'));
+
+  it('keeps someone who already uses Ansvisor on light, the theme they see, on Cloud', async () => {
+    expect(await open()).toBeNull();
+    expect(themes.setTheme).toHaveBeenCalledTimes(1);
+    expect(themes.setTheme).toHaveBeenCalledWith('light');
+  });
+
+  // Dark: what a new person got on sign-up, sign-in or onboarding. Either: a picked one.
+  it.each(['dark', 'light'])('keeps a saved theme (%s)', async (saved) => {
+    window.localStorage.setItem('theme', saved);
+    expect(await open()).toBeNull();
+    expect(themes.setTheme).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem('theme')).toBe(saved);
+  });
+
+  it('saves nothing on the way to onboarding, where a new person starts on dark', async () => {
+    profile = { ...profile, onboarding_completed: false };
+    expect(await open()).toBe('/dashboard/onboarding');
+    expect(themes.setTheme).not.toHaveBeenCalled();
+  });
+
+  it('saves nothing self-hosted', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await open()).toBeNull();
+    expect(themes.setTheme).not.toHaveBeenCalled();
+  });
 });
 
 describe('the dashboard layout and the sign-up event', () => {
@@ -596,10 +818,19 @@ describe('the dashboard layout and the sign-up event', () => {
     resend.mock.calls
       .filter(([url]) => url === 'https://eu.i.posthog.com/capture/')
       .map(([, init]) => JSON.parse((init as RequestInit).body as string));
-  /** The page's after() work, as Next runs it once the response is sent. */
-  async function runLater() {
-    const tasks = later.tasks.splice(0);
-    await Promise.all(tasks.map((task) => task()));
+  /**
+   * The page's after() work, as Next runs it once the response is sent, with
+   * the claim's wait (lib/signup-event.ts) run through.
+   */
+  async function runLater(tasks = later.tasks.splice(0)) {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const done = Promise.all(tasks.map((task) => task()));
+      await vi.runAllTimersAsync();
+      await done;
+    } finally {
+      vi.useRealTimers();
+    }
   }
 
   beforeEach(() => {
@@ -616,6 +847,9 @@ describe('the dashboard layout and the sign-up event', () => {
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', 'https://eu.i.posthog.com');
     expect(await open()).toBe('/dashboard/onboarding');
+    // Queued before the redirect: Next runs after() work once that response
+    // closes (lib/signup-event.ts).
+    expect(later.tasks).toHaveLength(1);
     expect(sent()).toEqual([]);
     await runLater();
     expect(sent()).toEqual([
@@ -629,7 +863,10 @@ describe('the dashboard layout and the sign-up event', () => {
         properties: expect.objectContaining({ source: 'email' }),
       }),
     ]);
-    expect(auth.account!.app_metadata).toMatchObject({ signup_event_at: expect.any(String) });
+    expect(auth.account!.app_metadata).toMatchObject({
+      signup_event_at: expect.any(String),
+      signup_posthog_at: expect.any(String),
+    });
 
     // The next page, onboarded or not: nothing more, and no read for it.
     auth.admin.getUserById.mockClear();
@@ -651,11 +888,71 @@ describe('the dashboard layout and the sign-up event', () => {
     // Another server's page, its session read before this one claimed it.
     auth.account = { ...auth.account, app_metadata: { provider: 'email' } };
     await open();
-    const [first] = later.tasks.splice(0);
+    const first = later.tasks.splice(0);
     await open();
-    await first();
+    await runLater(first);
     await runLater();
     expect(sent()).toHaveLength(2);
+  });
+
+  it('tries again from a later page when Resend refuses it (a 4xx), up to 3 tries', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    resend.mockResolvedValueOnce({ ok: false, status: 422 });
+    await open();
+    await runLater();
+    expect(auth.account!.app_metadata).toMatchObject({ signup_event_tries: 1 });
+    expect(auth.account!.app_metadata).not.toHaveProperty('signup_event_at');
+
+    resend.mockResolvedValueOnce({ ok: false, status: 429 });
+    await open();
+    await runLater();
+    await open();
+    await runLater();
+    expect(sent()).toHaveLength(3);
+    expect(auth.account!.app_metadata).toMatchObject({
+      signup_event_at: expect.any(String),
+      signup_event_tries: 3,
+    });
+    await open();
+    await runLater();
+    expect(sent()).toHaveLength(3);
+    vi.mocked(console.error).mockRestore();
+  });
+
+  it('keeps the claim when Resend may have the event: a timeout, a network error or a 5xx', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const answers = [
+      () =>
+        resend.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError')),
+      () => resend.mockRejectedValueOnce(new TypeError('fetch failed')),
+      () => resend.mockResolvedValueOnce({ ok: false, status: 500 }),
+      () => resend.mockResolvedValueOnce({ ok: false, status: 503 }),
+    ];
+    for (const [n, answer] of answers.entries()) {
+      // A new account each time.
+      auth.account = { ...auth.account, app_metadata: { provider: 'email' } };
+      answer();
+      await open();
+      await runLater();
+      expect(sent()).toHaveLength(n + 1);
+      expect(auth.account!.app_metadata).toMatchObject({
+        signup_event_at: expect.any(String),
+        signup_event_tries: 1,
+      });
+      // The next page sends no second welcome.
+      await open();
+      await runLater();
+      expect(sent()).toHaveLength(n + 1);
+    }
+    vi.mocked(console.warn).mockRestore();
+  });
+
+  it('claims nothing for the welcome where the web has no RESEND_API_KEY', async () => {
+    vi.stubEnv('RESEND_API_KEY', '');
+    await open();
+    await runLater();
+    expect(sent()).toEqual([]);
+    expect(auth.admin.updateUserById).not.toHaveBeenCalled();
   });
 
   it('never sends it for an account made before the welcome e-mail started', async () => {
@@ -685,6 +982,7 @@ describe('the dashboard layout and the sign-up event', () => {
 
   it('draws the page whatever the send does', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     profile = { organization_id: 'org1', onboarding_completed: true, role: 'admin' };
     resend.mockRejectedValueOnce(new Error('Resend down'));
     expect(await open()).toBeNull();
@@ -697,5 +995,6 @@ describe('the dashboard layout and the sign-up event', () => {
     expect(container.textContent).toContain('Page content');
     await expect(runLater()).resolves.toBeUndefined();
     vi.mocked(console.error).mockRestore();
+    vi.mocked(console.warn).mockRestore();
   });
 });

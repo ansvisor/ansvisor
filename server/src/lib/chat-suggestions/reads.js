@@ -65,7 +65,7 @@ export async function loadCandidates(db, brandId, userIds) {
     db
       .from('actions')
       .select(
-        'id, action_no, kind, category, impact, status, priority_score, created_at, assignee_id',
+        'id, action_no, brand_no, kind, category, impact, status, priority_score, created_at, assignee_id',
       )
       .eq('brand_id', brandId)
       .in('status', OPEN_STATUSES)
