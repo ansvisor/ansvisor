@@ -39,11 +39,11 @@ import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import {
   isSetupDeferred,
   isSetupDeferredValue,
-  needsSetupAfterPurchase,
-  ownBrandCount,
+  planLapsed,
+  readSetupProgress,
   SETUP_DEFERRED_COOKIE,
+  setupAfterPurchaseMayOpen,
 } from '@/lib/onboarding/setup-after-purchase';
-import { countPlanBrands } from '@/lib/plan-brand-count';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
@@ -52,6 +52,28 @@ import { PlanEndsBanner } from '@/components/billing/plan-ends-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 import { FirstRunReady } from '@/components/layout/first-run-ready';
 import { sendSignupEventOnce } from '@/lib/signup-event';
+
+/**
+ * Whether the organization's plan lapsed after a subscription (planLapsed),
+ * for someone whose onboarding isn't finished: one small read before the
+ * redirect to onboarding. Unread, it hasn't (onboarding, as before).
+ */
+async function lapsedPlan(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('subscription_status, stripe_subscription_id')
+    .eq('id', organizationId)
+    .single();
+  if (error || !data) return false;
+  return planLapsed({
+    cloud: true,
+    subscriptionStatus: data.subscription_status as string | null,
+    everSubscribed: Boolean(data.stripe_subscription_id),
+  });
+}
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -83,7 +105,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // everything goes as before.
   const deferred = isSetupDeferredValue((await cookies()).get(SETUP_DEFERRED_COOKIE)?.value);
 
-  if (!profile?.organization_id || (!profile.onboarding_completed && !deferred)) {
+  if (!profile?.organization_id) {
+    redirect('/dashboard/onboarding');
+  }
+  // Onboarding not finished goes back to it, unless setup is put off, or,
+  // on the cloud, the plan lapsed after a subscription (a trial canceled or a
+  // payment failed before setup's Finish): then the dashboard opens
+  // read-only, Billing included, never the wizard, whose writes that plan
+  // refuses (planLapsed; the onboarding layout sends it here too).
+  if (
+    !profile.onboarding_completed &&
+    !deferred &&
+    !(isCloud() && (await lapsedPlan(supabase, profile.organization_id)))
+  ) {
     redirect('/dashboard/onboarding');
   }
 
@@ -137,19 +171,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // database without those columns yet keeps the panel's choices above.
     chatOn ? readTourPrefs(supabase, user.id) : Promise.resolve(null),
   ]);
-  // Onboarding not finished (setup after purchase, started and left) opens
-  // the dashboard only while its admin has put setup off with a plan active.
-  if (
-    !profile.onboarding_completed &&
-    (orgError ||
-      !isSetupDeferred({
-        cloud: isCloud(),
-        subscriptionStatus: (org?.subscription_status as string | null) ?? null,
-        role,
-        deferred,
-      }))
-  ) {
-    redirect('/dashboard/onboarding');
+  // Onboarding not finished opens the dashboard only while its admin has put
+  // setup off with a plan active, or read-only once the plan lapsed after a
+  // subscription; an organization that couldn't be read, never.
+  if (!profile.onboarding_completed) {
+    const orgFacts = {
+      cloud: isCloud(),
+      subscriptionStatus: (org?.subscription_status as string | null) ?? null,
+    };
+    if (
+      orgError ||
+      !(
+        isSetupDeferred({ ...orgFacts, role, deferred }) ||
+        planLapsed({ ...orgFacts, everSubscribed: Boolean(org?.stripe_subscription_id) })
+      )
+    ) {
+      redirect('/dashboard/onboarding');
+    }
   }
   const chatPrefs = chatPrefsRead.data;
   // The side panel is Chat too: the person's Agent Chat conversations come
@@ -200,17 +238,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
       adminName = access.adminName;
     }
     // Setup after purchase (lib/onboarding/setup-after-purchase.ts): a plan
-    // active or trialing, and no brand of the organization's own at all (the
-    // demo brand left out, a paused one counted), for an admin or a manager:
-    // onboarding opens at its first step, and its Finish starts the first
-    // run. The brands this person sees decide first; a Selected-brands
-    // manager may see none of them, so the organization's own count has the
-    // last word (one read, only then), and an unread count decides nothing.
-    // Once a brand exists, no more; nor while its admin has put it off.
-    const setupFacts = { cloud: true, subscriptionStatus, role, deferred };
-    if (needsSetupAfterPurchase({ ...setupFacts, ownBrands: ownBrandCount(brands) })) {
-      const ownBrands = await countPlanBrands(supabase, profile.organization_id).catch(() => null);
-      if (needsSetupAfterPurchase({ ...setupFacts, ownBrands })) {
+    // active or trialing, for an admin or a manager, and the organization's
+    // data says setup is due (no brand of its own at all: the demo brand left
+    // out, a paused one counted) or was left part-way (its one brand with no
+    // competitor and never tracked): onboarding opens there, and its Finish
+    // starts the first run. The brands this person sees decide first; the
+    // reads after them only where they could change the answer, and an
+    // unread one decides nothing. Never with a plan that isn't active (the
+    // dashboard opens read-only, above), nor while its admin has put it off.
+    if (setupAfterPurchaseMayOpen({ cloud: true, subscriptionStatus, role, deferred })) {
+      if (await readSetupProgress(supabase, profile.organization_id, brands)) {
         redirect('/dashboard/onboarding');
       }
     }

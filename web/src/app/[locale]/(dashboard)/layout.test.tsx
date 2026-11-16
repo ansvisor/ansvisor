@@ -36,6 +36,9 @@ const reads: string[] = [];
 // and the calls made for it.
 let orgBrandCount: { data: number | null; error: { code: string; message: string } | null };
 const rpcs: [string, unknown][] = [];
+// Where a brand's setup stands (readSetupProgress): its competitors, which
+// setup's Finish saves, and its runs (tracking_runs), as each read finds them.
+let brandRows: Record<'competitors' | 'tracking_runs', { data: unknown[] | null; error: unknown }>;
 
 // The signed-in account, as the Auth server has it: what getUser() and the
 // admin API read, and where the sign-up event's claim is written.
@@ -76,6 +79,15 @@ vi.mock('@/lib/supabase/server', () => ({
               ? { data: chatPrefs, error: null }
               : { data: owner },
       };
+      // A brand's competitors and runs, read as a list.
+      if (table === 'competitors' || table === 'tracking_runs') {
+        return {
+          ...query,
+          select: () => ({
+            eq: () => ({ limit: async () => brandRows[table] }),
+          }),
+        };
+      }
       return query;
     },
   }),
@@ -251,9 +263,13 @@ beforeEach(() => {
   reads.length = 0;
   rpcs.length = 0;
   jar.deferred = null;
-  // A workspace with its own brand, as most are.
+  // A workspace with its own brand, as most are: set up, and tracked.
   orgBrands = [{ id: 'b1' }];
   orgBrandCount = { data: 1, error: null };
+  brandRows = {
+    competitors: { data: [{ id: 'c1' }], error: null },
+    tracking_runs: { data: [{ id: 'r1' }], error: null },
+  };
   loaded = [];
   useBrandStore.setState({ loaded: true });
   container = document.createElement('div');
@@ -424,13 +440,79 @@ describe('the dashboard layout and setup after purchase', () => {
     expect(await open()).toBe('/dashboard/onboarding');
   });
 
-  it('opens the dashboard once a brand exists, a paused one too, with no extra read', async () => {
+  it('opens the dashboard once a brand is set up, with one read of its competitors', async () => {
     orgBrands = [{ id: 'b1' }];
+    reads.length = 0;
     expect(await open()).toBeNull();
     expect(container.textContent).toContain('Page content');
-    orgBrands = [{ id: 'b1', isActive: false }];
-    expect(await open()).toBeNull();
+    expect(reads.filter((t) => t === 'competitors' || t === 'tracking_runs')).toEqual([
+      'competitors',
+    ]);
     expect(rpcs).toEqual([]);
+  });
+
+  it('opens the dashboard with a paused brand, or two, with no extra read', async () => {
+    orgBrands = [{ id: 'b1', isActive: false }];
+    reads.length = 0;
+    expect(await open()).toBeNull();
+    orgBrands = [{ id: 'b1' }, { id: 'b2' }];
+    expect(await open()).toBeNull();
+    expect(reads).not.toContain('competitors');
+    expect(rpcs).toEqual([]);
+  });
+
+  describe('left part-way (its one brand, no competitor, never tracked)', () => {
+    beforeEach(() => {
+      orgBrands = [{ id: 'b1' }];
+      orgBrandCount = { data: 1, error: null };
+      brandRows = {
+        competitors: { data: [], error: null },
+        tracking_runs: { data: [], error: null },
+      };
+    });
+
+    it('resumes setup, onboarding finished or not: never from onboarding_completed', async () => {
+      expect(await open()).toBe('/dashboard/onboarding');
+      expect(rpcs).toEqual([['org_brand_count', { p_organization_id: 'org1' }]]);
+      profile = { ...profile, onboarding_completed: false };
+      expect(await open()).toBe('/dashboard/onboarding');
+    });
+
+    it('opens the dashboard once Finish saved its competitors, even before its run', async () => {
+      brandRows.competitors = { data: [{ id: 'c1' }], error: null };
+      expect(await open()).toBeNull();
+      expect(container.textContent).toContain('Page content');
+    });
+
+    it('opens the dashboard for a brand tracked already, with no competitor left', async () => {
+      brandRows.tracking_runs = { data: [{ id: 'r1' }], error: null };
+      expect(await open()).toBeNull();
+    });
+
+    it('opens the dashboard for a new brand beside others this person does not see', async () => {
+      profile = { ...profile, role: 'manager' };
+      orgBrandCount = { data: 2, error: null };
+      expect(await open()).toBeNull();
+    });
+
+    it('decides nothing when a read fails', async () => {
+      brandRows.competitors = { data: null, error: { message: 'timeout' } };
+      expect(await open()).toBeNull();
+      brandRows.competitors = { data: [], error: null };
+      brandRows.tracking_runs = { data: null, error: { message: 'timeout' } };
+      expect(await open()).toBeNull();
+      brandRows.tracking_runs = { data: [], error: null };
+      orgBrandCount = { data: null, error: { code: '57014', message: 'statement timeout' } };
+      expect(await open()).toBeNull();
+      expect(redirect).not.toHaveBeenCalled();
+    });
+
+    it('opens the dashboard while its admin has put setup off', async () => {
+      jar.deferred = '1';
+      expect(await open()).toBeNull();
+      jar.deferred = null;
+      expect(await open()).toBe('/dashboard/onboarding');
+    });
   });
 
   it("opens the dashboard for a Selected-brands manager who sees none of the organization's brands", async () => {
@@ -485,7 +567,8 @@ describe('the dashboard layout and setup after purchase', () => {
       expect(await open()).toBe('/dashboard/onboarding');
     });
 
-    it('opens the dashboard for a setup started and left (onboarding open again)', async () => {
+    it('opens the dashboard for an onboarding not finished yet, with its plan on', async () => {
+      // A new admin back from Checkout (onboarding open until Finish).
       profile = { ...profile, onboarding_completed: false };
       orgBrands = [{ id: 'b1' }];
       expect(await open()).toBeNull();
@@ -546,6 +629,90 @@ describe('the dashboard layout and the demo brand', () => {
       'See plans',
       'See the demo',
     ]);
+  });
+});
+
+describe('the dashboard layout and a plan that lapsed before setup was finished', () => {
+  // Stripe's statuses for a plan that ended or a payment that failed, after
+  // the workspace had a subscription.
+  const LAPSED = ['past_due', 'unpaid', 'canceled', 'incomplete_expired', 'incomplete', 'paused'];
+  // Where setup stands: due (no brand of its own), left part-way (its one
+  // brand with no competitor, never tracked), or finished.
+  const SETUPS = {
+    due: () => {
+      orgBrands = [];
+      orgBrandCount = { data: 0, error: null };
+    },
+    unfinished: () => {
+      orgBrands = [{ id: 'b1' }];
+      brandRows = {
+        competitors: { data: [], error: null },
+        tracking_runs: { data: [], error: null },
+      };
+    },
+    finished: () => {},
+  } as const;
+  const cases = LAPSED.flatMap((status) =>
+    (Object.keys(SETUPS) as (keyof typeof SETUPS)[]).flatMap((setup) =>
+      [true, false].map((onboarded) => ({ status, setup, onboarded })),
+    ),
+  );
+
+  it.each(cases)(
+    'opens read-only, Billing included, for an admin: plan $status, setup $setup, onboarded $onboarded',
+    async ({ status, setup, onboarded }) => {
+      SETUPS[setup]();
+      profile = { ...profile, onboarding_completed: onboarded };
+      org = { ...org, subscription_status: status, stripe_subscription_id: 'sub_1' };
+      expect(await open(<p>Billing</p>)).toBeNull();
+      expect(redirect).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('Billing');
+      expect(band()).not.toBeNull();
+      // Nothing read for setup: it never opens with a plan that isn't active.
+      expect(reads).not.toContain('competitors');
+      expect(rpcs).toEqual([]);
+    },
+  );
+
+  it.each(['manager', 'analyst'])(
+    'opens read-only for a %s too, onboarded or not',
+    async (role) => {
+      SETUPS.due();
+      profile = { ...profile, role, onboarding_completed: false };
+      org = { ...org, subscription_status: 'canceled' };
+      expect(await open()).toBeNull();
+      expect(band()).not.toBeNull();
+    },
+  );
+
+  it('keeps the put-off cookie from mattering: read-only either way', async () => {
+    SETUPS.unfinished();
+    profile = { ...profile, onboarding_completed: false };
+    org = { ...org, subscription_status: 'past_due' };
+    jar.deferred = '1';
+    expect(await open()).toBeNull();
+    jar.deferred = null;
+    expect(await open()).toBeNull();
+    expect(band()).not.toBeNull();
+  });
+
+  it('still sends an onboarding never subscribed, or an organization unread, to onboarding', async () => {
+    profile = { ...profile, onboarding_completed: false };
+    org = { ...org, subscription_status: 'incomplete', stripe_subscription_id: null };
+    expect(await open()).toBe('/dashboard/onboarding');
+    org = { ...org, subscription_status: 'canceled', stripe_subscription_id: null };
+    expect(await open()).toBe('/dashboard/onboarding');
+    org = null;
+    orgError = { message: 'timeout' };
+    expect(await open()).toBe('/dashboard/onboarding');
+  });
+
+  it('opens setup again once the plan is active again', async () => {
+    SETUPS.unfinished();
+    org = { ...org, subscription_status: 'canceled' };
+    expect(await open()).toBeNull();
+    org = { ...org, subscription_status: 'active' };
+    expect(await open()).toBe('/dashboard/onboarding');
   });
 });
 

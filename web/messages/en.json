@@ -443,6 +443,7 @@
     "saved": "Setup saved. Tracking starts {trial, select, yes {when you start the free trial or buy a plan} other {when you choose a plan}}.",
     "trackingStartsNow": "Your plan is active. Tracking starts as soon as you finish.",
     "finishFailed": "We couldn't finish setup. Please try again.",
+    "planLapsed": "Your plan isn't active any more, so setup is paused. Choose a plan in Billing, then set up your brand.",
     "managePlan": "Manage your plan"
   },
   "planOffer": {
