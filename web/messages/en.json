@@ -4321,7 +4321,6 @@
       "steps": "{count, plural, one {# step} other {# steps}}",
       "stepsSources": "{steps, plural, one {# step} other {# steps}} · {sources, plural, one {# source} other {# sources}}",
       "stepsClock": "{steps, plural, one {# step} other {# steps}} · {clock}",
-      "rows": "{count, plural, one {# row} other {# rows}}",
       "items": "{count, plural, one {# item} other {# items}}",
       "parts": "{count, plural, one {# part} other {# parts}}",
       "seconds": "{s}s",
@@ -4706,7 +4705,6 @@
     "since": "Since {date}",
     "until": "Until {date}",
     "range": "{from} – {to}",
-    "rows": "{count, plural, one {# row} other {# rows}}",
     "morePlatforms": "+{count}",
     "step": {
       "stopped": "Stopped",

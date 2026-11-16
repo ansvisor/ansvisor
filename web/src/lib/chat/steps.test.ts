@@ -8,6 +8,7 @@ import {
   CHAT_RUN_STEP_MEMBER_COLUMNS,
   CHAT_RUN_STEP_SELECT,
   toClientStep,
+  withoutRowCount,
   type ChatRunStepMemberRow,
 } from './steps';
 
@@ -29,7 +30,7 @@ const FULL_ROW: StepRow = {
   kind: 'read',
   status: 'done',
   label: 'Read Citations',
-  detail: 'Pricing prompts · Last 30 days · ChatGPT, Perplexity · 42 rows',
+  detail: 'Pricing prompts · Last 30 days · ChatGPT, Perplexity',
   scope_json: {
     subject: 'Pricing prompts',
     dateRange: 'Last 30 days',
@@ -94,7 +95,7 @@ describe('toClientStep', () => {
       kind: 'read',
       status: 'done',
       label: 'Read Citations',
-      detail: 'Pricing prompts · Last 30 days · ChatGPT, Perplexity · 42 rows',
+      detail: 'Pricing prompts · Last 30 days · ChatGPT, Perplexity',
       scope: {
         subject: 'Pricing prompts',
         dateRange: 'Last 30 days',
@@ -155,6 +156,38 @@ describe('toClientStep', () => {
       toClientStep({ ...memory, scope_json: { subject: 'Memory', unit: 'items' } })?.scope,
     ).toEqual({ subject: 'Memory', unit: 'items' });
     expect(toClientStep({ ...memory, scope_json: { unit: 'bytes' } })).not.toHaveProperty('scope');
+  });
+
+  it('drops the row count an older read step kept in its words, 0 or 50, and keeps the count', () => {
+    const older = (detail: string, rowCount: number) =>
+      toClientStep({ ...FULL_ROW, detail, row_count: rowCount });
+    expect(older('Last 30 days · ChatGPT · 0 rows', 0)).toMatchObject({
+      detail: 'Last 30 days · ChatGPT',
+      rowCount: 0,
+    });
+    expect(older('Last 30 days · ChatGPT · 50 rows', 50)?.detail).toBe('Last 30 days · ChatGPT');
+    expect(older('All time · 1 row', 1)?.detail).toBe('All time');
+    expect(older('Last 7 days · ChatGPT, Gemini · 3,180 rows', 3180)?.detail).toBe(
+      'Last 7 days · ChatGPT, Gemini',
+    );
+    // A step that said its count only says nothing more, and is still a step.
+    const bare = older('0 rows', 0);
+    expect(bare).toMatchObject({ kind: 'read', status: 'done', label: 'Read Citations' });
+    expect(bare).not.toHaveProperty('detail');
+  });
+
+  it("leaves other words alone: another step's, or a read's that aren't its count", () => {
+    // Not the count it read.
+    expect(withoutRowCount('Last 30 days · 12 rows', 50)).toBe('Last 30 days · 12 rows');
+    expect(withoutRowCount('Last 30 days · 12 rows', null)).toBe('Last 30 days · 12 rows');
+    // Not the end of its words, or not a count of its own.
+    expect(withoutRowCount('3 rows · Last 30 days', 3)).toBe('3 rows · Last 30 days');
+    expect(withoutRowCount('Top 3 rows', 3)).toBe('Top 3 rows');
+    // A step other than a read keeps its words.
+    expect(
+      toClientStep({ ...FULL_ROW, kind: 'write', detail: 'Pricing table · 4 rows', row_count: 4 })
+        ?.detail,
+    ).toBe('Pricing table · 4 rows');
   });
 
   it('leaves out a data time it cannot read', () => {

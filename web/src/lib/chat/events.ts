@@ -111,9 +111,10 @@ export interface ChatStep {
   status: ChatStepStatus;
   /** "Read Citations" */
   label: string;
-  /** "Pricing prompts · Last 30 days · ChatGPT, Perplexity · 42 rows", or an error's plain reason. */
+  /** "Pricing prompts · Last 30 days · ChatGPT, Perplexity", or an error's plain reason. */
   detail?: string;
   scope?: ChatStepScope;
+  /** How many rows a read returned: never shown, unless scope.unit counts items or parts. */
   rowCount?: number;
   /** The newest data the read used, ISO (CHAT-20 §15a). */
   dataAsOf?: string;
@@ -422,7 +423,7 @@ export interface ChatUsage {
 export interface ChatRunSummary {
   workingMs: number;
   stepCount: number;
-  /** The "Data used" chips: "Citations · 42". */
+  /** Rows read by source ("Citations", 42): the app's count, never shown as one. */
   sources: { label: string; count: number }[];
   /** "Thought for N s" above the answer: the work before its first words; only when shown. */
   thoughtMs?: number;

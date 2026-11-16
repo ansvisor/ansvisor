@@ -4207,12 +4207,13 @@ export function dateRangeLabel(from: unknown, to: unknown): string {
   return t('allTime');
 }
 
-function scopeDetail(scope: ChatStepScope, rows?: number): string | null {
-  const parts = [
-    scope.dateRange,
-    scope.platforms?.join(', '),
-    rows !== undefined ? t('rows', { count: rows }) : undefined,
-  ].filter(Boolean);
+/**
+ * A read step's words: its period and platforms ("Last 30 days · ChatGPT").
+ * Never how many rows it read, 0 or 50: that count is the app's and the
+ * model's, never the person's (rowCount keeps it).
+ */
+function scopeDetail(scope: ChatStepScope): string | null {
+  const parts = [scope.dateRange, scope.platforms?.join(', ')].filter(Boolean);
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
@@ -4543,9 +4544,7 @@ async function readCall(
           status: 'done',
           // What's new says what it found for the plan (CHAT-11 item 11).
           detail:
-            tool.name === WHATS_NEW_TOOL
-              ? whatsNewStepDetail(read.value)
-              : scopeDetail(scope, rows),
+            tool.name === WHATS_NEW_TOOL ? whatsNewStepDetail(read.value) : scopeDetail(scope),
           rowCount: rows ?? null,
           dataAsOf: asOf,
           debug: {
