@@ -6,9 +6,11 @@ import { currentActionFirst, signalDetailForApi } from '@/lib/signals/detail';
 import { signalTexts } from '@/lib/signals/display';
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type SignalRow } from '@/lib/signals/map';
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
+import { signalCode } from '@/lib/signals/signal-code';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { brandAllowed, signalActionRefs } from './data';
 import { pageMeta, pageRows, pageWindow, type PageMeta } from './list-page';
+import { askedSignals, keysOf, signalLookup, type SignalLookup } from './lookup';
 
 /**
  * Chat's Signals read (CHAT-20 §9 row 40), a page at a time: the signals of
@@ -72,17 +74,33 @@ export async function listSignalsPageFor(
       .range(offset, offset + limit - 1),
     () => matching(true),
   );
-  const list = rows as unknown as SignalRow[];
+  const signals = await compactSignals(params.brandId, rows as unknown as SignalRow[]);
+  return {
+    ...pageMeta({ what: 'signals', order: 'newest first' }, total, offset, signals.length),
+    signals,
+  };
+}
+
+/** One signal as Chat's reads give it: compact, in the Signals page's words. */
+export type SignalPageRow = Record<string, unknown> & { id: string; code?: string };
+
+/**
+ * Each signal as the Signals page's list shows it: its code ("S-07", once
+ * its brand is numbered), its title and description in the page's words,
+ * where it happened, and the actions built on it by the codes the app shows.
+ */
+async function compactSignals(brandId: string, list: SignalRow[]): Promise<SignalPageRow[]> {
+  if (list.length === 0) return [];
   const [prompts, actions] = await Promise.all([
-    readPromptPlaces(supabaseAdmin, params.brandId),
+    readPromptPlaces(supabaseAdmin, brandId),
     signalActionRefs(
-      params.brandId,
+      brandId,
       list.filter((row) => row.action_id).map((row) => row.id),
     ),
   ]);
   const known = new Map(mapSignalRows(list, prompts).map((signal) => [signal.id, signal]));
 
-  const signals = list.map((row) => {
+  return list.map((row) => {
     const signal = known.get(row.id);
     const used = currentActionFirst(actions.get(row.id) ?? [], row.action_id);
     const where = signal
@@ -91,8 +109,10 @@ export async function listSignalsPageFor(
         )
       : {};
     const texts = signal ? signalTexts(signal, plainTexts) : null;
+    const code = signalCode({ brandNo: row.brand_no });
     return {
       id: row.id,
+      ...(code ? { code } : {}),
       ...(texts ? { title: texts.title, description: texts.description } : {}),
       kind: row.kind,
       category: row.category,
@@ -101,11 +121,49 @@ export async function listSignalsPageFor(
       detected: day(row.detected_at),
       ...(row.resolved_at ? { resolved: day(row.resolved_at) } : {}),
       ...(Object.keys(where).length > 0 ? { where } : {}),
-      ...(used.length > 0 ? { actions: used.map((a) => actionRef(a.action_no)) } : {}),
+      // As the app shows them: each action's code in its brand (00534), else its old number.
+      ...(used.length > 0 ? { actions: used.map((a) => a.code ?? actionRef(a.action_no)) } : {}),
     };
   });
-  return {
-    ...pageMeta({ what: 'signals', order: 'newest first' }, total, offset, signals.length),
-    signals,
+}
+
+// ─── The brand's signals by their codes and ids ─────────────────────────────
+
+/**
+ * The brand's signals by the codes a person wrote ("S-07", "S 7", "s7",
+ * "#7", "7") or by their ids, for Chat (the owner's plan of 2026-11-16,
+ * item 2: "what is S-07?" never depends on S-07 being on the first page).
+ * Every status and every date: a lookup ignores the page's window. A code
+ * is the signal's number in its brand (brand_no, 00534); every signal a
+ * code or id names comes back, never one picked. Only this brand of the
+ * caller's organization is read, its organization joined on the rows too:
+ * a code or id of another brand or workspace is not found. Null for a brand
+ * outside the caller's organization or access.
+ */
+export async function lookUpSignalsFor(
+  auth: McpAuthContext,
+  params: { brandId: string; codes?: readonly string[]; ids?: readonly string[] },
+): Promise<SignalLookup<SignalPageRow> | null> {
+  if (!auth.organizationId || !(await brandAllowed(auth, params.brandId))) return null;
+  const organizationId = auth.organizationId;
+  const asked = askedSignals(params.codes, params.ids);
+  // Numbers and checked ids only: none of the model's text reaches a filter.
+  const numbers = keysOf<number>(asked, 'code');
+  const ids = keysOf<string>(asked, 'id');
+
+  const read = async (column: 'brand_no' | 'id', values: (number | string)[]) => {
+    if (values.length === 0) return [];
+    const { data, error } = await supabaseAdmin
+      .from('signals')
+      .select(`${SIGNAL_ROW_COLUMNS}, brands!inner(organization_id)`)
+      .eq('brand_id', params.brandId)
+      .eq('brands.organization_id', organizationId)
+      .in(column, values)
+      .order('id');
+    if (error) throw new Error(error.message);
+    return (data ?? []) as unknown as SignalRow[];
   };
+  const [byNumber, byId] = await Promise.all([read('brand_no', numbers), read('id', ids)]);
+  const rows = [...byNumber, ...byId.filter((row) => !byNumber.some((n) => n.id === row.id))];
+  return signalLookup(asked, await compactSignals(params.brandId, rows));
 }

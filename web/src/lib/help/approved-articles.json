@@ -1534,7 +1534,15 @@
         "most important actions",
         "what should i do first",
         "top actions",
-        "action title"
+        "action title",
+        "signal code",
+        "what is s-07",
+        "look up a prompt",
+        "find a prompt",
+        "cited domain",
+        "cited page",
+        "find a draft",
+        "find a report"
       ],
       "synonyms": [
         "assistant",
@@ -1603,7 +1611,7 @@
         },
         {
           "heading": "Long lists",
-          "text": "Chat reads any list the same way, such as signals, prompts, mentions, citations, opportunities or drafts: 50 at a time, with how many there are in all. Signals are read over your date range the way the Signals page reads its window: those found by its end that were still open, or resolved, after it began. When your question needs more, Chat reads the next 50 before it answers. When an answer covers part of a list, it says which part, such as \"the newest 50 of 451 signals\", and offers the rest as a next move."
+          "text": "Chat reads any list the same way, such as signals, prompts, mentions, citations, opportunities or drafts: 50 at a time, with how many there are in all. Signals are read over your date range the way the Signals page reads its window: those found by its end that were still open, or resolved, after it began. When your question needs more, Chat reads the next 50 before it answers. When an answer covers part of a list, it says which part, such as \"the newest 50 of 451 signals\", and offers the rest as a next move.\n\nAsk about one item by what you see: a signal's code (S-07), a prompt's words, a cited domain or address, or an opportunity, draft or report title. Chat looks it up directly, in any status, and says plainly if the brand has none."
         },
         {
           "heading": "Change what you track",

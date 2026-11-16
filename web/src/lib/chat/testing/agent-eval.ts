@@ -5,10 +5,16 @@ import { PLACEHOLDER } from '../facts';
 import type { ChatMode } from '../precedence';
 import { SKILL_LIBRARY } from '../skills/library';
 import { searchedActionNo } from '@/lib/action-center/action-ref';
+import { citedDomainKey } from '@/lib/mcp/lookup';
+import { searchedSignalNo } from '@/lib/signals/signal-code';
 import {
   EVAL_BRAND,
+  EVAL_CITED_DOMAIN,
+  EVAL_CITED_DOMAINS,
   EVAL_CODE_ACTIONS,
+  EVAL_CODE_SIGNAL,
   EVAL_OTHER_BRAND,
+  EVAL_SIGNAL_BACKLOG,
   evalActions,
   type EvalWorkspace,
 } from './agent-eval-data';
@@ -107,6 +113,18 @@ export interface AgentEvalScenario {
    * name no other action in their place (the owner's report, 2026-11-16).
    */
   askedActions?: readonly { ref: string; title: string }[];
+  /**
+   * Signals the person asks about by their codes (the owner's plan of
+   * 2026-11-16, item 2): the run must read them by their codes, name each
+   * by its title and code, and name no other signal in their place.
+   */
+  askedSignals?: readonly { code: string; title: string }[];
+  /**
+   * Cited domains the person asks about: the run must read them by their
+   * domain, say how often each is cited, and name no other domain in their
+   * place.
+   */
+  askedDomains?: readonly { domain: string; citations: number }[];
 }
 
 const presetT = (id: string) =>
@@ -301,6 +319,32 @@ export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
       ref: a.number,
       title: a.title,
     })),
+  },
+  // The owner's plan (2026-11-16, item 2): an item named by its code or address is looked up,
+  // never answered from a page of the list. S-07 and decafdigest.example are past the first page.
+  {
+    id: 'signal-by-code',
+    group: 'skills',
+    name: 'A signal by its code',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'S-07 nedir',
+    promises: [],
+    workspace: 'long_lists',
+    askedSignals: [{ code: EVAL_CODE_SIGNAL.code, title: EVAL_CODE_SIGNAL.title }],
+  },
+  {
+    id: 'citation-by-domain',
+    group: 'skills',
+    name: 'A cited domain',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: `${EVAL_CITED_DOMAIN.domain} yapay zekâ yanıtlarında kaç kez kaynak gösterildi?`,
+    promises: [],
+    workspace: 'long_lists',
+    askedDomains: [{ domain: EVAL_CITED_DOMAIN.domain, citations: EVAL_CITED_DOMAIN.citations }],
   },
 ];
 
@@ -723,6 +767,102 @@ export function substituteActions(
   return [...new Set([...byRef, ...byTitle])];
 }
 
+// ─── Signals and cited domains asked for by name ────────────────────────────
+
+/** The answer's text, links and emphasis aside, folded for matching. */
+const answerText = (answer: string) =>
+  folded(answer.replace(/\]\([^)\s]*\)/g, ']').replace(/[*_`[\]]/g, ''));
+
+/** The asked signals' codes a run didn't read by code (list_signals' codes). */
+export function readSignalsByCodes(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  codes: readonly string[],
+): string[] {
+  const read = new Set<number>();
+  run.reads.forEach((tool, i) => {
+    const asked = run.readInputs[i]?.codes;
+    if (tool !== 'list_signals' || !Array.isArray(asked)) return;
+    for (const code of asked) {
+      const no = searchedSignalNo(String(code));
+      if (no !== null) read.add(no);
+    }
+  });
+  return codes.filter((code) => !read.has(searchedSignalNo(code) ?? -1));
+}
+
+/** The asked signals an answer doesn't name by both its title and its code. */
+export function unnamedAskedSignals(
+  answer: string,
+  asked: readonly { code: string; title: string }[],
+): string[] {
+  const text = answerText(answer);
+  return asked
+    .filter(
+      (s) =>
+        !text.includes(folded(s.title)) ||
+        !new RegExp(`(?<![\\p{L}\\p{N}])${s.code}(?!\\d)`, 'iu').test(text),
+    )
+    .map((s) => s.code);
+}
+
+/** The other signals an answer names besides the ones asked for: by code or by title. */
+export function substituteSignals(answer: string, asked: readonly { code: string }[]): string[] {
+  const codes = new Set(asked.map((s) => searchedSignalNo(s.code)));
+  const text = answerText(answer);
+  const byCode = [...text.matchAll(/(?<![\p{L}\p{N}])s-(\d{1,4})(?!\d)/giu)]
+    .map((m) => Number(m[1]))
+    .filter((no) => !codes.has(no))
+    .map((no) => `S-${String(no).padStart(2, '0')}`);
+  const byTitle = EVAL_SIGNAL_BACKLOG.filter(
+    (s) => !codes.has(searchedSignalNo(s.code)) && text.includes(folded(s.title)),
+  ).map((s) => s.code);
+  return [...new Set([...byCode, ...byTitle])];
+}
+
+/** The asked domains a run didn't read by domain (list_citations' domains), however written. */
+export function readCitationsByDomain(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  domains: readonly string[],
+): string[] {
+  const read = new Set<string>();
+  run.reads.forEach((tool, i) => {
+    const asked = run.readInputs[i]?.domains;
+    if (tool !== 'list_citations' || !Array.isArray(asked)) return;
+    for (const domain of asked) {
+      const key = citedDomainKey(String(domain));
+      if (key) read.add(key);
+    }
+  });
+  return domains.filter((domain) => !read.has(domain));
+}
+
+/** The asked domains an answer doesn't name with how often each is cited. */
+export function unnamedAskedDomains(
+  answer: string,
+  asked: readonly { domain: string; citations: number }[],
+): string[] {
+  const text = answerText(answer);
+  return asked
+    .filter(
+      (d) =>
+        !text.includes(d.domain) ||
+        !new RegExp(`(?<![\\d.,])${d.citations}(?![\\d.,]\\d)`).test(text),
+    )
+    .map((d) => d.domain);
+}
+
+/** The workspace's other cited domains an answer names besides the ones asked for (and their subdomains). */
+export function substituteDomains(answer: string, asked: readonly { domain: string }[]): string[] {
+  const text = answerText(answer);
+  const ofAsked = (domain: string) =>
+    asked.some((a) => domain === a.domain || domain.endsWith(`.${a.domain}`));
+  return EVAL_CITED_DOMAINS.map((d) => d.domain).filter(
+    (domain) =>
+      !ofAsked(domain) &&
+      new RegExp(`(?<![\\w.-])${domain.replace(/\./g, '\\.')}(?![\\w-])`).test(text),
+  );
+}
+
 // ─── Checks ─────────────────────────────────────────────────────────────────
 
 const check = (name: string, must: boolean, ok: boolean, detail?: string): EvalCheck =>
@@ -1005,6 +1145,64 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
       ),
     );
   }
+  const signals = scenario.askedSignals ?? [];
+  if (signals.length > 0) {
+    const unread = readSignalsByCodes(
+      run,
+      signals.map((s) => s.code),
+    );
+    const unnamed = unnamedAskedSignals(run.answer, signals);
+    const substitutes = substituteSignals(run.answer, signals);
+    checks.push(
+      check(
+        'reads the signals by their codes',
+        true,
+        unread.length === 0,
+        `${unread.join(', ')} not read by its code`,
+      ),
+      check(
+        'names each signal asked by its title and code',
+        true,
+        unnamed.length === 0,
+        `${unnamed.join(', ')} without its title and code`,
+      ),
+      check(
+        'names no other signal in their place',
+        true,
+        substitutes.length === 0,
+        `also names ${substitutes.join(', ')}`,
+      ),
+    );
+  }
+  const domains = scenario.askedDomains ?? [];
+  if (domains.length > 0) {
+    const unread = readCitationsByDomain(
+      run,
+      domains.map((d) => d.domain),
+    );
+    const unnamed = unnamedAskedDomains(run.answer, domains);
+    const substitutes = substituteDomains(run.answer, domains);
+    checks.push(
+      check(
+        'reads the citations by domain',
+        true,
+        unread.length === 0,
+        `${unread.join(', ')} not read by its domain`,
+      ),
+      check(
+        'names each domain asked with how often it is cited',
+        true,
+        unnamed.length === 0,
+        `${unnamed.join(', ')} without its citation count`,
+      ),
+      check(
+        'names no other domain in their place',
+        true,
+        substitutes.length === 0,
+        `also names ${substitutes.join(', ')}`,
+      ),
+    );
+  }
   if (scenario.group === 'skills' && scenario.skill) {
     const named = skillReads(scenario.skill);
     const read = named.filter((tool) => run.reads.includes(tool));
@@ -1112,6 +1310,13 @@ const CHECK_TR: Readonly<Record<string, string>> = {
   'reads the actions by their codes': 'aksiyonları koduyla okudu',
   'names each action asked by its title and code': 'sorulan her aksiyonu başlığı ve koduyla andı',
   'names no other action in their place': 'yerlerine başka aksiyon saymadı',
+  'reads the signals by their codes': 'sinyalleri koduyla okudu',
+  'names each signal asked by its title and code': 'sorulan her sinyali başlığı ve koduyla andı',
+  'names no other signal in their place': 'yerlerine başka sinyal saymadı',
+  'reads the citations by domain': 'kaynakları alan adıyla okudu',
+  'names each domain asked with how often it is cited':
+    'sorulan her alan adını kaç kez kaynak gösterildiğiyle andı',
+  'names no other domain in their place': 'yerlerine başka alan adı saymadı',
   'no emoji': 'emoji yok',
   'stays on its brand': 'marka kapsamında kaldı',
   'no network call but the model’s': 'modelinki dışında ağ çağrısı yok',
