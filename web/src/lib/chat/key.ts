@@ -209,7 +209,8 @@ export async function resolveChatModelKey(
  *   3. Ansvisor's key for the provider (ANTHROPIC_API_KEY or
  *      OPENROUTER_API_KEY), on the AI budget.
  * Steps 1 and 2 are pickedModelKeyOrder's, which the model menu's "Your key"
- * and an agent's Model step read too (pickedModelOwnKey).
+ * and an agent's Model step read too (pickedModelOwnKey); a model called on
+ * its provider's API only (`directOnly`) skips step 2.
  * A key for the step that can't be read stops it, as the active key does:
  * never Ansvisor's in its place. `ansvisorOnly`: the person chose "Use
  * Ansvisor's limit" after their key failed. Null when no key is there.
@@ -217,11 +218,14 @@ export async function resolveChatModelKey(
 export async function resolvePickedModelKey(
   organizationId: string,
   provider: OfferedModelProvider,
-  { ansvisorOnly = false }: { ansvisorOnly?: boolean } = {},
+  {
+    ansvisorOnly = false,
+    directOnly = false,
+  }: { ansvisorOnly?: boolean; directOnly?: boolean } = {},
 ): Promise<ChatModelKey | null> {
   const access = ansvisorOnly ? null : await ownKeyAccess(organizationId);
   if (access?.state === 'plan' || access?.state === 'kept') {
-    for (const candidate of pickedModelKeyOrder(provider)) {
+    for (const candidate of pickedModelKeyOrder(provider, directOnly)) {
       const own = await readProviderKey(organizationId, candidate);
       if (own.state === 'unreadable') {
         await markKeyFailing(organizationId, own.provider, {

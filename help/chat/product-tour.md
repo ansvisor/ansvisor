@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [product tour, take the tour, quick tour, show me everything, ansvisor tour, next topic, another topic, end the tour]
 synonyms: [walkthrough, guided tour, show me around, how to get started, restart the tour, tour again]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-15
+last_checked: 2026-11-15
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -56,7 +56,7 @@ The tour follows **Answer language** in Chat's settings. With a language picked 
 
 ## Take the tour again
 
-The tour is kept as a chat named **Ansvisor tour** in your chats, so you can read it again. To take it again, open **Settings** in the chat menu and click **Take the tour** under **Product tour**. It starts from the first topic and adds to the same chat.
+The tour is kept as a chat named **Ansvisor tour** in your chats, so you can read it again. To take it again, open **Settings › General** in the chat menu and click **Take the tour** under **Product tour**. It starts from the first topic and adds to the same chat.
 
 ## When the tour isn't offered
 

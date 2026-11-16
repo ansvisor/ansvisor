@@ -12,8 +12,9 @@ import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { AgentWorkGear } from '@/components/action-center/agent-work-gear';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { TodaySection, TodaySkeleton } from './today-parts';
-import { useTodayRead, type TodayVisit } from './use-today';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TodaySection } from './today-parts';
+import { useTodayPart, type TodayVisit } from './use-today';
 
 /** Where a focus card's button goes: its action, open in the Actions list's drawer. */
 export const actionHref = (id: string) =>
@@ -24,11 +25,12 @@ export const actionHref = (id: string) =>
  * finish or skip them (lib/action-center/focus.ts). Each card says why it
  * matters, its impact, effort and steps done, and opens the action at its
  * first step. "Skip for now" takes it out of this person's focus for 7
- * days. Reads once the visit knows the person's last one (for New), and
- * stays away when the read fails.
+ * days. Read with Today's other parts from the person's last visit (for
+ * New), again after a skip, and stays away when the read fails.
  */
 export function FocusSection({
   brandId,
+  read,
   visit,
   title,
   sub,
@@ -36,6 +38,8 @@ export function FocusSection({
   onUpgrade,
 }: {
   brandId: string;
+  /** The focus's read, started with Today's others; null until the day is known. */
+  read: Promise<FocusCard[] | null> | null;
   visit: TodayVisit;
   /**
    * After the plan ended: read-only cards, each with "Needs a plan", which
@@ -54,11 +58,7 @@ export function FocusSection({
   const [version, setVersion] = useState(0);
   const [skipped, setSkipped] = useState<string[]>([]);
   const seenAt = visit.seenAt;
-  const load = useTodayRead(
-    seenAt === undefined ? null : brandId,
-    () => getTodayFocus(brandId, seenAt ?? null),
-    version,
-  );
+  const load = useTodayPart(read, () => getTodayFocus(brandId, seenAt ?? null), version);
 
   const { settle } = visit;
   const settled = load.status === 'loading' ? null : load.status;
@@ -66,10 +66,10 @@ export function FocusSection({
   useEffect(() => {
     if (settled) settle('focus', count);
   }, [settled, count, settle]);
-  const read = load.status === 'ready' ? load.data : null;
+  const asRead = load.status === 'ready' ? load.data : null;
   useEffect(() => {
-    if (read) onCards?.(read);
-  }, [read, onCards]);
+    if (asRead) onCards?.(asRead);
+  }, [asRead, onCards]);
 
   if (load.status === 'failed') return null;
   const cards =
@@ -101,7 +101,7 @@ export function FocusSection({
       aside={chatOn && !onUpgrade ? <AgentWorkGear /> : null}
     >
       {load.status === 'loading' ? (
-        <TodaySkeleton />
+        <FocusSkeleton />
       ) : cards.length === 0 ? (
         <p className="border-t pt-3 text-sm text-muted-foreground">{t('empty')}</p>
       ) : (
@@ -118,6 +118,25 @@ export function FocusSection({
         </ul>
       )}
     </TodaySection>
+  );
+}
+
+/** Today's focus reading: three rows shaped as its cards, with the button's place. */
+export function FocusSkeleton() {
+  return (
+    <ul aria-hidden="true" data-skeleton="focus">
+      {[0, 1, 2].map((row) => (
+        <li key={row} className="flex items-center gap-3.5 border-t py-3.5">
+          <div className="min-w-0 flex-1 space-y-1">
+            <Skeleton className="h-6 w-2/5" />
+            <Skeleton className="h-[23px] w-4/5" />
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-4 w-1/4" />
+          </div>
+          <Skeleton className="h-10 w-20 shrink-0" />
+        </li>
+      ))}
+    </ul>
   );
 }
 

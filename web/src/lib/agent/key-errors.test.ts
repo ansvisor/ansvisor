@@ -1,7 +1,7 @@
 import { APICallError, RetryError } from 'ai';
 import { describe, expect, it } from 'vitest';
 import type { AiProvider } from '@/lib/agent/providers';
-import { classifyProviderError, isKeyFailureClass } from './key-errors';
+import { classifyProviderError, isKeyFailureClass, needsDataRetention } from './key-errors';
 
 /**
  * AGENT-OWN-KEY §5.1: each provider's answer sorted by what it says about
@@ -177,5 +177,27 @@ describe('isKeyFailureClass', () => {
   it('names the four classes that mark the key', () => {
     expect(['invalid', 'no_credit', 'model', 'unreadable'].every(isKeyFailureClass)).toBe(true);
     expect(['transient', 'request', null, 'other'].some(isKeyFailureClass)).toBe(false);
+  });
+});
+
+describe('needsDataRetention', () => {
+  const zdr = anthropicError(
+    'invalid_request_error',
+    'In order to access this model, your organization or workspace must have data retention enabled.',
+  );
+
+  it('reads Anthropic’s 400 for a model that needs 30-day retention, retried or not', () => {
+    expect(needsDataRetention(answer(400, zdr))).toBe(true);
+    expect(needsDataRetention(retried(answer(400, zdr)))).toBe(true);
+    // Our request's class, not the key's: the key isn't marked failing for it.
+    expect(sort('anthropic', answer(400, zdr)).class).toBe('request');
+  });
+
+  it('is no other answer', () => {
+    expect(needsDataRetention(answer(400, anthropicError('invalid_request_error', 'bad')))).toBe(
+      false,
+    );
+    expect(needsDataRetention(answer(403, zdr))).toBe(false);
+    expect(needsDataRetention(new Error('data retention'))).toBe(false);
   });
 });

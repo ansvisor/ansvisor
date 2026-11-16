@@ -121,7 +121,7 @@ export async function readModelMenu({
       multiplier: listed?.multiplier ?? null,
       tone: listed?.tone ?? null,
       variesByHour: listed?.variesByHour ?? false,
-      yourKey: pickedModelOwnKey(offered.provider, ownKeyProviders) !== null,
+      yourKey: pickedModelOwnKey(offered.provider, ownKeyProviders, offered.directOnly) !== null,
     });
   }
   const chosen = selected && selected !== AUTO_MODEL ? selected : null;

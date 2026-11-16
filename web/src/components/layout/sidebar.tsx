@@ -42,13 +42,12 @@ import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { NewPill } from '@/components/agentic/new-pill';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { menuSectionOf } from '@/lib/menu-access';
-import { ACTION_CENTER_ITEM, NEW_RESULTS_ITEM } from '@/lib/menu-dots';
+import { NEW_RESULTS_ITEM } from '@/lib/menu-dots';
 import {
   FoldedGroupLabel,
   ICON_DOT,
   MenuDot,
   NewResultsWords,
-  OpenActionsCount,
   useDotLabel,
   useMenuDots,
 } from '@/components/layout/menu-dots';
@@ -544,8 +543,6 @@ export function Sidebar() {
                       const words = dot?.colour === 'green' && item.href === NEW_RESULTS_ITEM;
                       const iconDot = submenuOpen ? null : dot;
                       const nameDot = submenuOpen && words ? dot : null;
-                      const openActions =
-                        item.href === ACTION_CENTER_ITEM ? dots.openActions : null;
                       return (
                         <div key={item.href}>
                           <button
@@ -572,7 +569,6 @@ export function Sidebar() {
                               <MenuDot dot={iconDot} className={cn(ICON_DOT, 'left-5')} />
                             )}
                             {words && <NewResultsWords />}
-                            {openActions !== null && <OpenActionsCount count={openActions} />}
                             {effectiveBadge && (
                               <Badge
                                 variant="secondary"

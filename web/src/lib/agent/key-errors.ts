@@ -73,6 +73,19 @@ function bodyWords(body: unknown): string {
   return words.join(' ');
 }
 
+/**
+ * A model that needs 30-day data retention, asked on a provider account with
+ * zero data retention: Anthropic answers a Covered Model (Claude Fable 5.2)
+ * with a 400 invalid_request_error that names data retention. Our request's
+ * class, not the key's: the key still runs every other model.
+ */
+export function needsDataRetention(error: unknown): boolean {
+  const cause = RetryError.isInstance(error) ? error.lastError : error;
+  if (!APICallError.isInstance(cause) || cause.statusCode !== 400) return false;
+  const words = `${bodyWords(errorBody(cause))} ${cause.message.toLowerCase()}`;
+  return words.includes('data retention');
+}
+
 /** A dropped connection or a timeout, rather than an answer. */
 function isNetworkError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;

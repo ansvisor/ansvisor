@@ -38,6 +38,33 @@ export function actionRefNo(segment: string): number | null {
   return match && NUMBER.test(match[1]) ? Number(match[1]) : null;
 }
 
+/** What an action's code is built from. */
+type Numbered = { actionNo: number };
+
+/**
+ * An action's code as the app shows it and Chat writes it, "AC-251". The one
+ * place it is built: the Actions list's rows, its search and its CSV, and the
+ * action's drawer and exports, all read it here.
+ */
+export function actionCode(action: Numbered): string {
+  return actionRef(action.actionNo);
+}
+
+/**
+ * The action number a search names, as Chat writes it or as typed: "AC-251",
+ * "ac-251", "AC 251", "#251" or "251". Null for any other text, which the
+ * Actions list then matches against its titles.
+ */
+export function searchedActionNo(query: string): number | null {
+  const match = /^(?:ac[-\s]?|#)?(\d+)$/i.exec(query.trim());
+  return match && NUMBER.test(match[1]) ? Number(match[1]) : null;
+}
+
+/** Whether a search names this action by its code ("AC-251", "ac-251", "251"). */
+export function matchesActionCode(action: Numbered, query: string): boolean {
+  return searchedActionNo(query) === action.actionNo;
+}
+
 /** A text's pieces: plain text, and each "AC-1497" with the address that opens it. */
 export function splitActionRefs(text: string): (string | { ref: string; href: string })[] {
   const parts: (string | { ref: string; href: string })[] = [];

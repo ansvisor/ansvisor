@@ -7,7 +7,6 @@ import type { NavGroup, NavItem } from '@/config/dashboard';
 import { getMenuState } from '@/lib/actions/menu-state';
 import { track } from '@/lib/analytics';
 import { isEcommerceBrand } from '@/lib/brand-visibility';
-import { formatNumber } from '@/lib/format';
 import {
   BROKEN_AREAS,
   areasToRead,
@@ -18,7 +17,6 @@ import {
   itemDot,
   menuDots,
   needsYouShown,
-  openActionCount,
   redShown,
   withOpened,
   type Dot,
@@ -51,8 +49,6 @@ export interface MenuDotsView {
   itemDot: (item: Pick<NavItem, 'href' | 'children'>) => Dot | null;
   /** A titled group's, for its title while folded. */
   groupDot: (group: Pick<NavGroup, 'items'>) => Dot | null;
-  /** The Action Center's open actions; null shows none. */
-  openActions: number | null;
   /** A row with a dot was clicked (menu_dot_clicked). */
   clicked: (dot: Dot | null, collapsed: boolean) => void;
 }
@@ -66,14 +62,13 @@ export interface MenuDotsView {
 function readMenuState(
   brandId: string,
   areasKey: string,
-  count: boolean,
   waiting: boolean,
   red: boolean,
   recheck = false,
 ) {
   const areas = areasKey ? (areasKey.split(',') as DotArea[]) : [];
-  if (areas.length === 0 && !count) return;
-  const key = `${brandId}|${areasKey}|${count ? 'count' : ''}|${waiting ? 'waiting' : ''}|${red ? 'red' : ''}`;
+  if (areas.length === 0) return;
+  const key = `${brandId}|${areasKey}|${waiting ? 'waiting' : ''}|${red ? 'red' : ''}`;
   const { read, pending } = useMenuStateStore.getState();
   if (pending === key) return;
   if (!recheck && read?.key === key && Date.now() - read.at < MENU_STATE_MAX_AGE_MS) return;
@@ -85,15 +80,14 @@ function readMenuState(
       pending: null,
     });
   };
-  getMenuState(brandId, { areas, count, waiting, red }).then(done, () => done(null));
+  getMenuState(brandId, { areas, waiting, red }).then(done, () => done(null));
 }
 
 /**
- * The menu's dots and the Action Center's count: read once per brand
- * (getMenuState) on a brand switch, and again on a page change once the
- * read is 5 minutes old, shared by every menu on the page. Yellow only for admins
- * and managers, and neither yellow nor the count once the plan ended; the
- * demo brand gets green alone. A section off the person's menu or locked
+ * The menu's dots: read once per brand (getMenuState) on a brand switch, and
+ * again on a page change once the read is 5 minutes old, shared by every
+ * menu on the page. Yellow only for admins and managers, and no yellow once
+ * the plan ended; the demo brand gets green alone. A section off the person's menu or locked
  * by the plan has none.
  */
 export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
@@ -116,15 +110,14 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
   });
   // What to read, as text: the read waits for a change in it, not in a list.
   const areasKey = areasToRead(onMenu, viewer).join(',');
-  const count = !viewer.ended;
   // Prompts waiting for a spot light Tracked Prompts yellow: counted only for those who see yellow.
   const waiting = needsYouShown(viewer) && onMenu.has('prompts/tracked');
   // What broke is read only for those who see red, and only with a red entry on their menu.
   const red = redShown(viewer) && BROKEN_AREAS.some((area) => onMenu.has(area));
 
   useEffect(() => {
-    if (brandId) readMenuState(brandId, areasKey, count, waiting, red);
-  }, [brandId, areasKey, count, waiting, red, pathname]);
+    if (brandId) readMenuState(brandId, areasKey, waiting, red);
+  }, [brandId, areasKey, waiting, red, pathname]);
 
   const read = useMenuStateStore((s) => s.read);
   const opened = useMenuStateStore((s) => (brandId ? s.opened[brandId] : undefined));
@@ -141,11 +134,11 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
   useEffect(() => {
     if (recheckAfter === null || !brandId) return;
     const timer = setTimeout(
-      () => readMenuState(brandId, areasKey, count, waiting, red, true),
+      () => readMenuState(brandId, areasKey, waiting, red, true),
       GREY_RECHECK_MS,
     );
     return () => clearTimeout(timer);
-  }, [recheckAfter, brandId, areasKey, count, waiting, red]);
+  }, [recheckAfter, brandId, areasKey, waiting, red]);
   const why = (dot: Dot | null): Dot | null =>
     dot && { ...dot, reason: dotReason(state, dot) ?? undefined };
 
@@ -167,7 +160,6 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
     dotOf: (href) => why(dotOf(dots, href)),
     itemDot: (item) => why(itemDot(dots, item)),
     groupDot: (group) => why(groupDot(dots, group)),
-    openActions: openActionCount(state, viewer),
     clicked: (dot, isCollapsed) => {
       if (dot)
         track('menu_dot_clicked', { area: dot.area, colour: dot.colour, collapsed: isCollapsed });
@@ -187,22 +179,6 @@ export function NewResultsWords() {
       className="shrink-0 text-[11px] font-medium text-green-700 dark:text-green-400"
     >
       {t('newResults')}
-    </span>
-  );
-}
-
-/** The Action Center's open actions, unassigned or the person's. */
-export function OpenActionsCount({ count }: { count: number }) {
-  const t = useTranslations('menuDots');
-  const label = t('openActions', { count });
-  return (
-    <span
-      title={label}
-      data-open-actions={count}
-      className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-foreground px-1.5 text-[11px] font-semibold tabular-nums text-background"
-    >
-      <span aria-hidden>{formatNumber(count)}</span>
-      <span className="sr-only">{label}</span>
     </span>
   );
 }

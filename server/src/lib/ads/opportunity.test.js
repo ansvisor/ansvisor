@@ -39,6 +39,9 @@ vi.mock('./opportunities.js', () => ({
   readOpportunities: (...a) => plan.readOpportunities(...a),
 }));
 
+const readEarn = vi.fn(async () => ({ page: null, action: null }));
+vi.mock('./earn.js', () => ({ readEarn: (...a) => readEarn(...a) }));
+
 const { answerExcerpt, readOpportunity } = await import('./opportunity.js');
 
 const NOW = new Date('2026-11-14T12:00:00Z');
@@ -66,7 +69,7 @@ beforeEach(() => {
   plan.readOpportunities.mockReset();
   db = {
     prompts: [
-      { id: 'p1', prompt_sets: ours },
+      { id: 'p1', text: 'best crm for small teams', prompt_sets: ours },
       { id: 'p2', prompt_sets: ours },
       { id: 'p6', prompt_sets: { brand_id: 'b2', brands: { organization_id: 'o2' } } },
       // A brand id of ours under another organization: never ours.
@@ -117,6 +120,9 @@ const read = (promptId, over = {}) =>
 describe('readOpportunity', () => {
   it('gives the latest answer per platform in the period, newest first, with who it names and cites', async () => {
     const got = await read('p1');
+    // The Earn card's part (earn.js), within the brand and organization.
+    expect(got.earn).toEqual({ page: null, action: null });
+    expect(readEarn).toHaveBeenCalledWith('b1', 'o1', 'p1', { action: true });
     expect(got.answers.map((a) => [a.platform, a.at])).toEqual([
       ['perplexity-web', '2026-11-13T08:00:00Z'],
       ['chatgpt-web', '2026-11-12T08:00:00Z'],
@@ -169,6 +175,88 @@ describe('readOpportunity', () => {
       now: NOW,
     });
     expect((await read('p1')).answers).toHaveLength(3);
+  });
+});
+
+describe("readOpportunity's ad drafts (00532)", () => {
+  const draft = (id, channel, created_at, over = {}) => ({
+    id,
+    organization_id: 'o1',
+    brand_id: 'b1',
+    prompt_id: 'p1',
+    channel,
+    headlines: [`Headline ${id}`],
+    descriptions: ['A description'],
+    context_hint: null,
+    keywords: [],
+    fact_ids: ['f1'],
+    gate: { limits: 'unconfirmed' },
+    status: 'draft',
+    source: 'drawer',
+    created_at,
+    ...over,
+  });
+
+  it("gives the prompt's text and its latest draft of each channel, within the brand and organization", async () => {
+    db.ads_ad_drafts = [
+      draft('d1', 'google', '2026-11-12T08:00:00Z'),
+      draft('d2', 'google', '2026-11-13T08:00:00Z'),
+      draft('d3', 'chatgpt', '2026-11-11T08:00:00Z', { context_hint: 'When teams compare' }),
+      draft('d4', 'microsoft', '2026-11-13T09:00:00Z', { status: 'archived' }),
+      // Another prompt's, brand's or organization's: never this drawer's.
+      draft('d5', 'microsoft', '2026-11-13T08:00:00Z', { prompt_id: 'p2' }),
+      draft('d6', 'microsoft', '2026-11-13T08:00:00Z', { brand_id: 'b2' }),
+      draft('d7', 'microsoft', '2026-11-13T08:00:00Z', { organization_id: 'o2' }),
+    ];
+    const got = await read('p1');
+    expect(got.text).toBe('best crm for small teams');
+    expect(got.drafts.map((d) => [d.id, d.channel])).toEqual([
+      ['d3', 'chatgpt'],
+      ['d2', 'google'],
+    ]);
+    expect(got.drafts[0]).toEqual({
+      id: 'd3',
+      channel: 'chatgpt',
+      headlines: ['Headline d3'],
+      descriptions: ['A description'],
+      contextHint: 'When teams compare',
+      keywords: [],
+      factIds: ['f1'],
+      gate: { limits: 'unconfirmed' },
+      status: 'draft',
+      source: 'drawer',
+      createdAt: '2026-11-11T08:00:00Z',
+    });
+  });
+
+  it('gives the approved facts its drafts rest on, within the brand; an export reads none', async () => {
+    db.ads_ad_drafts = [draft('d1', 'google', '2026-11-12T08:00:00Z', { fact_ids: ['f1', 'f2'] })];
+    const fact = (id, over = {}) => ({
+      id,
+      brand_id: 'b1',
+      brands: { organization_id: 'o1' },
+      quote: `Fact ${id}`,
+      source_url: `https://northwind.example/${id}`,
+      ...over,
+    });
+    // f2 under another organization: never this brand's.
+    db.brand_facts = [fact('f1'), fact('f2', { brands: { organization_id: 'o2' } }), fact('f3')];
+    expect((await read('p1')).facts).toEqual([
+      { id: 'f1', quote: 'Fact f1', sourceUrl: 'https://northwind.example/f1' },
+    ]);
+    reads.length = 0;
+    const exported = await read('p1', { drawer: false });
+    expect(exported.facts).toEqual([]);
+    expect(reads).not.toContain('brand_facts');
+    expect(readEarn).toHaveBeenLastCalledWith('b1', 'o1', 'p1', { action: false });
+  });
+
+  it('reads none for a prompt the plan locks', async () => {
+    db.ads_ad_drafts = [draft('d1', 'google', '2026-11-12T08:00:00Z', { prompt_id: 'p2' })];
+    plan.readsEveryOpportunity.mockResolvedValue(false);
+    plan.readOpportunities.mockResolvedValue({ rows: [{ promptId: 'p1' }], locked: 4 });
+    expect(await read('p2')).toBeNull();
+    expect(reads).not.toContain('ads_ad_drafts');
   });
 });
 

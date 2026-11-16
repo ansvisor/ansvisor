@@ -411,6 +411,21 @@ describe('multipliers', () => {
     expect(Object.values(AUTO_MIX).reduce((a, b) => a + b, 0)).toBeCloseTo(1);
   });
 
+  it("prices a model on its maker's API only at the budget's own price, not the catalog's", () => {
+    setSyncedPrices([
+      ...rows,
+      {
+        model_id: 'anthropic/claude-fable-5.2',
+        name: 'x',
+        input_per_m: 1,
+        output_per_m: 1,
+        overrides: [],
+      },
+    ]);
+    // Claude Fable 5.2: 3 × $8 + $40 against Auto's mix.
+    expect(multiplierLabel(multiplierFor('anthropic/claude-fable-5-2', NOW))).toBe('9.3x');
+  });
+
   it('labels with one decimal, no trailing ".0", and "<0.1x" below a tenth', () => {
     expect(multiplierLabel(1)).toBe('1x');
     expect(multiplierLabel(0.96)).toBe('1x');

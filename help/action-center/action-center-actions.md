@@ -1,11 +1,11 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence]
-synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work]
+keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number]
+synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work, order actions, newest first, oldest first]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -55,7 +55,15 @@ The cards at the top count and filter the list, all but **Highest Priority**. Cl
 - **In Progress**: actions someone is working on.
 - **Highest Priority**: the highest level among open actions; it doesn't filter.
 
-Below them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products.
+Below them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's number under its title, such as AC-251, the number Chat uses for it: search for AC-251 or 251 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products.
+
+## Sort the list
+
+The list opens on **Recently updated**: the most recently changed action first, by the date in the **Updated** column. **Sort** also offers **Priority**, the highest Priority Score first, and **Due date**, the soonest first.
+
+Click the **Updated** column's header to sort by it, most recent first, and click it again for the oldest first. While the list is sorted by a header, each click turns it the other way round. The **Priority Score** header works the same way: highest first, then lowest. An arrow shows which way the list is sorted.
+
+Filters and the sort are kept in the page's address, so a sorted, filtered view can be shared.
 
 ## Status, dismiss and delete
 
@@ -95,7 +103,7 @@ An action with no one on it belongs to **Everyone** in the workspace until someo
 
 ## Export actions
 
-**Export CSV** on the Actions tab downloads the actions in the current view, as filtered, with their priority, status, assignee, due date, task progress and affected items.
+**Export CSV** on the Actions tab downloads the actions in the current view, as filtered, with their number, priority, status, assignee, due date, task progress and affected items.
 
 Inside an action, **Copy Data** gives the whole action as Markdown to paste into a doc or ticket, and **Export** downloads it as **Export CSV** or **Export Excel**. The Excel file has one sheet each for the action, its affected items, tasks, signals and history.
 

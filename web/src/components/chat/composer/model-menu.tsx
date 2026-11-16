@@ -136,7 +136,7 @@ export function ModelMenu({
       role="dialog"
       aria-label={t('label')}
       data-slot="model-menu"
-      className="absolute right-0 bottom-full z-30 mb-2 w-[min(340px,calc(100vw-2rem))] rounded-[14px] border bg-popover p-1.5 text-popover-foreground shadow-[0_12px_32px_rgba(10,10,10,.12)]"
+      className="absolute left-0 bottom-full z-30 mb-2 w-[min(340px,calc(100vw-2rem))] rounded-[14px] border bg-popover p-1.5 text-popover-foreground shadow-[0_12px_32px_rgba(10,10,10,.12)]"
     >
       <div className="px-2 pt-1 pb-1.5 text-xs font-semibold">{t('title')}</div>
       {loaded.state === 'loading' && (

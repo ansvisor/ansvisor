@@ -62,6 +62,8 @@ export interface ActivityRow {
 export type ApprovalLabel =
   | 'denied'
   | 'card'
+  /** A card approved in Slack (#2139): its row's summary_params say via slack. */
+  | 'slack'
   | 'click'
   | 'always'
   | 'full_auto'
@@ -70,10 +72,11 @@ export type ApprovalLabel =
   | 'run';
 
 export function approvalLabel(
-  row: Pick<ActivityRow, 'kind' | 'approvalKind' | 'autoVia'>,
+  row: Pick<ActivityRow, 'kind' | 'approvalKind' | 'autoVia'> &
+    Partial<Pick<ActivityRow, 'summaryParams'>>,
 ): ApprovalLabel {
   if (row.kind === 'access.denied') return 'denied';
-  if (row.approvalKind === 'ask') return 'card';
+  if (row.approvalKind === 'ask') return row.summaryParams?.via === 'slack' ? 'slack' : 'card';
   if (row.approvalKind === 'click') return 'click';
   if (row.approvalKind === 'auto') {
     // An agent's step that went live on its own (AUTONOMOUS-GO-LIVE §6.4), never Full auto's.

@@ -311,6 +311,12 @@ describe('deliverToSlack', () => {
     );
   });
 
+  it('words the message with its post’s id, which a button names', async () => {
+    const make = vi.fn(() => ({ text: 'Hi' }));
+    await deliver({ post: posted(), ...clock() }, { message: make });
+    expect(make).toHaveBeenCalledWith({ postId: 'post-1' });
+  });
+
   it('records a message it could not word as failed', async () => {
     const make = () => {
       throw new TypeError('bad metrics');
@@ -337,5 +343,14 @@ describe('slackAllowed', () => {
     await expect(slackAllowed('org-1')).resolves.toBe(false);
     vi.stubEnv('IS_CLOUD', '');
     await expect(slackAllowed('org-1')).resolves.toBe(true);
+  });
+
+  it('has Approve from Slack (slack_approvals) on Growth and up only', async () => {
+    h.org = { plan: 'starter', subscription_status: 'active', plan_overrides: null };
+    await expect(slackAllowed('org-1', 'slack_approvals')).resolves.toBe(false);
+    h.org = { plan: 'growth', subscription_status: 'active', plan_overrides: null };
+    await expect(slackAllowed('org-1', 'slack_approvals')).resolves.toBe(true);
+    h.org = { plan: 'growth', subscription_status: 'canceled', plan_overrides: null };
+    await expect(slackAllowed('org-1', 'slack_approvals')).resolves.toBe(false);
   });
 });

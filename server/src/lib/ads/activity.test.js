@@ -21,7 +21,7 @@ vi.mock('../../config/supabase.js', () => {
   return { default: { from: (table) => (calls.push(['from', table]), q) } };
 });
 
-const { AdsActivityError, logAdsActivity, readAdsActivity, secretIn } =
+const { AdsActivityError, logAdsActivity, logNotifyMe, readAdsActivity, secretIn } =
   await import('./activity.js');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -146,5 +146,39 @@ describe('readAdsActivity', () => {
     expect(page.entries.map((e) => e.id)).toEqual(['a3', 'a2']);
     expect(page.entries[0].actor).toMatchObject({ userId: USER, agentRunId: null });
     expect(page.next).toBe('2026-11-12');
+  });
+});
+
+describe('logNotifyMe', () => {
+  const ask = () => logNotifyMe({ orgId: ORG, brandId: BRAND, userId: USER, platform: 'meta' });
+  const inserts = () => calls.filter(([op]) => op === 'insert');
+
+  it("logs a person's first ask of a platform in the workspace, naming only the platform", async () => {
+    answer = { data: [], error: null };
+    expect(await ask()).toBe(true);
+    expect(calls.filter(([op]) => op === 'eq')).toEqual([
+      ['eq', 'organization_id', ORG],
+      ['eq', 'actor_user_id', USER],
+      ['eq', 'event', 'connection.notify'],
+      ['eq', 'target->>platform', 'meta'],
+    ]);
+    expect(inserts()).toEqual([
+      [
+        'insert',
+        expect.objectContaining({
+          organization_id: ORG,
+          brand_id: BRAND,
+          actor_user_id: USER,
+          event: 'connection.notify',
+          target: { platform: 'meta' },
+        }),
+      ],
+    ]);
+  });
+
+  it('logs nothing more once the person asked, from any brand', async () => {
+    answer = { data: [{ id: 'a0' }], error: null };
+    expect(await ask()).toBe(false);
+    expect(inserts()).toEqual([]);
   });
 });

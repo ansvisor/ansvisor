@@ -100,6 +100,7 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
 }));
 
 vi.mock('@/lib/actions/chat-skills', () => ({ saveChatSkill: vi.fn() }));
+vi.mock('@/lib/actions/ads-drafts', () => ({ saveAdDrafts: async () => ({ ok: true }) }));
 vi.mock('@/lib/actions/chat-memory', () => ({
   saveChatMemory: vi.fn(),
   forgetChatMemory: vi.fn(),
@@ -216,6 +217,14 @@ const INPUTS: Record<string, unknown> = {
   },
   save_memory: { scope: 'user', text: 'Write blog posts in US English' },
   forget_memory: { memory_id: MEMORY_LINE },
+  // Ads Phase 0 PR 15: ad copy written in Chat, through the Pay card's claims gate.
+  save_ad_drafts: {
+    brand_id: BRAND,
+    prompt_id: PROMPT,
+    drafts: [
+      { channel: 'google', headlines: ['A'], descriptions: ['B'], keywords: [], claims: [] },
+    ],
+  },
 };
 /** The rows that change or send a Library draft find one. */
 const NEEDS_DRAFT = new Set([

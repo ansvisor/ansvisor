@@ -165,10 +165,16 @@ describe('agentFormSetupFor', () => {
     });
   });
 
-  it('names the Ansvisor skills this install does not offer now: the ChatGPT profile check until Business Hub is on', async () => {
+  it('names the Ansvisor skills this install does not offer now: the ChatGPT profile check until Business Hub is on, and Ads’ until Ads is', async () => {
     vi.stubEnv('BUSINESS_HUB_ENABLED', '');
-    expect((await setupOf(PEOPLE.manager)).offSkills).toEqual(['chatgpt-profile']);
+    vi.stubEnv('ADS_ENABLED', '');
+    expect((await setupOf(PEOPLE.manager)).offSkills).toEqual([
+      'chatgpt-profile',
+      'earn-or-pay',
+      'ad-drafts',
+    ]);
     vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    vi.stubEnv('ADS_ENABLED', 'true');
     expect((await setupOf(PEOPLE.manager)).offSkills).toEqual([]);
     vi.unstubAllEnvs();
   });
