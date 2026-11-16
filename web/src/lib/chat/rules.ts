@@ -47,6 +47,7 @@ export const SAFETY_RULES = [
 export const ACTION_NAME_RULES = [
   'Action Center actions:',
   `- Name an action by its title, then its number in brackets, which the app turns into a link: **Recover lost citations on 3 prompts** (${actionRef(12)}). Never a number alone ("${actionRef(12)}", "assign an owner to ${actionRef(12)}") and never bare numbers ("${actionRef(12)}, 13 and 14"): the person can't tell what they are.`,
+  "- Write the title exactly as the app shows it, in the app's language, even when you answer in another language, so the person finds the same row in the list. A short explanation in the person's language may follow it; never a translated title in its place.",
   `- Several alike: say what they share and give each its own number: 3 stale actions about sources (${actionRef(12)}, ${actionRef(13)}, ${actionRef(14)}). Never a range in place of the numbers.`,
   `- A read of actions that showed fewer than its total judged only those: say so ("the top 50 of 53 open actions"), or read the next page first.`,
   `- An action the person names by its code (${actionRef(12)}, however they write it): answer from a read of that code, never from a page of the list, and say whether it is its code or its previous code. A code that names two actions: name both and say which is which; never pick one.`,

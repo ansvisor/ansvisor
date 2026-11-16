@@ -54,6 +54,15 @@ describe('ACTION_NAME_RULES (the owner’s report, 2026-11-14)', () => {
     expect(ACTION_NAME_RULES).toContain('Never a range in place of the numbers');
   });
 
+  it("keep the app's title when answering in another language (the owner's decision, 2026-11-16)", () => {
+    expect(ACTION_NAME_RULES).toContain(
+      "Write the title exactly as the app shows it, in the app's language, even when you answer in another language",
+    );
+    expect(ACTION_NAME_RULES).toContain(
+      "A short explanation in the person's language may follow it; never a translated title in its place.",
+    );
+  });
+
   it('say how many actions a read judged when it showed fewer than its total', () => {
     expect(ACTION_NAME_RULES).toContain('the top 50 of 53 open actions');
     expect(ACTION_NAME_RULES).toContain('or read the next page first');
