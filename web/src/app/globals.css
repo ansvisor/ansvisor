@@ -447,6 +447,14 @@
     --nav-k 100ms linear,
     --nav-t var(--nav-duration) linear;
 }
+/*
+ * Icons alone, the menu opens over the page 150ms after the pointer comes on
+ * it, and redraws the rows that open a submenu: a motion there would start
+ * again. So it waits for the menu to open.
+ */
+[data-icons-only] [data-nav-item]:is(:hover, :focus-visible) [data-nav-motion] {
+  transition-delay: 250ms;
+}
 [data-nav-motion],
 [data-nav-motion] > * {
   --nav-p: clamp(0, (var(--nav-t) - var(--nav-from, 0)) / var(--nav-span, 1), 1);

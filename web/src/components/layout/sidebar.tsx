@@ -363,6 +363,8 @@ export function Sidebar() {
           if (!asideRef.current?.contains(e.relatedTarget as Node | null)) setPeeking(false);
         }}
         onKeyDown={(e) => handleNavKeys(e, setSubmenuOpen)}
+        // Icons alone: an icon's motion waits until the menu has opened (globals.css).
+        data-icons-only={compact || undefined}
         className={cn(
           'absolute inset-y-0 left-0 z-40 flex flex-col border-r bg-sidebar transition-[width] duration-200',
           compact ? 'w-16' : 'w-60',

@@ -134,8 +134,10 @@ describe('the main items’ icon motions', () => {
   it('draws each main item’s icon with its motion, open and as icons alone', async () => {
     await render();
     expect(mainMotions()).toEqual(MAIN_ITEMS.map(([, motion]) => motion));
+    expect(container.querySelector('aside')!.hasAttribute('data-icons-only')).toBe(false);
     act(() => useSidebarStore.setState({ isCollapsed: true }));
-    expect(container.querySelector('aside')!.className).toContain('w-16');
+    // Icons alone, the motions wait for the menu to open over the page.
+    expect(container.querySelector('aside')!.hasAttribute('data-icons-only')).toBe(true);
     expect(mainMotions()).toEqual(MAIN_ITEMS.map(([, motion]) => motion));
   });
 
@@ -165,9 +167,12 @@ describe('globals.css', () => {
     }
   });
 
-  it('plays a motion on hover and on keyboard focus', () => {
+  it('plays a motion on hover and on keyboard focus, later with icons alone', () => {
     expect(css).toContain('[data-nav-item]:is(:hover, :focus-visible) {');
     expect(css).toContain('[data-nav-item]:is(:hover, :focus-visible) [data-nav-motion] {');
+    expect(css).toMatch(
+      /\[data-icons-only\] \[data-nav-item\]:is\(:hover, :focus-visible\) \[data-nav-motion\] \{\s*transition-delay: 250ms;/,
+    );
   });
 
   it('keeps every motion between 400 and 700ms', () => {
