@@ -181,6 +181,7 @@ export function ChatInbox({
       initialTab={tab}
       notices={notices?.ok ? notices.notices : []}
       outside={outside ?? []}
+      brandId={brandId}
     />
   );
 }
