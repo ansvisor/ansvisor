@@ -670,6 +670,11 @@ describe('loadChatThread', () => {
       stepCount: 1,
       sources: [{ label: 'Citations', count: 18 }],
     });
+    // An older step's words lose the row count they kept: never shown, after a reload too.
+    expect(thread!.messages[1].run!.steps[0]).toMatchObject({
+      detail: 'Perplexity · Last 30 days',
+      rowCount: 18,
+    });
   });
 });
 
