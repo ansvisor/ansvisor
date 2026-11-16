@@ -321,7 +321,7 @@ describe("the page's period and filters (the owner's rule, 2026-11-16)", () => {
     const scoped = await scopeRead(
       citations,
       { brand_id: BRAND },
-      facts({ range: '7d', rangeFromPage: true, page }),
+      facts({ range: '7d', rangeFrom: 'page', page }),
     );
     expect(scoped).toMatchObject({
       kind: 'read',
@@ -344,7 +344,7 @@ describe("the page's period and filters (the owner's rule, 2026-11-16)", () => {
     const asked = await scopeRead(
       citations,
       { brand_id: BRAND, date_from: '2026-10-01', date_to: '2026-10-15' },
-      facts({ range: '7d', rangeFromPage: true, page }),
+      facts({ range: '7d', rangeFrom: 'page', page }),
     );
     expect(asked.kind === 'read' && asked.used.page).toEqual(['platform', 'sources']);
     const saved = await scopeRead(citations, { brand_id: BRAND }, facts({ range: '30d' }));
@@ -352,7 +352,7 @@ describe("the page's period and filters (the owner's rule, 2026-11-16)", () => {
     const allTime = await scopeRead(
       citations,
       { brand_id: BRAND },
-      facts({ question: 'Citations of all time', range: '7d', rangeFromPage: true }),
+      facts({ question: 'Citations of all time', range: '7d', rangeFrom: 'page' }),
     );
     expect(allTime).toMatchObject({ used: { dates: 'all_time' } });
     expect(allTime.kind === 'read' && allTime.used.page).toBeUndefined();
@@ -362,7 +362,7 @@ describe("the page's period and filters (the owner's rule, 2026-11-16)", () => {
     const scoped = await scopeRead(
       citations,
       { brand_id: BRAND },
-      facts({ range: null, rangeFromPage: true, allTime: true }),
+      facts({ range: null, rangeFrom: 'page', allTime: true }),
     );
     expect(scoped).toMatchObject({
       input: { brand_id: BRAND },
@@ -372,7 +372,7 @@ describe("the page's period and filters (the owner's rule, 2026-11-16)", () => {
     const days = await scopeRead(
       readTool({ days: z.number().int().min(1).max(90).optional() }),
       { brand_id: BRAND },
-      facts({ rangeFromPage: true, allTime: true }),
+      facts({ rangeFrom: 'page', allTime: true }),
     );
     expect(days).toMatchObject({
       input: { days: 90 },
@@ -396,25 +396,47 @@ describe("the page's period and filters (the owner's rule, 2026-11-16)", () => {
     expect(scoped).toMatchObject({ kind: 'not_on_plan', result: { asked: ['Perplexity'] } });
   });
 
-  it("gives a read of a named period (Ads') the range, when it is one of its periods", async () => {
+  it("gives Ads' read its own page's period, or one the message named; else its 30 days", async () => {
     const ads = CHAT_TOOLS.find((t) => t.name === 'get_ads_opportunities')!;
-    expect(
-      await scopeRead(ads, { brand_id: BRAND }, facts({ range: '7d', rangeFromPage: true })),
-    ).toMatchObject({
-      input: { period: '7d' },
-      used: { dates: 'default', range: '7d', dateFrom: '2026-10-24', page: ['period'] },
+    const adsPage = { route: '/dashboard/ads', brandId: BRAND, filters: [] };
+    const citationsPage = { ...adsPage, route: '/dashboard/citations' };
+    const read = (over: Partial<Parameters<typeof scopeRead>[2]>, raw = {}) =>
+      scopeRead(ads, { brand_id: BRAND, ...raw }, facts(over));
+    // On Ads: the page's period.
+    for (const period of ['7d', '30d', '90d'] as const) {
+      expect(await read({ range: period, rangeFrom: 'page', page: adsPage })).toMatchObject({
+        input: { period },
+        used: { dates: 'default', range: period, page: ['period'] },
+      });
+    }
+    expect(await read({ range: '7d', rangeFrom: 'page', page: adsPage })).toMatchObject({
+      used: { dateFrom: '2026-10-24', dateTo: '2026-10-30' },
     });
-    expect(await scopeRead(ads, { brand_id: BRAND }, facts({ range: '90d' }))).toMatchObject({
+    // A period the message named, on Ads or off it.
+    expect(await read({ range: '90d', rangeFrom: 'message', page: citationsPage })).toMatchObject({
       input: { period: '90d' },
     });
-    // The model's own period wins; a range Ads doesn't offer, or all time, leaves its default.
-    expect(
-      await scopeRead(ads, { brand_id: BRAND, period: '30d' }, facts({ range: '7d' })),
-    ).toMatchObject({ input: { period: '30d' }, used: { dates: 'none' } });
-    for (const over of [{ range: '24h' as const }, { range: '7d' as const, allTime: true }, {}]) {
-      const scoped = await scopeRead(ads, { brand_id: BRAND }, facts(over));
-      expect(scoped.kind === 'read' && scoped.input).not.toHaveProperty('period');
+    // Off Ads: the person's default and another page's range leave Ads' own 30 days.
+    for (const over of [
+      { range: '7d', rangeFrom: 'default' },
+      { range: '90d', rangeFrom: 'default' },
+      { range: '90d' },
+      { range: '7d', rangeFrom: 'page', page: citationsPage },
+      { range: '7d', rangeFrom: 'page', page: null },
+      // A range Ads doesn't offer, or all time.
+      { range: '24h', rangeFrom: 'page', page: adsPage },
+      { range: '7d', rangeFrom: 'page', page: adsPage, allTime: true },
+      {},
+    ] as const) {
+      const scoped = await read(over);
+      expect(scoped.kind === 'read' && scoped.input, JSON.stringify(over)).not.toHaveProperty(
+        'period',
+      );
     }
+    // The model's own period wins.
+    expect(
+      await read({ range: '7d', rangeFrom: 'page', page: adsPage }, { period: '30d' }),
+    ).toMatchObject({ input: { period: '30d' }, used: { dates: 'none' } });
   });
 });
 

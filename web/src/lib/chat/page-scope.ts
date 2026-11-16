@@ -16,8 +16,8 @@ import type { ChatTool } from './registry/define-tool';
  * A list's own filters (status, category, impact, type, sources, prompt)
  * mean one thing on each page (Actions' "In progress" is not Content's), so
  * they apply only to the reads of the page's own list. A read of another
- * brand, or one that names its rows (codes, ids), takes none. Plain module:
- * scope.ts applies it to every read.
+ * brand, or one that names its rows (codes, ids, domains, urls), takes
+ * none. Plain module: scope.ts applies it to every read.
  */
 
 /** A page's filter, as its chip carries it (`filter:platform` → `platform`). */
@@ -115,7 +115,7 @@ function ruleOf(key: string, route: string | null): FilterRule | null {
 const PAGE_FIELDS = ['model', 'platform', 'region'] as const;
 
 /** Inputs that name a read's rows: each named row comes back, whatever the page shows. */
-const LOOKUP_FIELDS = ['codes', 'ids'] as const;
+const LOOKUP_FIELDS = ['codes', 'ids', 'domains', 'urls'] as const;
 
 const EDGE = String.raw`(?<![\p{L}\d])`;
 /** "all platforms", "every region", "each topic", "tüm platformlar", "her bölgede". */

@@ -10,6 +10,7 @@ import {
   inventedNumbers,
   numbersIn,
   pageScopeMissed,
+  pageScopeUnsaid,
   readByCodes,
   skillReads,
   substituteActions,
@@ -319,5 +320,24 @@ describe("the page's period and filters", () => {
     expect(pageScopeMissed({ reads: [], readInputs: [] }, read, NOW)).toBe(
       'list_citations not read',
     );
+  });
+
+  it('checks the answer says its scope: as on the page, counts for all sources', () => {
+    const chips = scenario.page!.chips;
+    expect(
+      pageScopeUnsaid(
+        'Last 24 hours, ChatGPT, as on the page: citation counts for all sources, lists for Brand sources.',
+        chips,
+      ),
+    ).toBeNull();
+    expect(
+      pageScopeUnsaid('Son 24 saat, sayfadaki gibi; sayılar tüm kaynaklar için.', chips),
+    ).toBeNull();
+    expect(pageScopeUnsaid('Your top domains, as on the page.', chips)).toBe(
+      'no "all sources" for the counts',
+    );
+    expect(pageScopeUnsaid('Your top domains.', chips)).toBe('no "as on the page"');
+    // No Sources on the page: "as on the page" is enough.
+    expect(pageScopeUnsaid('As on the page: 31 citations.', chips.slice(0, 4))).toBeNull();
   });
 });

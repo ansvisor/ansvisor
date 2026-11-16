@@ -348,8 +348,15 @@ vi.mock('./registry/tools', async (importOriginal) => {
   });
   // The same read under a name the engine trusts: the workspace's own numbers (§16a).
   const ownNumbers = { ...readVisibility, name: 'get_visibility_summary' };
-  // A read that lists cited pages in its structured fields (CHAT-10 item 11).
-  const citations = { ...readVisibility, name: 'list_citations' };
+  // A read that lists cited pages in its structured fields (CHAT-10 item 11), on its page's Sources.
+  const citations = {
+    ...readVisibility,
+    name: 'list_citations',
+    route: '/dashboard/citations',
+    inputSchema: readVisibility.inputSchema.extend({
+      source_filter: z.enum(['all', 'owned', 'competitor', 'external']).optional(),
+    }),
+  };
   // One Site Audit in full, whose result shows as its card.
   const audit = { ...readVisibility, name: 'list_site_audit_issues' };
   // A list read a page at a time (scope.ts pagedRead): its next pages count lightly.
@@ -386,6 +393,17 @@ vi.mock('./registry/tools', async (importOriginal) => {
         t.name === 'check_draft_rules',
     ),
     publishPage,
+    // Ads' read of a named period, as its row has it, only with Ads on (ADS_ENABLED).
+    {
+      ...readVisibility,
+      name: 'get_ads_opportunities',
+      route: '/dashboard/ads',
+      inputSchema: z.object({
+        brand_id: z.string(),
+        period: z.enum(['7d', '30d', '90d']).optional(),
+      }),
+      offerIn: async () => process.env.ADS_ENABLED === 'true',
+    },
     {
       ...real.chatTool('run_subtasks')!,
       offerIn: async (run: { parentRunId?: string | null }) => subtaskTests.on && !run.parentRunId,
@@ -9977,6 +9995,138 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     useModels([read(), READY], [text('Up 12%.')]);
     await ask('How are we doing?');
     expect(readInput()).toMatchObject({ date_from: day(-29), date_to: day(0) });
+  });
+
+  it("reads Ads over its own page's period, and off that page over 30 days, whatever the default", async () => {
+    vi.stubEnv('ADS_ENABLED', 'true');
+    const ASK = 'Which prompts should we pay for?';
+    const cases: {
+      message: string;
+      dates?: string;
+      route?: string;
+      saved: string;
+      period: string | null;
+    }[] = [
+      // On Ads: the page's period, over the person's default.
+      { message: ASK, dates: '90d/', route: '/dashboard/ads', saved: '7d', period: '90d' },
+      { message: ASK, dates: '7d/', route: '/dashboard/ads', saved: '90d', period: '7d' },
+      // Off Ads: its own 30 days, never the default or another page's range.
+      { message: ASK, saved: '7d', period: null },
+      { message: ASK, saved: '90d', period: null },
+      { message: ASK, dates: '7d/', route: '/dashboard/citations', saved: '7d', period: null },
+      // A period the message names, anywhere.
+      { message: `${ASK.slice(0, -1)} in the last 90 days?`, saved: '7d', period: '90d' },
+    ];
+    // Not a hook: a script for each case's model (useModels).
+    const script = useModels;
+    for (const { message, dates, route, saved, period } of cases) {
+      db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: saved }];
+      fakes.readRun.mockClear();
+      script(
+        [calls(toolCall('r1', 'get_ads_opportunities', { brand_id: BRAND })), READY],
+        [text('Pay on two prompts.')],
+      );
+      const started = await engine.startChatRun(ADMIN, {
+        message,
+        brandId: BRAND,
+        ...(route
+          ? {
+              origin: 'panel' as const,
+              context: {
+                route,
+                chips: [
+                  { key: 'brand', label: 'Northwind', value: BRAND },
+                  ...(dates ? [{ key: 'dates', label: 'Page range', value: dates }] : []),
+                ],
+              },
+            }
+          : {}),
+      });
+      if (!started.ok) throw new Error('not started');
+      await engine.driveRun(ADMIN, started.runId);
+      expect(readInput().period ?? null, `${message} ${route ?? 'Chat'} ${saved}`).toBe(period);
+    }
+  });
+
+  it("lists Citations' Sources from the page beside the citations of every source, as the page does", async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
+    fakes.readRun.mockClear();
+    fakes.readRun.mockImplementation(async (_ctx: unknown, input: Record<string, unknown>) =>
+      input.source_filter === 'all'
+        ? { totals: { domains: 3, citations: 6, avg_citations_per_result: 1.5 }, top_domains: [] }
+        : {
+            totals: { domains: 1, citations: 3, avg_citations_per_result: 0.8 },
+            top_domains: [{ domain: 'northwind.example', total_citations: 3 }],
+          },
+    );
+    const { sonnet } = useModels(
+      [calls(toolCall('r1', 'list_citations', { brand_id: BRAND })), READY],
+      [
+        text(
+          'Last 7 days, as on the page: citation counts for all sources, lists for Brand sources.',
+        ),
+      ],
+    );
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'How many citations do we have, and which domains?',
+      brandId: BRAND,
+      origin: 'panel',
+      context: {
+        route: '/dashboard/citations',
+        chips: [
+          { key: 'page', label: 'Citations' },
+          { key: 'brand', label: 'Northwind', value: BRAND },
+          { key: 'dates', label: 'Last 7 days', value: '7d/' },
+          { key: 'filter:sources', label: 'Brand', value: 'own' },
+        ],
+      },
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    // The lists on Brand, and the same read over every source beside it, one row.
+    const inputs = fakes.readRun.mock.calls.map((c) => c[1] as Record<string, unknown>);
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]).toMatchObject({ source_filter: 'owned', date_from: day(-6) });
+    expect(inputs[1]).toMatchObject({
+      source_filter: 'all',
+      date_from: day(-6),
+      limit: 1,
+      offset: 0,
+    });
+    // One step: the person sees one read.
+    expect(stepsOf(started.runId).filter((s) => s.kind === 'read')).toHaveLength(1);
+    const written = promptOf(sonnet.seen[0]);
+    expect(written).toContain(
+      '\\"all_sources_totals\\":{\\"citations\\":6,\\"avg_citations_per_result\\":1.5}',
+    );
+    expect(written).toContain('\\"from_page\\":[\\"period\\",\\"sources\\"]');
+    expect(written).toContain('citation counts for all sources, lists for Brand sources');
+    const message = db.tables.chat_runs.find((r) => r.id === started.runId)!.message_id;
+    expect(db.tables.chat_messages.find((m) => m.id === message)!.content_md).toContain(
+      'citation counts for all sources, lists for Brand sources',
+    );
+
+    // Sources the person named: their own totals, no second read.
+    fakes.readRun.mockClear();
+    useModels(
+      [calls(toolCall('r1', 'list_citations', { brand_id: BRAND, source_filter: 'owned' })), READY],
+      [text('Brand sources only.')],
+    );
+    const own = await engine.startChatRun(ADMIN, {
+      message: 'How many citations from our own sites?',
+      brandId: BRAND,
+      origin: 'panel',
+      context: {
+        route: '/dashboard/citations',
+        chips: [
+          { key: 'brand', label: 'Northwind', value: BRAND },
+          { key: 'filter:sources', label: 'All', value: 'all' },
+        ],
+      },
+    });
+    if (!own.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, own.runId);
+    expect(fakes.readRun).toHaveBeenCalledTimes(1);
   });
 
   it("applies the page's filters to the reads that take them; the person's own words win", async () => {

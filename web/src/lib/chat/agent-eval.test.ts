@@ -1404,38 +1404,47 @@ describe('the agents’ test set harness, on a scripted model', () => {
     scripted([
       calls(toolCall('r1', 'list_citations', { brand_id: BRAND })),
       text(
-        'Last 24 hours, ChatGPT, Brand sources, as on the page: your subscriptions page leads with 31 citations, then the freshness guide with 26 and the subscriptions blog post with 21.',
+        'Last 24 hours, ChatGPT, as on the page: citation counts for all sources, lists for Brand sources. AI answers cited you 418 times in all. Your top cited pages are the subscriptions page with 31 citations, the freshness guide with 26 and the subscriptions blog post with 21.',
       ),
     ]);
     const result = await runScenario(scenario);
     // No range card: the page's range is read, and kept as nobody's default.
     expect(result.run.questions).toBe(0);
-    expect(result.run.reads).toEqual(['list_citations']);
-    const input = result.run.readInputs[0];
-    expect(input).toMatchObject({ model: 'chatgpt-web', source_filter: 'owned' });
-    expect(Date.now() - Date.parse(String(input.date_from))).toBeLessThanOrEqual(
+    expect(db.tables.chat_user_prefs ?? []).toEqual([]);
+    // The lists on Brand sources, and the same read over every source beside them.
+    expect(result.run.reads).toEqual(['list_citations', 'list_citations']);
+    const [filtered, every] = result.run.readInputs;
+    expect(filtered).toMatchObject({ model: 'chatgpt-web', source_filter: 'owned' });
+    expect(every).toMatchObject({ model: 'chatgpt-web', source_filter: 'all', limit: 1 });
+    expect(every.date_from).toBe(filtered.date_from);
+    expect(Date.now() - Date.parse(String(filtered.date_from))).toBeLessThanOrEqual(
       24 * 60 * 60 * 1000 + 60_000,
     );
-    expect(db.tables.chat_user_prefs ?? []).toEqual([]);
-    expect(
-      result.checks.find((c) => c.name === "reads with the page's period and filters"),
-    ).toEqual({ name: "reads with the page's period and filters", must: true, ok: true });
+    for (const name of [
+      "reads with the page's period and filters",
+      'says what the answer covers, as on the page',
+      'no invented numbers',
+    ]) {
+      expect(
+        result.checks.find((c) => c.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
     expect(result.passed).toBe(true);
   });
 
-  it("fails a read that leaves the page's platform out", async () => {
+  it("fails a read that leaves the page's platform out, and an answer that doesn't say its scope", async () => {
     scripted([
       calls(toolCall('r1', 'list_citations', { brand_id: BRAND, model: '' })),
-      text('Last 24 hours, all platforms: your subscriptions page leads with 31 citations.'),
+      text('Your subscriptions page leads with 31 citations.'),
     ]);
     const result = await runScenario(skillOf('citations-page-scope'));
-    expect(
-      result.checks.find((c) => c.name === "reads with the page's period and filters"),
-    ).toEqual({
-      name: "reads with the page's period and filters",
-      must: true,
-      ok: false,
-      detail: 'model null',
+    const failed = Object.fromEntries(
+      result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(failed).toMatchObject({
+      "reads with the page's period and filters": 'model null',
+      'says what the answer covers, as on the page': 'no "as on the page"',
     });
     expect(result.passed).toBe(false);
   });

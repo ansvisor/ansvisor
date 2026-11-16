@@ -281,11 +281,15 @@ export interface ScopeFacts {
    * The range a read with no dates covers (range.ts): one their message
    * named, the page's, or the person's default. Null or left out: none is
    * set, and the app's last 30 days are read (Google's reads keep their
-   * pages' 28). A read of a named period (Ads') takes it when it is one.
+   * pages' 28).
    */
   range?: ChatRange | null;
-  /** The range (or all time) came from the page the question was asked on (pageDatesOf). */
-  rangeFromPage?: boolean;
+  /**
+   * Where the range came from: a period the message named (or a short
+   * range), the page the question was asked on (range.ts pageDatesOf), or
+   * the person's default (picked on the card, or kept). Left out: default.
+   */
+  rangeFrom?: 'message' | 'page' | 'default';
   /** The page shows all time: a read with no dates covers all of it, as asked. */
   allTime?: boolean;
   /** The page's filters, for the reads that take them (page-scope.ts). */
@@ -433,8 +437,12 @@ export async function scopeRead(
       ...(range && fits === days ? { range } : {}),
     };
   } else if (hasField(tool, 'period') && input.period === undefined && facts.range && !allTime) {
-    // A read of a named period (Ads' 7d, 30d, 90d): the range, when it is one of them.
-    if (accepts(tool, { ...input, period: facts.range })) {
+    // A read of a named period (Ads' 7d, 30d, 90d) takes one the message named, or its own
+    // page's; never the person's default nor another page's range: else its own default, as
+    // its page opens on (the owner, 2026-11-16).
+    const ownPage = !!tool.route && facts.page?.route === tool.route;
+    const named = facts.rangeFrom === 'message' || (facts.rangeFrom === 'page' && ownPage);
+    if (named && accepts(tool, { ...input, period: facts.range })) {
       input.period = facts.range;
       const window = rangeWindow(facts.range, now);
       dates = { ...window, dates: 'default', range: facts.range };
@@ -442,7 +450,7 @@ export async function scopeRead(
   }
   // The page's period: a read that took the range, or all time, the page set.
   const pagePeriod =
-    facts.rangeFromPage === true &&
+    facts.rangeFrom === 'page' &&
     !askedAllTime &&
     (dates.range !== undefined || dates.dates === 'all_time');
   const page = [...(pagePeriod ? ['period'] : []), ...fromPage.applied];

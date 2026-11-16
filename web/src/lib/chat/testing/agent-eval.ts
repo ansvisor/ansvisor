@@ -729,6 +729,25 @@ export function pageScopeMissed(
   return misses.some((off) => off.length === 0) ? null : misses[0].join(', ');
 }
 
+/**
+ * What an answer from a page's scope leaves unsaid: that it covers what the
+ * page shows, and with the page's Sources, that its citation counts are
+ * every source's while its lists follow Sources. Null when it says both.
+ */
+export function pageScopeUnsaid(
+  answer: string,
+  chips: NonNullable<AgentEvalScenario['page']>['chips'],
+): string | null {
+  if (!/as (?:shown )?on the page|sayfa(?:daki|da) gibi/i.test(answer)) {
+    return 'no "as on the page"';
+  }
+  const sources = chips.some((chip) => chip.key === 'filter:sources' && chip.value !== 'all');
+  if (sources && !/all sources|every source|tüm kaynak/i.test(answer)) {
+    return 'no "all sources" for the counts';
+  }
+  return null;
+}
+
 // ─── Actions asked for by their codes ───────────────────────────────────────
 
 /** Whether a run read these codes' actions by their codes (list_action_center_tasks' codes). */
@@ -1072,6 +1091,10 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
     );
   }
   if (scenario.page) {
+    const said = pageScopeUnsaid(run.answer, scenario.page.chips);
+    checks.push(
+      check('says what the answer covers, as on the page', true, said === null, said ?? ''),
+    );
     const missed = pageScopeMissed(run, scenario.page.read);
     checks.push(
       check("reads with the page's period and filters", true, missed === null, missed ?? ''),
@@ -1185,6 +1208,7 @@ const CHECK_TR: Readonly<Record<string, string>> = {
   'names each action asked by its title and code': 'sorulan her aksiyonu başlığı ve koduyla andı',
   'names no other action in their place': 'yerlerine başka aksiyon saymadı',
   "reads with the page's period and filters": 'sayfanın dönemi ve filtreleriyle okudu',
+  'says what the answer covers, as on the page': 'yanıtın kapsamını sayfadaki gibi söyledi',
   'no emoji': 'emoji yok',
   'stays on its brand': 'marka kapsamında kaldı',
   'no network call but the model’s': 'modelinki dışında ağ çağrısı yok',

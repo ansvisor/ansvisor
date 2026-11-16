@@ -254,6 +254,12 @@ import {
 import { readSavedRange, saveRange, type SavedRange } from './range-store';
 import { pageScopeOf } from './page-scope';
 import {
+  allSourcesInput,
+  allSourcesTotalsOf,
+  needsAllSources,
+  withAllSources,
+} from './citation-totals';
+import {
   cacheKey,
   cachePolicy,
   dropCached,
@@ -2679,7 +2685,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
   } else {
     lines.push(
       [
-        'Answer from the data you read; never invent a number. Each read says the period and platforms it covered (`scope`): say them with its numbers, and what the answer covers. A read whose scope has from_page took that period or those filters from the page the person has open: say once, in one short line, what the answer covers as the page names it ("Last 7 days, ChatGPT, as on the page"), with any filter of the page no read took ("all regions"); never how many rows were read.',
+        'Answer from the data you read; never invent a number. Each read says the period and platforms it covered (`scope`): say them with its numbers, and what the answer covers. A read whose scope has from_page took that period or those filters from the page the person has open: say once, in one short line, what the answer covers as the page names it ("Last 7 days, ChatGPT, as on the page"), with any filter of the page no read took ("all regions"); never how many rows were read. A result with all_sources_totals took Sources from the page: its lists, and the domains and pages counted with them, follow Sources, as the table on the page does, while the citations and their average per answer are all_sources_totals, every source, as the cards on the page count them; say so in that line ("citation counts for all sources, lists for Brand sources").',
         'A page of a list (total, offset, next_offset, note) holds what its note says of all that match; next_offset is where the next page starts. A list with `truncated: true` was cut to fit (a series by date keeps its latest): `{list}_more` says how many more there are (null: more, count unknown) and `{list}_rest` what they add up to. Read the rest by a next page or a narrower read, or say what the answer covers; never present a part as complete or count it as a total. `texts_shortened: true`: long texts in it end early.',
         "A result with code \"not_on_plan\": the workspace's plan doesn't track that platform; say so in one sentence, naming the platforms it does track (`on_plan`), and don't try again.",
         "To make a change, call its tool: the app asks the person first when it should. Don't ask for permission in text, and don't say a change is made until its tool returned ok.",
@@ -2975,10 +2981,10 @@ async function savedRangeOf(rc: RunContext): Promise<SavedRange> {
   return rc.savedRange;
 }
 
-/** The range a read with no dates takes, and whether it is the page's (scope.ts ScopeFacts). */
+/** The range a read with no dates takes, and where it came from (scope.ts ScopeFacts). */
 interface ReadRange {
   range: ChatRange | null;
-  rangeFromPage: boolean;
+  rangeFrom: 'message' | 'page' | 'default';
   /** The page shows All time. */
   allTime: boolean;
 }
@@ -2995,13 +3001,17 @@ const pageDates = (rc: Pick<RunContext, 'progress'>, now = new Date()) =>
  * app's 30 days).
  */
 async function runRange(rc: RunContext): Promise<ReadRange> {
-  const own = rc.progress.range?.range;
-  if (own) return { range: own, rangeFromPage: false, allTime: false };
+  const own = rc.progress.range;
+  if (own) {
+    // A pick on the range card is the person's default; a period the message named, its own.
+    const named = own.how === 'question' || own.how === 'command';
+    return { range: own.range, rangeFrom: named ? 'message' : 'default', allTime: false };
+  }
   const page = pageDates(rc);
   if (page) {
-    return { range: page === 'all' ? null : page, rangeFromPage: true, allTime: page === 'all' };
+    return { range: page === 'all' ? null : page, rangeFrom: 'page', allTime: page === 'all' };
   }
-  return { range: (await savedRangeOf(rc)).range, rangeFromPage: false, allTime: false };
+  return { range: (await savedRangeOf(rc)).range, rangeFrom: 'default', allTime: false };
 }
 
 /**
@@ -4338,6 +4348,9 @@ export function dataAsOfOf(value: unknown): string | null {
 /**
  * A read's own call, with a time limit and one retry after 2 s when it failed
  * (CHAT-20 §11b); one that ran out of time isn't tried again (read-attempt.ts).
+ * `allSources`: the citations read took the page's Sources, so the same read
+ * over every source runs beside it, for the totals the page's cards count
+ * (citation-totals.ts); the filtered read stands without them if it fails.
  */
 function runRead(
   rc: RunContext,
@@ -4346,17 +4359,19 @@ function runRead(
   role: PrecedenceContext['role'],
   pageSites?: ChatToolContext['pageSites'],
   brandAccess?: PrecedenceContext['brandAccess'],
+  allSources = false,
 ): Promise<ReadAttempt> {
-  return attemptRead(
-    () =>
-      tool.run(
-        pageSites
-          ? { ...toolContext(rc, role, brandAccess), pageSites }
-          : toolContext(rc, role, brandAccess),
-        input as never,
-      ),
-    rc.signal,
-  );
+  const ctx = pageSites
+    ? { ...toolContext(rc, role, brandAccess), pageSites }
+    : toolContext(rc, role, brandAccess);
+  if (!allSources) return attemptRead(() => tool.run(ctx, input as never), rc.signal);
+  return attemptRead(async () => {
+    const [value, all] = await Promise.all([
+      tool.run(ctx, input as never),
+      Promise.resolve(tool.run(ctx, allSourcesInput(input) as never)).catch(() => null),
+    ]);
+    return withAllSources(value, allSourcesTotalsOf(all));
+  }, rc.signal);
 }
 
 /**
@@ -4502,7 +4517,15 @@ async function readCall(
   if (kept) {
     read = kept;
   } else {
-    const outcome = await runRead(rc, tool, input, rc.role, pageSites, ctx?.brandAccess);
+    const outcome = await runRead(
+      rc,
+      tool,
+      input,
+      rc.role,
+      pageSites,
+      ctx?.brandAccess,
+      needsAllSources(tool.name, input, scoped.used),
+    );
     // A page that couldn't be opened says why ({ ok: false, code, message }).
     const refusal = outcome.ok ? readRefusal(outcome.value) : null;
     if (!outcome.ok || refusal) {
