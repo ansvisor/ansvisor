@@ -1,0 +1,204 @@
+/**
+ * Send the welcome e-mail's event (Resend's `user.signed_up`, which starts the
+ * welcome Automation) to the accounts that missed it. Run by hand on the API
+ * server, which has RESEND_API_KEY and the Supabase service key:
+ *
+ *   node src/scripts/send-missed-welcome.js            # dry run: counts and dates
+ *   node src/scripts/send-missed-welcome.js --send     # claim, send, keep on a 2xx
+ *
+ * Options:
+ *   --since <date>         accounts made from then on (ISO date). Default, and
+ *                          earliest: 13 Nov 2026 00:00 Istanbul time, when the
+ *                          Automation started.
+ *   --dry-run              the default: list only, claim and send nothing.
+ *   --send                 claim each account as the web's pages do
+ *                          (lib/welcome-claim.js), send the event, keep the
+ *                          claim only when Resend accepted it (2xx), and
+ *                          release it otherwise.
+ *   --pause-ms <n>         wait between two sends (default 1000).
+ *   --include-early-oauth  also Google and GitHub accounts made before the
+ *                          claim went live (14 Nov 2026, 16:00 UTC). The old
+ *                          sign-in callback may have sent theirs, keeping no
+ *                          claim: include them only once Resend's Events tab
+ *                          shows it received no `user.signed_up` then.
+ *
+ * Who: made since --since, e-mail confirmed, not invited, signed in at least
+ * once, and no `signup_event_at` in app_metadata. It prints counts, the
+ * accounts' creation dates and sign-in providers: never an e-mail address,
+ * a name or a key.
+ */
+
+import { pathToFileURL } from 'node:url';
+import {
+  OAUTH_CALLBACK_SENT_UNTIL,
+  SIGNUP_EVENT_SINCE,
+  claimWelcome,
+  releaseWelcome,
+  sendWelcomeEvent,
+  welcomeStatus,
+} from '../lib/welcome-claim.js';
+
+export const USAGE =
+  'Usage: node src/scripts/send-missed-welcome.js [--dry-run | --send] [--since <ISO date>] ' +
+  '[--pause-ms <n>] [--include-early-oauth]';
+
+const PER_PAGE = 1000;
+
+/** The command line's options. Throws on an unknown or bad one. */
+export function parseArgs(argv) {
+  const opts = {
+    send: false,
+    since: SIGNUP_EVENT_SINCE,
+    pauseMs: 1000,
+    includeEarlyOAuth: false,
+    help: false,
+  };
+  let dryRun = false;
+  const args = [...argv];
+  while (args.length) {
+    const arg = args.shift();
+    const eq = arg.indexOf('=');
+    const flag = eq === -1 ? arg : arg.slice(0, eq);
+    const value = () => (eq === -1 ? args.shift() : arg.slice(eq + 1));
+    if (flag === '--send') opts.send = true;
+    else if (flag === '--dry-run') dryRun = true;
+    else if (flag === '--include-early-oauth') opts.includeEarlyOAuth = true;
+    else if (flag === '--help' || flag === '-h') opts.help = true;
+    else if (flag === '--since') {
+      const text = value() ?? '';
+      opts.since = Date.parse(text);
+      if (Number.isNaN(opts.since)) throw new Error(`--since isn't a date: ${text}`);
+    } else if (flag === '--pause-ms') {
+      const text = value() ?? '';
+      opts.pauseMs = Number(text);
+      if (!/^\d+$/.test(text)) throw new Error(`--pause-ms isn't a whole number: ${text}`);
+    } else throw new Error(`Unknown option: ${arg}`);
+  }
+  if (opts.send && dryRun) throw new Error('--send and --dry-run: pick one');
+  if (opts.since < SIGNUP_EVENT_SINCE) {
+    throw new Error(
+      `--since is before ${new Date(SIGNUP_EVENT_SINCE).toISOString()}, when the welcome ` +
+        'Automation started: older accounts are never sent the welcome',
+    );
+  }
+  return opts;
+}
+
+/** Every account, page by page, kept to what the script needs. */
+async function listAccounts(admin) {
+  const accounts = [];
+  for (let page = 1; ; page++) {
+    const { data, error } = await admin.listUsers({ page, perPage: PER_PAGE });
+    if (error) throw new Error(`listing the accounts failed (${error.status ?? error.name})`);
+    const users = data?.users ?? [];
+    accounts.push(...users);
+    if (users.length < PER_PAGE) return accounts;
+  }
+}
+
+const SKIPPED = {
+  claimed: 'already claimed (signup_event_at)',
+  'early-oauth': `Google or GitHub, made before ${new Date(OAUTH_CALLBACK_SENT_UNTIL).toISOString()} (may have had it from the old sign-in callback; --include-early-oauth)`,
+  unconfirmed: 'e-mail never confirmed (never welcomed, by design)',
+  invited: 'invited to a workspace (never welcomed)',
+  'never-signed-in': 'never signed in',
+  'no-email': 'no e-mail address',
+};
+
+/**
+ * List the accounts that missed the welcome and, with `send`, send it to
+ * each. `deps`: `admin` (the service client's auth.admin), `apiKey`
+ * (RESEND_API_KEY), `fetchImpl`, `sleep(ms)`, `log(line)`. Returns the counts.
+ */
+export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, now = Date.now }) {
+  if (opts.send && !apiKey) throw new Error('RESEND_API_KEY is not set: nothing claimed or sent');
+  const counts = {};
+  const owed = [];
+  for (const user of await listAccounts(admin)) {
+    const status = welcomeStatus(user, opts);
+    if (status === 'before-since') continue;
+    counts[status] = (counts[status] ?? 0) + 1;
+    if (status === 'owed') {
+      owed.push({
+        id: user.id,
+        created: user.created_at,
+        provider: user.app_metadata?.provider ?? 'unknown',
+      });
+    }
+  }
+  owed.sort((a, b) => Date.parse(a.created) - Date.parse(b.created));
+
+  log(
+    `Accounts made since ${new Date(opts.since).toISOString()} that missed the welcome: ${owed.length}`,
+  );
+  for (const account of owed) log(`  made ${account.created} (${account.provider})`);
+  for (const [status, label] of Object.entries(SKIPPED)) {
+    if (counts[status]) log(`Left out, ${label}: ${counts[status]}`);
+  }
+  const result = { owed: owed.length, sent: 0, refused: 0, skipped: 0, unreleased: 0 };
+  if (!opts.send) {
+    log('Dry run: nothing claimed or sent. Run again with --send to send.');
+    return result;
+  }
+
+  const isOwed = (user) => welcomeStatus(user, opts) === 'owed';
+  for (const [i, account] of owed.entries()) {
+    if (i > 0) await sleep(opts.pauseMs);
+    const claimed = await claimWelcome(admin, account.id, { isOwed, sleep, now });
+    if (!claimed) {
+      result.skipped++;
+      log(
+        `  made ${account.created}: skipped (no longer owed, claimed elsewhere, or not claimable)`,
+      );
+      continue;
+    }
+    const answer = await sendWelcomeEvent(claimed, { apiKey, fetchImpl });
+    if (answer.accepted) {
+      result.sent++;
+      log(`  made ${account.created}: sent`);
+      continue;
+    }
+    result.refused++;
+    const released = await releaseWelcome(admin, account.id);
+    if (!released) result.unreleased++;
+    const why = answer.status ? `HTTP ${answer.status}` : answer.error;
+    log(
+      `  made ${account.created}: not accepted (${why}); claim ${released ? 'released' : 'NOT released'}`,
+    );
+  }
+  log(
+    `Done: ${result.sent} sent, ${result.refused} not accepted (claim released), ` +
+      `${result.skipped} skipped` +
+      (result.unreleased ? `, ${result.unreleased} claim(s) not released` : ''),
+  );
+  return result;
+}
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  let opts;
+  try {
+    opts = parseArgs(process.argv.slice(2));
+  } catch (err) {
+    console.error(`${err.message}\n${USAGE}`);
+    process.exit(2);
+  }
+  if (opts.help) {
+    console.log(USAGE);
+    process.exit(0);
+  }
+  await import('dotenv/config');
+  const { default: supabaseAdmin } = await import('../config/supabase.js');
+  try {
+    const result = await run(opts, {
+      admin: supabaseAdmin.auth.admin,
+      apiKey: process.env.RESEND_API_KEY,
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      log: (line) => console.log(line),
+    });
+    process.exit(result.refused || result.unreleased ? 1 : 0);
+  } catch (err) {
+    console.error(`send-missed-welcome: ${err instanceof Error ? err.message : 'failed'}`);
+    process.exit(1);
+  }
+}
