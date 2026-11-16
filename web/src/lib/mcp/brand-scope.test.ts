@@ -67,6 +67,8 @@ const { getContentPlanFor } = await import('./content-plan');
 const { explainChangeFor } = await import('./why');
 const { createMcpServer } = await import('./server');
 const { listActionsPageFor } = await import('./action-center-reads');
+const aiConversions = await import('./ai-conversions');
+const { getTrackingSetupFor } = await import('./tracking-setup');
 
 const ALL: McpAuthContext = {
   userId: 'user-1',
@@ -181,6 +183,19 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     [
       'listMentionsFor (a page by offset)',
       () => mentions.listMentionsFor(SELECTED, { brandId: 'b1', offset: 50, limit: 50 }),
+    ],
+    // Customers and revenue from AI visits.
+    ['getTrackingSetupFor', () => getTrackingSetupFor(SELECTED, { brandId: 'b1' })],
+    ['getAiConversionsFor', () => aiConversions.getAiConversionsFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getAiConvertingPagesFor',
+      () => aiConversions.getAiConvertingPagesFor(SELECTED, { brandId: 'b1' }),
+    ],
+    ['getAiPipelineFor', () => aiConversions.getAiPipelineFor(SELECTED, { brandId: 'b1' })],
+    ['listAiVisitsFor', () => aiConversions.listAiVisitsFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getPromptConversionsFor',
+      () => aiConversions.getPromptConversionsFor(SELECTED, { brandId: 'b1' }),
     ],
   ];
 

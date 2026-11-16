@@ -1,11 +1,11 @@
 ---
 title: Track conversions from AI visits
 route: /dashboard/traffic
-keywords: [conversions, ai visit conversions, signups from ai, consent, shopify pixel]
+keywords: [conversions, ai visit conversions, signups from ai, consent, shopify pixel, ask chat, revenue from ai, which pages bring customers]
 synonyms: [track leads from chatgpt, orders from ai, demo requests from ai, first touch]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -43,6 +43,14 @@ The visitor has to agree on the page the AI assistant sent them to: agreeing on 
 ## Where you see the results
 
 The Content Editor shows what came of it: the **Live page** tab for each page, and the **From AI visits** line on the Content **Plan** for the whole site.
+
+## Ask Chat
+
+Chat answers which pages and AI assistants bring sign-ups, forms, orders, bookings and revenue, and how many of each. It reads the conversions above, by assistant, landing page and type, with each currency's revenue on its own. With Google Analytics connected, it adds **Top converting pages from AI**; with HubSpot, the AI-sourced pipeline.
+
+Chat first checks what is set up. Where something isn't, it says **Not measured** and gives the step and the page where an admin or manager sets it up: the tracking snippet, conversions, the conversion call or Shopify pixel for orders, Google Analytics or HubSpot.
+
+Asked which prompts bring customers, Chat lists the prompts whose answers cite pages that converted. It labels this an association, not a measurement: AI assistants don't pass on the question.
 
 ## What it can't see
 

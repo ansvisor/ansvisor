@@ -462,7 +462,7 @@ export async function getTrafficLogs(
     dateTo?: string;
   },
 ): Promise<{ logs: TrafficLog[]; total: number; pageviews: number }> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const limit = opts?.limit ?? 20;
   const offset = opts?.offset ?? 0;
   const platform = opts?.platform;
@@ -959,7 +959,7 @@ export async function getTrafficConversions(
   window: TrafficDateWindow | undefined,
   { limit = 10 }: { limit?: number } = {},
 ): Promise<TrafficConversions> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { from, to } = resolveTrafficWindow(window);
   const inRange = await readConversions(
     supabase,
@@ -1030,7 +1030,7 @@ export async function getTrafficAiPipeline(
   brandId: string,
   window: TrafficDateWindow | undefined,
 ): Promise<TrafficAiPipeline | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { from, to } = resolveTrafficWindow(window);
   const { data, error } = await supabase.rpc('brand_ai_pipeline', {
     p_brand_id: brandId,

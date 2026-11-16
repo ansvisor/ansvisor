@@ -28,6 +28,7 @@ import {
 import {
   AGENT_EVAL_PRICES,
   AGENT_SCENARIOS,
+  QUESTION_SCENARIOS,
   SKILL_SCENARIOS,
   agentEvalCost,
   gradeAgentRun,
@@ -176,6 +177,8 @@ const fakes = vi.hoisted(() => ({
     approving: string | null;
     sessionless: boolean;
     mode: string;
+    /** The state the reads answer from (agent-eval-data.ts EvalWorld). */
+    world?: import('./testing/agent-eval-data').EvalWorld;
   },
   resolveModels: vi.fn(),
   /** What the workspace's month has left of its AI limit, in dollars (Growth: $25, 40% used). */
@@ -340,7 +343,11 @@ vi.mock('./registry/tools', async (importOriginal) => {
         run: async (ctx: Parameters<typeof tool.run>[0], input: Parameters<typeof tool.run>[1]) => {
           const value = AS_IS.has(tool.name)
             ? await tool.run(ctx, input)
-            : data.evalReadResult(tool.name, (input ?? {}) as Record<string, unknown>);
+            : data.evalReadResult(
+                tool.name,
+                (input ?? {}) as Record<string, unknown>,
+                fakes.run?.world,
+              );
           fakes.run?.reads.push(tool.name);
           fakes.run?.readInputs.push((input ?? {}) as Record<string, unknown>);
           fakes.run?.readValues.push(JSON.stringify(value ?? null));
@@ -887,6 +894,7 @@ async function runScenario(scenario: AgentEvalScenario): Promise<EvalResult> {
     approving: null,
     sessionless: agentRun && scenario.trigger !== 'manual',
     mode: scenario.mode,
+    world: scenario.world,
   };
   const started = Date.now();
   let actor: import('./engine').ChatActor;
@@ -1393,7 +1401,8 @@ const GROUPS: {
     group: 'skills',
     asked: process.env.SKILL_EVAL?.trim() ?? '',
     maxUsd: Number(process.env.SKILL_EVAL_MAX_USD) || null,
-    scenarios: SKILL_SCENARIOS,
+    // Every skill by its /name, then the questions a person asks without one.
+    scenarios: [...SKILL_SCENARIOS, ...QUESTION_SCENARIOS],
     file: 'skill-eval',
     title: 'Ansvisor becerileri: kalite testi',
   },

@@ -3,14 +3,18 @@ import { AGENT_PRESETS } from '../agents/catalog';
 import { SKILL_LIBRARY } from '../skills/library';
 import {
   AGENT_SCENARIOS,
+  QUESTION_SCENARIOS,
   SKILL_SCENARIOS,
   agentEvalCost,
   checkLabel,
   inventedNumbers,
   numbersIn,
+  promptCauseClaims,
   skillReads,
   unnamedActionRefs,
 } from './agent-eval';
+import { EVAL_IDS, evalReadResult } from './agent-eval-data';
+import { PROMPT_ASSOCIATION_LABEL } from '@/lib/traffic-conversions';
 import { safetyChecks, safetyFindings } from './safety-checks';
 
 describe('the agents’ and skills’ test set (agent-eval.ts)', () => {
@@ -133,6 +137,105 @@ describe('how an answer names Action Center actions (the owner’s report, 2026-
     ].join('\n');
     expect(unnamedActionRefs(answer)).toEqual(['AC-251']);
     expect(checkLabel('names actions by title')).toBe('aksiyonları başlığıyla andı');
+  });
+});
+
+describe('the questions about customers and revenue from AI (the owner, 2026-11-16)', () => {
+  const scenario = (id: string) => QUESTION_SCENARIOS.find((s) => s.id === id)!;
+  /** Each of a scenario's own checks on an answer, by name. */
+  const grade = (id: string, answer: string, reads: string[]) =>
+    Object.fromEntries(scenario(id).checks!.map((c) => [c.name, c.ok({ answer, reads })]));
+  const brand = { brand_id: EVAL_IDS.brand };
+
+  it('asks them without a /name, each in its world, for the skill to be picked', () => {
+    expect(QUESTION_SCENARIOS.map((s) => [s.id, s.world ?? 'default', s.message])).toEqual([
+      [
+        'ai-revenue-setup',
+        'conversions_off',
+        'Hangi sayfalar müşteri getiriyor, ne kadar kazandırdı?',
+      ],
+      ['ai-revenue-data', 'default', 'Hangi sayfalar müşteri getiriyor, ne kadar kazandırdı?'],
+      ['ai-revenue-prompts', 'default', 'Hangi promptlar müşteri getiriyor?'],
+    ]);
+    for (const s of QUESTION_SCENARIOS) {
+      expect(s).toMatchObject({ group: 'skills', skill: 'ai-revenue', mode: 'auto' });
+      for (const c of s.checks!) expect(checkLabel(c.name)).toBe(c.tr);
+    }
+    expect(skillReads('ai-revenue')[0]).toBe('get_tracking_setup');
+  });
+
+  it('answers from the off world with no number, and the association label in both worlds', () => {
+    expect(evalReadResult('get_ai_conversions', brand, 'conversions_off')).toMatchObject({
+      measured: false,
+      where: `/dashboard/brands/${EVAL_IDS.brand}/settings?tab=tracking`,
+    });
+    expect(
+      JSON.stringify(evalReadResult('get_ai_conversions', brand, 'conversions_off')),
+    ).not.toMatch(/"conversions":/);
+    expect(evalReadResult('get_ai_conversions', brand)).toMatchObject({
+      measured: true,
+      conversions: 64,
+    });
+    for (const world of ['default', 'conversions_off'] as const) {
+      expect(evalReadResult('get_prompt_conversions', brand, world)).toMatchObject({
+        label: PROMPT_ASSOCIATION_LABEL,
+      });
+    }
+  });
+
+  it('with conversions off, passes the setup step and fails an amount', () => {
+    const good = [
+      'Bunu henüz ölçemiyoruz: AI ziyaretlerinden dönüşümler kapalı, bu yüzden müşteri ve gelir **ölçülmüyor**.',
+      `1. [Marka ayarları › Tracking](/dashboard/brands/${EVAL_IDS.brand}/settings?tab=tracking) içinde **Track conversions from AI visits** kutusunu işaretleyin.`,
+    ].join('\n');
+    expect(grade('ai-revenue-setup', good, ['get_tracking_setup'])).toEqual({
+      'reads get_tracking_setup': true,
+      'leads with the setup step and its page': true,
+      'says Not measured, with no amount': true,
+    });
+    const bad = '/subscriptions sayfası 1.488 EUR kazandırdı.';
+    expect(grade('ai-revenue-setup', bad, [])).toEqual({
+      'reads get_tracking_setup': false,
+      'leads with the setup step and its page': false,
+      'says Not measured, with no amount': false,
+    });
+  });
+
+  it('with data, passes pages, assistants and each currency, with no figure invented; fails a sum of two currencies', () => {
+    const good = [
+      '| Sayfa | Dönüşüm | Gelir | En çok getiren |',
+      '| --- | --- | --- | --- |',
+      '| /subscriptions | 26 (18 sipariş, 8 kayıt) | EUR 864 ve USD 247.5 | ChatGPT |',
+      '| /gift-boxes | 11 | EUR 384 ve USD 165 | ChatGPT |',
+    ].join('\n');
+    const read = JSON.stringify(evalReadResult('get_ai_conversions', brand));
+    expect(grade('ai-revenue-data', good, ['get_tracking_setup', 'get_ai_conversions'])).toEqual({
+      'reads get_ai_conversions': true,
+      'names pages and assistants': true,
+      'gives each currency on its own': true,
+    });
+    expect(inventedNumbers([good], [read]).invented).toEqual([]);
+    const summed = `${good}\nToplam gelir: 1,900.5.`;
+    expect(
+      grade('ai-revenue-data', summed, ['get_ai_conversions'])['gives each currency on its own'],
+    ).toBe(false);
+  });
+
+  it('on prompts, passes a labelled association and fails a claim that a prompt brought customers', () => {
+    const good = [
+      'Bu bir ilişki, ölçülmüş bir atıf değil: AI asistanları soruyu iletmez.',
+      '- "What are the best coffee subscriptions in 2026?" sorusunun cevapları, 47 dönüşüm alan sayfalara atıf yapıyor.',
+    ].join('\n');
+    expect(grade('ai-revenue-prompts', good, ['get_prompt_conversions'])).toEqual({
+      'reads get_prompt_conversions': true,
+      'labels it an association': true,
+      'never says a prompt brought customers': true,
+    });
+    expect(
+      promptCauseClaims('The prompt "Is a coffee subscription worth it?" brought 12 customers.'),
+    ).toHaveLength(1);
+    expect(promptCauseClaims('Bu prompt 47 müşteri getirdi.')).toHaveLength(1);
+    expect(promptCauseClaims("We can't see which prompt brought a buyer.")).toEqual([]);
   });
 });
 

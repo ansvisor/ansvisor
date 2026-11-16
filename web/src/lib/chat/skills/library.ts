@@ -87,6 +87,8 @@ export const SKILL_ORDER = [
   'content-plan',
   'seasonal',
   'traffic',
+  // Customers and revenue from AI visits: what brings them, and what to set up to measure it.
+  'ai-revenue',
   // Ads Phase 0 PR 15: only with Ads on (flagged.ts ADS_SKILLS).
   'earn-or-pay',
   'ad-drafts',
