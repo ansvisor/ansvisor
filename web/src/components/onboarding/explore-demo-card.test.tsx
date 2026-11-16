@@ -61,6 +61,27 @@ describe('ExploreDemoChoice', () => {
     expect(container.textContent).toContain('Your brand stays saved');
   });
 
+  it("names no brand of the person's own on the first screen: it is set up after buying", async () => {
+    await render(
+      <ExploreDemoChoice
+        brandName={null}
+        hasOwnBrand={false}
+        opening={false}
+        onExplore={explore}
+      />,
+    );
+    expect(container.textContent).toContain(
+      "You'll explore Brewline Coffee, a made-up brand with sample data. You can open every page, but nothing runs or changes there. When you pick a plan, you set up your own brand and its tracking starts. No card needed.",
+    );
+    expect(container.textContent).not.toContain('your brand.');
+    expect(container.textContent).not.toContain('stays saved');
+    expect([...container.querySelectorAll('strong')].map((b) => b.textContent)).toEqual([
+      'Brewline Coffee',
+    ]);
+    await act(async () => button().click());
+    expect(explore).toHaveBeenCalledTimes(1);
+  });
+
   it('says the demo is being set up while it opens', async () => {
     await render(<ExploreDemoChoice brandName="Acme" opening onExplore={explore} />);
     expect(button().disabled).toBe(true);
