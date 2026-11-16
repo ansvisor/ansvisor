@@ -34,7 +34,7 @@ const STEP: ChatStep = {
   kind: 'read',
   status: 'done',
   label: 'Read Citations',
-  detail: 'Pricing prompts · Last 30 days · ChatGPT, Perplexity · 42 rows',
+  detail: 'Pricing prompts · Last 30 days · ChatGPT, Perplexity',
   scope: {
     subject: 'Pricing prompts',
     dateRange: 'Last 30 days',

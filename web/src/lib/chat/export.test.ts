@@ -25,7 +25,7 @@ Perplexity **şubatta** _ılımlı_ düştü ¹ — [kaynak](https://example.com
 2. SSS bölümü
    - Şema ekle
 
-- [Citations · 42 rows](/dashboard/citations?platform=perplexity)
+- [Citations · Last 30 days](/dashboard/citations?platform=perplexity)
 
 ## Sayfalar
 
@@ -98,7 +98,7 @@ describe('answerBlocks', () => {
         // A data chip links to the app page with the same scope (item 33).
         runs: [
           {
-            text: 'Citations · 42 rows',
+            text: 'Citations · Last 30 days',
             link: 'https://app.ansvisor.com/dashboard/citations?platform=perplexity',
           },
         ],
@@ -188,7 +188,7 @@ describe('answerMarkdown', () => {
     expect(lines[0]).toBe(ANSWER.stamp);
     expect(lines[2]).toBe('# Why did Perplexity citations drop?');
     expect(md).toContain(
-      '[Citations · 42 rows](https://app.ansvisor.com/dashboard/citations?platform=perplexity)',
+      '[Citations · Last 30 days](https://app.ansvisor.com/dashboard/citations?platform=perplexity)',
     );
     expect(md).toContain('[Ana sayfa](https://app.ansvisor.com/dashboard/x)');
     expect(md).toContain('[kaynak](https://example.com/a?b=1&c=2)');
@@ -198,6 +198,14 @@ describe('answerMarkdown', () => {
 
   it('leaves app links as they are with no origin', () => {
     expect(answerMarkdown({ ...ANSWER, appOrigin: null })).toContain('](/dashboard/x)');
+  });
+
+  it('is the answer’s own words: no step, Data used or row count is added', () => {
+    const md = answerMarkdown({ ...ANSWER, markdown: 'Nothing changed this month.' });
+    expect(md).toBe(
+      `${ANSWER.stamp}\n\n# Why did Perplexity citations drop?\n\nNothing changed this month.\n`,
+    );
+    expect(md).not.toMatch(/\brows?\b/);
   });
 });
 

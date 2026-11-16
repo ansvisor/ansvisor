@@ -13,7 +13,7 @@ Perplexity **şubatta** düştü ¹ — [kaynak](https://example.com/a?b=1&c=2).
 1. Fiyat sayfası
 2. SSS bölümü
 
-- [Citations · 42 rows](/dashboard/citations?platform=perplexity)
+- [Citations · Last 30 days](/dashboard/citations?platform=perplexity)
 
 ## Sayfalar
 
@@ -85,6 +85,20 @@ describe('exportAnswer', () => {
     const footer = Object.keys(parts).find((name) => /^word\/footer\d*\.xml$/.test(name));
     expect(parts[header!]).toContain(ANSWER.stamp);
     expect(parts[footer!]).toContain(ANSWER.stamp);
+  });
+
+  it('adds no row count to a file: the answer’s own words and its line only, never its steps or Data used', async () => {
+    const answer = {
+      ...ANSWER,
+      markdown: 'Nothing changed.\n\n- [Citations · Last 30 days](/dashboard/citations)',
+    };
+    const md = strFromU8((await exportAnswer(answer, 'md'))!.body);
+    const word = unzipText((await exportAnswer(answer, 'docx'))!.body)['word/document.xml'];
+    for (const text of [md, word]) {
+      expect(text).toContain('Nothing changed.');
+      expect(text).toContain('Citations · Last 30 days');
+      expect(text).not.toMatch(/\brows?\b/);
+    }
   });
 
   it('writes one table as a CSV: the byte order mark, the line, then the table', async () => {
