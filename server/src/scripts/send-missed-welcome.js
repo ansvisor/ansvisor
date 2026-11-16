@@ -189,7 +189,7 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
       continue;
     }
     result.refused++;
-    const released = await releaseWelcome(admin, account.id);
+    const released = await releaseWelcome(admin, claimed);
     if (!released) result.unreleased++;
     const why = answer.status ? `HTTP ${answer.status}` : answer.error;
     log(

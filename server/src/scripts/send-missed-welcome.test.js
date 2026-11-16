@@ -232,6 +232,8 @@ describe('--send', () => {
       'u2',
       {
         app_metadata: {
+          provider: 'google',
+          providers: ['google'],
           signup_claim_id: expect.any(String),
           signup_event_at: expect.any(String),
           signup_event_tries: 1,
@@ -314,6 +316,8 @@ describe('--send', () => {
     const claim = admin.updateUserById.mock.calls.find(([id]) => id === 'u9');
     expect(claim[1]).toEqual({
       app_metadata: {
+        provider: 'google',
+        providers: ['google'],
         signup_claim_id: expect.any(String),
         signup_event_at: expect.any(String),
         signup_event_tries: 1,

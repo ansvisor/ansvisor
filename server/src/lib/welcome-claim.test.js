@@ -48,7 +48,7 @@ describe('the welcome claim on both sides', () => {
   it('starts, cuts over, stops and waits at the same points', () => {
     expect(dateOf('SIGNUP_EVENT_SINCE')).toBe(SIGNUP_EVENT_SINCE);
     expect(dateOf('OAUTH_CALLBACK_SENT_UNTIL')).toBe(OAUTH_CALLBACK_SENT_UNTIL);
-    expect(Number(constant('WELCOME_MAX_TRIES'))).toBe(WELCOME_MAX_TRIES);
+    expect(Number(constant('MAX_TRIES'))).toBe(WELCOME_MAX_TRIES);
     expect(Number(constant('CLAIM_SETTLE_MS'))).toBe(CLAIM_SETTLE_MS);
     expect(SIGNUP_EVENT_SINCE).toBe(Date.parse('2026-11-12T21:00:00Z'));
     expect(OAUTH_CALLBACK_SENT_UNTIL).toBe(Date.parse('2026-11-14T16:00:00Z'));
@@ -174,8 +174,10 @@ describe('claimWelcome', () => {
     const sleep = vi.fn(async () => {});
     const claimed = await claimWelcome(admin, 'u1', { isOwed, sleep, now, newClaimId: () => 'c1' });
     expect(claimed).toMatchObject({ id: 'u1' });
+    // The whole app_metadata, as read, with the claim on it.
     expect(admin.updateUserById).toHaveBeenCalledWith('u1', {
       app_metadata: {
+        provider: 'email',
         signup_claim_id: 'c1',
         signup_event_at: '2026-11-16T10:00:00.000Z',
         signup_event_tries: 3,
@@ -234,8 +236,30 @@ describe('claimWelcome', () => {
         app_metadata: { provider: 'email', signup_event_at: 'x', signup_event_tries: 1 },
       }),
     );
-    expect(await releaseWelcome(admin, 'u1')).toBe(true);
+    expect(await releaseWelcome(admin, copy(state.user))).toBe(true);
     expect(state.user.app_metadata).toEqual({ provider: 'email', signup_event_tries: 1 });
+  });
+
+  it('is right whether the Auth server merges app_metadata or replaces it', async () => {
+    const { admin, state } = adminOver(
+      account({ app_metadata: { provider: 'google', providers: ['google'] } }),
+    );
+    // Replaces it whole.
+    admin.updateUserById.mockImplementation(async (_id, { app_metadata }) => {
+      state.user = { ...state.user, app_metadata };
+      return { data: { user: state.user }, error: null };
+    });
+    const claimed = await claimWelcome(admin, 'u1', { isOwed, sleep: async () => {}, now });
+    expect(state.user.app_metadata).toMatchObject({ provider: 'google', providers: ['google'] });
+    expect(await releaseWelcome(admin, claimed)).toBe(true);
+    expect(state.user.app_metadata).toMatchObject({
+      provider: 'google',
+      providers: ['google'],
+      signup_event_at: null,
+      signup_event_tries: 1,
+    });
+    // Released reads as owed again.
+    expect(welcomeStatus(state.user)).toBe('owed');
   });
 });
 

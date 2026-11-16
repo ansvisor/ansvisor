@@ -445,6 +445,9 @@ describe('the dashboard layout and the sign-up event', () => {
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', 'https://eu.i.posthog.com');
     expect(await open()).toBe('/dashboard/onboarding');
+    // Queued before the redirect: Next runs after() work once that response
+    // closes (lib/signup-event.ts).
+    expect(later.tasks).toHaveLength(1);
     expect(sent()).toEqual([]);
     await runLater();
     expect(sent()).toEqual([

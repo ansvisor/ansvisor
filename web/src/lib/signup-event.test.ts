@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The sign-up events' rules, once per account (the dashboard's layout tests
- * draw the pages): who is owed them, and the claims that keep each to one.
+ * draw the pages): who is owed them, the claims that keep each to one, and
+ * the log lines that say where a sign-up's events stopped.
  */
 
 const later = vi.hoisted(() => ({
@@ -16,10 +17,12 @@ vi.mock('next/server', () => ({
   },
 }));
 
-// The Auth server's account, as the admin API reads and writes it: a write
-// merges app_metadata's keys, and a null removes one.
+// The Auth server's account, as the admin API reads and writes it. A write
+// merges app_metadata's keys and a null removes one ('merge', what the Auth
+// server does), or replaces app_metadata whole ('replace').
 const auth = vi.hoisted(() => ({
   account: null as Record<string, unknown> | null,
+  writes: 'merge' as 'merge' | 'replace',
   admin: {
     getUserById: vi.fn(),
     updateUserById: vi.fn(),
@@ -27,7 +30,7 @@ const auth = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { auth: { admin: auth.admin } } }));
 
-/** Resend's answer to the welcome event: true when it accepted it. */
+/** Resend's and PostHog's answers (lib/send-outcome.ts). */
 const sendSignedUp = vi.fn();
 vi.mock('@/lib/resend-event', () => ({
   sendSignedUpEvent: (u: unknown) => sendSignedUp(u),
@@ -36,19 +39,24 @@ const capturePostHog = vi.fn();
 vi.mock('@/lib/posthog-server', () => ({
   capturePostHog: (...args: unknown[]) => capturePostHog(...args),
 }));
+const ACCEPTED = { accepted: true, reason: 'accepted' };
+const refused = (status: number) => ({ accepted: false, reason: `refused:${status}` });
+const failed = (name: string) => ({ accepted: false, reason: `failed:${name}` });
 
-const { OAUTH_CALLBACK_SENT_UNTIL, SIGNUP_EVENT_SINCE, WELCOME_MAX_TRIES, sendSignupEventOnce } =
+const { MAX_TRIES, OAUTH_CALLBACK_SENT_UNTIL, SIGNUP_EVENT_SINCE, sendSignupEventOnce } =
   await import('./signup-event');
 
 const NOW = '2026-11-16T10:00:00Z';
+const AT = '2026-11-16T10:00:00.000Z';
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 const meta = () => auth.account!.app_metadata as Record<string, unknown>;
 
+/** A new account, made an hour ago with an e-mail and password unless told otherwise. */
 function signUp(fields: Record<string, unknown> = {}) {
   auth.account = {
     id: 'u1',
     email: 'ada@example.com',
-    created_at: '2026-11-13T09:00:00Z',
+    created_at: '2026-11-16T09:00:00Z',
     app_metadata: { provider: 'email', providers: ['email'] },
     user_metadata: { full_name: 'Ada Lovelace' },
     ...fields,
@@ -67,14 +75,23 @@ async function runLater() {
   await done;
 }
 
+/** Every line logged, at any level. */
+const logged = () =>
+  [console.log, console.warn, console.error].flatMap((fn) =>
+    vi.mocked(fn).mock.calls.map((call) => call.join(' ')),
+  );
+const clearLogs = () =>
+  [console.log, console.warn, console.error].forEach((fn) => vi.mocked(fn).mockClear());
+
 beforeEach(() => {
   vi.useFakeTimers({ now: new Date(NOW) });
   vi.stubEnv('RESEND_API_KEY', 're_test');
   vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
   later.tasks.length = 0;
   later.outsideRequest = false;
-  sendSignedUp.mockReset().mockResolvedValue(true);
-  capturePostHog.mockReset().mockResolvedValue(undefined);
+  auth.writes = 'merge';
+  sendSignedUp.mockReset().mockResolvedValue(ACCEPTED);
+  capturePostHog.mockReset().mockResolvedValue(ACCEPTED);
   auth.admin.getUserById.mockReset().mockImplementation(async () => ({
     data: { user: structuredClone(auth.account) },
     error: null,
@@ -83,15 +100,19 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation(
       async (_id: string, { app_metadata }: { app_metadata: Record<string, unknown> }) => {
-        const next: Record<string, unknown> = { ...meta() };
-        for (const [key, value] of Object.entries(app_metadata)) {
-          if (value === null) delete next[key];
-          else next[key] = value;
+        let next: Record<string, unknown> = { ...app_metadata };
+        if (auth.writes === 'merge') {
+          next = { ...meta() };
+          for (const [key, value] of Object.entries(app_metadata)) {
+            if (value === null) delete next[key];
+            else next[key] = value;
+          }
         }
         auth.account = { ...auth.account, app_metadata: next };
         return { data: { user: auth.account }, error: null };
       },
     );
+  vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
@@ -108,12 +129,16 @@ describe('sendSignupEventOnce', () => {
     await runLater();
     expect(auth.admin.getUserById).toHaveBeenCalledWith('u1');
     expect(auth.admin.updateUserById).toHaveBeenCalledTimes(1);
+    // The whole app_metadata, as read, with the claims on it.
     expect(auth.admin.updateUserById).toHaveBeenCalledWith('u1', {
       app_metadata: {
+        provider: 'email',
+        providers: ['email'],
         signup_claim_id: expect.any(String),
-        signup_event_at: NOW.replace('Z', '.000Z'),
+        signup_event_at: AT,
         signup_event_tries: 1,
-        signup_posthog_at: NOW.replace('Z', '.000Z'),
+        signup_posthog_at: AT,
+        signup_posthog_tries: 1,
       },
     });
     expect(auth.admin.updateUserById.mock.invocationCallOrder[0]).toBeLessThan(
@@ -126,33 +151,53 @@ describe('sendSignupEventOnce', () => {
     // PostHog's signed_up from its own claim: the user id and the way in only.
     expect(capturePostHog).toHaveBeenCalledTimes(1);
     expect(capturePostHog).toHaveBeenCalledWith('signed_up', 'u1', { source: 'email' });
-    // Accepted: both claims stay, and the other app_metadata too.
-    expect(meta()).toMatchObject({
-      provider: 'email',
-      providers: ['email'],
-      signup_event_at: expect.any(String),
-      signup_posthog_at: expect.any(String),
-    });
+    // Accepted: both claims stay.
+    expect(meta()).toMatchObject({ signup_event_at: AT, signup_posthog_at: AT });
+    expect(logged()).toEqual([
+      '[signup-event] scheduled: welcome+posthog',
+      '[signup-event] claimed: welcome+posthog',
+      '[signup-event] welcome_accepted',
+      '[signup-event] posthog_accepted',
+    ]);
 
-    // The next page: nothing more, and no read for it.
+    // The next page: nothing more, no read and no log for it.
+    clearLogs();
     auth.admin.getUserById.mockClear();
     sendSignupEventOnce(session());
     expect(later.tasks).toHaveLength(0);
     expect(auth.admin.getUserById).not.toHaveBeenCalled();
+    expect(logged()).toEqual([]);
   });
 
   it('starts with accounts made from 13 Nov 2026, 00:00 Istanbul time', async () => {
     expect(SIGNUP_EVENT_SINCE).toBe(Date.parse('2026-11-12T21:00:00Z'));
     sendSignupEventOnce(signUp({ created_at: '2026-11-12T20:59:59Z' }));
     expect(later.tasks).toHaveLength(0);
+    // An older account is no new sign-up: no log either.
+    expect(logged()).toEqual([]);
     sendSignupEventOnce(signUp({ created_at: '2026-11-12T21:00:00Z' }));
     await runLater();
     expect(sendSignedUp).toHaveBeenCalledTimes(1);
   });
 
-  it('is never sent to an invited teammate', () => {
-    sendSignupEventOnce(signUp({ invited_at: '2026-11-13T09:00:00Z' }));
+  it('is never sent to an invited teammate, and says why once, in its first day', () => {
+    sendSignupEventOnce(signUp({ invited_at: '2026-11-16T09:00:00Z' }));
+    sendSignupEventOnce(session());
     expect(later.tasks).toHaveLength(0);
+    expect(logged()).toEqual(['[signup-event] skip: not_owed:invited']);
+
+    clearLogs();
+    sendSignupEventOnce(
+      signUp({ id: 'u2', created_at: ago(2 * 86_400_000), invited_at: ago(2 * 86_400_000) }),
+    );
+    expect(logged()).toEqual([]);
+  });
+
+  it('says why a new account without a creation date is skipped', () => {
+    sendSignupEventOnce(signUp({ created_at: undefined }));
+    expect(later.tasks).toHaveLength(0);
+    expect(auth.admin.getUserById).not.toHaveBeenCalled();
+    expect(logged()).toEqual(['[signup-event] skip: not_owed:no_created_at']);
   });
 
   describe('a Google or GitHub account and the old sign-in callback', () => {
@@ -167,6 +212,7 @@ describe('sendSignupEventOnce', () => {
       vi.setSystemTime(new Date('2026-11-14T12:00:00Z'));
       sendSignupEventOnce(google(ago(3_600_000)));
       expect(later.tasks).toHaveLength(0);
+      expect(logged()).toEqual(['[signup-event] skip: not_owed:oauth_window']);
       // Days later too.
       vi.setSystemTime(new Date(NOW));
       sendSignupEventOnce(google('2026-11-14T15:59:59Z'));
@@ -185,7 +231,7 @@ describe('sendSignupEventOnce', () => {
 
     it('made from the cut-off on: a later page sends it, and retries a refused one', async () => {
       sendSignupEventOnce(google('2026-11-14T16:00:00Z'));
-      sendSignedUp.mockResolvedValueOnce(false);
+      sendSignedUp.mockResolvedValueOnce(refused(500));
       await runLater();
       expect(meta().signup_event_at).toBeUndefined();
 
@@ -208,14 +254,24 @@ describe('sendSignupEventOnce', () => {
     expect(later.tasks).toHaveLength(0);
     expect(auth.admin.getUserById).not.toHaveBeenCalled();
     expect(console.warn).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(console.warn).mock.calls[0][0]).toMatch(/RESEND_API_KEY is not set/);
+    expect(vi.mocked(console.warn).mock.calls[0][0]).toMatch(
+      /^\[signup-event\] RESEND_API_KEY is not set/,
+    );
+    // No other line: an install without the keys is not a failure.
+    expect(logged()).toHaveLength(1);
 
     // PostHog's key alone: its own claim only, and the welcome stays owed.
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
     fresh.sendSignupEventOnce(signUp());
     await runLater();
     expect(auth.admin.updateUserById).toHaveBeenCalledWith('u1', {
-      app_metadata: { signup_claim_id: expect.any(String), signup_posthog_at: expect.any(String) },
+      app_metadata: {
+        provider: 'email',
+        providers: ['email'],
+        signup_claim_id: expect.any(String),
+        signup_posthog_at: AT,
+        signup_posthog_tries: 1,
+      },
     });
     expect(capturePostHog).toHaveBeenCalledTimes(1);
     expect(sendSignedUp).not.toHaveBeenCalled();
@@ -228,32 +284,109 @@ describe('sendSignupEventOnce', () => {
     await runLater();
     expect(sendSignedUp).toHaveBeenCalledTimes(1);
     expect(capturePostHog).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain('re_live');
+    expect(logged().join('\n')).not.toMatch(/re_live|phc_test/);
   });
 
-  it(`releases a refused or failed welcome for a later page, up to ${WELCOME_MAX_TRIES} tries`, async () => {
-    expect(WELCOME_MAX_TRIES).toBe(3);
-    sendSignedUp.mockResolvedValue(false);
-    for (let page = 1; page <= WELCOME_MAX_TRIES; page++) {
+  it(`releases a refused or failed welcome for a later page, up to ${MAX_TRIES} tries`, async () => {
+    expect(MAX_TRIES).toBe(3);
+    sendSignedUp
+      .mockResolvedValueOnce(refused(500))
+      .mockResolvedValueOnce(refused(422))
+      .mockResolvedValueOnce(failed('TimeoutError'));
+    for (let page = 1; page <= MAX_TRIES; page++) {
       sendSignupEventOnce(page === 1 ? signUp() : session());
       await runLater();
       expect(sendSignedUp).toHaveBeenCalledTimes(page);
       expect(meta().signup_event_at).toBeUndefined();
       expect(meta().signup_event_tries).toBe(page);
     }
-    expect(vi.mocked(console.error).mock.calls.flat().join(' ')).toMatch(/0 tries left/);
-    // The cap: no more tries, and no read for them.
+    const lines = logged();
+    expect(lines).toContain('[signup-event] resend_refused:500');
+    expect(lines).toContain('[signup-event] released: welcome (2 tries left)');
+    expect(lines).toContain('[signup-event] resend_refused:422');
+    expect(lines).toContain('[signup-event] resend_failed:TimeoutError');
+    expect(lines).toContain('[signup-event] released: welcome (0 tries left)');
+
+    // The cap: no more tries, no read for them, and one line that says so.
+    clearLogs();
     auth.admin.getUserById.mockClear();
+    sendSignupEventOnce(session());
     sendSignupEventOnce(session());
     expect(later.tasks).toHaveLength(0);
     expect(auth.admin.getUserById).not.toHaveBeenCalled();
+    expect(logged()).toEqual(['[signup-event] skip: not_owed:welcome_max_tries,posthog_claimed']);
     // PostHog's signed_up went once, from the first page, whatever Resend said.
     expect(capturePostHog).toHaveBeenCalledTimes(1);
-    expect(meta().signup_posthog_at).toEqual(expect.any(String));
+    expect(meta().signup_posthog_at).toEqual(AT);
+  });
+
+  it(`releases a refused or failed PostHog signed_up the same way, up to ${MAX_TRIES} tries`, async () => {
+    capturePostHog
+      .mockResolvedValueOnce(failed('TypeError'))
+      .mockResolvedValueOnce(refused(401))
+      .mockResolvedValueOnce(ACCEPTED);
+    sendSignupEventOnce(signUp());
+    await runLater();
+    // The welcome stays; PostHog's claim is released, its try counted.
+    expect(meta()).toMatchObject({ signup_event_at: AT, signup_posthog_tries: 1 });
+    expect(meta()).not.toHaveProperty('signup_posthog_at');
+    expect(logged()).toContain('[signup-event] posthog_failed:TypeError');
+    expect(logged()).toContain('[signup-event] released: posthog (2 tries left)');
+
+    sendSignupEventOnce(session());
+    await runLater();
+    expect(logged()).toContain('[signup-event] posthog_refused:401');
+    sendSignupEventOnce(session());
+    await runLater();
+    expect(capturePostHog).toHaveBeenCalledTimes(3);
+    expect(sendSignedUp).toHaveBeenCalledTimes(1);
+    expect(meta()).toMatchObject({
+      signup_posthog_at: expect.any(String),
+      signup_posthog_tries: 3,
+    });
+    sendSignupEventOnce(session());
+    expect(later.tasks).toHaveLength(0);
+  });
+
+  it('releases both in one write when neither was accepted', async () => {
+    sendSignedUp.mockResolvedValueOnce(refused(503));
+    capturePostHog.mockResolvedValueOnce(refused(503));
+    sendSignupEventOnce(signUp());
+    await runLater();
+    expect(auth.admin.updateUserById).toHaveBeenCalledTimes(2);
+    expect(meta()).not.toHaveProperty('signup_event_at');
+    expect(meta()).not.toHaveProperty('signup_posthog_at');
+    expect(logged()).toContain(
+      '[signup-event] released: welcome (2 tries left), posthog (2 tries left)',
+    );
+  });
+
+  it('is right whether the Auth server merges app_metadata or replaces it', async () => {
+    auth.writes = 'replace';
+    sendSignedUp.mockResolvedValueOnce(refused(500));
+    sendSignupEventOnce(signUp());
+    await runLater();
+    // Replaced whole, with what was there kept; the released claim reads as null.
+    expect(meta()).toMatchObject({
+      provider: 'email',
+      providers: ['email'],
+      signup_event_at: null,
+      signup_event_tries: 1,
+      signup_posthog_at: AT,
+    });
+    sendSignupEventOnce(session());
+    await runLater();
+    expect(sendSignedUp).toHaveBeenCalledTimes(2);
+    expect(meta()).toMatchObject({
+      provider: 'email',
+      signup_event_at: expect.any(String),
+      signup_event_tries: 2,
+    });
+    expect(capturePostHog).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the welcome claimed once Resend accepts a retry', async () => {
-    sendSignedUp.mockResolvedValueOnce(false);
+    sendSignedUp.mockResolvedValueOnce(refused(500));
     sendSignupEventOnce(signUp());
     await runLater();
     sendSignupEventOnce(session());
@@ -268,13 +401,19 @@ describe('sendSignupEventOnce', () => {
     sendSignupEventOnce(signUp({ app_metadata: { provider: 'email', signup_event_at: 'x' } }));
     expect(later.tasks).toHaveLength(0);
     expect(auth.admin.getUserById).not.toHaveBeenCalled();
+    expect(logged()).toEqual([]);
   });
 
   it("keeps PostHog's claim apart from the welcome's", async () => {
     // Welcomed by this change, PostHog's key added since: PostHog's alone.
     sendSignupEventOnce(
       signUp({
-        app_metadata: { provider: 'email', signup_event_at: 'x', signup_event_tries: 1 },
+        app_metadata: {
+          provider: 'email',
+          signup_event_at: 'x',
+          signup_event_tries: 1,
+          signup_claim_id: 'c0',
+        },
       }),
     );
     await runLater();
@@ -290,24 +429,49 @@ describe('sendSignupEventOnce', () => {
     expect(meta().signup_posthog_at).toBe('y');
   });
 
-  it('sends nothing when the claim is already there, or cannot be written', async () => {
+  it('sends nothing when the claim is already there, or cannot be written, and says which', async () => {
     // Another page claimed it after this one's session was read.
     const stale = signUp();
     auth.account!.app_metadata = {
       provider: 'email',
-      signup_event_at: '2026-11-13T09:01:00Z',
+      signup_event_at: '2026-11-16T09:01:00Z',
       signup_event_tries: 1,
-      signup_posthog_at: '2026-11-13T09:01:00Z',
+      signup_posthog_at: '2026-11-16T09:01:00Z',
+      signup_claim_id: 'c0',
     };
     sendSignupEventOnce(stale);
     await runLater();
     expect(auth.admin.updateUserById).not.toHaveBeenCalled();
+    expect(logged()).toContain('[signup-event] skip: not_owed:claimed');
 
     sendSignupEventOnce(signUp());
-    auth.admin.updateUserById.mockResolvedValueOnce({ data: null, error: { message: 'down' } });
+    auth.admin.updateUserById.mockResolvedValueOnce({
+      data: { user: null },
+      error: { name: 'AuthApiError', status: 403, code: 'not_admin', message: 'u1 ada' },
+    });
     await runLater();
     expect(sendSignedUp).not.toHaveBeenCalled();
     expect(capturePostHog).not.toHaveBeenCalled();
+    expect(logged()).toContain('[signup-event] claim_write_failed:not_admin');
+  });
+
+  it('says when the account cannot be read, before the claim or after it', async () => {
+    sendSignupEventOnce(signUp());
+    auth.admin.getUserById.mockResolvedValueOnce({
+      data: { user: null },
+      error: { name: 'AuthApiError', status: 401, message: 'Invalid API key' },
+    });
+    await runLater();
+    expect(logged()).toContain('[signup-event] read_failed:401');
+    expect(auth.admin.updateUserById).not.toHaveBeenCalled();
+
+    sendSignupEventOnce(signUp());
+    auth.admin.getUserById
+      .mockImplementationOnce(async () => ({ data: { user: structuredClone(auth.account) } }))
+      .mockResolvedValueOnce({ data: { user: null }, error: { name: 'AuthRetryableFetchError' } });
+    await runLater();
+    expect(logged()).toContain('[signup-event] readback_failed:AuthRetryableFetchError');
+    expect(sendSignedUp).not.toHaveBeenCalled();
   });
 
   it('sends once for two pages of one server at once', async () => {
@@ -316,6 +480,7 @@ describe('sendSignupEventOnce', () => {
     await runLater();
     expect(sendSignedUp).toHaveBeenCalledTimes(1);
     expect(capturePostHog).toHaveBeenCalledTimes(1);
+    expect(logged()).toContain('[signup-event] skip: in_progress');
   });
 
   it('sends once for two servers whose pages both read the account before either claimed it', async () => {
@@ -337,6 +502,7 @@ describe('sendSignupEventOnce', () => {
     expect(capturePostHog).toHaveBeenCalledTimes(1);
     const last = auth.admin.updateUserById.mock.calls[1][1].app_metadata.signup_claim_id;
     expect(meta().signup_claim_id).toBe(last);
+    expect(logged()).toContain('[signup-event] readback_mismatch');
   });
 
   it('of two servers that claimed at once, only the one whose claim stayed sends', async () => {
@@ -351,6 +517,7 @@ describe('sendSignupEventOnce', () => {
           signup_event_at: '2026-11-16T10:00:00.001Z',
           signup_event_tries: 1,
           signup_posthog_at: '2026-11-16T10:00:00.001Z',
+          signup_posthog_tries: 1,
         },
       };
       return { data: { user: auth.account }, error: null };
@@ -362,23 +529,25 @@ describe('sendSignupEventOnce', () => {
     expect(auth.admin.updateUserById).toHaveBeenCalledTimes(1);
   });
 
-  it('never throws, and never logs the address', async () => {
+  it('never throws, and never logs an id, an address, a name or a key', async () => {
     later.outsideRequest = true;
     expect(() => sendSignupEventOnce(signUp())).not.toThrow();
+    expect(logged()).toContain('[signup-event] not_scheduled:Error');
 
     later.outsideRequest = false;
     sendSignupEventOnce(signUp());
     auth.admin.getUserById.mockRejectedValueOnce(new Error('auth down for ada@example.com'));
     await expect(runLater()).resolves.toBeUndefined();
     expect(sendSignedUp).not.toHaveBeenCalled();
+    expect(logged()).toContain('[signup-event] failed:Error');
 
-    sendSignedUp.mockResolvedValueOnce(false);
+    sendSignedUp.mockResolvedValueOnce(refused(500));
+    capturePostHog.mockResolvedValueOnce(failed('TypeError'));
     sendSignupEventOnce(signUp());
     await runLater();
-    const logged = JSON.stringify([
-      vi.mocked(console.error).mock.calls,
-      vi.mocked(console.warn).mock.calls,
-    ]);
-    expect(logged).not.toMatch(/ada@example\.com|Ada|re_test|phc_test/);
+    sendSignupEventOnce(signUp({ invited_at: AT }));
+    const all = logged().join('\n');
+    expect(all).not.toMatch(/ada@example\.com|Ada|Lovelace|re_test|phc_test|\bu1\b/);
+    expect(logged().every((line) => line.startsWith('[signup-event] '))).toBe(true);
   });
 });

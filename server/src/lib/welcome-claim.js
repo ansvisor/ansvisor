@@ -15,6 +15,11 @@ import { randomUUID } from 'node:crypto';
  *   back after CLAIM_SETTLE_MS, and only the writer whose id stayed sends.
  * - `signup_posthog_at`: PostHog's `signed_up`, claimed apart.
  *
+ * Every write sends the whole app_metadata, as just read, with the change on
+ * it: the Auth server merges top-level keys (a null removes one), but the SDK
+ * only sends what it is given and doesn't promise that, so this is right
+ * whether it merges or replaces; a released key reads as null or not at all.
+ *
  * An old-style claim is a `signup_event_at` with neither a count of tries nor
  * a claim id: written before this split, for both events at once, and kept
  * whether or not Resend got the welcome. The script re-sends those only with
@@ -116,6 +121,7 @@ export async function claimWelcome(
   const before = current.app_metadata ?? {};
   const { error } = await admin.updateUserById(id, {
     app_metadata: {
+      ...before,
       [CLAIM_ID_KEY]: claimId,
       [WELCOME_CLAIM_KEY]: at,
       [WELCOME_TRIES_KEY]: triesOf(before) + 1,
@@ -133,10 +139,13 @@ export async function claimWelcome(
     : null;
 }
 
-/** Release a welcome claim Resend didn't accept (its count of tries stays). True when written. */
-export async function releaseWelcome(admin, id) {
-  const { error } = await admin.updateUserById(id, {
-    app_metadata: { [WELCOME_CLAIM_KEY]: null },
+/**
+ * Release a welcome claim Resend didn't accept (its count of tries stays),
+ * on the account as claimWelcome read it back. True when written.
+ */
+export async function releaseWelcome(admin, user) {
+  const { error } = await admin.updateUserById(user.id, {
+    app_metadata: { ...(user.app_metadata ?? {}), [WELCOME_CLAIM_KEY]: null },
   });
   return !error;
 }
