@@ -101,6 +101,10 @@ describe('agentRows', () => {
     expect(events.map((e) => e.seq)).toEqual(events.map((_, i) => i + 1));
     expect(events.at(-1)).toMatchObject({ type: 'confirm.required' });
     expect(events.at(-1).data).toMatchObject({ n: 2, action: 'Save a draft in Content' });
+    // The steps it replays say their period and platforms, never how many rows they read.
+    const replayed = events.filter((e) => e.type.startsWith('step.'));
+    expect(replayed.length).toBeGreaterThan(0);
+    for (const e of replayed) expect(e.data.step.detail ?? '').not.toMatch(/\brows?\b/);
     const steps = rows.chats.steps.filter((s) => s.run_id === chatRun.id);
     expect(steps.at(-1)).toMatchObject({ kind: 'write', status: 'waiting', finished_at: null });
     // Its run state says whose it is (the events route reads it), with no

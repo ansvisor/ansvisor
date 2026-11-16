@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import type { ChatListStatus } from './chat-list-provider';
 import { INBOX_ROW, SuggestionRows, SuggestionsPanel, type InboxDaily } from './inbox-suggestions';
 import { NoticeRows } from './inbox-notices';
+import { InboxDraftGroups } from './inbox-draft-groups';
 import { OutsideEmailRows } from './inbox-outside';
 
 /**
@@ -226,6 +227,8 @@ export interface ChatInboxViewProps {
   notices?: ChatNotice[];
   /** Their jobs' e-mails to people outside the workspace, waiting for a Send (W4-28), in Needs you. */
   outside?: OutsideEmail[];
+  /** The active brand: its drafts several runs wait on get one Approve all. */
+  brandId?: string | null;
 }
 
 /**
@@ -251,6 +254,7 @@ function PlainInboxView({
   onRetry,
   notices = [],
   outside = [],
+  brandId,
 }: Omit<ChatInboxViewProps, 'daily' | 'initialTab'>) {
   const t = useTranslations('chatShell.inbox');
   const counts = inboxCounts(items, now ?? new Date());
@@ -302,6 +306,7 @@ function PlainInboxView({
         <div className="flex flex-col gap-2">
           <NoticeRows notices={notices} />
           <OutsideEmailRows emails={outside} />
+          <InboxDraftGroups brandId={brandId} />
           {items.map((chat) => (
             <InboxRow key={chat.id} chat={chat} now={now} />
           ))}
@@ -330,6 +335,7 @@ function TabbedInboxView({
   initialTab = 'all',
   notices = [],
   outside = [],
+  brandId,
 }: Omit<ChatInboxViewProps, 'daily'> & { daily: InboxDaily }) {
   const t = useTranslations('chatShell.inbox');
   const gets = daily.read.roleFeed !== 'never';
@@ -479,6 +485,7 @@ function TabbedInboxView({
               <div className="flex flex-col gap-2">
                 <NoticeRows notices={noticesShown} />
                 <OutsideEmailRows emails={outsideShown} />
+                {(tab === 'all' || tab === 'needsYou') && <InboxDraftGroups brandId={brandId} />}
                 {chats.map((chat) => (
                   <InboxRow key={chat.id} chat={chat} now={now} />
                 ))}

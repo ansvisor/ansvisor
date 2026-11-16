@@ -449,19 +449,41 @@ describe('RunSteps', () => {
     expect($('button')!.textContent).not.toContain('sources');
   });
 
-  it('shows a one-step run as that step’s line, and its rows', async () => {
+  it('shows a one-step run as that step’s line, never its rows, 0 or 50', async () => {
+    for (const rowCount of [0, 18, 50]) {
+      await render(
+        <RunSteps
+          status="done"
+          steps={[
+            step(1, 'done', 'Read Citations', { detail: 'Perplexity · Last 30 days', rowCount }),
+          ]}
+          workingMs={4_000}
+          sources={1}
+        />,
+      );
+      const header = $('button')!.textContent;
+      expect(header).toContain('Read Citations · Perplexity · Last 30 days');
+      expect(header).not.toMatch(/\brows?\b/);
+      expect(header).not.toMatch(new RegExp(`\\b${rowCount}\\b`));
+    }
+  });
+
+  it('shows a one-step run’s saved notes, which are counted', async () => {
     await render(
       <RunSteps
         status="done"
         steps={[
-          step(1, 'done', 'Read Citations', { detail: 'Perplexity · Last 30 days', rowCount: 18 }),
+          {
+            ...step(1, 'done', 'Used memory'),
+            scope: { subject: 'Memory', unit: 'items' },
+            rowCount: 3,
+          },
         ]}
-        workingMs={4_000}
-        sources={1}
+        workingMs={1_000}
       />,
     );
-    expect($('button')!.textContent).toContain('Read Citations · Perplexity · Last 30 days');
-    expect($('button')!.textContent).toContain('18 rows');
+    expect($('button')!.textContent).toContain('Used memory');
+    expect($('button')!.textContent).toContain('3 items');
   });
 
   it('says a stop and an error, and shows nothing without steps', async () => {
