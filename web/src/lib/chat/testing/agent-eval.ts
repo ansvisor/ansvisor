@@ -14,6 +14,7 @@ import {
   EVAL_CODE_ACTIONS,
   EVAL_CODE_SIGNAL,
   EVAL_OTHER_BRAND,
+  EVAL_PAGE_TOP_PROMPTS,
   EVAL_SIGNAL_BACKLOG,
   evalActions,
   type EvalWorkspace,
@@ -136,6 +137,12 @@ export interface AgentEvalScenario {
     chips: readonly { key: string; label: string; value?: string }[];
     read: { tool: string; days: number; input: Readonly<Record<string, unknown>> };
   };
+  /**
+   * The page's top rows, in its order (the owner's plan of 2026-11-16, item
+   * 7: "the top ones" are the rows on screen): the answer names each, in
+   * that order.
+   */
+  pageTop?: readonly string[];
 }
 
 const presetT = (id: string) =>
@@ -356,6 +363,27 @@ export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
     promises: [],
     workspace: 'long_lists',
     askedDomains: [{ domain: EVAL_CITED_DOMAIN.domain, citations: EVAL_CITED_DOMAIN.citations }],
+  },
+  {
+    // Prompts opens on the last 24 hours, its table by Visibility (the AI Visibility Score).
+    id: 'prompts-page-top',
+    group: 'skills',
+    name: 'Top 5 prompts, as the Prompts page ranks them',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'What are my top 5 prompts?',
+    promises: [],
+    page: {
+      route: '/dashboard/prompts/tracked',
+      chips: [
+        { key: 'page', label: 'Prompts' },
+        { key: 'brand', label: EVAL_BRAND.name, value: EVAL_BRAND.id },
+        { key: 'dates', label: 'Last 24 hours', value: '24h/' },
+      ],
+      read: { tool: 'get_prompt_performance', days: 1, input: {} },
+    },
+    pageTop: EVAL_PAGE_TOP_PROMPTS,
   },
   {
     // Citations opens on the last 24 hours; filtered to ChatGPT, its table on Brand sources.
@@ -790,6 +818,19 @@ export function pageScopeUnsaid(
     return 'no "all sources" for the counts';
   }
   return null;
+}
+
+/**
+ * Why an answer doesn't give the page's top rows in the page's order: null
+ * when it names each, in that order (as written, any case).
+ */
+export function pageTopMissed(answer: string, names: readonly string[]): string | null {
+  const text = answer.toLowerCase();
+  const at = names.map((name) => text.indexOf(name.toLowerCase()));
+  const missing = names.filter((_, i) => at[i] < 0);
+  if (missing.length > 0) return `missing ${missing.map((name) => `"${name}"`).join(', ')}`;
+  const out = at.findIndex((position, i) => i > 0 && position < at[i - 1]);
+  return out > 0 ? `"${names[out]}" before "${names[out - 1]}"` : null;
 }
 
 // ─── Actions asked for by their codes ───────────────────────────────────────
@@ -1298,6 +1339,12 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
       check("reads with the page's period and filters", true, missed === null, missed ?? ''),
     );
   }
+  if (scenario.pageTop) {
+    const missed = pageTopMissed(run.answer, scenario.pageTop);
+    checks.push(
+      check("names the page's top rows in its order", true, missed === null, missed ?? ''),
+    );
+  }
   if (scenario.group === 'skills' && scenario.skill) {
     const named = skillReads(scenario.skill);
     const read = named.filter((tool) => run.reads.includes(tool));
@@ -1407,6 +1454,7 @@ const CHECK_TR: Readonly<Record<string, string>> = {
   'names no other action in their place': 'yerlerine başka aksiyon saymadı',
   "reads with the page's period and filters": 'sayfanın dönemi ve filtreleriyle okudu',
   'says what the answer covers, as on the page': 'yanıtın kapsamını sayfadaki gibi söyledi',
+  "names the page's top rows in its order": 'sayfadaki ilk satırları sayfanın sırasıyla andı',
   'reads the signals by their codes': 'sinyalleri koduyla okudu',
   'names each signal asked by its title and code': 'sorulan her sinyali başlığı ve koduyla andı',
   'names no other signal in their place': 'yerlerine başka sinyal saymadı',

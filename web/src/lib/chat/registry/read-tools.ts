@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
+import { OPPORTUNITY_SORTS, type OpportunitySort } from '@/lib/content/opportunity-list';
 import { actionRef } from '@/lib/action-center/action-ref';
 import { ACTION_CODES_MAX } from '@/lib/action-center/action-codes';
 import { getAiUsageFor, getMeFor } from '@/lib/mcp/account';
@@ -107,6 +108,58 @@ function mentionParams(input: z.output<z.ZodObject<typeof mentionFilters>>) {
 
 const BRAND = FIXTURE_IDS.brand;
 const ITEM = FIXTURE_IDS.item;
+
+/**
+ * A trend as Chat reads it: every bucket of the period (the Overview's
+ * trend shows up to 90 days by day), each without its empty fields, and how
+ * many there are, so a long series fits the read's share whole (scope.ts
+ * TREND_ROWS, run-limits.ts RESULT_CHARS) or is cut saying so (fit.ts).
+ */
+export function trendForChat(trend: Awaited<ReturnType<typeof getVisibilityTrendFor>>) {
+  if (!trend) return null;
+  const buckets = trend.buckets.map((bucket) =>
+    Object.fromEntries(Object.entries(bucket).filter(([, value]) => value !== null)),
+  );
+  const unit = trend.granularity === 'week' ? 'week' : 'day';
+  const span =
+    buckets.length > 0
+      ? ` from ${trend.buckets[0].date} to ${trend.buckets[trend.buckets.length - 1].date}`
+      : '';
+  return {
+    granularity: trend.granularity,
+    note:
+      buckets.length === 0
+        ? `No ${unit} with answers in this period.`
+        : `Every ${unit} with answers in this period, ${buckets.length} in all${span}, oldest first.`,
+    buckets,
+  };
+}
+
+/** list_content_opportunities' order in a page's note, by its sort. */
+const OPPORTUNITY_ORDER_WORDS: Record<OpportunitySort | 'default', string> = {
+  default: 'highest score first',
+  newest: 'newest first, as the Content page lists them',
+  score: 'highest score first, as the Content page sorts by score',
+  oldest: 'oldest first',
+};
+
+/** get_prompt_performance's sorts, as its data function names them. */
+const PROMPT_SORTS = {
+  visibility: 'ai_visibility',
+  answer_score: 'visibility',
+  mentions: 'mentions',
+  citations: 'citations',
+  appearances: 'appearances',
+} as const;
+
+/** Each sort's order in a page's note. */
+const PROMPT_SORT_WORDS: Record<keyof typeof PROMPT_SORTS, string> = {
+  visibility: 'by AI Visibility Score, as the Prompts page lists them',
+  answer_score: 'by average answer score',
+  mentions: 'by mentions',
+  citations: 'by citations',
+  appearances: 'by appearances',
+};
 
 export const READ_TOOLS = [
   defineTool({
@@ -219,7 +272,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'visibility',
     description:
-      "A brand's visibility, mentions and citations over time, by day or week, for a topic too. For trend questions and charts. total_mentions is the times AI names the brand (the app's Mentions, a topic's Brand mentions); result_count is every answer recorded, not the answers naming it.",
+      "A brand's visibility, mentions and citations over time, by day or week, for a topic too: every day (or week) of the period, oldest first. For trend questions and charts. ai_visibility_score is the day's Visibility on the Overview's trend (by day only); avg_visibility_score is the average answer score, a different figure. total_mentions is the times AI names the brand (the app's Mentions, a topic's Brand mentions); result_count is every answer recorded, not the answers naming it.",
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -237,16 +290,18 @@ export const READ_TOOLS = [
       region,
       topic_id: topicId,
     }),
-    run: (ctx, input) =>
-      getVisibilityTrendFor(ctx, {
-        brandId: input.brand_id,
-        dateFrom: input.date_from,
-        dateTo: input.date_to,
-        granularity: input.granularity,
-        model: input.model,
-        region: input.region,
-        topicId: input.topic_id,
-      }),
+    run: async (ctx, input) =>
+      trendForChat(
+        await getVisibilityTrendFor(ctx, {
+          brandId: input.brand_id,
+          dateFrom: input.date_from,
+          dateTo: input.date_to,
+          granularity: input.granularity,
+          model: input.model,
+          region: input.region,
+          topicId: input.topic_id,
+        }),
+      ),
     fixture: { input: { brand_id: BRAND, granularity: 'week' } },
   }),
   defineTool({
@@ -297,7 +352,7 @@ export const READ_TOOLS = [
     name: 'get_prompt_performance',
     class: 'read',
     area: 'prompts',
-    description: `Visibility, mentions, citations and appearances per prompt over a period, sorted. For "which prompts do best" or "which dropped this week".${PAGED} For one prompt or a few (its page, or prompts the person names), read prompt_ids first (ids from list_prompts; by its words: list_prompts' search): those prompts only, every one of them, over the same period, platforms and region, whatever their topic (topic_id, sort, order and the page don't apply). A tracked prompt with no answers in that window is in no_results: say so, it is tracked. ${NOT_FOUND}`,
+    description: `Visibility, mentions, citations and appearances per prompt over a period, sorted. For "which prompts do best" or "which dropped this week". Each prompt's ai_visibility_score is its Visibility on the Prompts page (the AI Visibility Score: 0.6 × mention rate + 0.25 × citation rate + 0.15 × position factor) and coverage_pct its Coverage (visible runs of runs); quote those as its visibility. avg_visibility is a different figure, the average answer score: never call it Visibility. By default highest ai_visibility_score first, as the Prompts page lists them (sort_by "answer_score" orders by avg_visibility).${PAGED} For one prompt or a few (its page, or prompts the person names), read prompt_ids first (ids from list_prompts; by its words: list_prompts' search): those prompts only, every one of them, over the same period, platforms and region, whatever their topic (topic_id, sort, order and the page don't apply). A tracked prompt with no answers in that window is in no_results: say so, it is tracked. ${NOT_FOUND}`,
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -311,7 +366,12 @@ export const READ_TOOLS = [
       date_from: dateFrom,
       date_to: dateTo,
       topic_id: topicId,
-      sort_by: z.enum(['visibility', 'mentions', 'citations', 'appearances']).optional(),
+      sort_by: z
+        .enum(['visibility', 'answer_score', 'mentions', 'citations', 'appearances'])
+        .optional()
+        .describe(
+          'visibility (default): the AI Visibility Score, as the Prompts page sorts; answer_score: avg_visibility.',
+        ),
       order: z.enum(['desc', 'asc']).optional(),
       ...pageInput,
       model,
@@ -329,23 +389,29 @@ export const READ_TOOLS = [
           model: input.model,
           region: input.region,
           promptIds: input.prompt_ids!,
+          withScore: true,
         });
       }
+      const sort = input.sort_by ?? 'visibility';
       const read = await getPromptPerformanceFor(ctx, {
         brandId: input.brand_id,
         dateFrom: input.date_from,
         dateTo: input.date_to,
         topicId: input.topic_id,
-        sortBy: input.sort_by,
+        // The Prompts page's Visibility, the AI Visibility Score; the answer score by its own name.
+        sortBy: PROMPT_SORTS[sort],
         order: input.order,
         model: input.model,
         region: input.region,
+        withScore: true,
         ...pageWindow(input),
       });
       if (!read) return null;
       const { offset } = pageWindow(input);
-      const words = { what: 'prompts with results', order: `by ${input.sort_by ?? 'visibility'}` };
-      return { ...pageMeta(words, read.total, offset, read.prompts.length), ...read };
+      const words = { what: 'prompts with results', order: PROMPT_SORT_WORDS[sort] };
+      const meta = pageMeta(words, read.total, offset, read.prompts.length);
+      if (read.answers_cut) meta.note = `${meta.note} ${read.answers_cut.note}`;
+      return { ...meta, ...read };
     },
     fixture: { input: { brand_id: BRAND, sort_by: 'visibility' } },
   }),
@@ -600,7 +666,10 @@ export const READ_TOOLS = [
       const shown = Math.max(read.top_domains.length, read.top_urls.length);
       const total = Math.max(read.totals.domains, read.totals.urls);
       const words = { what: 'cited domains and pages', order: 'most cited first' };
-      return { ...pageMeta(words, total, offset, shown), ...read };
+      const meta = pageMeta(words, total, offset, shown);
+      // A window past what one read adds up: the note says what the counts cover.
+      if (read.answers_cut) meta.note = `${meta.note} ${read.answers_cut.note}`;
+      return { ...meta, ...read };
     },
     fixture: { input: { brand_id: BRAND, source_filter: 'competitor' } },
   }),
@@ -750,7 +819,7 @@ export const READ_TOOLS = [
     name: 'list_action_center_tasks',
     class: 'read',
     area: 'action_center',
-    description: `The brand's Action Center actions, a page at a time: every one that matches is counted and ranked on the server, highest Priority Score first (sort "updated": most recently changed first), so a page is the top of all of them. Open actions (New, In progress, On hold) unless you ask for one status. Each row: ref (its number, as ${actionRef(12)}), title, category, status, priority (0–100) and priority_level, stale_since (only when stale), due, assignee, tasks (done/total) and updated. total is how many match; note says how many this page shows. For "what matters most", "what should I do first" or an overview, read the default page (${ACTIONS_PAGE_MAX} rows) before you judge. When total is more than the page, say how many you judged ("the top ${ACTIONS_PAGE_MAX} of 53"), or read the next page with next_offset. Name each action by its title, with its ref after it: never a ref alone. When the person names an action by its code (${actionRef(12)}, "AC 12", "#12", or a number they clearly mean as one), read that code first: codes, every code of the message in one read. It reads every status, Completed and Dismissed included, in this brand only; each row says whether the code is its code or its previous code (matched), and a code that names two actions returns both: name both, never pick one. A code in not_found: say this brand has no action with that code (codes are per brand), and never offer other actions as the closest. Never say an action doesn't exist because a page of the list didn't show it.`,
+    description: `The brand's Action Center actions, a page at a time: every one that matches is counted and ranked on the server, highest Priority Score first (sort "updated": most recently changed first, as the Actions page lists them), so a page is the top of all of them. Open actions (New, In progress, On hold) unless you ask for one status, or "all" for every status, as the Actions page shows them. Each row: ref (its number, as ${actionRef(12)}), title, category, status, priority (0–100) and priority_level, stale_since (only when stale), due, assignee, tasks (done/total) and updated. total is how many match; note says how many this page shows. For "what matters most", "what should I do first" or an overview, read the default page (${ACTIONS_PAGE_MAX} rows) before you judge. When total is more than the page, say how many you judged ("the top ${ACTIONS_PAGE_MAX} of 53"), or read the next page with next_offset. Name each action by its title, with its ref after it: never a ref alone. When the person names an action by its code (${actionRef(12)}, "AC 12", "#12", or a number they clearly mean as one), read that code first: codes, every code of the message in one read. It reads every status, Completed and Dismissed included, in this brand only; each row says whether the code is its code or its previous code (matched), and a code that names two actions returns both: name both, never pick one. A code in not_found: say this brand has no action with that code (codes are per brand), and never offer other actions as the closest. Never say an action doesn't exist because a page of the list didn't show it.`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -762,11 +831,14 @@ export const READ_TOOLS = [
     inputSchema: z.object({
       brand_id: brandId,
       status: z
-        .enum(['open', 'new', 'in_progress', 'on_hold', 'completed', 'dismissed'])
+        .enum(['open', 'all', 'new', 'in_progress', 'on_hold', 'completed', 'dismissed'])
         .optional()
-        .describe('open (default): New, In progress and On hold.'),
+        .describe('open (default): New, In progress and On hold; all: every status.'),
       category: z.enum(['growth', 'protect', 'recover', 'fix', 'compete']).optional(),
-      sort: z.enum(['priority', 'updated']).optional().describe('priority (default).'),
+      sort: z
+        .enum(['priority', 'updated'])
+        .optional()
+        .describe('priority (default); updated: most recently updated first, as the Actions page.'),
       limit: rowCap(ACTIONS_PAGE_MAX).describe(`Rows on this page, default ${ACTIONS_PAGE_MAX}.`),
       offset: z
         .number()
@@ -889,7 +961,7 @@ export const READ_TOOLS = [
     name: 'list_content_opportunities',
     class: 'read',
     area: 'content',
-    description: `The brand's content opportunities, highest score first: the prompts where it loses visibility and the page that would win them. Archived ones only when asked by status.${PAGED} When the person names an opportunity by its title or id, read that first: search (a few distinctive words of its title, in any order and case; a year isn't matched, as Content shows past years as this one) or ids. A lookup reads every status, archived included (status, impact and type don't apply); search pages like the list. ${NOT_FOUND}`,
+    description: `The brand's content opportunities, highest score first (sort "newest" or "oldest": by when each was suggested, as the Content page's Sort; the page opens on newest): the prompts where it loses visibility and the page that would win them. Archived ones only when asked by status.${PAGED} When the person names an opportunity by its title or id, read that first: search (a few distinctive words of its title, in any order and case; a year isn't matched, as Content shows past years as this one) or ids. A lookup reads every status, archived included (status, impact and type don't apply); search pages like the list. ${NOT_FOUND}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -905,6 +977,12 @@ export const READ_TOOLS = [
         .optional(),
       impact: z.enum(['high', 'medium', 'low']).optional(),
       type: z.enum(['owned', 'earned']).optional(),
+      sort: z
+        .enum(OPPORTUNITY_SORTS)
+        .optional()
+        .describe(
+          "The Content page's Sort: newest (its default), score or oldest. Left out: highest score first.",
+        ),
       ...pageInput,
       search: lookupSearch(
         'Opportunities whose title holds every one of these words, in any order and case: a lookup, every status; pages by offset.',
@@ -925,11 +1003,12 @@ export const READ_TOOLS = [
               status: input.status,
               impact: input.impact,
               type: input.type,
+              sort: input.sort,
               ...pageWindow(input),
             }),
             'opportunities',
             input,
-            { what: 'opportunities', order: 'highest score first' },
+            { what: 'opportunities', order: OPPORTUNITY_ORDER_WORDS[input.sort ?? 'default'] },
           ),
     fixture: { input: { brand_id: BRAND, impact: 'high' } },
   }),

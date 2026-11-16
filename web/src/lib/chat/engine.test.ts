@@ -5903,6 +5903,29 @@ describe('starting', () => {
     }
   });
 
+  it("tells both models the page's list order beside its context (the owner's plan, item 7)", async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Your latest actions.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What are the first ones on the page?',
+      brandId: BRAND,
+      context: {
+        route: '/dashboard/action-center/actions',
+        chips: [{ key: 'page', label: 'Actions' }],
+      },
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    for (const prompt of [haiku.seen[0].prompt, sonnet.seen[0].prompt]) {
+      const seen = JSON.stringify(prompt);
+      expect(seen).toContain('The page lists its actions, most recently updated first');
+      expect(seen).toContain('status \\"all\\" and sort \\"updated\\"');
+    }
+    // The writer says which order a list is in.
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain(
+      'When you list items, say once in which order',
+    );
+  });
+
   it('starts a server’s run tainted, its scope read as untrusted data (Run with Chat, W2-17)', async () => {
     const { haiku } = useModels([READY], [text('On it.')]);
     const started = await engine.startChatRun(

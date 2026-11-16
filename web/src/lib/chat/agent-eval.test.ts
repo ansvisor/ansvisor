@@ -1539,6 +1539,48 @@ describe('the agents’ test set harness, on a scripted model', () => {
     expect(result.passed).toBe(false);
   });
 
+  // The owner's plan (2026-11-16, item 7): "my top 5 prompts" are the Prompts page's top 5.
+  it("names the Prompts page's top 5 in its order, read over its 24 hours", async () => {
+    const { EVAL_PAGE_TOP_PROMPTS } = await import('./testing/agent-eval-data');
+    const [a, b, c, d, e] = EVAL_PAGE_TOP_PROMPTS;
+    scripted([
+      calls(toolCall('r1', 'get_prompt_performance', { brand_id: BRAND })),
+      text(
+        `Last 24 hours, as on the page, by Visibility (the AI Visibility Score), highest first:\n1. ${a}: 74\n2. ${b}: 62\n3. ${c}: 55\n4. ${d}: 46\n5. ${e}: 38`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('prompts-page-top'));
+    expect(result.run.questions).toBe(0);
+    expect(result.run.reads).toEqual(['get_prompt_performance']);
+    // Its default order is the page's: no sort given, none needed.
+    expect(result.run.readInputs[0].sort_by).toBeUndefined();
+    const read = JSON.parse(result.run.readValues[0]) as { prompts: { text: string }[] };
+    expect(read.prompts.slice(0, 5).map((p) => p.text)).toEqual(EVAL_PAGE_TOP_PROMPTS);
+    for (const name of [
+      "reads with the page's period and filters",
+      'says what the answer covers, as on the page',
+      "names the page's top rows in its order",
+      'no invented numbers',
+    ]) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails a top 5 by the average answer score, not the page’s Visibility', async () => {
+    scripted([
+      calls(toolCall('r1', 'get_prompt_performance', { brand_id: BRAND, sort_by: 'answer_score' })),
+      text('As on the page, your top prompts are the ones with the best average answer score.'),
+    ]);
+    const result = await runScenario(skillOf('prompts-page-top'));
+    const failed = result.checks.filter((check) => check.must && !check.ok).map((c) => c.name);
+    expect(failed).toContain("names the page's top rows in its order");
+    expect(result.passed).toBe(false);
+  });
+
   it('refuses every network call but the model’s', async () => {
     await expect(fetch('https://example.com/')).rejects.toThrow('no network call');
   });

@@ -19,6 +19,7 @@ const {
   PAGED_READS,
   ROW_CAP,
   ROW_LIMITS,
+  TREND_ROWS,
   asksAllTime,
   capRows,
   givesDates,
@@ -580,7 +581,9 @@ describe('rows', () => {
         const input = { ...tool.fixture.input, limit: (limits?.max ?? ROW_CAP) + probe };
         expect(tool.inputSchema.safeParse(input).success, tool.name).toBe(true);
       }
-      expect(limits ? limits.max <= ROW_CAP : true, tool.name).toBe(true);
+      // A trend reads every day of its period (TREND_ROWS); any other list ROW_CAP at most.
+      const most = tool.name === 'get_visibility_trend' ? TREND_ROWS : ROW_CAP;
+      expect(limits ? limits.max <= most : true, tool.name).toBe(true);
     }
     for (const name of Object.keys(ROW_LIMITS)) {
       expect(

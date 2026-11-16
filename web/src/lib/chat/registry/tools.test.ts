@@ -39,10 +39,23 @@ const pageSources = vi.hoisted((): Record<string, unknown> => {
     'mcp/content.contentDraftsPageFor': counted,
   };
 });
+/**
+ * What the functions of the reads Chat reshapes return here, and what the
+ * row makes of it: a trend's every bucket with how many (trendForChat).
+ */
+const shapedSources = vi.hoisted(
+  (): Record<string, { from: unknown; to: unknown }> => ({
+    'mcp/data.getVisibilityTrendFor': {
+      from: { granularity: 'week', buckets: [] },
+      to: { granularity: 'week', note: 'No week with answers in this period.', buckets: [] },
+    },
+  }),
+);
 const tracked = vi.hoisted(() => {
   const track = (from: string) =>
     vi.fn(async (...args: unknown[]) => {
       calls.push({ from, args });
+      if (from in shapedSources) return shapedSources[from].from;
       return from in pageSources ? pageSources[from] : { from };
     });
   return {
@@ -350,6 +363,8 @@ describe('the Chat tool registry', () => {
       if (calls[0].from in pageSources) {
         // A list read: a page of what its function returned, with its total and no next page.
         expect(result).toMatchObject({ total: 0, offset: 0, next_offset: null });
+      } else if (calls[0].from in shapedSources) {
+        expect(result).toEqual(shapedSources[calls[0].from].to);
       } else {
         expect(result).toEqual({ from: calls[0].from });
       }
@@ -954,6 +969,8 @@ describe('the Chat tool registry', () => {
             model: undefined,
             region: 'US',
             promptIds: [id(3)],
+            // Each prompt's Visibility as the Prompts page shows it (the owner's plan, item 7).
+            withScore: true,
           },
         ],
       ],

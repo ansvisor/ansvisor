@@ -11,6 +11,7 @@ import {
   numbersIn,
   pageScopeMissed,
   pageScopeUnsaid,
+  pageTopMissed,
   readByCodes,
   readCitationsByDomain,
   readSignalsByCodes,
@@ -23,7 +24,12 @@ import {
   unnamedAskedDomains,
   unnamedAskedSignals,
 } from './agent-eval';
-import { EVAL_CITED_DOMAIN, EVAL_CODE_SIGNAL, evalReadResult } from './agent-eval-data';
+import {
+  EVAL_CITED_DOMAIN,
+  EVAL_CODE_SIGNAL,
+  EVAL_PAGE_TOP_PROMPTS,
+  evalReadResult,
+} from './agent-eval-data';
 import { safetyChecks, safetyFindings } from './safety-checks';
 
 describe('the agents’ and skills’ test set (agent-eval.ts)', () => {
@@ -444,5 +450,43 @@ describe("the page's period and filters", () => {
     expect(pageScopeUnsaid('Your top domains.', chips)).toBe('no "as on the page"');
     // No Sources on the page: "as on the page" is enough.
     expect(pageScopeUnsaid('As on the page: 31 citations.', chips.slice(0, 4))).toBeNull();
+  });
+});
+
+// The owner's plan (2026-11-16, item 7): "my top 5 prompts" are the Prompts page's top 5.
+describe("the Prompts page's top rows", () => {
+  const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'prompts-page-top')!;
+
+  it('asks on Prompts, on its 24 hours, for the top 5 by its Visibility', () => {
+    expect(scenario).toMatchObject({
+      message: 'What are my top 5 prompts?',
+      page: {
+        route: '/dashboard/prompts/tracked',
+        read: { tool: 'get_prompt_performance', days: 1, input: {} },
+      },
+    });
+    expect(scenario.pageTop).toEqual(EVAL_PAGE_TOP_PROMPTS);
+    // The read ranks by the AI Visibility Score; by the average answer score the top differs.
+    const read = evalReadResult('get_prompt_performance', {}) as {
+      prompts: { text: string; ai_visibility_score: number }[];
+    };
+    expect(read.prompts.slice(0, 5).map((p) => p.text)).toEqual(EVAL_PAGE_TOP_PROMPTS);
+    const old = evalReadResult('get_prompt_performance', { sort_by: 'answer_score' }) as {
+      prompts: { text: string }[];
+    };
+    expect(old.prompts.slice(0, 5).map((p) => p.text)).not.toEqual(EVAL_PAGE_TOP_PROMPTS);
+  });
+
+  it('checks the answer names the five in the page order', () => {
+    const [a, b, c, d, e] = EVAL_PAGE_TOP_PROMPTS;
+    expect(
+      pageTopMissed(`1. ${a}\n2. ${b}\n3. ${c}\n4. ${d}\n5. ${e}`, scenario.pageTop!),
+    ).toBeNull();
+    expect(pageTopMissed(`1. ${b}\n2. ${a}\n3. ${c}\n4. ${d}\n5. ${e}`, scenario.pageTop!)).toBe(
+      `"${b}" before "${a}"`,
+    );
+    expect(pageTopMissed(`1. ${a}\n2. ${b}`, scenario.pageTop!)).toBe(
+      `missing "${c}", "${d}", "${e}"`,
+    );
   });
 });

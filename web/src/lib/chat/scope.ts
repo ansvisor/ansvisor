@@ -4,6 +4,14 @@ import { platformFamily, platformName } from '@/lib/signals/names';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { oldestFirst } from './fit';
+import type { DayWindow } from '@/lib/insights-windows';
+import {
+  WHY_PERIOD_FIELDS,
+  readsRunDays,
+  rollingWindow,
+  runDaysWindow,
+  whyPeriodsOf,
+} from './page-periods';
 import { pageFilterInputs, type PageScope } from './page-scope';
 import { FALLBACK_RANGE, rangeDaysBack, rangeWindow, type ChatRange } from './range';
 import type { ChatTool } from './registry/define-tool';
@@ -28,6 +36,14 @@ export const DEFAULT_RANGE_DAYS = 30;
 export const ROW_CAP = 50;
 
 /**
+ * A trend's buckets: every day of a year by day, or years by week. A series
+ * is one list the answer reads whole (the Overview's trend shows up to 90
+ * days by day); its share of the run (run-limits.ts) cuts a longer one,
+ * saying so (fit.ts).
+ */
+export const TREND_ROWS = 400;
+
+/**
  * Rows per read, by tool: `default` when the model names none, `max` the
  * most it may ask for. A tool with a `limit` input reads `default` (or what
  * the model asked, up to `max`); one without has its lists cut to `default`
@@ -45,6 +61,8 @@ export const ROW_LIMITS: Readonly<Record<string, { default: number; max: number 
   list_action_center_tasks: { default: ROW_CAP, max: ROW_CAP },
   // What's new shows 3 updates at most (CHAT-11 item 10).
   get_whats_new: { default: 3, max: 3 },
+  // Every day of the period, as the trend on the page (the owner's plan of 2026-11-16, item 7).
+  get_visibility_trend: { default: TREND_ROWS, max: TREND_ROWS },
 };
 
 /**
@@ -142,6 +160,13 @@ interface DatesUsed {
   days?: number;
   /** The range a read with no dates took (range.ts): the page's, the person's or the app's. */
   range?: ChatRange;
+  /**
+   * How its page cuts that range (page-periods.ts): `latest_run`, Last 24
+   * hours as the latest completed tracking run's days (Overview, Citations);
+   * `rolling`, the last N × 24 hours (Prompts, AI Traffic). Left out: whole
+   * UTC days.
+   */
+  window?: 'latest_run' | 'rolling';
 }
 
 /** Whether a read's input gives its own period: dates, or days back. */
@@ -321,6 +346,12 @@ export interface ScopeFacts {
   now?: Date;
   /** The brand's AI models (brandModels); a test's own. Null: they couldn't be read. */
   modelsOf?: (brandId: string) => Promise<readonly string[] | null>;
+  /**
+   * The UTC days of the brand's latest completed tracking run (the pages'
+   * getTrackingWindow), for Overview's and Citations' Last 24 hours; null
+   * before its first run, or when it can't be read: the rolling 24 hours.
+   */
+  runDaysOf?: (brandId: string) => Promise<DayWindow | null>;
 }
 
 export type ScopedRead =
@@ -428,14 +459,22 @@ export async function scopeRead(
     );
     delete input.date_from;
     delete input.date_to;
-    for (const [key, value] of Object.entries(resolved.values)) {
+    // A range the app set, cut as the read's own page cuts it (page-periods.ts).
+    const pageWindow = resolved.range
+      ? await ownPageWindow(tool, resolved.range, input, facts, now)
+      : null;
+    const values = pageWindow
+      ? { date_from: pageWindow.dateFrom, date_to: pageWindow.dateTo }
+      : resolved.values;
+    for (const [key, value] of Object.entries(values)) {
       if (hasField(tool, key)) input[key] = value;
     }
     dates = {
-      dateFrom: resolved.dateFrom,
-      dateTo: resolved.dateTo,
+      dateFrom: pageWindow?.dateFrom ?? resolved.dateFrom,
+      dateTo: pageWindow?.dateTo ?? resolved.dateTo,
       dates: resolved.dates,
       ...(resolved.range ? { range: resolved.range } : {}),
+      ...(pageWindow ? { window: pageWindow.window } : {}),
     };
   } else if (hasField(tool, 'days')) {
     const asked = typeof input.days === 'number' ? input.days : null;
@@ -457,6 +496,20 @@ export async function scopeRead(
       days: fits,
       ...(range && fits === days ? { range } : {}),
     };
+  } else if (hasField(tool, 'period_b_from')) {
+    // The Why read compares the run's period with as many days before (page-periods.ts),
+    // unless the model named periods or a day; too short a period keeps its own 7 against 7.
+    const named = WHY_PERIOD_FIELDS.some((field) => input[field] !== undefined);
+    const periods = !named && facts.range && !allTime ? whyPeriodsOf(facts.range, now) : null;
+    if (periods && accepts(tool, { ...input, ...periods })) {
+      Object.assign(input, periods);
+      dates = {
+        dateFrom: periods.period_b_from,
+        dateTo: periods.period_b_to,
+        dates: 'default',
+        range: facts.range!,
+      };
+    }
   } else if (hasField(tool, 'period') && input.period === undefined && facts.range && !allTime) {
     // A read of a named period (Ads' 7d, 30d, 90d) takes one the message named, or its own
     // page's; never the person's default nor another page's range: else its own default, as
@@ -500,6 +553,31 @@ export async function scopeRead(
     platformNames,
     cap,
   };
+}
+
+/**
+ * The window a range covers on the read's own page, when that page cuts it
+ * its own way (page-periods.ts): Overview's and Citations' Last 24 hours,
+ * the latest completed run's days (the rolling 24 hours before a first run,
+ * or when they can't be read); Prompts' and AI Traffic's presets, the last
+ * N × 24 hours.
+ * Null: whole UTC days, as rangeWindow cuts them.
+ */
+async function ownPageWindow(
+  tool: Partial<Pick<ChatTool, 'route'>>,
+  range: ChatRange,
+  input: Record<string, unknown>,
+  facts: ScopeFacts,
+  now: Date,
+): Promise<{ dateFrom: string; dateTo: string; window: 'latest_run' | 'rolling' } | null> {
+  if (range === '24h' && readsRunDays(tool.route) && facts.runDaysOf) {
+    const brandId = typeof input.brand_id === 'string' ? input.brand_id : null;
+    const days = brandId ? await facts.runDaysOf(brandId).catch(() => null) : null;
+    const window = runDaysWindow(days);
+    return window ? { ...window, window: 'latest_run' } : null;
+  }
+  const rolling = rollingWindow(tool.route, range, now);
+  return rolling ? { ...rolling, window: 'rolling' } : null;
 }
 
 // ─── Rows ───────────────────────────────────────────────────────────────────

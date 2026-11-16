@@ -74,8 +74,11 @@ export async function getOnboardingProgressFor(auth: McpAuthContext, params: { b
 /** The most actions one page holds, and how many a page holds when none is asked (CHAT-04's ~50 rows). */
 export const ACTIONS_PAGE_MAX = 50;
 
-/** Which actions a page counts: `open` (New, In progress, On hold), or one status. */
-export type ActionsPageStatus = 'open' | ActionStatus;
+/**
+ * Which actions a page counts: `open` (New, In progress, On hold), `all`
+ * (every status, as the Actions list opens), or one status.
+ */
+export type ActionsPageStatus = 'open' | 'all' | ActionStatus;
 export type ActionsPageSort = 'priority' | 'updated';
 
 export interface ActionsPageParams {
@@ -83,7 +86,11 @@ export interface ActionsPageParams {
   /** `open` when left out. */
   status?: ActionsPageStatus;
   category?: string;
-  /** `priority` (default): highest Priority Score first, unscored last, as the Actions list. */
+  /**
+   * `priority` (default): highest Priority Score first, unscored last;
+   * `updated`: most recently updated first, as the Actions list opens
+   * (lib/action-center/sort.ts), its later number first on the same instant.
+   */
   sort?: ActionsPageSort;
   /** Rows on this page, 1 to ACTIONS_PAGE_MAX; ACTIONS_PAGE_MAX when left out. */
   limit?: number;
@@ -140,7 +147,7 @@ const textsT = createTranslator({ locale: 'en', messages, namespace: 'actionCent
 const plainTexts = (key: string, values?: Record<string, string | number>) =>
   textsT(key as never, values as never);
 
-const STATUS_WORDS: Record<ActionsPageStatus, string> = {
+const STATUS_WORDS: Record<Exclude<ActionsPageStatus, 'all'>, string> = {
   open: 'open',
   new: 'New',
   in_progress: 'In progress',
@@ -162,7 +169,8 @@ export function actionsPageNote(page: {
 }): string {
   const { total, offset, shown } = page;
   const where = page.category ? ` in ${page.category}` : '';
-  const what = `${STATUS_WORDS[page.status]} actions${where}`;
+  const status = page.status === 'all' ? '' : `${STATUS_WORDS[page.status]} `;
+  const what = `${status}actions${where}${page.status === 'all' ? ', every status' : ''}`;
   const order =
     page.sort === 'updated' ? 'most recently updated first' : 'highest Priority Score first';
   const naming = 'Name each by its title, with its ref.';
@@ -171,7 +179,7 @@ export function actionsPageNote(page: {
   const end = offset + shown;
   if (offset === 0 && end >= total) {
     return total === 1
-      ? `The only ${STATUS_WORDS[page.status]} action${where}. Name it by its title, with its ref.`
+      ? `The only ${status}action${where}. Name it by its title, with its ref.`
       : `All ${total} ${what}, ${order}. ${naming}`;
   }
   const left = total - end;
@@ -235,15 +243,16 @@ export async function listActionsPageFor(
       .eq('brand_id', params.brandId)
       // A deleted action (00168) is gone for everyone but the nightly generator.
       .is('deleted_at', null);
-    query =
-      status === 'open'
-        ? query.in('status', [...OPEN_ACTION_STATUSES])
-        : query.eq('status', status);
+    if (status === 'open') query = query.in('status', [...OPEN_ACTION_STATUSES]);
+    else if (status !== 'all') query = query.eq('status', status);
     return category ? query.eq('category', category) : query;
   };
   const ordered =
     sort === 'updated'
-      ? matching(false).order('updated_at', { ascending: false })
+      ? // As the Actions list orders it (sort.ts byUpdated): the later number first on the same instant.
+        matching(false)
+          .order('updated_at', { ascending: false })
+          .order('action_no', { ascending: false })
       : matching(false)
           .order('priority_score', { ascending: false, nullsFirst: false })
           .order('updated_at', { ascending: false });

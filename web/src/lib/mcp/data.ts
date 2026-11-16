@@ -59,6 +59,7 @@ import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
 import { PAGE_ROWS, pageRows } from './list-page';
+import { readAnswerPages, type AnswersCut } from './answer-pages';
 import {
   CITED_TOP,
   LOOKUP_MAX,
@@ -94,6 +95,7 @@ import {
   type OpportunityVolumeForMcp,
 } from '@/lib/content/question-volume';
 import { refreshYears } from '@/lib/content/current-year';
+import type { OpportunitySort } from '@/lib/content/opportunity-list';
 import { readPageComparison, type RangedAuditRow } from '@/lib/audit/page-trend';
 import type { ScoreRange } from '@/lib/audit/score-range';
 import { actionCode } from '@/lib/action-center/action-ref';
@@ -186,6 +188,11 @@ export interface VisibilitySummary {
     /** AI Visibility Score over the brand's answers (shared denominator). */
     score: number | null;
   }>;
+  /**
+   * Only when the window held more answers than one read adds up
+   * (answer-pages.ts): the answer counts cover its newest answers.
+   */
+  answers_cut?: AnswersCut;
 }
 
 interface CompetitorMentionRow {
@@ -295,45 +302,51 @@ export async function getVisibilitySummaryFor(
   //   • tracked_prompt_count  → promptCount (denominator)
   // This is the exact same source pair used by getVisibilityRateKpi /
   // getTrackedPromptsKpi on the Insights KPI card, so the numbers match.
-  let query = supabaseAdmin
-    .from('prompt_results')
-    .select(
-      'visibility_score, mention_count, citation_count, sentiment, model_used, competitor_mentions',
-    )
-    .eq('brand_id', params.brandId)
-    .neq('platform', 'chatgpt-shopping');
-
-  if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
+  // Every answer of the window, a page at a time, newest first: one select
+  // stopped at PostgREST's 1,000 rows (answer-pages.ts). A fresh query a page.
   const expandedDateTo = expandDateToEndOfDay(params.dateTo);
-  if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
-  if (params.region) query = query.eq('region', params.region);
-  if (p_models_arg) {
-    query =
-      p_models_arg.length > 1
-        ? query.in('model_used', p_models_arg)
-        : query.eq('model_used', p_models_arg[0]);
-  }
+  const answers = () => {
+    let query = supabaseAdmin
+      .from('prompt_results')
+      .select(
+        'id, created_at, visibility_score, mention_count, citation_count, sentiment, model_used, competitor_mentions',
+      )
+      .eq('brand_id', params.brandId)
+      .neq('platform', 'chatgpt-shopping');
+    if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
+    if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
+    if (params.region) query = query.eq('region', params.region);
+    if (p_models_arg) {
+      query =
+        p_models_arg.length > 1
+          ? query.in('model_used', p_models_arg)
+          : query.eq('model_used', p_models_arg[0]);
+    }
+    return query;
+  };
 
-  const [{ data: rows, error }, visibleRes, promptCountRes, aiVisRes] = await Promise.all([
-    query,
+  const [{ rows: results, cut }, visibleRes, promptCountRes, aiVisRes] = await Promise.all([
+    readAnswerPages<{
+      id: string;
+      created_at: string | null;
+      visibility_score: number;
+      mention_count: number;
+      citation_count: number;
+      sentiment: string;
+      model_used: string | null;
+      competitor_mentions: CompetitorMentionRow[] | null;
+    }>((from, to) =>
+      answers().order('created_at', { ascending: false }).order('id').range(from, to),
+    ),
     supabaseAdmin.rpc('visible_prompt_stats', rpcBaseArgs),
     supabaseAdmin.rpc('tracked_prompt_count', rpcBaseArgs),
     supabaseAdmin.rpc('ai_visibility_aggregates', rpcBaseArgs),
   ]);
 
-  if (error) throw new Error(error.message);
   if (visibleRes.error) throw new Error(visibleRes.error.message);
   if (promptCountRes.error) throw new Error(promptCountRes.error.message);
   if (aiVisRes.error) throw new Error(aiVisRes.error.message);
-
-  const results = (rows ?? []) as Array<{
-    visibility_score: number;
-    mention_count: number;
-    citation_count: number;
-    sentiment: string;
-    model_used: string | null;
-    competitor_mentions: CompetitorMentionRow[] | null;
-  }>;
+  const cutNote = cut ? { answers_cut: cut } : {};
 
   // Rate fields come from the RPCs — single source of truth, exact parity
   // with the Insights KPI card for the same brand/window/filters.
@@ -365,6 +378,7 @@ export async function getVisibilitySummaryFor(
         ...score,
       },
       topCompetitors: [],
+      ...cutNote,
     };
   }
 
@@ -417,6 +431,7 @@ export async function getVisibilitySummaryFor(
       ...score,
     },
     topCompetitors,
+    ...cutNote,
   };
 }
 
@@ -1259,6 +1274,12 @@ export interface ListContentOpportunitiesParams {
   ids?: readonly string[];
   /** Chat's lookup: the opportunities whose title holds every word of this, in any status, archived too. */
   search?: string;
+  /**
+   * The Content page's Sort (lib/content/opportunity-list.ts), in its order:
+   * newest or oldest by when each was suggested, score by its score, then
+   * by id. Left out: highest score, newest on a tie (the MCP tool's order).
+   */
+  sort?: OpportunitySort;
 }
 
 /** A year in a search: Content shows a past year in a title as this one (refreshYears), so it isn't matched. */
@@ -1323,10 +1344,19 @@ export async function contentOpportunitiesPageFor(
     if (params.type) query = query.eq('type', params.type);
     return query;
   };
-  const { rows: data, total } = await pageRows(
-    await matching()
+  // The Content page's sorts as its list orders them (server/src/routes/content.js), else the score's.
+  const sorted = () => {
+    const query = matching();
+    if (params.sort === 'score') return query.order('opportunity_score', { ascending: false });
+    if (params.sort === 'newest' || params.sort === 'oldest') {
+      return query.order('created_at', { ascending: params.sort === 'oldest' });
+    }
+    return query
       .order('opportunity_score', { ascending: false })
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false });
+  };
+  const { rows: data, total } = await pageRows(
+    await sorted()
       .order('id')
       .range(offset, offset + limit - 1),
     () => matching(true),
@@ -2328,6 +2358,11 @@ export interface CitationsOverviewOutput {
     usage_pct: number;
     article_type: string | null;
   }>;
+  /**
+   * Only when the window held more answers than one read adds up
+   * (answer-pages.ts): the counts cover its newest answers, from this one on.
+   */
+  answers_cut?: AnswersCut;
 }
 
 const CITATIONS_DEFAULT_LIMIT = 50;
@@ -2362,6 +2397,8 @@ interface CitationAggregates {
   urls: CitedUrlAgg[];
   /** Each answer's prompt, by the answer's id. */
   promptOf: Map<string, string>;
+  /** Null when every answer of the window was read; else what the counts cover. */
+  cut: AnswersCut | null;
 }
 
 /**
@@ -2399,50 +2436,56 @@ async function readCitationAggregates(
     .filter(Boolean);
   const classifyCtx = { brandDomains, competitorDomains };
 
-  // #155 — Citations summary is part of the Insights surface; chatgpt-shopping
-  // rows are isolated from these aggregations.
-  let query = supabaseAdmin
-    .from('prompt_results')
-    .select('id, prompt_id, platform, model_used, region, created_at, citations, citation_count')
-    .eq('brand_id', params.brandId)
-    .neq('platform', 'chatgpt-shopping');
-
-  if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
-  const expandedDateTo = expandDateToEndOfDay(params.dateTo);
-  if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
-  if (params.region) query = query.eq('region', params.region);
-  if (params.model) {
-    const list = params.model
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    query =
-      list.length > 1
-        ? query.in('model_used', list)
-        : query.eq('model_used', list[0] ?? params.model);
-  }
+  let topicPromptIds: string[] | null = null;
   if (params.topicId) {
     const { data: topicPrompts } = await supabaseAdmin
       .from('prompts')
       .select('id')
       .eq('topic_id', params.topicId);
-    const topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
-    query = query.in(
-      'prompt_id',
-      topicPromptIds.length > 0 ? topicPromptIds : ['00000000-0000-0000-0000-000000000000'],
-    );
+    topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
   }
+  const models = params.model
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const expandedDateTo = expandDateToEndOfDay(params.dateTo);
 
-  const { data: rows, error } = await query;
-  if (error) throw new Error(error.message);
+  // #155 — Citations summary is part of the Insights surface; chatgpt-shopping
+  // rows are isolated from these aggregations. A fresh query a page (a
+  // builder keeps what it was given), every answer of the window, newest
+  // first: one select stopped at PostgREST's 1,000 rows (answer-pages.ts).
+  const answers = () => {
+    let query = supabaseAdmin
+      .from('prompt_results')
+      .select('id, prompt_id, platform, model_used, created_at, citations')
+      .eq('brand_id', params.brandId)
+      .neq('platform', 'chatgpt-shopping');
+    if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
+    if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
+    if (params.region) query = query.eq('region', params.region);
+    if (params.model) {
+      query =
+        models && models.length > 1
+          ? query.in('model_used', models)
+          : query.eq('model_used', models?.[0] ?? params.model);
+    }
+    if (topicPromptIds) {
+      query = query.in(
+        'prompt_id',
+        topicPromptIds.length > 0 ? topicPromptIds : ['00000000-0000-0000-0000-000000000000'],
+      );
+    }
+    return query;
+  };
 
-  const results = (rows ?? []) as Array<{
+  const { rows: results, cut } = await readAnswerPages<{
     id: string;
     prompt_id: string | null;
     platform: string | null;
     model_used: string | null;
+    created_at: string | null;
     citations: Citation[] | null;
-  }>;
+  }>((from, to) => answers().order('created_at', { ascending: false }).order('id').range(from, to));
 
   const domainMap = new Map<string, CitedDomainAgg>();
   const urlMap = new Map<string, CitedUrlAgg>();
@@ -2531,6 +2574,7 @@ async function readCitationAggregates(
     domains: Array.from(domainMap.values()).sort((a, b) => b.totalCitations - a.totalCitations),
     urls: Array.from(urlMap.values()).sort((a, b) => b.totalCitations - a.totalCitations),
     promptOf,
+    cut,
   };
 }
 
@@ -2632,6 +2676,7 @@ export async function listCitationsFor(
     source_type_breakdown: sourceTypeBreakdown,
     top_domains: topDomains,
     top_urls: topUrls,
+    ...(agg.cut ? { answers_cut: agg.cut } : {}),
   };
 }
 
@@ -2649,7 +2694,11 @@ type CitedUrlRow = ReturnType<typeof citedUrlRow>;
 export type CitationLookup = CitedLookup<
   CitedDomainRow & { prompts: CitingPrompt[]; prompts_total: number },
   CitedUrlRow & { prompts: CitingPrompt[]; prompts_total: number }
-> & { period: { date_from: string | null; date_to: string | null } };
+> & {
+  period: { date_from: string | null; date_to: string | null };
+  /** Only when the window held more answers than one read adds up (answer-pages.ts). */
+  answers_cut?: AnswersCut;
+};
 
 /**
  * The cited domains and pages a person named (the Citations page's rows,
@@ -2722,6 +2771,7 @@ export async function lookUpCitationsFor(
     period: { date_from: params.dateFrom ?? null, date_to: params.dateTo ?? null },
     domains: found.domains.map((d, i) => ({ ...d, ...withPrompts(domainPrompts[i]) })),
     urls: found.urls.map((u, i) => ({ ...u, ...withPrompts(urlPrompts[i]) })),
+    ...(agg.cut ? { note: `${found.note} ${agg.cut.note}`, answers_cut: agg.cut } : {}),
   };
 }
 
@@ -3298,6 +3348,8 @@ export interface ProductVisibilityOutput {
   average_rating: number | null;
   total_reviews: number | null;
   merchant_domains: Array<{ domain: string; count: number }>;
+  /** Only when it appeared more often than one read adds up (answer-pages.ts). */
+  answers_cut?: AnswersCut;
 }
 
 /** One product's visibility: NOT_IN_PLAN on a plan without shopping analytics (Starter). */
@@ -3317,17 +3369,31 @@ export async function getProductVisibility(
   if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
   if (!(await planIncludes(auth.organizationId, 'shopping_analytics'))) return NOT_IN_PLAN;
 
-  const { data: cards, error } = await supabaseAdmin
-    .from('prompt_result_shopping_cards')
-    .select(
-      'platform, region, created_at, price_amount, price_currency, rating, review_count, merchant_domain',
-    )
-    .eq('brand_id', params.brandId)
-    .eq('product_title', params.productTitle)
-    .order('created_at', { ascending: false });
-
-  if (error) throw new Error(error.message);
-  if (!cards || cards.length === 0) return null;
+  // Every appearance, a page at a time, newest first: one select stopped at
+  // PostgREST's 1,000 rows (answer-pages.ts).
+  const { rows: cards, cut } = await readAnswerPages<{
+    id: string;
+    platform: string | null;
+    region: string | null;
+    created_at: string;
+    price_amount: number | null;
+    price_currency: string | null;
+    rating: number | null;
+    review_count: number | null;
+    merchant_domain: string | null;
+  }>((from, to) =>
+    supabaseAdmin
+      .from('prompt_result_shopping_cards')
+      .select(
+        'id, platform, region, created_at, price_amount, price_currency, rating, review_count, merchant_domain',
+      )
+      .eq('brand_id', params.brandId)
+      .eq('product_title', params.productTitle)
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to),
+  );
+  if (cards.length === 0) return null;
 
   const total_appearances = cards.length;
 
@@ -3394,6 +3460,7 @@ export async function getProductVisibility(
     average_rating,
     total_reviews: totalReviews,
     merchant_domains,
+    ...(cut ? { answers_cut: cut } : {}),
   };
 }
 
@@ -3404,7 +3471,12 @@ export interface PromptPerformanceParams {
   dateFrom?: string;
   dateTo?: string;
   topicId?: string;
-  sortBy?: 'visibility' | 'mentions' | 'citations' | 'appearances';
+  /**
+   * `visibility`: the average answer score (avg_visibility, the MCP tool's
+   * default); `ai_visibility`: the AI Visibility Score, the Prompts page's
+   * Visibility column and its order (needs withScore; Chat's default).
+   */
+  sortBy?: 'visibility' | 'ai_visibility' | 'mentions' | 'citations' | 'appearances';
   order?: 'desc' | 'asc';
   limit?: number;
   /** Prompts before this page, in the same order (Chat's pages). */
@@ -3416,6 +3488,11 @@ export interface PromptPerformanceParams {
    * whatever its topic; no page, and topicId doesn't apply.
    */
   promptIds?: readonly string[];
+  /**
+   * Also each prompt's AI Visibility Score and Coverage, as the Prompts page
+   * shows them (prompt-scores.ts): Chat's; the MCP tool's output stays as it was.
+   */
+  withScore?: boolean;
 }
 
 export interface PromptPerformanceOutput {
@@ -3432,7 +3509,13 @@ export interface PromptPerformanceOutput {
     total_mentions: number;
     total_citations: number;
     avg_competitor_score: number;
+    /** The Prompts page's Visibility: the AI Visibility Score (withScore only; null: no answers). */
+    ai_visibility_score?: number | null;
+    /** The Prompts page's Coverage: visible runs of runs, in percent (withScore only). */
+    coverage_pct?: number;
   }>;
+  /** Only when the window held more answers than one read adds up (answer-pages.ts). */
+  answers_cut?: AnswersCut;
 }
 
 interface PromptPerformanceRpcResult {
@@ -3484,6 +3567,18 @@ export async function getPromptPerformanceFor(
 
   if (error) throw new Error(error.message);
 
+  // The Prompts page's Visibility and Coverage, over the same window, region and platforms.
+  const scored = params.withScore
+    ? await (
+        await import('./prompt-scores')
+      ).promptScoresFor(params.brandId, {
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo,
+        region: params.region,
+        models: p_models,
+      })
+    : null;
+
   const named = params.promptIds ? new Set(params.promptIds) : null;
   const raw = ((data as unknown as PromptPerformanceRpcResult[]) ?? []).filter(
     (item) => !named || named.has(item.prompt_id),
@@ -3498,6 +3593,7 @@ export async function getPromptPerformanceFor(
         ? Math.round(Number(item.comp_sum_visibility) / Number(item.comp_count))
         : 0;
 
+    const score = scored?.scores.get(item.prompt_id);
     return {
       prompt_id: item.prompt_id,
       prompt_text: item.prompt_text,
@@ -3507,6 +3603,9 @@ export async function getPromptPerformanceFor(
       total_mentions: Number(item.total_mentions),
       total_citations: Number(item.total_citations),
       avg_competitor_score,
+      ...(scored
+        ? { ai_visibility_score: score?.score ?? null, coverage_pct: score?.coverage_pct ?? 0 }
+        : {}),
     };
   });
 
@@ -3516,6 +3615,15 @@ export async function getPromptPerformanceFor(
   const isAsc = order === 'asc';
 
   prompts.sort((a, b) => {
+    if (sortBy === 'ai_visibility') {
+      // As the Prompts table sorts its Visibility column (prompt-sort.ts): no score last, either way.
+      const byScore = nullsLast(
+        a.ai_visibility_score ?? null,
+        b.ai_visibility_score ?? null,
+        isAsc,
+      );
+      return byScore || a.prompt_id.localeCompare(b.prompt_id);
+    }
     let valA = 0;
     let valB = 0;
     if (sortBy === 'visibility') {
@@ -3557,7 +3665,14 @@ export async function getPromptPerformanceFor(
     },
     total,
     prompts,
+    ...(scored?.cut ? { answers_cut: scored.cut } : {}),
   };
+}
+
+/** Two values, none last whichever the order (the Prompts table's compareNullsLast). */
+function nullsLast(a: number | null, b: number | null, asc: boolean): number {
+  if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;
+  return asc ? a - b : b - a;
 }
 
 /** Prompt performance for prompts named by id: theirs, those with no results, and the ids not found. */

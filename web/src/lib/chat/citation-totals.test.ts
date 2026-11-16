@@ -51,6 +51,9 @@ function table(rows: unknown) {
   for (const name of ['select', 'eq', 'neq', 'in', 'gte', 'lte', 'order', 'limit', 'not']) {
     chain[name] = () => chain;
   }
+  // A page of the rows (the citations scan reads its answers a page at a time).
+  chain.range = (from: number, to: number) =>
+    table(Array.isArray(rows) ? rows.slice(from, to + 1) : rows);
   chain.maybeSingle = async () => ({ data: Array.isArray(rows) ? rows[0] : rows, error: null });
   chain.then = (resolve: (value: unknown) => void) => resolve({ data: rows, error: null });
   return chain;

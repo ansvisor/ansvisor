@@ -27,7 +27,9 @@ vi.mock('@/lib/supabase/admin', () => {
   const from = (table: string) => {
     db.tables.push(table);
     const chain: Record<string, unknown> = {};
-    for (const name of ['select', 'eq', 'neq', 'in', 'gte', 'lte']) chain[name] = () => chain;
+    for (const name of ['select', 'eq', 'neq', 'in', 'gte', 'lte', 'order', 'range']) {
+      chain[name] = () => chain;
+    }
     chain.maybeSingle = async () => ({
       data: table === 'brands' ? { id: 'b1', name: 'Acme' } : null,
       error: null,

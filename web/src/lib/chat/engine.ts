@@ -162,6 +162,8 @@ import {
   type TouchedBrands,
 } from './touched-brands';
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
+import { latestRunDaysFor } from '@/lib/mcp/overview-reads';
+import { pageOrderLine } from './page-order';
 import { stepPrompt, todayLine } from './prompt';
 import {
   ANSWER_NOTE,
@@ -2528,6 +2530,12 @@ function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
           : blockJson(scope)
       }\n</page_context>`,
     });
+    // The page's list in its order (page-order.ts): the app's words, by the page's path.
+    const filters = (scope.context?.chips ?? []).flatMap((chip) =>
+      chip.key.startsWith('filter:') && chip.value ? [chip.key.slice('filter:'.length)] : [],
+    );
+    const order = pageOrderLine(scope.context?.route, filters);
+    if (order) parts.push({ type: 'text', text: order });
   }
   // What the person accepted and rejected in the editor beside the chat since its last message.
   const decisions = rc.progress.editorDecisions;
@@ -2686,6 +2694,7 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
     lines.push(
       [
         'Answer from the data you read; never invent a number. Each read says the period and platforms it covered (`scope`): say them with its numbers, and what the answer covers. A read whose scope has from_page took that period or those filters from the page the person has open: say once, in one short line, what the answer covers as the page names it ("Last 7 days, ChatGPT, as on the page"), with any filter of the page no read took ("all regions"); never how many rows were read. A result with all_sources_totals took Sources from the page: its lists, and the domains and pages counted with them, follow Sources, as the table on the page does, while the citations and their average per answer are all_sources_totals, every source, as the cards on the page count them; say so in that line ("citation counts for all sources, lists for Brand sources").',
+        'When you list items, say once in which order they are, as the read\'s note names it ("most recently updated first, as on the page", "highest Priority Score first"). A scope with latest_run read Last 24 hours as its page does: the latest completed tracking run\'s day or days (its dates).',
         'A page of a list (total, offset, next_offset, note) holds what its note says of all that match; next_offset is where the next page starts. A list with `truncated: true` was cut to fit (a series by date keeps its latest): `{list}_more` says how many more there are (null: more, count unknown) and `{list}_rest` what they add up to. Read the rest by a next page or a narrower read, or say what the answer covers; never present a part as complete or count it as a total. `texts_shortened: true`: long texts in it end early.',
         "A result with code \"not_on_plan\": the workspace's plan doesn't track that platform; say so in one sentence, naming the platforms it does track (`on_plan`), and don't try again.",
         "To make a change, call its tool: the app asks the person first when it should. Don't ask for permission in text, and don't say a change is made until its tool returned ok.",
@@ -4282,6 +4291,8 @@ function scopeForModel(scope: ChatStepScope, used: ScopeUsed): Json {
   const note: Record<string, Json> = {};
   if (scope.dateRange) note.period = scope.dateRange;
   if (used.dateFrom || used.dateTo) note.dates = { from: used.dateFrom, to: used.dateTo };
+  // Last 24 hours as its page reads it: the latest completed tracking run's days (page-periods.ts).
+  if (used.window === 'latest_run') note.latest_run = true;
   if (scope.platforms) note.platforms = scope.platforms;
   // What the page the question came from set: its period, its filters (page_context names them).
   if (used.page) note.from_page = used.page;
@@ -4458,6 +4469,8 @@ async function readCall(
     limits: ctx?.plan.limits ?? null,
     planName: ctx?.plan.planName ?? rc.planName,
     modelsOf: brandModels,
+    // Overview's and Citations' Last 24 hours: the latest completed run's days (page-periods.ts).
+    runDaysOf: (id) => latestRunDaysFor(toolContext(rc, rc.role, ctx?.brandAccess), id),
   });
   if (scoped.kind === 'failed') return result(call, { code: 'failed', message: READ_FAILED }, true);
   if (scoped.kind === 'not_on_plan') {

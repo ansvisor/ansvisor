@@ -1126,6 +1126,44 @@ export const EVAL_PAGES: Readonly<Record<string, { title: string; text: string }
  * What each read answers, by tool name. A read of the other brand answers
  * as that brand: a run that wanders shows it.
  */
+/**
+ * Each prompt's average answer score (get_prompt_performance's
+ * avg_visibility): another order than the Prompts page's Visibility.
+ */
+const ANSWER_SCORES = [48, 41, 63, 70, 66, 37, 52, 44];
+
+/**
+ * The prompts as get_prompt_performance gives them: ai_visibility_score is
+ * the Prompts page's Visibility (the AI Visibility Score), highest first as
+ * the page lists them; sort_by "answer_score" orders by avg_visibility.
+ */
+function evalPromptPerformance(input: Record<string, unknown>) {
+  const byAnswer = input.sort_by === 'answer_score';
+  const prompts = PROMPTS.map((prompt, i) => ({
+    ...prompt,
+    ai_visibility_score: prompt.visibility_pct,
+    avg_visibility: ANSWER_SCORES[i],
+  })).sort((a, b) =>
+    byAnswer ? b.avg_visibility - a.avg_visibility : b.ai_visibility_score - a.ai_visibility_score,
+  );
+  const order = byAnswer
+    ? 'by average answer score'
+    : 'by AI Visibility Score, as the Prompts page lists them';
+  return {
+    ...window,
+    total: prompts.length,
+    offset: 0,
+    next_offset: null,
+    note: `All ${prompts.length} prompts with results, ${order}.`,
+    prompts,
+  };
+}
+
+/** The Prompts page's top 5, by its Visibility: what "my top 5 prompts" names, in order. */
+export const EVAL_PAGE_TOP_PROMPTS: readonly string[] = evalPromptPerformance({})
+  .prompts.slice(0, 5)
+  .map((prompt) => prompt.text);
+
 export function evalReadResult(
   tool: string,
   input: Record<string, unknown>,
@@ -1174,7 +1212,7 @@ export function evalReadResult(
       return TREND;
     case 'list_prompts':
     case 'get_prompt_performance':
-      return { ...window, prompts: PROMPTS };
+      return evalPromptPerformance(input);
     case 'get_prompt_volumes':
       return {
         volumes: PROMPTS.map((p) => ({ prompt: p.text, searches_a_month: p.searches_a_month })),

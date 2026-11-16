@@ -107,6 +107,8 @@ export function readBudget(
  */
 export const RESULT_CHARS: Readonly<Record<string, number>> = {
   list_action_center_tasks: 20_000,
+  // Every day of a trend (scope.ts TREND_ROWS): 90 days by day, as the Overview's trend, whole.
+  get_visibility_trend: 20_000,
 };
 
 /**
