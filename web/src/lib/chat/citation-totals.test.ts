@@ -6,9 +6,9 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  * Citations as its page shows them (the owner's decision, 2026-11-16): the
  * lists follow the page's Sources, as its table does, and the citations and
  * their average per answer count every source, as its cards do. One
- * fixture, read the way Chat reads it (the citations read, filtered and
- * over every source) and the way the page reads it (getCitationsOverview,
- * from the database's aggregates of the same answers).
+ * fixture, read the way Chat reads it (one citations read, filtered, that
+ * counts every source in the same scan) and the way the page reads it
+ * (getCitationsOverview, from the database's aggregates of the same answers).
  */
 
 const BRAND = '11111111-1111-4111-8111-111111111111';
@@ -95,8 +95,17 @@ function pageRpc(fn: string) {
   return { data: [], error: null };
 }
 
+/** The tables the service role read, one entry a query: how many scans a read took. */
+const scans = vi.hoisted(() => [] as string[]);
+
 vi.mock('@/lib/supabase/admin', () => ({
-  supabaseAdmin: { from: (name: string) => table(TABLES[name] ?? []), rpc: vi.fn() },
+  supabaseAdmin: {
+    from: (name: string) => {
+      scans.push(name);
+      return table(TABLES[name] ?? []);
+    },
+    rpc: vi.fn(),
+  },
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
@@ -105,8 +114,7 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }));
 
-const { allSourcesInput, allSourcesTotalsOf, needsAllSources, withAllSources } =
-  await import('./citation-totals');
+const { needsAllSources } = await import('./citation-totals');
 const { CHAT_TOOLS } = await import('./registry/tools');
 const { getCitationsOverview } = await import('@/lib/actions/citations');
 
@@ -128,54 +136,32 @@ describe('when a citations read needs the totals of every source', () => {
     expect(needsAllSources('list_citations', { source_filter: 'all' }, page)).toBe(false);
     expect(needsAllSources('list_mentions', { source_filter: 'owned' }, page)).toBe(false);
   });
-
-  it('reads the same over every source, one row, and puts its totals beside the lists', () => {
-    expect(
-      allSourcesInput({
-        brand_id: BRAND,
-        model: 'chatgpt-web',
-        source_filter: 'owned',
-        limit: 50,
-        offset: 50,
-      }),
-    ).toEqual({
-      brand_id: BRAND,
-      model: 'chatgpt-web',
-      source_filter: 'all',
-      limit: 1,
-      offset: 0,
-    });
-    const totals = allSourcesTotalsOf({ totals: { citations: 6, avg_citations_per_result: 1.5 } });
-    expect(totals).toEqual({ citations: 6, avg_citations_per_result: 1.5 });
-    expect(withAllSources({ top_domains: [] }, totals)).toEqual({
-      top_domains: [],
-      all_sources_totals: totals,
-    });
-    // Nothing read over every source: the filtered read as it was.
-    expect(allSourcesTotalsOf(null)).toBeNull();
-    expect(withAllSources({ top_domains: [] }, null)).toEqual({ top_domains: [] });
-  });
 });
 
 describe("Chat's citations and the Citations page, on one fixture", () => {
-  it('lists the Brand rows of the table, and counts every source as the cards do', async () => {
-    const tool = CHAT_TOOLS.find((t) => t.name === 'list_citations')!;
-    const input = {
-      brand_id: BRAND,
-      date_from: '2026-10-24',
-      date_to: '2026-10-30',
-      source_filter: 'owned' as const,
-      limit: 50,
-    };
-    const [filtered, every] = await Promise.all([
-      tool.run(AUTH as never, input as never),
-      tool.run(AUTH as never, allSourcesInput(input) as never),
-    ]);
-    const chat = withAllSources(filtered, allSourcesTotalsOf(every)) as {
-      totals: { domains: number; citations: number };
-      top_domains: { domain: string; category: string; total_citations: number }[];
-      all_sources_totals: { citations: number; avg_citations_per_result: number };
-    };
+  const tool = CHAT_TOOLS.find((t) => t.name === 'list_citations')!;
+  const input = {
+    brand_id: BRAND,
+    date_from: '2026-10-24',
+    date_to: '2026-10-30',
+    source_filter: 'owned' as const,
+    limit: 50,
+  };
+  type Read = {
+    totals: { domains: number; citations: number };
+    top_domains: { domain: string; category: string; total_citations: number }[];
+    all_sources_totals?: { citations: number; avg_citations_per_result: number };
+  };
+
+  it('lists the Brand rows of the table, and counts every source as the cards do, in one read and one scan', async () => {
+    scans.length = 0;
+    // Sources from the page: the engine asks the read for the cards' totals too.
+    const chat = (await tool.run(
+      { ...AUTH, allSourcesTotals: true } as never,
+      input as never,
+    )) as Read;
+    // One read, one scan of the window's answers: the totals come from the pass that built the lists.
+    expect(scans.filter((name) => name === 'prompt_results')).toHaveLength(1);
 
     const page = await getCitationsOverview(BRAND, {
       datePreset: 'custom',
@@ -200,5 +186,22 @@ describe("Chat's citations and the Citations page, on one fixture", () => {
     expect(chat.all_sources_totals).toEqual({ citations: 6, avg_citations_per_result: 1.5 });
     // The filtered totals alone would have said 3.
     expect(chat.totals.citations).toBe(3);
+  });
+
+  it('adds no totals of every source when nobody asked, or when the read is over every source', async () => {
+    // Sources the person named (or the MCP tool): the read's own totals, as before.
+    const own = (await tool.run(AUTH as never, input as never)) as Read;
+    expect(own).not.toHaveProperty('all_sources_totals');
+    expect(own.totals.citations).toBe(3);
+    // Over every source its own totals are the cards'.
+    const every = (await tool.run(
+      { ...AUTH, allSourcesTotals: true } as never,
+      {
+        ...input,
+        source_filter: 'all',
+      } as never,
+    )) as Read;
+    expect(every).not.toHaveProperty('all_sources_totals');
+    expect(every.totals.citations).toBe(6);
   });
 });

@@ -10074,14 +10074,14 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
   it("lists Citations' Sources from the page beside the citations of every source, as the page does", async () => {
     db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
     fakes.readRun.mockClear();
-    fakes.readRun.mockImplementation(async (_ctx: unknown, input: Record<string, unknown>) =>
-      input.source_filter === 'all'
-        ? { totals: { domains: 3, citations: 6, avg_citations_per_result: 1.5 }, top_domains: [] }
-        : {
-            totals: { domains: 1, citations: 3, avg_citations_per_result: 0.8 },
-            top_domains: [{ domain: 'northwind.example', total_citations: 3 }],
-          },
-    );
+    // The read counts every source in the scan of its filtered lists when asked (citation-totals.ts).
+    fakes.readRun.mockImplementation(async (ctx: { allSourcesTotals?: boolean }) => ({
+      totals: { domains: 1, citations: 3, avg_citations_per_result: 0.8 },
+      top_domains: [{ domain: 'northwind.example', total_citations: 3 }],
+      ...(ctx.allSourcesTotals
+        ? { all_sources_totals: { citations: 6, avg_citations_per_result: 1.5 } }
+        : {}),
+    }));
     const { sonnet } = useModels(
       [calls(toolCall('r1', 'list_citations', { brand_id: BRAND })), READY],
       [
@@ -10106,16 +10106,11 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     });
     if (!started.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, started.runId);
-    // The lists on Brand, and the same read over every source beside it, one row.
-    const inputs = fakes.readRun.mock.calls.map((c) => c[1] as Record<string, unknown>);
-    expect(inputs).toHaveLength(2);
-    expect(inputs[0]).toMatchObject({ source_filter: 'owned', date_from: day(-6) });
-    expect(inputs[1]).toMatchObject({
-      source_filter: 'all',
-      date_from: day(-6),
-      limit: 1,
-      offset: 0,
-    });
+    // One read: the lists on Brand, asked for the totals of every source from the same scan.
+    expect(fakes.readRun).toHaveBeenCalledTimes(1);
+    const [ctx, input] = fakes.readRun.mock.calls[0] as [Record<string, unknown>, unknown];
+    expect(input).toMatchObject({ source_filter: 'owned', date_from: day(-6) });
+    expect(ctx.allSourcesTotals).toBe(true);
     // One step: the person sees one read.
     expect(stepsOf(started.runId).filter((s) => s.kind === 'read')).toHaveLength(1);
     const written = promptOf(sonnet.seen[0]);
@@ -10129,7 +10124,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
       'citation counts for all sources, lists for Brand sources',
     );
 
-    // Sources the person named: their own totals, no second read.
+    // Sources the person named: their own totals, nothing of every source.
     fakes.readRun.mockClear();
     useModels(
       [calls(toolCall('r1', 'list_citations', { brand_id: BRAND, source_filter: 'owned' })), READY],
@@ -10150,6 +10145,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     if (!own.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, own.runId);
     expect(fakes.readRun).toHaveBeenCalledTimes(1);
+    expect(fakes.readRun.mock.calls[0][0]).not.toHaveProperty('allSourcesTotals');
   });
 
   it("applies the page's filters to the reads that take them; the person's own words win", async () => {

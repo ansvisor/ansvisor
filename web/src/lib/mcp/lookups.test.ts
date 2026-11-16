@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
@@ -10,7 +12,8 @@ import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
  * cited domain or page by its address, an opportunity, draft or report by
  * its title words or id: found past the first page, in every status, every
  * one asked either in the result or in not_found with a note that says so
- * plainly, and never a row of another brand or workspace.
+ * plainly, and never a row of another brand or workspace. The MCP server's
+ * list tools read them the same, through Chat's reads.
  */
 
 vi.mock('@/lib/supabase/admin', async () => ({
@@ -23,6 +26,7 @@ const data = await import('./data');
 const content = await import('./content');
 const { listSignalsPageFor, lookUpSignalsFor } = await import('./signal-page');
 const lookup = await import('./lookup');
+const { createMcpServer } = await import('./server');
 
 const ORG = 'org-1';
 const BRAND = 'b1000000-0000-4000-8000-000000000001';
@@ -47,6 +51,47 @@ const DAY = 24 * 60 * 60 * 1000;
 const dayAt = (n: number) => new Date(Date.UTC(2026, 7, 1) + n * DAY).toISOString();
 /** The tables a lookup read, after the brand check. */
 const tablesRead = () => [...new Set(db.log.map(([table]) => table))];
+
+/**
+ * An MCP tool's answer to a client of the server, as `auth`: its JSON, or
+ * its error's text. The lookups over MCP (the owner's approval of
+ * 2026-11-16) answer from Chat's reads, so each is checked against them.
+ */
+async function callMcp(name: string, args: Record<string, unknown>, auth: McpAuthContext = ALL) {
+  const server = createMcpServer(auth);
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  const client = new Client({ name: 'test', version: '1.0.0' });
+  await client.connect(clientTransport);
+  const result = await client.callTool({ name, arguments: args });
+  const text = (result.content as { text: string }[])[0].text;
+  return {
+    isError: Boolean(result.isError),
+    text,
+    json: result.isError ? null : JSON.parse(text),
+  };
+}
+
+/** A brand of another workspace, and one not shared with the key: not found over MCP, nothing of it read. */
+async function refusedOverMcp(name: string, args: Record<string, unknown>) {
+  const refusals: [McpAuthContext, string][] = [
+    [ALL, FOREIGN],
+    [SELECTED, BRAND],
+    [{ ...ALL, organizationId: null }, BRAND],
+  ];
+  for (const [auth, brandId] of refusals) {
+    db.log = [];
+    const refused = await callMcp(name, { ...args, brand_id: brandId }, auth);
+    expect(refused, `${name} for ${brandId}`).toMatchObject({
+      isError: true,
+      text: 'Brand not found',
+    });
+    expect(
+      db.log.filter(([table]) => table !== 'brands'),
+      name,
+    ).toEqual([]);
+  }
+}
 
 const promptSets = (brandId: string) => ({
   brand_id: brandId,
@@ -203,6 +248,61 @@ describe('signals by their codes and ids', () => {
     const found = await lookUpSignalsFor(ALL, { brandId: BRAND, codes: ['S-07'] });
     expect(found!.signals[0].actions).toEqual(['AC-03']);
   });
+
+  // MCP's list_signals reads codes and ids as Chat does.
+  describe('over MCP list_signals', () => {
+    it('finds codes and ids past the first page, whatever status, kind or limit it is given', async () => {
+      const list = await callMcp('list_signals', { brand_id: BRAND });
+      expect(list.json).toHaveLength(50);
+      expect(list.json.map((s: { id: string }) => s.id)).not.toContain(uuid('5a000000', 7));
+
+      const asked = { codes: ['S-07', 's 12', '#45'], ids: [uuid('5a000000', 33)] };
+      const found = await callMcp('list_signals', {
+        brand_id: BRAND,
+        ...asked,
+        status: 'dismissed',
+        kind: 'competitor_gain',
+        limit: 1,
+      });
+      expect(found.json).toEqual(await lookUpSignalsFor(ALL, { brandId: BRAND, ...asked }));
+      expect(
+        found.json.signals.map((s: Record<string, string>) => [
+          s.asked,
+          s.code,
+          s.status,
+          s.matched,
+        ]),
+      ).toEqual([
+        ['S-07', 'S-07', 'resolved', 'its code'],
+        ['s 12', 'S-12', 'new', 'its code'],
+        ['#45', 'S-45', 'new', 'its code'],
+        [uuid('5a000000', 33), 'S-33', 'new', 'its id'],
+      ]);
+      // S-07 of this brand, never the workspace's other brand's or another workspace's.
+      expect(found.json.signals[0].id).toBe(uuid('5a000000', 7));
+      expect(found.json.not_found).toEqual([]);
+    });
+
+    it("says what it didn't find plainly, and never reads another brand's signal", async () => {
+      const found = await callMcp('list_signals', {
+        brand_id: BRAND,
+        codes: ['S-99'],
+        ids: [uuid('5a000000', 107), uuid('5a000000', 207)],
+      });
+      expect(found.json).toMatchObject({
+        signals: [],
+        not_found: ['S-99', uuid('5a000000', 107), uuid('5a000000', 207)],
+      });
+      expect(found.json.note).toContain(
+        'S-99: no signal of this brand has this code (codes are per brand).',
+      );
+      expect(found.json.note).toContain('never offer other signals as the closest or similar.');
+    });
+
+    it('answers a brand of another workspace, or one not shared, as not found', async () => {
+      await refusedOverMcp('list_signals', { codes: ['S-07'], ids: [uuid('5a000000', 7)] });
+    });
+  });
 });
 
 // ─── Prompts ────────────────────────────────────────────────────────────────
@@ -333,6 +433,59 @@ describe('prompts by their words and ids', () => {
     expect(await data.lookUpPromptsFor(SELECTED, { brandId: BRAND, search: 'skip' })).toBeNull();
     expect(tablesRead()).toEqual(['brands']);
   });
+
+  // MCP's list_prompts reads words and ids as Chat does.
+  describe('over MCP list_prompts', () => {
+    it('finds one by its words past the first page, whatever topic, state or limit it is given', async () => {
+      const list = await callMcp('list_prompts', { brand_id: BRAND });
+      expect(list.json).toHaveLength(100);
+      expect(list.json.map((p: { id: string }) => p.id)).not.toContain(uuid('a1000000', 5));
+
+      const asked = {
+        search: 'SKIP subscription month?',
+        ids: [uuid('a1000000', 7), uuid('a1000000', 301), uuid('a1000000', 302)],
+      };
+      const found = await callMcp('list_prompts', {
+        brand_id: BRAND,
+        ...asked,
+        topic_id: uuid('70000000', 9),
+        is_active: true,
+        limit: 1,
+      });
+      expect(found.json).toEqual(await data.lookUpPromptsFor(ALL, { brandId: BRAND, ...asked }));
+      expect(found.json.prompts.map((p: { id: string }) => p.id)).toEqual([
+        uuid('a1000000', 7),
+        uuid('a1000000', 5),
+      ]);
+      expect(found.json.prompts[1]).toMatchObject({ text: SKIP, is_active: false });
+      // Another brand's prompt, of the workspace or another one, is not found.
+      expect(found.json.not_found).toEqual([uuid('a1000000', 301), uuid('a1000000', 302)]);
+    });
+
+    it('pages a search by offset, never cut by limit', async () => {
+      const last = await callMcp('list_prompts', {
+        brand_id: BRAND,
+        search: 'coffee beans',
+        offset: 100,
+        limit: 5,
+      });
+      expect(last.json).toEqual(
+        await data.lookUpPromptsFor(ALL, { brandId: BRAND, search: 'coffee beans', offset: 100 }),
+      );
+      expect(last.json).toMatchObject({ total: 117, offset: 100, next_offset: null });
+      expect(last.json.prompts).toHaveLength(17);
+    });
+
+    it('says plainly when no prompt has the words', async () => {
+      const found = await callMcp('list_prompts', { brand_id: BRAND, search: 'cold brew tonic' });
+      expect(found.json).toMatchObject({ prompts: [], total: 0, not_found: ['cold brew tonic'] });
+      expect(found.json.note).toContain('Never offer other prompts as the closest or similar.');
+    });
+
+    it('answers a brand of another workspace, or one not shared, as not found', async () => {
+      await refusedOverMcp('list_prompts', { search: 'skip', ids: [uuid('a1000000', 5)] });
+    });
+  });
 });
 
 describe("a prompt's performance by its id", () => {
@@ -389,6 +542,38 @@ describe("a prompt's performance by its id", () => {
     });
     expect(read!.prompts).toHaveLength(10);
     expect(rpcArgs[0]).toMatchObject({ p_topic_id: null });
+  });
+
+  it('over MCP get_prompt_performance: reads the prompts named, whatever topic, sort or limit, as Chat does', async () => {
+    const period = { date_from: '2026-10-01', date_to: '2026-10-31' };
+    const promptIds = [uuid('a1000000', 2), uuid('a1000000', 11), uuid('a1000000', 301)];
+    const found = await callMcp('get_prompt_performance', {
+      brand_id: BRAND,
+      ...period,
+      prompt_ids: promptIds,
+      topic_id: uuid('70000000', 1),
+      sort_by: 'mentions',
+      order: 'asc',
+      limit: 1,
+    });
+    expect(rpcArgs[0]).toMatchObject({ p_brand_id: BRAND, p_topic_id: null });
+    expect(found.json).toEqual(
+      await data.lookUpPromptPerformanceFor(ALL, {
+        brandId: BRAND,
+        dateFrom: period.date_from,
+        dateTo: period.date_to,
+        promptIds,
+      }),
+    );
+    expect(found.json.prompts.map((p: { prompt_id: string }) => p.prompt_id)).toEqual([
+      uuid('a1000000', 2),
+    ]);
+    expect(found.json.no_results).toEqual([
+      { prompt_id: uuid('a1000000', 11), prompt_text: 'Prompt 11' },
+    ]);
+    expect(found.json.not_found).toEqual([uuid('a1000000', 301)]);
+    expect(found.json.note).toContain('never offer other prompts as the closest or similar');
+    await refusedOverMcp('get_prompt_performance', { prompt_ids: [uuid('a1000000', 2)] });
   });
 });
 
@@ -565,6 +750,68 @@ describe('cited domains and pages by their address', () => {
     expect(lookup.citedUrlKey('https://example.com')).toBe('example.com');
     expect(lookup.citedUrlKey('nonsense')).toBeNull();
   });
+
+  // MCP's list_citations reads domains and addresses as Chat does.
+  describe('over MCP list_citations', () => {
+    const mcpWindow = { brand_id: BRAND, date_from: '2026-10-01', date_to: '2026-10-31' };
+
+    it('finds a domain and a page past the top ones, whatever source filter or limit it is given', async () => {
+      const list = await callMcp('list_citations', { ...mcpWindow, limit: 50 });
+      expect(list.json.top_domains.map((d: { domain: string }) => d.domain)).not.toContain(
+        'beanbulletin.example',
+      );
+
+      const asked = {
+        domains: ['https://www.BeanBulletin.example/'],
+        urls: ['beanbulletin.example/best-coffee-subscriptions'],
+      };
+      const found = await callMcp('list_citations', {
+        ...mcpWindow,
+        ...asked,
+        source_filter: 'owned',
+        limit: 1,
+      });
+      expect(found.json).toEqual(await data.lookUpCitationsFor(ALL, { ...window, ...asked }));
+      expect(found.json.domains.map((d: { domain: string }) => d.domain)).toEqual([
+        'beanbulletin.example',
+        'blog.beanbulletin.example',
+      ]);
+      // Two pages for one address, the other brand's and September's answers never counted.
+      expect(
+        found.json.urls.map((u: { url: string; total_citations: number }) => [
+          u.url,
+          u.total_citations,
+        ]),
+      ).toEqual([
+        ['https://www.beanbulletin.example/best-coffee-subscriptions', 1],
+        ['https://beanbulletin.example/best-coffee-subscriptions', 1],
+      ]);
+      expect(found.json.not_found).toEqual([]);
+    });
+
+    it("says what isn't cited in the period, plainly", async () => {
+      const found = await callMcp('list_citations', {
+        ...mcpWindow,
+        domains: ['nowhere.example'],
+        urls: ['https://beanbulletin.example/other'],
+      });
+      expect(found.json).toMatchObject({
+        domains: [],
+        urls: [],
+        not_found: ['nowhere.example', 'https://beanbulletin.example/other'],
+      });
+      expect(found.json.note).toContain(
+        'never offer other domains or pages as the closest or similar',
+      );
+    });
+
+    it('answers a brand of another workspace, or one not shared, as not found', async () => {
+      await refusedOverMcp('list_citations', {
+        domains: ['beanbulletin.example'],
+        urls: ['https://beanbulletin.example/best-coffee-subscriptions'],
+      });
+    });
+  });
 });
 
 // ─── Opportunities, drafts and reports ──────────────────────────────────────
@@ -632,6 +879,36 @@ describe('content opportunities by their title words and ids', () => {
     expect(await data.lookUpOpportunitiesFor(SELECTED, { brandId: BRAND, search: 'x' })).toBeNull();
     expect(tablesRead()).toEqual(['brands']);
   });
+
+  it('over MCP list_content_opportunities: finds one past the first page, archived too, whatever filter or limit, as Chat does', async () => {
+    const list = await callMcp('list_content_opportunities', { brand_id: BRAND });
+    expect(list.json.map((o: { id: string }) => o.id)).not.toContain(uuid('aa000000', 150));
+
+    const asked = {
+      search: 'STORAGE guide 2026',
+      ids: [uuid('aa000000', 3), uuid('aa000000', 301), uuid('aa000000', 302)],
+    };
+    const found = await callMcp('list_content_opportunities', {
+      brand_id: BRAND,
+      ...asked,
+      status: 'new',
+      impact: 'high',
+      type: 'earned',
+      limit: 1,
+    });
+    expect(found.json).toEqual(
+      await data.lookUpOpportunitiesFor(ALL, { brandId: BRAND, ...asked }),
+    );
+    expect(
+      found.json.opportunities.map((o: { id: string; status: string }) => [o.id, o.status]),
+    ).toEqual([
+      [uuid('aa000000', 3), 'new'],
+      [uuid('aa000000', 150), 'archived'],
+    ]);
+    expect(found.json.not_found).toEqual([uuid('aa000000', 301), uuid('aa000000', 302)]);
+    expect(found.json.note).toContain('never offer other opportunities as the closest or similar.');
+    await refusedOverMcp('list_content_opportunities', { search: 'storage guide' });
+  });
 });
 
 describe('drafts by their title words and ids', () => {
@@ -690,6 +967,26 @@ describe('drafts by their title words and ids', () => {
     ).toBeNull();
     expect(tablesRead()).toEqual(['brands']);
   });
+
+  it('over MCP list_content_drafts: finds one past the first page, archived too, whatever status, as Chat does', async () => {
+    const list = await callMcp('list_content_drafts', { brand_id: BRAND });
+    expect(list.json.map((d: { id: string }) => d.id)).not.toContain(uuid('a4000000', 0));
+
+    const asked = { search: 'GIFT boxes', ids: [uuid('a4000000', 12), uuid('a4000000', 301)] };
+    const found = await callMcp('list_content_drafts', {
+      brand_id: BRAND,
+      ...asked,
+      status: 'published',
+    });
+    expect(found.json).toEqual(await content.lookUpDraftsFor(ALL, { brandId: BRAND, ...asked }));
+    expect(found.json.drafts.map((d: { id: string }) => d.id)).toEqual([
+      uuid('a4000000', 12),
+      uuid('a4000000', 0),
+    ]);
+    expect(found.json.drafts[1]).toMatchObject({ status: 'ready', archived: true });
+    expect(found.json.not_found).toEqual([uuid('a4000000', 301)]);
+    await refusedOverMcp('list_content_drafts', { search: 'gift boxes' });
+  });
 });
 
 describe('reports by their title words and ids', () => {
@@ -727,5 +1024,80 @@ describe('reports by their title words and ids', () => {
   it('reads nothing of a brand not shared with the person', async () => {
     expect(await data.lookUpReportsFor(SELECTED, { brandId: BRAND, search: 'x' })).toBeNull();
     expect(tablesRead()).toEqual(['brands']);
+  });
+
+  it('over MCP list_reports: finds one past the first page, whatever limit, as Chat does', async () => {
+    const list = await callMcp('list_reports', { brand_id: BRAND });
+    expect(list.json.map((r: { id: string }) => r.id)).not.toContain(uuid('ae000000', 0));
+
+    const asked = {
+      search: 'benchmark competitor',
+      ids: [uuid('ae000000', 3), uuid('ae000000', 301)],
+    };
+    const found = await callMcp('list_reports', { brand_id: BRAND, ...asked, limit: 1 });
+    expect(found.json).toEqual(await data.lookUpReportsFor(ALL, { brandId: BRAND, ...asked }));
+    expect(found.json.reports.map((r: { id: string }) => r.id)).toEqual([
+      uuid('ae000000', 3),
+      uuid('ae000000', 0),
+    ]);
+    expect(found.json).toMatchObject({ total: 1, not_found: [uuid('ae000000', 301)] });
+    const none = await callMcp('list_reports', { brand_id: BRAND, search: 'quarterly board' });
+    expect(none.json).toMatchObject({ reports: [], not_found: ['quarterly board'] });
+    expect(none.json.note).toContain('Never offer other reports as the closest or similar.');
+    await refusedOverMcp('list_reports', { ids: [uuid('ae000000', 3)] });
+  });
+});
+
+// ─── What the MCP tools tell a client ───────────────────────────────────────
+
+describe("the MCP list tools' lookups", () => {
+  const LOOKUPS: [tool: string, inputs: string[], first: string][] = [
+    ['list_signals', ['codes', 'ids'], 'read that first with `codes` or `ids`'],
+    ['list_prompts', ['search', 'ids'], 'read that first with `search`'],
+    ['get_prompt_performance', ['prompt_ids'], 'read `prompt_ids` first'],
+    ['list_citations', ['domains', 'urls'], 'read that first with `domains`'],
+    ['list_content_opportunities', ['search', 'ids'], 'read that first with `search`'],
+    ['list_content_drafts', ['search', 'ids'], 'read that first with `search`'],
+    ['list_reports', ['search', 'ids'], 'read that first with `search`'],
+  ];
+
+  it('tells a client to read what the person names first, and never to answer with the closest', async () => {
+    const server = createMcpServer(ALL);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientTransport);
+    const { tools } = await client.listTools();
+    const tool = (name: string) => tools.find((t) => t.name === name)!;
+
+    for (const [name, inputs, first] of LOOKUPS) {
+      const { description, inputSchema } = tool(name);
+      expect(description, name).toContain(first);
+      expect(description, name).toMatch(/never offer (others|other \w+( or \w+)?) as the closest/);
+      expect(description, name).toMatch(
+        /Never say .+ because (a page of this list|the top domains or URLs) didn't show it\./,
+      );
+      expect(description, name).toMatch(/don't apply|doesn't apply/);
+      const properties = inputSchema.properties as Record<
+        string,
+        { maxItems?: number; type?: string }
+      >;
+      for (const input of inputs) {
+        expect(properties[input], `${name}.${input}`).toBeDefined();
+        if (properties[input].type === 'array') {
+          expect(properties[input].maxItems, `${name}.${input}`).toBe(lookup.LOOKUP_MAX);
+        }
+      }
+      // Optional: without them the tool reads as it did.
+      expect(inputSchema.required, name).toEqual(['brand_id']);
+    }
+
+    // An id from a list says where a named one's id comes from.
+    const idOf = (name: string, input: string) =>
+      (tool(name).inputSchema.properties as Record<string, { description?: string }>)[input]
+        .description;
+    expect(idOf('get_report', 'report_id')).toContain('its `search` input');
+    expect(idOf('get_content_draft', 'draft_id')).toContain('its `search` input');
+    expect(idOf('get_content_opportunity', 'opportunity_id')).toContain('its `search` input');
   });
 });

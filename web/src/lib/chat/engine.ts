@@ -255,12 +255,7 @@ import {
 } from './range';
 import { readSavedRange, saveRange, type SavedRange } from './range-store';
 import { pageScopeOf } from './page-scope';
-import {
-  allSourcesInput,
-  allSourcesTotalsOf,
-  needsAllSources,
-  withAllSources,
-} from './citation-totals';
+import { needsAllSources } from './citation-totals';
 import {
   cacheKey,
   cachePolicy,
@@ -4359,9 +4354,9 @@ export function dataAsOfOf(value: unknown): string | null {
 /**
  * A read's own call, with a time limit and one retry after 2 s when it failed
  * (CHAT-20 §11b); one that ran out of time isn't tried again (read-attempt.ts).
- * `allSources`: the citations read took the page's Sources, so the same read
- * over every source runs beside it, for the totals the page's cards count
- * (citation-totals.ts); the filtered read stands without them if it fails.
+ * `allSources`: the citations read took the page's Sources, so it also
+ * counts every source's citations, as the page's cards do, in the same scan
+ * as its filtered lists (citation-totals.ts): one read, one scan.
  */
 function runRead(
   rc: RunContext,
@@ -4372,17 +4367,12 @@ function runRead(
   brandAccess?: PrecedenceContext['brandAccess'],
   allSources = false,
 ): Promise<ReadAttempt> {
-  const ctx = pageSites
-    ? { ...toolContext(rc, role, brandAccess), pageSites }
-    : toolContext(rc, role, brandAccess);
-  if (!allSources) return attemptRead(() => tool.run(ctx, input as never), rc.signal);
-  return attemptRead(async () => {
-    const [value, all] = await Promise.all([
-      tool.run(ctx, input as never),
-      Promise.resolve(tool.run(ctx, allSourcesInput(input) as never)).catch(() => null),
-    ]);
-    return withAllSources(value, allSourcesTotalsOf(all));
-  }, rc.signal);
+  const ctx: ChatToolContext = {
+    ...toolContext(rc, role, brandAccess),
+    ...(pageSites ? { pageSites } : {}),
+    ...(allSources ? { allSourcesTotals: true } : {}),
+  };
+  return attemptRead(() => tool.run(ctx, input as never), rc.signal);
 }
 
 /**

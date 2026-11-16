@@ -42,6 +42,7 @@ import { DemoBanner } from '@/components/billing/demo-banner';
 import { PlanEndsBanner } from '@/components/billing/plan-ends-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 import { FirstRunReady } from '@/components/layout/first-run-ready';
+import { KeepCurrentTheme } from '@/components/theme/keep-current-theme';
 import { sendSignupEventOnce } from '@/lib/signup-event';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -237,6 +238,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         }}
       />
       <BrandLoader brands={listedBrands} />
+      {/* Cloud: a browser with no theme yet keeps light, the one shown (config/theme.ts). */}
+      <KeepCurrentTheme />
       <PlanProvider
         planId={planId}
         allowedModelIds={allowedModelIds}
