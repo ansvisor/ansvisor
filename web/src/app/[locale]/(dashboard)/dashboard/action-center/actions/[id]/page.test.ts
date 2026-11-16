@@ -85,4 +85,14 @@ describe("an action's own path", () => {
       expect(row.eq, id).toEqual([['id', id]]);
     }
   });
+
+  // Old links (Slack, e-mail, History, notes) keep their meaning after 00534.
+  it("opens an old link's AC-59 by the old global number, never a brand's AC-59", async () => {
+    row.value = { id: 'old-59', brand_id: 'brand-2' };
+    await go('AC-59');
+    expect(row.eq).toEqual([['action_no', 59]]);
+    expect(redirect).toHaveBeenCalledWith(
+      '/dashboard/action-center/actions?action=old-59&brand=brand-2',
+    );
+  });
 });

@@ -99,7 +99,14 @@ export interface SendImproveInput {
 }
 
 type SendResult =
-  | { actionId: string; actionNo: number; created: boolean; taskCount: number; sent: ImproveSent }
+  | {
+      actionId: string;
+      actionNo: number;
+      brandNo?: number | null;
+      created: boolean;
+      taskCount: number;
+      sent: ImproveSent;
+    }
   | { error: string };
 
 /** Send the selected suggestions, as edited, to Action Center as one action (PROMPT-004). */

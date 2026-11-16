@@ -1,11 +1,11 @@
 ---
 title: Use Ansvisor in AI assistants with MCP
 route: /dashboard/settings/api-keys
-keywords: [mcp, mcp server, api key, claude, chatgpt, cursor, codex, connect assistant, connected apps, sign in]
+keywords: [mcp, mcp server, api key, claude, chatgpt, cursor, codex, connect assistant, connected apps, sign in, action code]
 synonyms: [model context protocol, use ansvisor in claude, use ansvisor in chatgpt, ai assistant integration, connector, oauth, app sign-in, disconnect app]
 plan: all
-updated: 2026-11-10
-last_checked: 2026-11-10
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -46,6 +46,7 @@ Ask in plain words, for example:
 - "Which topic has the most prompts?"
 - "Who are my top 5 competitors by mention count this month?"
 - "Why did our sentiment drop on Gemini?"
+- "What is action AC-12?" Codes are per brand: a code the brand doesn't have gets a plain "not found", never a guess.
 
 The assistant can read visibility, mentions, citations, prompts, AI traffic, saved reports, content, Site Audits, product visibility and the Action Center. Some requests change data, such as accepting a suggested prompt, writing a content draft or recording a task's progress. Assistants are told to make a change only when you ask for it.
 

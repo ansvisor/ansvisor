@@ -36,7 +36,8 @@ interface Page {
  * The Activity log (CHAT-20 §10a): newest first, filtered by person (an
  * Admin's), area, class and "Auto changes only", with Undo on a change while
  * its window is open and CSV for Admins. Each row says what happened in
- * words (chatActivity.summary), never a tool's name.
+ * words (chatActivity.summary), never a tool's name. A tab of Chat's
+ * Settings: the frame holds the page's title, so this one is a section's.
  */
 export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
   const t = useTranslations('chatAccess.activity');
@@ -76,7 +77,7 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
   if (page === 'failed') {
     return (
       <div role="status" className="space-y-2 text-sm text-muted-foreground">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+        <h2 className="text-lg font-semibold text-foreground">{t('title')}</h2>
         <p>{t('loadError')}</p>
         <Button size="sm" variant="outline" onClick={() => setVersion((n) => n + 1)}>
           {t('retry')}
@@ -154,8 +155,8 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1 space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-muted-foreground">{t('lead')}</p>
+          <h2 className="text-lg font-semibold">{t('title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('lead')}</p>
         </div>
         {page.isAdmin && (
           <Button size="sm" variant="outline" disabled={exporting} onClick={() => void exportCsv()}>

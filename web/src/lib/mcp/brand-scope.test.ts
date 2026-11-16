@@ -66,7 +66,7 @@ const { getContentDraftPackageFor } = await import('./content-package');
 const { getContentPlanFor } = await import('./content-plan');
 const { explainChangeFor } = await import('./why');
 const { createMcpServer } = await import('./server');
-const { listActionsPageFor } = await import('./action-center-reads');
+const { listActionsByCodeFor, listActionsPageFor } = await import('./action-center-reads');
 const aiConversions = await import('./ai-conversions');
 const { getTrackingSetupFor } = await import('./tracking-setup');
 
@@ -156,6 +156,11 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     ['listActionsFor', () => data.listActionsFor(SELECTED, { brandId: 'b1' })],
     // Chat's page of actions (list_action_center_tasks).
     ['listActionsPageFor', () => listActionsPageFor(SELECTED, { brandId: 'b1' })],
+    // Chat's read of actions by their codes (list_action_center_tasks' codes).
+    [
+      'listActionsByCodeFor',
+      () => listActionsByCodeFor(SELECTED, { brandId: 'b1', codes: ['AC-481'] }),
+    ],
     ['listSignalsFor', () => data.listSignalsFor(SELECTED, { brandId: 'b1' })],
     ['listActionHistoryFor', () => data.listActionHistoryFor(SELECTED, { brandId: 'b1' })],
     ['listCompetitorsFor', () => data.listCompetitorsFor(SELECTED, 'b1')],
@@ -336,5 +341,19 @@ describe('the MCP server for a Selected-brands key', () => {
     const result = await client.callTool({ name: 'list_topics', arguments: { brand_id: hidden } });
     expect(result.isError).toBe(true);
     expect(text(result)).toBe('Brand not found');
+  });
+
+  it('answers a code on a brand it may not use as not found, reading none of its actions', async () => {
+    const hidden = '11111111-1111-4111-8111-111111111111';
+    db.rows.brands = { id: hidden, name: 'Acme' };
+    const client = await connect(SELECTED);
+    const result = await client.callTool({
+      name: 'list_actions',
+      arguments: { brand_id: hidden, codes: ['AC-481', '#12'] },
+    });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe('Brand not found');
+    expect(new Set(db.reads)).toEqual(new Set(['brands']));
+    expect(db.rpcs).toEqual([]);
   });
 });

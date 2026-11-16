@@ -96,6 +96,9 @@ import {
   listTaskReviewsFor,
   taskReviewEditShape,
 } from './task-reviews';
+import { listActionsByCodeFor } from './action-center-reads';
+import { actionRef } from '@/lib/action-center/action-ref';
+import { ACTION_CODES_MAX } from '@/lib/action-center/action-codes';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -1297,7 +1300,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Action Center actions',
       description:
-        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, priority (a 0–100 score, its level — critical, high, medium or low — the facts it rests on, and `confidence`: low, medium or high with `confidence_note` saying why, the raw factor in `confidence_score`; null until scored), status, `stale` (New for 30 days or more with no one working on it, since `stale_at`: not closed, ask whether it still matters), outcome, assignee, due date and task progress, highest priority first (unscored last), or most recently updated first with sort "updated". `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress.',
+        'List the Action Center actions for a brand: what the product thinks should be done about its AI visibility. Each action was consolidated from one or more detected signals and carries a task plan. Returns category, kind, impact, priority (a 0–100 score, its level — critical, high, medium or low — the facts it rests on, and `confidence`: low, medium or high with `confidence_note` saying why, the raw factor in `confidence_score`; null until scored), status, `stale` (New for 30 days or more with no one working on it, since `stale_at`: not closed, ask whether it still matters), outcome, assignee, due date and task progress, highest priority first (unscored last), or most recently updated first with sort "updated". `kind` is an opaque definition id (e.g. "close_competitor_gap"); the action payload with the specifics is on get_action. Use this to see open work ("what should we do next?") or to check what is in progress. ' +
+        `When the person names an action by its code (${actionRef(481)}, "AC 481", "#481", or a number they clearly mean as one), read that code first with \`codes\`, every code of the message in one read. It returns { note, actions, not_found } in place of the list: every status, Completed and Dismissed included, of this brand only; status, category, sort and limit don't apply. Each row has id (for get_action), ref (its code), title, status, priority, priority_level, tasks, \`asked\`, \`matched\` ("its code" or "its previous code") and \`previous_ref\` when it had another code. A code that names two actions returns both: name both and say which is which, never pick one. A code in \`not_found\`: this brand has no action with that code (codes are per brand); say so, and never offer the closest actions instead. Never say an action doesn't exist because a page of this list didn't show it.`,
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         status: z
@@ -1321,17 +1325,28 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .describe(
             'Order: "priority" (default) highest priority score first — the order to work on them; "updated" most recently updated first.',
           ),
+        codes: z
+          .array(z.string().trim().min(1).max(40))
+          .min(1)
+          .max(ACTION_CODES_MAX)
+          .optional()
+          .describe(
+            `Actions by their codes, as the person wrote them: "${actionRef(481)}", "AC 481", "ac481", "#481", "481", "${actionRef('07')}". Reads only these, in any status; the other inputs don't apply.`,
+          ),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const actions = await listActionsFor(auth, {
-        brandId: args.brand_id,
-        status: args.status,
-        category: args.category,
-        limit: args.limit,
-        sort: args.sort,
-      });
+      // By code: Chat's read (list_action_center_tasks' codes), the same rows and note.
+      const actions = args.codes?.length
+        ? await listActionsByCodeFor(auth, { brandId: args.brand_id, codes: args.codes })
+        : await listActionsFor(auth, {
+            brandId: args.brand_id,
+            status: args.status,
+            category: args.category,
+            limit: args.limit,
+            sort: args.sort,
+          });
       if (actions === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -1351,7 +1366,9 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         'Get one Action Center action in full: its outcome, its change net of the control (`net_of_control`: per metric, its move minus that of the brand\u2019s prompts it didn\u2019t touch; null when not netted) and why it was dismissed (`dismiss_reason`), its priority (score, level, the facts it rests on and its confidence, as on list_actions), whether it is `stale` (as on list_actions), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`. `details` says what the task carries beyond that, or null: `url` (the exact page), `where` (the page, prompt, platform, domain or competitor), `why` (the evidence), `change` (`before`, null when it adds text, and `after`), `how` (the steps), `done_when` (the check that closes it), `check` (how it is checked: auto, the page fetched again; rerun, the prompts run again; manual, a person confirms), `type` (content, on_page, technical, outreach, pr or product), `effort` and `role`; a task sent from the Improve tab also carries `body`, `platform`, `platform_label` and `sources`; `sent_to_content` (the opportunity it became) and `sent_to_webhook` say where it was sent. With `format` "markdown" or "csv" it returns the action as the dashboard\'s Copy Data and Export CSV write it instead (everything its tabs show, labelled in English, dates in UTC): Markdown to paste into a doc, ticket or another agent, CSV with a row per affected item, task and signal.',
       inputSchema: {
-        action_id: relaxedUuid.describe('Action UUID, from list_actions or list_action_history.'),
+        action_id: relaxedUuid.describe(
+          'Action UUID, from list_actions (an action named by its code: its `codes` input) or list_action_history.',
+        ),
         format: z
           .enum(['json', 'markdown', 'csv'])
           .optional()

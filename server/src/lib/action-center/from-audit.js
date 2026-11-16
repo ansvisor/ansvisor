@@ -20,6 +20,7 @@ import fixLowScores from './definitions/f01-fix-low-scores.js';
 import { priorityOnCreate } from './priority-data.js';
 import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
+import { brandNoOf } from './action-code.js';
 
 export const AUDIT_PAGE_ACTION_KIND = 'audit_page';
 
@@ -127,7 +128,7 @@ export async function sendAuditToActionCenter(brandId, { auditId, userId }) {
   const openAction = async () => {
     const { data } = await supabaseAdmin
       .from('actions')
-      .select('id, action_no')
+      .select('id, action_no, brand_no')
       .eq('brand_id', brandId)
       .eq('dedup_key', dedupKey)
       .in('status', ACTIVE)
@@ -135,7 +136,13 @@ export async function sendAuditToActionCenter(brandId, { auditId, userId }) {
     return data;
   };
   const open = await openAction();
-  if (open) return { actionId: open.id, actionNo: Number(open.action_no), created: false };
+  if (open)
+    return {
+      actionId: open.id,
+      actionNo: Number(open.action_no),
+      ...brandNoOf(open),
+      created: false,
+    };
 
   const score = audit.total_score == null ? null : Number(audit.total_score);
   const impact = auditImpact(score, checks.length);
@@ -179,14 +186,19 @@ export async function sendAuditToActionCenter(brandId, { auditId, userId }) {
         payload,
       })),
     })
-    .select('id, action_no')
+    .select('id, action_no, brand_no')
     .single();
   if (error) {
     // Two sends at once: the other one opened it (the open-action dedup index, 00084).
     if (error.code === '23505') {
       const winner = await openAction();
       if (winner) {
-        return { actionId: winner.id, actionNo: Number(winner.action_no), created: false };
+        return {
+          actionId: winner.id,
+          actionNo: Number(winner.action_no),
+          ...brandNoOf(winner),
+          created: false,
+        };
       }
     }
     throw new Error(error.message);
@@ -221,5 +233,10 @@ export async function sendAuditToActionCenter(brandId, { auditId, userId }) {
     data: { source: AUDIT_PAGE_ACTION_KIND, checks: checks.length, taskCount: plan.length },
   });
 
-  return { actionId: action.id, actionNo: Number(action.action_no), created: true };
+  return {
+    actionId: action.id,
+    actionNo: Number(action.action_no),
+    ...brandNoOf(action),
+    created: true,
+  };
 }

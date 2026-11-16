@@ -24,11 +24,11 @@ import {
   EVAL_IDS,
   EVAL_OTHER_BRAND,
   EVAL_PROMPTS,
+  evalActions,
 } from './testing/agent-eval-data';
 import {
   AGENT_EVAL_PRICES,
   AGENT_SCENARIOS,
-  QUESTION_SCENARIOS,
   SKILL_SCENARIOS,
   agentEvalCost,
   gradeAgentRun,
@@ -177,8 +177,8 @@ const fakes = vi.hoisted(() => ({
     approving: string | null;
     sessionless: boolean;
     mode: string;
-    /** The state the reads answer from (agent-eval-data.ts EvalWorld). */
-    world?: import('./testing/agent-eval-data').EvalWorld;
+    /** The workspace its reads answer from (agent-eval-data.ts). */
+    workspace?: import('./testing/agent-eval-data').EvalWorkspace;
   },
   resolveModels: vi.fn(),
   /** What the workspace's month has left of its AI limit, in dollars (Growth: $25, 40% used). */
@@ -346,7 +346,7 @@ vi.mock('./registry/tools', async (importOriginal) => {
             : data.evalReadResult(
                 tool.name,
                 (input ?? {}) as Record<string, unknown>,
-                fakes.run?.world,
+                fakes.run?.workspace,
               );
           fakes.run?.reads.push(tool.name);
           fakes.run?.readInputs.push((input ?? {}) as Record<string, unknown>);
@@ -894,8 +894,22 @@ async function runScenario(scenario: AgentEvalScenario): Promise<EvalResult> {
     approving: null,
     sessionless: agentRun && scenario.trigger !== 'manual',
     mode: scenario.mode,
-    world: scenario.world,
+    workspace: scenario.workspace,
   };
+  // The brand's other actions, where the scenario's workspace has them: a call by one's id finds
+  // its brand as the engine looks it up (precedence-context.ts resolveCallBrand).
+  for (const action of evalActions(scenario.workspace)) {
+    if (db.tables.actions.some((row) => row.id === action.id)) continue;
+    db.tables.actions.push({
+      id: action.id,
+      brand_id: BRAND,
+      action_no: Number(action.number.slice(3)),
+      kind: 'signal',
+      status: action.status,
+      deleted_at: null,
+      payload: { title: action.title },
+    });
+  }
   const started = Date.now();
   let actor: import('./engine').ChatActor;
   let chatRunId: string;
@@ -1308,6 +1322,75 @@ describe('the agents’ test set harness, on a scripted model', () => {
     expect(result.passed).toBe(false);
   });
 
+  it('answers actions asked for by their code from a read of those codes, one past the first page', async () => {
+    const scenario = skillOf('action-by-code');
+    expect(scenario).toMatchObject({
+      message: 'AC 481 ve AC-63 nedir',
+      workspace: 'action_backlog',
+    });
+    // The brand has 55 open actions: AC-63 is on the list's first page of 50, AC-481 isn't.
+    const { evalReadResult } = await import('./testing/agent-eval-data');
+    const first = evalReadResult('list_action_center_tasks', { brand_id: BRAND }, 'action_backlog');
+    expect(first).toMatchObject({ total: 55, next_offset: 50 });
+    const refs = (first as { actions: { ref: string }[] }).actions.map((a) => a.ref);
+    expect(refs).toContain('AC-63');
+    expect(refs).not.toContain('AC-481');
+
+    scripted([
+      calls(
+        toolCall('r1', 'list_action_center_tasks', {
+          brand_id: BRAND,
+          codes: ['AC 481', 'AC-63'],
+        }),
+      ),
+      text(
+        '- **Expand visibility on 1 platform** (AC-481): its code. New, priority 8, growth.\n- **Build on your gain on "Which coffee subscription lets you skip a month?"** (AC-63): its code. New, priority 69, growth.',
+      ),
+    ]);
+    const result = await runScenario(scenario);
+    expect(result.run.reads).toEqual(['list_action_center_tasks']);
+    // Both found by the one read, each by its code.
+    const read = JSON.parse(result.run.readValues[0]) as {
+      actions: { ref: string; matched: string }[];
+      not_found: string[];
+    };
+    expect(read.actions.map((a) => [a.ref, a.matched])).toEqual([
+      ['AC-481', 'its code'],
+      ['AC-63', 'its code'],
+    ]);
+    expect(read.not_found).toEqual([]);
+    for (const name of [
+      'reads the actions by their codes',
+      'names each action asked by its title and code',
+      'names no other action in their place',
+    ]) {
+      expect(
+        result.checks.find((c) => c.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails an answer from a page of the list that offers the closest actions instead', async () => {
+    scripted([
+      calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+      text(
+        'There is no AC-481 in the data I read. The closest is **Refresh the cold brew guide** (AC-53), and **Build on your gain on "Which coffee subscription lets you skip a month?"** (AC-63).',
+      ),
+    ]);
+    const result = await runScenario(skillOf('action-by-code'));
+    const failed = Object.fromEntries(
+      result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(failed).toMatchObject({
+      'reads the actions by their codes': 'AC-481, AC-63 not read by its code',
+      'names each action asked by its title and code': 'AC-481 without its title and code',
+      'names no other action in their place': 'also names AC-53',
+    });
+    expect(result.passed).toBe(false);
+  });
+
   it('refuses every network call but the model’s', async () => {
     await expect(fetch('https://example.com/')).rejects.toThrow('no network call');
   });
@@ -1401,8 +1484,7 @@ const GROUPS: {
     group: 'skills',
     asked: process.env.SKILL_EVAL?.trim() ?? '',
     maxUsd: Number(process.env.SKILL_EVAL_MAX_USD) || null,
-    // Every skill by its /name, then the questions a person asks without one.
-    scenarios: [...SKILL_SCENARIOS, ...QUESTION_SCENARIOS],
+    scenarios: SKILL_SCENARIOS,
     file: 'skill-eval',
     title: 'Ansvisor becerileri: kalite testi',
   },

@@ -17,6 +17,8 @@ import { NO_WHERE, signalWhere, type PromptPlace, type SignalWhere } from './whe
 
 export interface Signal {
   id: string;
+  /** Its number in its brand ("S-03", signalCode; 00534); absent until its brand is numbered. */
+  brandNo?: number | null;
   category: SignalCategory;
   kind: SignalKind;
   impact: SignalImpact;
@@ -37,6 +39,7 @@ export interface Signal {
 
 export interface SignalRow {
   id: string;
+  brand_no?: number | null;
   category: string;
   kind: string;
   impact: string;
@@ -54,7 +57,7 @@ export interface SignalRow {
 }
 
 export const SIGNAL_ROW_COLUMNS =
-  'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
+  'id, brand_no, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
 
 /** Maps rows, silently skipping unknown kinds (a detector removed from the
  *  registry must not take down a page). Without the brand's prompts, `where`
@@ -67,6 +70,7 @@ export function mapSignalRows(
     .filter((row) => isSignalKind(row.kind))
     .map((row) => ({
       id: row.id,
+      ...(row.brand_no ? { brandNo: row.brand_no } : {}),
       category: row.category as SignalCategory,
       kind: row.kind as SignalKind,
       impact: row.impact as SignalImpact,

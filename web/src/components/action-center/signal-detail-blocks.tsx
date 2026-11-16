@@ -22,6 +22,7 @@ import {
 } from '@/lib/signals/detail';
 import { languageName } from '@/lib/audit/reading-evidence';
 import { cn } from '@/lib/utils';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import { ActionStatusBadge } from './action-table';
 
 /**
@@ -826,7 +827,7 @@ export function SignalEvidenceBlock({ signal, brandId }: { signal: Signal; brand
                   >
                     <span className="inline-flex min-w-0 items-start gap-1 font-medium">
                       {t('actionLabel', {
-                        no: action.actionNo,
+                        no: actionCodeNo(action),
                         title: actionTexts(action, tActions).title,
                       })}
                       <ArrowUpRight className="mt-px h-3 w-3 shrink-0" />

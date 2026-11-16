@@ -1,7 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { MAX_QUEUED_PER_BRAND, RUN_NOW_REPEAT_MS, agentPlanLimits } from './agent-rules';
 import { idempotencyKey, requestHash, sweepExpiredKeys, withIdempotencyKey } from './idempotency';
-import { readActionForRun, type ActionSnapshot } from './agent-action';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
+import { readActionForRun, snapshotNumbers, type ActionSnapshot } from './agent-action';
 import { connectionName, missingRequiredConnection } from './agent-connections';
 import {
   agentForAct,
@@ -391,7 +392,7 @@ async function queueRun(
     return { runId, kind: 'queued' };
   }
   await logAgentChange(ctx, row, action ? 'agentRunOnAction' : 'agentRunQueued', {
-    params: action ? { action: String(action.no) } : { brand: brand.name },
+    params: action ? { action: actionCodeNo(snapshotNumbers(action)) } : { brand: brand.name },
     brandId: brand.id,
     agentRunId: runId,
   });

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import { actionCode } from '@/lib/action-center/action-ref';
 import {
   TASK_CHECKS,
   TASK_DETAIL_LIMITS,
@@ -41,6 +42,8 @@ export interface McpTaskReview {
   id: string;
   action_id: string;
   action_no: number | null;
+  /** Its action's code as the app shows it: "AC-03" (00534), or "AC-648" before its brand is numbered. */
+  code: string | null;
   title: string;
   /** What it was written without: fill these to approve it. */
   missing: McpReviewField[];
@@ -116,7 +119,7 @@ export async function listTaskReviewsFor(
   const { data, error } = await supabaseAdmin
     .from('action_task_reviews')
     .select(
-      'id, action_id, title, details, missing, source, created_at, actions!inner(action_no, brand_id, status, deleted_at)',
+      'id, action_id, title, details, missing, source, created_at, actions!inner(action_no, brand_no, brand_id, status, deleted_at)',
     )
     .eq('actions.brand_id', params.brandId)
     .is('actions.deleted_at', null)
@@ -128,11 +131,15 @@ export async function listTaskReviewsFor(
   return (data ?? []).map((row) => {
     const action = (Array.isArray(row.actions) ? row.actions[0] : row.actions) as {
       action_no: number | null;
+      brand_no: number | null;
     } | null;
     return {
       id: row.id as string,
       action_id: row.action_id as string,
       action_no: action?.action_no ?? null,
+      code: action?.action_no
+        ? actionCode({ actionNo: action.action_no, brandNo: action.brand_no })
+        : null,
       title: row.title as string,
       missing: ((row.missing ?? []) as string[])
         .map((field) => FIELD_NAMES[field])

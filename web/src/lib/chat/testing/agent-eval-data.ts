@@ -1,3 +1,4 @@
+import { askedCodes, lookUpCodes } from '@/lib/action-center/action-codes';
 import { priorityLevelOf } from '@/lib/action-center/priority';
 import { PROMPT_ASSOCIATION_LABEL } from '@/lib/traffic-conversions';
 
@@ -664,6 +665,156 @@ const ACTIONS = [
 ];
 export const EVAL_ACTIONS = ACTIONS;
 
+/**
+ * The workspace a scenario runs on: as above, or with the brand's long
+ * list of open actions (`action_backlog`), 55 in all as the owner's brand
+ * had (2026-11-16), so the list's first page of 50 doesn't hold them all;
+ * or with conversions from AI visits never turned on (`conversions_off`),
+ * where the others have them on, with a week of them (agent-eval.ts's
+ * questions about customers from AI).
+ */
+export type EvalWorkspace = 'default' | 'action_backlog' | 'conversions_off';
+
+const BACKLOG_SUBJECTS = [
+  'whole bean storage',
+  'cold brew',
+  'gift cards',
+  'espresso blends',
+  'single origins',
+  'grind sizes',
+  'roast dates',
+];
+const BACKLOG_TITLES = [
+  (x: string) => `Add an FAQ answer about ${x}`,
+  (x: string) => `Refresh the ${x} guide`,
+  (x: string) => `Earn a citation on ${x} from a review site`,
+  (x: string) => `Answer the fan-outs about ${x}`,
+  (x: string) => `Close the gap with Northbound Roasters on ${x}`,
+  (x: string) => `Add a comparison table to the ${x} page`,
+  (x: string) => `Recover lost mentions on ${x}`,
+];
+const BACKLOG_CATEGORIES = ['growth', 'compete', 'fix', 'recover', 'protect'];
+
+/** An action of the backlog: open, no tasks yet. */
+const backlogAction = (n: number, number: number, over: Record<string, unknown>) => ({
+  id: id('a5e10000', n),
+  number: `AC-${number}`,
+  category: BACKLOG_CATEGORIES[n % BACKLOG_CATEGORIES.length],
+  title: '',
+  priority_score: 0,
+  status: 'new',
+  due: undefined as string | undefined,
+  why: '',
+  pages: [] as string[],
+  tasks: [] as { id: string; title: string; status: string }[],
+  ...over,
+});
+
+/**
+ * The asked-about pair of the action-code scenario: AC-63 ranks third, on
+ * the list's first page; AC-481 is scored lowest of all 55, past it, as the
+ * owner's AC-481 was ("what is AC-481?" was answered from the first page).
+ */
+export const EVAL_CODE_ACTIONS = {
+  onFirstPage: backlogAction(0, 63, {
+    category: 'growth',
+    title: 'Build on your gain on "Which coffee subscription lets you skip a month?"',
+    priority_score: 69,
+    why: 'Brewline is now named in 3 of 4 answers to this prompt, up from 1 last week; a direct answer on the subscriptions page can keep it there.',
+    pages: [SUBS],
+  }),
+  pastFirstPage: backlogAction(1, 481, {
+    category: 'growth',
+    title: 'Expand visibility on 1 platform',
+    priority_score: 8,
+    why: 'Brewline is named on ChatGPT, Perplexity and Gemini for its subscription prompts, but not on Microsoft Copilot yet.',
+  }),
+};
+
+/** The backlog: the pair above and 49 others, scored 50 down to 12, AC-45 to AC-94 but AC-63. */
+const ACTION_BACKLOG = [
+  EVAL_CODE_ACTIONS.onFirstPage,
+  ...Array.from({ length: 49 }, (_, i) => {
+    const subject = BACKLOG_SUBJECTS[i % BACKLOG_SUBJECTS.length];
+    const title = BACKLOG_TITLES[Math.floor(i / BACKLOG_SUBJECTS.length)](subject);
+    return backlogAction(i + 2, i < 18 ? 45 + i : 46 + i, {
+      title,
+      priority_score: 50 - Math.floor(i * 0.8),
+      why: `Found in this week's tracking for ${subject}.`,
+    });
+  }),
+  EVAL_CODE_ACTIONS.pastFirstPage,
+];
+
+/** The brand's actions on a workspace. */
+export const evalActions = (workspace: EvalWorkspace = 'default') =>
+  workspace === 'action_backlog' ? [...ACTIONS, ...ACTION_BACKLOG] : ACTIONS;
+
+type EvalAction = ReturnType<typeof evalActions>[number];
+const OPEN_STATUSES = new Set(['new', 'in_progress', 'on_hold']);
+const EVAL_PAGE_MAX = 50;
+
+/** An action as Chat's list reads it: compact, as listActionsPageFor gives it. */
+const actionRow = (action: EvalAction) => ({
+  id: action.id,
+  ref: action.number,
+  title: action.title,
+  category: action.category,
+  status: action.status,
+  priority: action.priority_score,
+  priority_level: priorityLevelOf(action.priority_score),
+  ...(action.due ? { due: action.due } : {}),
+  tasks: `0/${action.tasks.length}`,
+  updated: '2026-11-02',
+});
+
+/**
+ * Chat's read of the brand's actions, as listActionsPageFor and
+ * listActionsByCodeFor answer it: by the codes asked (the same lookup), or
+ * a page of the open ones, highest Priority Score first, with the total and
+ * the same note.
+ */
+function evalActionsRead(input: Record<string, unknown>, workspace: EvalWorkspace): unknown {
+  const all = evalActions(workspace);
+  if (Array.isArray(input.codes) && input.codes.length > 0) {
+    return lookUpCodes(
+      askedCodes(input.codes.map(String)),
+      all.map((action) => ({
+        numbered: { actionNo: Number(action.number.slice(3)) },
+        row: actionRow(action),
+      })),
+    );
+  }
+  const open = all
+    .filter((action) => OPEN_STATUSES.has(action.status))
+    .sort((a, b) => b.priority_score - a.priority_score);
+  const offset = typeof input.offset === 'number' ? Math.max(0, input.offset) : 0;
+  const limit =
+    typeof input.limit === 'number' ? Math.min(input.limit, EVAL_PAGE_MAX) : EVAL_PAGE_MAX;
+  const shown = open.slice(offset, offset + limit);
+  const end = offset + shown.length;
+  const total = open.length;
+  const naming = 'Name each by its title, with its ref.';
+  return {
+    status: 'open',
+    category: null,
+    sort: 'priority',
+    total,
+    offset,
+    next_offset: shown.length > 0 && end < total ? end : null,
+    // actionsPageNote's words (mcp/action-center-reads.ts).
+    note:
+      offset === 0 && end >= total
+        ? `All ${total} open actions, highest Priority Score first. ${naming}`
+        : `Showing ${offset + 1}–${end} of ${total} open actions, highest Priority Score first. ${
+            end < total
+              ? `${total - end} more not shown: read them with offset ${end}, or say the answer covers ${offset === 0 ? `the top ${end}` : `${offset + 1}–${end}`} of ${total}.`
+              : `The first ${offset} were on earlier pages.`
+          } ${naming}`,
+    actions: shown.map(actionRow),
+  };
+}
+
 const SIGNALS = [
   {
     id: EVAL_IDS.signals[0],
@@ -762,12 +913,8 @@ export const EVAL_PAGES: Readonly<Record<string, { title: string; text: string }
   },
 };
 
-/**
- * Which state the workspace's measuring of customers from AI is in: the
- * default has conversions from AI visits on, with a week of them; with
- * `conversions_off`, they were never turned on (agent-eval.ts's questions).
- */
-export type EvalWorld = 'default' | 'conversions_off';
+// Customers from AI: conversions from AI visits are on, with a week of them, but on the
+// `conversions_off` workspace (EvalWorkspace), where they were never turned on.
 
 const TRACKING = `/dashboard/brands/${EVAL_IDS.brand}/settings?tab=tracking`;
 const GA_STEP = {
@@ -822,9 +969,9 @@ const LANDING = [
   },
 ];
 
-/** Customers and revenue from AI (get_tracking_setup and the five reads after it), in a world. */
-function aiRevenueRead(tool: string, world: EvalWorld): unknown {
-  const off = world === 'conversions_off';
+/** Customers and revenue from AI (get_tracking_setup and the five reads after it), on a workspace. */
+function aiRevenueRead(tool: string, workspace: EvalWorkspace): unknown {
+  const off = workspace === 'conversions_off';
   switch (tool) {
     case 'get_tracking_setup':
       return {
@@ -1069,14 +1216,14 @@ function aiRevenueRead(tool: string, world: EvalWorld): unknown {
 }
 
 /**
- * What each read answers, by tool name, in a world (the default unless a
- * scenario names one). A read of the other brand answers as that brand: a
+ * What each read answers, by tool name, on a workspace (the default unless
+ * a scenario names one). A read of the other brand answers as that brand: a
  * run that wanders shows it.
  */
 export function evalReadResult(
   tool: string,
   input: Record<string, unknown>,
-  world: EvalWorld = 'default',
+  workspace: EvalWorkspace = 'default',
 ): unknown {
   const brandId = typeof input.brand_id === 'string' ? input.brand_id : null;
   if (brandId && brandId !== EVAL_IDS.brand) {
@@ -1084,7 +1231,7 @@ export function evalReadResult(
       ? { brand: EVAL_OTHER_BRAND.name, visibility_pct: 23, citations: 61, data_as_of: EVAL_AS_OF }
       : { error: 'not_found' };
   }
-  const revenue = aiRevenueRead(tool, world);
+  const revenue = aiRevenueRead(tool, workspace);
   if (revenue !== undefined) return revenue;
   switch (tool) {
     case 'list_brands':
@@ -1311,30 +1458,11 @@ export function evalReadResult(
     case 'list_site_audit_issues':
       return AUDIT_ISSUES;
     case 'list_action_center_tasks':
-      // As listActionsPageFor pages them: compact rows, ranked, with the total and its note.
-      return {
-        status: 'open',
-        category: null,
-        sort: 'priority',
-        total: ACTIONS.length,
-        offset: 0,
-        next_offset: null,
-        note: `All ${ACTIONS.length} open actions, highest Priority Score first. Name each by its title, with its ref.`,
-        actions: ACTIONS.map((action) => ({
-          id: action.id,
-          ref: action.number,
-          title: action.title,
-          category: action.category,
-          status: action.status,
-          priority: action.priority_score,
-          priority_level: priorityLevelOf(action.priority_score),
-          due: action.due,
-          tasks: `0/${action.tasks.length}`,
-          updated: '2026-11-02',
-        })),
-      };
+      return evalActionsRead(input, workspace);
     case 'get_action': {
-      const action = ACTIONS.find((a) => a.id === input.action_id || a.number === input.number);
+      const action = evalActions(workspace).find(
+        (a) => a.id === input.action_id || a.number === input.number,
+      );
       return action ?? { error: 'not_found' };
     }
     case 'list_signals':

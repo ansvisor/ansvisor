@@ -79,7 +79,7 @@ interface ShipRow {
   shipped_by: string | null;
   execution_mode: string;
   url: string | null;
-  actions: { action_no: number | null } | null;
+  actions: { action_no: number | null; brand_no: number | null } | null;
   impact_measurements: Record<string, unknown> | Record<string, unknown>[] | null;
 }
 
@@ -162,6 +162,7 @@ export async function readImpactReport(
           execution_mode: row.execution_mode,
           url: row.url,
           actionNo: row.actions?.action_no ?? null,
+          brandNo: row.actions?.brand_no ?? null,
           measurement: measurementOf(row.impact_measurements),
         },
         user.id,

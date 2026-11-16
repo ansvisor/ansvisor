@@ -782,7 +782,10 @@ export async function sendTrafficPagesToActionCenter(
   window: TrafficDateWindow | undefined,
   pages: string[],
   reason: TrafficPagesReason,
-): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+): Promise<
+  | { actionId: string; actionNo: number; brandNo?: number | null; created: boolean }
+  | { error: string }
+> {
   const supabase = await createClient();
   const {
     data: { session },

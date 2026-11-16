@@ -162,8 +162,8 @@ export interface ContentDraftListItem {
   origin: DraftOrigin;
   /** The chat it was made in, when the member may open it; null otherwise. */
   conversation: DraftConversation | null;
-  /** The Action Center action it is the work of (CE-022), by id and number; null for none. */
-  action?: { id: string; number: number } | null;
+  /** The Action Center action it is the work of (CE-022), by id and the number its code shows ("03", actionCodeNo); null for none. */
+  action?: { id: string; number: number | string } | null;
 }
 
 /**
@@ -259,8 +259,8 @@ export interface ContentDraft {
    * names (00271): a real person, and their profile with a bio and links.
    */
   authorConfirmed: { real: boolean; profile: boolean };
-  /** The Action Center action the draft is the work of (CE-022), shown as "from Action AC-214". */
-  action: { id: string; number: number } | null;
+  /** The Action Center action the draft is the work of (CE-022), shown as "from Action AC-03" (number: actionCodeNo). */
+  action: { id: string; number: number | string } | null;
   /** The chat it was made in (W4-10), shown as "From chat: {title}"; null for none or another's. */
   conversation: DraftConversation | null;
   /** Where the Content Agent is on it (CE-015): the editor waits while it writes. */

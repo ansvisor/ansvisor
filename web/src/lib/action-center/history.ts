@@ -152,6 +152,8 @@ export interface SignalOutcome {
 export interface ActionHistoryItem {
   id: string;
   actionNo: number;
+  /** Its number in its brand (00534); null until its brand is numbered (actionCode). */
+  brandNo?: number | null;
   kind: string;
   /** Grow / Recover / Protect / Fix / Compete — the module's one classification. */
   type: ActionCategory;

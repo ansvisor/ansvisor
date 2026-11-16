@@ -89,4 +89,9 @@ describe('the onboarding layout', () => {
     expect(await open()).toBe(true);
     expect(sendSignupEventOnce).toHaveBeenCalledWith({ id: 'u1' });
   });
+
+  it('hands it over before a redirect too: Next runs after() work once that response closes', async () => {
+    expect(await open()).toBe('/dashboard');
+    expect(sendSignupEventOnce).toHaveBeenCalledWith({ id: 'u1' });
+  });
 });
