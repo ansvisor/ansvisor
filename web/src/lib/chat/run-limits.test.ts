@@ -8,7 +8,10 @@ const {
   RUNS_PER_USER,
   readBudget,
   readCap,
+  MAX_NEXT_PAGES,
+  PAGES_PER_READ,
   PAGE_CHARS,
+  readsUsed,
   resultCharsFor,
   startDecision,
   workspaceRunLimit,
@@ -59,6 +62,18 @@ describe('run limits', () => {
     expect(resultCharsFor(readBudget('normal'), 'list_action_center_tasks')).toBe(20_000);
     expect(resultCharsFor(readBudget('max'), 'list_action_center_tasks')).toBe(36_000);
     expect(resultCharsFor(readBudget('normal'), 'list_citations')).toBe(12_000);
+  });
+
+  it('count four next pages of a list as one read, with a ceiling of their own', () => {
+    expect(PAGES_PER_READ).toBe(4);
+    expect(readsUsed({ reads: 2 })).toBe(2);
+    expect(readsUsed({ reads: 2, pages: 3 })).toBe(2);
+    expect(readsUsed({ reads: 2, pages: 4 })).toBe(3);
+    expect(readsUsed({ reads: 1, pages: MAX_NEXT_PAGES })).toBe(
+      1 + MAX_NEXT_PAGES / PAGES_PER_READ,
+    );
+    // Within the run's 6 reads: a list of 13 pages, with one more read beside it.
+    expect(1 + MAX_NEXT_PAGES / PAGES_PER_READ).toBeLessThan(readBudget('normal').reads);
   });
 
   it('give a page of any list read the same room (PAGE_CHARS), never less than the run’s own', () => {

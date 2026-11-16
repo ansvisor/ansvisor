@@ -107,6 +107,10 @@ Or send a short range as your message, such as "last 7d", "last 24h" or "use 90 
 
 A period inside a question, such as "How was last week?", is used for that answer only: your default stays as it is.
 
+## Long lists
+
+Chat reads any list the same way, such as signals, prompts, mentions, citations, opportunities or drafts: 50 at a time, with how many there are in all. Signals are read over your date range the way the Signals page reads its window: those found by its end that were still open, or resolved, after it began. When your question needs more, Chat reads the next 50 before it answers. When an answer covers part of a list, it says which part, such as "the newest 50 of 451 signals", and offers the rest as a next move.
+
 ## Change what you track
 
 Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.
@@ -232,7 +236,7 @@ Everything comes from your scheduled tracking. Chat never asks an AI engine anyt
 
 ## What explains the change
 
-Under the answer, a card shows the same numbers. Click the two values for the periods, the tracking runs compared and the normal swing. Each cause shows its share of the change, or its points when it partly offset it. Open a cause to see its prompts, the page cited before and the one cited now, and the day. **Answer** opens that tracked answer, with your brand marked and the pages it cited. Each cause says how sure Chat is: **High** when 10 or more prompts show it, **Medium** for 3 to 9, **Low** for fewer. When some answers couldn't be read, the card says so. What the causes don't cover shows as **Shifts across AI answers**.
+Under the answer, a card shows the same numbers. Click the two values for the periods, the tracking runs compared and the normal swing. Each cause shows its share of the change, or its points when it partly offset it. Open a cause to see its prompts, the page cited before and the one cited now, and the day. **Answer** opens that tracked answer, with your brand marked and the pages it cited. Each cause says how sure Chat is: **High** when 10 or more prompts show it, **Medium** for 3 to 9, **Low** for fewer. When some prompts had more answers than the explanation compares, the card says causes come only from prompts whose answers were all compared. What the causes don't cover shows as **Shifts across AI answers**.
 
 ## Close a task from what Chat made
 
@@ -296,7 +300,7 @@ Parts only read, on the same brand and with the same access as you. When a part 
 
 ## When something goes wrong
 
-A step that fails shows a red mark and why, such as **Timed out**. Chat goes on where it can, and the answer says what it couldn't read. A read that timed out isn't tried again in the same answer, so it doesn't hold up the rest.
+A step that fails shows a red mark and why, such as **Took too long this time**. Chat retries once with a narrower read, such as a shorter period. If a figure still isn't there, the answer says it isn't available right now and offers to retry. Something off for you, such as another plan's feature, is named with why and what you can do.
 
 If the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.
 
