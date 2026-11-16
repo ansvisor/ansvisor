@@ -78,6 +78,7 @@ import {
 import { refreshYears } from '@/lib/content/current-year';
 import { readPageComparison, type RangedAuditRow } from '@/lib/audit/page-trend';
 import type { ScoreRange } from '@/lib/audit/score-range';
+import { actionCode } from '@/lib/action-center/action-ref';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -3237,6 +3238,8 @@ export async function assigneeNames(ids: (string | null)[]): Promise<Map<string,
 export interface ActionListRow {
   id: string;
   action_no: number;
+  /** Its code as the app shows it: "AC-03" (its number in its brand, 00534), or "AC-648" before its brand is numbered. */
+  code: string;
   category: string;
   kind: string;
   impact: string;
@@ -3322,7 +3325,7 @@ export async function listActionsFor(
   let query = supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, stale_at, target_entity:payload->>targetEntity, target_count:payload->targetCount',
+      'id, action_no, brand_no, category, kind, impact, status, outcome, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, stale_at, target_entity:payload->>targetEntity, target_count:payload->targetCount',
     )
     .eq('brand_id', params.brandId)
     // A deleted action (00168) is gone for everyone but the nightly generator.
@@ -3371,6 +3374,7 @@ export async function listActionsFor(
   return rows.map((r) => ({
     id: r.id,
     action_no: Number(r.action_no),
+    code: actionCode({ actionNo: Number(r.action_no), brandNo: r.brand_no }),
     category: r.category,
     kind: r.kind,
     impact: r.impact,
@@ -3400,6 +3404,8 @@ export async function listActionsFor(
 export interface ActionDetailForMcp {
   id: string;
   action_no: number;
+  /** Its code as the app shows it: "AC-03" (its number in its brand, 00534), or "AC-648" before its brand is numbered. */
+  code: string;
   brand_id: string;
   category: string;
   kind: string;
@@ -3482,6 +3488,7 @@ export function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
 interface ActionDetailRow {
   id: string;
   action_no: number;
+  brand_no: number | null;
   brand_id: string;
   category: string;
   kind: string;
@@ -3503,7 +3510,7 @@ interface ActionDetailRow {
 }
 
 const ACTION_DETAIL_COLUMNS =
-  'id, action_no, brand_id, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, stale_at, brands!inner(organization_id)';
+  'id, action_no, brand_no, brand_id, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, stale_at, brands!inner(organization_id)';
 
 export async function getActionFor(
   auth: McpAuthContext,
@@ -3563,6 +3570,7 @@ export async function getActionFor(
   return {
     id: action.id,
     action_no: Number(action.action_no),
+    code: actionCode({ actionNo: Number(action.action_no), brandNo: action.brand_no }),
     brand_id: action.brand_id,
     category: action.category,
     kind: action.kind,
@@ -3628,7 +3636,13 @@ export interface ListSignalsParams {
 /** Signal ids per action_signals read: 100 UUIDs keep the request line well under 8KB. */
 const SIGNAL_LINK_CHUNK = 100;
 
-type LinkedAction = { id: string; action_no: number; kind: string; status: string };
+type LinkedAction = {
+  id: string;
+  action_no: number;
+  brand_no: number | null;
+  kind: string;
+  status: string;
+};
 
 /**
  * The actions each signal has been used by, through action_signals (AC-007):
@@ -3648,7 +3662,7 @@ async function signalActionRefs(
     chunks.map((ids) =>
       supabaseAdmin
         .from('action_signals')
-        .select('signal_id, actions!inner(id, action_no, kind, status)')
+        .select('signal_id, actions!inner(id, action_no, brand_no, kind, status)')
         .in('signal_id', ids)
         .eq('actions.brand_id', brandId)
         .is('actions.deleted_at', null)
@@ -3673,7 +3687,13 @@ async function signalActionRefs(
       if (!a) continue;
       bySignal.set(link.signal_id, [
         ...(bySignal.get(link.signal_id) ?? []),
-        { id: a.id, action_no: Number(a.action_no), kind: a.kind, status: a.status },
+        {
+          id: a.id,
+          action_no: Number(a.action_no),
+          code: actionCode({ actionNo: Number(a.action_no), brandNo: a.brand_no }),
+          kind: a.kind,
+          status: a.status,
+        },
       ]);
     }
   }
@@ -3727,6 +3747,8 @@ export async function listSignalsFor(
 export interface ActionHistoryRow {
   id: string;
   action_no: number;
+  /** Its code as the app shows it: "AC-03" (its number in its brand, 00534), or "AC-648" before its brand is numbered. */
+  code: string;
   category: string;
   kind: string;
   impact: string;
@@ -3784,6 +3806,7 @@ interface ValidationSnapshot {
 interface ActionHistoryDbRow {
   id: string;
   action_no: number;
+  brand_no: number | null;
   category: string;
   kind: string;
   impact: string;
@@ -3796,7 +3819,7 @@ interface ActionHistoryDbRow {
 }
 
 const ACTION_HISTORY_COLUMNS =
-  'id, action_no, category, kind, impact, status, outcome, validation, created_at, completed_at';
+  'id, action_no, brand_no, category, kind, impact, status, outcome, validation, created_at, completed_at';
 
 export async function listActionHistoryFor(
   auth: McpAuthContext,
@@ -3829,6 +3852,7 @@ export async function listActionHistoryFor(
     return {
       id: r.id,
       action_no: Number(r.action_no),
+      code: actionCode({ actionNo: Number(r.action_no), brandNo: r.brand_no }),
       category: r.category,
       kind: r.kind,
       impact: r.impact,

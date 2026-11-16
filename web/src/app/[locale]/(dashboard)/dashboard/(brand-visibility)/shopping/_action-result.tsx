@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/format';
 import { resultTrend, type ActionResult } from '@/lib/shopping/recheck';
 import { cn } from '@/lib/utils';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 
 /**
  * What a done Products action did, 7 days on (ECOM-018): on the product's
@@ -40,7 +41,9 @@ export function ActionResultCard({ result }: { result: ActionResult }) {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center gap-2">
-          <CardTitle className="text-base">{t('title', { number: result.actionNo })}</CardTitle>
+          <CardTitle className="text-base">
+            {t('title', { number: actionCodeNo(result) })}
+          </CardTitle>
           {trend && Trend && (
             <span
               className={cn(
@@ -101,19 +104,19 @@ export function ActionResultLine({ result }: { result: ActionResult | undefined 
       )}
     >
       {result.after === null
-        ? t('shortPending', { number: result.actionNo, ready: formatDate(result.readyAt) })
+        ? t('shortPending', { number: actionCodeNo(result), ready: formatDate(result.readyAt) })
         : result.partial
-          ? t('shortTooMany', { number: result.actionNo })
+          ? t('shortTooMany', { number: actionCodeNo(result) })
           : result.after.shelves === 0
-            ? t('shortNoRuns', { number: result.actionNo })
+            ? t('shortNoRuns', { number: actionCodeNo(result) })
             : trend === 'new'
               ? t('shortNew', {
-                  number: result.actionNo,
+                  number: actionCodeNo(result),
                   after: result.after.on,
                   afterShelves: result.after.shelves,
                 })
               : t('short', {
-                  number: result.actionNo,
+                  number: actionCodeNo(result),
                   before: result.before.on,
                   beforeShelves: result.before.shelves,
                   after: result.after.on,

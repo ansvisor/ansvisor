@@ -1,3 +1,4 @@
+import { actionCode } from '@/lib/action-center/action-ref';
 import { csvLine } from '@/lib/csv';
 
 /**
@@ -51,8 +52,9 @@ export interface ImpactRow {
   kind: 'cms_publish' | 'pr_merged' | 'manual' | 'third_party_observed';
   source: 'chat' | 'action_center' | 'content_editor';
   shippedAt: string;
-  /** The action it belongs to, as AC-1241; null for none. */
+  /** The action it belongs to, as AC-1241 or its brand's AC-03 (actionCode); null for none. */
   actionNo: number | null;
+  brandNo?: number | null;
   /** Who shipped it: the person reading, a teammate (named), or no one (an integration or an agent). */
   by: { who: 'you' | 'teammate' | 'automation'; name: string | null };
   executionMode: 'manual' | 'assisted' | 'automated';
@@ -177,7 +179,7 @@ export function checkpointMarks(
  * select, as impactRow reads them: Reports' month and an agent's page alike.
  */
 export const SHIP_ROW_EMBEDS =
-  'actions!ship_events_action_id_fkey(action_no), impact_measurements!impact_measurements_ship_event_id_fkey(targets, window_json, metrics, outcome, confidence, checkpoint, checkpoints_json, not_measurable_reason, concurrent_changes, next_check_at, measured_at)';
+  'actions!ship_events_action_id_fkey(action_no, brand_no), impact_measurements!impact_measurements_ship_event_id_fkey(targets, window_json, metrics, outcome, confidence, checkpoint, checkpoints_json, not_measurable_reason, concurrent_changes, next_check_at, measured_at)';
 
 /** The measurement an embedded select gave: one row (one per ship event), or none. */
 export const measurementOf = (
@@ -196,6 +198,7 @@ export interface ShipRowInput {
   execution_mode: string;
   url: string | null;
   actionNo: number | null;
+  brandNo?: number | null;
   measurement: Record<string, unknown> | null;
 }
 
@@ -235,6 +238,7 @@ export function impactRow(
     source: oneOf(input.source, ['chat', 'action_center', 'content_editor'] as const) ?? 'chat',
     shippedAt: input.shipped_at,
     actionNo: input.actionNo,
+    brandNo: input.brandNo ?? null,
     by: !input.shipped_by
       ? { who: 'automation', name: null }
       : input.shipped_by === viewer
@@ -340,7 +344,7 @@ export function impactCsv(rows: readonly ImpactRow[], words: CsvWords): string {
       row.title,
       localDay(row.shippedAt),
       words.source(row.source),
-      row.actionNo !== null ? `AC-${row.actionNo}` : '',
+      row.actionNo !== null ? actionCode({ ...row, actionNo: row.actionNo }) : '',
       row.targetPrompts,
       row.metric ?? '',
       row.before,

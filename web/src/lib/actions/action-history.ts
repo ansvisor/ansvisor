@@ -44,6 +44,7 @@ import {
 interface HistoryRow {
   id: string;
   action_no: number;
+  brand_no?: number | null;
   category: string;
   kind: string;
   status: string;
@@ -64,7 +65,7 @@ interface HistoryRow {
 }
 
 const HISTORY_COLUMNS_BEFORE_00366 =
-  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level';
+  'id, action_no, brand_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level';
 
 const HISTORY_COLUMNS = `${HISTORY_COLUMNS_BEFORE_00366}, dismiss_reason`;
 
@@ -354,6 +355,7 @@ export async function getActionHistory(
     return {
       id: row.id,
       actionNo: Number(row.action_no),
+      brandNo: row.brand_no ?? null,
       kind: row.kind,
       type: row.category as ActionCategory,
       priorityScore: score,

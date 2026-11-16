@@ -30,9 +30,9 @@ export type SuggestionStatus = (typeof SUGGESTION_STATUSES)[number];
 export interface DraftSuggestion {
   id: string;
   batchId: string;
-  /** The Action Center action the run came from, with its number ("AC-214"). */
+  /** The Action Center action the run came from, with the number its code shows ("AC-03": actionCodeNo). */
   actionId: string | null;
-  actionNo: number | null;
+  actionNo: number | string | null;
   kind: 'replace' | 'insert' | 'page';
   /** The passage's text when the agent read it. */
   blockText: string;

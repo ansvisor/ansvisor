@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { sendShoppingActions } from '@/lib/actions/shopping';
 import type { PlannedWork } from '@/lib/shopping/action-plan';
 import { cn } from '@/lib/utils';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 
 /**
  * "Actions to get on the shelf" (ECOM-013): the proposed work for a product
@@ -61,8 +62,8 @@ export function ActionPlan({
       };
       (result.created ? toast.success : toast.info)(
         result.created
-          ? t('sent', { number: result.actionNo })
-          : t('alreadySent', { number: result.actionNo }),
+          ? t('sent', { number: actionCodeNo(result) })
+          : t('alreadySent', { number: actionCodeNo(result) }),
         { id: toastId, duration: 10_000, action: open },
       );
       onSent?.();

@@ -24,7 +24,9 @@
         "sort actions",
         "recently updated",
         "action number",
-        "find action by number"
+        "find action by number",
+        "action code",
+        "previously"
       ],
       "synonyms": [
         "recommendations",
@@ -65,7 +67,11 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's number under its title, such as AC-251, the number Chat uses for it: search for AC-251 or 251 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products."
+          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products."
+        },
+        {
+          "heading": "Action codes",
+          "text": "Each brand numbers its own actions from AC-01, in the order they were made, and an action keeps its code for good. A number is never used again, so the list has gaps where actions were done, dismissed or removed. Actions made before this had an older code, such as AC-648: the drawer shows it as \"Previously AC-648\" beside the new code, searching for it still finds the action, and links made with it still open it."
         },
         {
           "heading": "Sort the list",
@@ -1705,7 +1711,7 @@
         },
         {
           "heading": "Watch the work",
-          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its number, such as AC-1497, is a link: click it to open that action in Action Center in a new tab."
+          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both."
         },
         {
           "heading": "Big requests in parts",
