@@ -37,7 +37,23 @@ export const MODEL_PRICES = {
     long: { over: 100_000, input: 0.5, output: 2.5 },
   },
   'anthropic/claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2 },
+  // Chat's Claude Fable 5.2, on Anthropic's API only (DIRECT_MODELS). Its 5-minute cache write,
+  // $10, is CACHE_WRITE_MULTIPLIER times its input price.
+  'anthropic/claude-fable-5-2': { input: 8, output: 40, cacheRead: 0.2 },
 };
+
+/**
+ * Chat's models called on their maker's own API only (web lib/chat/models.ts
+ * `directOnly`): OpenRouter's catalog has no verified id for them, so they
+ * are priced from MODEL_PRICES above, never from the synced catalog, and the
+ * model menu offers them without it (model-menu.js).
+ */
+export const DIRECT_MODELS = Object.freeze(['anthropic/claude-fable-5-2']);
+
+/** Whether a model is one of DIRECT_MODELS. */
+export function isDirectModel(modelId) {
+  return DIRECT_MODELS.includes(String(modelId ?? ''));
+}
 
 /**
  * A prompt-cache write costs this many times the input price: Anthropic's
@@ -82,11 +98,12 @@ function usableSynced(modelId, price) {
 /**
  * A model's price, for a call of `promptTokens` (which may cross a
  * prompt-size price). With `synced` (Chat's own steps only), the synced one
- * in effect now comes first; otherwise, and when it's missing or $0, this
- * table's, and FALLBACK_PRICE for a model the table hasn't.
+ * in effect now comes first, but for a DIRECT_MODELS one; otherwise, and
+ * when it's missing or $0, this table's, and FALLBACK_PRICE for a model the
+ * table hasn't.
  */
 export function priceFor(modelId, { promptTokens = 0, synced = false } = {}) {
-  if (synced) {
+  if (synced && !isDirectModel(modelId)) {
     const price = syncedPriceFor(modelId, { promptTokens });
     if (usableSynced(modelId, price)) return price;
   }

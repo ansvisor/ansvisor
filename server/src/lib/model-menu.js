@@ -1,3 +1,4 @@
+import { isDirectModel } from './improve-cost.js';
 import { multiplierFor, multiplierLabel } from './model-prices.js';
 import { syncedRow, syncedRows, variesByTime } from './model-price-cache.js';
 
@@ -72,9 +73,22 @@ export function shortName(name, id) {
  * One model as the menu shows it. `removed`: the catalog no longer lists it
  * (no row, or one REMOVED_AFTER_MS older than the newest sync): the menu
  * leaves it out and the engine runs Auto in its place. Its multiplier and
- * tone are null until it is synced (its name is then its id).
+ * tone are null until it is synced (its name is then its id). A model called
+ * on its maker's API only (improve-cost.js DIRECT_MODELS) isn't the
+ * catalog's: never removed, its multiplier from the price the budget charges.
  */
 export function menuModel(modelId, { now = new Date(), updatedAt = catalogUpdatedAt() } = {}) {
+  if (isDirectModel(modelId)) {
+    const multiplier = multiplierFor(modelId, now);
+    return {
+      id: modelId,
+      name: modelId,
+      multiplier: multiplier === null ? null : multiplierLabel(multiplier),
+      tone: toneOf(multiplier),
+      variesByHour: false,
+      removed: false,
+    };
+  }
   const row = syncedRow(modelId);
   // With no sync at all (a first start that failed), nothing counts as dropped.
   const removed =

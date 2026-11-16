@@ -4816,6 +4816,9 @@
       "queueTimeout": "Too many runs are working at once in this workspace, so this one didn't start. Try again in a moment.",
       "failed": "Something went wrong, so Chat stopped here. What's done so far is kept.",
       "providerDown": "{provider} didn't answer, so Chat stopped here. What's done so far is kept. Try again in a moment.",
+      "refused": "{model} turned this request down, so Chat stopped here. What's done so far is kept. Ask another way, or pick another model.",
+      "retention": "{model} needs 30-day data retention on the Anthropic account it runs on, and that account doesn't have it, so Chat stopped here. Pick another model and send again.",
+      "retentionOwnKey": "{model} needs 30-day data retention, and your workspace's Anthropic key is on an account with zero data retention, so Chat stopped here. Pick another model, or an Admin can turn on 30-day retention for that key's workspace in the Anthropic Console.",
       "keyStopped": "So Chat stopped here. What's done so far is kept.",
       "key": {
         "invalid": "{provider} turned down your workspace's key.",
