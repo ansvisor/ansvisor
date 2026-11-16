@@ -30,8 +30,10 @@ export function newUserThemeScript(theme: string, storageKey: string): string {
  * has a theme (picked, or given here before) keeps it.
  *
  * Sign-in can't tell new people from returning ones, so someone signing in
- * on a new browser or device, or in one where they never picked a theme,
- * starts dark too (the owner accepted this).
+ * on a new browser or device starts dark too (the owner accepted this).
+ * Someone who already uses Ansvisor and never picked a theme keeps light:
+ * KeepCurrentTheme saves it when they open a dashboard page signed in, so
+ * this finds a theme on their next sign-in and leaves it.
  *
  * The inline script covers a page loaded from the server; the effect covers
  * a page reached in the app (a link from another page), where React doesn't

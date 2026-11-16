@@ -393,4 +393,35 @@ describe('the MCP server for a Selected-brands key', () => {
     expect(new Set(db.reads)).toEqual(new Set(['brands']));
     expect(db.rpcs).toEqual([]);
   });
+
+  // The list tools' lookups (Chat's reads, over MCP): what a person names on a brand they may not use.
+  const lookups: [string, Record<string, unknown>][] = [
+    ['list_signals', { codes: ['S-07'], ids: ['5a000000-0000-4000-8000-000000000007'] }],
+    ['list_prompts', { search: 'skip a month', ids: ['a1000000-0000-4000-8000-000000000005'] }],
+    ['get_prompt_performance', { prompt_ids: ['a1000000-0000-4000-8000-000000000005'] }],
+    [
+      'list_citations',
+      { domains: ['beanbulletin.example'], urls: ['https://beanbulletin.example/best'] },
+    ],
+    ['list_content_opportunities', { search: 'storage guide' }],
+    [
+      'list_content_drafts',
+      { search: 'gift boxes', ids: ['a4000000-0000-4000-8000-000000000001'] },
+    ],
+    ['list_reports', { ids: ['ae000000-0000-4000-8000-000000000001'] }],
+  ];
+
+  it.each(lookups)(
+    '%s answers a lookup on a brand it may not use as not found, reading none of its rows',
+    async (name, args) => {
+      const hidden = '11111111-1111-4111-8111-111111111111';
+      db.rows.brands = { id: hidden, name: 'Acme' };
+      const client = await connect(SELECTED);
+      const result = await client.callTool({ name, arguments: { brand_id: hidden, ...args } });
+      expect(result.isError).toBe(true);
+      expect(text(result)).toBe('Brand not found');
+      expect(new Set(db.reads)).toEqual(new Set(['brands']));
+      expect(db.rpcs).toEqual([]);
+    },
+  );
 });

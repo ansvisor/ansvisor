@@ -9,7 +9,8 @@ import { computeAiVisibilityScore } from '@/lib/visibility-score';
  * daily rollups the Visibility page reads, in two calls that run together,
  * never from the answers themselves. On a customer brand the raw path outran
  * Chat's 20 s read limit twice in one run (2026-11-11). A window that starts
- * or ends inside a day still reads the raw rows.
+ * or ends inside a day reads the raw aggregates the page reads for it, never
+ * the answers (the maintainer's review of 2026-11-16).
  */
 
 type Rpc = { fn: string; args: Record<string, unknown> };
@@ -262,22 +263,48 @@ describe('getVisibilitySummaryFor over whole days', () => {
 });
 
 describe('getVisibilitySummaryFor over a window inside a day', () => {
-  it('reads the raw rows', async () => {
-    db.payloads = { tracked_prompt_count: 0 };
-    await getVisibilitySummaryFor(AUTH, {
+  it("reads the page's raw aggregates, never the answers", async () => {
+    db.payloads = {
+      competitor_aggregates: AGGREGATES,
+      ai_visibility_aggregates: SCORE,
+      visible_prompt_stats: { visible_prompts: 120 },
+      tracked_prompt_count: 290,
+    };
+    const summary = await getVisibilitySummaryFor(AUTH, {
       brandId: 'b1',
       dateFrom: '2026-11-10T15:30:00Z',
       dateTo: '2026-11-11T15:30:00Z',
     });
-    expect(db.tables).toContain('prompt_results');
+    expect(db.tables).not.toContain('prompt_results');
     expect(fns().sort()).toEqual([
       'ai_visibility_aggregates',
+      'competitor_aggregates',
       'tracked_prompt_count',
       'visible_prompt_stats',
     ]);
-    expect(db.rpcs[0].args).toMatchObject({
-      p_date_from: '2026-11-10T15:30:00Z',
-      p_date_to: '2026-11-11T15:30:00Z',
+    for (const call of db.rpcs) {
+      expect(call.args, call.fn).toMatchObject({
+        p_brand_id: 'b1',
+        p_date_from: '2026-11-10T15:30:00Z',
+        p_date_to: '2026-11-11T15:30:00Z',
+      });
+    }
+    // The same shape as the rollups' summary: the aggregate's counts, the KPI card's prompt pair.
+    expect(summary!.totals).toMatchObject({
+      resultCount: 54_000,
+      avgVisibility: 15,
+      totalMentions: 21_500,
+      totalCitations: 6_200,
+      visiblePrompts: 120,
+      promptCount: 290,
     });
+    expect(summary!.topCompetitors.map((c) => c.name)).toEqual([
+      'Profound',
+      'Peec AI',
+      'Athena',
+      'Scrunch',
+      'Rankscale',
+    ]);
+    expect(summary).not.toHaveProperty('answers_cut');
   });
 });
