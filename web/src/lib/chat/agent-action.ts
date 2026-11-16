@@ -64,6 +64,8 @@ const TITLE_MAX = 300;
 export const actionSnapshotSchema = z.object({
   id: z.guid(),
   no: z.number().int().positive(),
+  /** Its number in its brand (00534); absent on a run kept before, or before its brand is numbered. */
+  brandNo: z.number().int().positive().nullable().optional(),
   title: z.string().max(TITLE_MAX),
   category: z.enum(ACTION_CATEGORIES as [ActionCategory, ...ActionCategory[]]),
   kind: z.string().max(100),
@@ -73,6 +75,12 @@ export const actionSnapshotSchema = z.object({
   tasks: z.array(z.string().max(TITLE_MAX)).max(SNAPSHOT_TASKS),
 });
 export type ActionSnapshot = z.infer<typeof actionSnapshotSchema>;
+
+/** A snapshot's numbers, as its code is built from them (actionCode). */
+export const snapshotNumbers = (action: ActionSnapshot) => ({
+  actionNo: action.no,
+  brandNo: action.brandNo,
+});
 
 /** A run's action, from its evidence as stored; null for a run not on an action, or one that doesn't read. */
 export function actionScopeOf(evidence: unknown): ActionSnapshot | null {
@@ -87,6 +95,7 @@ export const categoryName = (category: ActionCategory) => categoriesT(category);
 interface ActionRow {
   id: string;
   action_no: number;
+  brand_no: number | null;
   brand_id: string;
   category: ActionCategory;
   kind: string;
@@ -115,7 +124,7 @@ export async function readActionForRun(
 ): Promise<AgentResult<ActionForRun>> {
   const { data, error } = await supabaseAdmin
     .from('actions')
-    .select('id, action_no, brand_id, category, kind, status, payload, deleted_at')
+    .select('id, action_no, brand_no, brand_id, category, kind, status, payload, deleted_at')
     .eq('id', actionId)
     .maybeSingle();
   if (error) throw new Error(`Could not read the action: ${error.message}`);
@@ -186,6 +195,7 @@ export async function readActionForRun(
       snapshot: {
         id: row.id,
         no: Number(row.action_no),
+        brandNo: row.brand_no,
         title: title.slice(0, TITLE_MAX),
         category: row.category,
         kind: row.kind,

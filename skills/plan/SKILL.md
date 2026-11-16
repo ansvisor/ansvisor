@@ -29,18 +29,18 @@ Every read covers the person's date range: Chat asks for it before the first rea
 ## Steps
 
 1. Find the gaps: prompts with low or falling visibility, the top opportunities, prompts and platforms where a competitor leads, and pages that lost citations.
-2. Leave out anything an open action already covers (the same prompts or pages, for the same goal): name that action, as AC-n, in the plan instead.
+2. Leave out anything an open action already covers (the same prompts or pages, for the same goal): name that action in the plan instead, by its title with its AC-n.
 3. Choose 8 to 12 new actions in all: the most visibility for the least effort first. For each: a title that names its prompt or page, its category (growth, protect, recover, fix, compete), why, with the numbers it comes from, its effort (Small: under 2 hours, Medium: about half a day, Large: a day or more), the prompts and pages it covers, and 1 to 3 tasks, each with its exact page or where it is done, and Done when.
 4. Spread them over four weeks, at most 3 a week: fixes and quick wins in week 1, then the pages and content that win prompts, and in week 4 the follow-ups and a check of what moved.
 5. Show the plan, then ask once, as one question with options: add the new actions to the Action Center now (recommended), or change the plan first. When the person asks for changes, show the changed plan and ask once again.
 6. When the person says yes, call `create_action` once for each new action, in week order. The app shows its own card where the person's mode needs one; an action they decline is left out. In an agent's run nobody is there to ask: call the tool anyway, and the app holds each action for approval where the agent's mode needs it.
-7. When `create_action` answers `duplicate`, nothing was made: link the action it names (AC-n) in that action's place, and never create it anyway.
+7. When `create_action` answers `duplicate`, nothing was made: name the action it points to, by its title with its AC-n, in that action's place, and never create it anyway.
 
 ## Output
 
 1. The date range read, in one line.
-2. One table for each week: Action (AC-n, or "not added" with the reason), Why, Effort, Prompts and pages.
-3. Already open: each open action the plan builds on, as AC-n, with what it covers.
+2. One table for each week: Action (its title with its AC-n, or "not added" with the reason), Why, Effort, Prompts and pages.
+3. Already open: each open action the plan builds on, by its title with its AC-n, and what it covers.
 4. One line, "What to do first": the first action, and its first task.
 
 ## Don't

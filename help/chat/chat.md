@@ -1,11 +1,11 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range above the box, add date range, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, settings in the chat menu, general settings, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, open action from answer, action link]
+keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range above the box, add date range, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, settings in the chat menu, general settings, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, action code, what is ac, open action from answer, action link, most important actions, what should i do first, top actions, action title, signal code, what is s-07, look up a prompt, find a prompt, cited domain, cited page, find a draft, find a report]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-11-16
-last_checked: 2026-11-15
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -107,6 +107,12 @@ Or send a short range as your message, such as "last 7d", "last 24h" or "use 90 
 
 A period inside a question, such as "How was last week?", is used for that answer only: your default stays as it is.
 
+## Long lists
+
+Chat reads any list the same way, such as signals, prompts, mentions, citations, opportunities or drafts: 50 at a time, with how many there are in all. Signals are read over your date range the way the Signals page reads its window: those found by its end that were still open, or resolved, after it began. When your question needs more, Chat reads the next 50 before it answers. When an answer covers part of a list, it says which part, such as "the newest 50 of 451 signals", and offers the rest as a next move.
+
+Ask about one item by what you see: a signal's code (S-07), a prompt's words, a cited domain or address, or an opportunity, draft or report title. Chat looks it up directly, in any status, and says plainly if the brand has none.
+
 ## Change what you track
 
 Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.
@@ -122,6 +128,14 @@ Admins and Managers see **Send to Action Center** under Chat's latest answer. Ch
 If an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.
 
 Chat can also attach a file or draft to a task, and set a task it finished to **Ready for review**. It never marks a task done: you do that in Action Center. Each change has **Undo** in the **Activity** log.
+
+## Ask about your actions
+
+Ask "What are the most important actions?" or "What should I do first?" and Chat reads the brand's open actions (New, In progress and On hold) in Priority Score order, up to 50 at a time, with how many there are in all. When there are more than it read, it reads the next ones too, or says how many it judged, such as "the top 50 of 53".
+
+Chat names each action by its title, with its number after it as a link: **Recover lost citations on 3 prompts** (AC-12). Actions that are alike are grouped by what they share, each with its own number.
+
+Ask about an action by its code, such as "What is AC-12?", and Chat reads that action, whatever its status. A code the brand doesn't have gets a plain "not found" (codes are per brand), never a guess.
 
 ## Work through your Action Center tasks
 
@@ -226,7 +240,7 @@ Everything comes from your scheduled tracking. Chat never asks an AI engine anyt
 
 ## What explains the change
 
-Under the answer, a card shows the same numbers. Click the two values for the periods, the tracking runs compared and the normal swing. Each cause shows its share of the change, or its points when it partly offset it. Open a cause to see its prompts, the page cited before and the one cited now, and the day. **Answer** opens that tracked answer, with your brand marked and the pages it cited. Each cause says how sure Chat is: **High** when 10 or more prompts show it, **Medium** for 3 to 9, **Low** for fewer. When some answers couldn't be read, the card says so. What the causes don't cover shows as **Shifts across AI answers**.
+Under the answer, a card shows the same numbers. Click the two values for the periods, the tracking runs compared and the normal swing. Each cause shows its share of the change, or its points when it partly offset it. Open a cause to see its prompts, the page cited before and the one cited now, and the day. **Answer** opens that tracked answer, with your brand marked and the pages it cited. Each cause says how sure Chat is: **High** when 10 or more prompts show it, **Medium** for 3 to 9, **Low** for fewer. When some prompts had more answers than the explanation compares, the card says causes come only from prompts whose answers were all compared. What the causes don't cover shows as **Shifts across AI answers**.
 
 ## Close a task from what Chat made
 
@@ -280,7 +294,7 @@ While Chat works, one line says what it is doing now, such as "Reading Citations
 
 Under the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
-Each Action Center action an answer names, such as AC-1497, is a link: click it to open that action in Action Center in a new tab.
+Each Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both.
 
 ## Big requests in parts
 
@@ -290,7 +304,7 @@ Parts only read, on the same brand and with the same access as you. When a part 
 
 ## When something goes wrong
 
-A step that fails shows a red mark and why, such as **Timed out**. Chat goes on where it can, and the answer says what it couldn't read. A read that timed out isn't tried again in the same answer, so it doesn't hold up the rest.
+A step that fails shows a red mark and why, such as **Took too long this time**. Chat retries once with a narrower read, such as a shorter period. If a figure still isn't there, the answer says it isn't available right now and offers to retry. Something off for you, such as another plan's feature, is named with why and what you can do.
 
 If the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.
 
@@ -334,7 +348,7 @@ Chats have the same dots as the main menu. A grey dot that pulses means Chat is 
 
 ## Open and close Settings in the chat menu
 
-Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on **General**, **Activity** or **What Chat can do**. Chat remembers whether you left them open or closed, in this browser.
+Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on one of them. Chat remembers whether you left them open or closed, in this browser. Each opens on the **Settings** page, whose own tabs on the left are the same four: **General**, **Activity**, **What Chat can do** and **Tool policy**.
 
 ## Hide the chat menu
 

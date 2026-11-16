@@ -86,6 +86,7 @@ describe('getTaskReviews', () => {
         id: 'r1',
         actionId: 'a1',
         actionNo: 12,
+        brandNo: null,
         title: 'Add a pricing FAQ to /pricing',
         details: expect.objectContaining({ where: '/pricing', doneWhen: 'FAQ present' }),
         missing: ['url', 'change'],

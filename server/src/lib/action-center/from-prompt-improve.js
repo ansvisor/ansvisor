@@ -20,6 +20,7 @@ import {
   readPlatformStates,
 } from './improve-outcome.js';
 import { priorityOnCreate } from './priority-data.js';
+import { brandNoOf } from './action-code.js';
 
 export const IMPROVE_ACTION_KIND = 'prompt_improve';
 
@@ -263,11 +264,17 @@ export async function sendImproveToActionCenter({
   const dedupKey = `prompt_improve:${prompt.id}:${idempotencyKey}`;
   const { data: existing } = await supabaseAdmin
     .from('actions')
-    .select('id, action_no')
+    .select('id, action_no, brand_no')
     .eq('brand_id', brandId)
     .eq('dedup_key', dedupKey)
     .maybeSingle();
-  if (existing) return { actionId: existing.id, actionNo: existing.action_no, created: false };
+  if (existing)
+    return {
+      actionId: existing.id,
+      actionNo: existing.action_no,
+      ...brandNoOf(existing),
+      created: false,
+    };
 
   const covered = new Set(suggestions.map((s) => s.platform));
   const platforms = (set.platform_states ?? []).filter((p) => covered.has(p.id));
@@ -338,7 +345,7 @@ export async function sendImproveToActionCenter({
         payload,
       })),
     })
-    .select('id, action_no')
+    .select('id, action_no, brand_no')
     .single();
   if (error) {
     // Two requests for the same send can race past the lookup; the partial
@@ -346,11 +353,17 @@ export async function sendImproveToActionCenter({
     if (error.code === '23505') {
       const { data: winner } = await supabaseAdmin
         .from('actions')
-        .select('id, action_no')
+        .select('id, action_no, brand_no')
         .eq('brand_id', brandId)
         .eq('dedup_key', dedupKey)
         .maybeSingle();
-      if (winner) return { actionId: winner.id, actionNo: winner.action_no, created: false };
+      if (winner)
+        return {
+          actionId: winner.id,
+          actionNo: winner.action_no,
+          ...brandNoOf(winner),
+          created: false,
+        };
     }
     throw new Error(error.message);
   }
@@ -372,7 +385,7 @@ export async function sendImproveToActionCenter({
     },
   });
 
-  return { actionId: action.id, actionNo: action.action_no, created: true };
+  return { actionId: action.id, actionNo: action.action_no, ...brandNoOf(action), created: true };
 }
 
 /**
@@ -385,15 +398,19 @@ export async function liveImproveSends(set) {
   if (!sends.length) return { latest: null, sentSuggestionIds: [] };
   const { data: actions } = await supabaseAdmin
     .from('actions')
-    .select('id, status')
+    .select('id, status, brand_no')
     .in(
       'id',
       sends.map((s) => s.actionId),
     );
-  const live = new Set((actions ?? []).filter((a) => a.status !== 'dismissed').map((a) => a.id));
+  const live = new Map(
+    (actions ?? []).filter((a) => a.status !== 'dismissed').map((a) => [a.id, a]),
+  );
   const liveSends = sends.filter((s) => live.has(s.actionId));
+  const latest = liveSends.at(-1);
   return {
-    latest: liveSends.length ? liveSends[liveSends.length - 1] : null,
+    // Named by its code as it reads now (00534): its brand's number once there.
+    latest: latest ? { ...latest, ...brandNoOf(live.get(latest.actionId)) } : null,
     sentSuggestionIds: [...new Set(liveSends.flatMap((s) => s.suggestionIds ?? []))],
   };
 }

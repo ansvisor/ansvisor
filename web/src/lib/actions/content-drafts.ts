@@ -151,6 +151,11 @@ import { isManager } from '@/lib/session-role';
 import { refreshYears } from '@/lib/content/current-year';
 import { withContentDom } from '@/lib/content/server-dom';
 import { readDraftBriefWith, readDraftSourcesWith } from '@/lib/content/draft-reads';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
+
+/** The number a draft's action's code shows ("03", actionCodeNo), as its "AC-{no}" chips read it. */
+const draftActionNo = (action: { action_no: number; brand_no?: number | null }) =>
+  actionCodeNo({ actionNo: Number(action.action_no), brandNo: action.brand_no });
 
 /**
  * Content drafts (Content Editor, CE-002), read through the signed-in member's
@@ -238,7 +243,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
     supabase
       .from('content_drafts')
       .select(
-        `id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at, shopping_built:shopping_path->>builtAt, origin, action_id, actions(action_no), ${DRAFT_CHAT}` as const,
+        `id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at, shopping_built:shopping_path->>builtAt, origin, action_id, actions(action_no, brand_no), ${DRAFT_CHAT}` as const,
       )
       .eq('brand_id', brandId)
       .order('updated_at', { ascending: false })
@@ -281,7 +286,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
       conversation: draftConversationOf(row.conversation, me),
       action:
         row.action_id && row.actions
-          ? { id: row.action_id, number: Number(row.actions.action_no) }
+          ? { id: row.action_id, number: draftActionNo(row.actions) }
           : null,
     }),
   );
@@ -307,7 +312,7 @@ const keptSource = z
 /** One draft for the editor (CE-004), or null when it isn't the member's to read. */
 /** The draft as the editor reads it; before 00448, without schema_left_out. */
 const DRAFT_COLUMNS_BEFORE_00448 =
-  `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no), ${DRAFT_CHAT}` as const;
+  `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no, brand_no), ${DRAFT_CHAT}` as const;
 const DRAFT_COLUMNS = `${DRAFT_COLUMNS_BEFORE_00448}, schema_left_out` as const;
 
 /**
@@ -405,7 +410,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     authorConfirmed: { real: !!data.author_real_at, profile: !!data.author_profile_at },
     action:
       data.action_id && data.actions
-        ? { id: data.action_id, number: data.actions.action_no }
+        ? { id: data.action_id, number: draftActionNo(data.actions) }
         : null,
     conversation: draftConversationOf(data.conversation, userRes.data.user?.id ?? null),
     agentState: agentStateOf(data.agent_state, data.agent_state_at),
@@ -888,7 +893,10 @@ export async function checkDraftClaims(
 export async function sendContentDraftToActionCenter(
   brandId: string,
   id: string,
-): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+): Promise<
+  | { actionId: string; actionNo: number; brandNo?: number | null; created: boolean }
+  | { error: string }
+> {
   if (!draftId.safeParse(brandId).success || !draftId.safeParse(id).success) {
     return { error: 'invalid' };
   }
@@ -913,6 +921,7 @@ export async function sendContentDraftToActionCenter(
     return {
       actionId: String(body.actionId),
       actionNo: Number(body.actionNo),
+      ...(typeof body.brandNo === 'number' ? { brandNo: body.brandNo } : {}),
       created: Boolean(body.created),
     };
   } catch (err) {
@@ -2059,7 +2068,7 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
   const { data, error } = await supabase
     .from('content_draft_suggestions')
     .select(
-      'id, batch_id, action_id, kind, block_text, before_text, before_html, after_text, after_links, reason, rule_keys, position, status, created_at, sources, source_marks, actions(action_no)',
+      'id, batch_id, action_id, kind, block_text, before_text, before_html, after_text, after_links, reason, rule_keys, position, status, created_at, sources, source_marks, actions(action_no, brand_no)',
     )
     .eq('draft_id', id)
     .eq('batch_id', latest.batch_id)
@@ -2072,6 +2081,7 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
     .map((row) => {
       const action = (Array.isArray(row.actions) ? row.actions[0] : row.actions) as {
         action_no: number;
+        brand_no: number | null;
       } | null;
       // What it was written from (00248); an insert's marks are by its text,
       // within its HTML's length. A page names its sources, with no marks.
@@ -2084,7 +2094,7 @@ export async function getDraftSuggestions(id: string): Promise<DraftSuggestion[]
         id: row.id,
         batchId: row.batch_id,
         actionId: row.action_id,
-        actionNo: action?.action_no ?? null,
+        actionNo: action ? draftActionNo(action) : null,
         kind: row.kind === 'insert' || row.kind === 'page' ? row.kind : 'replace',
         blockText: row.block_text,
         beforeText: row.before_text,

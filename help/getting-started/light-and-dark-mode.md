@@ -2,10 +2,10 @@
 title: Switch between light and dark mode
 route: /dashboard
 keywords: [dark mode, light mode, theme, night mode, appearance, account menu, sign out, settings shortcut]
-synonyms: [change colors, dark theme, light theme, make it darker, brighter screen, log out, where is settings, menu under my name]
+synonyms: [change colors, dark theme, light theme, make it darker, brighter screen, why is it dark now, log out, where is settings, menu under my name]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,13 +15,13 @@ Ansvisor has a light and a dark mode. You can switch between them at any time, f
 
 ## Which mode you start in
 
-On Ansvisor Cloud, a new account starts in dark mode for now, from the sign-up page on. Anyone who used Ansvisor before keeps the mode they had. Self-hosted installs start in light mode.
+On Ansvisor Cloud, new people start in dark mode for now. The sign-up, sign-in and password reset pages give it to a browser where no mode has been picked yet, and the browser then keeps it, as if you had picked it. People who already use Ansvisor keep the mode they have: if you never picked one, each browser where you open Ansvisor signed in keeps light mode. A mode you picked with the sun or moon button is never changed. Self-hosted installs start in light mode.
 
 ## Switch the mode
 
 Open the main menu: its sun or moon button sits beside the Ansvisor logo, at the top. When the menu is folded to icons, the button is hidden until you open it. On a phone, it is at the top of the menu. The moon switches to dark mode, and the sun to light mode.
 
-Your choice is kept in this browser, so each page opens in it. On another browser or device, Ansvisor opens in its usual mode until you switch there too.
+Your choice is kept in this browser, so each page opens in it. Another browser or device keeps its own mode. On Ansvisor Cloud, one where you never used Ansvisor starts in dark mode when you sign in there, until you switch.
 
 ## The account menu
 

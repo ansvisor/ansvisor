@@ -8,8 +8,11 @@ import type { Json } from '@/types/supabase';
  * oldest first: its latest), with how
  * many were left out (`{list}_more`) and what those rows add up to
  * (`{list}_rest`: "+132 more rows, 9% of citations"); only then is the rest
- * cut as text. Every cut says `truncated: true`. No model: the numbers are
- * the rows' own. Pure, so the engine and its tests share it.
+ * cut as text. Every cut says `truncated: true`. A page of a list read
+ * (`total`, `offset`, `next_offset`) is cut as a shorter page instead: the
+ * next one starts where it ends, so the rest reads as the next page, never
+ * as missing. No model: the numbers are the rows' own. Pure, so the engine
+ * and its tests share it.
  */
 
 /** A long text in a row (an answer, a page's text) is shortened to this, when a result is over. */
@@ -137,10 +140,46 @@ function moreOf(prior: Json | undefined, dropped: number): Json {
   return (typeof prior === 'number' ? prior : 0) + dropped;
 }
 
+/** A page of a list read (lib/mcp/list-page.ts): how many match, where it starts and the next. */
+const isPage = (value: Json): value is Record<string, Json> =>
+  isRecord(value) &&
+  typeof value.total === 'number' &&
+  typeof value.offset === 'number' &&
+  'next_offset' in value;
+
+/**
+ * A page over `maxChars` as a shorter page: each of its lists keeps its
+ * first rows, as many as fit, all to the same count, and `next_offset` and
+ * `note` say where the next page starts. Null when not even one row fits.
+ */
+function fitPage(page: Record<string, Json>, maxChars: number, shortened: boolean): Json | null {
+  const lists = Object.keys(page).filter((key) => Array.isArray(page[key]));
+  const longest = Math.max(0, ...lists.map((key) => (page[key] as Json[]).length));
+  const offset = page.offset as number;
+  const keep = (kept: number): Record<string, Json> => {
+    const out: Record<string, Json> = { ...page };
+    if (shortened) out.texts_shortened = true;
+    if (kept >= longest) return out;
+    for (const key of lists) out[key] = (page[key] as Json[]).slice(0, kept);
+    const end = offset + kept;
+    out.next_offset = end;
+    out.note = `Showing ${offset + 1}–${end} of ${page.total as number}. Read the next page with offset ${end}, or say how many you judged.`;
+    return out;
+  };
+  let low = 0;
+  let high = longest;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (size(keep(mid)) <= maxChars) low = mid;
+    else high = mid - 1;
+  }
+  return low > 0 || longest === 0 ? keep(low) : null;
+}
+
 /**
  * A tool's output fitted to `maxChars` (CHAT-04 items 5–6): as it is when
  * it fits; else shortened texts, then cut lists with their rest lines, then
- * cut text, each saying `truncated: true`.
+ * cut text, each saying `truncated: true`. A page stays a page (fitPage).
  */
 export function fitResult(
   value: unknown,
@@ -152,6 +191,9 @@ export function fitResult(
 
   // 1. Long texts in the rows.
   const short = shortenTexts(json, TEXT_FIELD_CHARS);
+  // A page: its first rows that fit, with where the next page starts.
+  const page = isPage(short.value) ? fitPage(short.value, maxChars, short.shortened) : null;
+  if (page && size(page) <= maxChars) return done(page);
   const marked = (out: Json): Json =>
     isRecord(out)
       ? { ...out, truncated: true, ...(short.shortened ? { texts_shortened: true } : {}) }

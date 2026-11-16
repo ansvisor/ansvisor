@@ -1,11 +1,11 @@
 ---
 title: Signals in the Action Center
 route: /dashboard/action-center/signals
-keywords: [signals, what changed, visibility drop, lost citation, signal status]
+keywords: [signals, what changed, visibility drop, lost citation, signal status, signal code, find signal by number]
 synonyms: [alerts, changes, detections, findings]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -17,7 +17,7 @@ The **Signals** tab lists what changed: a visibility drop, a lost citation, a co
 
 The cards show Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before.
 
-Filter by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, or search.
+Filter by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, or search. Each signal has a code beside its title, such as S-12: each brand numbers its own signals from S-01, and searching for S-12 or 12 finds it.
 
 ## Signal status
 

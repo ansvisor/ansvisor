@@ -1,3 +1,8 @@
+import { askedCodes, lookUpCodes } from '@/lib/action-center/action-codes';
+import { priorityLevelOf } from '@/lib/action-center/priority';
+import { pageMeta, pageWindow } from '@/lib/mcp/list-page';
+import { askedSignals, lookUpCited, periodWords, signalLookup } from '@/lib/mcp/lookup';
+
 /**
  * The workspace the agents' and skills' test set runs in (agent-eval.ts):
  * Brewline Coffee, the demo brand's world (server/src/lib/demo/brewline.js),
@@ -661,6 +666,156 @@ const ACTIONS = [
 ];
 export const EVAL_ACTIONS = ACTIONS;
 
+/**
+ * The workspace a scenario runs on: as above, or with the brand's long
+ * list of open actions (`action_backlog`), 55 in all as the owner's brand
+ * had (2026-11-16), so the list's first page of 50 doesn't hold them all;
+ * or with long lists of signals and cited domains (`long_lists`, the
+ * owner's plan of 2026-11-16, item 2), 60 and 70, so a signal or domain
+ * asked about is past the first page of 50.
+ */
+export type EvalWorkspace = 'default' | 'action_backlog' | 'long_lists';
+
+const BACKLOG_SUBJECTS = [
+  'whole bean storage',
+  'cold brew',
+  'gift cards',
+  'espresso blends',
+  'single origins',
+  'grind sizes',
+  'roast dates',
+];
+const BACKLOG_TITLES = [
+  (x: string) => `Add an FAQ answer about ${x}`,
+  (x: string) => `Refresh the ${x} guide`,
+  (x: string) => `Earn a citation on ${x} from a review site`,
+  (x: string) => `Answer the fan-outs about ${x}`,
+  (x: string) => `Close the gap with Northbound Roasters on ${x}`,
+  (x: string) => `Add a comparison table to the ${x} page`,
+  (x: string) => `Recover lost mentions on ${x}`,
+];
+const BACKLOG_CATEGORIES = ['growth', 'compete', 'fix', 'recover', 'protect'];
+
+/** An action of the backlog: open, no tasks yet. */
+const backlogAction = (n: number, number: number, over: Record<string, unknown>) => ({
+  id: id('a5e10000', n),
+  number: `AC-${number}`,
+  category: BACKLOG_CATEGORIES[n % BACKLOG_CATEGORIES.length],
+  title: '',
+  priority_score: 0,
+  status: 'new',
+  due: undefined as string | undefined,
+  why: '',
+  pages: [] as string[],
+  tasks: [] as { id: string; title: string; status: string }[],
+  ...over,
+});
+
+/**
+ * The asked-about pair of the action-code scenario: AC-63 ranks third, on
+ * the list's first page; AC-481 is scored lowest of all 55, past it, as the
+ * owner's AC-481 was ("what is AC-481?" was answered from the first page).
+ */
+export const EVAL_CODE_ACTIONS = {
+  onFirstPage: backlogAction(0, 63, {
+    category: 'growth',
+    title: 'Build on your gain on "Which coffee subscription lets you skip a month?"',
+    priority_score: 69,
+    why: 'Brewline is now named in 3 of 4 answers to this prompt, up from 1 last week; a direct answer on the subscriptions page can keep it there.',
+    pages: [SUBS],
+  }),
+  pastFirstPage: backlogAction(1, 481, {
+    category: 'growth',
+    title: 'Expand visibility on 1 platform',
+    priority_score: 8,
+    why: 'Brewline is named on ChatGPT, Perplexity and Gemini for its subscription prompts, but not on Microsoft Copilot yet.',
+  }),
+};
+
+/** The backlog: the pair above and 49 others, scored 50 down to 12, AC-45 to AC-94 but AC-63. */
+const ACTION_BACKLOG = [
+  EVAL_CODE_ACTIONS.onFirstPage,
+  ...Array.from({ length: 49 }, (_, i) => {
+    const subject = BACKLOG_SUBJECTS[i % BACKLOG_SUBJECTS.length];
+    const title = BACKLOG_TITLES[Math.floor(i / BACKLOG_SUBJECTS.length)](subject);
+    return backlogAction(i + 2, i < 18 ? 45 + i : 46 + i, {
+      title,
+      priority_score: 50 - Math.floor(i * 0.8),
+      why: `Found in this week's tracking for ${subject}.`,
+    });
+  }),
+  EVAL_CODE_ACTIONS.pastFirstPage,
+];
+
+/** The brand's actions on a workspace. */
+export const evalActions = (workspace: EvalWorkspace = 'default') =>
+  workspace === 'action_backlog' ? [...ACTIONS, ...ACTION_BACKLOG] : ACTIONS;
+
+type EvalAction = ReturnType<typeof evalActions>[number];
+const OPEN_STATUSES = new Set(['new', 'in_progress', 'on_hold']);
+const EVAL_PAGE_MAX = 50;
+
+/** An action as Chat's list reads it: compact, as listActionsPageFor gives it. */
+const actionRow = (action: EvalAction) => ({
+  id: action.id,
+  ref: action.number,
+  title: action.title,
+  category: action.category,
+  status: action.status,
+  priority: action.priority_score,
+  priority_level: priorityLevelOf(action.priority_score),
+  ...(action.due ? { due: action.due } : {}),
+  tasks: `0/${action.tasks.length}`,
+  updated: '2026-11-02',
+});
+
+/**
+ * Chat's read of the brand's actions, as listActionsPageFor and
+ * listActionsByCodeFor answer it: by the codes asked (the same lookup), or
+ * a page of the open ones, highest Priority Score first, with the total and
+ * the same note.
+ */
+function evalActionsRead(input: Record<string, unknown>, workspace: EvalWorkspace): unknown {
+  const all = evalActions(workspace);
+  if (Array.isArray(input.codes) && input.codes.length > 0) {
+    return lookUpCodes(
+      askedCodes(input.codes.map(String)),
+      all.map((action) => ({
+        numbered: { actionNo: Number(action.number.slice(3)) },
+        row: actionRow(action),
+      })),
+    );
+  }
+  const open = all
+    .filter((action) => OPEN_STATUSES.has(action.status))
+    .sort((a, b) => b.priority_score - a.priority_score);
+  const offset = typeof input.offset === 'number' ? Math.max(0, input.offset) : 0;
+  const limit =
+    typeof input.limit === 'number' ? Math.min(input.limit, EVAL_PAGE_MAX) : EVAL_PAGE_MAX;
+  const shown = open.slice(offset, offset + limit);
+  const end = offset + shown.length;
+  const total = open.length;
+  const naming = 'Name each by its title, with its ref.';
+  return {
+    status: 'open',
+    category: null,
+    sort: 'priority',
+    total,
+    offset,
+    next_offset: shown.length > 0 && end < total ? end : null,
+    // actionsPageNote's words (mcp/action-center-reads.ts).
+    note:
+      offset === 0 && end >= total
+        ? `All ${total} open actions, highest Priority Score first. ${naming}`
+        : `Showing ${offset + 1}–${end} of ${total} open actions, highest Priority Score first. ${
+            end < total
+              ? `${total - end} more not shown: read them with offset ${end}, or say the answer covers ${offset === 0 ? `the top ${end}` : `${offset + 1}–${end}`} of ${total}.`
+              : `The first ${offset} were on earlier pages.`
+          } ${naming}`,
+    actions: shown.map(actionRow),
+  };
+}
+
 const SIGNALS = [
   {
     id: EVAL_IDS.signals[0],
@@ -688,6 +843,209 @@ const SIGNALS = [
     detected: '2026-11-01',
   },
 ];
+
+// ─── Long lists (`long_lists`) ──────────────────────────────────────────────
+
+const SIGNAL_TITLES = [
+  (p: string) => `Visibility on "${p}" dropped on Perplexity`,
+  (p: string) => `Northbound Roasters gained on "${p}"`,
+  (p: string) => `A cited page lost citations on "${p}"`,
+  (p: string) => `Visibility on "${p}" rose on ChatGPT`,
+];
+
+/** A signal of the brand's long list, S-n, detected on day n from 2026-08-01: the newest has the highest code. */
+const backlogSignal = (n: number, over: Record<string, unknown> = {}) => ({
+  id: id('a8e10000', n),
+  code: `S-${String(n).padStart(2, '0')}`,
+  title: SIGNAL_TITLES[n % SIGNAL_TITLES.length](PROMPTS[n % PROMPTS.length].text),
+  kind: 'sharp_drop',
+  category: 'visibility',
+  impact: 'medium',
+  status: 'new',
+  detected: new Date(Date.UTC(2026, 7, 1) + n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  ...over,
+});
+
+/**
+ * The signal the signal-code scenario asks about: S-07, resolved, detected in
+ * August, so the Signals list's first page (the newest 50) doesn't hold it.
+ */
+export const EVAL_CODE_SIGNAL = backlogSignal(7, {
+  kind: 'competitor_overtake',
+  category: 'compete',
+  impact: 'high',
+  status: 'resolved',
+  title: 'Northbound Roasters passed you on "Freshest whole bean coffee delivered"',
+  description: 'Northbound Roasters was named in 5 of 8 answers, Brewline Coffee in 3.',
+  resolved: '2026-09-02',
+});
+
+/** The brand's 60 signals, newest first. */
+const SIGNAL_BACKLOG = Array.from({ length: 60 }, (_, i) =>
+  60 - i === 7 ? EVAL_CODE_SIGNAL : backlogSignal(60 - i),
+);
+export const EVAL_SIGNAL_BACKLOG = SIGNAL_BACKLOG;
+
+/**
+ * Chat's read of the brand's signals, as listSignalsPageFor and
+ * lookUpSignalsFor answer it: by the codes or ids asked (the same lookup
+ * and note), or a page of the newest with the total.
+ */
+function evalSignalsRead(input: Record<string, unknown>, workspace: EvalWorkspace): unknown {
+  if (workspace !== 'long_lists') return { signals: SIGNALS };
+  const list = (value: unknown) => (Array.isArray(value) ? value.map(String) : undefined);
+  const codes = list(input.codes);
+  const ids = list(input.ids);
+  if (codes?.length || ids?.length) return signalLookup(askedSignals(codes, ids), SIGNAL_BACKLOG);
+  const { limit, offset } = pageWindow(input as { limit?: number; offset?: number });
+  const signals = SIGNAL_BACKLOG.slice(offset, offset + limit);
+  return {
+    ...pageMeta(
+      { what: 'signals', order: 'newest first' },
+      SIGNAL_BACKLOG.length,
+      offset,
+      signals.length,
+    ),
+    signals,
+  };
+}
+
+/** A cited domain of the brand's long list, as listCitationsFor gives it. */
+const citedDomain = (domain: string, citations: number, answers: number, category = 'other') => ({
+  domain,
+  category,
+  total_citations: citations,
+  results_citing: answers,
+  usage_pct: Math.round((answers / 400) * 1000) / 10,
+  models: ['gpt-4o', 'sonar'],
+  article_types: [],
+});
+const citedUrl = (
+  url: string,
+  domain: string,
+  title: string,
+  citations: number,
+  answers: number,
+) => ({
+  url,
+  domain,
+  category: 'other',
+  title,
+  total_citations: citations,
+  results_citing: answers,
+  usage_pct: Math.round((answers / 400) * 1000) / 10,
+  article_type: 'review',
+});
+
+/**
+ * The domain the citation scenario asks about: cited 3 times in 2 answers,
+ * past the first page of the 70 cited domains (most cited first).
+ */
+export const EVAL_CITED_DOMAIN = {
+  domain: 'decafdigest.example',
+  citations: 3,
+  answers: 2,
+  pages: [
+    citedUrl(
+      'https://decafdigest.example/best-decaf-subscriptions',
+      'decafdigest.example',
+      'The best decaf coffee subscriptions',
+      2,
+      2,
+    ),
+    citedUrl(
+      'https://www.decafdigest.example/swiss-water-guide',
+      'decafdigest.example',
+      'Swiss Water decaf, explained',
+      1,
+      1,
+    ),
+  ],
+  prompts: [{ prompt_id: EVAL_IDS.prompts[0], text: PROMPTS[0].text, answers: 2 }],
+};
+
+/** The 70 domains AI answers cite for the brand, most cited first. */
+const CITED_DOMAINS = [
+  citedDomain('brewline.example', 96, 80, 'you'),
+  citedDomain('northboundroasters.example', 47, 41, 'competitor'),
+  citedDomain('beanbulletin.example', 34, 30),
+  citedDomain('coffeegeekly.example', 22, 20),
+  citedDomain('brewforum.example', 18, 16, 'forum'),
+  ...Array.from({ length: 60 }, (_, i) =>
+    citedDomain(`roastnotes${i + 1}.example`, 16 - Math.floor(i / 5), 12),
+  ),
+  citedDomain(EVAL_CITED_DOMAIN.domain, EVAL_CITED_DOMAIN.citations, EVAL_CITED_DOMAIN.answers),
+  citedDomain('giftguide.example', 2, 2),
+  citedDomain('beanmap.example', 2, 1),
+  citedDomain('grindguide.example', 1, 1),
+  citedDomain('mugshots.example', 1, 1),
+];
+export const EVAL_CITED_DOMAINS = CITED_DOMAINS;
+
+const CITED_URLS = [
+  citedUrl(BLOG, 'brewline.example', 'The best coffee subscriptions in 2026', 21, 20),
+  citedUrl(NB_GUIDE, 'northboundroasters.example', 'Coffee subscription guide', 29, 27),
+  citedUrl(
+    'https://beanbulletin.example/best-coffee-subscriptions',
+    'beanbulletin.example',
+    'The best coffee subscriptions',
+    34,
+    30,
+  ),
+  ...EVAL_CITED_DOMAIN.pages,
+];
+
+/**
+ * Chat's read of the brand's citations: by the domains or addresses asked,
+ * as lookUpCitationsFor answers it (the same lookup and note, with the
+ * prompts citing each), or a page of the domains, most cited first, with
+ * the total. The default workspace keeps its own answer.
+ */
+function evalCitationsRead(input: Record<string, unknown>, workspace: EvalWorkspace): unknown {
+  if (workspace !== 'long_lists') {
+    return {
+      ...window,
+      owned: OWNED_CITATIONS,
+      external: EXTERNAL_CITATIONS,
+      competitors: COMPETITOR_CITATIONS,
+    };
+  }
+  const list = (value: unknown) => (Array.isArray(value) ? value.map(String) : undefined);
+  const domains = list(input.domains);
+  const urls = list(input.urls);
+  const dateFrom = typeof input.date_from === 'string' ? input.date_from : null;
+  const dateTo = typeof input.date_to === 'string' ? input.date_to : null;
+  if (domains?.length || urls?.length) {
+    const found = lookUpCited(
+      { domains, urls },
+      { domains: CITED_DOMAINS, urls: CITED_URLS },
+      periodWords(dateFrom, dateTo),
+    );
+    const prompts = (domain: string) =>
+      domain === EVAL_CITED_DOMAIN.domain
+        ? { prompts: EVAL_CITED_DOMAIN.prompts, prompts_total: 1 }
+        : { prompts: [], prompts_total: 0 };
+    return {
+      ...found,
+      period: { date_from: dateFrom, date_to: dateTo },
+      domains: found.domains.map((d) => ({ ...d, ...prompts(d.domain) })),
+      urls: found.urls.map((u) => ({ ...u, ...prompts(u.domain) })),
+    };
+  }
+  const { limit, offset } = pageWindow(input as { limit?: number; offset?: number });
+  const top = CITED_DOMAINS.slice(offset, offset + limit);
+  return {
+    ...pageMeta(
+      { what: 'cited domains and pages', order: 'most cited first' },
+      CITED_DOMAINS.length,
+      offset,
+      top.length,
+    ),
+    totals: { domains: CITED_DOMAINS.length, urls: CITED_URLS.length },
+    top_domains: top,
+    top_urls: CITED_URLS.slice(offset, offset + limit),
+  };
+}
 
 const AUDIT = {
   audit_id: EVAL_IDS.audit,
@@ -763,7 +1121,11 @@ export const EVAL_PAGES: Readonly<Record<string, { title: string; text: string }
  * What each read answers, by tool name. A read of the other brand answers
  * as that brand: a run that wanders shows it.
  */
-export function evalReadResult(tool: string, input: Record<string, unknown>): unknown {
+export function evalReadResult(
+  tool: string,
+  input: Record<string, unknown>,
+  workspace: EvalWorkspace = 'default',
+): unknown {
   const brandId = typeof input.brand_id === 'string' ? input.brand_id : null;
   if (brandId && brandId !== EVAL_IDS.brand) {
     return brandId === EVAL_IDS.otherBrand
@@ -889,12 +1251,7 @@ export function evalReadResult(tool: string, input: Record<string, unknown>): un
         ],
       };
     case 'list_citations':
-      return {
-        ...window,
-        owned: OWNED_CITATIONS,
-        external: EXTERNAL_CITATIONS,
-        competitors: COMPETITOR_CITATIONS,
-      };
+      return evalCitationsRead(input, workspace);
     case 'list_competitors':
       return { competitors: COMPETITORS };
     case 'get_competitor_comparison':
@@ -995,15 +1352,15 @@ export function evalReadResult(tool: string, input: Record<string, unknown>): un
     case 'list_site_audit_issues':
       return AUDIT_ISSUES;
     case 'list_action_center_tasks':
-      return {
-        actions: ACTIONS.map(({ tasks, ...action }) => ({ ...action, tasks: tasks.length })),
-      };
+      return evalActionsRead(input, workspace);
     case 'get_action': {
-      const action = ACTIONS.find((a) => a.id === input.action_id || a.number === input.number);
+      const action = evalActions(workspace).find(
+        (a) => a.id === input.action_id || a.number === input.number,
+      );
       return action ?? { error: 'not_found' };
     }
     case 'list_signals':
-      return { signals: SIGNALS };
+      return evalSignalsRead(input, workspace);
     case 'get_action_history':
       return {
         closed_this_week: [

@@ -651,7 +651,7 @@ export async function sendTopicOpportunityToActionCenter(
   topicId: string,
   suggestionIds: string[],
 ): Promise<
-  | { actionId: string; actionNo: number; created: boolean }
+  | { actionId: string; actionNo: number; brandNo?: number | null; created: boolean }
   // 'stale': none of the suggestions is still open in the topic (409).
   | { error: string; code?: 'stale' }
 > {

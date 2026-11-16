@@ -134,6 +134,7 @@ import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { exportFileName } from '@/lib/white-label/export-name';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state';
 import { useFirstRun } from '@/hooks/use-first-run';
@@ -331,7 +332,7 @@ function OpportunityScope({ opp }: { opp: ContentOpportunity }) {
         : t('groupNoTopic', { count: scope.count })
       : scope.kind === 'action'
         ? scope.actionNo !== null
-          ? t('action', { ref: `AC-${scope.actionNo}` })
+          ? t('action', { ref: actionCode({ ...scope, actionNo: scope.actionNo }) })
           : t('actionNoRef')
         : t('single');
   return (

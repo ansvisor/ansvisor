@@ -33,6 +33,9 @@ const db = vi.hoisted(() => ({
   } | null,
   // The person's organization: none yet for a new account.
   orgId: 'org-1' as string | null,
+  // The own brand's competitors (saved by Finish) and runs (tracking_runs).
+  competitors: [] as unknown[],
+  runs: [] as unknown[],
   // The person's role.
   role: 'admin',
   // The organization's own brands, whatever this person sees (org_brand_count);
@@ -73,6 +76,8 @@ vi.mock('@/lib/supabase/client', () => {
       role: db.role,
     }),
     organizations: () => db.org,
+    competitors: () => db.competitors,
+    tracking_runs: () => db.runs,
     brands: () =>
       db.ownBrand
         ? [
@@ -220,6 +225,8 @@ beforeEach(() => {
   db.role = 'admin';
   db.orgBrandCount = 1;
   db.orgId = 'org-1';
+  db.competitors = [];
+  db.runs = [];
   db.log = [];
   db.profileWriteFails = false;
   db.trackingCode = null;
@@ -864,9 +871,10 @@ describe('the plan step', () => {
       db.orgBrandCount = 0;
     });
 
-    it('opens a new admin on the choice, with its organization made once', async () => {
+    it('opens a new admin on the choice, with no organization made until a choice is', async () => {
       await render();
       expect(text()).toContain('How do you want to start?');
+      // A new person may have the free trial: no organization needed to say so.
       expect(container.querySelector('[data-slot="start-intro"]')?.textContent).toBe(
         'With the 14-day free trial, you add a card and nothing is charged until it ends. Cancel any time. Then set up your brand, and its tracking starts.',
       );
@@ -875,33 +883,29 @@ describe('the plan step', () => {
         'Start 14-day free trial',
         'Start 14-day free trial',
       ]);
+      expect(modeButtons('trial').every((b) => !b.disabled)).toBe(true);
       // Nothing before it, and no brand yet: no Back, no step dots, no brand line.
       expect(button('Back')).toBeUndefined();
       expect(container.querySelector('.w-6.bg-foreground')).toBeNull();
       expect(container.querySelector('[data-slot="ready-to-track"]')).toBeNull();
       expect(text()).not.toContain('Set up your brand');
-      // The organization, named for now, and the person in it.
-      expect(inserted()).toEqual([
-        { organizations: { insert: { id: db.orgId, name: 'My workspace', slug: 'my-workspace' } } },
-      ]);
-      expect(db.log).toEqual([...inserted(), { profiles: { organization_id: db.orgId } }]);
-      // The checks that read it, once it is there; the demo built ahead.
-      const urls = fetchMock.mock.calls.map(([url]) => url);
-      expect(urls).toContain('/api/stripe/trial');
-      expect(urls).toContain('/api/stripe/promo-code');
-      expect(prepareDemoBrand).toHaveBeenCalled();
+      // Opening it makes no organization (someone with an invitation leaves
+      // none behind), and nothing reads one: the demo is built ahead once it exists.
+      expect(inserted()).toEqual([]);
+      expect(db.log).toEqual([]);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(prepareDemoBrand).not.toHaveBeenCalled();
       // The plan step's event, first.
       expect(
         vi.mocked(track).mock.calls.filter(([event]) => event === 'onboarding_step_viewed'),
       ).toEqual([['onboarding_step_viewed', { step: 6, step_name: 'plan', position: 'first' }]]);
 
-      // A reload finds it: no second organization.
+      // A reload makes none either.
       act(() => root.unmount());
       root = createRoot(container);
       await render();
       expect(text()).toContain('How do you want to start?');
-      expect(inserted()).toHaveLength(1);
-      expect(db.log).toHaveLength(2);
+      expect(db.log).toEqual([]);
     });
 
     it('makes one organization when asked twice at once', async () => {
@@ -920,9 +924,14 @@ describe('the plan step', () => {
       });
     });
 
-    it('starts the trial in Checkout with the organization, then setup after it', async () => {
+    it('starts the trial in Checkout with the organization made on the click, then setup after it', async () => {
       await render();
       await act(async () => modeButtons('trial')[1].click());
+      // The organization, named for now, and the person in it: once.
+      expect(inserted()).toEqual([
+        { organizations: { insert: { id: db.orgId, name: 'My workspace', slug: 'my-workspace' } } },
+      ]);
+      expect(db.log).toEqual([...inserted(), { profiles: { organization_id: db.orgId } }]);
       expect(checkoutBody()).toEqual({
         planId: 'growth',
         organizationId: db.orgId,
@@ -980,7 +989,14 @@ describe('the plan step', () => {
         'Brewline Coffee',
       ]);
       await act(async () => button('Explore the sample brand')!.click());
-      expect(db.log.slice(-2)).toEqual([{ profiles: { onboarding_completed: true } }, 'explore']);
+      // The organization first, then onboarding marked completed, then the demo.
+      expect(db.log).toEqual([
+        ...inserted(),
+        { profiles: { organization_id: db.orgId } },
+        { profiles: { onboarding_completed: true } },
+        'explore',
+      ]);
+      expect(inserted()).toHaveLength(1);
       expect(exploreDemo.explore).toHaveBeenCalledTimes(1);
       expect(track).toHaveBeenCalledWith('onboarding_step_completed', {
         step: 6,
@@ -1000,6 +1016,9 @@ describe('the plan step', () => {
     });
 
     it('stays on the choice, saying so, when onboarding could not be marked completed', async () => {
+      // Back on the choice with its organization (a canceled Checkout).
+      db.orgId = 'org-1';
+      db.org = { subscription_status: null, plan: 'starter', stripe_subscription_id: null };
       await render();
       db.profileWriteFails = true;
       await act(async () => button('Explore a sample brand first →')!.click());
@@ -1008,14 +1027,42 @@ describe('the plan step', () => {
       expect(text()).toContain('How do you want to start?');
     });
 
-    it('says so when the organization could not be made, with Checkout off', async () => {
+    it('says so when the organization could not be made: no Checkout, and the choice stays', async () => {
       db.profileWriteFails = true;
       await render();
+      expect(toast.error).not.toHaveBeenCalled();
+      await act(async () => modeButtons('trial')[0].click());
       expect(toast.error).toHaveBeenCalledWith(
-        "We couldn't set up your workspace. Reload the page to try again.",
+        "We couldn't set up your workspace. Please try again.",
       );
+      expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/stripe/checkout');
       expect(text()).toContain('How do you want to start?');
-      expect(modeButtons('trial').every((b) => b.disabled)).toBe(true);
+      // Asked again, it tries again.
+      expect(modeButtons('trial').every((b) => !b.disabled)).toBe(true);
+    });
+
+    it('never marks onboarding completed for the sample brand without an organization: no loop', async () => {
+      // The organization can't be made: /api/demo would fail, and onboarding
+      // marked completed with no organization would bounce between the
+      // dashboard and here.
+      db.profileWriteFails = true;
+      await render();
+      await act(async () => button('Explore a sample brand first →')!.click());
+      expect(toast.error).toHaveBeenCalledWith(
+        "We couldn't set up your workspace. Please try again.",
+      );
+      expect(exploreDemo.explore).not.toHaveBeenCalled();
+      // Nothing written to the profile: onboarding stays open.
+      expect(db.log).toEqual(inserted());
+      expect(text()).toContain('How do you want to start?');
+    });
+
+    it('falls through to the choice for someone onboarded with no organization, never to the dashboard', async () => {
+      db.onboarded = true;
+      const push = vi.spyOn(stable.router, 'push');
+      await render();
+      expect(push).not.toHaveBeenCalled();
+      expect(text()).toContain('How do you want to start?');
     });
 
     it('comes back to the choice after a canceled Checkout, with no other organization', async () => {
@@ -1042,18 +1089,23 @@ describe('the plan step', () => {
       );
     });
 
-    it('keeps the old order for an organization that had a plan, or a member who is no admin', async () => {
-      db.orgId = 'org-1';
-      db.org = {
-        subscription_status: 'canceled',
-        plan: 'starter',
-        stripe_subscription_id: 'sub_1',
-      };
-      await render();
-      expect(text()).not.toContain('How do you want to start?');
-      expect(text()).toContain('Set up your brand');
+    it.each(['canceled', 'past_due', 'unpaid', 'incomplete_expired'])(
+      'opens the read-only dashboard for a new admin whose trial is %s before setup is finished',
+      async (status) => {
+        // The trial started from the choice; no brand yet, onboarding open.
+        db.orgId = 'org-1';
+        db.org = { subscription_status: status, plan: 'starter', stripe_subscription_id: 'sub_1' };
+        const push = vi.spyOn(stable.router, 'push');
+        await render();
+        // Billing is reachable there; the choice and setup's writes are not offered.
+        expect(push).toHaveBeenCalledWith('/dashboard');
+        expect(text()).not.toContain('How do you want to start?');
+        expect(createBrand).not.toHaveBeenCalled();
+      },
+    );
 
-      act(() => root.unmount());
+    it('keeps the old order for a member who is no admin', async () => {
+      db.orgId = 'org-1';
       root = createRoot(container);
       db.org = null;
       db.role = 'manager';
@@ -1190,8 +1242,8 @@ describe('setup after purchase', () => {
     await act(async () => button('Continue')!.click());
     await act(async () => button('Continue')!.click());
     await act(async () => {});
-    // Onboarding is open again before the brand is made: left half-way, setup resumes.
-    expect(db.log).toEqual([{ profiles: { onboarding_completed: false } }, 'createBrand']);
+    // Onboarding stays as it is: left half-way, setup resumes from the brand's own data.
+    expect(db.log).toEqual(['createBrand']);
     expect(text()).toContain('Choose topics to monitor');
     await act(async () => button('Looks good')!.click());
     expect(text()).toContain('Choose your prompts');
@@ -1215,8 +1267,8 @@ describe('setup after purchase', () => {
     expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
     expect(toast.success).toHaveBeenCalledWith('Setup complete! Your first tracking is starting.');
     expect(text()).not.toContain('Choose how to start');
-    // The server marks onboarding completed, not the page.
-    expect(db.log).toHaveLength(2);
+    // The page writes nothing to the profile: the server marks onboarding completed.
+    expect(db.log).toEqual(['createBrand']);
     // Today's events and step names, with the property.
     expect(flowEvents()).toEqual(
       expect.arrayContaining([
@@ -1272,11 +1324,8 @@ describe('setup after purchase', () => {
     await act(async () => button('Continue')!.click());
     await act(async () => {});
     // The workspace takes the brand's name, once the brand is there.
-    expect(db.log).toEqual([
-      { profiles: { onboarding_completed: false } },
-      'createBrand',
-      { organizations: { name: 'Acme' } },
-    ]);
+    // Onboarding stays open as it was: nothing written to the profile before Finish.
+    expect(db.log).toEqual(['createBrand', { organizations: { name: 'Acme' } }]);
     await act(async () => button('Looks good')!.click());
     await act(async () => button('Continue')!.click());
     await act(async () => {});
@@ -1302,16 +1351,18 @@ describe('setup after purchase', () => {
     await type('website', 'acme.com');
     await act(async () => button('Continue')!.click());
     await act(async () => button('Continue')!.click());
-    expect(db.log).toEqual([{ profiles: { onboarding_completed: false } }]);
+    expect(db.log).toEqual([]);
   });
 
   it('resumes a setup left half-way, and its Finish still skips the plan step', async () => {
-    // Onboarding open again, the brand and its prompts saved.
-    db.onboarded = false;
+    // Onboarded, the brand and its prompts saved, no competitor yet and never
+    // tracked: the brand's own data says setup was left, as the dashboard reads it.
     db.ownBrand = true;
     db.orgBrandCount = 1;
     db.promptSets = [{ id: 's1' }];
+    const push = vi.spyOn(stable.router, 'push');
     await render();
+    expect(push).not.toHaveBeenCalled();
     expect(text()).toContain('Add your competitors');
     expect(stepDots()).toHaveLength(5);
     expect(track).toHaveBeenCalledWith('onboarding_step_viewed', {
@@ -1323,6 +1374,101 @@ describe('setup after purchase', () => {
     await act(async () => button('Start tracking with 1 competitor')!.click());
     expect(finishSetup).toHaveBeenCalledWith('b1');
     expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+  });
+
+  it('resumes it the same for an onboarding not finished (a new account back from Checkout)', async () => {
+    db.onboarded = false;
+    db.ownBrand = true;
+    db.promptSets = [{ id: 's1' }];
+    await render();
+    expect(text()).toContain('Add your competitors');
+    expect(stepDots()).toHaveLength(5);
+  });
+
+  it.each([
+    ['its competitors are saved (Finish pressed)', () => (db.competitors = [{ id: 'c1' }])],
+    ['it was tracked already', () => (db.runs = [{ id: 'r1' }])],
+    ['the organization has another brand', () => (db.orgBrandCount = 2)],
+  ])('sends someone onboarded with a brand to the dashboard when %s', async (_, given) => {
+    db.ownBrand = true;
+    db.orgBrandCount = 1;
+    db.promptSets = [{ id: 's1' }];
+    given();
+    const push = vi.spyOn(stable.router, 'push');
+    await render();
+    expect(push).toHaveBeenCalledWith('/dashboard');
+  });
+
+  describe('a plan that lapsed after the subscription', () => {
+    const lapse = () => {
+      db.org = { subscription_status: 'canceled', plan: 'growth', stripe_subscription_id: 'sub_1' };
+    };
+
+    it('opens the read-only dashboard instead of setup, for an onboarding not finished', async () => {
+      db.onboarded = false;
+      db.ownBrand = true;
+      db.promptSets = [{ id: 's1' }];
+      lapse();
+      const push = vi.spyOn(stable.router, 'push');
+      await render();
+      expect(push).toHaveBeenCalledWith('/dashboard');
+      expect(text()).not.toContain('Add your competitors');
+    });
+
+    it('writes nothing at Finish: Billing opens for its admin, saying why', async () => {
+      db.ownBrand = true;
+      db.orgBrandCount = 1;
+      db.promptSets = [{ id: 's1' }];
+      await render();
+      expect(text()).toContain('Add your competitors');
+      lapse();
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Start tracking with 1 competitor')!.click());
+      const { addCompetitor } = await import('@/lib/actions/competitor');
+      expect(addCompetitor).not.toHaveBeenCalled();
+      expect(finishSetup).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith(
+        "Your plan isn't active any more, so setup is paused. Choose a plan in Billing, then set up your brand.",
+      );
+      expect(window.location.href).toBe('/dashboard/settings/billing');
+    });
+
+    it('makes no brand: the read-only dashboard for a manager', async () => {
+      db.role = 'manager';
+      await render();
+      expect(text()).toContain('Set up your brand');
+      await type('brandName', 'Acme');
+      await type('website', 'acme.com');
+      await act(async () => button('Continue')!.click());
+      lapse();
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Continue')!.click());
+      expect(createBrand).not.toHaveBeenCalled();
+      expect(window.location.href).toBe('/dashboard');
+    });
+
+    it('saves no topics or prompts', async () => {
+      db.ownBrand = true;
+      db.orgBrandCount = 1;
+      await render();
+      expect(text()).toContain('Choose topics to monitor');
+      lapse();
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Looks good')!.click());
+      const { createTopics } = await import('@/lib/actions/topic');
+      expect(createTopics).not.toHaveBeenCalled();
+      expect(window.location.href).toBe('/dashboard/settings/billing');
+    });
+  });
+
+  it('falls through to the choice for an admin onboarded with no organization, never to the dashboard', async () => {
+    // The dashboard sends anyone with no organization here: pushing it back would loop.
+    db.orgId = null;
+    db.org = null;
+    const push = vi.spyOn(stable.router, 'push');
+    await render();
+    expect(push).not.toHaveBeenCalled();
+    expect(text()).toContain('How do you want to start?');
   });
 
   it('lands on the dashboard without a job when no run could be started', async () => {

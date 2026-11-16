@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/button';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { actionTexts } from '@/lib/action-center/display';
 import {
   sentDay,
@@ -84,7 +85,7 @@ export function SuggestionRow({
   }
   const line = [
     brand.name,
-    summary.actionNo !== null ? `AC-${summary.actionNo}` : null,
+    summary.actionNo !== null ? actionCode({ ...summary, actionNo: summary.actionNo }) : null,
     summary.priorityLevel ? tActions(`priority.levels.${summary.priorityLevel}`) : null,
     how,
   ]
