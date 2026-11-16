@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/layout/sidebar';
 import { SidebarErrorBoundary } from '@/components/layout/sidebar-error-boundary';
@@ -35,7 +36,13 @@ import { getBrands } from '@/lib/actions/brand';
 import { menuOfProfile, menuSectionsFor, readRoleHidden } from '@/lib/menu-access';
 import { getPlan, isCloud, toPlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
-import { needsSetupAfterPurchase, ownBrandCount } from '@/lib/onboarding/setup-after-purchase';
+import {
+  isSetupDeferred,
+  isSetupDeferredValue,
+  needsSetupAfterPurchase,
+  ownBrandCount,
+  SETUP_DEFERRED_COOKIE,
+} from '@/lib/onboarding/setup-after-purchase';
 import { countPlanBrands } from '@/lib/plan-brand-count';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
@@ -70,7 +77,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // account goes.
   if (profile) sendSignupEventOnce(user);
 
-  if (!profile?.organization_id || !profile?.onboarding_completed) {
+  // Setup after purchase put off by its admin ("Manage your plan" on the
+  // setup screens, for half an hour): checked against the plan and the role
+  // once the organization is read (isSetupDeferred). Without the cookie,
+  // everything goes as before.
+  const deferred = isSetupDeferredValue((await cookies()).get(SETUP_DEFERRED_COOKIE)?.value);
+
+  if (!profile?.organization_id || (!profile.onboarding_completed && !deferred)) {
     redirect('/dashboard/onboarding');
   }
 
@@ -124,6 +137,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // database without those columns yet keeps the panel's choices above.
     chatOn ? readTourPrefs(supabase, user.id) : Promise.resolve(null),
   ]);
+  // Onboarding not finished (setup after purchase, started and left) opens
+  // the dashboard only while its admin has put setup off with a plan active.
+  if (
+    !profile.onboarding_completed &&
+    (orgError ||
+      !isSetupDeferred({
+        cloud: isCloud(),
+        subscriptionStatus: (org?.subscription_status as string | null) ?? null,
+        role,
+        deferred,
+      }))
+  ) {
+    redirect('/dashboard/onboarding');
+  }
   const chatPrefs = chatPrefsRead.data;
   // The side panel is Chat too: the person's Agent Chat conversations come
   // over on their first visit with it, as they do on Chat's pages (W1-02).
@@ -179,8 +206,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // run. The brands this person sees decide first; a Selected-brands
     // manager may see none of them, so the organization's own count has the
     // last word (one read, only then), and an unread count decides nothing.
-    // Once a brand exists, no more.
-    const setupFacts = { cloud: true, subscriptionStatus, role };
+    // Once a brand exists, no more; nor while its admin has put it off.
+    const setupFacts = { cloud: true, subscriptionStatus, role, deferred };
     if (needsSetupAfterPurchase({ ...setupFacts, ownBrands: ownBrandCount(brands) })) {
       const ownBrands = await countPlanBrands(supabase, profile.organization_id).catch(() => null);
       if (needsSetupAfterPurchase({ ...setupFacts, ownBrands })) {

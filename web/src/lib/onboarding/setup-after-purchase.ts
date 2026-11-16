@@ -23,6 +23,61 @@ export function canSetUpBrand(role: string | null | undefined): boolean {
 }
 
 /**
+ * Whether someone manages the plan: admins only, as Billing lets only them
+ * change or cancel it (/api/stripe/subscription). They are the ones offered
+ * "Manage your plan" on the setup screens.
+ */
+export function canManagePlan(role: string | null | undefined): boolean {
+  return role === 'admin';
+}
+
+/**
+ * Setup after purchase put off for a while: "Manage your plan" on the setup
+ * screens sets this cookie and opens Billing, so an admin can change or
+ * cancel the plan (a trial, say) before setting up a brand. While it lasts,
+ * the dashboard doesn't send them back to setup; the onboarding page ignores
+ * it, so setup still opens there.
+ */
+export const SETUP_DEFERRED_COOKIE = 'ansvisor_setup_deferred';
+
+/** How long setup stays put off, in seconds: half an hour. */
+export const SETUP_DEFERRED_MAX_AGE = 30 * 60;
+
+/** Settings › Billing, where the plan is changed or cancelled. */
+export const SETUP_BILLING_HREF = '/dashboard/settings/billing';
+
+/** The cookie that puts setup off, as document.cookie takes it. */
+export function setupDeferredCookie({ secure }: { secure: boolean }): string {
+  return `${SETUP_DEFERRED_COOKIE}=1; path=/; max-age=${SETUP_DEFERRED_MAX_AGE}; SameSite=Lax${secure ? '; Secure' : ''}`;
+}
+
+/** Whether the cookie's value says setup is put off. */
+export function isSetupDeferredValue(value: string | null | undefined): boolean {
+  return value === '1';
+}
+
+/**
+ * Whether setup after purchase is put off for this person: the cookie set, on
+ * the cloud, with the plan active or trialing, for an admin (who manages the
+ * plan). Then the dashboard opens for them, as for a workspace with no brand
+ * today, whether setup is due or was started and left (onboarding open).
+ */
+export function isSetupDeferred({
+  cloud,
+  subscriptionStatus,
+  role,
+  deferred,
+}: {
+  cloud: boolean;
+  subscriptionStatus: string | null | undefined;
+  role: string | null | undefined;
+  /** The cookie is set (isSetupDeferredValue). */
+  deferred: boolean;
+}): boolean {
+  return deferred && cloud && isSubscriptionActive(subscriptionStatus) && canManagePlan(role);
+}
+
+/**
  * The organization's own brands among these: every one but the demo brand
  * (sample data, 00380), a paused one too. A paused brand means the
  * organization had one, so it is never sent to setup.
@@ -44,21 +99,32 @@ export interface SetupAfterPurchaseFacts {
    * nothing.
    */
   ownBrands: number | null;
+  /**
+   * The setup-deferred cookie is set (isSetupDeferredValue). The dashboard
+   * passes it; the onboarding page doesn't, so setup still opens there.
+   */
+  deferred?: boolean;
 }
 
 /**
  * Whether the person goes to setup after purchase: on the cloud, the plan
  * active or trialing, no brand of the organization's own at all, and someone
- * who can set one up. Everyone else keeps the way they go today.
+ * who can set one up, unless they put it off (isSetupDeferred). Everyone else
+ * keeps the way they go today.
  */
 export function needsSetupAfterPurchase({
   cloud,
   subscriptionStatus,
   role,
   ownBrands,
+  deferred = false,
 }: SetupAfterPurchaseFacts): boolean {
   return (
-    cloud && isSubscriptionActive(subscriptionStatus) && canSetUpBrand(role) && ownBrands === 0
+    cloud &&
+    isSubscriptionActive(subscriptionStatus) &&
+    canSetUpBrand(role) &&
+    ownBrands === 0 &&
+    !isSetupDeferred({ cloud, subscriptionStatus, role, deferred })
   );
 }
 

@@ -484,6 +484,7 @@ describe('the plan step', () => {
     expect(dots.findIndex((dot) => dot.classList.contains('w-6'))).toBe(5);
     // Today's flow: no setup after purchase, and its events as they were.
     expect(finishSetup).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-slot="manage-plan"]')).toBeNull();
     expect(db.log).toEqual([{ profiles: { onboarding_completed: true } }]);
     expect(
       vi.mocked(track).mock.calls.some(([, props]) => props && 'setup_after_purchase' in props),
@@ -961,6 +962,46 @@ describe('setup after purchase', () => {
     finishSetup.mockRejectedValueOnce(new Error('An error occurred in the Server Components'));
     await act(async () => button('Start tracking with 1 competitor')!.click());
     expect(toast.error).toHaveBeenLastCalledWith("We couldn't finish setup. Please try again.");
+  });
+
+  describe('"Manage your plan"', () => {
+    const link = () => container.querySelector<HTMLAnchorElement>('[data-slot="manage-plan"]');
+    afterEach(() => {
+      document.cookie = 'ansvisor_setup_deferred=; path=/; max-age=0';
+    });
+
+    it('offers its admin Billing first: setup put off for half an hour, then Billing opens', async () => {
+      await render();
+      expect(text()).toContain('Set up your brand');
+      expect(link()?.textContent).toBe('Manage your plan');
+      expect(link()?.getAttribute('href')).toBe('/dashboard/settings/billing');
+      expect(document.cookie).not.toContain('ansvisor_setup_deferred');
+
+      vi.stubGlobal('location', { href: '', protocol: 'http:' });
+      await act(async () => link()!.click());
+      expect(document.cookie).toContain('ansvisor_setup_deferred=1');
+      expect(window.location.href).toBe('/dashboard/settings/billing');
+      expect(track).toHaveBeenCalledWith('onboarding_manage_plan_opened', {
+        step: 1,
+        setup_after_purchase: true,
+      });
+    });
+
+    it('stays on every setup step, a resumed one too', async () => {
+      db.onboarded = false;
+      db.ownBrand = true;
+      db.promptSets = [{ id: 's1' }];
+      await render();
+      expect(text()).toContain('Add your competitors');
+      expect(link()?.textContent).toBe('Manage your plan');
+    });
+
+    it('is not offered to a manager, who cannot change the plan', async () => {
+      db.role = 'manager';
+      await render();
+      expect(text()).toContain('Set up your brand');
+      expect(link()).toBeNull();
+    });
   });
 
   it.each([

@@ -14,8 +14,11 @@ import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
 import { finishSetupAfterPurchase } from '@/lib/actions/setup-after-purchase';
 import {
+  canManagePlan,
   canSetUpBrand,
   needsSetupAfterPurchase,
+  SETUP_BILLING_HREF,
+  setupDeferredCookie,
   setupFlowProps,
   setupLanding,
 } from '@/lib/onboarding/setup-after-purchase';
@@ -263,6 +266,9 @@ export default function OnboardingPage() {
   // trialing already, so setup has no plan step. Finish aligns the prompts to
   // the plan and starts the brand's first run (lib/onboarding/setup-after-purchase.ts).
   const [afterPurchase, setAfterPurchase] = useState(false);
+  // The admin, who manages the plan: in setup after purchase, "Manage your
+  // plan" puts setup off for a while and opens Billing.
+  const [managesPlan, setManagesPlan] = useState(false);
 
   // Plan step (cloud only)
   const [organizationId, setOrganizationId] = useState<string | null>(null);
@@ -479,6 +485,7 @@ export default function OnboardingPage() {
       // purchase. Set with the step the resume opens, so its first
       // onboarding_step_viewed carries it.
       let planActive = false;
+      let role: string | null = null;
       try {
         const supabase = createClient();
         const {
@@ -491,6 +498,7 @@ export default function OnboardingPage() {
           .select('organization_id, onboarding_completed, role')
           .eq('id', user.id)
           .single();
+        role = profile?.role ?? null;
 
         if (profile?.onboarding_completed) {
           if (isCloud() && profile.organization_id) {
@@ -629,7 +637,10 @@ export default function OnboardingPage() {
       } catch (err) {
         console.error('Resume check failed:', err);
       } finally {
-        if (planActive) setAfterPurchase(true);
+        if (planActive) {
+          setAfterPurchase(true);
+          setManagesPlan(canManagePlan(role));
+        }
         setInitialLoading(false);
       }
     }
@@ -1130,6 +1141,15 @@ export default function OnboardingPage() {
       toast.error(err instanceof Error ? err.message : 'Failed to save competitors');
       setSavingCompetitors(false);
     }
+  };
+
+  // Setup after purchase, put off for half an hour: Billing opens (a full
+  // page navigation, so the dashboard's layout reads the cookie), where the
+  // admin can change or cancel the plan before setting up a brand.
+  const openBillingFirst = () => {
+    document.cookie = setupDeferredCookie({ secure: window.location.protocol === 'https:' });
+    track('onboarding_manage_plan_opened', { step, ...setupFlowProps(true) });
+    window.location.href = SETUP_BILLING_HREF;
   };
 
   // ── Plan step: Stripe checkout ──
@@ -2033,6 +2053,21 @@ export default function OnboardingPage() {
       }
     >
       {renderStep()}
+      {!initialLoading && afterPurchase && managesPlan && step !== PLAN_STEP && (
+        <div className="flex justify-center px-6 pb-6">
+          <a
+            href={SETUP_BILLING_HREF}
+            data-slot="manage-plan"
+            onClick={(e) => {
+              e.preventDefault();
+              openBillingFirst();
+            }}
+            className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            {tSetup('managePlan')}
+          </a>
+        </div>
+      )}
     </OnboardingFrame>
   );
 }

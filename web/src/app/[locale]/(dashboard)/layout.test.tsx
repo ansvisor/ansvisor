@@ -81,6 +81,18 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }));
 
+// The setup-deferred cookie ("Manage your plan" on the setup screens): its value, or none.
+const jar = vi.hoisted(() => ({ deferred: null as string | null }));
+vi.mock('next/headers', async (original) => ({
+  ...(await original<typeof import('next/headers')>()),
+  cookies: async () => ({
+    get: (name: string) =>
+      name === 'ansvisor_setup_deferred' && jar.deferred !== null
+        ? { name, value: jar.deferred }
+        : undefined,
+  }),
+}));
+
 const redirect = vi.fn((url: string) => {
   throw new Error(`NEXT_REDIRECT ${url}`);
 });
@@ -238,6 +250,7 @@ beforeEach(() => {
   panel.setup = null;
   reads.length = 0;
   rpcs.length = 0;
+  jar.deferred = null;
   // A workspace with its own brand, as most are.
   orgBrands = [{ id: 'b1' }];
   orgBrandCount = { data: 1, error: null };
@@ -456,6 +469,53 @@ describe('the dashboard layout and setup after purchase', () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     expect(await open()).toBeNull();
     expect(rpcs).toEqual([]);
+  });
+
+  describe('put off by its admin ("Manage your plan")', () => {
+    beforeEach(() => {
+      jar.deferred = '1';
+    });
+
+    it('opens the dashboard, Billing included, with no brand of its own', async () => {
+      expect(await open(<p>Billing</p>)).toBeNull();
+      expect(redirect).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('Billing');
+      // The cookie gone (half an hour on): back to setup.
+      jar.deferred = null;
+      expect(await open()).toBe('/dashboard/onboarding');
+    });
+
+    it('opens the dashboard for a setup started and left (onboarding open again)', async () => {
+      profile = { ...profile, onboarding_completed: false };
+      orgBrands = [{ id: 'b1' }];
+      expect(await open()).toBeNull();
+      expect(container.textContent).toContain('Page content');
+      jar.deferred = null;
+      expect(await open()).toBe('/dashboard/onboarding');
+    });
+
+    it('only for an admin: a manager still goes to setup', async () => {
+      profile = { ...profile, role: 'manager' };
+      expect(await open()).toBe('/dashboard/onboarding');
+      profile = { ...profile, onboarding_completed: false };
+      expect(await open()).toBe('/dashboard/onboarding');
+    });
+
+    it('never lets an onboarding without a plan, an unread organization or no organization through', async () => {
+      profile = { ...profile, onboarding_completed: false };
+      org = { ...org, subscription_status: 'incomplete', stripe_subscription_id: null };
+      expect(await open()).toBe('/dashboard/onboarding');
+      org = null;
+      orgError = { message: 'timeout' };
+      expect(await open()).toBe('/dashboard/onboarding');
+      profile = { ...profile, organization_id: null };
+      expect(await open()).toBe('/dashboard/onboarding');
+    });
+
+    it('takes no other value of the cookie', async () => {
+      jar.deferred = 'yes';
+      expect(await open()).toBe('/dashboard/onboarding');
+    });
   });
 });
 

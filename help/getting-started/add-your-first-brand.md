@@ -75,7 +75,7 @@ A self-hosted install skips this step.
 
 ## Set up a brand with a plan already active
 
-If your workspace already has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor. It has five steps and no plan step. On the last one, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once. If you leave part-way, you pick up where you stopped.
+If your workspace already has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor. It has five steps and no plan step. On the last one, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once. If you leave part-way, you pick up where you stopped. Admins who want to change or cancel the plan first can use **Manage your plan** under the steps: it opens Billing, and setup waits for half an hour.
 
 ## Add another brand later
 

@@ -442,7 +442,8 @@
     "trackingStarts": "Next, choose how to start. Tracking starts {trial, select, yes {when you start the free trial or buy a plan} other {when you choose a plan}}.",
     "saved": "Setup saved. Tracking starts {trial, select, yes {when you start the free trial or buy a plan} other {when you choose a plan}}.",
     "trackingStartsNow": "Your plan is active. Tracking starts as soon as you finish.",
-    "finishFailed": "We couldn't finish setup. Please try again."
+    "finishFailed": "We couldn't finish setup. Please try again.",
+    "managePlan": "Manage your plan"
   },
   "planOffer": {
     "buyNow": "Buy now",
