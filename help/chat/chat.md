@@ -5,7 +5,7 @@ keywords: [chat, ask chat, date range, time range, which time range, default ran
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-11-16
-last_checked: 2026-11-15
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -340,7 +340,7 @@ Chats have the same dots as the main menu. A grey dot that pulses means Chat is 
 
 ## Open and close Settings in the chat menu
 
-Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on **General**, **Activity** or **What Chat can do**. Chat remembers whether you left them open or closed, in this browser.
+Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on one of them. Chat remembers whether you left them open or closed, in this browser. Each opens on the **Settings** page, whose own tabs on the left are the same four: **General**, **Activity**, **What Chat can do** and **Tool policy**.
 
 ## Hide the chat menu
 

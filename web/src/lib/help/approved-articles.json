@@ -1749,7 +1749,7 @@
         },
         {
           "heading": "Open and close Settings in the chat menu",
-          "text": "Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on **General**, **Activity** or **What Chat can do**. Chat remembers whether you left them open or closed, in this browser."
+          "text": "Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on one of them. Chat remembers whether you left them open or closed, in this browser. Each opens on the **Settings** page, whose own tabs on the left are the same four: **General**, **Activity**, **What Chat can do** and **Tool policy**."
         },
         {
           "heading": "Hide the chat menu",
@@ -1792,6 +1792,10 @@
       "keywords": [
         "chat settings",
         "general settings",
+        "settings tabs",
+        "activity tab",
+        "what chat can do",
+        "tool policy tab",
         "date range",
         "default date range",
         "time range",
@@ -1817,11 +1821,15 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-15",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
           "text": "Click **Settings** in the chat menu, then **General**, for your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so."
+        },
+        {
+          "heading": "Settings tabs",
+          "text": "The **Settings** page has its own tabs on the left: **General**, **Activity**, **What Chat can do** and **Tool policy**, in the same order as under **Settings** in the chat menu. Click one to open it on the right: the page's title and the tabs stay, and the tab you are on is highlighted. **General** holds your own preferences, below. **Activity** logs every change Chat made, with **Undo**. **What Chat can do** lists the tools Chat may use, by area. **Tool policy** holds the workspace's rules: everyone reads them, and only Admins change them. On a narrow screen the tabs sit in a row above the page."
         },
         {
           "heading": "Default mode",
@@ -1853,7 +1861,7 @@
         },
         {
           "heading": "Product tour",
-          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**, also under **Settings** in the chat menu; only Admins change them."
+          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in the **Tool policy** tab; only Admins change them."
         }
       ]
     },
