@@ -112,8 +112,12 @@ export interface RunProgress {
   dataChars: number;
   /** Writes made, by tool name. */
   writes: Record<string, number>;
-  /** Reads made, by tool name, for the reads READ_CAPS caps (pages opened). */
+  /** Reads made, by tool name, for the reads READ_CAPS caps (pages opened) and the paged lists. */
   toolReads?: Record<string, number>;
+  /** Next pages of lists read (run-limits.ts PAGES_PER_READ): they count lightly against `reads`. */
+  pages?: number;
+  /** Reads that took too long, by tool name: one narrower try after the first (read-attempt.ts). */
+  timeouts?: Record<string, number>;
   /**
    * The sites the run's reads listed in their structured fields (competitors'
    * domains, cited and audited pages): with the person's and the brand's, a

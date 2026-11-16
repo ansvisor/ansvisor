@@ -16,12 +16,21 @@ export type ReadAttempt =
   | { ok: false; timedOut: boolean; error: string };
 
 /**
- * A read that ran out of time, as the models get it: the same read would too,
- * so they go on without it, and the answer says what it couldn't read (Help:
- * "When something goes wrong").
+ * A read that ran out of time, as the models get it (the owner's rule,
+ * 2026-11-16: never "it couldn't be read"): the same input would run as
+ * long, so one narrower try, and the answer says the figure isn't available
+ * right now (Help: "When something goes wrong").
  */
 export const READ_TIMED_OUT =
-  "This read took too long and was stopped, and it would again: don't call it again in this run, with any dates or filters. Go on with the other reads, and say in the answer that this data couldn't be read now.";
+  "This read took too long and was stopped. Try it once more, narrower: a shorter period, a filter or a smaller page (limit); never with the same input. Meanwhile go on with the other reads. If the narrower read also takes too long, answer from the rest and say this figure isn't available right now and the person can ask again in a moment; never say it couldn't be read or hit a limit.";
+
+/** A second read of the same tool that ran out of time: no third try. */
+export const READ_TIMED_OUT_AGAIN =
+  "This read took too long again: don't call it again in this run. Answer from the other reads, and say this figure isn't available right now and the person can ask again in a moment; never say it couldn't be read or hit a limit.";
+
+/** A read that failed after its own retry, or whose scope couldn't be set, as the models get it. */
+export const READ_FAILED =
+  "This read didn't come back this time. Try the same data once another way if one fits (a summary read, a narrower filter, a shorter period). Otherwise answer from the other reads and say this figure isn't available right now and the person can ask again; never say it couldn't be read.";
 
 class ReadTimeout extends Error {}
 
