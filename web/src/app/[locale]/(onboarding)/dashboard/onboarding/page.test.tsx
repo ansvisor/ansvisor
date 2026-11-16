@@ -42,6 +42,8 @@ const db = vi.hoisted(() => ({
   log: [] as unknown[],
   // The person's profile can't be written (a network error).
   profileWriteFails: false,
+  // The own brand's tracking code: none unless a test gives it one.
+  trackingCode: null as string | null,
 }));
 vi.mock('@/lib/supabase/client', () => {
   /** A query that answers `data` however it ends (single, limit, or awaited). */
@@ -79,6 +81,7 @@ vi.mock('@/lib/supabase/client', () => {
               organization_id: 'org-1',
               name: 'Acme',
               slug: 'acme',
+              tracking_code: db.trackingCode,
               brand_domains: [{ id: 'd1', brand_id: 'b1', domain: 'acme.com', is_primary: true }],
             },
           ]
@@ -164,6 +167,9 @@ const finishSetup = vi.hoisted(() =>
 );
 vi.mock('@/lib/actions/setup-after-purchase', () => ({ finishSetupAfterPurchase: finishSetup }));
 vi.mock('@/lib/actions/volumes', () => ({ bootstrapBrandVolumes: vi.fn() }));
+// AI Traffic's Check again, on "Connect your site": the server's read of the home page.
+const checkTrackingSnippet = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/traffic-snippet-client', () => ({ checkTrackingSnippet }));
 const setup = vi.hoisted(() => ({
   suggestTopics: vi.fn(),
   generatePromptsFromTopics: vi.fn(),
@@ -216,6 +222,7 @@ beforeEach(() => {
   db.orgId = 'org-1';
   db.log = [];
   db.profileWriteFails = false;
+  db.trackingCode = null;
   exploreDemo.opening = false;
   resetEnsureOrganization();
   container = document.createElement('div');
@@ -1141,13 +1148,13 @@ describe('setup after purchase', () => {
     vi.unstubAllGlobals();
   });
 
-  it('opens at the website step, never the plan step, with five steps', async () => {
+  it('opens at the website step, never the plan step, with six steps, "Connect your site" the last', async () => {
     const push = vi.spyOn(stable.router, 'push');
     await render();
     expect(push).not.toHaveBeenCalled();
     expect(text()).toContain('Set up your brand');
     expect(text()).not.toContain('Choose how to start');
-    expect(stepDots()).toHaveLength(5);
+    expect(stepDots()).toHaveLength(6);
     expect(track).toHaveBeenCalledWith('onboarding_step_viewed', {
       step: 1,
       step_name: 'brand_setup',
@@ -1257,7 +1264,7 @@ describe('setup after purchase', () => {
     await render();
     expect(text()).toContain('Set up your brand');
     expect(text()).not.toContain('How do you want to start?');
-    expect(stepDots()).toHaveLength(5);
+    expect(stepDots()).toHaveLength(6);
 
     await type('brandName', 'Acme');
     await type('website', 'acme.com');
@@ -1396,6 +1403,184 @@ describe('setup after purchase', () => {
       await render();
       expect(text()).toContain('Set up your brand');
       expect(link()).toBeNull();
+    });
+  });
+
+  describe('"Connect your site", after Finish', () => {
+    const TAG = '<script src="https://api.ansvisor.com/t.js" data-t="abc123" defer></script>';
+    const snippetBox = () => container.querySelector('[data-slot="connect-site"] pre');
+    const clipboard = { writeText: vi.fn(async () => {}) };
+    /** Setup resumed on the competitors, with a tracking code, then Finish. */
+    async function finish() {
+      await render();
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Start tracking with 1 competitor')!.click());
+    }
+
+    beforeEach(() => {
+      db.onboarded = false;
+      db.ownBrand = true;
+      db.orgBrandCount = 1;
+      db.promptSets = [{ id: 's1' }];
+      db.trackingCode = 'abc123';
+      clipboard.writeText.mockClear();
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard });
+    });
+
+    it("starts tracking, then shows the brand's snippet as the last of six steps", async () => {
+      await render();
+      expect(text()).toContain('Add your competitors');
+      expect(stepDots()).toHaveLength(6);
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Start tracking with 1 competitor')!.click());
+
+      // Finish ran first: tracking has started, and the page stays.
+      expect(finishSetup).toHaveBeenCalledWith('b1');
+      expect(track).toHaveBeenCalledWith('onboarding_finished', {
+        paid: true,
+        setup_after_purchase: true,
+      });
+      expect(window.location.href).toBe('');
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(text()).toContain('Your first tracking run has started.');
+      expect(text()).toContain('Connect your site');
+      expect(snippetBox()?.textContent).toBe(TAG);
+      expect(button('Done, go to my dashboard')).toBeDefined();
+      expect(button("I'll do it later")).toBeDefined();
+      // The sixth of six dots, the current one; no way back, and no "Manage your plan".
+      expect(stepDots()).toHaveLength(6);
+      expect(stepDots().findIndex((dot) => dot.classList.contains('w-6'))).toBe(5);
+      expect(button('Back')).toBeUndefined();
+      expect(container.querySelector('[data-slot="manage-plan"]')).toBeNull();
+      expect(track).toHaveBeenCalledWith('onboarding_step_viewed', {
+        step: 7,
+        step_name: 'connect_site',
+        setup_after_purchase: true,
+      });
+    });
+
+    it('copies the snippet, and counts the copy', async () => {
+      await finish();
+      const copy = container.querySelector<HTMLButtonElement>(
+        '[aria-label="Copy tracking script"]',
+      )!;
+      await act(async () => copy.click());
+      expect(clipboard.writeText).toHaveBeenCalledWith(TAG);
+      expect(track).toHaveBeenCalledWith('onboarding_snippet_copied', {
+        setup_after_purchase: true,
+      });
+    });
+
+    it("checks the brand's home page, saying what it found", async () => {
+      await finish();
+      checkTrackingSnippet.mockResolvedValueOnce({
+        ok: true,
+        status: 'not_found',
+        domain: 'acme.com',
+        checkedAt: new Date().toISOString(),
+      });
+      await act(async () => button('Check again')!.click());
+      expect(checkTrackingSnippet).toHaveBeenCalledWith('b1');
+      expect(text()).toContain("Not found on acme.com's home page yet.");
+      expect(track).toHaveBeenCalledWith('onboarding_snippet_checked', {
+        outcome: 'not_found',
+        setup_after_purchase: true,
+      });
+
+      checkTrackingSnippet.mockResolvedValueOnce({
+        ok: true,
+        status: 'found',
+        domain: 'acme.com',
+        checkedAt: new Date().toISOString(),
+      });
+      await act(async () => button('Check again')!.click());
+      expect(container.querySelector('[data-slot="snippet-found"]')?.textContent).toBe(
+        'Found on acme.com. AI visits show in AI Traffic as they arrive.',
+      );
+      expect(track).toHaveBeenCalledWith('onboarding_snippet_checked', {
+        outcome: 'found',
+        setup_after_purchase: true,
+      });
+    });
+
+    it('lands on the dashboard with the run on Done', async () => {
+      await finish();
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[aria-label="Copy tracking script"]')!.click(),
+      );
+      await act(async () => button('Done, go to my dashboard')!.click());
+      expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+      expect(track).toHaveBeenCalledWith('onboarding_connect_site_done', {
+        copied: true,
+        setup_after_purchase: true,
+      });
+      expect(button("I'll do it later")!.disabled).toBe(true);
+    });
+
+    it('lands the same way on Later, without a job when no run could be started', async () => {
+      finishSetup.mockResolvedValueOnce({ ok: true, jobId: null });
+      await finish();
+      expect(text()).toContain('Connect your site');
+      await act(async () => button("I'll do it later")!.click());
+      expect(window.location.href).toBe('/dashboard/action-center/today');
+      expect(track).toHaveBeenCalledWith('onboarding_connect_site_skipped', {
+        copied: false,
+        setup_after_purchase: true,
+      });
+      expect(track).not.toHaveBeenCalledWith('onboarding_connect_site_done', expect.anything());
+    });
+
+    it('is skipped when the brand has no tracking code: Finish lands at once, as before', async () => {
+      db.trackingCode = null;
+      await render();
+      expect(stepDots()).toHaveLength(5);
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Start tracking with 1 competitor')!.click());
+      expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+      expect(toast.success).toHaveBeenCalledWith(
+        'Setup complete! Your first tracking is starting.',
+      );
+      expect(text()).not.toContain('Connect your site');
+      expect(
+        vi.mocked(track).mock.calls.some(([, props]) => props?.step_name === 'connect_site'),
+      ).toBe(false);
+    });
+
+    it('is not shown when the plan is no longer active at the end: the plan step, as before', async () => {
+      finishSetup.mockResolvedValueOnce({ ok: false, reason: 'no_plan' });
+      await finish();
+      await act(async () => {});
+      expect(text()).toContain('Choose Your Plan');
+      expect(text()).not.toContain('Connect your site');
+      expect(stepDots()).toHaveLength(6);
+    });
+
+    it('is not part of the old order, where the plan step follows the competitors', async () => {
+      // No plan yet, a brand set up under the old order.
+      db.org = null;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => Response.json({ trialAvailable: true, trialDays: 14 })),
+      );
+      await render();
+      await act(async () => button('Continue with 1 competitor')!.click());
+      await act(async () => {});
+      expect(text()).toContain('Choose how to start');
+      expect(text()).not.toContain('Connect your site');
+      expect(finishSetup).not.toHaveBeenCalled();
+    });
+
+    it('is not part of a self-hosted setup, which lands on the dashboard', async () => {
+      vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+      vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://aeo.example.test');
+      db.org = null;
+      await render();
+      expect(stepDots()).toHaveLength(5);
+      vi.stubGlobal('location', { href: '' });
+      await act(async () => button('Start tracking with 1 competitor')!.click());
+      expect(finishSetup).not.toHaveBeenCalled();
+      expect(window.location.href).toBe('/dashboard');
+      expect(text()).not.toContain('Connect your site');
     });
   });
 

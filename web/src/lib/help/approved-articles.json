@@ -457,7 +457,7 @@
         "onboarding"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -465,7 +465,7 @@
         },
         {
           "heading": "The 7 steps",
-          "text": "- Set your KPIs.\n- Add at least 3 competitors.\n- Add at least 3 topics.\n- Add 3 prompts per topic.\n- Connect Google Search Console.\n- Connect Google Analytics.\n- Add the AI Traffic snippet.\n\nEach step opens its page. Steps are checked from your data, such as three competitors saved or a first AI visit detected, so what you did before counts: an existing brand shows its real count on the first day."
+          "text": "- Add the AI Traffic snippet.\n- Set your KPIs.\n- Add at least 3 competitors.\n- Add at least 3 topics.\n- Add 3 prompts per topic.\n- Connect Google Search Console.\n- Connect Google Analytics.\n\nThe snippet comes first, because AI Traffic shows no AI visits, conversions or revenue without it. It's done when its first visit arrives.\n\nEach step opens its page. Steps are checked from your data, such as three competitors saved or a first AI visit detected, so what you did before counts: an existing brand shows its real count on the first day."
         },
         {
           "heading": "Search Console and Analytics",
@@ -647,7 +647,7 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -671,7 +671,7 @@
         },
         {
           "heading": "Finish setting up",
-          "text": "Under **Today's focus**, **Finish setting up** lists the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise."
+          "text": "Under **Today's focus**, **Finish setting up** lists the next of the 7 set-up steps (the AI traffic snippet, KPIs, competitors, topics, prompts, Search Console, Analytics), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise."
         },
         {
           "heading": "Prompts waiting for a spot",
@@ -973,7 +973,7 @@
         "gsc"
       ],
       "plan": "all",
-      "updated": "2026-11-08",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -985,7 +985,7 @@
         },
         {
           "heading": "Add the tracking snippet",
-          "text": "Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page."
+          "text": "Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page.\n\nOn the cloud, the same snippet is offered at the end of brand setup, on **Connect your site**. Until its first visit, it's also the first step of **Finish setting up** on the Action Center's **Today** tab."
         },
         {
           "heading": "Check that the snippet works",
@@ -3815,7 +3815,8 @@
         "free trial",
         "plan already active",
         "how do you want to start",
-        "sample brand"
+        "sample brand",
+        "connect your site"
       ],
       "synonyms": [
         "get started",
@@ -3825,14 +3826,15 @@
         "add another brand",
         "set up a brand after buying",
         "start the free trial",
-        "explore the demo"
+        "explore the demo",
+        "add the tracking snippet during setup"
       ],
       "plan": "all",
       "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
-          "text": "When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. On the cloud, you first choose how to start: the free trial, a plan, or the sample brand. The setup itself has five steps. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped."
+          "text": "When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. On the cloud, you first choose how to start: the free trial, a plan, or the sample brand. The setup itself has five steps, then on the cloud an optional last screen, **Connect your site**. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped."
         },
         {
           "heading": "On the cloud: choose how to start",
@@ -3859,8 +3861,12 @@
           "text": "On **Add your competitors**, Ansvisor suggests competitors for your brand. Check the real rivals, and uncheck or remove the ones that aren't comparable. Add your own with a company name and domain, using the name as it appears in AI answers rather than the website address.\n\nSelect at least one competitor to continue. **Start tracking with N competitors** finishes the brand and starts its first run. Competitor tracking is on every plan.\n\nIf your site looks like an online store, Ansvisor turns on Product Visibility for the brand and says so on this step. You can turn it off in the brand settings."
         },
         {
+          "heading": "Last, optional: Connect your site",
+          "text": "On the cloud, once **Start tracking with N competitors** has started your brand's first run, **Connect your site** shows your brand's AI Traffic snippet: one line for your site's head. Without it, AI Traffic shows no AI visits, conversions or revenue.\n\n1. Copy the snippet with the copy button.\n2. Paste it just before the head closes on every page of your site, then publish.\n3. Click **Check again** to see whether your home page has it.\n\n**Done, go to my dashboard** and **I'll do it later** both open the dashboard while the first run goes on. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab."
+        },
+        {
           "heading": "Set up your brand with a plan active",
-          "text": "Whenever your workspace has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor: after checkout on the first screen, after buying from the sample brand, or once the only brand was deleted. On the last step, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once. If you leave part-way, you pick up where you stopped. Admins who want to change or cancel the plan first can use **Manage your plan** under the steps: it opens Billing, and setup waits for half an hour."
+          "text": "Whenever your workspace has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor: after checkout on the first screen, after buying from the sample brand, or once the only brand was deleted. On the last step, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once; **Connect your site** follows. If you leave part-way, you pick up where you stopped. Admins who want to change or cancel the plan first can use **Manage your plan** under the steps: it opens Billing, and setup waits for half an hour."
         },
         {
           "heading": "A brand set up before choosing a plan",
@@ -3982,7 +3988,7 @@
         },
         {
           "heading": "Add the tracking snippet",
-          "text": "Setup doesn't include the tracking snippet. It's an optional step you do separately for **AI Referral Traffic**: real visits that arrive on your site from AI answer engines.\n\n1. Pick **AI Referral Traffic** in the sidebar. Until the snippet sends its first visit, the code is shown at the top of the page. After that, **Code** beside **Tracking snippet** in the **Data sources** strip shows it again.\n2. Copy the snippet.\n3. Paste it into the head section of your site's pages, just before the head closes. On WordPress, use a header injection plugin; on a static site, edit your template.\n\nOnce the snippet sends a visit, **Tracking snippet** in the **Data sources** strip shows it as active, with the time of the last visit."
+          "text": "The optional tracking snippet fills **AI Referral Traffic**: real visits that arrive on your site from AI answer engines. On the cloud, setup ends with **Connect your site**, which offers it. Skipped it? It's the first step of **Finish setting up** on **Today**. You can also add it yourself:\n\n1. Pick **AI Referral Traffic** in the sidebar. Until the snippet sends its first visit, the code is shown at the top of the page. After that, **Code** beside **Tracking snippet** in the **Data sources** strip shows it again.\n2. Copy the snippet.\n3. Paste it into the head section of your site's pages, just before the head closes. On WordPress, use a header injection plugin; on a static site, edit your template.\n\nOnce the snippet sends a visit, **Tracking snippet** in the **Data sources** strip shows it as active, with the time of the last visit."
         },
         {
           "heading": "While the first tracking runs",

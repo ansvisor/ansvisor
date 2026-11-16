@@ -22,15 +22,17 @@ function snippetTag(trackingCode?: string, conversions?: ConversionsConsent | nu
 /**
  * Where the tag goes, the tag, and a copy button. The tag wraps inside its
  * box, and the block can shrink below the tag's width: in the dialog's grid
- * it would otherwise widen the dialog past the screen.
+ * it would otherwise widen the dialog past the screen. Onboarding's "Connect
+ * your site" shows it too, and counts the copies (`onCopy`).
  */
-function SnippetCode({ snippet }: { snippet: string }) {
+export function SnippetCode({ snippet, onCopy }: { snippet: string; onCopy?: () => void }) {
   const t = useTranslations('traffic');
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(snippet);
     setCopied(true);
+    onCopy?.();
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -75,14 +77,24 @@ export interface SnippetCheckProps {
   busy?: boolean;
   /** The check found it: the page reads its sources again. */
   onFound: () => void;
+  /** Each check's outcome, for analytics (onboarding's "Connect your site"). */
+  onChecked?: (outcome: SnippetCheckStatus | 'failed') => void;
 }
 
 /**
  * Check again: the server reads the brand's home page for the snippet. A
  * find reloads the page's sources (the banner goes); otherwise the line
  * says what it saw, or that the domain is missing or didn't answer.
+ * Onboarding's "Connect your site" offers it too.
  */
-function CheckAgain({ brandId, domain, checkedAt, busy = false, onFound }: SnippetCheckProps) {
+export function CheckAgain({
+  brandId,
+  domain,
+  checkedAt,
+  busy = false,
+  onFound,
+  onChecked,
+}: SnippetCheckProps) {
   const t = useTranslations('traffic.snippetCheck');
   const tCommon = useTranslations('common');
   const [checking, setChecking] = useState(false);
@@ -98,6 +110,7 @@ function CheckAgain({ brandId, domain, checkedAt, busy = false, onFound }: Snipp
     setChecking(true);
     const result = await checkTrackingSnippet(brandId);
     setChecking(false);
+    onChecked?.(result.ok ? result.status : 'failed');
     if (!result.ok) return setOutcome('failed');
     if (result.checkedAt) setCheckedHere(result.checkedAt);
     if (result.status === 'found') {
