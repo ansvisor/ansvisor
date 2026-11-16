@@ -59,6 +59,24 @@ describe('ACTION_NAME_RULES (the owner’s report, 2026-11-14)', () => {
     expect(ACTION_NAME_RULES).toContain('or read the next page first');
   });
 
+  it('read an action asked for by its code, and never answer with the closest others (owner, 2026-11-16)', () => {
+    expect(ACTION_NAME_RULES).toContain(
+      `An action the person names by its code (${actionRef(12)}, however they write it): answer from a read of that code, never from a page of the list, and say whether it is its code or its previous code.`,
+    );
+    expect(ACTION_NAME_RULES).toContain(
+      'A code that names two actions: name both and say which is which; never pick one.',
+    );
+    expect(ACTION_NAME_RULES).toContain(
+      'A code not found in this brand: say plainly that this brand has no action with that code, and that codes are per brand.',
+    );
+    expect(ACTION_NAME_RULES).toContain(
+      'Never offer "the closest" or similar actions in its place',
+    );
+    expect(ACTION_NAME_RULES).toContain(
+      "never say an action doesn't exist because a page of the list didn't show it",
+    );
+  });
+
   it('build every example number with the shared formatter, small and generic', () => {
     expect(actionRef(12)).toBe('AC-12');
     expect(ACTION_NAME_RULES).not.toMatch(/AC-\d{3,}/);

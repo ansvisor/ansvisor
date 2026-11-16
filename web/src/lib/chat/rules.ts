@@ -40,12 +40,17 @@ export const SAFETY_RULES = [
  * by title, with the number the app links (actionRef, so a change of
  * numbering changes the examples too), and never by numbers alone, which
  * the Actions list doesn't show. A read that didn't cover them all says so.
+ * An action asked for by its code is read by that code, and a code this
+ * brand doesn't have is "not found", never answered with "the closest"
+ * others (the owner's report, 2026-11-16).
  */
 export const ACTION_NAME_RULES = [
   'Action Center actions:',
   `- Name an action by its title, then its number in brackets, which the app turns into a link: **Recover lost citations on 3 prompts** (${actionRef(12)}). Never a number alone ("${actionRef(12)}", "assign an owner to ${actionRef(12)}") and never bare numbers ("${actionRef(12)}, 13 and 14"): the person can't tell what they are.`,
   `- Several alike: say what they share and give each its own number: 3 stale actions about sources (${actionRef(12)}, ${actionRef(13)}, ${actionRef(14)}). Never a range in place of the numbers.`,
   `- A read of actions that showed fewer than its total judged only those: say so ("the top 50 of 53 open actions"), or read the next page first.`,
+  `- An action the person names by its code (${actionRef(12)}, however they write it): answer from a read of that code, never from a page of the list, and say whether it is its code or its previous code. A code that names two actions: name both and say which is which; never pick one.`,
+  `- A code not found in this brand: say plainly that this brand has no action with that code, and that codes are per brand. Never offer "the closest" or similar actions in its place, and never say an action doesn't exist because a page of the list didn't show it.`,
 ].join('\n');
 
 /**

@@ -1527,6 +1527,8 @@
         "reject suggestion",
         "action number",
         "ac number",
+        "action code",
+        "what is ac",
         "open action from answer",
         "action link",
         "most important actions",
@@ -1541,7 +1543,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-15",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -1609,7 +1611,7 @@
         },
         {
           "heading": "Ask about your actions",
-          "text": "Ask \"What are the most important actions?\" or \"What should I do first?\" and Chat reads the brand's open actions (New, In progress and On hold) in Priority Score order, up to 50 at a time, with how many there are in all. When there are more than it read, it reads the next ones too, or says how many it judged, such as \"the top 50 of 53\".\n\nChat names each action by its title, with its number after it as a link: **Recover lost citations on 3 prompts** (AC-12). Actions that are alike are grouped by what they share, each with its own number."
+          "text": "Ask \"What are the most important actions?\" or \"What should I do first?\" and Chat reads the brand's open actions (New, In progress and On hold) in Priority Score order, up to 50 at a time, with how many there are in all. When there are more than it read, it reads the next ones too, or says how many it judged, such as \"the top 50 of 53\".\n\nChat names each action by its title, with its number after it as a link: **Recover lost citations on 3 prompts** (AC-12). Actions that are alike are grouped by what they share, each with its own number.\n\nAsk about an action by its code, such as \"What is AC-12?\", and Chat reads that action, whatever its status. A code the brand doesn't have gets a plain \"not found\" (codes are per brand), never a guess."
         },
         {
           "heading": "Work through your Action Center tasks",

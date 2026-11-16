@@ -63,7 +63,7 @@ export function actionCodeRefNo(segment: string): number | null {
 }
 
 /** What an action's code is built from: its brand's number once its brand is numbered (00534). */
-type Numbered = { actionNo: number; brandNo?: number | null };
+export type Numbered = { actionNo: number; brandNo?: number | null };
 
 /**
  * The number in an action's code: its number in its brand, two digits at

@@ -22,8 +22,9 @@ vi.mock('@/lib/actions/tracking', () => ({ getTrackingWindow: vi.fn() }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { ACTIONS_PAGE_MAX, actionsPageNote, listActionsPageFor } =
+const { ACTIONS_PAGE_MAX, actionsPageNote, listActionsByCodeFor, listActionsPageFor } =
   await import('./action-center-reads');
+const { ACTION_CODES_MAX } = await import('@/lib/action-center/action-codes');
 const { readBudget, resultCharsFor } = await import('@/lib/chat/run-limits');
 
 const ORG = 'org-1';
@@ -329,5 +330,126 @@ describe('the note', () => {
     expect(note({ offset: 20, shown: 10, total: 53 })).toContain(
       '23 more not shown: read them with offset 30, or say the answer covers 21–30 of 53.',
     );
+  });
+});
+
+// The owner's report (2026-11-16): "AC 481 ve AC-63 nedir" with AC-481 on the screen got "there
+// is no AC-481" and the closest others: Chat read a page of the list, which didn't hold it.
+describe('the brand’s actions by their codes', () => {
+  const byCode = (codes: string[], auth: McpAuthContext = ALL, brandId = BRAND) =>
+    listActionsByCodeFor(auth, { brandId, codes });
+
+  it('finds a code however it is written', async () => {
+    db.tables.actions = [
+      action(381),
+      action(1, { brand_no: 7, action_no: 900, payload: { title: 'Fix the pricing page' } }),
+    ];
+    for (const code of ['AC-481', 'AC 481', 'ac481', 'ac-481', '#481', '481']) {
+      const found = await byCode([code]);
+      expect(
+        found!.actions.map((a) => [a.ref, a.asked, a.matched]),
+        code,
+      ).toEqual([['AC-481', code, 'its code']]);
+      expect(found!.not_found, code).toEqual([]);
+    }
+    for (const code of ['AC-07', 'AC-7', 'ac 7', '#07', '7']) {
+      const found = await byCode([code]);
+      expect(
+        found!.actions.map((a) => [a.ref, a.title]),
+        code,
+      ).toEqual([['AC-07', 'Fix the pricing page']]);
+    }
+  });
+
+  it('answers every code of a message from one read, each once', async () => {
+    db.tables.actions = [action(381), action(63, { brand_no: 63, action_no: 777 })];
+    const found = await byCode(['AC 481', 'AC-63', '#481', 'AC-999']);
+    expect(found!.actions.map((a) => [a.asked, a.ref])).toEqual([
+      ['AC 481', 'AC-481'],
+      ['AC-63', 'AC-63'],
+    ]);
+    expect(found!.not_found).toEqual(['AC-999']);
+    expect(db.log.filter(([table]) => table === 'actions')).toHaveLength(1);
+    const many = await byCode(Array.from({ length: 12 }, (_, i) => `AC-${i + 1}`));
+    expect(many!.not_found).toHaveLength(ACTION_CODES_MAX);
+  });
+
+  it("matches the brand's number, and the old global number as its previous code", async () => {
+    db.tables.actions = [
+      action(5, { brand_no: 3, action_no: 648, payload: { title: 'Recover lost citations' } }),
+    ];
+    const byBrandNo = await byCode(['AC-03']);
+    expect(byBrandNo!.actions).toEqual([
+      expect.objectContaining({
+        ref: 'AC-03',
+        matched: 'its code',
+        previous_ref: 'AC-648',
+        title: 'Recover lost citations',
+      }),
+    ]);
+    expect(byBrandNo!.note).toMatch(/^AC-03: one action, by its code\./);
+    const byOldNo = await byCode(['AC-648']);
+    expect(byOldNo!.actions).toEqual([
+      expect.objectContaining({ ref: 'AC-03', matched: 'its previous code' }),
+    ]);
+    expect(byOldNo!.note).toMatch(
+      /^AC-648: one action, by its previous code; its code now is AC-03\./,
+    );
+  });
+
+  it('returns both actions a code names, and says never to pick one', async () => {
+    db.tables.actions = [
+      action(6, { brand_no: 12, action_no: 59, payload: { title: 'Old 59' } }),
+      action(7, { brand_no: 59, action_no: 700, payload: { title: 'Brand 59' } }),
+    ];
+    const found = await byCode(['AC-59']);
+    expect(found!.actions.map((a) => [a.ref, a.title, a.matched])).toEqual([
+      ['AC-59', 'Brand 59', 'its code'],
+      ['AC-12', 'Old 59', 'its previous code'],
+    ]);
+    expect(found!.note).toContain(
+      'AC-59 names 2 different actions (AC-59 by its code, AC-12 by its previous code): name each, say which is which, and never pick one.',
+    );
+  });
+
+  it('finds a Completed or Dismissed action, never a deleted one', async () => {
+    const found = await byCode(['AC-191', 'AC-192', 'AC-193']);
+    expect(found!.actions.map((a) => [a.ref, a.status])).toEqual([
+      ['AC-191', 'completed'],
+      ['AC-192', 'dismissed'],
+    ]);
+    expect(found!.not_found).toEqual(['AC-193']);
+    expect(found!.note).toContain(
+      'AC-193: no action of this brand has this code, now or before (codes are per brand). Say so plainly; never offer other actions in its place.',
+    );
+  });
+
+  it('finds an action past the first page of the list', async () => {
+    const page = await listActionsPageFor(ALL, { brandId: BRAND });
+    expect(page!.actions.map((a) => a.ref)).not.toContain('AC-101');
+    const found = await byCode(['AC-101']);
+    expect(found!.actions).toEqual([
+      expect.objectContaining({ ref: 'AC-101', title: 'Finding 1', priority: 1 }),
+    ]);
+  });
+
+  it("never reads another brand's action, of the workspace or another one", async () => {
+    // AC-194 is the sister brand's, AC-195 another workspace's: not found on this brand.
+    const found = await byCode(['AC-194', 'AC-195']);
+    expect(found).toMatchObject({ actions: [], not_found: ['AC-194', 'AC-195'] });
+    expect((await byCode(['AC-194'], ALL, SISTER))!.actions.map((a) => a.ref)).toEqual(['AC-194']);
+    db.log = [];
+    await expect(byCode(['AC-195'], ALL, FOREIGN)).resolves.toBeNull();
+    await expect(byCode(['AC-101'], { ...ALL, brandAccess: [SISTER] })).resolves.toBeNull();
+    await expect(byCode(['AC-101'], { ...ALL, organizationId: null })).resolves.toBeNull();
+    expect(db.log.filter(([table]) => table !== 'brands')).toEqual([]);
+  });
+
+  it('reads nothing for words that are no code, and says so', async () => {
+    db.log = [];
+    const found = await byCode(['citations']);
+    expect(found).toMatchObject({ actions: [], not_found: [] });
+    expect(found!.note).toMatch(/^"citations" is not an action code\./);
+    expect(db.log.filter(([table]) => table === 'actions')).toEqual([]);
   });
 });
