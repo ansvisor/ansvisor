@@ -1,6 +1,7 @@
 import { useTranslations } from 'next-intl';
 import { SignInForm } from '@/components/auth/sign-in-form';
 import { AuthCard, AuthShell } from '@/components/auth/auth-shell';
+import { NewUserTheme } from '@/components/theme/new-user-theme';
 import { Link2, MailCheck } from 'lucide-react';
 import { mcpOAuthEnabled } from '@/lib/mcp-oauth/config';
 import { appForSignIn, type ConsentApp } from '@/lib/mcp-oauth/consent';
@@ -28,20 +29,25 @@ function SignInView({
   const t = useTranslations('auth');
 
   return (
-    <AuthShell
-      prompt={t('noAccount')}
-      cta={{ href: '/sign-up', label: t('signUp') }}
-      brandAboveCard
-      backdrop="agent"
-    >
-      <div className="flex flex-col gap-6">
-        {connecting && <ConnectingBanner app={connecting} />}
-        {showVerificationBanner && <VerificationBanner />}
-        <AuthCard title={t('signIn')} subtitle={t('signInSubtitle')}>
-          <SignInForm />
-        </AuthCard>
-      </div>
-    </AuthShell>
+    <>
+      {/* Before the page: a browser with no theme yet starts on dark, for a while
+          (config/theme.ts). New and returning people look the same here. */}
+      <NewUserTheme />
+      <AuthShell
+        prompt={t('noAccount')}
+        cta={{ href: '/sign-up', label: t('signUp') }}
+        brandAboveCard
+        backdrop="agent"
+      >
+        <div className="flex flex-col gap-6">
+          {connecting && <ConnectingBanner app={connecting} />}
+          {showVerificationBanner && <VerificationBanner />}
+          <AuthCard title={t('signIn')} subtitle={t('signInSubtitle')}>
+            <SignInForm />
+          </AuthCard>
+        </div>
+      </AuthShell>
+    </>
   );
 }
 

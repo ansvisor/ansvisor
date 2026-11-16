@@ -24,7 +24,9 @@
         "sort actions",
         "recently updated",
         "action number",
-        "find action by number"
+        "find action by number",
+        "action code",
+        "previously"
       ],
       "synonyms": [
         "recommendations",
@@ -65,7 +67,11 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's number under its title, such as AC-251, the number Chat uses for it: search for AC-251 or 251 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products."
+          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products."
+        },
+        {
+          "heading": "Action codes",
+          "text": "Each brand numbers its own actions from AC-01, in the order they were made, and an action keeps its code for good. A number is never used again, so the list has gaps where actions were done, dismissed or removed. Actions made before this had an older code, such as AC-648: the drawer shows it as \"Previously AC-648\" beside the new code, searching for it still finds the action, and links made with it still open it."
         },
         {
           "heading": "Sort the list",
@@ -193,7 +199,9 @@
         "what changed",
         "visibility drop",
         "lost citation",
-        "signal status"
+        "signal status",
+        "signal code",
+        "find signal by number"
       ],
       "synonyms": [
         "alerts",
@@ -202,7 +210,7 @@
         "findings"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -210,7 +218,7 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards show Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before.\n\nFilter by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, or search."
+          "text": "The cards show Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before.\n\nFilter by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, or search. Each signal has a code beside its title, such as S-12: each brand numbers its own signals from S-01, and searching for S-12 or 12 finds it."
         },
         {
           "heading": "Signal status",
@@ -1519,6 +1527,8 @@
         "reject suggestion",
         "action number",
         "ac number",
+        "action code",
+        "what is ac",
         "open action from answer",
         "action link",
         "most important actions",
@@ -1601,7 +1611,7 @@
         },
         {
           "heading": "Ask about your actions",
-          "text": "Ask \"What are the most important actions?\" or \"What should I do first?\" and Chat reads the brand's open actions (New, In progress and On hold) in Priority Score order, up to 50 at a time, with how many there are in all. When there are more than it read, it reads the next ones too, or says how many it judged, such as \"the top 50 of 53\".\n\nChat names each action by its title, with its number after it as a link: **Recover lost citations on 3 prompts** (AC-12). Actions that are alike are grouped by what they share, each with its own number."
+          "text": "Ask \"What are the most important actions?\" or \"What should I do first?\" and Chat reads the brand's open actions (New, In progress and On hold) in Priority Score order, up to 50 at a time, with how many there are in all. When there are more than it read, it reads the next ones too, or says how many it judged, such as \"the top 50 of 53\".\n\nChat names each action by its title, with its number after it as a link: **Recover lost citations on 3 prompts** (AC-12). Actions that are alike are grouped by what they share, each with its own number.\n\nAsk about an action by its code, such as \"What is AC-12?\", and Chat reads that action, whatever its status. A code the brand doesn't have gets a plain \"not found\" (codes are per brand), never a guess."
         },
         {
           "heading": "Work through your Action Center tasks",
@@ -1705,7 +1715,7 @@
         },
         {
           "heading": "Watch the work",
-          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its number, such as AC-1497, is a link: click it to open that action in Action Center in a new tab."
+          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both."
         },
         {
           "heading": "Big requests in parts",
@@ -1741,7 +1751,7 @@
         },
         {
           "heading": "Open and close Settings in the chat menu",
-          "text": "Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on **General**, **Activity** or **What Chat can do**. Chat remembers whether you left them open or closed, in this browser."
+          "text": "Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on one of them. Chat remembers whether you left them open or closed, in this browser. Each opens on the **Settings** page, whose own tabs on the left are the same four: **General**, **Activity**, **What Chat can do** and **Tool policy**."
         },
         {
           "heading": "Hide the chat menu",
@@ -1784,6 +1794,10 @@
       "keywords": [
         "chat settings",
         "general settings",
+        "settings tabs",
+        "activity tab",
+        "what chat can do",
+        "tool policy tab",
         "date range",
         "default date range",
         "time range",
@@ -1809,11 +1823,15 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-15",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
           "text": "Click **Settings** in the chat menu, then **General**, for your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so."
+        },
+        {
+          "heading": "Settings tabs",
+          "text": "The **Settings** page has its own tabs on the left: **General**, **Activity**, **What Chat can do** and **Tool policy**, in the same order as under **Settings** in the chat menu. Click one to open it on the right: the page's title and the tabs stay, and the tab you are on is highlighted. **General** holds your own preferences, below. **Activity** logs every change Chat made, with **Undo**. **What Chat can do** lists the tools Chat may use, by area. **Tool policy** holds the workspace's rules: everyone reads them, and only Admins change them. On a narrow screen the tabs sit in a row above the page."
         },
         {
           "heading": "Default mode",
@@ -1845,7 +1863,7 @@
         },
         {
           "heading": "Product tour",
-          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**, also under **Settings** in the chat menu; only Admins change them."
+          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in the **Tool policy** tab; only Admins change them."
         }
       ]
     },
@@ -4024,12 +4042,13 @@
         "light theme",
         "make it darker",
         "brighter screen",
+        "why is it dark now",
         "log out",
         "where is settings",
         "menu under my name"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -4037,11 +4056,11 @@
         },
         {
           "heading": "Which mode you start in",
-          "text": "On Ansvisor Cloud, a new account starts in dark mode for now, from the sign-up page on. Anyone who used Ansvisor before keeps the mode they had. Self-hosted installs start in light mode."
+          "text": "On Ansvisor Cloud, a browser where no mode has been picked yet starts in dark mode for now. That happens on the sign-up, sign-in and password reset pages, so new people start in dark mode, and so does anyone who signs in on a new browser or device. The mode is then kept in that browser, as if you had picked it. If you never picked a mode, you may find Ansvisor in dark mode after you next sign in. A mode you picked with the sun or moon button is never changed. Self-hosted installs start in light mode."
         },
         {
           "heading": "Switch the mode",
-          "text": "Open the main menu: its sun or moon button sits beside the Ansvisor logo, at the top. When the menu is folded to icons, the button is hidden until you open it. On a phone, it is at the top of the menu. The moon switches to dark mode, and the sun to light mode.\n\nYour choice is kept in this browser, so each page opens in it. On another browser or device, Ansvisor opens in its usual mode until you switch there too."
+          "text": "Open the main menu: its sun or moon button sits beside the Ansvisor logo, at the top. When the menu is folded to icons, the button is hidden until you open it. On a phone, it is at the top of the menu. The moon switches to dark mode, and the sun to light mode.\n\nYour choice is kept in this browser, so each page opens in it. Another browser or device keeps its own mode: on Ansvisor Cloud, it starts in dark mode when you sign in there, until you switch."
         },
         {
           "heading": "The account menu",
@@ -5417,7 +5436,8 @@
         "codex",
         "connect assistant",
         "connected apps",
-        "sign in"
+        "sign in",
+        "action code"
       ],
       "synonyms": [
         "model context protocol",
@@ -5430,7 +5450,7 @@
         "disconnect app"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -5454,7 +5474,7 @@
         },
         {
           "heading": "What you can ask",
-          "text": "Ask in plain words, for example:\n\n- \"What's my visibility score on ChatGPT for the last 7 days?\"\n- \"Which topic has the most prompts?\"\n- \"Who are my top 5 competitors by mention count this month?\"\n- \"Why did our sentiment drop on Gemini?\"\n\nThe assistant can read visibility, mentions, citations, prompts, AI traffic, saved reports, content, Site Audits, product visibility and the Action Center. Some requests change data, such as accepting a suggested prompt, writing a content draft or recording a task's progress. Assistants are told to make a change only when you ask for it."
+          "text": "Ask in plain words, for example:\n\n- \"What's my visibility score on ChatGPT for the last 7 days?\"\n- \"Which topic has the most prompts?\"\n- \"Who are my top 5 competitors by mention count this month?\"\n- \"Why did our sentiment drop on Gemini?\"\n- \"What is action AC-12?\" Codes are per brand: a code the brand doesn't have gets a plain \"not found\", never a guess.\n\nThe assistant can read visibility, mentions, citations, prompts, AI traffic, saved reports, content, Site Audits, product visibility and the Action Center. Some requests change data, such as accepting a suggested prompt, writing a content draft or recording a task's progress. Assistants are told to make a change only when you ask for it."
         },
         {
           "heading": "What your plan includes",

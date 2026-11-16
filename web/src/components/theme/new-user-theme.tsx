@@ -22,16 +22,20 @@ export function newUserThemeScript(theme: string, storageKey: string): string {
 }
 
 /**
- * Starts a new person on the dark theme (NEW_USER_THEME), on Ansvisor Cloud:
- * on the sign-up page and in onboarding, the pages only new people see. The
- * theme is stored as if they had picked it, so the rest of the app opens
- * dark too, and the sun/moon button beside the logo switches it back. A
- * browser that already has a theme keeps it, so no one who uses Ansvisor
- * today changes.
+ * Starts a browser with no theme yet on the dark theme (NEW_USER_THEME), on
+ * Ansvisor Cloud: on the sign-up, sign-in and password pages and in
+ * onboarding, the first pages a browser sees. The theme is stored as if the
+ * person had picked it, so the rest of the app opens dark too, and the
+ * sun/moon button beside the logo switches it back. A browser that already
+ * has a theme (picked, or given here before) keeps it.
+ *
+ * Sign-in can't tell new people from returning ones, so someone signing in
+ * on a new browser or device, or in one where they never picked a theme,
+ * starts dark too (the owner accepted this).
  *
  * The inline script covers a page loaded from the server; the effect covers
- * a page reached in the app (sign-in to sign-up), where React doesn't run
- * inline scripts.
+ * a page reached in the app (a link from another page), where React doesn't
+ * run inline scripts.
  */
 export function NewUserTheme() {
   const { setTheme } = useTheme();

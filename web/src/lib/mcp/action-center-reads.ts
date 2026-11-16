@@ -4,7 +4,8 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 import { getKpiSnapshots } from '@/lib/actions/kpis';
 import { getGettingStarted } from '@/lib/actions/getting-started';
 import { getTrackingWindow } from '@/lib/actions/tracking';
-import { actionRef } from '@/lib/action-center/action-ref';
+import { actionCode } from '@/lib/action-center/action-ref';
+import { askedCodes, lookUpCodes, type ActionCodeLookup } from '@/lib/action-center/action-codes';
 import { actionTexts } from '@/lib/action-center/display';
 import { readEntityCounts, withEntityCounts } from '@/lib/action-center/entity-counts';
 import { storedPriorityLevel } from '@/lib/action-center/priority';
@@ -94,7 +95,7 @@ export interface ActionsPageParams {
 export interface ActionsPageRow {
   /** For get_action; never shown. */
   id: string;
-  /** Its number as the app shows and links it, "AC-12" (actionRef). */
+  /** Its code as the app shows and links it, "AC-12" (actionCode: its brand's number, 00534). */
   ref: string;
   /** Its title, as the Actions list words it. */
   title: string;
@@ -186,6 +187,7 @@ export function actionsPageNote(page: {
 interface ActionsPageDbRow {
   id: string;
   action_no: number;
+  brand_no?: number | null;
   kind: string;
   category: string;
   status: string;
@@ -227,7 +229,7 @@ export async function listActionsPageFor(
     let query = supabaseAdmin
       .from('actions')
       .select(
-        'id, action_no, kind, category, status, assignee_id, due_date, updated_at, priority_score, priority_level, stale_at, payload',
+        'id, action_no, brand_no, kind, category, status, assignee_id, due_date, updated_at, priority_score, priority_level, stale_at, payload',
         { count: 'exact', head },
       )
       .eq('brand_id', params.brandId)
@@ -271,7 +273,11 @@ export async function listActionsPageFor(
   const rows = (data ?? []) as unknown as ActionsPageDbRow[];
   const total = count ?? rows.length;
   if (rows.length === 0) return page(total, []);
+  return page(total, await compactRows(rows));
+}
 
+/** Each action as a page row: its tasks, assignee and what is left of its targets read with it. */
+async function compactRows(rows: ActionsPageDbRow[]): Promise<ActionsPageRow[]> {
   const ids = rows.map((row) => row.id);
   const [tasks, names, entityCounts] = await Promise.all([
     supabaseAdmin.from('action_tasks').select('action_id, status').in('action_id', ids),
@@ -285,33 +291,83 @@ export async function listActionsPageFor(
     statuses.set(task.action_id, [...(statuses.get(task.action_id) ?? []), task.status]);
   }
 
-  return page(
-    total,
-    rows.map((row) => {
-      const payload = withEntityCounts(row.payload ?? {}, entityCounts.get(row.id));
-      const progress = taskProgress(statuses.get(row.id) ?? []);
-      const stale = staleFor(row);
-      const assignee = row.assignee_id ? names.get(row.assignee_id) : null;
-      const due = day(row.due_date);
-      const score = row.priority_score === null ? null : Number(row.priority_score);
-      return {
-        id: row.id,
-        ref: actionRef(row.action_no),
-        title: actionTexts(
-          { kind: row.kind, payload } as Parameters<typeof actionTexts>[0],
-          plainTexts,
-        ).title,
-        category: row.category,
-        status: row.status,
-        priority: score,
-        // As the list shows it: the stored level, or the score's when that is missing.
-        priority_level: storedPriorityLevel(row.priority_level, score),
-        ...(stale.stale && stale.stale_at ? { stale_since: day(stale.stale_at) } : {}),
-        ...(due ? { due } : {}),
-        ...(assignee ? { assignee } : {}),
-        tasks: `${progress.completed}/${progress.total}`,
-        updated: day(row.updated_at) ?? row.updated_at,
-      };
-    }),
+  return rows.map((row) => {
+    const payload = withEntityCounts(row.payload ?? {}, entityCounts.get(row.id));
+    const progress = taskProgress(statuses.get(row.id) ?? []);
+    const stale = staleFor(row);
+    const assignee = row.assignee_id ? names.get(row.assignee_id) : null;
+    const due = day(row.due_date);
+    const score = row.priority_score === null ? null : Number(row.priority_score);
+    return {
+      id: row.id,
+      ref: actionCode({ actionNo: row.action_no, brandNo: row.brand_no }),
+      title: actionTexts(
+        { kind: row.kind, payload } as Parameters<typeof actionTexts>[0],
+        plainTexts,
+      ).title,
+      category: row.category,
+      status: row.status,
+      priority: score,
+      // As the list shows it: the stored level, or the score's when that is missing.
+      priority_level: storedPriorityLevel(row.priority_level, score),
+      ...(stale.stale && stale.stale_at ? { stale_since: day(stale.stale_at) } : {}),
+      ...(due ? { due } : {}),
+      ...(assignee ? { assignee } : {}),
+      tasks: `${progress.completed}/${progress.total}`,
+      updated: day(row.updated_at) ?? row.updated_at,
+    };
+  });
+}
+
+// ─── The brand's actions by their codes ─────────────────────────────────────
+
+/** What the codes found: each action a code named, with its page row, and the codes not found. */
+export type ActionsByCode = ActionCodeLookup<ActionsPageRow>;
+
+/**
+ * The brand's actions by the codes a person wrote ("AC-481", "AC 481",
+ * "ac481", "#481", "481", "AC-07"), for Chat (the owner's report of
+ * 2026-11-16: "what is AC-481?" was answered from a page of the list that
+ * didn't hold it). A code is read as the Actions list's search and the
+ * actions/code route read it (matchesActionCode, action-codes.ts): the
+ * brand's number (brand_no, 00534) or the old global number (action_no),
+ * so one code can name two actions, and both come back, never one picked.
+ * Every status, Completed and Dismissed included; never a deleted action.
+ * Only this brand of the caller's organization is read, its organization
+ * joined on the rows too: a code of another brand or workspace is not
+ * found. Null for a brand outside the caller's organization or access.
+ */
+export async function listActionsByCodeFor(
+  auth: McpAuthContext,
+  params: { brandId: string; codes: readonly string[] },
+): Promise<ActionsByCode | null> {
+  if (!auth.organizationId || !(await brandAllowed(auth, params.brandId))) return null;
+  const asked = askedCodes(params.codes);
+  const numbers = asked.flatMap((code) => (code.no === null ? [] : [code.no]));
+
+  let rows: ActionsPageDbRow[] = [];
+  if (numbers.length > 0) {
+    const { data, error } = await supabaseAdmin
+      .from('actions')
+      .select(
+        'id, action_no, brand_no, kind, category, status, assignee_id, due_date, updated_at, priority_score, priority_level, stale_at, payload, brands!inner(organization_id)',
+      )
+      .eq('brand_id', params.brandId)
+      .eq('brands.organization_id', auth.organizationId)
+      // A deleted action (00168) is gone for everyone but the nightly generator.
+      .is('deleted_at', null)
+      // Numbers only (searchedActionNo): none of the model's text reaches the filter.
+      .or(numbers.flatMap((no) => [`brand_no.eq.${no}`, `action_no.eq.${no}`]).join(','))
+      .order('id');
+    if (error) throw new Error(error.message);
+    rows = (data ?? []) as unknown as ActionsPageDbRow[];
+  }
+  const compact = rows.length > 0 ? await compactRows(rows) : [];
+  return lookUpCodes(
+    asked,
+    rows.map((row, i) => ({
+      numbered: { actionNo: Number(row.action_no), brandNo: row.brand_no ?? null },
+      row: compact[i],
+    })),
   );
 }

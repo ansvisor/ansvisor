@@ -49,10 +49,12 @@ const PRECEDENCE = ['hard', 'plan', 'role', 'policy', 'mode', 'dontAsk'] as cons
  * Settings › Chat (CHAT-20 §5, §8b; mockup #g-policy): the rules Chat
  * follows here. Everyone reads them; an Admin changes the workspace's, only
  * to what each tool and the plan allow; everyone removes their own "Don't
- * ask again" ticks. Tools go by their labels, never their names.
+ * ask again" ticks. Tools go by their labels, never their names. In Chat's
+ * Settings it is the Tool policy tab, and says so (`heading="policy"`).
  */
-export function ChatSettingsSection() {
+export function ChatSettingsSection({ heading = 'chat' }: { heading?: 'chat' | 'policy' }) {
   const t = useTranslations('chatAccess.settings');
+  const tMenu = useTranslations('chatShell.menu');
   const tAccess = useTranslations('chatAccess');
   const tTools = useTranslations('chatTools');
   const tActions = useTranslations('readOnly.actions');
@@ -119,7 +121,9 @@ export function ChatSettingsSection() {
       {view.plan && <YourPlanCard plan={view.plan} isAdmin={isAdmin} />}
 
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold">{t('title')}</h2>
+        <h2 className="text-lg font-semibold">
+          {heading === 'policy' ? tMenu('policy') : t('title')}
+        </h2>
         <p className="text-sm text-muted-foreground">{t('lead')}</p>
         <Link
           href="/dashboard/chat/activity"

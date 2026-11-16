@@ -49,6 +49,8 @@ export interface ImprovePlatform {
 export interface ImproveSend {
   actionId: string;
   actionNo: number;
+  /** Its number in its brand (00534), read when the send is shown. */
+  brandNo?: number | null;
   sentAt: string;
   suggestionIds: string[];
 }

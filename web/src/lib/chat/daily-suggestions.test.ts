@@ -100,6 +100,7 @@ describe('parseSuggestionSummary', () => {
         version: 1,
         action: {
           no: 2841,
+          brandNo: 3,
           kind: 'improve_page_content',
           category: 'growth',
           impact: 'high',
@@ -114,6 +115,7 @@ describe('parseSuggestionSummary', () => {
       }),
     ).toEqual({
       actionNo: 2841,
+      brandNo: 3,
       kind: 'improve_page_content',
       payload: { targetEntity: 'pages', targetCount: 5 },
       priorityLevel: 'high',
@@ -124,6 +126,7 @@ describe('parseSuggestionSummary', () => {
   it('reads a missing or odd part as none, and a level from the score when it has none', () => {
     expect(parseSuggestionSummary(null)).toEqual({
       actionNo: null,
+      brandNo: null,
       kind: '',
       payload: {},
       priorityLevel: null,
@@ -137,6 +140,7 @@ describe('parseSuggestionSummary', () => {
       }),
     ).toEqual({
       actionNo: null,
+      brandNo: null,
       kind: 'add_llms_txt',
       payload: {},
       priorityLevel: 'medium',
