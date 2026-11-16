@@ -95,11 +95,12 @@ describe('connectionRecords', () => {
       connectedBy: 'Sam Lee',
       connectedAt: '2026-10-02T09:00:00Z',
       access: 'read_only',
-      uses: ['/winback', '/report', '/prompts'],
+      uses: ['/winback', '/report', '/prompts', '/seasonal'],
       suggested: false,
     });
     expect(byKey(records, 'google_analytics')).toMatchObject({
       status: 'not_connected',
+      uses: ['/traffic'],
       suggested: true,
     });
   });

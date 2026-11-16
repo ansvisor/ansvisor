@@ -98,12 +98,9 @@ export const PRESET_NEEDS = [
   'brand_access',
   'ads_data',
   'catalog_read',
-  'seasonal_skill',
   'app_store_data',
   'review_sites',
   'local_listings',
-  'content_plan_skill',
-  'traffic_skill',
 ] as const;
 
 /** The gallery's filters, in order; one shows only once a preset carries one of its values. */

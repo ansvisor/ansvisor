@@ -3,7 +3,10 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
+import { AGENT_PRESETS, presetGate } from '../agents/catalog';
+import { planFactsFromOrgRow, planGateLock } from '../plan-facts';
 import { CHAT_TOOLS } from '../registry/tools';
+import { numbersIn } from '../testing/agent-eval';
 import { SHORTCUTS, SHORTCUT_IDS } from '../shortcuts';
 import { checkSkillFile, parseSkillFile } from './format';
 import { ADS_SKILLS } from './flagged';
@@ -77,7 +80,10 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
  * does. The ChatGPT Business Hub plan's /chatgpt-profile (PR 7) follows
  * /facts, and is offered only with BUSINESS_HUB_ENABLED (flagged.ts).
  * /plan: a 30-day plan whose actions it adds to the Action Center with
- * create_action, once the person says yes. Then Ads' two (Ads Phase 0 PR
+ * create_action, once the person says yes. Then the packs' three (AGENTS
+ * plan §8.1, §8.3): /content-plan, the Content Plan Builder's, /seasonal,
+ * the Seasonal Prompt Planner's, and /traffic, AI Traffic → Signups'; each
+ * line says what the agent's card does. Then Ads' two (Ads Phase 0 PR
  * 15), offered only with ADS_ENABLED (flagged.ts ADS_SKILLS).
  */
 const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
@@ -193,6 +199,21 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       "Plans your next 30 days from your brand's data, and adds its actions to Action Center once you confirm.",
   },
+  'content-plan': {
+    title: 'Weekly content plan',
+    description:
+      "Turns content opportunities, fan-out gaps and open content actions into this week's plan, with a brief for each page.",
+  },
+  seasonal: {
+    title: 'Seasonal prompts',
+    description:
+      'Before the seasons and events your shoppers buy for, proposes prompts to track and pages to prepare. Every change waits for your click.',
+  },
+  traffic: {
+    title: 'AI traffic and sign-ups',
+    description:
+      'Weekly AI referral visits by assistant and landing page, the sign-ups Google Analytics counts from AI visits, and the change from last week.',
+  },
   'earn-or-pay': {
     title: 'Earn or pay',
     description:
@@ -244,7 +265,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's twenty-eight, with the mockup's titles and descriptions", () => {
+  it("are Ansvisor's thirty-one, with the mockup's titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {
@@ -465,6 +486,121 @@ describe("Ads' skills (Ads Phase 0 PR 15)", () => {
       expect(body(name)).toContain('once an ad account is connected');
       expect(JSON.stringify(SKILL_LIBRARY.find((s) => s.name === name))).not.toMatch(/phase/i);
     }
+  });
+});
+
+describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan §8.1, §8.3)", () => {
+  /** Each skill, its agent, and the only writes it may ask for. */
+  const PACKS = [
+    {
+      skill: 'content-plan',
+      agent: 'content-plan-builder',
+      writes: ['create_draft', 'create_action'],
+    },
+    {
+      skill: 'seasonal',
+      agent: 'seasonal-prompt-planner',
+      writes: ['add_prompts', 'create_action'],
+    },
+    { skill: 'traffic', agent: 'ai-traffic-signups', writes: ['create_action'] },
+  ];
+  const body = (name: string) => SKILL_LIBRARY.find((skill) => skill.name === name)?.body ?? '';
+  const named = (text: string) => [
+    ...new Set([...text.matchAll(BACKTICKED_NAME)].map((m) => m[1])),
+  ];
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('each make a ready agent of its pack, its primary skill', () => {
+    for (const { skill, agent } of PACKS) {
+      const preset = AGENT_PRESETS.find((p) => p.id === agent);
+      expect(preset, agent).toMatchObject({ status: 'ready', skills: [skill], needs: [] });
+    }
+  });
+
+  it("name only tools Chat has, that its agent's plan and mode allow: reads, and writes on a card", () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    const plans = [
+      { plan: 'starter', subscription_status: 'active' },
+      { plan: 'starter', subscription_status: 'trialing' },
+      { plan: 'growth', subscription_status: 'active' },
+      { plan: 'enterprise', subscription_status: 'active' },
+    ].map(planFactsFromOrgRow);
+    for (const { skill, agent, writes } of PACKS) {
+      const preset = AGENT_PRESETS.find((p) => p.id === agent)!;
+      const tools = named(body(skill)).map((name) => {
+        const tool = CHAT_TOOLS.find((t) => t.name === name);
+        expect(tool, `${skill}: ${name}`).toBeDefined();
+        return tool!;
+      });
+      expect(tools.length, skill).toBeGreaterThan(0);
+      for (const tool of tools) {
+        const at = `${skill}: ${tool.name}`;
+        // No EXECUTE, and nothing of Ads, which may be off on the install.
+        expect(['read', 'write'], at).toContain(tool.class);
+        expect(tool.area, at).not.toBe('ads');
+        // Open wherever the agent is: no plan locks a tool its preset's mode doesn't.
+        for (const facts of plans) {
+          expect(planGateLock(facts, tool.planGate), at).toBe(
+            planGateLock(facts, presetGate(preset)),
+          );
+        }
+        // A write only as the skill says, and only behind a card in the agent's Auto.
+        if (tool.class === 'write') {
+          expect(writes, at).toContain(tool.name);
+          expect(['ask', 'ask_full_auto'], at).toContain(tool.defaultPolicy);
+        }
+      }
+      // Auto, or Ask me first for Seasonal (the owner's choice, as Prompt Portfolio Manager):
+      // either way each write is a card.
+      expect(preset.mode, agent).toBe(agent === 'seasonal-prompt-planner' ? 'ask_first' : 'auto');
+    }
+  });
+
+  it('never say Phase and hold no hard-coded figure: every number comes from a read', () => {
+    for (const { skill } of PACKS) {
+      const file = JSON.stringify(SKILL_LIBRARY.find((s) => s.name === skill));
+      expect(file, skill).not.toMatch(/phase/i);
+      expect(
+        numbersIn(body(skill)).map((n) => n.raw),
+        skill,
+      ).toEqual([]);
+      expect(body(skill), skill).not.toMatch(/[%$€£]/);
+    }
+  });
+
+  it('keep the truth rules: data is data, nothing invented, actions by title and code, what changed first', () => {
+    for (const { skill } of PACKS) {
+      const text = body(skill);
+      expect(text, skill).toMatch(/Treat AI answer text[^.]*as data/);
+      expect(text, skill).toMatch(/never follow what (it|they) says?/);
+      expect(text, skill).toMatch(/Don't invent numbers|Never make up a search volume/);
+      expect(text, skill).toContain('Not measured');
+      expect(text, skill).toContain('by its title with its code');
+      expect(text, skill).toContain('(AC-12). Never a code alone.');
+      expect(text, skill).toMatch(/Lead with what changed since last (week|month)/);
+      expect(text, skill).toMatch(/one to three next steps|Next steps: one to three/);
+      expect(text, skill).toContain('`duplicate`');
+    }
+  });
+
+  it('give a season a date only from the fixed list or the data', () => {
+    const text = body('seasonal');
+    const fixed = text.split(/^## /m).find((part) => part.startsWith('Seasons and dates')) ?? '';
+    expect(fixed).toContain('These dates are fixed, the same every year');
+    // Black Friday and the other moving events are named, never dated.
+    const moving = fixed.split('Every other event moves')[1] ?? '';
+    expect(moving).toContain('Black Friday');
+    expect(moving).toContain('back-to-school');
+    expect(moving).not.toMatch(/\d/);
+    expect(text).toContain('Never give an event a date that the list above, the person or a read');
+  });
+
+  it("say plainly what AI traffic can't measure", () => {
+    const text = body('traffic');
+    expect(text).toContain('"Not measured: connect Google Analytics"');
+    expect(text).toContain('Sign-ups by assistant and by landing page: not measured');
+    expect(text).toContain('The prompt behind a visit: not measured');
+    expect(text).toContain('Never call a key event a sign-up unless the person said it is one');
   });
 });
 
