@@ -847,7 +847,7 @@ export async function sendAuditToActionCenter(
   brandId: string,
   auditId: string,
 ): Promise<
-  | { actionId: string; actionNo: number; created: boolean }
+  | { actionId: string; actionNo: number; brandNo?: number | null; created: boolean }
   // newer_audit names the page's latest audit, to send from instead.
   | { error: string; code?: string; latestAuditId?: string }
 > {

@@ -160,7 +160,7 @@ describe('readImpactReport', () => {
     expect(report.dataAsOf).toBe('2026-10-20T06:00:00Z');
     const read = calls.find((c) => c.table === 'ship_events' && !c.options)!;
     expect(read.columns).toContain('impact_measurements!impact_measurements_ship_event_id_fkey(');
-    expect(read.columns).toContain('actions!ship_events_action_id_fkey(action_no)');
+    expect(read.columns).toContain('actions!ship_events_action_id_fkey(action_no, brand_no)');
     expect(read.filters).toEqual(
       expect.arrayContaining([
         ['eq', 'brand_id', BRAND],

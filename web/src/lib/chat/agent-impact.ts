@@ -98,7 +98,7 @@ interface ShipRow {
   execution_mode: string;
   url: string | null;
   agent_run_id: string | null;
-  actions: { action_no: number | null } | null;
+  actions: { action_no: number | null; brand_no: number | null } | null;
   impact_measurements: Record<string, unknown> | Record<string, unknown>[] | null;
 }
 
@@ -322,6 +322,7 @@ export async function readAgentImpact(
         execution_mode: ship.execution_mode,
         url: ship.url,
         actionNo: ship.actions?.action_no ?? null,
+        brandNo: ship.actions?.brand_no ?? null,
         measurement: measurementOf(ship.impact_measurements),
       },
       viewer,

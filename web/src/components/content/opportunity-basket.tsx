@@ -12,6 +12,7 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { getOpportunityActions, type OpportunityActionResult } from '@/lib/actions/content';
 import { formatDate } from '@/lib/format';
+import { actionCode } from '@/lib/action-center/action-ref';
 import type {
   ContentOpportunityDecision,
   ContentOpportunitySourceData,
@@ -383,7 +384,7 @@ export function OpportunityResultsCard({ actionIds }: { actionIds: string[] }) {
                     href={`/dashboard/action-center/actions?action=${a.id}`}
                     className="text-xs font-medium hover:underline"
                   >
-                    AC-{a.actionNo}
+                    {actionCode(a)}
                   </Link>
                   <Badge variant="outline" className="text-[10px]">
                     {tStatus(a.status)}

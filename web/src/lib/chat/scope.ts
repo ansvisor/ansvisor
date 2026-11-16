@@ -53,6 +53,15 @@ export const ROW_LIMITS: Readonly<Record<string, { default: number; max: number 
 export const PAGED_READS: ReadonlySet<string> = new Set(['list_action_center_tasks']);
 
 /**
+ * Reads that can name the rows they return, by the input field that names
+ * them: the actions of the codes a person wrote (list_action_center_tasks'
+ * codes, at most 10, each one or two actions). Every row named comes back,
+ * never cut by a `limit` given beside it: a code that names two actions
+ * shows both (the owner's report, 2026-11-16).
+ */
+export const NAMED_ROWS: Readonly<Record<string, string>> = { list_action_center_tasks: 'codes' };
+
+/**
  * The days a `days` read covers when the model names none: Google's
  * reads keep their pages' 28 days; anything else DEFAULT_RANGE_DAYS.
  */
@@ -414,7 +423,11 @@ export async function scopeRead(
   // unless the read counts them itself.
   const limits = ROW_LIMITS[tool.name];
   let cap: RowCap = { rows: limits?.default ?? ROW_CAP, probe: null };
-  if (hasField(tool, 'limit')) {
+  const named = NAMED_ROWS[tool.name];
+  if (named && Array.isArray(input[named]) && (input[named] as unknown[]).length > 0) {
+    delete input.limit;
+    cap = { rows: ROW_CAP, probe: null };
+  } else if (hasField(tool, 'limit')) {
     const max = limits?.max ?? ROW_CAP;
     const asked = typeof input.limit === 'number' ? input.limit : null;
     const rows = Math.max(1, Math.min(asked ?? limits?.default ?? ROW_CAP, max));

@@ -197,6 +197,7 @@ describe('readDailySuggestions', () => {
             closed: null,
             summary: {
               actionNo: 2841,
+              brandNo: null,
               kind: 'improve_page_content',
               payload: { targetCount: 5 },
               priorityLevel: 'high',

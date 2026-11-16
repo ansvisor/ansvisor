@@ -52,28 +52,21 @@ describe('readBusinessHubSetup', () => {
     expect(from).not.toHaveBeenCalled();
   });
 
-  it("opens the brand's setup action by its number, looked up by its dedup key", async () => {
+  it("opens the brand's setup action by its id, looked up by its dedup key", async () => {
     db.rows = [{ id: ACTION, action_no: 1497 }];
     expect(await readBusinessHubSetup(BRAND)).toEqual({
       enabled: true,
-      actionHref: '/dashboard/action-center/actions/AC-1497',
+      actionHref: `/dashboard/action-center/actions/${ACTION}`,
       failed: false,
     });
     expect(from).toHaveBeenCalledWith('actions');
     expect(db.calls).toEqual([
-      ['select', 'id, action_no'],
+      ['select', 'id'],
       ['eq', 'brand_id', BRAND],
       ['eq', 'dedup_key', `business_hub_setup:${BRAND}`],
       ['order', 'created_at', { ascending: false }],
       ['limit', 1],
     ]);
-  });
-
-  it('opens it by its id when it has no number', async () => {
-    db.rows = [{ id: ACTION, action_no: null }];
-    expect(await readBusinessHubSetup(BRAND)).toMatchObject({
-      actionHref: `/dashboard/action-center/actions/${ACTION}`,
-    });
   });
 
   it('says when the brand has no setup action', async () => {

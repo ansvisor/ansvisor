@@ -101,6 +101,7 @@ describe('pickImprovingAction', () => {
     expect(pickImprovingAction([row()])).toEqual({
       actionId: 'a1',
       actionNo: 61,
+      brandNo: null,
       avgBefore: 2,
       avgAfter: 1.2,
     });

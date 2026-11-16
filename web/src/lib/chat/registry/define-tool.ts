@@ -224,8 +224,9 @@ export interface ToolCardDetails {
  */
 export interface ToolResultCard {
   kind: 'action_created' | 'action_added';
-  /** The action's number: "AC-1271". */
+  /** The action's number: "AC-1271"; with its brand's number, "AC-03" (actionCode). */
   actionNo: number;
+  brandNo?: number | null;
   title: string;
   /** Open in Actions. */
   href: `/dashboard/${string}`;

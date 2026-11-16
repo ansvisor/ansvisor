@@ -176,3 +176,29 @@ describe('SignalTable groups', () => {
     expect(onStatusChange).toHaveBeenCalledWith([copies[0]], 'resolved');
   });
 });
+
+// The owner's ask (14 Nov): each brand numbers its signals from S-01 (00534).
+describe("SignalTable's codes", () => {
+  it("shows a numbered signal's code beside its title, small and muted, and none before", () => {
+    render(
+      <SignalTable
+        groups={groupSignals([{ ...copy('a', 'Coffee', 'new'), brandNo: 3 }])}
+        onSelect={vi.fn()}
+        onStatusChange={vi.fn()}
+        busyIds={new Set()}
+      />,
+    );
+    const code = [...container.querySelectorAll('span')].find((el) => el.textContent === 'S-03');
+    expect(code?.className).toContain('text-muted-foreground');
+
+    render(
+      <SignalTable
+        groups={groupSignals([copy('b', 'Coffee', 'new')])}
+        onSelect={vi.fn()}
+        onStatusChange={vi.fn()}
+        busyIds={new Set()}
+      />,
+    );
+    expect(container.textContent).not.toMatch(/S-\d/);
+  });
+});

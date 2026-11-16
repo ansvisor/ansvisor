@@ -82,6 +82,7 @@ import {
 import { formatNumber } from '@/lib/format';
 import { frictionFlow } from '@/lib/friction-events';
 import { cn } from '@/lib/utils';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
@@ -620,7 +621,7 @@ export function NewContentDialog({
     }
     CONTENT_GENERATE.completed();
     toast.success(t('start.sent'), {
-      description: t('start.sentDescription', { number: sent.actionNo }),
+      description: t('start.sentDescription', { number: actionCodeNo(sent) }),
       duration: 10_000,
       action: {
         label: t('start.openAction'),

@@ -335,6 +335,27 @@ describe('the Earn card', () => {
     expect(opened()?.textContent).toBe('Open AC-1258');
   });
 
+  it("names the action by its brand's code once the brand is numbered", async () => {
+    api.readAdsOpportunity.mockResolvedValue({
+      ...DETAIL,
+      earn: { page: null, action: { id: 'a9', no: 1258, brandNo: 3 } },
+    });
+    await remount('manager');
+    await open();
+    expect(opened()?.textContent).toBe('Open AC-03');
+
+    api.readAdsOpportunity.mockResolvedValue(DETAIL);
+    api.sendAdsEarn.mockResolvedValue({
+      action: { id: 'a1', no: 1300, brandNo: 12 },
+      created: true,
+      covered: false,
+    });
+    await remount('manager');
+    await open();
+    await act(async () => sendButton()!.click());
+    expect(opened()?.textContent).toBe('Sent · Open AC-12');
+  });
+
   it('has no button on the demo brand, Starter or the trial, whatever the role', async () => {
     await remount('admin', ROW, false);
     await open();

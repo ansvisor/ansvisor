@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { gradeAgentRun, type AgentEvalRun, type AgentEvalScenario } from './agent-eval';
+import {
+  AGENT_SCENARIOS,
+  gradeAgentRun,
+  SKILL_SCENARIOS,
+  type AgentEvalRun,
+  type AgentEvalScenario,
+} from './agent-eval';
 import { giveUpPhrases, lookedUp } from './give-up';
 import {
   EVAL_ACTIONS,
@@ -248,6 +254,36 @@ describe("the agents' eval", () => {
       gaveUp(agentRun("I couldn't read the citations; 12 prompts are missing.")),
     ).toMatchObject({ ok: false, must: true });
     expect(gaveUp(agentRun('Sinyallere ulaşamadım.'))).toMatchObject({ ok: false });
+  });
+
+  it('holds for every agent and skill scenario, the actions asked by their code too', () => {
+    for (const each of [...AGENT_SCENARIOS, ...SKILL_SCENARIOS]) {
+      const check = gradeAgentRun(each, agentRun('Done.')).checks.find(
+        (c) => c.name === 'never gives up on data it could read',
+      );
+      expect(check, each.id).toMatchObject({ must: true });
+    }
+    const byCode = SKILL_SCENARIOS.find((s) => s.id === 'action-by-code')!;
+    const giveUp = (run: AgentEvalRun) =>
+      gradeAgentRun(byCode, run).checks.find(
+        (c) => c.name === 'never gives up on data it could read',
+      );
+    // A page of the list read, then "couldn't find": given up on.
+    expect(
+      giveUp(
+        agentRun('AC-481’i bulamadım; AC-63 açık bir aksiyon.', {
+          readInputs: [{ brand_id: 'b1' }],
+        }),
+      ),
+    ).toMatchObject({ ok: false, must: true });
+    // Read by its code, a code the brand hasn't may be "not found".
+    expect(
+      giveUp(
+        agentRun('AC-481 bu markada bulunamadı.', {
+          readInputs: [{ brand_id: 'b1', codes: ['AC 481', 'AC-63'] }],
+        }),
+      ),
+    ).toMatchObject({ ok: true });
   });
 
   it('lets a missing connection or a direct lookup say so', () => {

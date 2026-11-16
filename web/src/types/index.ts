@@ -279,6 +279,8 @@ export interface ContentOpportunitySourceData {
   fromAction?: {
     actionId: string;
     actionNo: number | null;
+    /** Its number in its brand (00534) when sent; the code reads it (actionCode). */
+    brandNo?: number | null;
     taskId: string;
     task?: {
       /** The exact page, and the change to make there (AC-010). */
@@ -314,6 +316,7 @@ export interface OpportunityMerge {
   title?: string;
   actionId?: string;
   actionNo?: number | null;
+  brandNo?: number | null;
   taskId?: string;
 }
 

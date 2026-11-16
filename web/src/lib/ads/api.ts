@@ -199,10 +199,15 @@ export interface AdsAdDraft {
   gate: { limits?: 'confirmed' | 'unconfirmed' };
 }
 
-/** An Action Center action, as AC-{no} names it. */
+/**
+ * An Action Center action, as AC-{no} names it: its old global number, and
+ * its number in its brand once the brand is numbered (00534), which its code
+ * shows (actionCodeNo).
+ */
 export interface AdsActionRef {
   id: string;
   no: number;
+  brandNo?: number | null;
 }
 
 export function readAdsOpportunity(brandId: string, promptId: string, period: AdsPeriod) {

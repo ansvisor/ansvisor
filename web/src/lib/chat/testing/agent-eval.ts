@@ -4,7 +4,14 @@ import { AGENT_PRESETS, type AgentPreset } from '../agents/catalog';
 import { PLACEHOLDER } from '../facts';
 import type { ChatMode } from '../precedence';
 import { SKILL_LIBRARY } from '../skills/library';
-import { EVAL_BRAND, EVAL_OTHER_BRAND } from './agent-eval-data';
+import { searchedActionNo } from '@/lib/action-center/action-ref';
+import {
+  EVAL_BRAND,
+  EVAL_CODE_ACTIONS,
+  EVAL_OTHER_BRAND,
+  evalActions,
+  type EvalWorkspace,
+} from './agent-eval-data';
 import { SAFETY_CHECK_NAMES, safetyChecks } from './safety-checks';
 import { giveUpPhrases, lookedUp } from './give-up';
 
@@ -92,6 +99,14 @@ export interface AgentEvalScenario {
   reviewPromises?: readonly OutputPromise[];
   /** The connections the agent uses (its preset's). */
   connections?: readonly { key: string; required: boolean }[];
+  /** The workspace it runs on (agent-eval-data.ts); the default one when left out. */
+  workspace?: EvalWorkspace;
+  /**
+   * Actions the person asks about by their codes, as the brand has them: the
+   * run must read them by their codes, name each by its title and code, and
+   * name no other action in their place (the owner's report, 2026-11-16).
+   */
+  askedActions?: readonly { ref: string; title: string }[];
 }
 
 const presetT = (id: string) =>
@@ -264,8 +279,33 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
   },
 };
 
-/** Every skill of the library, called by its /name in a person's own chat, in Auto. */
-export const SKILL_SCENARIOS: readonly AgentEvalScenario[] = SKILL_LIBRARY.map((skill) => {
+/**
+ * Questions a person types with no skill, in their own chat, in Auto: kept
+ * with the skills, as each is a person's chat. "AC 481 ve AC-63 nedir" (the
+ * owner's report of 2026-11-16, in Turkish as it was asked) on a brand with
+ * 55 open actions, AC-481 past the list's first page of 50: it was answered
+ * "there is no AC-481" with the closest others.
+ */
+export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
+  {
+    id: 'action-by-code',
+    group: 'skills',
+    name: 'Actions by their code',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'AC 481 ve AC-63 nedir',
+    promises: [],
+    workspace: 'action_backlog',
+    askedActions: [EVAL_CODE_ACTIONS.pastFirstPage, EVAL_CODE_ACTIONS.onFirstPage].map((a) => ({
+      ref: a.number,
+      title: a.title,
+    })),
+  },
+];
+
+/** Every skill of the library, called by its /name in a person's own chat, in Auto; then the questions. */
+const LIBRARY_SCENARIOS: readonly AgentEvalScenario[] = SKILL_LIBRARY.map((skill) => {
   const request = SKILL_REQUESTS[skill.name] ?? {
     message: skill.description,
     must: ['list'] as OutputPromise[],
@@ -282,6 +322,10 @@ export const SKILL_SCENARIOS: readonly AgentEvalScenario[] = SKILL_LIBRARY.map((
     promises: request.must,
   };
 });
+export const SKILL_SCENARIOS: readonly AgentEvalScenario[] = [
+  ...LIBRARY_SCENARIOS,
+  ...QUESTION_SCENARIOS,
+];
 
 // ─── What a run did ─────────────────────────────────────────────────────────
 
@@ -619,6 +663,66 @@ export function unnamedActionRefs(markdown: string): string[] {
   return found;
 }
 
+// ─── Actions asked for by their codes ───────────────────────────────────────
+
+/** Whether a run read these codes' actions by their codes (list_action_center_tasks' codes). */
+export function readByCodes(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  refs: readonly string[],
+) {
+  const read = new Set<number>();
+  run.reads.forEach((tool, i) => {
+    const codes = run.readInputs[i]?.codes;
+    if (tool !== 'list_action_center_tasks' || !Array.isArray(codes)) return;
+    for (const code of codes) {
+      const no = searchedActionNo(String(code));
+      if (no !== null) read.add(no);
+    }
+  });
+  return refs.filter((ref) => !read.has(searchedActionNo(ref) ?? -1));
+}
+
+const folded = (text: string) =>
+  text
+    .toLocaleLowerCase('en')
+    .replace(/[“”„«»"]/g, '"')
+    .replace(/[‘’']/g, "'")
+    .replace(/\s+/g, ' ');
+
+/** The asked actions an answer doesn't name by both its title and its code. */
+export function unnamedAskedActions(
+  answer: string,
+  asked: readonly { ref: string; title: string }[],
+): string[] {
+  const text = folded(answer.replace(/\]\([^)\s]*\)/g, ']').replace(/[*_`[\]]/g, ''));
+  return asked
+    .filter(
+      (a) => !text.includes(folded(a.title)) || !new RegExp(`${a.ref}(?!\\d)`, 'i').test(text),
+    )
+    .map((a) => a.ref);
+}
+
+/**
+ * The other actions an answer names besides the ones asked for: by their
+ * code, or by their title (the owner's report: "the closest" in their place).
+ */
+export function substituteActions(
+  answer: string,
+  asked: readonly { ref: string; title: string }[],
+  workspace: EvalWorkspace = 'default',
+): string[] {
+  const refs = new Set(asked.map((a) => a.ref.toUpperCase()));
+  const text = answer.replace(/\]\([^)\s]*\)/g, ']').replace(/[*_`[\]]/g, '');
+  const byRef = splitActionRefs(text)
+    .flatMap((part) => (typeof part === 'string' ? [] : [part.ref.toUpperCase()]))
+    .filter((ref) => !refs.has(ref));
+  const plainText = folded(text);
+  const byTitle = evalActions(workspace)
+    .filter((a) => !refs.has(a.number) && plainText.includes(folded(a.title)))
+    .map((a) => a.number);
+  return [...new Set([...byRef, ...byTitle])];
+}
+
 // ─── Checks ─────────────────────────────────────────────────────────────────
 
 const check = (name: string, must: boolean, ok: boolean, detail?: string): EvalCheck =>
@@ -872,6 +976,35 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
       );
     }
   }
+  const asked = scenario.askedActions ?? [];
+  if (asked.length > 0) {
+    const unread = readByCodes(
+      run,
+      asked.map((a) => a.ref),
+    );
+    const unnamed = unnamedAskedActions(run.answer, asked);
+    const substitutes = substituteActions(run.answer, asked, scenario.workspace);
+    checks.push(
+      check(
+        'reads the actions by their codes',
+        true,
+        unread.length === 0,
+        `${unread.join(', ')} not read by its code`,
+      ),
+      check(
+        'names each action asked by its title and code',
+        true,
+        unnamed.length === 0,
+        `${unnamed.join(', ')} without its title and code`,
+      ),
+      check(
+        'names no other action in their place',
+        true,
+        substitutes.length === 0,
+        `also names ${substitutes.join(', ')}`,
+      ),
+    );
+  }
   if (scenario.group === 'skills' && scenario.skill) {
     const named = skillReads(scenario.skill);
     const read = named.filter((tool) => run.reads.includes(tool));
@@ -976,6 +1109,9 @@ const CHECK_TR: Readonly<Record<string, string>> = {
   'no invented numbers': 'uydurma sayı yok',
   'no tool names or ids shown': 'ham araç adı ya da id yok',
   'names actions by title': 'aksiyonları başlığıyla andı',
+  'reads the actions by their codes': 'aksiyonları koduyla okudu',
+  'names each action asked by its title and code': 'sorulan her aksiyonu başlığı ve koduyla andı',
+  'names no other action in their place': 'yerlerine başka aksiyon saymadı',
   'no emoji': 'emoji yok',
   'stays on its brand': 'marka kapsamında kaldı',
   'no network call but the model’s': 'modelinki dışında ağ çağrısı yok',
