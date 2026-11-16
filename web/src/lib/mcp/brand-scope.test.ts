@@ -60,7 +60,7 @@ const data = await import('./data');
 const mentions = await import('./mentions');
 const content = await import('./content');
 const taskReviews = await import('./task-reviews');
-const { listSignalsPageFor } = await import('./signal-page');
+const { listSignalsPageFor, lookUpSignalsFor } = await import('./signal-page');
 const { exportActionFor } = await import('./action-export');
 const { getContentDraftPackageFor } = await import('./content-package');
 const { getContentPlanFor } = await import('./content-plan');
@@ -186,6 +186,58 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     [
       'listMentionsFor (a page by offset)',
       () => mentions.listMentionsFor(SELECTED, { brandId: 'b1', offset: 50, limit: 50 }),
+    ],
+    // Chat's lookups by code, id, words, domain or address (the owner's plan, 2026-11-16).
+    [
+      'lookUpSignalsFor',
+      () =>
+        lookUpSignalsFor(SELECTED, {
+          brandId: 'b1',
+          codes: ['S-07'],
+          ids: ['5a000000-0000-4000-8000-000000000007'],
+        }),
+    ],
+    [
+      'lookUpPromptsFor',
+      () =>
+        data.lookUpPromptsFor(SELECTED, {
+          brandId: 'b1',
+          search: 'skip a month',
+          ids: ['a1000000-0000-4000-8000-000000000005'],
+        }),
+    ],
+    [
+      'lookUpPromptPerformanceFor',
+      () =>
+        data.lookUpPromptPerformanceFor(SELECTED, {
+          brandId: 'b1',
+          promptIds: ['a1000000-0000-4000-8000-000000000005'],
+        }),
+    ],
+    [
+      'lookUpCitationsFor',
+      () =>
+        data.lookUpCitationsFor(SELECTED, {
+          brandId: 'b1',
+          domains: ['beanbulletin.example'],
+          urls: ['https://beanbulletin.example/best'],
+        }),
+    ],
+    [
+      'lookUpOpportunitiesFor',
+      () => data.lookUpOpportunitiesFor(SELECTED, { brandId: 'b1', search: 'storage guide' }),
+    ],
+    [
+      'lookUpDraftsFor',
+      () => content.lookUpDraftsFor(SELECTED, { brandId: 'b1', search: 'gift boxes' }),
+    ],
+    [
+      'lookUpReportsFor',
+      () =>
+        data.lookUpReportsFor(SELECTED, {
+          brandId: 'b1',
+          ids: ['ae000000-0000-4000-8000-000000000001'],
+        }),
     ],
   ];
 

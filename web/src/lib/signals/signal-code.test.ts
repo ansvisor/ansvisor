@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchesSignalCode, signalCode } from './signal-code';
+import { matchesSignalCode, searchedSignalNo, signalCode } from './signal-code';
 
 // The owner's ask (14 Nov): each brand numbers its signals from S-01 (00534).
 describe("a signal's code", () => {
@@ -19,5 +19,14 @@ describe("a signal's code", () => {
       expect(matchesSignalCode({ brandNo: 12 }, query), query).toBe(false);
     }
     expect(matchesSignalCode({ brandNo: null }, '12')).toBe(false);
+  });
+
+  it("reads the number a person's code names, however written (Chat's lookup by code)", () => {
+    for (const query of ['S-07', 's-7', 'S 7', 's7', '#7', '7', ' S-007 ']) {
+      expect(searchedSignalNo(query), query).toBe(7);
+    }
+    for (const query of ['S-0', 'AC-7', 'S-7a', 'S - 7', 'seven', '']) {
+      expect(searchedSignalNo(query), query).toBeNull();
+    }
   });
 });

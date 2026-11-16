@@ -83,9 +83,12 @@ const LOOKUP_FIELDS = [
   'draft_id',
   'audit_id',
   'prompt_id',
+  'prompt_ids',
   'product_title',
   'url',
+  'urls',
   'domain',
+  'domains',
 ];
 
 /** Whether a run's reads include a direct lookup, by their inputs. */

@@ -1392,6 +1392,96 @@ describe('the agents’ test set harness, on a scripted model', () => {
     expect(result.passed).toBe(false);
   });
 
+  // The owner's plan (2026-11-16, item 2): "S-07 nedir" with S-07 past the first page of signals.
+  it('answers a signal asked for by its code from a read of that code, one past the first page', async () => {
+    const scenario = skillOf('signal-by-code');
+    const { EVAL_CODE_SIGNAL } = await import('./testing/agent-eval-data');
+    scripted([
+      calls(toolCall('r1', 'list_signals', { brand_id: BRAND, codes: ['S-07'] })),
+      text(
+        `**${EVAL_CODE_SIGNAL.title}** (S-07): Northbound Roasters bu prompttaki yanıtlarda sizi geçmişti. Sinyal çözüldü.`,
+      ),
+    ]);
+    const result = await runScenario(scenario);
+    expect(result.run.reads).toEqual(['list_signals']);
+    // The page's window doesn't hide it: the lookup read every date and status.
+    const read = JSON.parse(result.run.readValues[0]) as {
+      signals: { code: string; matched: string; status: string }[];
+      not_found: string[];
+    };
+    expect(read.signals.map((s) => [s.code, s.matched, s.status])).toEqual([
+      ['S-07', 'its code', 'resolved'],
+    ]);
+    expect(read.not_found).toEqual([]);
+    for (const name of [
+      'reads the signals by their codes',
+      'names each signal asked by its title and code',
+      'names no other signal in their place',
+      'never gives up on data it could read',
+    ]) {
+      expect(
+        result.checks.find((c) => c.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails an answer about a signal from a page of the list, with the closest instead', async () => {
+    scripted([
+      calls(toolCall('r1', 'list_signals', { brand_id: BRAND })),
+      text('S-07 okuduğum sinyallerde yok. En yakını S-11.'),
+    ]);
+    const result = await runScenario(skillOf('signal-by-code'));
+    const failed = Object.fromEntries(
+      result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(failed).toMatchObject({
+      'reads the signals by their codes': 'S-07 not read by its code',
+      'names each signal asked by its title and code': 'S-07 without its title and code',
+      'names no other signal in their place': 'also names S-11',
+    });
+    expect(result.passed).toBe(false);
+  });
+
+  it('answers a cited domain from a read of that domain, one past the first page', async () => {
+    const scenario = skillOf('citation-by-domain');
+    scripted([
+      calls(
+        toolCall('r1', 'list_citations', {
+          brand_id: BRAND,
+          domains: ['https://www.decafdigest.example/'],
+        }),
+      ),
+      text(
+        'decafdigest.example, yapay zekâ yanıtlarında 3 kez kaynak gösterildi (2 yanıtta). En çok decafdigest.example/best-decaf-subscriptions sayfası.',
+      ),
+    ]);
+    const result = await runScenario(scenario);
+    expect(result.run.reads).toEqual(['list_citations']);
+    const read = JSON.parse(result.run.readValues[0]) as {
+      domains: { domain: string; total_citations: number }[];
+      note: string;
+    };
+    expect(read.domains.map((d) => [d.domain, d.total_citations])).toEqual([
+      ['decafdigest.example', 3],
+    ]);
+    // Over the person's own period, which the note names.
+    expect(read.note).toMatch(/AI answers from \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}/);
+    for (const name of [
+      'reads the citations by domain',
+      'names each domain asked with how often it is cited',
+      'names no other domain in their place',
+      'never gives up on data it could read',
+    ]) {
+      expect(
+        result.checks.find((c) => c.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
   it('refuses every network call but the model’s', async () => {
     await expect(fetch('https://example.com/')).rejects.toThrow('no network call');
   });
