@@ -1,17 +1,17 @@
 ---
 title: Add your first brand
 route: /dashboard/brands/new
-keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial]
-synonyms: [get started, create a brand, set up my account, onboard, add another brand]
+keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial, plan already active]
+synonyms: [get started, create a brand, set up my account, onboard, add another brand, set up a brand after buying]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/add-your-first-brand.mdx]
 ---
-When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and six on the cloud: the extra one picks your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
+When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and six on the cloud: the extra one picks your plan, unless your plan is already active. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
 
 ## Step 1: Brand basics
 
@@ -72,6 +72,10 @@ While a free trial is on offer, **Choose how to start** opens on the trial, and 
 Not ready to add a card? Pick **Demo**, after **Yearly**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The demo is a made-up brand with sample data: you can open every page, but nothing runs or changes. Your brand stays saved, and its tracking starts when you pick a plan.
 
 A self-hosted install skips this step.
+
+## Set up a brand with a plan already active
+
+If your workspace already has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor. It has five steps and no plan step. On the last one, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once. If you leave part-way, you pick up where you stopped.
 
 ## Add another brand later
 

@@ -24,6 +24,15 @@ const db = vi.hoisted(() => ({
   hasDemo: false,
   // The own brand is saved: the resume opens on it, past steps 1 and 2.
   ownBrand: true,
+  // The organization's plan, as its row has it: none for a new account.
+  org: null as { subscription_status: string; plan: string } | null,
+  // The person's role.
+  role: 'admin',
+  // The organization's own brands, whatever this person sees (org_brand_count);
+  // null: the count fails (a statement timeout).
+  orgBrandCount: 1 as number | null,
+  // What was written, in order: profile updates and brands created.
+  log: [] as unknown[],
 }));
 vi.mock('@/lib/supabase/client', () => {
   /** A query that answers `data` however it ends (single, limit, or awaited). */
@@ -46,7 +55,12 @@ vi.mock('@/lib/supabase/client', () => {
         : []
       : null;
   const rows: Record<string, () => unknown> = {
-    profiles: () => ({ organization_id: 'org-1', onboarding_completed: db.onboarded }),
+    profiles: () => ({
+      organization_id: 'org-1',
+      onboarding_completed: db.onboarded,
+      role: db.role,
+    }),
+    organizations: () => db.org,
     brands: () =>
       db.ownBrand
         ? [
@@ -64,13 +78,24 @@ vi.mock('@/lib/supabase/client', () => {
   return {
     createClient: () => ({
       auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+      rpc: async (fn: string) =>
+        fn === 'org_brand_count' && db.orgBrandCount !== null
+          ? { data: db.orgBrandCount, error: null }
+          : { data: null, error: { code: '57014', message: 'statement timeout' } },
       from: (table: string) => {
         const filters: [string, unknown][] = [];
         if (table === 'brands') db.brandFilters.push(filters);
-        return query(
+        const q = query(
           () => (table === 'brands' ? demoRows(filters) : null) ?? rows[table]?.() ?? null,
           filters,
         );
+        if (table === 'profiles') {
+          q.update = (values: unknown) => {
+            db.log.push({ profiles: values });
+            return q;
+          };
+        }
+        return q;
       },
     }),
   };
@@ -109,6 +134,11 @@ vi.mock('@/lib/actions/prompt', () => ({
   savePromptSet: vi.fn(),
 }));
 vi.mock('@/lib/actions/tracking', () => ({ triggerTrackingCheck: vi.fn() }));
+// The end of setup after purchase, on the server: its own tests.
+const finishSetup = vi.hoisted(() =>
+  vi.fn(async (): Promise<unknown> => ({ ok: true, jobId: 'job1' })),
+);
+vi.mock('@/lib/actions/setup-after-purchase', () => ({ finishSetupAfterPurchase: finishSetup }));
 vi.mock('@/lib/actions/volumes', () => ({ bootstrapBrandVolumes: vi.fn() }));
 const setup = vi.hoisted(() => ({
   suggestTopics: vi.fn(),
@@ -135,6 +165,8 @@ vi.mock('@/components/onboarding/dashboard-preview', () => ({ DashboardPreview: 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const { default: OnboardingPage } = await import('./page');
+const { track } = await import('@/lib/analytics');
+const { toast } = await import('sonner');
 const { SetupDailyLimitError } = await import('@/lib/ai-brand-setup');
 // The brand's saved topics: Coffee, unless a test says none.
 const getTopics = vi.mocked((await import('@/lib/actions/topic')).getTopics);
@@ -153,6 +185,10 @@ beforeEach(() => {
   db.onboarded = false;
   db.brandFilters = [];
   db.hasDemo = false;
+  db.org = null;
+  db.role = 'admin';
+  db.orgBrandCount = 1;
+  db.log = [];
   exploreDemo.opening = false;
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -446,6 +482,12 @@ describe('the plan step', () => {
     const dots = [...container.querySelector('.w-6.bg-foreground')!.parentElement!.children];
     expect(dots).toHaveLength(6);
     expect(dots.findIndex((dot) => dot.classList.contains('w-6'))).toBe(5);
+    // Today's flow: no setup after purchase, and its events as they were.
+    expect(finishSetup).not.toHaveBeenCalled();
+    expect(db.log).toEqual([{ profiles: { onboarding_completed: true } }]);
+    expect(
+      vi.mocked(track).mock.calls.some(([, props]) => props && 'setup_after_purchase' in props),
+    ).toBe(false);
   });
 
   it('offers the demo brand in one line under the plans, for someone not ready to add a card', async () => {
@@ -729,5 +771,209 @@ describe('the plan step', () => {
     await render();
     await act(async () => {});
     expect(prepareDemoBrand).not.toHaveBeenCalled();
+  });
+});
+
+describe('setup after purchase', () => {
+  const stepDots = () => [
+    ...container.querySelector('.w-6.bg-foreground')!.parentElement!.children,
+  ];
+  async function type(id: string, value: string) {
+    const input = container.querySelector<HTMLInputElement>(`#${id}`)!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+  /** The events sent with the setup-after-purchase property. */
+  const flowEvents = () =>
+    vi
+      .mocked(track)
+      .mock.calls.filter(([, props]) => props?.setup_after_purchase === true)
+      .map(([event, props]) => [event, props?.step]);
+
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ trialAvailable: false, trialDays: 14 })),
+    );
+    // A trial started, and no brand of the organization's own yet.
+    db.onboarded = true;
+    db.org = { subscription_status: 'trialing', plan: 'growth' };
+    db.ownBrand = false;
+    db.orgBrandCount = 0;
+    finishSetup.mockResolvedValue({ ok: true, jobId: 'job1' });
+    setup.suggestCompetitors.mockResolvedValue({
+      competitors: [{ name: 'Rival', domain: 'rival.com' }],
+      isEcommerce: false,
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('opens at the website step, never the plan step, with five steps', async () => {
+    const push = vi.spyOn(stable.router, 'push');
+    await render();
+    expect(push).not.toHaveBeenCalled();
+    expect(text()).toContain('Set up your brand');
+    expect(text()).not.toContain('Choose how to start');
+    expect(stepDots()).toHaveLength(5);
+    expect(track).toHaveBeenCalledWith('onboarding_step_viewed', {
+      step: 1,
+      step_name: 'brand_setup',
+      setup_after_purchase: true,
+    });
+  });
+
+  it('walks the setup, then starts tracking at once and lands on the dashboard with the run', async () => {
+    createBrand.mockImplementationOnce(async () => {
+      db.log.push('createBrand');
+      return {
+        brand: {
+          id: 'b1',
+          organizationId: 'org-1',
+          name: 'Acme',
+          slug: 'acme',
+          region: 'US',
+          language: 'en',
+          domains: [{ id: 'd1', brandId: 'b1', domain: 'acme.com', isPrimary: true }],
+        },
+      };
+    });
+    setup.suggestTopics.mockResolvedValue({ topics: ['Espresso'] });
+    setup.generatePromptsFromTopics.mockResolvedValue({
+      topicPrompts: [{ topic: 'Espresso', prompts: ['Best espresso beans?'] }],
+    });
+    const { savePromptSet } = await import('@/lib/actions/prompt');
+    vi.mocked(savePromptSet).mockResolvedValueOnce({} as never);
+    await render();
+
+    await type('brandName', 'Acme');
+    await type('website', 'acme.com');
+    await act(async () => button('Continue')!.click());
+    await act(async () => button('Continue')!.click());
+    await act(async () => {});
+    // Onboarding is open again before the brand is made: left half-way, setup resumes.
+    expect(db.log).toEqual([{ profiles: { onboarding_completed: false } }, 'createBrand']);
+    expect(text()).toContain('Choose topics to monitor');
+    await act(async () => button('Looks good')!.click());
+    expect(text()).toContain('Choose your prompts');
+    // The prompts are made for the plan's engines (Growth's), as the alignment leaves them.
+    await act(async () => button('Continue')!.click());
+    await act(async () => {});
+    expect(vi.mocked(savePromptSet).mock.calls[0][0].prompts[0].platforms.length).toBeGreaterThan(
+      2,
+    );
+    expect(text()).toContain('Add your competitors');
+    expect(stepDots()).toHaveLength(5);
+    expect(container.querySelector('[data-slot="tracking-starts"]')?.textContent).toBe(
+      'Your plan is active. Tracking starts as soon as you finish.',
+    );
+    expect(button('Continue with 1 competitor')).toBeUndefined();
+
+    vi.stubGlobal('location', { href: '' });
+    await act(async () => button('Start tracking with 1 competitor')!.click());
+    expect(finishSetup).toHaveBeenCalledTimes(1);
+    expect(finishSetup).toHaveBeenCalledWith('b1');
+    expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+    expect(toast.success).toHaveBeenCalledWith('Setup complete! Your first tracking is starting.');
+    expect(text()).not.toContain('Choose how to start');
+    // The server marks onboarding completed, not the page.
+    expect(db.log).toHaveLength(2);
+    // Today's events and step names, with the property.
+    expect(flowEvents()).toEqual(
+      expect.arrayContaining([
+        ['onboarding_step_viewed', 1],
+        ['onboarding_step_completed', 1],
+        ['onboarding_step_completed', 2],
+        ['onboarding_step_completed', 3],
+        ['onboarding_step_completed', 4],
+        ['onboarding_step_viewed', 5],
+        ['onboarding_step_completed', 5],
+        ['onboarding_finished', undefined],
+      ]),
+    );
+    expect(track).toHaveBeenCalledWith('onboarding_finished', {
+      paid: true,
+      setup_after_purchase: true,
+    });
+  });
+
+  it('resumes a setup left half-way, and its Finish still skips the plan step', async () => {
+    // Onboarding open again, the brand and its prompts saved.
+    db.onboarded = false;
+    db.ownBrand = true;
+    db.orgBrandCount = 1;
+    db.promptSets = [{ id: 's1' }];
+    await render();
+    expect(text()).toContain('Add your competitors');
+    expect(stepDots()).toHaveLength(5);
+    expect(track).toHaveBeenCalledWith('onboarding_step_viewed', {
+      step: 5,
+      step_name: 'competitors',
+      setup_after_purchase: true,
+    });
+    vi.stubGlobal('location', { href: '' });
+    await act(async () => button('Start tracking with 1 competitor')!.click());
+    expect(finishSetup).toHaveBeenCalledWith('b1');
+    expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+  });
+
+  it('lands on the dashboard without a job when no run could be started', async () => {
+    db.onboarded = false;
+    db.ownBrand = true;
+    db.promptSets = [{ id: 's1' }];
+    finishSetup.mockResolvedValueOnce({ ok: true, jobId: null });
+    await render();
+    vi.stubGlobal('location', { href: '' });
+    await act(async () => button('Start tracking with 1 competitor')!.click());
+    expect(window.location.href).toBe('/dashboard/action-center/today');
+  });
+
+  it('goes to the plan step, as before, when the plan is no longer active at the end', async () => {
+    db.onboarded = false;
+    db.ownBrand = true;
+    db.promptSets = [{ id: 's1' }];
+    finishSetup.mockResolvedValueOnce({ ok: false, reason: 'no_plan' });
+    await render();
+    await act(async () => button('Start tracking with 1 competitor')!.click());
+    await act(async () => {});
+    expect(text()).toContain('Choose Your Plan');
+    expect(stepDots()).toHaveLength(6);
+    expect(db.log).toEqual([{ profiles: { onboarding_completed: true } }]);
+  });
+
+  it('stays on the competitors, to try again, when setup could not be finished', async () => {
+    db.onboarded = false;
+    db.ownBrand = true;
+    db.promptSets = [{ id: 's1' }];
+    finishSetup.mockResolvedValueOnce({ ok: false, reason: 'failed' });
+    await render();
+    await act(async () => button('Start tracking with 1 competitor')!.click());
+    expect(toast.error).toHaveBeenCalledWith("We couldn't finish setup. Please try again.");
+    expect(text()).toContain('Add your competitors');
+    expect(button('Start tracking with 1 competitor')!.disabled).toBe(false);
+    expect(db.log).toEqual([]);
+
+    finishSetup.mockRejectedValueOnce(new Error('An error occurred in the Server Components'));
+    await act(async () => button('Start tracking with 1 competitor')!.click());
+    expect(toast.error).toHaveBeenLastCalledWith("We couldn't finish setup. Please try again.");
+  });
+
+  it.each([
+    ['the organization has a brand of its own', () => (db.orgBrandCount = 1)],
+    ['the person is an analyst', () => (db.role = 'analyst')],
+    ['the brands could not be counted', () => (db.orgBrandCount = null)],
+  ])('sends someone onboarded to the dashboard, as before, when %s', async (_, given) => {
+    given();
+    const push = vi.spyOn(stable.router, 'push');
+    await render();
+    expect(push).toHaveBeenCalledWith('/dashboard');
+    expect(
+      vi.mocked(track).mock.calls.some(([, props]) => props && 'setup_after_purchase' in props),
+    ).toBe(false);
   });
 });

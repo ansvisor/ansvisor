@@ -35,6 +35,8 @@ import { getBrands } from '@/lib/actions/brand';
 import { menuOfProfile, menuSectionsFor, readRoleHidden } from '@/lib/menu-access';
 import { getPlan, isCloud, toPlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
+import { needsSetupAfterPurchase, ownBrandCount } from '@/lib/onboarding/setup-after-purchase';
+import { countPlanBrands } from '@/lib/plan-brand-count';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
@@ -169,6 +171,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
     if (access.state === 'read_only') {
       subscriptionActive = false;
       adminName = access.adminName;
+    }
+    // Setup after purchase (lib/onboarding/setup-after-purchase.ts): a plan
+    // active or trialing, and no brand of the organization's own at all (the
+    // demo brand left out, a paused one counted), for an admin or a manager:
+    // onboarding opens at its first step, and its Finish starts the first
+    // run. The brands this person sees decide first; a Selected-brands
+    // manager may see none of them, so the organization's own count has the
+    // last word (one read, only then), and an unread count decides nothing.
+    // Once a brand exists, no more.
+    const setupFacts = { cloud: true, subscriptionStatus, role };
+    if (needsSetupAfterPurchase({ ...setupFacts, ownBrands: ownBrandCount(brands) })) {
+      const ownBrands = await countPlanBrands(supabase, profile.organization_id).catch(() => null);
+      if (needsSetupAfterPurchase({ ...setupFacts, ownBrands })) {
+        redirect('/dashboard/onboarding');
+      }
     }
   }
 

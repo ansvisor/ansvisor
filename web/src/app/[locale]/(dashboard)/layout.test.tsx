@@ -32,6 +32,10 @@ let owner: { full_name: string | null } | null;
 let chatSettings: { full_auto_for_members: boolean } | null;
 let chatPrefs: Record<string, unknown> | null;
 const reads: string[] = [];
+// The organization's own brands, whatever this person sees (org_brand_count),
+// and the calls made for it.
+let orgBrandCount: { data: number | null; error: { code: string; message: string } | null };
+const rpcs: [string, unknown][] = [];
 
 // The signed-in account, as the Auth server has it: what getUser() and the
 // admin API read, and where the sign-up event's claim is written.
@@ -52,6 +56,10 @@ vi.mock('next/server', async (original) => ({
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: structuredClone(auth.account) } }) },
+    rpc: async (fn: string, args: unknown) => {
+      rpcs.push([fn, args]);
+      return orgBrandCount;
+    },
     from: (table: string) => {
       reads.push(table);
       const query = {
@@ -151,7 +159,12 @@ vi.mock('@/components/providers/brand-loader', () => ({
 }));
 vi.mock('@/components/providers/brand-guard', () => ({ BrandGuard: pass }));
 vi.mock('@/components/getting-started/page-opened', () => ({ GettingStartedPageOpened: none }));
-let orgBrands: { id: string; isDemo?: boolean; demoHiddenAt?: string | null }[] = [];
+let orgBrands: {
+  id: string;
+  isDemo?: boolean;
+  demoHiddenAt?: string | null;
+  isActive?: boolean;
+}[] = [];
 vi.mock('@/lib/actions/brand', () => ({
   getBrands: async () => orgBrands,
   getBrandById: vi.fn(),
@@ -224,7 +237,10 @@ beforeEach(() => {
   chatPrefs = null;
   panel.setup = null;
   reads.length = 0;
-  orgBrands = [];
+  rpcs.length = 0;
+  // A workspace with its own brand, as most are.
+  orgBrands = [{ id: 'b1' }];
+  orgBrandCount = { data: 1, error: null };
   loaded = [];
   useBrandStore.setState({ loaded: true });
   container = document.createElement('div');
@@ -366,6 +382,80 @@ describe('the dashboard layout', () => {
     expect(await open()).toBeNull();
     expect(container.textContent).toContain('Page content');
     expect(band()).toBeNull();
+  });
+});
+
+describe('the dashboard layout and setup after purchase', () => {
+  beforeEach(() => {
+    // A plan bought, and no brand of the organization's own yet.
+    orgBrands = [];
+    orgBrandCount = { data: 0, error: null };
+  });
+
+  it.each([
+    ['an admin', 'admin', 'active'],
+    ['an admin in the free trial', 'admin', 'trialing'],
+    ['a manager', 'manager', 'active'],
+  ])(
+    'sends %s of a workspace with a plan and no brand of its own to setup',
+    async (_, role, status) => {
+      profile = { ...profile, role };
+      org = { ...org, subscription_status: status };
+      expect(await open()).toBe('/dashboard/onboarding');
+      expect(rpcs).toEqual([['org_brand_count', { p_organization_id: 'org1' }]]);
+    },
+  );
+
+  it('sends it there with only the demo brand, hidden after the purchase', async () => {
+    orgBrands = [{ id: 'demo', isDemo: true, demoHiddenAt: '2026-11-16T09:00:00Z' }];
+    expect(await open()).toBe('/dashboard/onboarding');
+  });
+
+  it('opens the dashboard once a brand exists, a paused one too, with no extra read', async () => {
+    orgBrands = [{ id: 'b1' }];
+    expect(await open()).toBeNull();
+    expect(container.textContent).toContain('Page content');
+    orgBrands = [{ id: 'b1', isActive: false }];
+    expect(await open()).toBeNull();
+    expect(rpcs).toEqual([]);
+  });
+
+  it("opens the dashboard for a Selected-brands manager who sees none of the organization's brands", async () => {
+    profile = { ...profile, role: 'manager' };
+    orgBrandCount = { data: 2, error: null };
+    expect(await open()).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('decides nothing when the brands could not be counted', async () => {
+    orgBrandCount = { data: null, error: { code: '57014', message: 'statement timeout' } };
+    expect(await open()).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it.each(['analyst', 'agency_partner'])(
+    'never sends an invited %s, who cannot create a brand',
+    async (role) => {
+      profile = { ...profile, role };
+      expect(await open()).toBeNull();
+      expect(container.textContent).toContain('Page content');
+      expect(rpcs).toEqual([]);
+    },
+  );
+
+  it('keeps a workspace without an active plan as it is', async () => {
+    org = { ...org, subscription_status: 'canceled' };
+    expect(await open()).toBeNull();
+    expect(band()).not.toBeNull();
+    org = { ...org, subscription_status: 'incomplete', stripe_subscription_id: null };
+    expect(await open()).toBe('/dashboard/onboarding');
+    expect(rpcs).toEqual([]);
+  });
+
+  it('never sends anyone on a self-hosted install', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await open()).toBeNull();
+    expect(rpcs).toEqual([]);
   });
 });
 

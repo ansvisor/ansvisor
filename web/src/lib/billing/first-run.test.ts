@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const brands = vi.hoisted(() => ({
-  first: { id: 'brand1' } as { id: string } | null,
+  first: { id: 'brand1' } as { id: string; created_at?: string } | null,
+  error: null as { message: string } | null,
   filters: [] as [string, unknown][],
 }));
 vi.mock('@/lib/supabase/admin', () => ({
@@ -20,14 +21,14 @@ vi.mock('@/lib/supabase/admin', () => ({
         },
         order: () => query,
         limit: () => query,
-        maybeSingle: async () => ({ data: brands.first }),
+        maybeSingle: async () => ({ data: brands.first, error: brands.error }),
       };
       return query;
     },
   },
 }));
 
-const { startFirstTrackingRun } = await import('./first-run');
+const { startFirstRunForBrand, startFirstTrackingRun } = await import('./first-run');
 
 const fetchMock = vi.fn();
 const answer = (status: number, body: unknown = {}) =>
@@ -47,6 +48,7 @@ const start = (status: string | null | undefined = 'trialing') =>
 
 beforeEach(() => {
   brands.first = { id: 'brand1' };
+  brands.error = null;
   brands.filters = [];
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
@@ -117,5 +119,69 @@ describe('startFirstTrackingRun', () => {
     fetchMock.mockResolvedValueOnce(answer(200, { jobId: 'job1', created: false }));
     await startFirstTrackingRun({ orgId: 'org1', subscriptionStatus: 'active', ctx: 'test' });
     expect(bodyOf(0)).toEqual({ brandId: 'brand1' });
+  });
+});
+
+describe('startFirstRunForBrand', () => {
+  // A brand set up after the purchase, made a few minutes after it.
+  const MADE = '2026-11-16T10:00:00.123456+00:00';
+  const startFor = (status: string | null | undefined = 'trialing', brandId = 'brand2') =>
+    startFirstRunForBrand({ orgId: 'org1', brandId, subscriptionStatus: status, ctx: 'test' });
+
+  beforeEach(() => {
+    brands.first = { id: 'brand2', created_at: MADE };
+  });
+
+  it("starts the brand's run, counting runs since the brand was made as its first", async () => {
+    fetchMock.mockResolvedValueOnce(answer(200, { jobId: 'job2', created: true }));
+
+    expect(await startFor()).toBe('job2');
+    expect(calls()).toEqual(['/api/internal/trigger-tracking']);
+    expect(bodyOf(0)).toEqual({ brandId: 'brand2', since: '2026-11-16T10:00:00.123Z' });
+    // Only the organization's own, active brand: never another organization's,
+    // a paused one or the demo brand (00380).
+    expect(brands.filters).toEqual([
+      ['id', 'brand2'],
+      ['organization_id', 'org1'],
+      ['is_active', true],
+      ['is_demo', false],
+    ]);
+  });
+
+  it('hands back the run already started for it: pressed twice, one run', async () => {
+    fetchMock
+      .mockResolvedValueOnce(answer(200, { jobId: 'job2', created: true }))
+      .mockResolvedValueOnce(answer(200, { jobId: 'job2', created: false }));
+
+    expect(await startFor()).toBe('job2');
+    expect(await startFor()).toBe('job2');
+    // The same window both times: the API finds the first call's run.
+    expect(bodyOf(1)).toEqual(bodyOf(0));
+  });
+
+  it("starts nothing for a brand that isn't the organization's own active brand", async () => {
+    brands.first = null;
+    expect(await startFor('active', 'other-org-brand')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('starts nothing when the brand could not be read', async () => {
+    brands.error = { message: 'timeout' };
+    expect(await startFor()).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['incomplete', 'canceled', null])(
+    'starts nothing for a %s subscription',
+    async (status) => {
+      expect(await startFor(status)).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(brands.filters).toEqual([]);
+    },
+  );
+
+  it('never throws: a refused API gives no run', async () => {
+    fetchMock.mockResolvedValueOnce(answer(500));
+    expect(await startFor()).toBeNull();
   });
 });
