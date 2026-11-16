@@ -1161,7 +1161,7 @@ const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
  * `onCard`: told once, as soon as the card `resume` answers is settled and
  * before the run goes on, whether its change was made (its step done); false
  * when the run ends, waits again or fails before that. Approve all counts
- * with it what it made (actions/chat-approve-all.ts).
+ * with it what it made (approve-all.ts).
  */
 export async function driveRun(
   actor: ChatActor,
