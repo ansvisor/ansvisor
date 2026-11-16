@@ -79,6 +79,7 @@ import { refreshYears } from '@/lib/content/current-year';
 import { readPageComparison, type RangedAuditRow } from '@/lib/audit/page-trend';
 import type { ScoreRange } from '@/lib/audit/score-range';
 import { actionCode } from '@/lib/action-center/action-ref';
+import { signalCode } from '@/lib/signals/signal-code';
 
 /**
  * Pure data-fetch functions shared by the MCP route and the parallel REST
@@ -3187,7 +3188,7 @@ export type McpTaskStatus = (typeof MCP_TASK_STATUSES)[number];
 const UNCOUNTED_TASK_STATUSES = ['skipped', 'failed'];
 
 const MCP_SIGNAL_COLUMNS =
-  'id, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
+  'id, brand_no, category, kind, impact, status, source, detected_at, last_detected_at, resolved_at, previous_value, current_value, change_value, payload, kpi_keys, action_id';
 
 /**
  * Whether the person a key or a call acts for may use a brand now
@@ -3736,7 +3737,11 @@ export async function listSignalsFor(
   return rows.map((row) => {
     const used = currentActionFirst(actions.get(row.id) ?? [], row.action_id);
     const signal = known.get(row.id);
-    const lean = withoutTargetIds(row as unknown as Record<string, unknown>);
+    const lean = {
+      ...withoutTargetIds(row as unknown as Record<string, unknown>),
+      // "S-03", as the app shows it (00534); null until its brand is numbered.
+      code: signalCode({ brandNo: row.brand_no }),
+    };
     // A kind this build has no detail for still comes back, as it always did.
     return signal
       ? { ...lean, ...signalDetailForApi(signal, used) }
