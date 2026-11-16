@@ -5449,7 +5449,8 @@
         "connect assistant",
         "connected apps",
         "sign in",
-        "action code"
+        "action code",
+        "signal code"
       ],
       "synonyms": [
         "model context protocol",
@@ -5486,7 +5487,7 @@
         },
         {
           "heading": "What you can ask",
-          "text": "Ask in plain words, for example:\n\n- \"What's my visibility score on ChatGPT for the last 7 days?\"\n- \"Which topic has the most prompts?\"\n- \"Who are my top 5 competitors by mention count this month?\"\n- \"Why did our sentiment drop on Gemini?\"\n- \"What is action AC-12?\" Codes are per brand: a code the brand doesn't have gets a plain \"not found\", never a guess.\n\nThe assistant can read visibility, mentions, citations, prompts, AI traffic, saved reports, content, Site Audits, product visibility and the Action Center. Some requests change data, such as accepting a suggested prompt, writing a content draft or recording a task's progress. Assistants are told to make a change only when you ask for it."
+          "text": "Ask in plain words, for example:\n\n- \"What's my visibility score on ChatGPT for the last 7 days?\"\n- \"Which topic has the most prompts?\"\n- \"Who are my top 5 competitors by mention count this month?\"\n- \"Why did our sentiment drop on Gemini?\"\n- \"What is action AC-12?\" Codes are per brand: a code the brand doesn't have gets a plain \"not found\", never a guess.\n- \"What is signal S-07?\" or \"Is example.com cited?\" The assistant reads what you name directly, not from a page of a list.\n\nThe assistant can read visibility, mentions, citations, prompts, AI traffic, saved reports, content, Site Audits, product visibility and the Action Center. Some requests change data, such as accepting a suggested prompt, writing a content draft or recording a task's progress. Assistants are told to make a change only when you ask for it."
         },
         {
           "heading": "What your plan includes",
