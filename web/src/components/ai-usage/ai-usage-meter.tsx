@@ -41,6 +41,14 @@ const FILL_CLASS: Record<UsageTone, string> = {
   unlimited: 'bg-muted-foreground/30',
 };
 
+/** The ring's share, in the bar's colours (the Content Editor's status group). */
+const STROKE_CLASS: Record<UsageTone, string> = {
+  normal: 'stroke-foreground',
+  warning: 'stroke-amber-500',
+  exhausted: 'stroke-red-500',
+  unlimited: 'stroke-muted-foreground/30',
+};
+
 const LABEL_KEY = {
   normal: 'meter.label',
   warning: 'meter.labelWarning',
@@ -101,10 +109,10 @@ export function HeaderWithAiUsage({
  * and where to get more: getting more and an own key are an admin's to
  * change, so other members are told to ask one. Nothing on a plan without an
  * allowance; while the first read runs, an empty box of its size keeps the
- * header row from shifting. In the Content Editor's header (Next step spec
- * §3b) it is `compact`, the header's button height, and the percent alone
- * narrower than 1280px, as the Next button's label goes; with the page's
- * `draftId` the popover adds the page's own share of the month. Once an
+ * header row from shifting. In the Content Editor's header it is `compact`
+ * (the owner's layout, 2026-11-14): in the status group after "Saved", a
+ * 16 px ring and "AI 4.7%" with no border, amber or red as the bar; with
+ * the page's `draftId` the popover adds the page's own share of the month. Once an
  * agent the member may see has used some, a line names the top one
  * (CHAT-27 item 28).
  */
@@ -142,7 +150,7 @@ export function AiUsageMeter({
         aria-hidden
         className={cn(
           'hidden shrink-0 sm:inline-block',
-          compact ? 'h-7 w-[3.625rem] xl:w-[8.25rem]' : 'h-8 w-[8.5rem]',
+          compact ? 'h-7 w-[5.5rem]' : 'h-8 w-[8.5rem]',
           className,
         )}
       />
@@ -194,38 +202,58 @@ export function AiUsageMeter({
           title={compact && !trial ? t(LABEL_KEY[tone], { percent: used }) : undefined}
           className={cn(
             'inline-flex shrink-0 items-center gap-2 rounded-full border bg-background text-xs font-medium transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-muted',
-            compact ? 'h-7 px-2.5' : 'h-8 px-3',
+            compact ? 'h-7 gap-1.5 rounded-md px-1.5 font-normal' : 'h-8 px-3',
             METER_CLASS[tone],
+            compact && 'border-transparent bg-transparent',
+            compact && tone === 'normal' && 'text-muted-foreground',
             className,
           )}
         >
-          <span aria-hidden className={cn(compact && 'hidden xl:inline')}>
-            {t('meter.ai')}
-          </span>
+          {compact && !trial && (
+            <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4 shrink-0 -rotate-90">
+              <circle cx="8" cy="8" r="6" fill="none" strokeWidth="2.5" className="stroke-muted" />
+              <circle
+                cx="8"
+                cy="8"
+                r="6"
+                fill="none"
+                strokeWidth="2.5"
+                pathLength={100}
+                strokeDasharray={`${Math.min(100, percent)} 100`}
+                className={STROKE_CLASS[tone]}
+              />
+            </svg>
+          )}
+          <span aria-hidden>{t('meter.ai')}</span>
           {trial ? (
             <span aria-hidden>{t(`meter.trial.${tone}`)}</span>
           ) : (
             <>
+              {!compact && (
+                <span
+                  aria-hidden
+                  className="block h-1.5 w-11 overflow-hidden rounded-full bg-muted"
+                >
+                  <span
+                    className={cn('block h-full rounded-full', FILL_CLASS[tone])}
+                    style={{ width }}
+                  />
+                </span>
+              )}
+              {/* As wide as "99.9%": the button keeps its width as the tenths move. */}
               <span
                 aria-hidden
-                className={cn(
-                  'block h-1.5 w-11 overflow-hidden rounded-full bg-muted',
-                  compact && 'hidden xl:block',
-                )}
+                className={cn('inline-block min-w-9 tabular-nums', !compact && 'text-right')}
               >
-                <span
-                  className={cn('block h-full rounded-full', FILL_CLASS[tone])}
-                  style={{ width }}
-                />
-              </span>
-              {/* As wide as "99.9%": the button keeps its width as the tenths move. */}
-              <span aria-hidden className="inline-block min-w-9 text-right tabular-nums">
                 {used}
               </span>
             </>
           )}
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] text-sm">
+        <PopoverContent
+          align={compact ? 'start' : 'end'}
+          className="w-80 max-w-[calc(100vw-2rem)] text-sm"
+        >
           <PopoverTitle className="text-xs font-normal text-muted-foreground">
             {usage.planName
               ? t(usage.trial ? 'popover.titleTrial' : 'popover.title', { plan: usage.planName })

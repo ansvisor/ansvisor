@@ -26,11 +26,11 @@ import {
   type LibraryTab,
   type PageImportError,
   type PageType,
-  isPageType,
   missingSchemaLeftOut,
   PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
+import { contentRulesOf } from '@/lib/content/content-rules';
 import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/content/impact';
 import type { ContentConversions } from '@/lib/content/conversions';
 import { MAX_TITLE_LENGTH, type SaveDraftResult } from '@/lib/content/editor';
@@ -60,6 +60,7 @@ import {
   ruleLength,
   ruleSet,
   ruleSetFits,
+  ruleSetType,
   savedRuleSetSchema,
   startingRules,
   type DraftRules,
@@ -309,13 +310,70 @@ const DRAFT_COLUMNS_BEFORE_00448 =
   `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no), ${DRAFT_CHAT}` as const;
 const DRAFT_COLUMNS = `${DRAFT_COLUMNS_BEFORE_00448}, schema_left_out` as const;
 
+/**
+ * What the editor's first paint shows that it reads again later (no jump):
+ * whether the agent card shows, as the editor decides it once its batch is
+ * read (getDraftSuggestions, getLastRestoreAt), and the author's name. As
+ * the member may read them; a read that fails shows nothing ahead, never a guess.
+ */
+async function readOpening(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+): Promise<{ agentCardShown: boolean; authorName: string | null }> {
+  try {
+    const [draft, latest] = await Promise.all([
+      supabase
+        .from('content_drafts')
+        .select('restored_at, page_author:content_authors!content_drafts_author_id_fkey(name)')
+        .eq('id', id)
+        .maybeSingle(),
+      // The latest batch's rows come first; no text is read.
+      supabase
+        .from('content_draft_suggestions')
+        .select('batch_id, status, created_at')
+        .eq('draft_id', id)
+        .order('created_at', { ascending: false })
+        .limit(MAX_DECIDE),
+    ]);
+    const statuses: readonly string[] = SUGGESTION_STATUSES;
+    const rows = latest.error ? [] : (latest.data ?? []);
+    const batch = rows.filter(
+      (r) => r.batch_id === rows[0]?.batch_id && statuses.includes(r.status),
+    );
+    const restoredAt = draft.error ? undefined : (draft.data?.restored_at ?? null);
+    const ranAt = Date.parse(batch[0]?.created_at ?? '');
+    return {
+      agentCardShown:
+        batch.some((r) => r.status === 'open') ||
+        (batch.length > 0 &&
+          restoredAt !== undefined &&
+          !(restoredAt && ranAt < Date.parse(restoredAt))),
+      authorName: draft.data?.page_author?.name ?? null,
+    };
+  } catch {
+    return { agentCardShown: false, authorName: null };
+  }
+}
+
 export async function getContentDraft(id: string): Promise<ContentDraft | null> {
   if (!draftId.safeParse(id).success) return null;
   const supabase = await createClient();
-  // Who reads it: whether the chat that made it is theirs (W4-16).
-  const [userRes, read] = await Promise.all([
+  // Who reads it: whether the chat that made it is theirs (W4-16). The
+  // brand's banned phrases, through the draft (its brand, as the member may
+  // read it): a read that fails leaves the rule out, never the draft.
+  const [userRes, read, contentRules, opening] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from('content_drafts').select(DRAFT_COLUMNS).eq('id', id).maybeSingle(),
+    supabase
+      .from('content_drafts')
+      .select('brands(content_rules)')
+      .eq('id', id)
+      .maybeSingle()
+      .then(
+        ({ data }) => contentRulesOf(data?.brands?.content_rules).bannedPhrases,
+        () => [],
+      ),
+    readOpening(supabase, id),
   ]);
   // The web ahead of 00448: the draft without it, as not left out.
   const { data, error } = missingSchemaLeftOut(read.error)
@@ -357,6 +415,8 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     archivedAt: data.archived_at,
     qualityHandoff: data.quality_handoff === true,
     schemaLeftOut: 'schema_left_out' in data && data.schema_left_out === true,
+    bannedPhrases: contentRules,
+    ...opening,
   };
 }
 
@@ -2463,7 +2523,7 @@ export async function suggestDraftChanges(
     if (!draft) {
       return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
     }
-    const setType = draft.rules.set ?? (isPageType(draft.pageType) ? draft.pageType : null);
+    const setType = ruleSetType(draft.rules, draft.pageType);
     // Without the workspace's rules, the page type's defaults still apply.
     const mine = await getMyRuleSets(draft.brandId).catch(
       (): Awaited<ReturnType<typeof getMyRuleSets>> => ({}),

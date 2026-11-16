@@ -24,6 +24,7 @@ import {
   presetCardHref,
   presetGate,
   presetSameness,
+  presetsOnInstall,
   readyPreset,
   recommendedPresets,
   type AgentPreset,
@@ -91,18 +92,22 @@ describe('the preset files', () => {
       'fanout-gap-filler',
       'prompt-portfolio',
       'onboarding-help',
+      'paid-opportunity',
       'product-answer-pages',
+      'seasonal-prompt-planner',
       'feature-question-coverage',
       'alternatives-comparison-pages',
       'integration-questions',
       'social-proof-pages',
+      'content-plan-builder',
       'narrative-sentiment-watch',
       'source-outreach-list',
       'ceo-brief',
+      'ai-traffic-signups',
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(18);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(15);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -289,11 +294,140 @@ describe('a ready preset', () => {
     expect(chatAgents.presets['onboarding-help'].description).toContain('3 to 5 agents');
   });
 
+  it('plans the week’s pages as Content Plan Builder: /content-plan on Mondays, in Auto', () => {
+    // AGENTS plan §8.3, the content team's: its own skill, weekly. Auto, as the other agents that
+    // start drafts: a draft never goes live, and starting one asks unless allowed.
+    const preset = readyPreset('content-plan-builder')!;
+    expect(preset).toMatchObject({
+      goal: 'content',
+      roles: ['content'],
+      skills: ['content-plan'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'auto',
+      connections: [],
+      needs: [],
+    });
+    expect(presetGate(preset)).toBeNull();
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'content-plan')?.body ?? '';
+    for (const tool of [
+      'list_content_opportunities',
+      'get_fanout_gaps',
+      'list_action_center_tasks',
+      'list_drafts',
+      'create_draft',
+      'create_action',
+    ]) {
+      expect(body).toContain(`\`${tool}\``);
+    }
+    expect(body).toContain('Write a brief for each page');
+    expect(body).toContain('Lead with what changed since last week');
+    expect(chatAgents.presets['content-plan-builder'].description).toContain('a brief for each');
+  });
+
+  it('readies an online store for its seasons as Seasonal Prompt Planner: /seasonal monthly', () => {
+    // AGENTS plan §8.1, e-commerce's: the first of the month, on Ask me first (the owner's
+    // choice, as Prompt Portfolio Manager): every prompt it adds is a card; Search Console is
+    // Optional, read for the searches a season brings.
+    const preset = readyPreset('seasonal-prompt-planner')!;
+    expect(preset).toMatchObject({
+      goal: 'visibility',
+      businessTypes: ['ecommerce'],
+      skills: ['seasonal'],
+      triggers: [{ kind: 'schedule', repeat: 'month_first', time: '09:00' }],
+      mode: 'ask_first',
+      connections: [{ key: 'google_search_console', required: false }],
+      needs: [],
+    });
+    expect(presetGate(preset)).toBeNull();
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'seasonal')?.body ?? '';
+    expect(body).toContain('`add_prompts`');
+    expect(body).toContain('`get_gsc_queries`');
+    expect(body).toContain('These dates are fixed');
+    expect(body).toContain('Never give one of them a date, a week or a month yourself');
+    expect(body).toContain('Lead with what changed since last month');
+    // The card's own examples move every year: the skill gives them no date.
+    for (const moving of ['Black Friday', 'back-to-school']) {
+      expect(body).toContain(moving);
+      expect(chatAgents.presets['seasonal-prompt-planner'].description).toContain(moving);
+    }
+  });
+
+  it('reports AI visits and the sign-ups Analytics counts as AI Traffic → Signups, on Mondays', () => {
+    // AGENTS plan §8.3, the growth team's. Google Analytics is Optional: without it, sign-ups are
+    // "Not measured", and no read gives them by assistant, landing page or prompt.
+    const preset = readyPreset('ai-traffic-signups')!;
+    expect(preset).toMatchObject({
+      goal: 'reporting',
+      roles: ['growth'],
+      skills: ['traffic'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'auto',
+      connections: [{ key: 'google_analytics', required: false }],
+      needs: [],
+    });
+    expect(presetGate(preset)).toBeNull();
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'traffic')?.body ?? '';
+    expect(body).toContain('`get_ai_traffic_summary`');
+    expect(body).toContain('`get_ga_summary`');
+    expect(body).toContain('"Not measured: connect Google Analytics"');
+    expect(body).toContain('Sign-ups by assistant and by landing page: not measured');
+    expect(body).toContain('The prompt behind a visit: not measured');
+    expect(body).toContain('Lead with what changed since last week');
+    // The card promises only what the reads give: no prompts behind a visit.
+    const line = chatAgents.presets['ai-traffic-signups'].description ?? '';
+    expect(line).toContain('Google Analytics counts');
+    expect(line).not.toMatch(/prompt/i);
+  });
+
   it('is found by its id; a soon one, or no id, is not', () => {
     expect(readyPreset('weekly-report')?.id).toBe('weekly-report');
     expect(readyPreset('localization')).toBeNull();
     expect(readyPreset('nope')).toBeNull();
     expect(readyPreset(null)).toBeNull();
+  });
+});
+
+describe('the Paid Opportunity agent (Ads Phase 0 PR 18)', () => {
+  const PAID = 'paid-opportunity';
+  const paid = AGENT_PRESETS.find((preset) => preset.id === PAID)!;
+  const viewer = { siteType: null, workAreas: [] };
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('reads earn or pay, then drafts ads, on Mondays as AI Ads Watch would, asking before changes', () => {
+    expect(paid).toMatchObject({
+      goal: 'visibility',
+      skills: ['earn-or-pay', 'ad-drafts'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'auto',
+      connections: [],
+      status: 'ready',
+      needs: [],
+    });
+    expect(presetGate(paid)).toBeNull();
+    // AI Ads Watch still waits for ads read from AI answers.
+    expect(AGENT_PRESETS.find((p) => p.id === 'ai-ads-watch')).toMatchObject({
+      status: 'soon',
+      needs: ['ads_data'],
+      triggers: paid.triggers,
+    });
+    expect(JSON.stringify(chatAgents.presets[PAID])).not.toMatch(/phase|\d/i);
+  });
+
+  it('is in no list while Ads is off: Ready to use, New agent, the recommendations', () => {
+    vi.stubEnv('ADS_ENABLED', '');
+    const ids = presetsOnInstall().map((preset) => preset.id);
+    expect(ids).toEqual(AGENT_PRESETS.map((p) => p.id).filter((id) => id !== PAID));
+    expect(readyPreset(PAID)).toBeNull();
+    expect(recommendedPresets(viewer, [paid])).toEqual([]);
+    expect(recommendedPresets(viewer).map(({ preset }) => preset.id)).not.toContain(PAID);
+  });
+
+  it('is in each with Ads on, with both its skills', () => {
+    vi.stubEnv('ADS_ENABLED', 'true');
+    expect(presetsOnInstall().map((preset) => preset.id)).toEqual([...PRESET_ORDER]);
+    expect(presetsOnInstall().find((p) => p.id === PAID)?.skills).toEqual(paid.skills);
+    expect(readyPreset(PAID)).toBe(paid);
+    expect(recommendedPresets(viewer, [paid])).toEqual([{ preset: paid, fit: null }]);
   });
 });
 
@@ -515,11 +649,12 @@ describe('the filters', () => {
   it('put the packs for an e-commerce brand and a product person first in the catalog', () => {
     const viewer = { siteType: 'ecommerce', workAreas: ['product'] };
     const ready = filterPresets(AGENT_PRESETS, {}, viewer).filter((p) => p.status === 'ready');
-    expect(ready.slice(0, 2).map((p) => [p.id, presetFit(p, viewer)])).toEqual([
+    expect(ready.slice(0, 3).map((p) => [p.id, presetFit(p, viewer)])).toEqual([
       ['product-answer-pages', 'siteType'],
+      ['seasonal-prompt-planner', 'siteType'],
       ['unmet-needs-miner', 'role'],
     ]);
-    expect(ready[2].id).toBe('visibility-watch');
+    expect(ready[3].id).toBe('visibility-watch');
   });
 });
 
@@ -547,6 +682,7 @@ describe('the agents setup recommends (AGENTS plan §8)', () => {
       ['content-freshness', 'role'],
       ['alternatives-comparison-pages', 'siteType'],
       ['integration-questions', 'siteType'],
+      ['content-plan-builder', 'role'],
     ]);
     // A B2B brand alone: its two packs, then the launch set's first to make three.
     expect(ids({ siteType: 'b2b', workAreas: [] })).toEqual([
@@ -563,8 +699,8 @@ describe('the agents setup recommends (AGENTS plan §8)', () => {
     // An e-commerce brand and a product person.
     expect(ids({ siteType: 'ecommerce', workAreas: ['product'] })).toEqual([
       ['product-answer-pages', 'siteType'],
+      ['seasonal-prompt-planner', 'siteType'],
       ['unmet-needs-miner', 'role'],
-      ['visibility-watch', null],
     ]);
     // Many fits: the first five.
     expect(ids({ siteType: 'b2b', workAreas: ['leaders', 'brand', 'bizdev', 'product'] })).toEqual([

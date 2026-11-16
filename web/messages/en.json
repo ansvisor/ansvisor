@@ -347,7 +347,9 @@
       "setByline": "Changing the byline setting needs a plan",
       "changeContentSettings": "Changing content settings needs a plan",
       "disconnectIntegrations": "Disconnecting an integration needs a plan",
-      "changeChatSettings": "Changing Chat's settings needs a plan"
+      "changeChatSettings": "Changing Chat's settings needs a plan",
+      "changeTags": "Changing tags needs a plan",
+      "removeTags": "Removing tags needs a plan"
     },
     "plans": {
       "perMonthBilledYearly": "{price} a month, billed yearly",
@@ -690,8 +692,7 @@
       "agentWorking": "it is running now",
       "agentNeedsOk": "it is waiting for your OK",
       "agentRunFailed": "its last run failed"
-    },
-    "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
+    }
   },
   "pageDots": {
     "reasons": {
@@ -844,12 +845,8 @@
         "noChange": "no change since yesterday",
         "behind": "#{rank} of {count} brands. {gap} points behind {name}.",
         "ahead": "#1 of {count} brands. {gap} points ahead of {name}.",
-        "alone": "No competitor scored on your prompts yet."
-      },
-      "ask": {
-        "label": "Ask Chat",
-        "placeholder": "Ask Chat, e.g. why did my score change?",
-        "button": "Ask"
+        "alone": "No competitor scored on your prompts yet.",
+        "none": "No score yet. It shows here once your latest AI answers are scored."
       },
       "summary": {
         "changes": "{title}: {count, plural, =0 {no big changes} one {# change} other {# changes}}",
@@ -1889,10 +1886,11 @@
       },
       "sort": {
         "label": "Sort",
+        "updated": "Recently updated",
+        "updated_asc": "Least recently updated",
         "priority": "Priority",
-        "newest": "Newest",
-        "due_date": "Due date",
-        "updated": "Recently updated"
+        "priority_asc": "Lowest priority first",
+        "due_date": "Due date"
       },
       "table": {
         "priority": "Priority Score",
@@ -1901,6 +1899,7 @@
         "assignee": "Assignee",
         "dueDate": "Due date",
         "updated": "Updated",
+        "sortTo": "Sort: {sort}",
         "actions": "Actions"
       },
       "status": {
@@ -2282,7 +2281,7 @@
         "dueDate": "Due date",
         "statusLabel": "Status",
         "events": {
-          "created": "{source, select, chat {Action created from Chat} other {Action created}}",
+          "created": "{source, select, chat {Action created from Chat} ads {Action created from Ads} other {Action created}}",
           "evidence_attached": "Finding added from Chat: “{finding}”",
           "evidence_withdrawn": "Finding from Chat withdrawn with Undo: “{finding}”",
           "file_attached": "Attached from Chat to {task}{title}: “{file}”",
@@ -4237,7 +4236,9 @@
     "splitWork": { "name": "Split work into parts", "step": "Worked on parts" },
     "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" },
     "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" },
-    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agents" }
+    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agents" },
+    "adsOpportunities": { "name": "Read Ads opportunities", "step": "Read Ads opportunities" },
+    "adDrafts": { "name": "Save ad drafts", "step": "Saved ad drafts" }
   },
   "agentic": {
     "avatar": {
@@ -4815,6 +4816,9 @@
       "queueTimeout": "Too many runs are working at once in this workspace, so this one didn't start. Try again in a moment.",
       "failed": "Something went wrong, so Chat stopped here. What's done so far is kept.",
       "providerDown": "{provider} didn't answer, so Chat stopped here. What's done so far is kept. Try again in a moment.",
+      "refused": "{model} turned this request down, so Chat stopped here. What's done so far is kept. Ask another way, or pick another model.",
+      "retention": "{model} needs 30-day data retention on the Anthropic account it runs on, and that account doesn't have it, so Chat stopped here. Pick another model and send again.",
+      "retentionOwnKey": "{model} needs 30-day data retention, and your workspace's Anthropic key is on an account with zero data retention, so Chat stopped here. Pick another model, or an Admin can turn on 30-day retention for that key's workspace in the Anthropic Console.",
       "keyStopped": "So Chat stopped here. What's done so far is kept.",
       "key": {
         "invalid": "{provider} turned down your workspace's key.",
@@ -4940,6 +4944,8 @@
   "chatComposer": {
     "message": "Message",
     "placeholder": "Ask anything…",
+    "placeholderHint": "{placeholder} · / skills · @ data",
+    "placeholderHintReadOnly": "{placeholder} · @ data",
     "steerPlaceholder": "Steer while I work: “only blog pages”…",
     "send": "Send",
     "stop": "Stop",
@@ -4947,7 +4953,7 @@
     "readOnlyTitle": "{role}s ask and read. Admins and Managers make changes. See what you can do.",
     "model": "Model",
     "modelAuto": "Auto",
-    "modelAutoHow": "Haiku reads, Sonnet writes",
+    "modelWarn": "Model · {usage}",
     "modelImage": "Image · {model}",
     "modelMenu": {
       "label": "Model and effort",
@@ -4976,7 +4982,7 @@
       "ownKeyIncluded": "Included in your plan",
       "ownKeyUntil": "Works until {date}",
       "ownKeyLocked": "Own API keys come with Enterprise · you're on {plan}",
-      "usage": "Monthly AI usage",
+      "usage": "AI usage this month",
       "usageLine": "{percent} · Resets {date}",
       "plan": "Your plan",
       "planTrial": "{plan} · free trial",
@@ -5066,9 +5072,7 @@
     },
     "tab": "Tab",
     "under": {
-      "hint": "/ skills · @ data",
       "ghostHint": "Tab to accept · / skills · @ data",
-      "readOnly": "@ data · read-only",
       "answering": "Answering · Esc to stop",
       "answerQuestion": "Your message answers Chat's question · Esc stops the run",
       "steer": "Enter stops this run and sends your message"
@@ -5093,6 +5097,11 @@
       "ask_first": "Ask me first",
       "auto": "Auto, ask before changes",
       "full_auto": "Full auto",
+      "short": {
+        "ask_first": "Ask me first",
+        "auto": "Ask before changes",
+        "full_auto": "Full auto"
+      },
       "needsGrowth": "Needs Growth",
       "fullAutoLocked": "Full auto · Needs Growth: agents apply changes for you, logged and undoable",
       "offByAdmin": "Off by Admin",
@@ -5469,11 +5478,11 @@
     "lineDay": "Range: last 24 hours",
     "lineDays": "Range: last {days} days",
     "lineCustom": "Range: {from} – {to}",
-    "lineNotSet": "Range: not set yet",
     "lineTitle": "The period Chat reads when your message names none",
-    "change": "change",
-    "choose": "choose",
     "menuLabel": "Chat's date range",
+    "chipLabel": "{range} · Chat's date range",
+    "add": "Add date range",
+    "clear": "Clear the date range: Chat asks before the next analysis",
     "save": "Save",
     "saveFailed": "Couldn't save your date range. Try again.",
     "settingLabel": "Date range",
@@ -5562,8 +5571,6 @@
       "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
       "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
       "skills": "Skills",
-      "governance": "Governance",
-      "toggleGovernance": "Show or hide Governance",
       "activity": "Activity",
       "capabilities": "What Chat can do",
       "policy": "Tool policy",
@@ -5608,13 +5615,13 @@
       "allChats": "All chats · {count} ›",
       "archivedLink": "Archived · {count} ›",
       "settings": "Settings",
-      "usageTip": "AI usage this month",
+      "toggleSettings": "Show or hide the pages under Settings",
+      "general": "General",
       "files": "Files",
       "scheduled": "Scheduled",
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
       "agents": "Agents",
       "agentsShort": "Agents",
-      "agentsWhere": "in Action Center",
       "agentsLabel": "Agents · in Action Center"
     },
     "actions": {
@@ -6669,6 +6676,7 @@
       "approval": {
         "denied": "Not allowed",
         "card": "Approved on its card",
+        "slack": "Approved in Slack",
         "click": "Your click",
         "always": "Auto · policy Always",
         "full_auto": "Auto · Full auto",
@@ -6767,7 +6775,8 @@
         "scheduling": "Scheduling",
         "skills": "Skills",
         "memory": "Memory",
-        "agents": "Agents"
+        "agents": "Agents",
+        "ads": "Ads"
       }
     }
   },
@@ -6845,7 +6854,8 @@
       "modelProviderOn": "Turned on {provider} models in Chat",
       "modelProviderOff": "Turned off {provider} models in Chat",
       "outsideEmailSent": "Sent “{title}” to {to}, outside the workspace",
-      "outsideEmailCancelled": "Cancelled the e-mail of “{title}” to {to}"
+      "outsideEmailCancelled": "Cancelled the e-mail of “{title}” to {to}",
+      "adDrafts": "Saved ad drafts"
     },
     "undo": {
       "ok": "Undone.",
@@ -7228,7 +7238,12 @@
       "setup": "Setup guide",
       "fanout": "Fan-out gaps",
       "prompts": "Prompt portfolio",
-      "plan": "30-day plan"
+      "plan": "30-day plan",
+      "content-plan": "Weekly content plan",
+      "seasonal": "Seasonal prompts",
+      "traffic": "AI traffic and sign-ups",
+      "earn-or-pay": "Earn or pay",
+      "ad-drafts": "Ad drafts"
     },
     "form": {
       "titleNew": "New agent",
@@ -7663,12 +7678,9 @@
         "brand_access": "access by brand",
         "ads_data": "ads read from AI answers",
         "catalog_read": "a skill that reads your product catalog",
-        "seasonal_skill": "a seasonal demand skill",
         "app_store_data": "App Store and Google Play data",
         "review_sites": "review site data",
-        "local_listings": "local listings data",
-        "content_plan_skill": "a content plan skill",
-        "traffic_skill": "an AI traffic skill"
+        "local_listings": "local listings data"
       },
       "policyLock": "Your Admin turned Full auto off",
       "fallbackTip": "Use this agent opens it on Auto, ask before changes",
@@ -7754,6 +7766,10 @@
         "name": "Agency Client Reporter",
         "description": "A monthly report for each client brand, for agencies."
       },
+      "paid-opportunity": {
+        "name": "Paid Opportunity",
+        "description": "Each week, says which buying prompts to earn with content or pay for, flags what changed, like a rival now paying on your name, and drafts ads in Ansvisor."
+      },
       "ai-ads-watch": {
         "name": "AI Ads Watch",
         "description": "Shows who advertises inside AI answers on your prompts, and where."
@@ -7824,7 +7840,7 @@
       },
       "ai-traffic-signups": {
         "name": "AI Traffic → Signups",
-        "description": "Shows the prompts and pages that bring AI visitors who sign up."
+        "description": "Each week, shows which AI assistants and pages bring visitors, and the sign-ups from AI visits that Google Analytics counts."
       },
       "unmet-needs-miner": {
         "name": "Unmet Needs Miner",
@@ -9429,6 +9445,8 @@
       "pinLimit": "Up to 5 competitors",
       "pinFailed": "Couldn't save the pinned competitors.",
       "promptsAdded": "{count, plural, one {# prompt} other {# prompts}} added · {date}",
+      "windowRolling": "Rolling {days}-day window ending {date} · {count, plural, one {# answer} other {# answers}}",
+      "windowCumulative": "All answers up to {date} · {count, plural, one {# answer} other {# answers}}",
       "goal": "Goal {value}",
       "goalLegend": "Action Center goal"
     },
@@ -10400,7 +10418,13 @@
       "markedReady": "Marked ready. Publish it on your site when you're ready.",
       "markedReadyAction": "Marked ready, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} done. Publish it on your site when you're ready.",
       "auditEstimate": {
-        "title": "Site Audit estimate",
+        "title": "AI search readiness (Site Audit estimate)",
+        "intro": "Technical and site-wide checks, as Site Audit scores them. Different from Quality, which scores the writing.",
+        "reasons": {
+          "page": "This page",
+          "site": "Your site",
+          "siteLink": "Open Site Audit"
+        },
         "free": "free",
         "score": "≈{score}",
         "outOf": "{score}/100",
@@ -10414,7 +10438,7 @@
           "structure": "Structure",
           "content": "Content",
           "authority": "Authority",
-          "trust": "Trust",
+          "trust": "Site setup",
           "eeat": "E-E-A-T"
         },
         "estimateAi": "Estimate AI checks",
@@ -10504,10 +10528,14 @@
         "careful": "Keeping its changes small for rules people here mostly reject: {rules}.",
         "live": "Keeping what the live page earns: cited {citations, plural, one {# time} other {# times}} in {days} days ({before, number} before){lost, plural, =0 {} one {, # prompt lost} other {, # prompts lost}}.",
         "breaks": "would break {names}",
+        "breaksCount": "{count, plural, one {# rule} other {# rules}}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
+        "stillFinishing": "Still finishing…",
+        "stillFinishingLine": "Its answer is taking longer than usual and may still land. Open this page again in a few minutes to see what it wrote.",
+        "stillFinishingToast": "Content Agent is still finishing. Open this page again in a few minutes to see what it wrote.",
         "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
-        "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
+        "waiting": "{count, plural, one {# suggestion} other {# suggestions}}",
         "gain": "{met, number} → {after, number}/{total, number} rules",
         "review": "Review",
         "reviewed": "All suggestions reviewed",
@@ -10558,6 +10586,7 @@
         "accepted": "Rewrite accepted",
         "rejected": "Rewrite rejected",
         "rulesOpen": "{count, plural, one {# rule still open} other {# rules still open}}",
+        "dropped": "Rewrite left {count, plural, one {# rule open that was met} other {# rules open that were met}}",
         "compare": "Compare",
         "compareTitle": "Your page and the rewrite",
         "before": "Your page · {count, number} characters",
@@ -10571,8 +10600,10 @@
         "rejectedToast": "Rewrite rejected. Your page stays as it is.",
         "undoneToast": "Your page is back, and the rewrite is open to decide again."
       },
-      "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
-      "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
+      "actionChip": "From Action AC-{no}",
+      "actionChipLabel": "From Action AC-{no}. Mark ready completes its task there.",
+      "actionChipHint": "This draft is the work of Action AC-{no}. Mark ready completes its task there.",
+      "actionChipHintDone": "This draft is the work of Action AC-{no}.",
       "chatBar": "From chat: <link>{title}</link>",
       "chatBarUntitled": "Untitled chat",
       "suggestions": {
@@ -11493,6 +11524,7 @@
       "rulesChip": "{met}/{total} rules",
       "rulesChipLabel": "Rules {met}/{total} met",
       "rulesChipReading": "Rules · reading",
+      "rulesChipName": "Rules",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "reviewer": {
         "title": "Reviewed by",
@@ -11526,12 +11558,12 @@
       "qualityChip": "Quality {score}",
       "qualityChipHint": "The average of E-E-A-T, Trust and Readability: an Ansvisor estimate, not a Google score. Open Quality.",
       "qualityChipReading": "Quality · reading…",
+      "qualityChipName": "Quality",
       "qualityChipUpdating": "updating as the page is read",
       "nextStep": {
         "label": "Next step",
         "short": "Next",
         "button": "Next · {step}",
-        "buttonStep": "· {step}",
         "stepOf": "Step {n} of {total}",
         "allDone": "Every step is done",
         "stepsLeft": "{count, plural, one {# step} other {# steps}} still open",
@@ -11558,10 +11590,12 @@
           "ahead": "to do"
         },
         "steps": {
+          "pageType": "Set page type",
           "plan": "Plan the page",
           "write": "Write the first draft",
           "import": "Bring in your page",
-          "lengthLong": "Shorten to your Length",
+          "conflict": "Raise Length to ~{n, number}",
+          "lengthLong": "Rewrite within all rules",
           "lengthShort": "Bring it up to your Length",
           "fixRules": "Fix open rules",
           "proof": "Add proof and author",
@@ -11570,6 +11604,8 @@
           "review": "Review {count, plural, one {# suggestion} other {# suggestions}}"
         },
         "reasons": {
+          "pageType": "The page has no type yet. Its rules follow its type, so set it before Content Agent runs.",
+          "conflict": "The sections, questions and summary the rules ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise the Length to fit them, or ask the rules for fewer.",
           "plan": "No brief yet. I build one from your prompts, fan-outs and cited pages.",
           "planNoSources": "No brief yet, and no prompt, fan-out or Search Console query is kept to build one from. Add one in Sources first.",
           "review": "Content Agent left {count, plural, one {# suggestion} other {# suggestions}} on the page. Accept or reject {count, plural, one {it} other {each, or all at once}}: the next step follows from what you keep.",
@@ -11591,6 +11627,9 @@
           "publishedLeft": "It's published, with {count, plural, one {# step} other {# steps}} still open: see All steps. Export it again when the page changes."
         },
         "actions": {
+          "setPageType": "Set page type",
+          "raiseLength": "Raise Length",
+          "askFewer": "Ask for fewer",
           "buildBrief": "Build brief",
           "addSources": "Add sources",
           "review": "Review",
@@ -11777,6 +11816,10 @@
           "fill": "Fill now"
         },
         "logged": "If you mark it ready anyway, we note it with this Trust.",
+        "banned": {
+          "title": "{count, plural, one {# banned phrase} other {# banned phrases}} on the page",
+          "detail": "{list}{more, plural, =0 {} other { +# more}}. Your brand never uses these: say them in other words, or use Fix on its rule in Rules."
+        },
         "openWork": "Still open: {rules, plural, =0 {} one {# rule} other {# rules}}{rules, plural, =0 {} other {{todos, plural, =0 {} other { and }}}}{todos, plural, =0 {} one {# to-do} other {# to-dos}}. You can mark it ready: they stay in Rules and Quality.",
         "author": {
           "ok": "Author for your CMS",
@@ -12312,7 +12355,15 @@
           "structure": "Length and structure",
           "fanouts": "Fan-outs and keywords",
           "links": "Links and sources",
-          "style": "Style"
+          "style": "Style",
+          "notChecked": "Not checked on this page"
+        },
+        "notChecked": {
+          "otherType": "{set, select, product_page {Product page rule. This page isn't a product page.} other {{type} rule. This page isn't one.}}",
+          "setPageType": "Set page type",
+          "needsFeed": "Needs your product feed. Connect a catalog, or turn this rule off.",
+          "noSizes": "No sizes on this page, so not checked.",
+          "needsSpecs": "Needs your product's specs. Content Agent won't invent them."
         },
         "names": {
           "sentence": "Max sentence length",
@@ -12330,6 +12381,7 @@
           "citeInline": "Cite sources inline",
           "aiTraces": "Remove AI traces (humanize)",
           "bannedWords": "Banned words",
+          "brandBanned": "Avoid your brand's banned phrases",
           "tone": "Tone",
           "language": "Language",
           "comparisonTable": "Comparison table vs alternatives",
@@ -12364,6 +12416,7 @@
           "internalLinks": "Links with descriptive anchor text to your own pages.",
           "outboundLinks": "Descriptive anchor text to an authoritative source: research, a standards body, government or a well-known publication. Never a competitor. Opens in a new tab.",
           "aiTraces": "Finds phrases that read as machine-written (delve, in today's fast-paced world, not only… but also). Fixing them comes with the Content Agent.",
+          "brandBanned": "The phrases your brand never uses, from Brand settings › Content rules, found as whole words in any case. Content Agent says them in other words.",
           "whoFor": "Who the page is for, in one sentence, e.g. \"Sales leaders at 20–200 person B2B teams\".",
           "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
           "feedMatch": "Checked against the product in your product feed with this page's URL, or else its name: the price, any GTIN the page gives, and the stock, where both say them.",
@@ -12418,6 +12471,8 @@
           "notHowTo": "Not a how-to",
           "englishOnly": "English only",
           "noSizes": "No sizes",
+          "otherType": "Other type",
+          "needsSpecs": "Needs specs",
           "noShoppingPath": "Pick in Brief",
           "shoppingReading": "Reading catalog",
           "shoppingFailed": "Couldn't read",
@@ -12463,9 +12518,17 @@
         "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
         "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
         "triedNote": "Content Agent tried this and couldn't fix it. It's yours to decide: change the page yourself, or the rule.",
+        "yours": {
+          "line": "Content Agent did what it could. {count, plural, one {# rule is} other {# rules are}} yours to decide.",
+          "page": "Change the page",
+          "rule": "Change the rule",
+          "again": "Ask again"
+        },
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
         "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
+        "fanoutsLeft": "Still to use: {list}{more, plural, =0 {} other { +# more}}",
+        "bannedFound": "On the page: {list}{more, plural, =0 {} other { +# more}}",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {
@@ -12481,8 +12544,9 @@
         "resetDone": "Back to the default set",
         "text": {
           "title": "Your text rules",
+          "heading": "Custom rule",
           "write": "Write a rule",
-          "placeholder": "Write a rule in your own words, e.g. \"Mention free shipping in the first paragraph\"",
+          "placeholder": "Write a rule in your own words",
           "help": "Numbers become checks. Other lines are checked by AI.",
           "add": "Add",
           "pasteMany": "Paste many",
@@ -12588,6 +12652,7 @@
     "openPlan": "Open Plan",
     "moreActions": "More actions",
     "rowActions": "Actions for {title}",
+    "showFullText": "Show full text",
     "exportOne": {
       "button": "Export",
       "csv": "Export CSV",
@@ -13809,13 +13874,255 @@
     "period": "Period",
     "export": "Export",
     "noDataYet": "Available once Ads has data",
+    "exports": {
+      "editor": "Export for Google Ads Editor",
+      "one": "Export this prompt",
+      "done": "Exported {rows, plural, one {# row} other {# rows}} from {prompts, plural, one {# prompt} other {# prompts}}",
+      "dropped": "{count, plural, one {# link outside your domains was replaced with your home page} other {# links outside your domains were replaced with your home page}}",
+      "failed": "The export couldn't be made. Try again."
+    },
+    "chat": {
+      "pay": "Which buying-intent prompts should we pay for?",
+      "rivals": "Where do competitors lead the AI answer on our buying-intent prompts?",
+      "earn": "Which open prompts can we win with content?"
+    },
+    "chatDrafts": {
+      "managers": "Only Admins and Managers can save ad drafts.",
+      "failed": "The ad drafts couldn't be saved. Try again.",
+      "gateFailed": "No ad draft passed the claims check, so none was saved.",
+      "factsNeeded": "Approve your brand facts first: ad drafts only state facts you approved.",
+      "planLimit": "Saving ad drafts needs a paid Growth plan or above."
+    },
+    "overview": {
+      "failed": "The Overview couldn't be read. Reload the page to try again.",
+      "notMeasured": "Not measured",
+      "prompts": "Buying-intent prompts",
+      "notAnalysed": "Not analysed ({count})",
+      "covered": "Covered (earned or paid)",
+      "coveredOf": "{covered} of {total} prompts",
+      "coveredEarned": "{covered} of {total} prompts, earned only: paid isn't measured yet",
+      "sov": "Paid SoV",
+      "sovNote": "Sponsored ads in AI answers aren't captured yet",
+      "cost": "Cost per AI-assisted signup",
+      "costNote": "Needs a connected ad account",
+      "signups": "{count, plural, one {# AI-assisted signup} other {# AI-assisted signups}} in this period",
+      "signupsNotMeasured": "AI-assisted signups: not measured",
+      "barTitle": "Earn or pay · {count, plural, one {# prompt} other {# prompts}}",
+      "days": "Last {days} days",
+      "earned": "Earned (cited)",
+      "earnedPaid": "Earned + paid",
+      "paidOnly": "Paid only",
+      "neither": "Neither",
+      "paidNotMeasured": "Paid isn't measured yet, so the bar shows only earned and neither.",
+      "openPrompts": "See {count, plural, one {# open prompt} other {# open prompts}}",
+      "locked": "{count, plural, one {# more prompt} other {# more prompts}} in Opportunities {count, plural, one {is} other {are}} included from the {plan} plan.",
+      "openSov": "Who pays per prompt"
+    },
+    "opportunities": {
+      "failed": "Opportunities couldn't be read. Reload the page to try again.",
+      "emptyTitle": "No buying-intent prompts yet",
+      "empty": "Opportunities lists the prompts people ask to compare and choose, once Prompts has analysed their intent.",
+      "filter": "Decision",
+      "all": "All",
+      "filterCount": "{label} · {count}",
+      "decisions": {
+        "earn": "Earn",
+        "pay": "Pay",
+        "earn_pay": "Earn + pay",
+        "overlap": "Overlap"
+      },
+      "paidNotMeasured": "Who pays on these prompts isn't measured yet, so the decisions read AI answers and Google searches only.",
+      "columns": {
+        "prompt": "Prompt",
+        "decision": "Decision",
+        "leader": "Who AI picks",
+        "searches": "Google searches/mo",
+        "channels": "Channels"
+      },
+      "topic": "Topic · {name}",
+      "change": "Change the decision",
+      "useRecommended": "Back to the recommendation ({decision})",
+      "recommended": "Recommended: {decision}",
+      "saveFailed": "The decision couldn't be saved. Try again.",
+      "leaderUs": "You",
+      "leaderNone": "No clear leader",
+      "leaderRival": "A competitor",
+      "you": "You: {at, select, named {named} none {not named} other {#{at}}}{cited, select, true {, cited} other {}}",
+      "notMeasured": "Not measured",
+      "searchesTip": "{google} Google searches a month",
+      "searchesTipAi": "{google} Google searches a month. AI prompts, estimated: {ai} a month",
+      "channels": {
+        "chatgpt": "ChatGPT",
+        "google": "Google",
+        "microsoft": "Microsoft"
+      },
+      "noChannel": "No ad channel",
+      "noAdNeeded": "No ad needed",
+      "open": "Open",
+      "noneFiltered": "No prompts with this decision.",
+      "lock": "{count, plural, one {# more prompt} other {# more prompts}} · Ads opportunities are included from {plan}"
+    },
+    "thresholds": {
+      "open": "Thresholds",
+      "title": "Earn-or-pay thresholds",
+      "description": "They decide every brand's opportunities in this workspace. Leave one empty for its default.",
+      "reading": "Reading the thresholds…",
+      "readFailed": "The thresholds couldn't be read. Try again.",
+      "minIntentWeight": "Buying intent from (0 to 1)",
+      "leadPosition": "We lead when AI names us at or above",
+      "minPaidVolume": "Pay from Google searches/mo",
+      "default": "Default: {value}",
+      "save": "Save",
+      "saved": "Thresholds saved",
+      "failed": "The thresholds couldn't be saved. Try again."
+    },
+    "drawer": {
+      "close": "Close",
+      "why": "Why",
+      "reasons": {
+        "we_lead": "{position, select, none {AI picks you} other {AI names you at #{position}}}",
+        "we_cited": "AI cites your pages",
+        "rival_leads": "{name} leads the AI answer",
+        "rival_pays": "A competitor pays for ads on it",
+        "we_pay": "You pay for ads on it",
+        "no_rival_pays": "No competitor pays for ads on it",
+        "no_leader": "No clear leader in the AI answer",
+        "volume_at_least": "{volume} Google searches a month, at least {threshold}",
+        "volume_below": "{volume} Google searches a month, below {threshold}",
+        "volume_not_measured": "Google searches aren't measured yet",
+        "paid_not_measured": "Who pays isn't measured yet",
+        "no_ad_channel": "No ad channel reaches the AI platforms it's tracked on"
+      },
+      "answers": "What AI answers today",
+      "answerOn": "{platform}{region, select, none {} other { · {region}}} · {date}",
+      "noAnswers": "No AI answer on this prompt in this period yet.",
+      "named": "Names: {names}",
+      "cites": "Cites: {domains}",
+      "fanOuts": "Fan-out queries",
+      "keywords": "Keyword seeds",
+      "failed": "The answers couldn't be read. Close this and open it again.",
+      "earn": {
+        "title": "Earn · fix the answer",
+        "fix": "{page, select, none {Write a page that answers this prompt} other {Refresh {page} to answer this prompt}}{why, select, rival {, so AI picks you over {name, select, none {the competitor it names} other {{name}}}} protect {, so AI keeps picking you} other {, so AI has a page of yours to pick}}.",
+        "send": "Send to Action Center",
+        "sent": "Sent · Open AC-{no}",
+        "open": "Open AC-{no}",
+        "failed": "The fix couldn't be sent to the Action Center. Try again."
+      },
+      "pay": {
+        "title": "Pay · win it now",
+        "intro": "Ad drafts for ChatGPT, Google and Microsoft, from this prompt and your approved brand facts. Nothing is sent to an ad account.",
+        "none": "No ad drafts for this prompt yet.",
+        "create": "Create ad drafts",
+        "creating": "Writing ad drafts…",
+        "retry": "Try again",
+        "see": "See the {channel} ad",
+        "channel": "{channel, select, chatgpt {ChatGPT · contextual} google {Google · search, eligible for AI Overviews and AI Mode} other {Microsoft · search, eligible for Copilot}}",
+        "hint": "Fits when: {hint}",
+        "checked": "Claims checked against your brand facts",
+        "limits": "Character limits not confirmed yet",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyFailed": "Couldn't copy the ad. Try again.",
+        "edit": "Edit",
+        "editAsk": "Rewrite the {channel} ad draft for \"{prompt}\" using only my approved brand facts:\n\n{ad}",
+        "factsNeeded": "Approve your brand facts first: ad drafts only state facts you approved.",
+        "factsLink": "Open Brand facts",
+        "factsOff": "Brand facts aren't available here, so ad drafts can't be written.",
+        "gateFailed": "No draft passed the claims check. Try again for new drafts.",
+        "aiBudget": "This month's AI usage is spent, so no ad drafts were written. Try again once it resets.",
+        "failed": "The ad drafts couldn't be written. Try again."
+      },
+      "doBoth": {
+        "both": "Do both",
+        "earn": "Send to Action Center",
+        "pay": "Create ad drafts",
+        "retryEarn": "Retry the Action Center task",
+        "retryPay": "Retry the ad drafts",
+        "earnFailed": "The ad drafts are saved, but the task didn't reach the Action Center.",
+        "payFailed": "The task is in the Action Center, but the ad drafts weren't written."
+      },
+      "brief": {
+        "copy": "Copy as campaign brief",
+        "copied": "Campaign brief copied",
+        "copyFailed": "Couldn't copy the campaign brief. Try again.",
+        "prompt": "Prompt: {text}",
+        "decision": "Decision: {decision}{recommended, select, none {} other { (recommended: {recommended})}}",
+        "why": "Why:",
+        "keywords": "Keyword seeds:",
+        "fanOuts": "Fan-out queries:",
+        "draft": "Ad draft: {channel}",
+        "headline": "Headline {n}: {text}",
+        "description": "Description {n}: {text}",
+        "facts": "Facts used:",
+        "fact": "\"{quote}\" Source: {url}"
+      }
+    },
     "empty": {
       "title": "Coming soon in this preview",
-      "ov": "The Overview will count your buying-intent prompts and show which you earn in AI answers, which you pay for, and which need both.",
-      "op": "Opportunities will list your buying-intent prompts, each with a reason to earn the answer with content, pay for an ad, or do both.",
-      "sov": "Paid SoV will show your share of the sponsored ads in AI answers, only on the platforms where Ansvisor can see them.",
-      "cmp": "Campaigns will list your ad campaigns once an ad account is connected.",
-      "con": "Connections will let you connect ChatGPT Ads, Google Ads and Microsoft Advertising, read-only to start."
+      "sov": "Paid SoV will show your share of the sponsored ads in AI answers, only on the platforms where Ansvisor can see them."
+    },
+    "campaigns": {
+      "yourPlan": "Your plan",
+      "readOnly": "Read-only: see spend and results once an ad account is connected. Building and changing campaigns needs {plan} or the Ads add-on.",
+      "full": "Build and change campaigns once an ad account is connected. Every enable, budget or bid change still needs your click.",
+      "compare": "Compare plans",
+      "addon": "Add Ads add-on",
+      "addonHint": "Talk to us: we set up the Ads add-on with you for now.",
+      "columns": {
+        "campaign": "Campaign",
+        "channel": "Channel",
+        "status": "Status",
+        "spend": "Spend",
+        "signups": "AI-assisted signups",
+        "cost": "Cost per signup"
+      },
+      "empty": "Connect an ad account · coming soon",
+      "emptyNote": "Your campaigns will be listed here, read-only to start.",
+      "safety": {
+        "title": "Safety",
+        "note": "Enforced by Ansvisor, not by an agent. Nothing reaches an ad account today.",
+        "click": "Every enable, pause, budget or bid change needs a person's click and confirmation, in every mode.",
+        "agents": "Agents never spend: an agent can suggest a change, and only a person can make it.",
+        "cap": "Admins set a monthly cap for each channel. A change over the cap is blocked, counting the changes of the last 24 hours.",
+        "billing": "Ad spend is paid to Google, Microsoft and OpenAI from your own ad accounts. Ansvisor never sees or changes payment methods."
+      }
+    },
+    "connections": {
+      "soon": "Coming soon",
+      "later": "Coming later",
+      "notify": "Notify me",
+      "notified": "We'll tell you",
+      "notifiedToast": "We'll tell you when {name} is ready.",
+      "notifyFailed": "Couldn't save that. Try again.",
+      "status": {
+        "connected": "Connected",
+        "failing": "Sign-in failed",
+        "not_connected": "Not connected",
+        "unknown": "Couldn't check"
+      },
+      "manage": "Manage",
+      "connect": "Connect",
+      "platforms": {
+        "chatgpt": {
+          "name": "ChatGPT Ads",
+          "note": "Ads in ChatGPT conversations. Billing stays in ChatGPT Ads Manager."
+        },
+        "google": {
+          "name": "Google Ads",
+          "note": "Includes ads in AI Overviews and AI Mode. Billing stays in Google Ads."
+        },
+        "microsoft": {
+          "name": "Microsoft Advertising",
+          "note": "Includes ads in Copilot. Billing stays in Microsoft Advertising."
+        },
+        "meta": { "name": "Meta Ads", "note": "Facebook and Instagram" },
+        "linkedin": { "name": "LinkedIn Ads", "note": "B2B campaigns" },
+        "analytics": {
+          "name": "Google Analytics",
+          "note": "Signups and key events from AI answers and ads"
+        }
+      }
     },
     "locked": {
       "title": "Ads is included from the {plan} plan",
@@ -13903,7 +14210,11 @@
       "removeTag": "Remove tag {tag}",
       "placeholder": "Add a tag and press Enter",
       "hint": "Up to 10 tags, 50 characters each.",
-      "allTags": "All tags"
+      "allTags": "All tags",
+      "selected": "{count, plural, one {# tag} other {# tags}}",
+      "match": "Match",
+      "matchAll": "Match all",
+      "matchAny": "Match any"
     },
     "loadError": "Couldn't load your prompts.",
     "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
@@ -13921,6 +14232,7 @@
       "citedOnlyTitle": "Cited in {cited} of {count, plural, one {# answer} other {# answers}} in this period, named in none"
     },
     "title": "Prompt Volumes",
+    "showFullText": "Show full text",
     "description": "Discover query volumes and trends across AI platforms.",
     "similarTopics": {
       "aiTitle": "Est. AI Volume",
@@ -14103,6 +14415,26 @@
       "emptyTitle": "No fan-out captured yet",
       "emptyBody": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
       "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
+    },
+    "bulkTags": {
+      "bulkButton": "Tags",
+      "bulkAdd": "Add tags",
+      "bulkRemove": "Remove tags",
+      "modes": "Add or remove",
+      "modeAdd": "Add",
+      "modeRemove": "Remove",
+      "title": "Add tags",
+      "lead": "Add tags to the {count} selected prompts. Tags a prompt already has stay as they are; a prompt that would go over 10 tags is left alone.",
+      "removeTitle": "Remove tags",
+      "removeLead": "Take tags off the {count} selected prompts. Prompts without them stay as they are.",
+      "removeTags": "Tags to remove",
+      "removeNone": "The selected prompts have no tags.",
+      "previewAdd": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} already have them · {blocked} would go over the 10-tag limit",
+      "previewRemove": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} don't have them",
+      "save": "Add to {count, plural, one {# prompt} other {# prompts}}",
+      "removeSave": "Remove from {count, plural, one {# prompt} other {# prompts}}",
+      "done": "{count, plural, one {# prompt tagged} other {# prompts tagged}}",
+      "removed": "{count, plural, one {Tags removed from # prompt} other {Tags removed from # prompts}}"
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
@@ -15880,6 +16212,7 @@
     "pulseFrequency_daily": "Daily",
     "pulseFrequency_weekly": "Weekly",
     "pulseFrequency_notable": "Only when notable",
+    "pulseFrequency_notableNote": "Your first pulse, then only when something notable happens.",
     "pulseFrequency_off": "Off",
     "pulseRecipients": "Recipients",
     "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
@@ -15941,6 +16274,7 @@
         "agent": "Agents",
         "schedule": "Scheduled runs",
         "image": "Images",
+        "ads": "Ad drafts",
         "other": "Other"
       },
       "none": "No AI usage yet this period.",
@@ -16543,7 +16877,7 @@
         },
         "needsYou": {
           "label": "Agents that need someone",
-          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned"
+          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned, and on Growth and up can approve or reject the step from Slack"
         }
       },
       "test": "Send a test message",
@@ -17208,6 +17542,12 @@
         "duplicateCompetitor": "{name} is already in the list",
         "setupComplete": "Brand setup complete! Tracking is starting."
       },
+      "step4": {
+        "listTitle": "Your Prompt List",
+        "topicColumn": "Topic",
+        "noPrompts": "No prompts generated yet.",
+        "saving": "Saving prompts..."
+      },
       "step5": {
         "title": "Add your competitors",
         "subtitle": "We'll track how often competitors appear alongside your brand in AI responses.",
@@ -17278,7 +17618,7 @@
       "facts": {
         "tab": "Brand facts",
         "title": "Brand facts",
-        "description": "Your prices and plans, your trial, when you were founded and the claims you make, read from your own pricing, About and product pages. Approve the ones that are right: Quality checks your pages against the approved ones that are still on your site.",
+        "description": "Your prices and plans, your trial, when you were founded and the claims you make, read from your own pricing, About and product pages. Approve the ones that are right: Quality checks your pages against the approved ones that are still on your site. A fact for one destination, operator or route is used only on pages about that place.",
         "loading": "Reading your brand facts",
         "loadFailed": "Your brand facts couldn't be read. Try again in a moment.",
         "off": "Brand facts aren't available yet.",
@@ -17311,6 +17651,15 @@
         "approveFact": "Approve {fact}",
         "rejectFact": "Reject {fact}",
         "reviewFailed": "That fact couldn't be saved. Try again.",
+        "scope": "Applies to",
+        "scopeFact": "Change where {fact} applies",
+        "scopeLabel": "Destination, operator or route",
+        "scopeHint": "Leave it empty when it holds for your whole brand. A page is checked against it only when its title, heading or address names that place.",
+        "scopeSave": "Save",
+        "scopeCancel": "Cancel",
+        "scopeFailed": "That couldn't be saved. Try again.",
+        "scopeTaken": "This fact is already kept for that place.",
+        "wholeBrand": "Whole brand",
         "gone": "No longer on your site",
         "replaces": "Was {value}",
         "trialDays": "{days, plural, one {# day} other {# days}}",
@@ -17721,7 +18070,6 @@
     },
     "menu": {
       "label": "Connections",
-      "manage": "Manage",
       "show": "Show connections",
       "hide": "Hide connections",
       "listLabel": "The brand’s connections",

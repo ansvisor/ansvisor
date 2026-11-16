@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j, accepted suggestions, rejected suggestions, read your choices in the editor]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-07
-last_checked: 2026-11-07
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,15 +15,19 @@ The Content Editor is where pages are written. It opens from the Library, from t
 
 ## The header
 
-The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept.
+The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.
 
-On the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel.
+On the right are **Next** (hover it for the step) and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**.
 
-## Site Audit estimate
+## AI search readiness (Site Audit estimate)
 
-In the side panel's **Quality**, **Site Audit estimate** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.
+In **Before you publish**, which opens on **Mark ready**, **Export** and **Send to CMS**, **AI search readiness (Site Audit estimate)** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Site setup and E-E-A-T. It's free, and it's read again each time you pause typing.
 
-It runs Site Audit's checks on the page as it would go out. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.
+It's different from Quality, which scores the writing. Under the score, the top reasons it's low are split: **This page** for what you can fix in the draft, and **Your site** for what to fix in Site Audit, with a link there.
+
+## What the estimate reads
+
+It runs Site Audit's checks on the page as it would go out, with its Article schema. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.
 
 The 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew.
 
@@ -57,7 +61,9 @@ A brand counts as a health brand when its industry is Healthcare, or its industr
 
 The side panel's tabs are **Chat** (with Chat on, see below), **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**, or on **Chat** for a page Chat made.
 
-While the panel is closed, its tabs run down the editor's right edge: click one to open the panel there.
+The panel is as tall as the window. Its tabs stay on top and each tab scrolls inside it, the Chat box at its bottom. The page scrolls on its own.
+
+**Hide side panel**, at the right end of the header's second row, above the panel, closes it, and in its place **Show side panel** opens it again. While it's closed, its tabs also run down the editor's right edge under **Show side panel**: click one to open the panel there.
 
 Building the brief and running the Content Agent use your workspace's monthly AI usage.
 

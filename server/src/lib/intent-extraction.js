@@ -198,8 +198,8 @@ export function normalizeIntentQuery(raw) {
 
 /**
  * Classifies the queries the cache doesn't hold yet. With
- * FANOUT_INTENTS_DECIDER set and OpenRouter configured, a decision model
- * answers them in batches; otherwise the chat model takes each, six at a time,
+ * FANOUT_INTENTS_DECIDER set and a decision provider configured, a decision
+ * model answers them in batches; otherwise the chat model takes each, six at a time,
  * as before. A query that fails stays out, and is asked again next time.
  *
  * @param {string[]} queries - normalized queries, each once

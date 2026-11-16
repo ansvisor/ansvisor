@@ -21,6 +21,8 @@ export const SKIPPED = {
     'AI spend on suggestion relevance: nothing is spent for a demo brand.',
   fast_rollups_ready:
     'The brands whose Topics and Perception reads use the summed rollups (00536), listed by the backfill script (src/scripts/backfill-fast-rollups.js), which leaves demo brands out: a demo brand is small, and reads the rollups it always has.',
+  mentions_terms_packed_ready:
+    'The brands whose live Perception read sums the packed terms (00540), listed by the backfill script (src/scripts/backfill-perception-packed.js), which walks only brands in fast_rollups_ready: never a demo brand, which reads the rollups it always has.',
   webhook_configs: 'Outgoing webhooks: a demo brand never calls out.',
   prompt_table_views:
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
@@ -62,6 +64,14 @@ export const SKIPPED = {
     "A brand's default author points at one of the organization's own content_authors: the demo adds no people to the person's organization, so its drafts name no author.",
   chat_activity_log:
     "Chat's log of the changes it made (00402): Chat's precedence refuses every change on a demo brand, so none is logged.",
+  ads_activity_log:
+    "Ads' append-only log of changes (00530): every Ads change on a demo brand is refused, so none is logged, and a row could never be removed again.",
+  ads_decision_overrides:
+    "A person's decision on an Ads prompt (00531): made with their click, and refused on a demo brand, whose decisions are the rule's.",
+  ads_opportunity_snapshots:
+    "Each Ads prompt's weekly decision (00531): never written for a demo brand, whose sample data doesn't change week to week.",
+  ads_ad_drafts:
+    "Ads' ad drafts (00532): written by a model call a person starts, which is refused on a demo brand, so it has none.",
   chat_access_requests:
     "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
   chat_tool_cache:

@@ -149,6 +149,19 @@ describe('getAiUsage', () => {
     expect(usage.features).toEqual([{ feature: 'action_center', percent: 0 }]);
   });
 
+  it('lists Ads’ ad drafts in a row of their own, before spend it can’t place (00532)', async () => {
+    spend = [
+      { feature: 'other', cost_usd: '0.25' },
+      { feature: 'ads', cost_usd: '0.5' },
+      { feature: 'improve', cost_usd: '0.5' },
+    ];
+    expect((await guard.getAiUsage('o1')).features).toEqual([
+      { feature: 'improve', percent: 10 },
+      { feature: 'ads', percent: 10 },
+      { feature: 'other', percent: 5 },
+    ]);
+  });
+
   it('lists spend it can’t place last, and nothing when nothing was spent', async () => {
     spend = [
       { feature: 'other', cost_usd: '0.25' },

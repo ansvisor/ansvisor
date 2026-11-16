@@ -2,13 +2,10 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { ArrowUpRight } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
 import { NewPill } from '@/components/agentic/new-pill';
-import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { Skeleton } from '@/components/ui/skeleton';
-import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import { countChatSchedules } from '@/lib/actions/chat-schedules';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
@@ -23,28 +20,40 @@ import { MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
 
 /** The menu's sections the person folded, remembered in this browser. */
 const SECTIONS_KEY = 'ansvisor.chatMenu.sections';
-type Section = 'menu' | 'governance' | 'atWork' | 'chats' | 'connections';
+type Section = 'menu' | 'settings' | 'atWork' | 'chats' | 'connections';
 
 /**
  * As the menu opens: every section shown, but Connections' list (agentic
- * plan §6: closed by default) and Governance, closed until opened.
+ * plan §6: closed by default) and Settings' list, closed until opened.
  */
 const FOLDED: Record<Section, boolean> = {
   menu: false,
-  governance: true,
+  settings: true,
   atWork: false,
   chats: false,
   connections: true,
 };
 
-/** Governance's pages in Chat: on one, Governance is open. Tool policy is in Settings. */
-const GOVERNANCE_PAGES = ['/dashboard/chat/activity', '/dashboard/chat/capabilities'];
+/**
+ * Settings' pages in Chat: on one, Settings' list is open. Tool policy is
+ * in the app's Settings, out of Chat.
+ */
+const SETTINGS_PAGES = [
+  '/dashboard/chat/settings',
+  '/dashboard/chat/activity',
+  '/dashboard/chat/capabilities',
+];
 
 function readFolded(): Record<Section, boolean> {
   const none = FOLDED;
   try {
     const raw = JSON.parse(window.localStorage.getItem(SECTIONS_KEY) ?? '{}');
-    return { ...none, ...(typeof raw === 'object' && raw ? raw : {}) };
+    if (typeof raw !== 'object' || !raw) return none;
+    // Only today's sections: one since taken out (Governance) is dropped.
+    return {
+      ...none,
+      ...Object.fromEntries(Object.entries(raw).filter(([section]) => section in FOLDED)),
+    };
   } catch {
     return none;
   }
@@ -57,6 +66,10 @@ function saveFolded(folded: Record<Section, boolean>) {
     // Private windows and full storage: it is only folded for this visit.
   }
 }
+
+/** The ▴ / ▾'s box: a section's FoldButton, and the arrow on Settings' row. */
+const FOLD_ARROW =
+  'flex size-[22px] items-center justify-center rounded-md text-[13px] text-foreground';
 
 /** The ▴ / ▾ at a section's right: hides or shows the section. */
 function FoldButton({
@@ -81,7 +94,10 @@ function FoldButton({
       aria-expanded={!folded}
       aria-controls={controls}
       onClick={onClick}
-      className="ml-auto flex size-[22px] items-center justify-center rounded-md text-[13px] text-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className={cn(
+        FOLD_ARROW,
+        'ml-auto outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
+      )}
     >
       {folded ? '▾' : '▴'}
     </button>
@@ -113,13 +129,21 @@ function Count({ value, title }: { value: number; title?: string }) {
   );
 }
 
-/** A menu item (Home, Activity…): one 32px row; grey while it is the page shown. */
+/** A menu row's look: 32px, its words at 8px. */
+const MENU_ROW =
+  'flex h-8 w-full items-center gap-2 rounded-lg px-2 text-[13px] leading-[18px] text-foreground/80 outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50';
+
+/**
+ * A menu item (Home, Inbox…): one 32px row; grey while it is the page shown.
+ * In a row's list (Settings'), 28px and indented as Connections' list.
+ */
 function MenuItem({
   href,
   action,
   active,
   onNavigate,
   label,
+  sub = false,
   children,
 }: {
   href: string;
@@ -128,6 +152,8 @@ function MenuItem({
   onNavigate?: () => void;
   /** Its name for a screen reader when the visible words and counts don't say it all. */
   label?: string;
+  /** In the list under a row (Settings'). */
+  sub?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -138,7 +164,8 @@ function MenuItem({
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
       className={cn(
-        'flex h-8 w-full items-center gap-2 rounded-lg px-2 text-[13px] leading-[18px] text-foreground/80 outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        MENU_ROW,
+        sub && 'h-7 pl-[23px] text-[12.5px] leading-[18px]',
         active && 'bg-sidebar-accent font-medium text-foreground',
       )}
     >
@@ -148,52 +175,81 @@ function MenuItem({
 }
 
 /**
- * The workspace's AI usage this month beside Settings (mockup `.usg2`): a
- * 30px bar and its percent, amber from 80%, red when used up. In the free
- * trial it names no share, as the header's meter (AI usage spec §3.1):
- * "Trial credit", "Almost used" from 80%, then "Used up". Nothing where
- * there is no allowance to meter (self-hosted) or before it is read.
+ * Settings in the menu (owner decision, 15 Nov 2026): a plain row that
+ * shows or hides its list, only the menu's ▾ / ▴ on its right, as
+ * Connections' row. Under it, General (Chat's Settings page), then what
+ * was Governance: Activity, What Chat can do and Tool policy.
  */
-function UsageMeter() {
+function SettingsMenu({
+  open,
+  onToggle,
+  pathname,
+  onNavigate,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  pathname: string;
+  onNavigate?: () => void;
+}) {
   const t = useTranslations('chatShell.menu');
-  const tMeter = useTranslations('aiUsage.meter');
-  const { usage } = useAiUsage();
-  if (!usage || usage.percentUsed === null) return null;
-  const tone = aiUsageTone(usage);
-  if (usage.trial && tone !== 'unlimited') {
-    return (
-      <span
-        title={tMeter(`trialLabel.${tone}`)}
-        className={cn(
-          'ml-auto text-[11.5px] font-normal text-muted-foreground',
-          tone === 'warning' && 'text-amber-700 dark:text-amber-400',
-          tone === 'exhausted' && 'text-red-700 dark:text-red-400',
-        )}
-      >
-        {tMeter(`trial.${tone}`)}
-      </span>
-    );
-  }
   return (
-    <span
-      title={t('usageTip')}
-      className="ml-auto inline-flex items-center gap-[5px] text-[11.5px] font-normal text-muted-foreground tabular-nums"
-    >
-      <span aria-hidden className="h-1 w-[30px] overflow-hidden rounded bg-foreground/10">
-        <i
-          className={cn(
-            'block h-full rounded',
-            tone === 'exhausted'
-              ? 'bg-red-600 dark:bg-red-400'
-              : tone === 'warning'
-                ? 'bg-amber-600 dark:bg-amber-400'
-                : 'bg-foreground',
-          )}
-          style={{ width: `${Math.min(100, usage.percentUsed)}%` }}
-        />
-      </span>
-      {percentLabel(usage.percentUsed)}
-    </span>
+    <div>
+      <button
+        type="button"
+        data-action="chatMenu.toggleSettings"
+        title={t('toggleSettings')}
+        aria-expanded={open}
+        aria-controls="chat-menu-settings"
+        onClick={onToggle}
+        className={MENU_ROW}
+      >
+        {t('settings')}
+        <span aria-hidden className={cn(FOLD_ARROW, 'ml-auto')}>
+          {open ? '▴' : '▾'}
+        </span>
+      </button>
+      {open && (
+        <div id="chat-menu-settings" className="flex flex-col gap-0.5 pt-0.5 pb-1">
+          <MenuItem
+            sub
+            href="/dashboard/chat/settings"
+            action="chatMenu.openSettings"
+            active={pathname === '/dashboard/chat/settings'}
+            onNavigate={onNavigate}
+          >
+            {t('general')}
+          </MenuItem>
+          <MenuItem
+            sub
+            href="/dashboard/chat/activity"
+            action="chatMenu.openActivity"
+            active={pathname === '/dashboard/chat/activity'}
+            onNavigate={onNavigate}
+          >
+            {t('activity')}
+          </MenuItem>
+          <MenuItem
+            sub
+            href="/dashboard/chat/capabilities"
+            action="chatMenu.openCapabilities"
+            active={pathname === '/dashboard/chat/capabilities'}
+            onNavigate={onNavigate}
+          >
+            {t('capabilities')}
+          </MenuItem>
+          {/* The app's Settings › Chat, out of Chat: never the one open here. */}
+          <MenuItem
+            sub
+            href="/dashboard/settings/chat"
+            action="chatMenu.openPolicy"
+            active={false}
+            onNavigate={onNavigate}
+          >
+            {t('policy')}
+          </MenuItem>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -231,16 +287,17 @@ export interface ChatMenuViewProps {
  * CHAT-mockup-v2.html, the menu on every #s-… screen): the toggle and
  * "＋ New chat"; Menu (Home; Inbox, with its count and an amber dot while
  * something needs the person; Agents, with "New" until it is first opened
- * (governance mockup #cnav); Settings, with the month's AI usage; Scheduled, with the
- * person's jobs on; Files); Governance (Activity, What Chat can do, Tool
- * policy: the governance mockup's menu, #cnav); Agents at work (needs you,
+ * (governance mockup #cnav); Settings, a plain row whose list holds
+ * General (Chat's Settings page), Activity, What Chat can do and Tool
+ * policy (once Governance, the governance mockup's #cnav);
+ * Scheduled, with the person's jobs on; Files); Agents at work (needs you,
  * running, unread results: three rows, See all, Show less, the dots'
  * legend); Chats with its count, Search chats (typing lists the chats
  * whose title or messages match, in place of the days; Ctrl K opens the
  * palette under it), Pinned, then by day, and All chats and Archived at the
  * end. Items whose pages aren't built yet stay out (Skills, Integrations). Sections fold, remembered in this
- * browser; Governance folds with the same ▴ / ▾, closed until opened and
- * open on one of its pages.
+ * browser; Settings' list folds with the same ▴ / ▾, closed until opened
+ * and open on one of its pages.
  */
 export function ChatMenuView({
   status,
@@ -261,12 +318,12 @@ export function ChatMenuView({
   const tAttention = useTranslations('agentic.attention');
   const isMac = useIsMac();
   const [folded, setFolded] = useState<Record<Section, boolean>>(FOLDED);
-  // Governance folds as the other sections do, with one difference: open on
+  // Settings' list folds as the sections do, with one difference: open on
   // one of its pages, without remembering that, and otherwise as the person
   // left it, closed at first.
-  const onGovernancePage = GOVERNANCE_PAGES.includes(pathname);
-  const [governanceForPage, setGovernanceForPage] = useState(onGovernancePage);
-  const governanceOpen = governanceForPage || !folded.governance;
+  const onSettingsPage = SETTINGS_PAGES.includes(pathname);
+  const [settingsForPage, setSettingsForPage] = useState(onSettingsPage);
+  const settingsOpen = settingsForPage || !folded.settings;
   const [allRuns, setAllRuns] = useState(false);
   const [query, setQuery] = useState('');
   const found = useChatSearch(query);
@@ -281,17 +338,17 @@ export function ChatMenuView({
   }, []);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (onGovernancePage) setGovernanceForPage(true);
-  }, [onGovernancePage]);
+    if (onSettingsPage) setSettingsForPage(true);
+  }, [onSettingsPage]);
   const fold = (section: Section, to?: boolean) =>
     setFolded((was) => {
       const next = { ...was, [section]: to ?? !was[section] };
       saveFolded(next);
       return next;
     });
-  const toggleGovernance = () => {
-    setGovernanceForPage(false);
-    fold('governance', governanceOpen);
+  const toggleSettings = () => {
+    setSettingsForPage(false);
+    fold('settings', settingsOpen);
   };
 
   // Read the clock again with every list read, so a menu left open past
@@ -408,7 +465,7 @@ export function ChatMenuView({
               </span>
             )}
           </MenuItem>
-          {/* Action Center › Agents, out of Chat: never the one open here. "Agents · in Action Center ↗". */}
+          {/* Action Center › Agents, out of Chat: never the one open here (named so for screen readers). */}
           <MenuItem
             href="/dashboard/agents"
             action="chatMenu.openAgents"
@@ -418,13 +475,6 @@ export function ChatMenuView({
           >
             {t('agentsShort')}
             {agentsNew && <NewPill />}
-            <span
-              data-slot="agents-where"
-              className="ml-auto flex shrink-0 items-center gap-1 text-[11.5px] text-muted-foreground"
-            >
-              {t('agentsWhere')}
-              <ArrowUpRight className="size-3" aria-hidden />
-            </span>
           </MenuItem>
           <MenuItem
             href="/dashboard/chat/skills"
@@ -441,15 +491,12 @@ export function ChatMenuView({
             active={pathname === '/dashboard/chat/connections'}
             onNavigate={onNavigate}
           />
-          <MenuItem
-            href="/dashboard/chat/settings"
-            action="chatMenu.openSettings"
-            active={pathname === '/dashboard/chat/settings'}
+          <SettingsMenu
+            open={settingsOpen}
+            onToggle={toggleSettings}
+            pathname={pathname}
             onNavigate={onNavigate}
-          >
-            {t('settings')}
-            <UsageMeter />
-          </MenuItem>
+          />
           <MenuItem
             href="/dashboard/chat/scheduled"
             action="chatMenu.openScheduled"
@@ -471,47 +518,6 @@ export function ChatMenuView({
             onNavigate={onNavigate}
           >
             {t('files')}
-          </MenuItem>
-        </div>
-      )}
-
-      {/* Governance folds under its title with the ▴ / ▾ on the right, as Menu
-          and Chats do. */}
-      <SectionHead>
-        {t('governance')}
-        <FoldButton
-          folded={!governanceOpen}
-          label={t('toggleGovernance')}
-          controls="chat-menu-governance"
-          action="chatMenu.toggleGovernance"
-          onClick={toggleGovernance}
-        />
-      </SectionHead>
-      {governanceOpen && (
-        <div id="chat-menu-governance" className="flex flex-col gap-0.5">
-          <MenuItem
-            href="/dashboard/chat/activity"
-            action="chatMenu.openActivity"
-            active={pathname === '/dashboard/chat/activity'}
-            onNavigate={onNavigate}
-          >
-            {t('activity')}
-          </MenuItem>
-          <MenuItem
-            href="/dashboard/chat/capabilities"
-            action="chatMenu.openCapabilities"
-            active={pathname === '/dashboard/chat/capabilities'}
-            onNavigate={onNavigate}
-          >
-            {t('capabilities')}
-          </MenuItem>
-          <MenuItem
-            href="/dashboard/settings/chat"
-            action="chatMenu.openPolicy"
-            active={false}
-            onNavigate={onNavigate}
-          >
-            {t('policy')}
           </MenuItem>
         </div>
       )}

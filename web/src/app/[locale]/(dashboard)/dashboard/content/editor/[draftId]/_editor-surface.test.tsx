@@ -102,7 +102,8 @@ describe('the editor page', () => {
 
     expect(getContentDraft).toHaveBeenCalledWith('d1');
     const frame = container.firstElementChild!;
-    expect(frame.className).toBe('-m-6 flex h-[calc(100%+3rem)] flex-col');
+    // Window-high, and nothing in it makes the page taller (the owner, 2026-11-14).
+    expect(frame.className).toBe('relative -m-6 flex h-[calc(100%+3rem)] flex-col overflow-y-clip');
     // The surface fills the frame; the editor opens in it as the editor's own page.
     const surface = frame.firstElementChild!;
     expect(frame.children).toHaveLength(1);

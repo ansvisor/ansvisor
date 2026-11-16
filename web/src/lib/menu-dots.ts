@@ -109,9 +109,6 @@ export const NEEDS_YOU_AREAS: readonly DotArea[] = [
 /** The menu item that says "New results" in words beside its dot: Visibility. */
 export const NEW_RESULTS_ITEM = '/dashboard/insights';
 
-/** The item whose row carries the open-action count. */
-export const ACTION_CENTER_ITEM = '/dashboard/action-center';
-
 /** Opened only at their own address: Visibility's Overview, and Content's Opportunities. */
 const EXACT_AREAS: ReadonlySet<DotArea> = new Set(['insights', 'content']);
 
@@ -160,8 +157,6 @@ export interface MenuState {
   traffic?: { connectedAt: string | null };
   /** Prompts waiting for a spot (read from PR 16 on): yellow on Tracked Prompts. */
   waitingPrompts?: number;
-  /** The open actions, unassigned or the person's: the Action Center's count. */
-  openActions: number | null;
   /** When the person last opened each area; null when it couldn't be read. */
   navSeen: Partial<Record<NavArea, string>> | null;
   /**
@@ -292,12 +287,6 @@ export function dotReason(
 /** What broke, in menu order: Today's "Fix this" rows, from the menu's own read. */
 export function brokenReasons(state: MenuState | null): BrokenReason[] {
   return BROKEN_AREAS.flatMap((area) => state?.broken?.[area] ?? []);
-}
-
-/** The count beside the Action Center: none once the plan ended, or with nothing open. */
-export function openActionCount(state: MenuState | null, viewer: DotViewer): number | null {
-  if (viewer.ended || !state?.openActions) return null;
-  return state.openActions > 0 ? state.openActions : null;
 }
 
 /**

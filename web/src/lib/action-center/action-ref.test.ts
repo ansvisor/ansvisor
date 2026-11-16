@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { actionRefHref, actionRefNo, opensOneAction, splitActionRefs } from './action-ref';
+import {
+  actionCode,
+  actionRefHref,
+  actionRefNo,
+  matchesActionCode,
+  opensOneAction,
+  searchedActionNo,
+  splitActionRefs,
+} from './action-ref';
 
 /**
  * "AC-1497" as the app shows an action's number, and the address that opens
@@ -88,6 +96,54 @@ describe("an action's address", () => {
       'https://example.org/dashboard/action-center/actions/AC-1',
     ]) {
       expect(opensOneAction(href), href).toBe(false);
+    }
+  });
+});
+
+// The Actions list shows each action's code and its search finds the action Chat names
+// (owner's feedback, 14 Nov). One helper builds the code and one matches it.
+describe("an action's code", () => {
+  it('is AC- and its number, whole, and reads back as the same action', () => {
+    expect(actionCode({ actionNo: 251 })).toBe('AC-251');
+    expect(actionCode({ actionNo: 1497 })).toBe('AC-1497');
+    expect(splitActionRefs(`See ${actionCode({ actionNo: 1497 })}.`)).toEqual([
+      'See ',
+      { ref: 'AC-1497', href: '/dashboard/action-center/actions/AC-1497' },
+      '.',
+    ]);
+  });
+
+  it('is what a search for AC-251, ac-251 or 251 finds, and nothing near it', () => {
+    const action = { actionNo: 251 };
+    for (const query of ['AC-251', 'ac-251', '251', actionCode(action)]) {
+      expect(matchesActionCode(action, query), query).toBe(true);
+    }
+    for (const query of ['25', '2510', 'AC-2510', 'AC-25', 'citations', '']) {
+      expect(matchesActionCode(action, query), query).toBe(false);
+    }
+  });
+});
+
+describe('a search for an action number', () => {
+  it('reads the number however it is typed', () => {
+    for (const query of ['AC-251', 'ac-251', 'Ac-251', 'AC 251', 'AC251', '#251', '251', ' 251 ']) {
+      expect(searchedActionNo(query), query).toBe(251);
+    }
+  });
+
+  it('is no number for words, a near miss or no real number', () => {
+    for (const query of [
+      '',
+      'AC-',
+      'citations',
+      'AC-251a',
+      'AC-25 1',
+      'XAC-251',
+      '0',
+      '0251',
+      'AC-0',
+    ]) {
+      expect(searchedActionNo(query), query).toBeNull();
     }
   });
 });

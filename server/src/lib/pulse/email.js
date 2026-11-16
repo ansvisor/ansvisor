@@ -18,6 +18,27 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
+const CAMPAIGN_TAGS = { utm_source: 'pulse', utm_medium: 'email', utm_campaign: 'daily_pulse' };
+
+/**
+ * Campaign tags for PostHog on links into the app. Only the app's own origin
+ * is tagged (never a cited third-party URL), and an existing query string is
+ * kept.
+ */
+export function tagAppLink(
+  link,
+  appOrigin = process.env.PUBLIC_APP_URL || 'http://localhost:3000',
+) {
+  try {
+    const url = new URL(link);
+    if (url.origin !== new URL(appOrigin).origin) return link;
+    for (const [key, value] of Object.entries(CAMPAIGN_TAGS)) url.searchParams.set(key, value);
+    return url.toString();
+  } catch {
+    return link;
+  }
+}
+
 function kpiCell(label, value, change) {
   const roundedChange = change === null ? null : Math.round(change * 10) / 10;
   const changeHtml =
@@ -142,12 +163,12 @@ export function renderPulseEmail({ brandName, metrics, insightsUrl, settingsUrl 
   }
 
   <div style="margin:28px 0;">
-    <a href="${escapeHtml(insightsUrl)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">Open Visibility</a>
+    <a href="${escapeHtml(tagAppLink(insightsUrl))}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">Open Visibility</a>
   </div>
 
   <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">
     You're receiving this because Daily Pulse is enabled for ${escapeHtml(brandName)}.
-    <a href="${escapeHtml(settingsUrl)}" style="color:#6b7280;">Manage notification settings</a>
+    <a href="${escapeHtml(tagAppLink(settingsUrl))}" style="color:#6b7280;">Manage notification settings</a>
   </p>
 </div>`;
 

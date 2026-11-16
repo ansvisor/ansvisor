@@ -44,6 +44,7 @@ export function UpgradeCard({
         </div>
         <Link
           href="/dashboard/settings?tab=billing"
+          data-action="plan.upgrade"
           className={buttonVariants({ variant: 'default' })}
         >
           <Badge variant="secondary" className="mr-2 gap-1">

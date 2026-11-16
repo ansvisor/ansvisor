@@ -60,6 +60,7 @@ function state(
     checkHtml: () => checked,
     change,
     pickSet,
+    followPageType: vi.fn(),
     addTextRules,
     changeTextRule,
     saveAsMine,
@@ -193,7 +194,8 @@ describe('the Rules tab', () => {
       // ▾ offers both, Fix checked and the rewrite recommended here.
       await act(async () => trigger().click());
       expect(items().map((item) => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
-        [`Fix open rules${open.length} rules · small, reviewable changesLess AI usage`, 'true'],
+        // Not Who it's for, unset: a setting only the person fills.
+        [`Fix open rules${open.length - 1} rules · small, reviewable changesLess AI usage`, 'true'],
         [
           'Rewrite the whole pageRecommended · Every rule in “Feature page · Ansvisor default” · one new version, cited passages keptMore AI usage',
           'false',
@@ -372,7 +374,7 @@ describe('the Rules tab', () => {
       expect(trigger().disabled).toBe(true);
     });
 
-    it('offers only the rewrite when the agent can fix none of the open rules', async () => {
+    it('turns the button into the rules that are yours when the agent can fix none (F1)', async () => {
       // Only One H1 is open: Content Agent doesn't change heading levels.
       const s = state();
       const onlyH1 = {
@@ -391,18 +393,41 @@ describe('the Rules tab', () => {
       } as DraftRulesState;
       await show({ agentFix: fix(), pageRewrite: fix() }, onlyH1);
       expect(container.textContent).toContain('1 rule is not met');
-      expect(main().disabled).toBe(true);
+      expect(main()).toBeUndefined();
+      expect(trigger()).toBeNull();
       expect(reason().textContent).toBe(
         "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
       );
-      await act(async () => trigger().click());
-      expect(items()[0].getAttribute('aria-disabled')).toBe('true');
-      // Nothing turned off is recommended, and the page is near Length: no rewrite advice.
-      expect(
-        items()
-          .map((item) => item.textContent)
-          .join(' '),
-      ).not.toContain('Recommended');
+      const yours = () => container.querySelector('[data-slot="rules-yours"]')!;
+      expect(yours().textContent).toBe(
+        'Content Agent did what it could. 1 rule is yours to decide.One H1 per pageChange the rule',
+      );
+
+      // Every open rule tried: each the person's, to change on the page, in the rule or ask again.
+      const agentFix = {
+        ...fix(),
+        tried: new Set(openRules().map(({ rule }) => rule.key)),
+        askAgain: vi.fn(),
+        showInPage: vi.fn(),
+      };
+      await show({ agentFix, pageRewrite: fix() });
+      expect(main()).toBeUndefined();
+      expect(yours().textContent).toContain(
+        `Content Agent did what it could. ${openRules().length} rules are yours to decide.`,
+      );
+      const item = [...yours().querySelectorAll('[role="listitem"]')].find((li) =>
+        li.textContent?.startsWith('Banned words'),
+      )!;
+      const act_ = (label: string) =>
+        act(async () =>
+          [...item.querySelectorAll('button')].find((b) => b.textContent === label)!.click(),
+        );
+      await act_('Change the page');
+      expect(agentFix.showInPage).toHaveBeenCalledWith('bannedWords');
+      await act_('Change the rule');
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Banned words: value');
+      await act_('Ask again');
+      expect(agentFix.askAgain).toHaveBeenCalledWith('bannedWords');
     });
 
     it('says all rules are met, with nothing to run', async () => {
@@ -433,11 +458,14 @@ describe('the Rules tab', () => {
     const s = state();
     await render(s);
     expect([...container.querySelectorAll('h4')].map((h) => h.textContent)).toEqual([
+      'Custom rule',
       'Feature page rules',
       'Length and structure',
       'Fan-outs and keywords',
       'Links and sources',
       'Style',
+      // No fan-outs or keywords to check here.
+      'Not checked on this page',
     ]);
     expect(container.textContent).toContain(`${s.met}/${s.total} rules met`);
     expect(row('Comparison table vs alternatives').textContent).toContain('✓');
@@ -560,6 +588,29 @@ describe('the Rules tab', () => {
     expect(changeTextRule).toHaveBeenCalledWith('b', { on: true });
   });
 
+  it('puts the box for your own rule before the first rule group, under its own heading', async () => {
+    await render(state());
+    const box = container.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Write a rule"]',
+    )!;
+    expect(box.placeholder).toBe('Write a rule in your own words');
+    // "Custom rule" above it, as Rule set is labelled, naming the box and its buttons.
+    const group = box.closest('[role="group"]')!;
+    const heading = group.firstElementChild!;
+    expect(heading.tagName).toBe('H4');
+    expect(heading.textContent).toBe('Custom rule');
+    expect(heading.className).toBe('text-xs text-muted-foreground');
+    expect(group.getAttribute('aria-labelledby')).toBe(heading.id);
+    expect(group.textContent).toContain('Numbers become checks. Other lines are checked by AI.');
+    expect(group.textContent).toContain('Paste many');
+    const firstGroup = container.querySelector('section')!;
+    expect(box.compareDocumentPosition(firstGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const save = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Reset')!;
+    expect(
+      firstGroup.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('adds a rule written in the box, one per line', async () => {
     await render(state());
     const box = container.querySelector<HTMLTextAreaElement>(
@@ -663,6 +714,59 @@ describe('the Rules tab', () => {
     );
   });
 
+  it('names the fan-outs still to use on their rows, the first three', async () => {
+    const fanouts = ['ai overviews', 'ai mode', 'search console', 'ga4 reports', 'llms txt'];
+    const page = readPage('<h1>T</h1><p>x</p>', 10);
+    const checked = activeRules(ruleSet('feature_page'), { overrides: {} }).map((rule) => ({
+      rule,
+      status: checkRule(rule, page, { brandDomains: [], competitorDomains: [], fanouts }),
+    }));
+    await render(state(undefined, { rules: checked, ...rulesMet(checked) }));
+    expect(row('Use top fan-outs as H2s').textContent).toContain(
+      'Still to use: “ai overviews”, “ai mode”, “search console” +1 more',
+    );
+    expect(row('Use fan-outs in FAQ questions').textContent).toContain(
+      'Still to use: “ai overviews”',
+    );
+  });
+
+  it('names the brand’s banned phrases on the page in Style, with Fix for them alone', async () => {
+    const page = readPage('<h1>Cheap flights</h1><p>The best price, every day.</p>', 40);
+    const ctx = { brandDomains: [], competitorDomains: [], fanouts: [] };
+    const checked = (bannedPhrases?: string[]) =>
+      activeRules(ruleSet('feature_page', { bannedPhrases }), { overrides: {} }).map((rule) => ({
+        rule,
+        status: checkRule(rule, page, { ...ctx, bannedPhrases }),
+      }));
+    const run = vi.fn();
+    const show = (rules: ReturnType<typeof checked>) =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages}>
+            <RoleProvider role="admin">
+              <RulesTab
+                state={state(undefined, { rules, ...rulesMet(rules) })}
+                siteType="b2b"
+                draftPageType="feature_page"
+                agentFix={{ run, running: false, blocked: null }}
+              />
+            </RoleProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+    await show(checked(['cheap', 'best price', 'free']));
+    const banned = row("Avoid your brand's banned phrases");
+    expect(banned.textContent).toContain('2 found');
+    expect(banned.textContent).toContain('On the page: “cheap”, “best price”');
+    await act(async () => {
+      [...banned.querySelectorAll('button')].find((b) => b.textContent === 'Fix')!.click();
+    });
+    expect(run).toHaveBeenCalledWith(['brandBanned']);
+    // No list in the brand's settings: nothing new shows.
+    await show(checked([]));
+    expect(container.textContent).not.toContain('banned phrases');
+  });
+
   it('explains the Shopping rules on hover, accepted by Merchant Center only when the brand has it', async () => {
     const checked = activeRules(ruleSet('buying_guide', { shopping: true }), {
       overrides: {},
@@ -686,6 +790,49 @@ describe('the Rules tab', () => {
     expect(hint('No out-of-stock or refused product linked')).toContain(
       'is in stock, accepted by Merchant Center for free listings, and still in the catalog.',
     );
+  });
+
+  it('sets apart the rules this page can’t meet, uncounted, saying why (H)', async () => {
+    const onChangeType = vi.fn();
+    const page = readPage('<h1>Why we roast light</h1><p>Light roasts keep more.</p>', 0);
+    const checked = activeRules(ruleSet('product_page'), { overrides: {} }).map((rule) => ({
+      rule,
+      status: checkRule(rule, page, {
+        brandDomains: [],
+        competitorDomains: [],
+        fanouts: [],
+        pageType: 'blog_post',
+      }),
+    }));
+    const s = state(undefined, { setType: 'product_page', rules: checked, ...rulesMet(checked) });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <RoleProvider role="admin">
+            <RulesTab
+              state={s}
+              siteType="ecommerce"
+              draftPageType="blog_post"
+              onChangeType={onChangeType}
+            />
+          </RoleProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    const apart = [...container.querySelectorAll('section')].find(
+      (section) => section.querySelector('h4')?.textContent === 'Not checked on this page',
+    )!;
+    expect(row('Specs table').closest('section')).toBe(apart);
+    expect(row('Specs table').textContent).toContain(
+      "Product page rule. This page isn't a product page.",
+    );
+    expect(container.textContent).not.toContain('Product page rules');
+    expect(s.total).toBe(rulesMet(checked.filter(({ rule }) => rule.group !== 'type')).total);
+    const button = [...apart.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Set page type',
+    );
+    await act(async () => button!.click());
+    expect(onChangeType).toHaveBeenCalled();
   });
 
   it('shows Ansvisor’s set when a draft on My rules has none for its type', async () => {

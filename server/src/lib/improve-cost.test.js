@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { setSyncedPrices } from './model-price-cache.js';
 import {
+  DIRECT_MODELS,
   FALLBACK_PRICE,
   MODEL_PRICES,
   estimateGenerationsLeft,
   generationCostUsd,
+  isDirectModel,
   medianCost,
   priceFor,
   searchCostUsd,
@@ -194,6 +196,30 @@ describe('priceFor with synced prices (CHAT-16 §A)', () => {
     expect(priceFor('anthropic/claude-sonnet-5.5')).toBe(
       MODEL_PRICES['anthropic/claude-sonnet-5-5'],
     );
+  });
+});
+
+describe("Chat's model on its maker's API only: Claude Fable 5.2 (DIRECT_MODELS)", () => {
+  afterEach(() => setSyncedPrices([]));
+  const FABLE = 'anthropic/claude-fable-5-2';
+  const SYNCED = { synced: true };
+
+  it("is priced at Anthropic's list price from the table, never from the catalog", () => {
+    expect(DIRECT_MODELS).toEqual([FABLE]);
+    expect(isDirectModel(FABLE)).toBe(true);
+    expect(isDirectModel('anthropic/claude-opus-5.5')).toBe(false);
+    // A catalog row under the dotted id OpenRouter might give it is never read for it.
+    setSyncedPrices([{ model_id: 'anthropic/claude-fable-5.2', input_per_m: 1, output_per_m: 2 }]);
+    expect(priceFor(FABLE, SYNCED)).toEqual({ input: 8, output: 40, cacheRead: 0.2 });
+    expect(priceFor(FABLE, SYNCED).input).toBeGreaterThan(FALLBACK_PRICE.input);
+  });
+
+  it('charges $8 in, $40 out, $0.20 a cache read and $10 a 5-minute cache write per million', () => {
+    const cost = (usage) => generationCostUsd(FABLE, usage, SYNCED);
+    expect(cost({ inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(8, 9);
+    expect(cost({ inputTokens: 0, outputTokens: 1_000_000 })).toBeCloseTo(40, 9);
+    expect(cost({ inputTokens: 1_000_000, cacheReadTokens: 1_000_000 })).toBeCloseTo(0.2, 9);
+    expect(cost({ inputTokens: 1_000_000, cacheWriteTokens: 1_000_000 })).toBeCloseTo(10, 9);
   });
 });
 

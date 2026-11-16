@@ -12,8 +12,9 @@
  * configured provider: "anthropic/claude-haiku-4-5", "google/gemini-3-flash",
  * "openrouter/…". Default is unchanged from the previous behaviour.
  *
- * With OPENROUTER_API_KEY set and no SENTIMENT_MODEL, a decision model
- * (decider.js) answers instead (#987): sentiment is a three-way choice, which
+ * With a decision provider configured (DECIDER_PROVIDER, decider.js) and no
+ * SENTIMENT_MODEL, a decision model answers instead (#987): sentiment is a
+ * three-way choice, which
  * it answers with real probabilities, far cheaper, and with room for the whole
  * answer. A chat model reads at most a 3,000-character excerpt, and the
  * excerpt is built around the brand's mentions (#986): the first 3,000

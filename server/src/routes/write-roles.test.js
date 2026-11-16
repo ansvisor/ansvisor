@@ -65,6 +65,8 @@ const OPEN = {
   'POST /api/prompts/fanout-intents': 'The Fan-out tab calls it on its own.',
   'POST /api/reports/summary': "A report's AI summary stays open (2026-11-03).",
   'POST /api/demo': 'Opens the demo brand, for any member.',
+  // Ads: asking to hear when a later ad platform is ready is anyone's (ADS-01 §3.5).
+  'POST /api/ads/connections/notify': 'Notify me: logged once per person; nothing runs or costs.',
 };
 
 const read = (file) => readFileSync(new URL(file, import.meta.url), 'utf8');

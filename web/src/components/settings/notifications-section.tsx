@@ -142,7 +142,7 @@ export function NotificationsSection() {
                   disabled={!canManage}
                 >
                   <SelectTrigger size="sm" className="w-44">
-                    <SelectValue />
+                    <SelectValue>{t(`pulseFrequency_${brand.frequency}`)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {FREQUENCIES.map((freq) => (
@@ -153,6 +153,9 @@ export function NotificationsSection() {
                   </SelectContent>
                 </Select>
               </div>
+              {brand.frequency === 'notable' && (
+                <p className="text-xs text-muted-foreground">{t('pulseFrequency_notableNote')}</p>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor={`pulse-recipients-${brand.brandId}`}>{t('pulseRecipients')}</Label>
                 <Input

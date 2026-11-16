@@ -98,7 +98,9 @@ export type ToolArea =
   /** What Chat remembers between chats (CHAT-14). */
   | 'memory'
   /** Agents: the ready-to-use ones (AGENTS plan §8), one running another (CHAT-27 phase 2). */
-  | 'agents';
+  | 'agents'
+  /** Ads (ADS-01 §6): listed and offered only while Ads is on (lib/ads/flag.ts). */
+  | 'ads';
 
 /**
  * What the plan decides about a call (CHAT-20 §7), null when nothing. The

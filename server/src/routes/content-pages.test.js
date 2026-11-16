@@ -30,7 +30,14 @@ vi.mock('../config/supabase.js', () => ({
             : name === 'content_drafts'
               ? { data: draftRow, error: null }
               : name === 'brand_facts'
-                ? { data: [{ quote: 'Bluesign certified' }], error: null }
+                ? // A claim for one place the page doesn't name is left out (00539).
+                  {
+                    data: [
+                      { quote: 'Bluesign certified', scope: null },
+                      { quote: 'Sewn in Bozcaada', scope: 'Bozcaada' },
+                    ],
+                    error: null,
+                  }
                 : {
                     data: [
                       { domain: 'https://www.Northwind.example/' },
@@ -435,7 +442,7 @@ describe('POST /api/content-pages/page-read (Quality CE-049)', () => {
       ['is', 'gone_at', null],
       ['order', 'first_seen_at'],
       ['order', 'id'],
-      ['limit', 10],
+      ['limit', 60],
     ]);
   });
 

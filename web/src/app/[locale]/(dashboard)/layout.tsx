@@ -42,6 +42,7 @@ import { DemoBanner } from '@/components/billing/demo-banner';
 import { PlanEndsBanner } from '@/components/billing/plan-ends-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 import { FirstRunReady } from '@/components/layout/first-run-ready';
+import { sendSignupEventOnce } from '@/lib/signup-event';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -60,6 +61,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
     )
     .eq('id', user.id)
     .single();
+
+  // The sign-up events (Resend's welcome e-mail, PostHog's signed_up), once
+  // per account, from its first signed-in page: every kind of sign-up comes
+  // here. In the background, and before onboarding's redirect, where a new
+  // account goes.
+  if (profile) sendSignupEventOnce(user);
 
   if (!profile?.organization_id || !profile?.onboarding_completed) {
     redirect('/dashboard/onboarding');
@@ -288,7 +295,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
                               <ReadOnlyBanner />
                               <PlanEndsBanner />
                               <DemoBanner />
-                              <main className="flex-1 overflow-y-auto bg-background p-6">
+                              {/* The only scroll of a page. Relative: what a page places
+                                  absolutely with nothing positioned around it (a
+                                  screen-reader label, sr-only) is placed and clipped here.
+                                  Placed on the page instead, it made the window taller than
+                                  the shell, and the window scrolled past it (2026-11-14). */}
+                              <main
+                                data-slot="dashboard-main"
+                                className="relative flex-1 overflow-y-auto bg-background p-6"
+                              >
                                 <BrandGuard>{children}</BrandGuard>
                               </main>
                               <TrackingJobHandoff />

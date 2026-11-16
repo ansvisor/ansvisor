@@ -455,17 +455,23 @@ afterEach(() => {
 });
 
 describe('the content editor', () => {
-  it('shows the month’s AI usage before History, with this page’s share, and its banner from 80%', async () => {
+  it('shows the month’s AI usage after Saved, with this page’s share, and its banner from 80%', async () => {
     aiUsage.usage = usageAt(84);
     getContentDraft.mockResolvedValue(draft());
     await renderPage();
     const meter = button('AI 84% used this month, close to the limit')!;
-    expect(meter.closest('header')).not.toBeNull();
+    // A status beside Saved, not among the actions (the owner's layout, 2026-11-14).
+    const status = meter.parentElement!;
+    expect(status.querySelector('h1')).not.toBeNull();
+    expect(status.querySelector('[role="status"]')!.textContent).toBe('Saved');
     expect(
-      meter.compareDocumentPosition(button('History')!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      status.querySelector('[role="status"]')!.compareDocumentPosition(meter) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    // Narrower than 1280px, the percent alone, as Next's label goes (Next step spec §3b).
-    expect(meter.querySelector('span')!.className).toContain('hidden xl:inline');
+    expect(status.contains(button('History')!)).toBe(false);
+    // A 16 px ring in place of the bar, amber near the limit.
+    expect(meter.querySelector('svg circle')).not.toBeNull();
+    expect(meter.className).toContain('text-amber-700');
     expect(container.textContent).toContain("You've used 84% of this month's AI limit.");
 
     await act(async () => meter.click());
@@ -513,7 +519,7 @@ describe('the content editor', () => {
         checks: { page: 18, site: 13, ai: 0 },
       },
     });
-    getContentDraft.mockResolvedValue(draft());
+    getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
     await renderPage();
     await act(() => new Promise((resolve) => setTimeout(resolve, 1_100)));
 
@@ -529,6 +535,9 @@ describe('the content editor', () => {
     expect(doc).toMatch(/^<!doctype html>/);
     expect(doc).toContain('<title>Pipeline forecasting</title>');
     expect(doc).toContain('<h1>Pipeline forecasting</h1>');
+    // The Article JSON-LD Export and Copy HTML add: the page that ships.
+    expect(doc).toContain('application/ld+json');
+    expect(doc).toContain('"@type": "Article"');
   });
 
   it('remembers the draft for Content › Editor, per brand', async () => {
@@ -1524,21 +1533,29 @@ describe('the content editor', () => {
     markContentDraftReady.mockResolvedValue({ status: 'ready', tasksDone: 1 });
     await renderPage();
 
-    const note = [...container.querySelectorAll('p')].find((p) =>
-      p.textContent?.startsWith('This draft is the work of'),
-    )!;
-    expect(note.textContent).toBe(
+    // A chip at the end of the header's tags (the owner's layout, 2026-11-14), not a line;
+    // only the side panel's toggle comes after it.
+    const tags = container.querySelector('header')!.children[1];
+    expect(tags.lastElementChild!.getAttribute('aria-label')).toMatch(/side panel$/);
+    const chip = tags.lastElementChild!.previousElementSibling as HTMLAnchorElement;
+    expect(chip.textContent).toBe('From Action AC-214');
+    expect(chip.getAttribute('href')).toBe('/dashboard/action-center/actions?action=act-1');
+    expect(chip.title).toBe(
       'This draft is the work of Action AC-214. Mark ready completes its task there.',
     );
-    expect(note.querySelector('a')!.getAttribute('href')).toBe(
-      '/dashboard/action-center/actions?action=act-1',
+    expect(chip.getAttribute('aria-label')).toBe(
+      'From Action AC-214. Mark ready completes its task there.',
     );
+    expect(
+      [...container.querySelectorAll('p')].some((p) => p.textContent?.includes('the work of')),
+    ).toBe(false);
 
     await act(async () => button('Mark ready')!.click());
     expect(toast.success).toHaveBeenCalledWith(
       "Marked ready, and its task in Action AC-214 is done. Publish it on your site when you're ready.",
     );
-    expect(note.textContent).toBe('This draft is the work of Action AC-214.');
+    expect(chip.title).toBe('This draft is the work of Action AC-214.');
+    expect(chip.getAttribute('aria-label')).toBeNull();
 
     // Taken back, the task Ready completed is open again.
     unmarkContentDraftReady.mockResolvedValueOnce({ status: 'in_review', tasksReopened: 1 });
@@ -2362,13 +2379,43 @@ describe('the content editor', () => {
       (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }).editor.state.doc
         .textContent;
 
+    it('keeps the card’s place from the first paint when the draft’s read says it shows', async () => {
+      let batchIn!: (read: DraftSuggestion[]) => void;
+      getDraftSuggestions.mockReturnValue(new Promise((resolve) => (batchIn = resolve)));
+      getContentDraft.mockResolvedValue({ ...page, agentCardShown: true });
+      await renderPage();
+      const skeleton = () => container.querySelector('[data-slot="agent-card-skeleton"]');
+      // Where the card goes, over the toolbar, before its batch is read (no jump).
+      expect(bar()).toBeNull();
+      expect(
+        skeleton()!.compareDocumentPosition(container.querySelector('[role="toolbar"]')!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      await act(async () => batchIn(batch));
+      expect(skeleton()).toBeNull();
+      expect(bar()!.textContent).toContain('2 suggestions');
+
+      // Nothing kept when it doesn't show, nor once its read failed.
+      for (const [shown, read] of [
+        [false, () => new Promise<DraftSuggestion[]>(() => {})],
+        [true, () => Promise.reject(new Error('offline'))],
+      ] as const) {
+        act(() => root.unmount());
+        root = createRoot(container);
+        getDraftSuggestions.mockImplementation(read);
+        getContentDraft.mockResolvedValue({ ...page, agentCardShown: shown });
+        await renderPage();
+        expect(skeleton()).toBeNull();
+      }
+    });
+
     it('shows each open suggestion where it applies, with the agent bar', async () => {
       getContentDraft.mockResolvedValue(page);
       getDraftSuggestions.mockResolvedValue(batch);
       await renderPage();
 
       expect(getDraftSuggestions).toHaveBeenCalledWith('d1');
-      expect(bar()!.textContent).toContain('Content Agent has 2 suggestions for you');
+      expect(bar()!.textContent).toContain('2 suggestions');
       expect(bar()!.textContent).toContain('from Action AC-214');
       expect(bar()!.querySelector('a')!.getAttribute('href')).toBe(
         '/dashboard/action-center/actions?action=a1',
@@ -2439,7 +2486,7 @@ describe('the content editor', () => {
       expect(container.querySelector('.ProseMirror .agent-accepted-text')!.textContent).toBe(
         'Accuracy is shown per team, each week, against closed revenue.',
       );
-      expect(bar()!.textContent).toContain('Content Agent has 1 suggestion for you');
+      expect(bar()!.textContent).toContain('1 suggestion');
 
       await press('s1', 'Undo');
       expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s1'], 'open');
@@ -2585,7 +2632,7 @@ describe('the content editor', () => {
       await act(async () => {});
       expect(decideDraftSuggestions).toHaveBeenLastCalledWith(['s2', 's1'], 'open');
       expect(pageText()).toBe(`Pipeline forecasting${VAGUE}Teams trust it.`);
-      expect(bar()!.textContent).toContain('Content Agent has 2 suggestions for you');
+      expect(bar()!.textContent).toContain('2 suggestions');
     });
 
     it('never applies one to a passage AI quotes, or to one the page changed', async () => {
@@ -3124,6 +3171,46 @@ describe('the side panel', () => {
     }
   });
 
+  it('keeps the page window-high, and Chat and each tab in a scroll of their own (the owner, 2026-11-14)', async () => {
+    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+    const classes = (el: Element | null | undefined) => el?.className.split(' ') ?? [];
+    chatPanel.value = { setup: { enabled: true } };
+    getContentDraft.mockResolvedValue(
+      draft({ conversation: { id: CHAT, title: 'Pricing FAQ', mine: true } }),
+    );
+    localStorage.setItem('aeo:content-editor-panel', '1');
+    try {
+      await renderPage('admin', { chatOn: true });
+      // jsdom lays nothing out: these are the classes that bound it (the harness checks the rest).
+      // The page: the dashboard's height, nothing in it taller.
+      expect(classes(container.firstElementChild)).toEqual(
+        expect.arrayContaining(['relative', 'flex', 'flex-col', 'overflow-y-clip']),
+      );
+      expect(classes(panel())).toEqual(expect.arrayContaining(['flex', 'flex-col', 'shrink-0']));
+      // Chat: the conversation scrolls in the panel, under its tabs; the box sticks to its bottom.
+      const chatScroll = panel()!.querySelector('[data-slot="editor-chat-scroll"]');
+      expect(chatScroll!.contains(panel()!.querySelector('[data-slot="editor-chat"]'))).toBe(true);
+      expect(classes(chatScroll)).toEqual(
+        expect.arrayContaining(['relative', 'min-h-0', 'flex-1', 'overflow-y-auto']),
+      );
+      expect(chatScroll!.className).not.toMatch(/\b(py|pb)-/);
+      // The box's strip is the panel's grey, not the page's black.
+      expect(classes(chatScroll)).toContain('[&_[data-slot=thread-composer]]:bg-card');
+      expect(panel()!.querySelector('[role="tablist"]')!.compareDocumentPosition(chatScroll!)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      // Instructions (and Sources, Live page): their own scroll, and Chat hidden.
+      await pickTab('Instructions');
+      expect(classes(panel()!.querySelector('[data-panel-scroll]'))).toEqual(
+        expect.arrayContaining(['relative', 'min-h-0', 'flex-1', 'overflow-y-auto']),
+      );
+      expect(chatScroll!.hasAttribute('hidden')).toBe(true);
+    } finally {
+      chatPanel.value = null;
+      localStorage.removeItem('aeo:content-editor-panel');
+    }
+  });
+
   it('opens on Instructions when a teammate’s shared chat made the draft (W4-16)', async () => {
     const CHAT = 'cccccccc-0000-4000-8000-000000000001';
     chatPanel.value = { setup: { enabled: true } };
@@ -3148,7 +3235,10 @@ describe('the side panel', () => {
     await renderPage();
     expect(panel()).toBeNull();
     const rail = () => container.querySelector('nav[aria-label="Side panel"]');
-    const tabs = [...rail()!.querySelectorAll('button')];
+    // Show side panel on top, then the tabs.
+    const [show, ...tabs] = [...rail()!.querySelectorAll('button')];
+    expect(show.getAttribute('aria-label')).toBe('Show side panel');
+    expect(show.getAttribute('aria-pressed')).toBe('false');
     expect(tabs.map((b) => b.textContent)).toEqual(['Instructions', 'Sources', 'Live page']);
     expect(tabs[1].getAttribute('title')).toBe('Open Sources in the side panel');
 
@@ -3159,10 +3249,34 @@ describe('the side panel', () => {
     expect(rail()).toBeNull();
     expect(localStorage.getItem('aeo:content-editor-panel')).toBe('1');
 
-    // Closed again from the header, the strip is back.
-    await act(async () => button('Hide side panel')!.click());
+    // Closed again from the header, at the right end of its tags above the panel (the
+    // owner, 2026-11-14), the strip is back. The panel's tab row holds its tabs alone.
+    const tags = container.querySelector('header')!.children[1];
+    const hide = button('Hide side panel')!;
+    expect(hide.getAttribute('aria-pressed')).toBe('true');
+    expect(hide.title).toBe('Hide side panel');
+    expect(tags.lastElementChild).toBe(hide);
+    expect(hide.className).toContain('ml-auto');
+    const tabRow = panel()!.querySelector('[role="tablist"]')!.parentElement!;
+    expect([...tabRow.children].map((el) => el.getAttribute('role'))).toEqual(['tablist']);
+    expect(panel()!.querySelector('[aria-label="Hide side panel"]')).toBeNull();
+    await act(async () => hide.click());
     expect(panel()).toBeNull();
     expect(rail()).not.toBeNull();
+    // The same button shows it again, in its place, as the rail's does.
+    expect(tags.lastElementChild).toBe(hide);
+    expect(hide.getAttribute('aria-label')).toBe('Show side panel');
+    expect(hide.getAttribute('aria-pressed')).toBe('false');
+    expect(hide.title).toBe('Show side panel');
+    await act(async () => hide.click());
+    expect(panel()).not.toBeNull();
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('1');
+    // And the rail's Show side panel opens it again, as it was left.
+    await act(async () => button('Hide side panel')!.click());
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('0');
+    await act(async () => rail()!.querySelector<HTMLButtonElement>('button')!.click());
+    expect(panel()).not.toBeNull();
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('1');
   });
 
   // Brief › Shopping path (shopping path, part 3): an online shop's page that links products.
@@ -3289,7 +3403,8 @@ describe('the side panel', () => {
     await renderPage();
     // The editor reads the sources once on opening; the tab itself isn't there yet.
     expect(getDraftSources).toHaveBeenCalledTimes(1);
-    expect(panel()!.textContent).not.toContain('pipeline forecasting');
+    // Rules names the fan-out still to use; Sources' row for it isn't there.
+    expect(panel()!.querySelector('[aria-label="Use pipeline forecasting"]')).toBeNull();
 
     // The tab counts the sources in use, from the editor's one read.
     const tab = [...panel()!.querySelectorAll<HTMLElement>('[role="tab"]')].find(
@@ -3571,6 +3686,9 @@ describe('the side panel', () => {
     // 8 of 12 then 11 of 15 on first paint (editor test 2026-10-25): no count until it stands.
     const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
     expect(chip.getAttribute('aria-label')).toBe('Rules · reading');
+    // "Rules ···", as wide as its count will be: the chips after it stay put.
+    expect(chip.textContent).toBe('Rules');
+    expect(chip.className).toContain('min-w-24');
   });
 
   it('shows how many rules the page meets, and opens them from the header', async () => {
@@ -3648,6 +3766,201 @@ describe('the side panel', () => {
     expect(
       vi.mocked(toast).mock.calls.filter(([m]) => m === 'Rule updated for this draft'),
     ).toHaveLength(1);
+  });
+
+  describe('a rule set picked for another page type', () => {
+    /** A set picked before a pick kept the page's type with it (no setFor), customised. */
+    const legacy = {
+      set: 'product_page' as const,
+      source: 'default' as const,
+      overrides: { sentence: { on: false } },
+      textRules: [{ id: 't1', text: 'Mention free shipping', on: true }],
+    };
+    const openRules = async () => {
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!.click(),
+      );
+    };
+    const toggle = (label: string) =>
+      act(async () =>
+        panel()!
+          .querySelector<HTMLElement>(`[role="switch"][aria-label="${label}: on or off"]`)!
+          .click(),
+      );
+    const setTrigger = () => panel()!.querySelector('[aria-label="Rule set"]')!;
+    const groups = () => [...panel()!.querySelectorAll('section h4')].map((h) => h.textContent);
+    const lastSaved = () => saveDraftRules.mock.calls.at(-1)![1] as Record<string, unknown>;
+
+    it('keeps a set picked before setFor, its type rules and its custom rules, through an edit', async () => {
+      for (const pageType of ['blog_post', null]) {
+        saveDraftRules.mockClear();
+        getContentDraft.mockResolvedValue(draft({ pageType, rules: legacy }));
+        window.innerWidth = 1024;
+        await renderPage();
+        await openRules();
+        expect(setTrigger().textContent).toContain('Product page · Ansvisor default');
+        // Its type rules are checked, as before setFor: not set apart as another type's.
+        expect(groups()).toContain('Product page rules');
+        expect(panel()!.textContent).not.toContain("This page isn't a product page.");
+        expect(
+          panel()!
+            .querySelector('[role="switch"][aria-label="Max sentence length: on or off"]')!
+            .getAttribute('aria-checked'),
+        ).toBe('false');
+
+        // An unrelated edit keeps the set, no setFor added, and the custom rules.
+        await toggle('FAQ block');
+        expect(saveDraftRules).toHaveBeenCalledTimes(1);
+        expect(lastSaved()).toEqual({
+          ...legacy,
+          overrides: { sentence: { on: false }, faq: { on: false } },
+        });
+        expect(lastSaved()).not.toHaveProperty('setFor');
+
+        // Reset clears the custom rules, not the set.
+        await act(async () =>
+          [...panel()!.querySelectorAll('button')].find((b) => b.textContent === 'Reset')!.click(),
+        );
+        expect(lastSaved()).toMatchObject({ set: 'product_page', overrides: {}, textRules: [] });
+        expect(lastSaved()).not.toHaveProperty('setFor');
+        act(() => root.unmount());
+        root = createRoot(container);
+      }
+    });
+
+    /** Picks a page type from the header's menu, as Next's Set page type opens it. */
+    const pickType = async (name: string) => {
+      const typeMenu = container.querySelector<HTMLButtonElement>(
+        'header button[aria-label^="Page type:"]',
+      )!;
+      await act(async () => {
+        typeMenu.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        typeMenu.click();
+      });
+      const item = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
+        (el) => el.textContent?.startsWith(name),
+      )!;
+      await act(async () => item.click());
+    };
+
+    it('brings the type’s set when the person picks a page type: a set picked before setFor goes, its values stay (the owner, 2026-11-14)', async () => {
+      // The owner's draft: "Set page type" in the header, Product page in Rules.
+      getContentDraft.mockResolvedValue(draft({ pageType: null, rules: legacy }));
+      window.innerWidth = 1024;
+      await renderPage();
+      await openRules();
+      expect(setTrigger().textContent).toContain('Product page · Ansvisor default');
+
+      await pickType('Blog post');
+      expect(setContentDraftPageType).toHaveBeenCalledWith('d1', 'blog_post');
+      // Only the pin goes: the custom values and text rules stay, no setFor.
+      expect(saveDraftRules).toHaveBeenCalledTimes(1);
+      expect(lastSaved()).toEqual({ ...legacy, set: null });
+      expect(lastSaved()).not.toHaveProperty('setFor');
+      // Said by the header's type, not a toast of the rules' own.
+      expect(toast).not.toHaveBeenCalled();
+      expect(setTrigger().textContent).toContain('Blog post · Ansvisor default');
+      // A blog post has no type rules of its own; the product page's are gone.
+      expect(groups()).not.toContain('Product page rules');
+      expect(panel()!.textContent).not.toContain('Product page rule');
+      // A rule the blog post's set also has keeps its value.
+      expect(
+        panel()!
+          .querySelector('[role="switch"][aria-label="Max sentence length: on or off"]')!
+          .getAttribute('aria-checked'),
+      ).toBe('false');
+      expect(panel()!.textContent).toContain('Your text rules');
+
+      // The set follows the type from then on.
+      await pickType('How-to guide');
+      expect(setContentDraftPageType).toHaveBeenLastCalledWith('d1', 'guide');
+      expect(saveDraftRules).toHaveBeenCalledTimes(1);
+      expect(setTrigger().textContent).toContain('How-to guide · Ansvisor default');
+    });
+
+    it('builds on the rule changes still saving when the person picks a page type, after them', async () => {
+      getContentDraft.mockResolvedValue(draft({ pageType: null, rules: legacy }));
+      let finish: () => void = () => {};
+      saveDraftRules.mockImplementationOnce(() => new Promise<void>((r) => (finish = r)));
+      window.innerWidth = 1024;
+      await renderPage();
+      await openRules();
+      await toggle('FAQ block');
+      await pickType('Blog post');
+      // The toggle's save is still under way: the pin's goes next, holding the toggle.
+      expect(saveDraftRules).toHaveBeenCalledTimes(1);
+      expect(lastSaved()).toMatchObject({ set: 'product_page' });
+      await act(async () => finish());
+      await act(async () => {});
+      expect(saveDraftRules).toHaveBeenCalledTimes(2);
+      expect(lastSaved()).toEqual({
+        ...legacy,
+        set: null,
+        overrides: { sentence: { on: false }, faq: { on: false } },
+      });
+      // The toggle's own toast, once all is saved; none for the set that followed the type.
+      expect(toast).toHaveBeenCalledTimes(1);
+      expect(toast).toHaveBeenCalledWith('Rule updated for this draft');
+    });
+
+    it('drops a set picked for another type when the person picks a page type, and keeps it when that fails', async () => {
+      const pinned = { ...legacy, set: 'feature_page' as const, setFor: 'blog_post' as const };
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post', rules: pinned }));
+      window.innerWidth = 1024;
+      await renderPage();
+      await openRules();
+      expect(setTrigger().textContent).toContain('Feature page · Ansvisor default');
+
+      // Not saved: the type goes back, and so does nothing of the rules.
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setContentDraftPageType.mockRejectedValueOnce(new Error('not_found'));
+      await pickType('How-to guide');
+      expect(toast.error).toHaveBeenCalledWith("Couldn't change the page type. Try again.");
+      expect(saveDraftRules).not.toHaveBeenCalled();
+      expect(setTrigger().textContent).toContain('Feature page · Ansvisor default');
+
+      await pickType('How-to guide');
+      expect(lastSaved()).toEqual({ ...legacy, set: null });
+      expect(setTrigger().textContent).toContain('How-to guide · Ansvisor default');
+    });
+
+    it('writes setFor when the person picks a set, and set: null for the page type’s own', async () => {
+      getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post', rules: legacy }));
+      window.innerWidth = 1024;
+      await renderPage();
+      await openRules();
+      const pick = async (name: string) => {
+        const trigger = setTrigger();
+        await act(async () => {
+          trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+          (trigger as HTMLElement).click();
+        });
+        const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+          (o) => o.textContent === name,
+        )!;
+        await act(async () => {
+          option.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+        });
+        await act(async () => option.click());
+      };
+
+      // Another type's set: it holds while the page is a blog post.
+      await pick('Feature page · Ansvisor default');
+      expect(lastSaved()).toMatchObject({
+        set: 'feature_page',
+        setFor: 'blog_post',
+        source: 'default',
+      });
+      expect(setTrigger().textContent).toContain('Feature page · Ansvisor default');
+      expect(groups()).not.toContain('Feature page rules');
+      expect(panel()!.textContent).toContain("Feature page rule. This page isn't one.");
+
+      // The page type's own: the set follows the page type again.
+      await pick('Blog post · Ansvisor default');
+      expect(lastSaved()).toMatchObject({ set: null, source: 'default' });
+      expect(lastSaved()).not.toHaveProperty('setFor');
+      expect(toast).toHaveBeenCalledWith('Rule set changed for this draft');
+    });
   });
 
   it('says when the rules are too long to save, rather than failing the save', async () => {
@@ -3802,6 +4115,8 @@ describe('the side panel', () => {
       });
       getContentDraft.mockResolvedValue({
         ...readable,
+        // Specs the page gives, not in a table yet: a page with none isn't asked for one.
+        bodyHtml: `${readable.bodyHtml}<p>Weight: 1.2 kg</p><p>Volume: 28 l</p>`,
         pageType: 'product_page',
         siteType: 'ecommerce',
       });
@@ -4027,7 +4342,7 @@ describe('the side panel', () => {
           b.textContent?.startsWith('Quality'),
         );
       // Readability alone would say more than the page is worth: no number yet.
-      expect(chip()?.textContent).toBe('Quality · reading…');
+      expect(chip()?.getAttribute('aria-label')).toBe('Quality · reading…');
       await act(async () =>
         authorsIn({
           authors: [],
@@ -4135,7 +4450,7 @@ describe('the side panel', () => {
         window.innerWidth = 1440;
         await renderPage();
         // The claims are read after a save's pause: no score until they are.
-        expect(qualityChip()?.textContent).toBe('Quality · reading…');
+        expect(qualityChip()?.getAttribute('aria-label')).toBe('Quality · reading…');
         await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
         expect(qualityChip()?.textContent).toMatch(/^Quality \d+/);
         await pickTab('Brief');
@@ -4168,7 +4483,7 @@ describe('the side panel', () => {
         await renderPage();
         await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
         // Every other read is in: the facts still hold it.
-        expect(qualityChip()?.textContent).toBe('Quality · reading…');
+        expect(qualityChip()?.getAttribute('aria-label')).toBe('Quality · reading…');
         await act(async () =>
           factsIn({
             facts: [],
@@ -5206,7 +5521,7 @@ describe('the side panel', () => {
           [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
             b.textContent?.startsWith('Quality'),
           );
-        expect(chip()?.textContent).toBe('Quality · reading…');
+        expect(chip()?.getAttribute('aria-label')).toBe('Quality · reading…');
         await act(async () =>
           pageIn({
             spots: [],
@@ -5614,6 +5929,37 @@ describe('the side panel', () => {
       expect(getContentAuthors).not.toHaveBeenCalled();
       expect(byButton()).toBeUndefined();
       expect(strip()).toBeNull();
+    });
+
+    it('names the author from the draft’s read on the first paint, until the menu is read', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+      let authorsIn!: (read: unknown) => void;
+      getContentAuthors.mockReturnValue(new Promise((resolve) => (authorsIn = resolve)));
+      getContentDraft.mockResolvedValue({
+        ...draft({ authorId: 'a1' }),
+        authorName: 'Ada Lovelace',
+      });
+      await renderPage();
+      const chip = () => container.querySelector('header [data-slot="author-chip"]');
+      expect(chip()!.textContent).toBe('By Ada Lovelace');
+      expect(byButton()).toBeUndefined();
+      await act(async () =>
+        authorsIn({
+          authors: [ada],
+          brands: [{ id: 'b1', name: 'Acme' }],
+          me: { id: 'u1', role: 'analyst' },
+        }),
+      );
+      expect(chip()).toBeNull();
+      expect(byButton()!.textContent).toBe('By Ada Lovelace');
+
+      // An author the read couldn't name: nothing ahead of the menu, never a guess.
+      act(() => root.unmount());
+      root = createRoot(container);
+      getContentAuthors.mockReturnValue(new Promise(() => {}));
+      getContentDraft.mockResolvedValue({ ...draft({ authorId: 'a1' }), authorName: null });
+      await renderPage();
+      expect(chip()).toBeNull();
     });
 
     it('names the author in the header and a Page info strip outside the page', async () => {
@@ -7254,13 +7600,15 @@ describe('the side panel', () => {
         expect(basket()!.textContent).toContain(
           'Fix open rulesdone by Content Agent, the rest is in Rules',
         );
-        // Passed with what the page read then: the rule left open, and its batch.
+        // Passed with what the page read then, and its batch: the rule it
+        // left open is tried, the person's, as the Rules tab says (F1).
         expect(JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1')!)).toEqual({
           attempt: null,
-          passes: {
-            fixRules: { rules: expect.arrayContaining(['fanoutH2']), length: '', batch: 'b9' },
-          },
+          passes: { fixRules: { rules: [], length: '', batch: 'b9' } },
         });
+        expect(JSON.parse(localStorage.getItem('aeo:agent-tried-rules:d1')!).tried).toContain(
+          'fanoutH2',
+        );
       });
 
       it("stays passed when the agent's own later batch opens a rule, and not when the person's edits do (editor test 2026-11-03)", async () => {
@@ -7351,9 +7699,9 @@ describe('the side panel', () => {
         expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
       });
 
-      it('asks the agent to shorten a long page of many sections, the Length being the person’s (editor UX review 2026-11-03, decision b)', async () => {
-        // Ten sections far past a Length of 400: a rewrite merges or drops
-        // sections to fit, so the Length is the agent's, not held.
+      it('asks to raise a Length the rules can’t fit in first, in one click (editor test 2026-11-12)', async () => {
+        // Ten sections far past a Length of 400, which can't hold the
+        // fan-out section, FAQ and summary the rules ask for.
         const sections = Array.from(
           { length: 10 },
           (_, i) =>
@@ -7364,20 +7712,31 @@ describe('the side panel', () => {
         );
         getDraftSuggestions.mockResolvedValue([]);
         await renderPage();
-        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Raise Length to ~1,050');
+        await act(async () => nextButton()!.click());
+        expect(inBasket('Ask for fewer')).toBeDefined();
+        await act(async () => inBasket('Raise Length')!.click());
+        expect(saveDraftRules).toHaveBeenLastCalledWith(
+          'd1',
+          expect.objectContaining({
+            overrides: expect.objectContaining({ length: { value: '1050' } }),
+          }),
+        );
       });
 
       it('on the Length step, isn’t passed by a Fix, and is by a rewrite once decided', async () => {
-        getContentDraft.mockResolvedValue(draft(LONG));
+        // No FAQ asked for: the rules fit in the Length.
+        const rules = { ...LONG.rules, overrides: { ...LONG.rules.overrides, faq: { on: false } } };
+        getContentDraft.mockResolvedValue(draft({ ...LONG, rules }));
         getDraftSuggestions.mockResolvedValue([]);
         fixDraftRules.mockResolvedValue({ count: 0 });
         await renderPage();
-        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
-        // The step's other button, Fix open rules: it takes Fix open rules, not the Length.
+        // Fix first: it takes Fix open rules, not the Length (editor test 2026-11-12).
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
         await act(async () => nextButton()!.click());
         await act(async () => inBasket('Fix open rules')!.click());
         await settle();
-        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Rewrite within all rules');
         expect(stored().passes).toEqual({ fixRules: expect.any(Object) });
 
         // A rewrite begun on it, then the waiting page; its page decided.
@@ -7408,7 +7767,9 @@ describe('the side panel', () => {
         root = createRoot(container);
         await renderPage();
         await settle();
-        expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Shorten to your Length');
+        expect(nextButton()!.getAttribute('aria-label')).not.toBe(
+          'Next · Rewrite within all rules',
+        );
         expect(stored().passes).toEqual({ length: expect.any(Object) });
       });
 
@@ -7708,6 +8069,8 @@ describe('the side panel', () => {
           (rule: string) => rule !== 'fanoutH2',
         );
         localStorage.setItem(key, JSON.stringify(stored));
+        // Never tried: met since the run, and open again.
+        localStorage.removeItem('aeo:agent-tried-rules:d1');
         await act(async () => root.unmount());
         root = createRoot(container);
         await renderPage();
@@ -7920,9 +8283,25 @@ describe('the side panel', () => {
       expect(container.querySelector('.ProseMirror')!.textContent).toContain(
         'Would break Max sentence length',
       );
-      expect(
-        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('would break Max sentence length');
+      // On the card in the page: a line of its own under the label and the buttons,
+      // which keep their line (the owner, 2026-11-14).
+      const card = container.querySelector<HTMLElement>('.ProseMirror [data-suggestion]')!;
+      const [top, warning] = [...card.children];
+      expect(warning.hasAttribute('data-suggestion-breaks')).toBe(true);
+      expect(warning.textContent).toBe('Would break Max sentence length');
+      expect(top.textContent).not.toContain('Would break');
+      const label = top.firstElementChild!;
+      expect(label.textContent).toBe('Content Agent · remove an AI trace (rule)');
+      expect([...top.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+        'Reject',
+        'Accept',
+      ]);
+      // On the agent card: an icon and a count, the rule named on hover.
+      const breaks = container.querySelector(
+        '[role="region"][aria-label="Agent suggestions"] [data-slot="agent-card-breaks"]',
+      )!;
+      expect(breaks.textContent).toBe('1 rule');
+      expect(breaks.getAttribute('aria-label')).toBe('Would break Max sentence length');
     });
 
     it('sends the Length to Fix however far past it the page is, with the room it leaves (editor UX review 2026-11-03, decision b)', async () => {
@@ -7991,7 +8370,7 @@ describe('the side panel', () => {
       await act(async () => answer({ count: 1 }));
       await act(async () => {});
       expect(card().getAttribute('aria-busy')).toBe('false');
-      expect(card().textContent).toContain('Content Agent has 1 suggestion for you');
+      expect(card().textContent).toContain('1 suggestion');
     });
 
     it('shows the run’s steps while it works, and Stop leaves the page as it was', async () => {
@@ -8271,7 +8650,7 @@ describe('the side panel', () => {
       expect(request).toMatchObject({ textRules: [], locked: [] });
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('Content Agent has 1 suggestion for you');
+      ).toContain('1 suggestion');
       expect(toast.success).toHaveBeenCalledWith(
         'Content Agent suggested 1 change · review them in the page',
       );
@@ -8600,7 +8979,7 @@ describe('the side panel', () => {
         expect(getDraftSuggestions).toHaveBeenCalledTimes(3);
         expect(
           container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-        ).toContain('Content Agent has 1 suggestion for you');
+        ).toContain('1 suggestion');
         expect(toast.success).toHaveBeenCalledWith(
           'Content Agent suggested 1 change · review them in the page',
         );
@@ -8664,7 +9043,7 @@ describe('the side panel', () => {
         expect(toast.error).not.toHaveBeenCalled();
       });
 
-      it('says it stopped, or failed, as its row says, without waiting out the minute and a half', async () => {
+      it('says it stopped, or failed, as its row says, without waiting out the three minutes', async () => {
         runs(null, ended({ outcome: 'stopped' }));
         await run();
         expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
@@ -8683,9 +9062,10 @@ describe('the side panel', () => {
         runs(earlier, earlier);
         await run();
         expect(toast).not.toHaveBeenCalledWith('Stopped · nothing was changed');
-        await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
+        await act(async () => void (await vi.advanceTimersByTimeAsync(175_000)));
         await act(async () => {});
-        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+        expect(toast).toHaveBeenCalledWith(expect.stringMatching(/still finishing/));
+        expect(toast.error).not.toHaveBeenCalled();
       });
     });
 
@@ -8700,7 +9080,7 @@ describe('the side panel', () => {
       );
     });
 
-    it('says the agent couldn’t run when no batch lands in time', async () => {
+    it('says it is still finishing, never that it failed, when no batch lands in time', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {
         getContentDraft.mockResolvedValue(traced);
@@ -8709,11 +9089,15 @@ describe('the side panel', () => {
         await openRules();
 
         await act(async () => panelButton('Fix open rules').click());
-        await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
-        expect(toast.error).not.toHaveBeenCalled();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(175_000)));
+        expect(
+          container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+        ).toContain('Still finishing…');
+        expect(toast).not.toHaveBeenCalledWith(expect.stringMatching(/still finishing/));
         await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
         await act(async () => {});
-        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+        expect(toast).toHaveBeenCalledWith(expect.stringMatching(/still finishing/));
+        expect(toast.error).not.toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }
@@ -8808,7 +9192,7 @@ describe('the side panel', () => {
       );
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
-      ).toContain('Content Agent has 1 suggestion for you');
+      ).toContain('1 suggestion');
     });
   });
 

@@ -1,6 +1,13 @@
 import { APICallError } from 'ai';
 import { describe, expect, it } from 'vitest';
-import { KeyFailureError, ProviderDownError, stepFailure } from './engine-key';
+import {
+  KeyFailureError,
+  ModelRefusalError,
+  ModelRetentionError,
+  ProviderDownError,
+  endsRun,
+  stepFailure,
+} from './engine-key';
 
 /**
  * AGENT-OWN-KEY §5.2: a failed call on the workspace's own key stops the run
@@ -73,5 +80,38 @@ describe('stepFailure', () => {
       ),
     ).toBeNull();
     expect(stepFailure(OWN, 'openai/gpt-5.5', new Error('bad schema'))).toBeNull();
+  });
+});
+
+describe('a model’s own answers (Claude Fable 5.2)', () => {
+  const zdr = {
+    type: 'error',
+    error: {
+      type: 'invalid_request_error',
+      message:
+        'In order to access this model, your organization or workspace must have data retention enabled.',
+    },
+  };
+
+  it('ends the run on a key whose account has zero data retention, the key not failing', () => {
+    const own = stepFailure(
+      { source: 'own', provider: 'anthropic' },
+      'anthropic/claude-fable-5-2',
+      answer(400, zdr),
+    );
+    expect(own).toBeInstanceOf(ModelRetentionError);
+    expect(own).toMatchObject({ model: 'anthropic/claude-fable-5-2', source: 'own' });
+    expect(stepFailure(ANSVISOR, 'anthropic/claude-fable-5-2', answer(400, zdr))).toMatchObject({
+      source: 'ansvisor',
+    });
+    expect(endsRun(own)).toBe(true);
+  });
+
+  it('ends the run on a refusal, as it was thrown', () => {
+    const refused = new ModelRefusalError('anthropic/claude-fable-5-2');
+    expect(stepFailure(ANSVISOR, 'anthropic/claude-fable-5-2', refused)).toBe(refused);
+    expect(endsRun(refused)).toBe(true);
+    expect(endsRun(new ProviderDownError('anthropic', null))).toBe(false);
+    expect(endsRun(null)).toBe(false);
   });
 });

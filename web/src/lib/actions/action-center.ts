@@ -130,6 +130,10 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
     .from('actions')
     .select(`${ACTION_COLUMNS}, tasks_writing_since`)
     .eq('brand_id', brandId)
+    // In the list's default order (lib/action-center/sort.ts): past the cap, the
+    // list keeps the most recently updated, and the same ones on every read.
+    .order('updated_at', { ascending: false })
+    .order('action_no', { ascending: false })
     .limit(1000);
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as (ActionRow & { tasks_writing_since?: string | null })[];

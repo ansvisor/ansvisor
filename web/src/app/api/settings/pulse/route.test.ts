@@ -98,11 +98,17 @@ beforeEach(() => {
 describe('GET /api/settings/pulse', () => {
   it('has the weekly digest on for a brand nobody configured, and as saved otherwise', async () => {
     expect((await (await GET()).json()).brands).toEqual([
-      { brandId: 'b1', brandName: 'Acme', frequency: 'daily', recipients: [], trafficDigest: true },
+      {
+        brandId: 'b1',
+        brandName: 'Acme',
+        frequency: 'notable',
+        recipients: [],
+        trafficDigest: true,
+      },
       {
         brandId: 'b2',
         brandName: 'Globex',
-        frequency: 'daily',
+        frequency: 'notable',
         recipients: [],
         trafficDigest: true,
       },

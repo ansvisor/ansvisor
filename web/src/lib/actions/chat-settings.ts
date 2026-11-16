@@ -14,7 +14,7 @@ import {
   type ChatSettings,
   type PrecedenceContext,
 } from '@/lib/chat/precedence';
-import { CHAT_TOOLS, chatToolByKey } from '@/lib/chat/registry/tools';
+import { chatToolByKey, listedTools } from '@/lib/chat/registry/tools';
 import {
   EXECUTE_GROUPS,
   type ExecuteGroup,
@@ -148,7 +148,7 @@ async function who(): Promise<Who | null> {
 }
 
 function rowsOf(ctx: PrecedenceContext): PolicyRow[] {
-  return CHAT_TOOLS.map((tool) => ({
+  return listedTools().map((tool) => ({
     key: tool.labelKey,
     area: tool.area,
     class: tool.class,

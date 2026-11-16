@@ -80,7 +80,7 @@ export async function GET() {
       return {
         brandId: brand.id,
         brandName: brand.name,
-        frequency: s?.frequency ?? 'daily',
+        frequency: s?.frequency ?? 'notable',
         recipients: s?.recipients ?? [],
         // On unless turned off (00187).
         trafficDigest: s?.traffic_digest ?? true,

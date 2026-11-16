@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from 'react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
-import { Check, ChevronRight, User, X } from 'lucide-react';
+import { Check, ChevronRight, TriangleAlert, User, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
@@ -36,6 +36,37 @@ import { WorkingDots } from './_working-dots';
 
 /** A ghost button on the card's grey: its hover shows. */
 const GHOST = 'hover:bg-foreground/5 dark:hover:bg-foreground/10';
+/** The card's box: one line, about 56 px, with its tile (the owner's layout, 2026-11-14). */
+const CARD =
+  'mx-4 mt-3 mb-1 flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-2xl border bg-muted px-3.5 py-2 shadow-xs';
+/** The skeleton's grey. */
+const BONE = 'block rounded-md bg-foreground/10';
+
+/**
+ * The card's place while its batch is read, when the draft's read says it
+ * shows (no jump): its tile, two lines and its buttons in grey, as high as
+ * the card.
+ */
+export function AgentCardSkeleton() {
+  return (
+    <div
+      aria-hidden
+      data-slot="agent-card-skeleton"
+      className={cn(CARD, 'animate-pulse motion-reduce:animate-none')}
+    >
+      <span className={cn(BONE, 'h-10 w-10 shrink-0 rounded-xl')} />
+      <span className="min-w-0 flex-1 basis-56 space-y-2">
+        <span className={cn(BONE, 'h-3 w-28')} />
+        <span className={cn(BONE, 'h-2.5 w-64 max-w-full')} />
+      </span>
+      <span className="ml-auto flex gap-1.5">
+        <span className={cn(BONE, 'h-7 w-16')} />
+        <span className={cn(BONE, 'h-7 w-20')} />
+        <span className={cn(BONE, 'h-7 w-20')} />
+      </span>
+    </div>
+  );
+}
 
 /** The rules as the card counts them. */
 export interface CardRules {
@@ -46,10 +77,10 @@ export interface CardRules {
   /**
    * What accepting the open result would do, checked on a copy of the page
    * (editor test 2026-10-25): the rules met then, and those met now it would
-   * break, named. Without it, the gain is read from what each change says
-   * it fixes (rulesAfter).
+   * break, named, and how many. Without it, the gain is read from what each
+   * change says it fixes (rulesAfter).
    */
-  after?: { now: number; met: number; breaks: string | null };
+  after?: { now: number; met: number; breaks: string | null; broken?: number };
 }
 
 /**
@@ -258,9 +289,12 @@ export function AgentCard({
   stopping = false,
   next = null,
   onAllSteps,
+  rewriteDropped = 0,
   length = null,
   lastRunFailed = false,
+  stillFinishing = false,
   pageChars = null,
+  actionInHeader = null,
 }: {
   suggestions: DraftSuggestion[];
   rules: CardRules;
@@ -312,10 +346,16 @@ export function AgentCard({
   } | null;
   /** Opens the basket with every step. */
   onAllSteps?: () => void;
+  /** A rewrite taken: the rules it left open that the page before it met (said, beside Undo). */
+  rewriteDropped?: number;
   /** The agent's last run failed: said in place of an earlier batch's review. */
   lastRunFailed?: boolean;
+  /** Its answer was lost and its run hasn't said how it ended: never read as failed. */
+  stillFinishing?: boolean;
   /** A rewrite's characters, before and after, as the toolbar counts them (the editor's count). */
   pageChars?: { before: number; after: number } | null;
+  /** The action the editor's header already links ("From Action AC-…"): not linked again here. */
+  actionInHeader?: string | null;
   /**
    * The page's Length rule (its target and band) and what a rewrite keeps
    * as it is: a rewrite's result is read against it, never the agent's say.
@@ -422,8 +462,12 @@ export function AgentCard({
 
   let title: React.ReactNode;
   let line: React.ReactNode;
+  // Suggestions to decide: one line, what they change truncating (the owner's layout).
+  let oneLine = false;
   if (working) {
-    title = (
+    title = stillFinishing ? (
+      t('stillFinishing')
+    ) : (
       <>
         {t('working')}
         <WorkingDots />
@@ -495,11 +539,16 @@ export function AgentCard({
           {breaks}
           {builtFrom}
         </>
+      ) : page.status === 'accepted' && rewriteDropped > 0 ? (
+        <span className="text-amber-700 dark:text-amber-400">
+          {tRewrite('dropped', { count: rewriteDropped })}
+        </span>
       ) : page.status === 'accepted' && stillOpen > 0 ? (
         tRewrite('rulesOpen', { count: stillOpen })
       ) : null;
   } else if (open > 0) {
     title = t('waiting', { count: open });
+    oneLine = true;
     // The placeholders its changes add, for the person to fill once accepted.
     const batchLeft = openOnes.reduce(
       (n, s) =>
@@ -511,42 +560,76 @@ export function AgentCard({
         ),
       0,
     );
+    const first = sentence(openOnes[0]?.reason ?? '', locale);
+    // One run of text, the only part that shrinks: what it changes, the rules, the
+    // sources and an action the header doesn't link, cut short at the end. A rule
+    // it would break stays in sight as an icon and a count, named on hover (the
+    // owner, 2026-11-14: a warning that couldn't shrink ran under the buttons).
+    const breaking = rules.after?.breaks
+      ? tSuggestions('breaks', { names: rules.after.breaks })
+      : null;
+    const linkAction = action && action.actionId !== actionInHeader ? action : null;
+    // Its whole text on hover: what the ellipsis cut, the rules' count with it.
+    const runTitle = [
+      openOnes.length > 1 ? `${first}, ${t('more', { count: openOnes.length - 1 })}` : first,
+      batchLeft > 0 && t('placeholders', { count: batchLeft }),
+      after !== from && t('gain', { met: from, after, total: rules.total }),
+      sourceCount > 0 && t('builtFrom', { count: sourceCount }),
+      linkAction && tSuggestions('fromAction', { no: linkAction.actionNo! }),
+    ]
+      .filter(Boolean)
+      .join(' · ');
     line = (
       <>
-        {sentence(openOnes[0]?.reason ?? '', locale)}
-        {openOnes.length > 1 && ` · ${t('more', { count: openOnes.length - 1 })}`}
-        {batchLeft > 0 && ` · ${t('placeholders', { count: batchLeft })}`}
-        {after > from && (
-          <>
-            {' · '}
-            <span className="font-medium text-emerald-700 dark:text-emerald-400">
-              {t('gain', { met: from, after, total: rules.total })}
-            </span>
-          </>
-        )}
-        {after < from && (
-          <>
-            {' · '}
-            <span className="font-medium text-amber-700 dark:text-amber-400">
-              {t('gain', { met: from, after, total: rules.total })}
-            </span>
-          </>
-        )}
-        {breaks}
-        {builtFrom}
-        {action && (
-          <>
-            {' · '}
-            <Link
-              href={`/dashboard/action-center/actions?action=${action.actionId}`}
-              className="underline underline-offset-2 hover:no-underline"
-            >
-              {tSuggestions('fromAction', { no: action.actionNo! })}
-            </Link>
-          </>
+        <span title={runTitle} className="min-w-0 truncate">
+          {first}
+          {openOnes.length > 1 && `, ${t('more', { count: openOnes.length - 1 })}`}
+          {batchLeft > 0 && ` · ${t('placeholders', { count: batchLeft })}`}
+          {after !== from && (
+            <>
+              {' · '}
+              <span
+                className={cn(
+                  'font-medium',
+                  after > from
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-amber-700 dark:text-amber-400',
+                )}
+              >
+                {t('gain', { met: from, after, total: rules.total })}
+              </span>
+            </>
+          )}
+          {builtFrom}
+          {linkAction && (
+            <>
+              {' · '}
+              <Link
+                href={`/dashboard/action-center/actions?action=${linkAction.actionId}`}
+                className="underline underline-offset-2 hover:no-underline"
+              >
+                {tSuggestions('fromAction', { no: linkAction.actionNo! })}
+              </Link>
+            </>
+          )}
+        </span>
+        {breaking && (
+          <span
+            role="img"
+            aria-label={breaking}
+            title={breaking}
+            data-slot="agent-card-breaks"
+            className="inline-flex shrink-0 items-center gap-1 self-center font-medium text-amber-700 dark:text-amber-400"
+          >
+            <TriangleAlert aria-hidden className="h-3.5 w-3.5" />
+            {rules.after?.broken !== undefined && t('breaksCount', { count: rules.after.broken })}
+          </span>
         )}
       </>
     );
+  } else if (stillFinishing) {
+    title = t('stillFinishing');
+    line = t('stillFinishingLine');
   } else if (lastRunFailed) {
     title = t('runFailed');
     line = t('runFailedLine');
@@ -601,7 +684,7 @@ export function AgentCard({
       role="region"
       aria-label={page ? tRewrite('bar') : tSuggestions('bar')}
       aria-busy={working}
-      className="mx-4 mt-3 mb-1 flex flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-2xl border bg-muted px-3.5 py-3 shadow-xs"
+      className={CARD}
     >
       {/* The person's tile only with nothing of the agent's to decide: its count stays in sight.
           With Chat on, the agent at work is Chat's own avatar (Chat agentic plan §2–3). */}
@@ -614,8 +697,16 @@ export function AgentCard({
       )}
       {/* Room for a line of text first: on a narrow page the buttons go under it. */}
       <div className="min-w-0 flex-1 basis-56">
-        <div className="text-sm font-semibold [overflow-wrap:anywhere]">{title}</div>
-        {line && (
+        {oneLine ? (
+          <div className="flex min-w-0 items-baseline gap-2 overflow-hidden">
+            <span className="shrink-0 text-sm font-semibold">{title}</span>
+            {/* A flex item's first space goes: the gap stands in for the tail's. */}
+            <span className="flex min-w-0 gap-1.5 text-[12.5px] text-muted-foreground">{line}</span>
+          </div>
+        ) : (
+          <div className="text-sm font-semibold [overflow-wrap:anywhere]">{title}</div>
+        )}
+        {line && !oneLine && (
           <div className="text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]">{line}</div>
         )}
         {reason && (
@@ -641,7 +732,7 @@ export function AgentCard({
         </span>
       )}
       {!working && (
-        <span className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
+        <span className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5">
           {page ? (
             <>
               <Button

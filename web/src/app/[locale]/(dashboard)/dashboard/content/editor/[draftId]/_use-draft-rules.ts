@@ -21,7 +21,10 @@ import {
   ruleLengthBand,
   ruleSet,
   ruleSetFits,
+  ruleSetType,
+  rulesForPageType,
   rulesMet,
+  rulesPageType,
   setToSave,
   textRuleCheck,
   type ActiveRule,
@@ -73,8 +76,17 @@ export interface DraftRulesState {
   checkHtml: (html: string, characters: number) => { rule: ActiveRule; status: RuleStatus }[];
   /** Turns a rule on or off, or gives it a value, for this draft. */
   change: (key: string, change: { on?: boolean; value?: string }) => void;
-  /** Loads a set into the draft: a type's Ansvisor default, or the workspace's My rules for it. */
+  /**
+   * Loads a set into the draft: a type's Ansvisor default, or the workspace's
+   * My rules for it. On a page with no type, the page takes that type too.
+   */
   pickSet: (type: PageType, source: 'default' | 'mine') => void;
+  /**
+   * The person picked the page's type (the header's menu, Next's Set page
+   * type), once it's saved: the set follows it (rulesForPageType). A set
+   * pinned before setFor, or for another type, goes; the rules' values stay.
+   */
+  followPageType: (type: PageType) => void;
   /** Adds rules in the person's own words, one per line. */
   addTextRules: (lines: string[]) => void;
   /** Edits a text rule, turns it on or off; an empty text removes it. */
@@ -113,6 +125,7 @@ export function useDraftRules({
   reads,
   catalog = null,
   shopping = null,
+  pickPageType,
 }: {
   draft: ContentDraft;
   /** The brand's business type as the editor holds it: My rules are kept per type (00227). */
@@ -130,6 +143,8 @@ export function useDraftRules({
    * path never shows them.
    */
   shopping?: ShoppingCheck | 'reading' | 'failed' | null;
+  /** Sets the page's type, as the header's page type menu does. */
+  pickPageType: (type: PageType) => void;
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -150,8 +165,11 @@ export function useDraftRules({
   const language = useBrandStore((s) => s.brands.find((b) => b.id === draft.brandId)?.language);
   // One save at a time, the latest waiting; what the database holds, to go back to.
   const saving = useRef(false);
-  const waiting = useRef<{ rules: DraftRules; message: string } | null>(null);
+  const waiting = useRef<{ rules: DraftRules; message: string | null } | null>(null);
   const saved = useRef<DraftRules>(draft.rules);
+  // The choices as last set here, a change waiting to save included: what a
+  // page type picked builds on once its save is back, not an older render's.
+  const latest = useRef<DraftRules>(draft.rules);
 
   // Read again once the brand's site type is saved (the editor passes it then).
   useEffect(() => {
@@ -169,10 +187,24 @@ export function useDraftRules({
     };
   }, [draft.brandId, siteType]);
 
+  const draftType = isPageType(pageType) ? pageType : null;
+  // The type the rules are checked as: a set picked before setFor keeps its type rules.
+  const checkedAs = rulesPageType(choices, draftType);
   const sources = reads.sources;
+  // The brand's banned phrases, read with the draft: the rule shows only when it has some.
+  const bannedPhrases = draft.bannedPhrases;
   const ctx = useMemo<RuleContext>(() => {
     if (!sources || sources.failed) {
-      return { brandDomains: [], competitorDomains: [], fanouts: [], language, catalog, shopping };
+      return {
+        brandDomains: [],
+        competitorDomains: [],
+        fanouts: [],
+        language,
+        catalog,
+        shopping,
+        pageType: checkedAs,
+        bannedPhrases,
+      };
     }
     const fanouts = buildSourceGroups(sources.data, sources.choices, {
       title: draft.title,
@@ -188,16 +220,32 @@ export function useDraftRules({
       language,
       catalog,
       shopping,
+      pageType: checkedAs,
+      bannedPhrases,
     };
-  }, [sources, draft.title, draft.sourceUrl, language, catalog, shopping]);
+  }, [
+    sources,
+    draft.title,
+    draft.sourceUrl,
+    language,
+    catalog,
+    shopping,
+    checkedAs,
+    bannedPhrases,
+  ]);
   const brief = reads.brief;
   const keywords = useMemo(
     () => (brief.status === 'ready' ? (brief.brief?.keywords ?? []) : []),
     [brief],
   );
 
-  const draftType = isPageType(pageType) ? pageType : null;
-  const setType = choices.set ?? draftType;
+  const setType = ruleSetType(choices, draftType);
+  // The set as the person picked it, setFor or none: only picking a set, or
+  // the page's type (followPageType), changes it; never a rule's change or Reset.
+  const pinned: Pick<DraftRules, 'set' | 'setFor'> = {
+    set: choices.set,
+    ...(choices.setFor ? { setFor: choices.setFor } : {}),
+  };
   const effective = useMemo(
     () => effectiveRules(choices, setType ? mine[setType] : undefined),
     [choices, setType, mine],
@@ -210,10 +258,11 @@ export function useDraftRules({
           language,
           length: effective.importLength,
           shopping: shopping !== null && shopping !== 'reading',
+          bannedPhrases,
         }),
         effective,
       ),
-    [setType, keywords, language, effective, shopping],
+    [setType, keywords, language, effective, shopping, bannedPhrases],
   );
   // The checks follow the page a beat behind typing.
   const deferredHtml = useDeferredValue(html);
@@ -253,11 +302,17 @@ export function useDraftRules({
     saveDraftRules(draft.id, next)
       .then(() => {
         saved.current = next;
-        if (!waiting.current) toast(message);
+        if (!waiting.current) {
+          if (message) toast(message);
+        } else {
+          // A change saved without a word of its own (followPageType) says this one's.
+          waiting.current.message ??= message;
+        }
       })
       .catch((err) => {
         console.error('Failed to save the rules:', err);
         if (!waiting.current) {
+          latest.current = saved.current;
           setChoices(saved.current);
           toast.error(t('saveFailed'));
         }
@@ -266,6 +321,13 @@ export function useDraftRules({
         saving.current = false;
         flush();
       });
+  };
+  /** Shows a change and saves it after the ones before it (null: no toast once saved). */
+  const queue = (next: DraftRules, message: string | null) => {
+    latest.current = next;
+    setChoices(next);
+    waiting.current = { rules: next, message: message ?? waiting.current?.message ?? null };
+    flush();
   };
   const save = (next: DraftRules, message: string) => {
     if (locked()) return;
@@ -276,13 +338,11 @@ export function useDraftRules({
       toast.error(t('tooLong'));
       return;
     }
-    setChoices(next);
-    waiting.current = { rules: next, message };
-    flush();
+    queue(next, message);
   };
-  // A change keeps the set the draft's rules come from.
+  // A change keeps the set the draft's rules come from, and the set picked.
   const edited = (change: Partial<DraftRules>, message = t('updated')) =>
-    save({ ...effective, source: effective.source ?? 'default', ...change }, message);
+    save({ ...effective, ...pinned, source: effective.source ?? 'default', ...change }, message);
   const typeName = (type: PageType | null) => (type ? tTypes(type) : '');
 
   return {
@@ -304,10 +364,15 @@ export function useDraftRules({
         overrides: { ...effective.overrides, [key]: { ...effective.overrides[key], ...change } },
       }),
     pickSet: (type, source) => {
+      if (locked()) return;
+      // No page type yet: the set picked is the page's type, and the rules follow it.
+      if (!draftType) pickPageType(type);
       const set = source === 'mine' ? mine[type] : undefined;
       save(
         {
-          set: type === draftType ? null : type,
+          // Another type's set holds while the page keeps the type it was picked on
+          // (a set picked before setFor takes it now); the page type's own follows it.
+          ...(draftType && type !== draftType ? { set: type, setFor: draftType } : { set: null }),
           source,
           // The page's own length stays the Length rule's starting point.
           overrides: overridesForImport(set?.overrides ?? {}, effective.importLength),
@@ -316,6 +381,12 @@ export function useDraftRules({
         },
         t('setPicked'),
       );
+    },
+    // The editor calls it once the type is saved (its own lock checked), on the
+    // choices as they are then: the pin goes, nothing else, with no toast of its own.
+    followPageType: (type) => {
+      const next = rulesForPageType(latest.current, type);
+      if (next) queue(next, null);
     },
     addTextRules: (lines) => {
       const room = MAX_TEXT_RULES - effective.textRules.length;
@@ -368,7 +439,7 @@ export function useDraftRules({
     reset: () =>
       save(
         {
-          set: choices.set,
+          ...pinned,
           source: 'default',
           overrides: {},
           textRules: [],

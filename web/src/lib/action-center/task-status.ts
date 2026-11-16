@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TaskStatus } from '@/lib/action-center/registry';
+import { captureForSessionUser } from '@/lib/posthog-server';
 
 /**
  * The Action Center's own writes of a task's status, shared by its drawer
@@ -73,5 +74,13 @@ export async function writeTaskStatus(
     ...data,
   });
   await touchAction(supabase, task.brandId, task.actionId);
+  // The core-loop funnel's last step (docs/analytics/core-loop-funnel.md).
+  if (status === 'completed') {
+    await captureForSessionUser(supabase, 'task_completed', {
+      brand_id: task.brandId,
+      action_id: task.actionId,
+      source: typeof data.source === 'string' ? data.source : 'drawer',
+    });
+  }
   return true;
 }

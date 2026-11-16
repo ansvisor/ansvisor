@@ -4,14 +4,16 @@ import { z } from 'zod';
 import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import type { BrandFactsRead, FactStatus } from '@/lib/content/brand-facts';
+import { MAX_SCOPE_CHARS } from '@/lib/content/fact-scope';
 
 /**
  * A brand's facts (Quality CE-047), as the API reads them from the brand's
  * own site and keeps them. Returned, not thrown: 'off' before Quality's
- * phase 2 is live on the API, 'failed' otherwise.
+ * phase 2 is live on the API, 'duplicate' for a fact kept in that scope
+ * already, 'failed' otherwise.
  */
 
-type FactsError = { error: 'invalid' | 'failed' | 'off' };
+type FactsError = { error: 'invalid' | 'failed' | 'off' | 'duplicate' };
 
 const id = z.guid();
 
@@ -33,6 +35,7 @@ async function call(path: string, init: RequestInit = {}): Promise<Response | Fa
       const body = (await res.json().catch(() => ({}))) as { code?: string };
       if (body.code === 'off') return { error: 'off' };
     }
+    if (res.status === 409) return { error: 'duplicate' };
     if (!res.ok) return { error: 'failed' };
     return res;
   } catch (err) {
@@ -79,4 +82,25 @@ export async function setBrandFactStatus(
   if ('error' in res) return res;
   const body = (await res.json().catch(() => null)) as { id: string; status: FactStatus } | null;
   return body ? { id: body.id, status: body.status } : { error: 'failed' };
+}
+
+/**
+ * Sets where a fact holds (00539): a destination, operator or route; empty
+ * for the whole brand. Through the API, which checks the plan, the role and
+ * the brand, as an approval.
+ */
+export async function setBrandFactScope(
+  factId: string,
+  scope: string,
+): Promise<{ id: string; scope: string | null } | FactsError> {
+  if (!id.safeParse(factId).success || typeof scope !== 'string') return { error: 'invalid' };
+  const text = scope.replace(/\s+/g, ' ').trim();
+  if (text.length > MAX_SCOPE_CHARS) return { error: 'invalid' };
+  const res = await call(`/${factId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ scope: text || null }),
+  });
+  if ('error' in res) return res;
+  const body = (await res.json().catch(() => null)) as { id: string; scope: string | null } | null;
+  return body ? { id: body.id, scope: body.scope ?? null } : { error: 'failed' };
 }

@@ -3,9 +3,11 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, AtSign, Building2, CalendarDays, FileText, ListFilter } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useAiUsage } from '@/components/providers/ai-usage-provider';
+import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import {
@@ -45,7 +47,7 @@ import {
   type PlusItem,
 } from './composer-menus';
 import { ModeMenu } from './mode-menu';
-import { RangeLine } from '../range/range-line';
+import { RangeChip } from '../range/range-line';
 import { ModelMenu, useModelLabel } from './model-menu';
 import { VoiceButton } from './voice-button';
 import { YourKeysDialog } from './your-keys-dialog';
@@ -138,19 +140,38 @@ export function atQuery(text: string, cursor: number): { query: string; start: n
 
 const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
 
+/** A chip's small icon, by its key: @ data, the brand, the page's dates or a filter, else the page. */
+function ChipIcon({ chipKey }: { chipKey: string }) {
+  const Icon = chipKey.startsWith('ref:')
+    ? AtSign
+    : chipKey === 'brand'
+      ? Building2
+      : chipKey === 'dates'
+        ? CalendarDays
+        : chipKey.startsWith('filter:')
+          ? ListFilter
+          : FileText;
+  return <Icon className="size-3 shrink-0 text-muted-foreground" aria-hidden />;
+}
+
 /**
- * Chat's composer (CHAT-02, mockup compHTML): the box, its toolbar (＋ / @ on
- * the left, the microphone and Send on the right), and the line under it,
- * which starts with the run mode's menu. Enter sends, Shift+Enter adds a
+ * Chat's composer (CHAT-02; the owner's layout of 2026-11-14, in every Chat
+ * box): context chips above the box, then the text, then one row in the box:
+ * ＋ / @ on the left, the microphone and Send on the right. One line under the
+ * box holds the run mode and the model on the right, by their full names
+ * (the owner's change after testing it live, 2026-11-14), and the run's
+ * status on the left; the line keeps its height, so nothing moves as a run
+ * starts or ends. Alerts follow under it. The placeholder carries the
+ * "/ skills · @ data" hint. Enter sends, Shift+Enter adds a
  * line. While a run answers, Send is Stop (Esc too), and the box steers:
  * Enter stops the run, its done steps kept, and sends the text as the next
  * message (decided 2026-10-30). Analysts and Agency partners read only: no
- * run mode and no skills, a "Read-only" link to what they can do in its place
- * under the box. A send
- * the page refuses (it answers false) puts the text back.
+ * run mode and no skills, a "Read-only" link to what they can do in the mode's place.
+ * A send the page refuses (it answers false) puts the text back.
  *
- * Context chips sit above the text (W1-11): × takes one off, and the page
- * keeps it off for the rest of the chat; a send carries the chips left. The
+ * Context chips sit above the box (W1-11), each with a small icon, then
+ * Chat's date range: × takes one off, and the page keeps it off for the rest
+ * of the chat; a send carries the chips left. The
  * empty box can show one ghost suggestion, dim, with a Tab hint: Tab (or a
  * click on it) makes it the text, to edit or send; typing replaces it; it
  * never sends itself, and Enter and Send wait while only it shows.
@@ -198,7 +219,6 @@ export function ChatComposer({
   sharedReadOnly = false,
   placeholder,
   disabled = false,
-  usage,
   modelLabel,
   onOpenModel,
   modelChoice,
@@ -255,9 +275,12 @@ export function ChatComposer({
   placeholder?: string;
   /** No sending at all (the usage cap's state, W1-23). */
   disabled?: boolean;
-  /** The usage meter in the line under the box (W1-23). */
+  /**
+   * Not shown since 2026-11-14: the AI usage is in the model menu, and its
+   * warning a dot on the model button. Kept so callers still compile.
+   */
   usage?: ReactNode;
-  /** The model button's words; "Auto · Haiku reads, Sonnet writes" by default. */
+  /** The model button's words; "Auto" by default. */
   modelLabel?: ReactNode;
   onOpenModel?: () => void;
   /**
@@ -288,6 +311,8 @@ export function ChatComposer({
   const t = useTranslations('chatComposer');
   const tRoles = useTranslations('chatAccess.roleNames');
   const tAsk = useTranslations('chatAccess.askAdmin');
+  const tMeter = useTranslations('aiUsage.meter');
+  const { usage: aiUsage } = useAiUsage();
   const router = useRouter();
   const { role, canAdmin, canManage } = useUserRole();
   const readOnly = !canManage;
@@ -315,6 +340,8 @@ export function ChatComposer({
   const [shortcut, setShortcut] = useState<{ id: ShortcutId; trigger: string } | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
+  // The box the / @ ＋ menus open on, as popovers in the page's body.
+  const shell = useRef<HTMLDivElement>(null);
   // The page's last hand-off taken in: each one once.
   const [taken, setTaken] = useState<number | null>(null);
   if (draft && draft.nonce !== taken) {
@@ -373,11 +400,14 @@ export function ChatComposer({
     el?.setSelectionRange(el.value.length, el.value.length);
   }, [taken]);
 
-  // A menu closes on a click outside the composer.
+  // A menu closes on a click outside the composer and its menu (in the page's body).
   useEffect(() => {
     if (!menu) return;
     const onDown = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) setMenu(null);
+      const target = e.target as Node;
+      if (root.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-slot="composer-menu"]')) return;
+      setMenu(null);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
@@ -709,17 +739,56 @@ export function ChatComposer({
     }
   }
 
-  const under = running
-    ? hasText && onSteer
-      ? t('under.steer')
-      : t('under.answering')
-    : answering
-      ? t('under.answerQuestion')
-      : readOnly
-        ? t('under.readOnly')
-        : ghostShown
+  // The status on the line under the box: the files, what Enter and Esc do now, a ghost's Tab.
+  const status = uploading
+    ? t('files.sendWaits')
+    : running
+      ? hasText && onSteer
+        ? t('under.steer')
+        : t('under.answering')
+      : answering
+        ? t('under.answerQuestion')
+        : ghostShown && !readOnly
           ? t('under.ghostHint')
-          : t('under.hint');
+          : null;
+
+  // The empty box's line carries the / and @ hint, except while a run answers, a question waits or the box is off.
+  const baseHolder = running ? t('steerPlaceholder') : (placeholder ?? t('placeholder'));
+  const holder =
+    running || answering || disabled
+      ? baseHolder
+      : t(readOnly ? 'placeholderHintReadOnly' : 'placeholderHint', {
+          placeholder: baseHolder.replace(/…$/, ''),
+        });
+
+  // From 80% of the month's AI usage (the meter left the line under the box), a dot on the model button.
+  const usageTone = aiUsage && !aiUsage.unlimited ? aiUsageTone(aiUsage) : 'normal';
+  const usageWarn = usageTone === 'warning' || usageTone === 'exhausted' ? usageTone : null;
+  const usageLabel =
+    !aiUsage || !usageWarn
+      ? undefined
+      : aiUsage.trial
+        ? tMeter(`trialLabel.${usageWarn}`)
+        : tMeter(usageWarn === 'warning' ? 'labelWarning' : 'labelExhausted', {
+            percent: percentLabel(aiUsage.percentUsed ?? 0),
+          });
+  const usageDot = usageWarn && (
+    <i
+      aria-hidden
+      data-slot="model-usage-dot"
+      data-tone={usageWarn}
+      className={cn(
+        'size-1.5 shrink-0 rounded-full',
+        usageWarn === 'warning' ? 'bg-amber-500' : 'bg-red-500',
+      )}
+    />
+  );
+  // The model's short name: Auto, the chosen model, or the images' model.
+  const modelWords = onModelChoice
+    ? imageModel
+      ? t('modelImage', { model: imageModel })
+      : (chosenLabel ?? t('modelAuto'))
+    : (modelLabel ?? t('modelAuto'));
 
   const shownChips: (ComposerChip & { remove?: () => void })[] = [
     ...chips.map((chip) => ({
@@ -761,7 +830,44 @@ export function ChatComposer({
         </div>
       )}
       {keyForm && <YourKeysDialog open={keysOpen} onClose={() => setKeysOpen(false)} />}
+      {/* Context chips above the box, then Chat's date range: empty, the row hides. */}
       <div
+        data-slot="composer-context"
+        className="mb-1.5 flex flex-wrap items-center gap-1.5 empty:hidden"
+      >
+        {shownChips.map((chip) => {
+          const shown = chipLabel(chip.label);
+          return (
+            <span
+              key={chip.key}
+              title={shown === chip.label ? undefined : chip.label}
+              className="inline-flex h-[22px] items-center gap-1 rounded-[7px] border bg-muted/60 pr-1 pl-[7px] text-[11.5px] text-foreground/80"
+            >
+              <ChipIcon chipKey={chip.key} />
+              {shown}
+              {chip.remove && (
+                <button
+                  type="button"
+                  data-action="composer.removeChip"
+                  onClick={() => {
+                    chip.remove?.();
+                    // The × goes with its chip: keep the focus in the composer.
+                    box.current?.focus();
+                  }}
+                  aria-label={t('removeChip', { label: chip.label })}
+                  className="-ml-0.5 inline-flex size-4 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          );
+        })}
+        <RangeChip running={running} />
+      </div>
+      <div
+        ref={shell}
+        data-slot="composer-box"
         onDragOver={(e) => {
           if (uploader && e.dataTransfer.types.includes('Files')) e.preventDefault();
         }}
@@ -791,6 +897,7 @@ export function ChatComposer({
         )}
         {menu?.kind === 'slash' && (
           <SlashMenu
+            anchor={shell}
             shortcuts={shortcuts}
             skills={skillRows}
             skillsOn={skills.length > 0}
@@ -801,44 +908,14 @@ export function ChatComposer({
         )}
         {menu?.kind === 'at' && (
           <ReferenceMenu
+            anchor={shell}
             references={atRefs}
             loading={atLoading}
             active={active}
             onPick={pickReference}
           />
         )}
-        {menu?.kind === 'plus' && <PlusMenu items={plusItems} active={active} />}
-        {shownChips.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 px-2.5 pt-2">
-            {shownChips.map((chip) => {
-              const shown = chipLabel(chip.label);
-              return (
-                <span
-                  key={chip.key}
-                  title={shown === chip.label ? undefined : chip.label}
-                  className="inline-flex h-[22px] items-center gap-0.5 rounded-[7px] border bg-muted/60 pr-1 pl-[7px] text-[11.5px] text-foreground/80"
-                >
-                  {shown}
-                  {chip.remove && (
-                    <button
-                      type="button"
-                      data-action="composer.removeChip"
-                      onClick={() => {
-                        chip.remove?.();
-                        // The × goes with its chip: keep the focus in the composer.
-                        box.current?.focus();
-                      }}
-                      aria-label={t('removeChip', { label: chip.label })}
-                      className="inline-flex size-4 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      ×
-                    </button>
-                  )}
-                </span>
-              );
-            })}
-          </div>
-        )}
+        {menu?.kind === 'plus' && <PlusMenu anchor={shell} items={plusItems} active={active} />}
         {files.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-2.5 pt-2">
             {files.map((entry) => {
@@ -886,13 +963,7 @@ export function ChatComposer({
             maxLength={maxLength}
             aria-label={t('message')}
             aria-describedby={ghostShown ? ghostId : undefined}
-            placeholder={
-              ghostShown
-                ? undefined
-                : running
-                  ? t('steerPlaceholder')
-                  : (placeholder ?? t('placeholder'))
-            }
+            placeholder={ghostShown ? undefined : holder}
             onChange={(e) => textChanged(e.target.value, e.target.selectionStart ?? 0)}
             onPaste={(e) => {
               if (!uploader || e.clipboardData.files.length === 0) return;
@@ -957,7 +1028,10 @@ export function ChatComposer({
           )}
         </div>
         {/* One row under the text: ＋ / @ on the left, the microphone and Send on the right. */}
-        <div className="flex items-center gap-2 pt-1.5 pr-2 pb-2 pl-2.5">
+        <div
+          data-slot="composer-controls"
+          className="flex items-center gap-1 pt-1.5 pr-2 pb-2 pl-2"
+        >
           <button
             type="button"
             data-action="composer.openPlus"
@@ -995,7 +1069,10 @@ export function ChatComposer({
           >
             @
           </button>
-          <div data-slot="composer-send-group" className="ml-auto flex shrink-0 items-center gap-2">
+          <div
+            data-slot="composer-send-group"
+            className="ml-auto flex shrink-0 items-center gap-1.5"
+          >
             <VoiceButton onText={addSpoken} onDeniedChange={setMicDenied} disabled={disabled} />
             {(running || answering) && (
               // While a question waits, Stop sits beside Send, outlined: Send answers.
@@ -1034,6 +1111,72 @@ export function ChatComposer({
             )}
           </div>
         </div>
+      </div>
+      {/*
+        One line under the box that keeps its height, all of it on the left (the owner's change
+        after testing it live, 2026-11-15): the run mode, or Read-only, and the model, by their
+        full names, then the run's status (two short lines at most, the whole text in its
+        tooltip). The menus open from the left, so they stay inside a narrow panel.
+      */}
+      <div data-slot="composer-under" className="mt-1 flex h-7 items-center gap-2">
+        <div data-slot="composer-settings" className="relative flex min-w-0 items-center gap-0.5">
+          {readOnly ? (
+            <Link
+              data-action="access.see"
+              href={ACCESS_HREF}
+              title={t('readOnlyTitle', { role: tRoles(role) })}
+              className="flex h-7 shrink-0 items-center rounded-lg px-1.5 text-xs whitespace-nowrap text-muted-foreground no-underline hover:bg-muted hover:text-foreground"
+            >
+              {t('readOnly', { role: tRoles(role) })}
+            </Link>
+          ) : (
+            <ModeMenu
+              mode={mode}
+              onChange={onModeChange}
+              fullAutoOpen={fullAutoOpen}
+              offByAdmin={fullAutoOffByAdmin}
+            />
+          )}
+          <span data-slot="composer-model" className="flex min-w-0">
+            {onModelChoice || onOpenModel ? (
+              <button
+                type="button"
+                data-action="model.openMenu"
+                onClick={onModelChoice ? () => setModelOpen((on) => !on) : onOpenModel}
+                aria-label={usageLabel ? t('modelWarn', { usage: usageLabel }) : t('model')}
+                aria-expanded={onModelChoice ? modelOpen : undefined}
+                title={usageLabel}
+                className="flex h-7 min-w-0 items-center gap-1 rounded-lg px-1.5 text-xs whitespace-nowrap hover:bg-muted aria-expanded:bg-muted"
+              >
+                <span className="truncate">{modelWords}</span> <span aria-hidden>▾</span>
+                {usageDot}
+              </button>
+            ) : (
+              <span
+                title={usageLabel}
+                className="flex h-7 min-w-0 items-center gap-1 px-1.5 text-xs whitespace-nowrap"
+              >
+                <span className="truncate">{modelWords}</span>
+                {usageDot}
+              </span>
+            )}
+            {modelOpen && onModelChoice && (
+              <ModelMenu
+                choice={modelChoice ?? AUTO_CHOICE}
+                onChange={onModelChoice}
+                onClose={() => setModelOpen(false)}
+                onOpenKeys={keyForm && canAdmin ? () => setKeysOpen(true) : undefined}
+              />
+            )}
+          </span>
+        </div>
+        <p
+          data-slot="composer-status"
+          title={status ?? undefined}
+          className="line-clamp-2 min-w-0 flex-1 px-0.5 text-[11.5px] leading-[14px] text-muted-foreground"
+        >
+          {status}
+        </p>
       </div>
       {keyInText && (
         <p
@@ -1092,78 +1235,6 @@ export function ChatComposer({
           </button>
         </p>
       )}
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5 text-[11.5px] text-muted-foreground">
-        {readOnly ? (
-          <Link
-            data-action="access.see"
-            href={ACCESS_HREF}
-            title={t('readOnlyTitle', { role: tRoles(role) })}
-            className="rounded-lg border bg-muted/60 px-[9px] py-[3px] text-xs text-foreground/80 no-underline hover:bg-muted"
-          >
-            {t('readOnly', { role: tRoles(role) })}
-          </Link>
-        ) : (
-          <ModeMenu
-            mode={mode}
-            onChange={onModeChange}
-            fullAutoOpen={fullAutoOpen}
-            offByAdmin={fullAutoOffByAdmin}
-          />
-        )}
-        {/* The range Chat reads when a message names none (range.ts), and its change. */}
-        <RangeLine running={running} />
-        <span>{uploading ? t('files.sendWaits') : under}</span>
-        <span className="ml-auto flex items-center gap-2.5">
-          {usage}
-          {onModelChoice ? (
-            <span className="relative">
-              <button
-                type="button"
-                data-action="model.openMenu"
-                onClick={() => setModelOpen((on) => !on)}
-                aria-label={t('model')}
-                aria-expanded={modelOpen}
-                className="rounded-[7px] px-1.5 py-0.5 text-foreground hover:bg-muted aria-expanded:bg-muted"
-              >
-                {imageModel
-                  ? t('modelImage', { model: imageModel })
-                  : (chosenLabel ?? <ModelAuto />)}{' '}
-                ▾
-              </button>
-              {modelOpen && (
-                <ModelMenu
-                  choice={modelChoice ?? AUTO_CHOICE}
-                  onChange={onModelChoice}
-                  onClose={() => setModelOpen(false)}
-                  onOpenKeys={keyForm && canAdmin ? () => setKeysOpen(true) : undefined}
-                />
-              )}
-            </span>
-          ) : onOpenModel ? (
-            <button
-              type="button"
-              data-action="model.openMenu"
-              onClick={onOpenModel}
-              aria-label={t('model')}
-              className="rounded-[7px] px-1.5 py-0.5 text-foreground hover:bg-muted"
-            >
-              {modelLabel ?? <ModelAuto />} ▾
-            </button>
-          ) : (
-            <span className="px-1.5 py-0.5 text-foreground">{modelLabel ?? <ModelAuto />}</span>
-          )}
-        </span>
-      </div>
     </div>
-  );
-}
-
-/** "Auto · Haiku reads, Sonnet writes", the model button on Auto (agentic update). */
-function ModelAuto() {
-  const t = useTranslations('chatComposer');
-  return (
-    <>
-      {t('modelAuto')} <em className="text-muted-foreground not-italic">· {t('modelAutoHow')}</em>
-    </>
   );
 }

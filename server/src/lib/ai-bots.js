@@ -74,9 +74,12 @@ export function parseIp(raw) {
 /** "20.171.206.0/24" as a family, a first address and a prefix length; null when malformed. */
 export function parsePrefix(cidr) {
   if (typeof cidr !== 'string') return null;
-  const [addr, len] = cidr.split('/');
-  const ip = parseIp(addr);
-  const bits = Number(len);
+  // One "/" and a decimal length only: Number() reads "" as 0, a /0 that holds
+  // every address, and " 24" or "0x18" as 24; split() drops a second "/" (#2346).
+  const match = cidr.match(/^([^/\s]+)\/(\d{1,3})$/);
+  if (!match) return null;
+  const ip = parseIp(match[1]);
+  const bits = Number(match[2]);
   const width = ip?.family === 4 ? 32 : 128;
   if (!ip || !Number.isInteger(bits) || bits < 0 || bits > width) return null;
   const shift = BigInt(width - bits);

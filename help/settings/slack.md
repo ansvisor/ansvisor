@@ -1,17 +1,17 @@
 ---
 title: Send a brand's Daily Pulse and alerts to Slack
 route: /dashboard/settings/integrations
-keywords: [slack, slack channel, connect slack, pulse in slack, daily pulse, drop alert, daily suggestion, agent needs me, notifications]
-synonyms: [post to slack, slack integration, send updates to a channel, slack app, team chat alerts]
+keywords: [slack, slack channel, connect slack, pulse in slack, daily pulse, drop alert, daily suggestion, agent needs me, notifications, approve from slack, reject from slack]
+synonyms: [post to slack, slack integration, send updates to a channel, slack app, team chat alerts, approve in slack, slack buttons]
 plan: starter
-updated: 2026-11-10
-last_checked: 2026-11-10
+updated: 2026-11-15
+last_checked: 2026-11-15
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/self-host/env-variables.mdx]
 ---
-Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, an alert when visibility or citations drop more than usual, one daily suggestion, and a message when an agent needs someone. Each message links back to Ansvisor. Slack is on every paid plan.
+Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, an alert when visibility or citations drop more than usual, one daily suggestion, and a message when an agent needs someone, which on Growth and up can approve or reject the agent's step. Each message links back to Ansvisor. Slack is on every paid plan.
 
 ## Connect Slack
 
@@ -27,7 +27,7 @@ If another brand already posts to a Slack workspace, **Use the same workspace as
 
 ## When the Pulse is posted
 
-With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable**. Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.
+With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable** (the default). Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.
 
 Each Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day.
 
@@ -44,6 +44,16 @@ With **Daily suggestion** on, the channel gets one Action Center action a day fo
 ## Agents that need someone
 
 With **Agents that need someone** on, when an agent's run on the brand stops to ask someone or wait for their OK, the channel gets a message that mentions them, with **Open the run**. Only for people who chose **Inbox + Slack** under **Notify me when an agent needs me** in their Chat settings, and only once per run. Ansvisor finds their Slack account by their email; when it can't, the message names them. If the brand doesn't post these, they get the email instead.
+
+## Approve or reject from Slack
+
+On Growth and up, when an agent waits for an OK on a change, its message says what the change is, with **Approve**, **Reject** and **Open in Ansvisor**. **Reject** is the card's **Skip**.
+
+Only the person the agent waits for can use them, as in Ansvisor. Ansvisor matches them to the Slack account with their Ansvisor sign-in email, in the brand's Slack workspace. Their role and brand access are checked as in Ansvisor, and a workspace whose plan has ended can't approve.
+
+Anyone else who clicks, or someone Ansvisor can't match, gets a note only they see, and nothing changes. Some changes need you signed in to Ansvisor, and questions are answered there: those messages only have the link.
+
+Once decided, the message shows who decided and when, without buttons. A click on a step already decided says so. The Activity log shows **Approved in Slack**.
 
 ## When the card asks you to reconnect
 

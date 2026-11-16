@@ -12,6 +12,7 @@ import { TableKit } from '@tiptap/extension-table';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import {
   ArrowLeft,
+  ArrowUpRight,
   Bot,
   Check,
   Copy,
@@ -19,7 +20,6 @@ import {
   MessageSquare,
   PanelRight,
   Send,
-  Target,
   X,
 } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -176,6 +176,7 @@ import { MAX_PROOF_TODOS, type ProofSpot } from '@/lib/content/page-read';
 import {
   liveSkips,
   nextStep,
+  raisedLength,
   rulesForNext,
   stepState,
   thirdPassOf,
@@ -203,6 +204,8 @@ import {
   heldMessage,
   keptOutOfReach,
   lengthOutOfReach,
+  notCheckedHere,
+  phrasesFound,
   readPage,
   pageTextLength,
   ruleNumber,
@@ -219,8 +222,8 @@ import { exportAuthor, exportFileWord } from '@/lib/white-label/export-name';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { AgentCard } from './_agent-card';
-import { AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
+import { AgentCard, AgentCardSkeleton } from './_agent-card';
+import { AuthorChip, AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
 import { ReviewerMenu } from './_reviewer-menu';
 import { BeforePublish, TRUST_GATE, type ReadyAnyway, type ReadyToPaste } from './_before-publish';
 import { FlashBlock, findBlock, flashKey } from './_flash-block';
@@ -276,6 +279,7 @@ import {
 } from './_next-step';
 import {
   NO_TRIED,
+  agentFixable,
   readTried,
   runDecided,
   triedAfter,
@@ -347,11 +351,11 @@ const DOCUMENT_CLASS = cn(
 );
 
 /**
- * How long Fix open rules waits for the agent's batch when its answer didn't
- * come back: past the API's model call (content-agent.js, 60 s) and the
- * batch's save.
+ * How long Fix open rules waits for the agent's batch once its answer is
+ * lost: past the model's call (content-agent.js, 60 s), its facts lookup
+ * (content-research.js, up to 90 s) and the batch's save.
  */
-const FIX_WAIT_MS = 90_000;
+const FIX_WAIT_MS = 180_000;
 
 /** The runs the agent card shows: Fix open rules', or the brief's. */
 // Fix open rules, and Quality's hand-off (CE-051): the same card, steps and Stop.
@@ -398,6 +402,13 @@ async function agentOutcome(
   }
   return null;
 }
+
+/**
+ * The rules and Quality chips: as wide while they read as with their count
+ * (the owner's layout, 2026-11-14), so the chips after them don't move.
+ */
+const CHIP_WIDE =
+  'inline-flex h-5 min-w-24 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium';
 
 /** What a paragraph Remove empties goes with, when it was all they held (CE-045). */
 const EMPTIED_WITH = new Set([
@@ -519,8 +530,12 @@ export function DraftEditor({
   const [citedRead, setCitedRead] = useState(!draft.sourceUrl);
   // An agent's suggestions (CE-018): its latest batch, with what was decided.
   const [suggestions, setSuggestions] = useState<DraftSuggestion[]>([]);
+  // The batch was read as the editor opened (or failed to): until then, the card's place.
+  const [suggestionsRead, setSuggestionsRead] = useState(false);
   // The agent's last run failed (Fix or hand-off): the card says so over an earlier batch.
   const [lastRunFailed, setLastRunFailed] = useState(false);
+  // Its answer was lost and how its run ended isn't known yet: "Still finishing…", never failed.
+  const [stillFinishing, setStillFinishing] = useState(false);
   const suggestionsNow = useRef(suggestions);
   // The agent on the Next step basket's third step (Fix open rules, Rewrite
   // page): its run, and the steps it took with what the page read then; and
@@ -570,7 +585,7 @@ export function DraftEditor({
     if (
       kind === 'fix' &&
       only &&
-      !rulesForNext(rules.rules, heldRules).every((key) => only.includes(key))
+      !rulesForNext(rules.rules, heldRules, triedShown).every((key) => only.includes(key))
     ) {
       return null;
     }
@@ -653,6 +668,8 @@ export function DraftEditor({
     input?: boolean;
     /** Quality's part to show, from the Next step basket: its to-dos, or what raises Trust. */
     focus?: QualityFocus;
+    /** A rule whose value Rules focuses: the Next step basket's Ask for fewer. */
+    rule?: string;
   } | null>(null);
   // Embedded, the bottom bar opens what is asked for itself, and the page's
   // own open-or-closed choice stays as it was.
@@ -829,6 +846,7 @@ export function DraftEditor({
     reads,
     catalog: feedOn ? (catalog === undefined ? 'reading' : catalog) : null,
     shopping: shoppingCheck.check,
+    pickPageType: (type) => void pickPageType(type),
   });
   // What a page rewrite keeps as it is (the passages AI answers quote, tables,
   // images…), read as the characters are: a Length under that is out of
@@ -1828,7 +1846,8 @@ export function DraftEditor({
         const ranAt = read[0]?.createdAt;
         if (restoredAt && ranAt && Date.parse(ranAt) < Date.parse(restoredAt)) setBarClosed(true);
       })
-      .catch((err) => console.error('Failed to read the agent suggestions:', err));
+      .catch((err) => console.error('Failed to read the agent suggestions:', err))
+      .finally(() => setSuggestionsRead(true));
   }, [editor, draft.id]);
 
   // Suggestions the Content Agent left for a request in the Chat tab (W4-14, W4-16): read, as
@@ -2094,6 +2113,19 @@ export function DraftEditor({
     reads.brief.status !== 'loading' &&
     (!feedOn || catalog !== undefined) &&
     shoppingCheck.check !== 'reading';
+  // A rewrite taken that meets fewer rules than the page before it: the
+  // rules it left open that were met, for the card to say beside Undo.
+  const rewriteDropped = useMemo(() => {
+    const before = pageSuggestion?.status === 'accepted' ? pageSuggestion.beforeHtml : null;
+    if (!before || !rulesSettled) return 0;
+    const then = rules.checkHtml(before, htmlChars(before));
+    if (rulesMet(then).met <= rules.met) return 0;
+    const metThen = new Set(then.filter((r) => r.status.state === 'ok').map((r) => r.rule.key));
+    return rules.rules.filter(
+      ({ rule, status }) => rule.on && status.state === 'bad' && metThen.has(rule.key),
+    ).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the rewrite's page before, once read
+  }, [pageSuggestion?.status, pageSuggestion?.beforeHtml, rules.rules, rulesSettled]);
   // Open rules no run can close on this page (editor test 2026-10-25): every
   // long sentence inside a passage AI answers quote, a Length out of a
   // rewrite's reach. They leave the agent's work and Next step; the Rules tab
@@ -2145,6 +2177,7 @@ export function DraftEditor({
               now: effect.now,
               met: effect.met,
               breaks: effect.broken.length ? ruleNames(effect.broken) : null,
+              broken: effect.broken.length,
             },
           }
         : {}),
@@ -2405,15 +2438,15 @@ export function DraftEditor({
       toast(t('suggestions.decideFirst', { count: openSuggestions }));
       return;
     }
-    const {
-      forAgent: open,
-      notForAgent,
-      held: heldOpen,
-    } = openRulesForAgent(rules.rules, only, heldRules);
+    // What it can still fix (agentFixable): not what it tried, read now, so Ask again's clear counts.
+    const tried = triedOpen(triedNow.current.tried, rules.rules);
+    const { fixable: open, yours } = agentFixable(rules.rules, { held: heldRules, tried, only });
     if (open.length === 0) {
       // Only rules it can't fix are open: say what to do instead.
+      const { notForAgent, held: heldOpen } = openRulesForAgent(rules.rules, only, heldRules);
       if (notForAgent.length) toast(t(`suggestions.${notForAgentMessage(notForAgent)}`));
       else if (heldOpen.length) toast(tRules(heldMessage(heldOpen)));
+      else if (yours.length) toast(tRules('yours.line', { count: yours.length }));
       return;
     }
     const pageText = editor.getText({ blockSeparator: '\n' });
@@ -2427,6 +2460,11 @@ export function DraftEditor({
             ...aimAndNow(rule, status),
             rule.key === 'aiTraces'
               ? `${tRules('agent.phrases')}: ${aiTracesFound(pageText).join(', ')}`
+              : null,
+            // The brand's banned phrases on the page, within the detail's room (the
+            // server's prompt has them all): the ones to say in other words.
+            phrasesFound(status).length
+              ? `${tRules('agent.phrases')}: ${phrasesFound(status).join(', ')}`.slice(0, 300)
               : null,
             // Which fan-outs, so it writes those rather than questions of its own.
             fanouts ? `${tRules('agent.fanouts')}: ${fanouts}` : null,
@@ -2518,6 +2556,7 @@ export function DraftEditor({
       if (error === 'failed') setLastRunFailed(true);
     };
     setLastRunFailed(false);
+    setStillFinishing(false);
     setStoppingRun(null);
     stopSent.current = null;
     setFixing(true);
@@ -2527,7 +2566,6 @@ export function DraftEditor({
         pending: { keys: tried, batch: suggestionsNow.current[0]?.batchId ?? null },
       });
     }
-    const asked = Date.now();
     try {
       // The agent reads the page as saved.
       await autosave.settle();
@@ -2548,13 +2586,21 @@ export function DraftEditor({
       }
       if ('error' in result && result.error === 'unconfirmed') {
         // No answer is not a failure: how its run ended says (its batch, or its row).
-        const outcome = await agentOutcome(draft.id, before, asked + FIX_WAIT_MS);
-        if (outcome && 'stopped' in outcome) {
+        setStillFinishing(true);
+        const outcome = await agentOutcome(draft.id, before, Date.now() + FIX_WAIT_MS);
+        if (!outcome) {
+          // Still not known: it may land yet, so it's never said to have failed.
+          untried();
+          if (!quiet) toast(t('agentCard.stillFinishingToast'));
+          return;
+        }
+        setStillFinishing(false);
+        if ('stopped' in outcome) {
           untried();
           toast(t('agentCard.stopped'));
           return;
         }
-        if (outcome && 'nothing' in outcome) {
+        if ('nothing' in outcome) {
           nothing();
           if (!quiet) {
             toast(
@@ -2567,7 +2613,8 @@ export function DraftEditor({
           }
           return;
         }
-        if (!outcome || 'failed' in outcome) {
+        // Only its row says it failed.
+        if ('failed' in outcome) {
           failed('suggestions.fixErrors.failed', 'failed');
           return;
         }
@@ -2692,10 +2739,15 @@ export function DraftEditor({
   // The agent at work from this page: Fix open rules, or the brief. Its run,
   // step by step, and Stop (CE-027/035).
   const agentWorking = fixing || briefRebuilding;
+  // The agent card: while it works, or its batch until a closed one has none open.
+  const cardShown =
+    agentWorking || (suggestions.length > 0 && !(barClosed && openSuggestions === 0));
   const pagePill = pagePillOf({ working: agentWorking, openSuggestions, status });
   // Any run the card follows (Fix, a hand-off, the brief): a failed one before it is behind it.
   useEffect(() => {
-    if (agentWorking) setLastRunFailed(false);
+    if (!agentWorking) return;
+    setLastRunFailed(false);
+    setStillFinishing(false);
   }, [agentWorking]);
   // Another run started here (Fix, a hand-off, the brief): the band of the
   // one that couldn't finish goes (editor UX review 2026-11-03: it stayed over
@@ -2814,6 +2866,18 @@ export function DraftEditor({
     blocked: agentFixBlocked(fixRunning),
     held: heldRules,
     tried: triedShown,
+    askAgain: (key) => {
+      const store = triedNow.current;
+      saveTried({ ...store, tried: store.tried.filter((tried) => tried !== key) });
+      void fixRules([key]);
+    },
+    // At the rule's spot where it has one (an AI trace's phrase), else the page.
+    showInPage: (key) => {
+      const phrase = key === 'aiTraces' && editor ? aiTracesFound(editor.getText())[0] : undefined;
+      if (phrase && editor && findBlock(editor.state.doc, phrase))
+        showInPage(phrase, { focus: true });
+      else editor?.commands.focus();
+    },
   };
   const handOffCard: HandOff | null =
     sourcesOn && quality
@@ -2857,13 +2921,18 @@ export function DraftEditor({
   // The card's Run Agent says why it won't run, as the Rules card does: also
   // when the only rules left open are ones the agent doesn't fix (one H1).
   const agentRules = openRulesForAgent(rules.rules, undefined, heldRules);
+  // As the Rules tab reads them (agentFixable): none left it can fix, what's open is the person's.
+  const fixableNow = agentFixable(rules.rules, { held: heldRules, tried: triedShown });
+  const none = fixableNow.fixable.length === 0;
   const cardRunBlocked =
     agentFix.blocked ??
-    (agentRules.forAgent.length === 0 && agentRules.notForAgent.length > 0
+    (none && agentRules.notForAgent.length > 0
       ? t(`suggestions.${notForAgentMessage(agentRules.notForAgent)}`)
-      : agentRules.forAgent.length === 0 && agentRules.held.length > 0
+      : none && agentRules.held.length > 0
         ? tRules(heldMessage(agentRules.held))
-        : null);
+        : none && fixableNow.yours.length > 0
+          ? tRules('yours.line', { count: fixableNow.yours.length })
+          : null);
 
   // A drag with files over the page shows where they go; one dropped beside
   // the page (not on its text) goes in at the cursor.
@@ -2956,7 +3025,7 @@ export function DraftEditor({
     authorsRead && (pageAuthor || !authorConfirmed.real) ? teamName(language, brandName) : '';
   // Site Audit's estimate (customer priorities item 9): the page as Export's
   // HTML file has it, read again once typing pauses, whatever Quality's phase.
-  const estimateDoc = useMemo(() => {
+  const estimatePage = useMemo(() => {
     const html = publishableHtml(pageHtml);
     const fields = pageFields({
       title,
@@ -2966,7 +3035,7 @@ export function DraftEditor({
       reviewer: pageReviewer,
       teamByline,
     });
-    return estimateDocument({
+    return {
       title,
       html: withReviewerJsonLd(
         title,
@@ -2975,8 +3044,13 @@ export function DraftEditor({
       ),
       metaDescription: fields.metaDescription,
       author: fields.author,
-    });
+    };
   }, [pageHtml, title, draft.sourceUrl, pageAuthor, pageReviewer, teamByline, contentByline]);
+  // With the Article JSON-LD Export and Copy HTML add: the page that ships.
+  const estimateDoc = estimateDocument({
+    ...estimatePage,
+    html: withArticleSchema(estimatePage.html, addedSchema),
+  });
   const auditEstimate = useAuditEstimate(draft.id, draft.brandId, estimateDoc);
   // Export (CE-057), once Quality is live: where it goes, its checks and fields.
   // The page as it was when Export opened: what it shows stays still while open.
@@ -3119,7 +3193,8 @@ export function DraftEditor({
     setRewriting(true);
     try {
       await autosave.settle();
-      const inEffect = rules.rules.filter(({ rule }) => rule.on);
+      // Not the rules this page can't meet: the agent can't meet them either.
+      const inEffect = rules.rules.filter(({ rule, status }) => rule.on && !notCheckedHere(status));
       const locks = citedLocks(editor.state);
       const request = await agentWriteRequest(
         {
@@ -3398,9 +3473,13 @@ export function DraftEditor({
     waiting: agentWorking ? 0 : openSuggestions,
     empty: !pageHasWords,
     rewrite: rewriteAdvice(rules.rules, reach, heldRules),
-    openRules: rulesForNext(rules.rules, heldRules),
-    fixable: openRulesForAgent(rules.rules, undefined, heldRules).forAgent.length,
+    // As the Rules tab reads them (agentFixable): the two never disagree.
+    openRules: rulesForNext(rules.rules, heldRules, triedShown),
+    fixable: fixableNow.fixable.length,
+    yours: fixableNow.yours.length,
     openTotal: rules.rules.filter(({ rule, status }) => rule.on && status.state === 'bad').length,
+    noType: !isPageType(pageType),
+    conflict: rules.lengthConflict,
     quality: quality
       ? {
           trust: trustNow,
@@ -3684,6 +3763,23 @@ export function DraftEditor({
   const runNext = (action: NextAction) => {
     setNextOpen(false);
     switch (action) {
+      case 'setPageType':
+        setTypeMenuOpen(true);
+        return;
+      case 'raiseLength':
+        if (rules.lengthConflict) {
+          rules.change('length', { value: String(raisedLength(rules.lengthConflict)) });
+        }
+        return;
+      case 'askFewer': {
+        // The count the rules ask the most of, focused in Rules.
+        const rule = ['fanoutH2', 'faq', 'buyingFaq', 'fanoutFaq'].find((key) =>
+          rules.rules.some(({ rule }) => rule.key === key && rule.on),
+        );
+        showPanel();
+        setTabRequest((prev) => ({ tab: 'rules', n: (prev?.n ?? 0) + 1, rule }));
+        return;
+      }
       case 'addSources':
         openPanelTab('sources');
         return;
@@ -3889,7 +3985,13 @@ export function DraftEditor({
       console.error('Failed to set the page type:', err);
       setPicked(before);
       toast.error(t('pageType.failed'));
+      return;
     }
+    // A type picked is a choice about the rules (the owner, 2026-11-14): its set
+    // comes with it, and a set pinned for another type or before setFor goes;
+    // every other edit keeps the pin (#2389). One place for the header's menu
+    // and every Set page type that opens it (Next, Quality, Rules).
+    rules.followPageType(type);
   };
 
   // The site type, for the whole brand as in Brand settings: admins and
@@ -3942,7 +4044,7 @@ export function DraftEditor({
       {/* Two lines: the title and what you do with the page on top, which
           stays light (the title shortens, the save state and Mark ready never
           move), and the page's tags under the title, all of them at any width. */}
-      <header className="border-b px-4 pt-2.5 pb-2">
+      <header className="border-b px-4 pt-3 pb-3.5">
         {/* Embedded, in a pane beside Chat (CHAT-25 §4): the buttons move under the
             title when the row can't hold both, so nothing overflows at 600px. */}
         <div className={cn('flex items-center gap-2.5', embedded && 'flex-wrap gap-y-1.5')}>
@@ -3993,6 +4095,14 @@ export function DraftEditor({
             <span className="shrink-0">
               <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
             </span>
+            {/* The month's AI usage, with this page's share (AI usage spec §3.1): a status
+                beside Saved, not an action (the owner's layout, 2026-11-14). */}
+            {aiUsage !== null && !aiUsage?.unlimited && (
+              <span aria-hidden className="-mx-1 text-xs text-muted-foreground">
+                ·
+              </span>
+            )}
+            <AiUsageMeter compact draftId={draft.id} />
           </div>
           <div
             className={cn(
@@ -4002,8 +4112,6 @@ export function DraftEditor({
           >
             {qualityOn && (
               <NextStepButton
-                // The pane is narrow on a wide window: "Next" and the bars, the step on hover.
-                compact={embedded}
                 next={next}
                 state={nextState}
                 todoLine={todoLine}
@@ -4038,8 +4146,6 @@ export function DraftEditor({
                 readAgain={`${agentWorking}:${agentRun?.id ?? ''}`}
               />
             )}
-            {/* The month's AI usage, with this page's share (AI usage spec §3.1). */}
-            <AiUsageMeter compact draftId={draft.id} />
             <HeaderTip label={t('history.button')} hint={historyWaits ?? t('history.hint')}>
               <HistoryMenu
                 draftId={draft.id}
@@ -4147,24 +4253,10 @@ export function DraftEditor({
                 </Button>
               </HeaderTip>
             )}
-            {/* Embedded, the bottom bar holds the panel's parts: nothing to show or hide. */}
-            {!embedded && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-pressed={panelOpen}
-                aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
-                title={panelOpen ? t('panel.hide') : t('panel.show')}
-                onClick={togglePanel}
-                className={cn(panelOpen && 'bg-muted')}
-              >
-                <PanelRight className="h-4 w-4" />
-              </Button>
-            )}
           </div>
         </div>
         {/* Lined up under the title (the back button's 28px and the 10px gap). */}
-        <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-[38px]">
+        <div className="mt-3 flex flex-wrap items-center gap-2 pl-[38px]">
           <PageTypeMenu
             brandId={draft.brandId}
             siteType={siteType}
@@ -4181,6 +4273,15 @@ export function DraftEditor({
             open={typeMenuOpen}
             onOpenChange={setTypeMenuOpen}
           />
+          {/* Before the authors are read, the author as the draft was read (no jump). */}
+          {!authorsRead &&
+            qualityOn &&
+            !authorsTried &&
+            (draft.authorName || (!draft.authorId && brandName)) && (
+              <AuthorChip
+                name={draft.authorName || t('author.organization', { brand: brandName })}
+              />
+            )}
           {authorsRead && (
             <AuthorMenu
               brandId={draft.brandId}
@@ -4215,7 +4316,7 @@ export function DraftEditor({
                 : t('rulesChipReading')
             }
             className={cn(
-              'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium',
+              CHIP_WIDE,
               !rulesSettled
                 ? 'text-muted-foreground'
                 : rules.total > 0 && rules.met === rules.total
@@ -4226,22 +4327,29 @@ export function DraftEditor({
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
             {/* One count once the set and the fan-outs are read (editor test
                 2026-10-25: 8 of 12 on first paint, then 11 of 15). */}
-            {rulesSettled
-              ? t('rulesChip', { met: rules.met, total: rules.total })
-              : t('rulesChipReading')}
+            {rulesSettled ? (
+              t('rulesChip', { met: rules.met, total: rules.total })
+            ) : (
+              <>
+                {t('rulesChipName')}
+                <LoadingDots />
+              </>
+            )}
           </button>
           {qualityOn && shownQuality === null && (
             <button
               type="button"
               onClick={() => openPanelTab('quality')}
               title={t('qualityChipHint')}
-              className="inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 px-2 text-xs font-medium text-muted-foreground"
+              aria-label={t('qualityChipReading')}
+              className={cn(CHIP_WIDE, 'bg-muted/40 text-muted-foreground')}
             >
               <span
                 aria-hidden
                 className="h-1.5 w-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none"
               />
-              {t('qualityChipReading')}
+              {t('qualityChipName')}
+              <LoadingDots />
             </button>
           )}
           {shownScore !== null && (
@@ -4249,10 +4357,7 @@ export function DraftEditor({
               type="button"
               onClick={() => openPanelTab('quality')}
               title={t('qualityChipHint')}
-              className={cn(
-                'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium tabular-nums',
-                BAND_CLASSES[qualityBand(shownScore)],
-              )}
+              className={cn(CHIP_WIDE, 'tabular-nums', BAND_CLASSES[qualityBand(shownScore)])}
             >
               <span
                 aria-hidden
@@ -4278,6 +4383,39 @@ export function DraftEditor({
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
               {t('cited.chip', { count: citedCount })}
             </span>
+          )}
+          {/* The action this draft is the work of (CE-022), at the row's end: Mark ready
+              completes its task there, as its hint and label say. */}
+          {draft.action && (
+            <Link
+              href={`/dashboard/action-center/actions?action=${draft.action.id}`}
+              title={t(canMarkReady ? 'actionChipHint' : 'actionChipHintDone', {
+                no: draft.action.number,
+              })}
+              aria-label={
+                canMarkReady ? t('actionChipLabel', { no: draft.action.number }) : undefined
+              }
+              className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              {t('actionChip', { no: draft.action.number })}
+              <ArrowUpRight aria-hidden className="h-3 w-3" />
+            </Link>
+          )}
+          {/* The side panel's toggle at the row's right end, above the panel's edge, never
+              cut off (the owner, 2026-11-14); as tall as the chips, so the row keeps its
+              height. Embedded, the bottom bar holds the panel's parts: nothing to hide. */}
+          {!embedded && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-pressed={panelOpen}
+              aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
+              title={panelOpen ? t('panel.hide') : t('panel.show')}
+              onClick={togglePanel}
+              className={cn('-my-1 ml-auto shrink-0', panelOpen && 'bg-muted')}
+            >
+              <PanelRight className="h-4 w-4" />
+            </Button>
           )}
         </div>
       </header>
@@ -4324,26 +4462,6 @@ export function DraftEditor({
               </span>
             </div>
           )}
-          {/* The action this draft is the work of (CE-022): under the header,
-              which has no room left at 1024px, and Mark ready completes its task. */}
-          {draft.action && (
-            <p className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-[13px] text-muted-foreground">
-              <Target aria-hidden className="h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0">
-                {t.rich(canMarkReady ? 'actionBar' : 'actionBarDone', {
-                  no: draft.action.number,
-                  link: (chunks) => (
-                    <Link
-                      href={`/dashboard/action-center/actions?action=${draft.action!.id}`}
-                      className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
-                    >
-                      {chunks}
-                    </Link>
-                  ),
-                })}
-              </span>
-            </p>
-          )}
           {/* The chat it was made in (W4-10): "From chat: {title}", with the new Chat on. */}
           {chatOn && draft.conversation && (
             <p
@@ -4367,10 +4485,15 @@ export function DraftEditor({
               </span>
             </p>
           )}
-          {(agentWorking || (suggestions.length > 0 && !(barClosed && openSuggestions === 0))) && (
+          {/* Its place from the first paint when the draft's read says it shows, until its batch
+              is read (the owner's layout, 2026-11-14: no jump); nothing when it doesn't. */}
+          {!cardShown && !suggestionsRead && draft.agentCardShown && <AgentCardSkeleton />}
+          {cardShown && (
             <AgentCard
               suggestions={suggestions}
               rules={cardRules}
+              // Its header chip links the draft's action: the card doesn't again.
+              actionInHeader={draft.action?.id ?? null}
               sourceCount={batchSources(suggestions).length}
               onSeeSources={() => openPanelTab('sources')}
               // Not while the HTML view holds the page: it would write over it.
@@ -4379,6 +4502,7 @@ export function DraftEditor({
               onServer={(fixing && fixOnServer) || (briefRebuilding && briefOnServer)}
               run={agentRun}
               lastRunFailed={lastRunFailed}
+              stillFinishing={stillFinishing}
               onStop={() => void stopAgent()}
               stopping={stoppingRun !== null && stoppingRun === agentRun?.id}
               onAcceptAll={() =>
@@ -4423,6 +4547,7 @@ export function DraftEditor({
               // The kept blocks are named only when they put the Length out of reach.
               length={length && { ...length, outOfReach: keptOutOfReach(rules.rules, reach) }}
               pageChars={pageChars}
+              rewriteDropped={rewriteDropped}
               onAllSteps={() => {
                 setNextFocus(true);
                 setNextOpen(true);
@@ -4568,7 +4693,6 @@ export function DraftEditor({
             onConfirmIntro={() => void confirmIntro()}
             onChangeType={() => setTypeMenuOpen(true)}
             handOff={handOffCard}
-            auditEstimate={<AuditEstimateCard state={auditEstimate} />}
             yourInput={inputsRead.status === 'off' ? null : inputsRead}
             onAddInput={addInput}
             onConfirmAuthor={confirmAuthor}
@@ -4580,7 +4704,7 @@ export function DraftEditor({
             onShoppingPathChange={shoppingCheck.reload}
           />
         ) : (
-          <EditorPanelRail onOpen={openPanelTab} chat={chatTab} />
+          <EditorPanelRail onOpen={openPanelTab} onShow={togglePanel} chat={chatTab} />
         )}
       </div>
 
@@ -4704,6 +4828,7 @@ export function DraftEditor({
           pageType={pageType}
           image={firstImage(pageHtml)}
           articleSchema={addedSchema}
+          auditEstimate={<AuditEstimateCard state={auditEstimate} />}
           ownArticleSchema={hasArticleSchema(publishOpen.html)}
           onSchemaLeftOut={leaveOutSchema}
           linksPending={linksPending}
@@ -4714,6 +4839,10 @@ export function DraftEditor({
           product={productSchema}
           category={categorySchema}
           shopping={shoppingRead}
+          // The brand's banned phrases on the page, while their rule is on: to fix first.
+          bannedPhrases={phrasesFound(
+            rules.rules.find(({ rule }) => rule.key === 'brandBanned' && rule.on)?.status,
+          )}
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);

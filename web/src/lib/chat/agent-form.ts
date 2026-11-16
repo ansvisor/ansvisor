@@ -212,7 +212,9 @@ export function modelKeyProvider(
   setup: Pick<AgentFormSetup, 'ownKeyProvider' | 'ownKeyProviders' | 'modelChoiceOpen'>,
 ): string | null {
   const picked = offeredModel(runChoiceOf({ model }, setup.modelChoiceOpen).model);
-  return picked ? pickedModelOwnKey(picked.provider, setup.ownKeyProviders) : setup.ownKeyProvider;
+  return picked
+    ? pickedModelOwnKey(picked.provider, setup.ownKeyProviders, picked.directOnly)
+    : setup.ownKeyProvider;
 }
 
 export const MAX_INSTRUCTIONS = 2000;

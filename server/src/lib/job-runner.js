@@ -23,6 +23,7 @@ import { generatePulseForBrand } from './pulse/engine.js';
 import { runSlackDrops } from './slack/drops.js';
 import { runFirstSignalPass, runSignalPass } from './signals/pass.js';
 import { sendFirstResultsEmail } from './first-results-email.js';
+import { captureWorkspaceEvent } from './core-loop-events.js';
 import { emitToBrand } from './socket-rooms.js';
 import logger from './logger.js';
 
@@ -180,6 +181,15 @@ async function attemptTrackingJob(jobId, io, priority = false) {
     // exactly once, after the stamp, so it reads the finished window.
     const afterStamp = () => {
       if (!fullRun) return;
+      // The core-loop funnel's third step; every stamped full run sends it,
+      // PostHog takes the first. Never throws.
+      if (result.resultCount > 0) {
+        void captureWorkspaceEvent(brandId, 'tracking_results_ready', {
+          result_count: result.resultCount,
+          first_run: Boolean(result.firstRun),
+          source: immediate ? 'manual' : 'cron',
+        });
+      }
       // The brand's first run: its results are in, and the people who
       // waited for them may have left the app (once per person).
       if (result.firstRun) {

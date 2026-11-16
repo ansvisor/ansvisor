@@ -56,10 +56,15 @@ export function webAppOrigin() {
  * Answers { status, body }, or null when nothing was sent (Chat off, no
  * secret) or the web didn't answer in time; never throws.
  *
- * @param {'agents/tick' | 'agents/signals' | 'schedules/tick'} path
+ * @param {'agents/tick' | 'agents/signals' | 'schedules/tick' | 'slack/card' | 'slack/decide'} path
  * @param {object} body
+ * @param {{ timeoutMs?: number }} [options]
  */
-async function postToChatInternal(path, body) {
+export async function postToChatInternal(
+  path,
+  body,
+  { timeoutMs = CHAT_AGENTS_CALL_TIMEOUT_MS } = {},
+) {
   if (!chatAgenticDeployed()) return null;
   const secret = process.env.CHAT_INTERNAL_SECRET;
   if (!secret) return null;
@@ -68,7 +73,7 @@ async function postToChatInternal(path, body) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(CHAT_AGENTS_CALL_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return { status: res.status, body: await res.json().catch(() => null) };
   } catch (err) {

@@ -24,6 +24,23 @@ const ORGANIZATION = 'organization';
 /** The address of Settings › Authors. */
 export const MANAGE_AUTHORS_PATH = '/dashboard/settings/authors';
 
+/** The chip: the menu's trigger, and its place before the authors are read. */
+const CHIP = cn(badgeVariants({ variant: 'outline' }), 'max-w-56 gap-1 font-normal');
+
+/**
+ * "By {name} ▾" as the draft was read, on the header's first paint: the
+ * menu takes its place, as wide, once the authors are read (no jump).
+ */
+export function AuthorChip({ name }: { name: string }) {
+  const t = useTranslations('contentEditor.editor.author');
+  return (
+    <span data-slot="author-chip" title={t('hint')} className={CHIP}>
+      <span className="truncate">{t('by', { name })}</span>
+      <ChevronDown aria-hidden className="h-3 w-3 shrink-0 opacity-60" />
+    </span>
+  );
+}
+
 /**
  * Who the page is by, in the editor's header (Quality spec §9, CE-038):
  * "By {name} ▾", one of the workspace's real authors or the organization
@@ -61,10 +78,7 @@ export function AuthorMenu({
       <DropdownMenuTrigger
         aria-label={t('change', { name })}
         title={inContent ? t('hintInContent') : t('hint')}
-        className={cn(
-          badgeVariants({ variant: 'outline' }),
-          'max-w-56 cursor-pointer gap-1 font-normal hover:bg-muted',
-        )}
+        className={cn(CHIP, 'cursor-pointer hover:bg-muted')}
       >
         <span className="truncate">{t('by', { name })}</span>
         <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />

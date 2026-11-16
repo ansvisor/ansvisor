@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { AgentCenter } from '@/components/chat/agents/agent-center';
-import { AGENT_PRESETS, presetOnInstall } from '@/lib/chat/agents/catalog';
+import { presetsOnInstall } from '@/lib/chat/agents/catalog';
 import { readMyWorkAreas, readPresetLocks } from '@/lib/chat/agents/ready-setup';
 import { chatPageOpen } from '../chat/_chat-page-access';
 
@@ -19,8 +19,9 @@ export default async function AgentCenterPage() {
     <AgentCenter
       locks={locks}
       workAreas={workAreas}
-      // As this install offers them: a skill behind a flag that is off is left out.
-      presets={AGENT_PRESETS.map(presetOnInstall)}
+      // As this install offers them: a skill behind a flag that is off is left out, and an
+      // agent whose primary skill is (the Paid Opportunity agent without Ads) isn't listed.
+      presets={presetsOnInstall()}
     />
   );
 }

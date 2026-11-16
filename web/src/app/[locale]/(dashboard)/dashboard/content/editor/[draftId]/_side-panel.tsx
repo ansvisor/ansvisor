@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, PanelRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -96,13 +96,16 @@ const BAR_ITEM =
 /**
  * The panel's tabs while it is closed, down the editor's right edge, so the
  * panel is never out of sight (it starts closed on a narrow window). A tab
- * opens the panel on it.
+ * opens the panel on it; Show side panel, on top, as the panel last was.
  */
 export function EditorPanelRail({
   onOpen,
+  onShow,
   chat = false,
 }: {
   onOpen: (tab: PanelTab) => void;
+  /** Opens the panel, as the header's toggle above it does. */
+  onShow?: () => void;
   /** Chat is a tab (W4-16). */
   chat?: boolean;
 }) {
@@ -112,6 +115,18 @@ export function EditorPanelRail({
       aria-label={t('label')}
       className="flex w-9 shrink-0 flex-col items-center gap-1 border-l bg-card py-2"
     >
+      {onShow && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={false}
+          aria-label={t('show')}
+          title={t('show')}
+          onClick={onShow}
+        >
+          <PanelRight className="h-4 w-4" />
+        </Button>
+      )}
       {tabsOf(chat).map((value) => (
         <button
           key={value}
@@ -128,7 +143,7 @@ export function EditorPanelRail({
 }
 
 /**
- * The editor's right panel (Content Editor spec v2 §6), 400px beside the page.
+ * The editor's right panel (Content Editor spec v2 §6), 440px beside the page: room for Chat's box and the line under it.
  * Its tabs are Instructions · Sources · Live page (v1.1, CE-028): Instructions
  * holds what the agent follows, the Brief (CE-007) and the Rules (CE-009),
  * under a Brief | Rules control, with the rules still open on both. The panel
@@ -184,7 +199,6 @@ export function EditorSidePanel({
   onConfirmIntro,
   onChangeType,
   handOff = null,
-  auditEstimate = null,
   onShoppingPathChange,
   chat,
   layout = 'side',
@@ -223,6 +237,8 @@ export function EditorSidePanel({
     input?: boolean;
     /** Quality's part to show (the Next step basket's Show to-dos, Show what raises Trust). */
     focus?: QualityFocus;
+    /** A rule whose value Rules focuses (the Next step basket's Ask for fewer). */
+    rule?: string;
   } | null;
   /** Run Agent's Fix open rules, for Rules (CE-018, v1.1 CE-029). */
   agentFix?: AgentFix;
@@ -276,12 +292,10 @@ export function EditorSidePanel({
   onConfirmCase?: (key: string) => void;
   /** Quality's Confirm on a category intro's facts (CE-054). */
   onConfirmIntro?: () => void;
-  /** Quality's Change: the header's page type menu (CE-052). */
+  /** Quality's Change and the Rules tab's Set page type: the header's page type menu (CE-052). */
   onChangeType?: () => void;
   /** Hand it off to Content Agent, Quality's (CE-051). */
   handOff?: HandOff | null;
-  /** Quality's Site Audit estimate (customer priorities item 9). */
-  auditEstimate?: ReactNode;
   /** Brief › Shopping path changed: the Shopping rules read it again (shopping path, part 6). */
   onShoppingPathChange?: () => void;
   /**
@@ -488,7 +502,7 @@ export function EditorSidePanel({
       className={
         bar
           ? 'flex max-h-[60%] shrink-0 flex-col border-t bg-card'
-          : 'flex w-[400px] shrink-0 flex-col border-l bg-card'
+          : 'flex w-[440px] shrink-0 flex-col border-l bg-card'
       }
     >
       {bar ? (
@@ -508,6 +522,8 @@ export function EditorSidePanel({
         <Tabs
           value={tab}
           onValueChange={(value) => open(value as PanelTab)}
+          // The tabs alone: Hide side panel is in the header, above the panel (the
+          // owner, 2026-11-14), so nothing here is cut off at the panel's edge.
           className="border-b px-3 pt-1.5"
         >
           <TabsList variant="line">
@@ -544,9 +560,20 @@ export function EditorSidePanel({
           </TabsList>
         </Tabs>
       )}
-      {/* Chat keeps its own scroll, its box at the bottom (W4-16); mounted once opened. */}
+      {/* Chat keeps its own scroll, its box at the bottom (W4-16); mounted once opened.
+          The thread's box is sticky to this scroll, as in Chat's side panel: without
+          it the conversation grew the page and scrolled the editor away. Relative:
+          the thread's screen-reader text is placed (and clipped) here, not on the
+          page, where it made the window taller than the screen. No padding under
+          it: the box keeps its own. The box's strip takes the panel's colour (card):
+          Chat fills it with the page's background, which showed as a black block on
+          this grey panel (the owner's report, 15 Nov). */}
       {chat && opened.has('chat') && (
-        <div hidden={tab !== 'chat'} className="min-h-0 flex-1 px-3 py-3">
+        <div
+          hidden={tab !== 'chat'}
+          data-slot="editor-chat-scroll"
+          className="relative min-h-0 flex-1 overflow-y-auto px-2 pt-3 [&_[data-slot=thread-composer]]:bg-card"
+        >
           <EditorChat
             draftId={draft.id}
             conversation={chat.conversation}
@@ -555,12 +582,13 @@ export function EditorSidePanel({
           />
         </div>
       )}
-      {/* The panel's own scroll: a part shown in it scrolls here, never the page (scrollInPanel). */}
+      {/* The panel's own scroll: a part shown in it scrolls here, never the page (scrollInPanel).
+          Relative, as Chat's: what is placed absolutely in it stays in it. */}
       <div
         id={barPanelId}
         data-panel-scroll
         hidden={tab === 'chat' || (bar && !barOpen)}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+        className="relative min-h-0 flex-1 overflow-y-auto px-4 py-4"
       >
         <div hidden={tab !== 'instructions'} className="space-y-4">
           <DataNote />
@@ -672,7 +700,6 @@ export function EditorSidePanel({
                 onConfirmIntro={onConfirmIntro}
                 onChangeType={onChangeType}
                 handOff={handOff}
-                auditEstimate={auditEstimate}
               />
             </div>
           )}
@@ -692,6 +719,8 @@ export function EditorSidePanel({
                 siteType={siteType}
                 draftPageType={isPageType(pageType) ? pageType : null}
                 brandRules={brandRules}
+                onChangeType={onChangeType}
+                focusRequest={tabRequest?.rule ? { key: tabRequest.rule, n: tabRequest.n } : null}
               />
             </div>
           )}

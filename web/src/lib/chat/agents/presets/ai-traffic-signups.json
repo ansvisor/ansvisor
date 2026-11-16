@@ -6,7 +6,9 @@
   "roles": [
     "growth"
   ],
-  "skills": [],
+  "skills": [
+    "traffic"
+  ],
   "triggers": [
     {
       "kind": "schedule",
@@ -15,9 +17,12 @@
     }
   ],
   "mode": "auto",
-  "connections": [],
-  "status": "soon",
-  "needs": [
-    "traffic_skill"
-  ]
+  "connections": [
+    {
+      "key": "google_analytics",
+      "required": false
+    }
+  ],
+  "status": "ready",
+  "needs": []
 }

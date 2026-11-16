@@ -6,7 +6,13 @@ import { modeDenial } from '../agent-rules';
 import { readAgentContext, type AgentContext } from '../agents';
 import { planGateLock } from '../plan-facts';
 import { chatActor } from '../run-api';
-import { AGENT_PRESETS, FULL_AUTO_PLAN, presetGate, type PresetLock } from './catalog';
+import {
+  AGENT_PRESETS,
+  FULL_AUTO_PLAN,
+  presetGate,
+  presetOffered,
+  type PresetLock,
+} from './catalog';
 
 /**
  * What Agent Center's Ready to use cards say about the workspace's plan
@@ -22,7 +28,7 @@ export function presetLocksFor(
 ): Record<string, PresetLock> {
   const locks: Record<string, PresetLock> = {};
   for (const preset of AGENT_PRESETS) {
-    if (preset.status !== 'ready') continue;
+    if (preset.status !== 'ready' || !presetOffered(preset)) continue;
     const needs = planGateLock(ctx.plan, presetGate(preset));
     const denial = modeDenial(preset.mode, ctx.plan, ctx.settings, ctx.viewer.role);
     if (needs || denial?.denial.code === 'plan_locked') {

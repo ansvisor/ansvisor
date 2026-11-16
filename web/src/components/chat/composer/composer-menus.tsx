@@ -1,17 +1,24 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import type { ChatReference, ChatReferenceType } from '@/lib/chat/references';
 import { SHORTCUTS, shortcutCommand, type Shortcut } from '@/lib/chat/shortcuts';
-import { cn } from '@/lib/utils';
 
 /**
  * The composer's menus (CHAT-02 items 11–17, agentic update; mockup #slash,
- * #atmenu, #plusmenu): each opens above the box, or below it when there's
- * no room above (menuPlacement). Which row is active, and what a pick does,
- * is the composer's; these draw them.
+ * #atmenu, #plusmenu): each is a popover on the box, above it, or below it
+ * when there's no room above (menuPlacement). Which row is active, and what a
+ * pick does, is the composer's; these draw them.
  */
 
 /**
@@ -64,81 +71,159 @@ const REFERENCE_MARK: Record<ChatReferenceType, string> = {
 
 /** The tallest a menu gets (mockup: 300px). */
 export const MENU_MAX = 300;
-/** The gap between the box and its menu (mb-2, mt-2). */
+/** The gap between the box and its menu. */
 const MENU_GAP = 8;
+/** The narrowest a menu gets, unless the window is narrower. */
+const MENU_MIN_WIDTH = 240;
+/** The room a menu keeps from the window's sides. */
+const WINDOW_EDGE = 8;
 /** The overflow values that clip what sticks out of a box. */
 const CLIPS = /^(auto|scroll|hidden|clip)$/;
 
+/** Where a menu sits: in the window, as `position: fixed` places it. */
+export interface MenuPlace {
+  /** It opens below the box (Chat Home's box sits high on the page). */
+  down: boolean;
+  maxHeight: number;
+  left: number;
+  width: number;
+  /** Below the box: its top. Above it: its bottom, from the window's bottom, so it stays on the box as it shrinks. */
+  top?: number;
+  bottom?: number;
+}
+
 /**
- * Where a menu opens and how tall it may be: above the box when its rows
- * fit there, else below when there's more room below (Chat Home's box sits
- * high on the page). The room ends at every box that clips the menu (the
- * page's scrolling area, under the header) and at the window. The menu is
- * absolutely placed against its parent, the composer's box.
+ * Where a menu opens, how tall and how wide: above the box when its rows fit
+ * there, else below when there's more room below. The room ends at every box
+ * that clips the composer (the page's scrolling area, under the header) and
+ * at the window. It starts at the box's left edge, as wide as `width` but no
+ * wider than the box (a narrow panel's) or the window, and never past the
+ * window's right edge. The menu is drawn in the page's body (a portal), so it
+ * never widens or scrolls what the box sits in.
  */
-export function menuPlacement(panel: HTMLElement): { down: boolean; maxHeight: number } {
-  const anchor = panel.parentElement;
-  if (!anchor) return { down: false, maxHeight: MENU_MAX };
-  const box = anchor.getBoundingClientRect();
+export function menuPlacement(box: HTMLElement, panel: HTMLElement, width: number): MenuPlace {
+  const rect = box.getBoundingClientRect();
+  const windowWidth = document.documentElement.clientWidth || window.innerWidth;
+  const windowHeight = document.documentElement.clientHeight || window.innerHeight;
   let top = 0;
-  let bottom = window.innerHeight;
-  for (let node = anchor.parentElement; node; node = node.parentElement) {
+  let bottom = windowHeight;
+  for (let node = box.parentElement; node; node = node.parentElement) {
     if (!CLIPS.test(getComputedStyle(node).overflowY)) continue;
     const clip = node.getBoundingClientRect();
     top = Math.max(top, clip.top);
     bottom = Math.min(bottom, clip.bottom);
   }
-  const above = box.top - top;
-  const below = bottom - box.bottom;
+  const above = rect.top - top;
+  const below = bottom - rect.bottom;
   const need = Math.min(MENU_MAX, panel.scrollHeight) + MENU_GAP;
   const down = above < need && below > above;
   const room = (down ? below : above) - MENU_GAP;
-  return { down, maxHeight: Math.max(0, Math.min(MENU_MAX, room)) };
+  const maxHeight = Math.max(0, Math.min(MENU_MAX, room));
+  const most = Math.max(0, Math.min(width, windowWidth - 2 * WINDOW_EDGE));
+  const fit = Math.max(Math.min(most, rect.width || most), Math.min(MENU_MIN_WIDTH, most));
+  const left = Math.max(WINDOW_EDGE, Math.min(rect.left, windowWidth - WINDOW_EDGE - fit));
+  return down
+    ? { down, maxHeight, left, width: fit, top: rect.bottom + MENU_GAP }
+    : { down, maxHeight, left, width: fit, bottom: windowHeight - rect.top + MENU_GAP };
 }
 
+const samePlace = (a: MenuPlace | null, b: MenuPlace) =>
+  !!a &&
+  a.down === b.down &&
+  a.maxHeight === b.maxHeight &&
+  a.left === b.left &&
+  a.width === b.width &&
+  a.top === b.top &&
+  a.bottom === b.bottom;
+
+/** The menus' anchor: the composer's box, which they open above or below. */
+export type MenuAnchor = RefObject<HTMLElement | null>;
+
+/**
+ * A menu as a popover on the box: in the page's body, `position: fixed`
+ * against the box, so opening it moves nothing (owner's report 2026-11-14:
+ * drawn inside the box, a menu wider than a narrow panel's box made the
+ * panel scroll sideways, and the page jumped). It follows the box as the
+ * page scrolls, the window changes size or the box grows. The arrows keep
+ * the active row in view by scrolling the menu only.
+ */
 function Panel({
   label,
-  className,
+  anchor,
+  width,
   active,
   children,
 }: {
   label: string;
-  className?: string;
+  anchor: MenuAnchor;
+  /** The width it asks for; the box and the window can make it narrower. */
+  width: number;
   /** The active row's index: kept in view as the arrows move it. */
   active?: number;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [place, setPlace] = useState({ down: false, maxHeight: MENU_MAX });
-  // Its side is picked as it opens, before it paints, and again when the window changes size.
+  const [place, setPlace] = useState<MenuPlace | null>(null);
+  // Its side is picked as it opens, before it paints; it follows the box from then on.
   useLayoutEffect(() => {
     const panel = ref.current;
-    if (!panel) return;
-    const fit = () => setPlace(menuPlacement(panel));
+    const box = anchor.current;
+    if (!panel || !box) return;
+    const fit = () => {
+      const next = menuPlacement(box, panel, width);
+      setPlace((was) => (samePlace(was, next) ? was : next));
+    };
     fit();
+    // The menu's own scroll moves nothing else.
+    const onScroll = (e: Event) => {
+      if (!(e.target instanceof Node && panel.contains(e.target))) fit();
+    };
     window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
-  }, []);
+    window.addEventListener('scroll', onScroll, true);
+    const grows = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fit);
+    grows?.observe(box);
+    return () => {
+      window.removeEventListener('resize', fit);
+      window.removeEventListener('scroll', onScroll, true);
+      grows?.disconnect();
+    };
+  }, [anchor, width]);
   useEffect(() => {
-    ref.current
-      ?.querySelector<HTMLElement>('[aria-selected="true"]')
-      ?.scrollIntoView?.({ block: 'nearest' });
+    const panel = ref.current;
+    const row = panel?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!panel || !row) return;
+    // Never scrollIntoView: it scrolls every box around the menu too, the page with them.
+    const top = row.offsetTop;
+    const bottom = top + row.offsetHeight;
+    if (top < panel.scrollTop) panel.scrollTop = top;
+    else if (bottom > panel.scrollTop + panel.clientHeight) {
+      panel.scrollTop = bottom - panel.clientHeight;
+    }
   }, [active]);
-  return (
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <div
       ref={ref}
       role="listbox"
       aria-label={label}
-      data-side={place.down ? 'below' : 'above'}
-      style={{ maxHeight: place.maxHeight }}
-      className={cn(
-        'absolute left-0 z-30 min-w-[240px] overflow-auto rounded-[14px] border bg-popover p-1.5 text-popover-foreground shadow-[0_12px_32px_rgba(10,10,10,.12)]',
-        place.down ? 'top-full mt-2' : 'bottom-full mb-2',
-        className,
-      )}
+      data-slot="composer-menu"
+      data-side={place ? (place.down ? 'below' : 'above') : undefined}
+      style={
+        place
+          ? {
+              left: place.left,
+              width: place.width,
+              maxHeight: place.maxHeight,
+              ...(place.down ? { top: place.top } : { bottom: place.bottom }),
+            }
+          : // Measured before it paints, out of sight.
+            { left: 0, top: 0, width, visibility: 'hidden' }
+      }
+      className="fixed z-50 overflow-auto rounded-[14px] border bg-popover p-1.5 text-popover-foreground shadow-[0_12px_32px_rgba(10,10,10,.12)]"
     >
       {children}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -151,6 +236,7 @@ const row =
  * waits for the Skills page (W3).
  */
 export function SlashMenu({
+  anchor,
   shortcuts,
   skills = [],
   skillsOn = false,
@@ -158,6 +244,8 @@ export function SlashMenu({
   onPick,
   onPickSkill,
 }: {
+  /** The composer's box, the menu's anchor. */
+  anchor: MenuAnchor;
   shortcuts: Shortcut[];
   /** The enabled skills the query matches. */
   skills?: ChatSkillItem[];
@@ -170,7 +258,7 @@ export function SlashMenu({
 }) {
   const t = useTranslations('chatComposer.slash');
   return (
-    <Panel label={t('label')} active={active} className="w-[min(520px,calc(100vw-2rem))]">
+    <Panel label={t('label')} anchor={anchor} width={520} active={active}>
       <div className="flex px-2 py-1.5 text-xs font-semibold">
         {t('title')}
         <span className="ml-auto font-normal text-muted-foreground">{t('keys')}</span>
@@ -228,11 +316,13 @@ export function SlashMenu({
 }
 
 export function ReferenceMenu({
+  anchor,
   references,
   loading,
   active,
   onPick,
 }: {
+  anchor: MenuAnchor;
   references: ChatReference[];
   loading: boolean;
   active: number;
@@ -240,7 +330,7 @@ export function ReferenceMenu({
 }) {
   const t = useTranslations('chatComposer.reference');
   return (
-    <Panel label={t('title')} active={active} className="w-[260px]">
+    <Panel label={t('title')} anchor={anchor} width={260} active={active}>
       <div className="px-2 pt-2 pb-1 text-[11px] tracking-[.4px] text-muted-foreground uppercase">
         {t('title')}
       </div>
@@ -291,10 +381,18 @@ const PLUS_ACTIONS: Record<PlusItem['key'], string> = {
   connect: 'plusMenu.connectTool',
 };
 
-export function PlusMenu({ items, active }: { items: PlusItem[]; active: number }) {
+export function PlusMenu({
+  anchor,
+  items,
+  active,
+}: {
+  anchor: MenuAnchor;
+  items: PlusItem[];
+  active: number;
+}) {
   const t = useTranslations('chatComposer.plus');
   return (
-    <Panel label={t('label')} active={active} className="w-[240px]">
+    <Panel label={t('label')} anchor={anchor} width={240} active={active}>
       {items.map((item, i) => (
         <button
           key={item.key}

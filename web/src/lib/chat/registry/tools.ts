@@ -1,6 +1,8 @@
 import type { TeamRole } from '@/components/providers/role-provider';
+import { adsEnabled } from '@/lib/ads/flag';
 import type { ChatTool, PlanGate, ToolFlags } from './define-tool';
 import { ACTION_CENTER_TOOLS } from './action-center-tools';
+import { ADS_READS, ADS_WRITES } from './ads-tools';
 import { AGENT_CALL_TOOLS } from './agent-call-tools';
 import { AUDIT_TOOLS } from './audit-tools';
 import { COMPETITOR_TOOLS } from './competitor-tools';
@@ -37,6 +39,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...SUBTASK_TOOLS,
   ...WHY_TOOLS,
   ...IMAGE_READS,
+  ...ADS_READS,
   ...WRITE_TOOLS,
   ...PROMPT_TOOLS,
   ...TOPIC_TOOLS,
@@ -51,7 +54,17 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...SKILL_TOOLS,
   ...MEMORY_TOOLS,
   ...AGENT_CALL_TOOLS,
+  ...ADS_WRITES,
 ];
+
+/**
+ * The rows the install's pages list (Settings › Chat, What Chat can do,
+ * Roles & access, the activity log's areas): every row, but Ads' only
+ * while Ads is on (ADS_ENABLED), as their offerIn offers them to a run.
+ */
+export function listedTools(tools: readonly ChatTool[] = CHAT_TOOLS): readonly ChatTool[] {
+  return adsEnabled() ? tools : tools.filter((tool) => tool.area !== 'ads');
+}
 
 /** The row of a tool, by its internal name; undefined for a name with no row. */
 export function chatTool(name: string): ChatTool | undefined {
@@ -92,7 +105,7 @@ export type ToolCatalogEntry = Pick<
  * back for chatToolByKey. Server code only (a server component or action
  * passes the result on): the rows import the functions they call.
  */
-export function registryCatalog(tools: readonly ChatTool[] = CHAT_TOOLS): ToolCatalogEntry[] {
+export function registryCatalog(tools: readonly ChatTool[] = listedTools()): ToolCatalogEntry[] {
   return tools.map((tool) => ({
     key: tool.labelKey,
     area: tool.area,

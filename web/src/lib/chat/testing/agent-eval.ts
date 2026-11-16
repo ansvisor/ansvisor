@@ -113,14 +113,22 @@ const AGENT_PROMISES: Readonly<
   'fanout-gap-filler': { must: ['draft'] },
   'prompt-portfolio': { must: ['list', 'prompt_change'] },
   'onboarding-help': { must: ['list'] },
+  // Ads Phase 0 PR 18: the decisions and what changed; its ad drafts wait on a card.
+  'paid-opportunity': { must: ['list'] },
   'product-answer-pages': { must: ['draft'] },
+  // Its prompts to add wait on a card each; the upcoming events and their evidence come first.
+  'seasonal-prompt-planner': { must: ['list'], review: ['prompt_change'] },
   'feature-question-coverage': { must: ['draft'] },
   'alternatives-comparison-pages': { must: ['draft'] },
   'integration-questions': { must: ['draft'] },
   'social-proof-pages': { must: ['draft'] },
+  // The week's plan and a brief per page; a draft it starts waits on a card.
+  'content-plan-builder': { must: ['list'], review: ['draft'] },
   'narrative-sentiment-watch': { must: ['list', 'wrong_claim'] },
   'source-outreach-list': { must: ['list'] },
   'ceo-brief': { must: ['report'] },
+  // Sign-ups are "Not measured" here: the workspace has no Google Analytics.
+  'ai-traffic-signups': { must: ['report'] },
   'unmet-needs-miner': { must: ['list'] },
   'market-source-finder': { must: ['list'] },
 };
@@ -238,6 +246,19 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
   prompts: {
     message: 'Which prompts should we add, and which should we pause?',
     must: ['list', 'prompt_change'],
+  },
+  'content-plan': {
+    message: "Plan this week's content from our opportunities and fan-out gaps.",
+    must: ['list'],
+  },
+  seasonal: {
+    message:
+      'Which prompts should we track before the holidays, and which pages should we prepare?',
+    must: ['list'],
+  },
+  traffic: {
+    message: 'How much traffic did AI send us this week, and did those visitors sign up?',
+    must: ['report'],
   },
 };
 

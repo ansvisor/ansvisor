@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Cable,
@@ -13,15 +13,29 @@ import {
 } from 'lucide-react';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { UpgradeCard } from '@/components/billing/upgrade-card';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { PLANS, hasFeature } from '@/config/plans';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
-import { ADS_PERIODS, ADS_TABS, DEFAULT_ADS_PERIOD, adsTabOf, type AdsTab } from '@/lib/ads/tabs';
+import {
+  ADS_PERIODS,
+  ADS_TABS,
+  DEFAULT_ADS_PERIOD,
+  adsTabOf,
+  type AdsPeriod,
+  type AdsTab,
+} from '@/lib/ads/tabs';
+import { rangeChipLabel } from '@/lib/chat/page-context';
 import { isDemoSelected } from '@/lib/demo/demo-brand';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { AdsCampaigns } from './_campaigns';
+import { AdsConnections } from './_connections';
+import { AdsOpportunities } from './_opportunities';
+import { AdsOverview } from './_overview';
 
 const TAB_ICONS: Record<AdsTab, LucideIcon> = {
   ov: LayoutDashboard,
@@ -63,29 +77,54 @@ function useAdsTab(): [AdsTab, (tab: AdsTab) => void] {
 /**
  * Whether the workspace reads Ads (ADS-01 §8, owner A2): Growth and above.
  * Starter and the free trial (an Enterprise deal's trial keeps its plan) see
- * each tab locked, with what Growth adds (DECISIONS J); the demo brand shows
- * it as Growth has it. Self-hosted has no plans.
+ * the Overview, Opportunities' first rows from the server, and each other
+ * tab locked, with what Growth adds (DECISIONS J). The demo brand shows it as
+ * Growth has it, its decisions the rule's. Self-hosted has no plans.
+ *
+ * `thresholds`: whether the workspace's own plan changes the thresholds, as
+ * the server allows (routes/ads.js, PATCH /settings): Growth and above, not
+ * the trial. They are the workspace's, so the demo brand's Growth doesn't
+ * count.
  */
-function useAdsAccess(): { readable: boolean; trial: boolean } {
+function useAdsAccess(): { readable: boolean; trial: boolean; demo: boolean; thresholds: boolean } {
   const { canUse, isCloud } = useFeatureGate();
   const { subscriptionStatus, ownPlanId } = usePlanContext();
   const demo = useBrandStore(isDemoSelected);
   const trial = isCloud && subscriptionStatus === 'trialing' && ownPlanId !== 'enterprise';
-  return { readable: !isCloud || (canUse('ads_read') && (!trial || demo)), trial };
+  const ownPlan = PLANS[ownPlanId] ?? PLANS.starter;
+  return {
+    readable: !isCloud || (canUse('ads_read') && (!trial || demo)),
+    trial,
+    demo,
+    thresholds: !isCloud || (hasFeature(ownPlan, 'ads_read') && !trial),
+  };
 }
 
 /**
  * Ads (ADS-01 §3, mockup): the header every app page has, then the tab row
- * with the period and Export on its right, then the open tab. Nothing is
- * read yet (Phase 0's first step): each tab says what it will show, the
- * period and Export wait for data, and Starter and the trial see the lock.
+ * with the period and Export on its right, then the open tab. The Overview
+ * and Opportunities read their data for the period, on every plan (§8:
+ * Starter and the trial too, their lock from the server). Campaigns and
+ * Connections show what comes before an ad account can be connected, Paid
+ * SoV what it will show; the period waits for their data and Export for
+ * any, and Starter and the trial see their lock.
  */
 export function AdsView() {
   const t = useTranslations('ads');
+  const tRange = useTranslations('chatPanel.range');
   const [tab, openTab] = useAdsTab();
-  const { readable, trial } = useAdsAccess();
+  const [period, setPeriod] = useState<AdsPeriod>(DEFAULT_ADS_PERIOD);
+  const { readable, trial, demo, thresholds } = useAdsAccess();
   const { requiredPlanFor } = useFeatureGate();
   const Icon = TAB_ICONS[tab];
+  const periodOff = tab !== 'ov' && tab !== 'op';
+
+  // Chat's side panel sees the page: Ads, its period and three questions.
+  useChatPageContext({
+    pageName: t('title'),
+    dateRange: { from: period, to: null, label: rangeChipLabel(period, {}, tRange) },
+    suggestions: [t('chat.pay'), t('chat.rivals'), t('chat.earn')],
+  });
 
   return (
     <div className="space-y-6">
@@ -148,22 +187,30 @@ export function AdsView() {
           {t('tabs.sovTip')}
         </span>
 
-        {/* The period and Export, as AI Referral Traffic has them: off until
-            Ads has data to show and to export. */}
-        <div className="flex items-center gap-2 pb-1.5" title={t('noDataYet')}>
+        {/* The period and Export, as AI Referral Traffic has them: the period
+            for the tab's data, Export off until Ads has data to export.
+            Opportunities has its own, by its filter (_export.tsx). */}
+        <div
+          className="flex items-center gap-2 pb-1.5"
+          title={periodOff ? t('noDataYet') : undefined}
+        >
           <DateRangeFilter
-            value={DEFAULT_ADS_PERIOD}
-            onChange={() => {}}
+            value={period}
+            onChange={setPeriod}
             presets={ADS_PERIODS}
             label={t('period')}
             labelHidden
-            disabled
+            disabled={periodOff}
             action="ads.period"
           />
-          <Button variant="outline" className="gap-2" disabled data-action="ads.export">
-            <Download className="h-4 w-4" />
-            {t('export')}
-          </Button>
+          {tab !== 'op' && (
+            <span title={t('noDataYet')}>
+              <Button variant="outline" className="gap-2" disabled data-action="ads.export">
+                <Download className="h-4 w-4" />
+                {t('export')}
+              </Button>
+            </span>
+          )}
         </div>
       </div>
 
@@ -174,13 +221,19 @@ export function AdsView() {
         data-slot="ads-panel"
         data-tab={tab}
       >
-        {readable ? (
+        {tab === 'ov' ? (
+          <AdsOverview period={period} onOpenTab={openTab} />
+        ) : tab === 'op' ? (
+          <AdsOpportunities period={period} writable={readable && !demo} thresholds={thresholds} />
+        ) : readable && tab === 'cmp' ? (
+          <AdsCampaigns />
+        ) : readable && tab === 'con' ? (
+          <AdsConnections />
+        ) : readable ? (
           <div data-slot="ads-empty" className="rounded-xl border border-dashed py-12 text-center">
             <Icon aria-hidden className="mx-auto h-10 w-10 text-muted-foreground/40" />
             <h2 className="mt-3 text-sm font-medium">{t('empty.title')}</h2>
-            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-              {t(`empty.${tab}`)}
-            </p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{t('empty.sov')}</p>
           </div>
         ) : (
           <UpgradeCard

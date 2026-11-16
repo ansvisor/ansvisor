@@ -34,17 +34,24 @@ import {
 } from '@/lib/actions/action-center';
 import { listBrandMembers, type TeamMember } from '@/lib/actions/team';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
+import { actionCode, matchesActionCode } from '@/lib/action-center/action-ref';
 import {
   ACTION_CATEGORIES,
-  ACTION_SORTS,
   ACTION_STATUSES,
   FROM_PRODUCTS_KINDS,
   OPEN_ACTION_STATUSES,
   type ActionCategory,
   type ActionDismissReason,
-  type ActionSort,
   type ActionStatus,
 } from '@/lib/action-center/registry';
+import {
+  ACTION_SORTS,
+  ACTION_SORT_CHOICES,
+  DEFAULT_ACTION_SORT,
+  compareActions,
+  parseActionSort,
+  type ActionSort,
+} from '@/lib/action-center/sort';
 import {
   actionContextTags,
   actionTexts,
@@ -182,7 +189,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const [priority, setPriority] = useState<PriorityLevel | 'all'>('all');
   const [status, setStatus] = useState<StatusChoice>('all');
   const [assignee, setAssignee] = useState<string>('all');
-  const [sort, setSort] = useState<ActionSort>('priority');
+  // Most recently updated first, by the date the list shows (Updated).
+  const [sort, setSort] = useState<ActionSort>(DEFAULT_ACTION_SORT);
   const [search, setSearch] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const { canManage } = useUserRole();
@@ -209,7 +217,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
     );
     setStatus(readUrlChoice<StatusChoice>('status', STATUS_CHOICES, 'all'));
     setAssignee(readUrlParam('assignee') || 'all');
-    setSort(readUrlChoice<ActionSort>('sort', ACTION_SORTS, 'priority'));
+    // An old link's ?sort=newest lands on the one date sort.
+    setSort(parseActionSort(readUrlParam('sort')));
     setSearch(readUrlParam('q'));
     setFromProducts(readUrlParam('from') === 'products');
     setUrlRead(true);
@@ -235,7 +244,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
             priority: 'all',
             status: 'all',
             assignee: 'all',
-            sort: 'priority',
+            sort: DEFAULT_ACTION_SORT,
             from: 'all',
           },
         ),
@@ -407,7 +416,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
         if (assignee === 'unassigned' ? action.assignee !== null : action.assignee?.id !== assignee)
           return false;
       }
-      if (needle) {
+      // "AC-251", "ac-251" or "251" finds the action Chat names by its code.
+      if (needle && !matchesActionCode(action, needle)) {
         const texts = actionTexts(action, tTexts);
         const tags = actionContextTags(action, t).join(' ');
         if (!`${texts.title} ${texts.description} ${tags}`.toLowerCase().includes(needle))
@@ -415,18 +425,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
       }
       return true;
     });
-    return filtered.sort((a, b) => {
-      switch (sort) {
-        case 'newest':
-          return b.createdAt.localeCompare(a.createdAt);
-        case 'due_date':
-          return (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999');
-        case 'updated':
-          return b.updatedAt.localeCompare(a.updatedAt);
-        default:
-          return comparePriority(a, b);
-      }
-    });
+    return filtered.sort(compareActions(sort));
   }, [
     actions,
     topIds,
@@ -463,7 +462,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
     const csv = actionListCsv(
       visible.map((action) => ({
-        number: action.actionNo,
+        number: actionCode(action),
         priorityScore: action.priorityScore,
         priorityLevel: action.priorityLevel ? t(`priority.levels.${action.priorityLevel}`) : '',
         title: actionTexts(action, tTexts).title,
@@ -689,17 +688,19 @@ function ActionsContent({ brand }: { brand: Brand }) {
             />
           )}
         </div>
+        {/* One choice per column; a header click turns it the other way round, and
+            the trigger names that too ("Least recently updated"). */}
         <Select
           value={sort}
-          onValueChange={(v) => setSort((v ?? 'priority') as ActionSort)}
+          onValueChange={(v) => setSort((v ?? DEFAULT_ACTION_SORT) as ActionSort)}
           items={ACTION_SORTS.map((key) => ({ value: key, label: t(`sort.${key}`) }))}
         >
-          <SelectTrigger className="h-8 w-44 text-xs">
+          <SelectTrigger className="h-8 min-w-44 text-xs">
             <span className="text-muted-foreground">{t('sort.label')}:</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {ACTION_SORTS.map((key) => (
+            {ACTION_SORT_CHOICES.map((key) => (
               <SelectItem key={key} value={key}>
                 {t(`sort.${key}`)}
               </SelectItem>
@@ -781,6 +782,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
           onStartNow={(action) => void startFromRow(action)}
           canDelete={canManage}
           busyIds={busyIds}
+          sort={sort}
+          onSortChange={setSort}
         />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">

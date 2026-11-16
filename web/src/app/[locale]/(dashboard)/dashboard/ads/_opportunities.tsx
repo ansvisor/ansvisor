@@ -1,0 +1,435 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { ChevronDown, Lock } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useUserRole } from '@/hooks/use-user-role';
+import { Link } from '@/i18n/navigation';
+import {
+  readAdsOpportunities,
+  setAdsDecision,
+  type AdsChosenDecision,
+  type AdsDecision,
+  type AdsFilter as Filter,
+  type AdsOpportunities as Page,
+  type AdsOpportunity,
+} from '@/lib/ads/api';
+import type { AdsPeriod } from '@/lib/ads/tabs';
+import { formatCompactNumber, formatNumber } from '@/lib/format';
+import { useUpgradeWallShown } from '@/lib/friction-events';
+import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
+import { AdsExportMenu } from './_export';
+import { AdsOpportunityDrawer } from './_opportunity-drawer';
+import { AdsThresholds } from './_thresholds';
+
+/** The filters (§3.2), in the mockup's order; overlap rows show under All. */
+const FILTERS: Filter[] = ['all', 'earn_pay', 'pay', 'earn'];
+const CHOICES: AdsChosenDecision[] = ['earn', 'pay', 'earn_pay'];
+
+/** The mockup's pills: earn green, pay grey, earn + pay dark. */
+const PILL: Record<AdsDecision, string> = {
+  earn: 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-300',
+  pay: 'bg-muted text-foreground',
+  earn_pay: 'border-foreground bg-foreground text-background',
+  overlap:
+    'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+};
+
+function Pill({ decision }: { decision: AdsDecision }) {
+  const t = useTranslations('ads.opportunities.decisions');
+  return (
+    <span
+      data-decision={decision}
+      className={cn(
+        'inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap',
+        PILL[decision],
+      )}
+    >
+      {t(decision)}
+    </span>
+  );
+}
+
+/** The decision in force; Admins and Managers change it here, others only read it. */
+function Decision({
+  row,
+  onChange,
+}: {
+  row: AdsOpportunity;
+  onChange: ((decision: AdsChosenDecision | null) => void) | null;
+}) {
+  const t = useTranslations('ads.opportunities');
+  const label = (d: AdsDecision) => t(`decisions.${d}`);
+  return (
+    <div className="space-y-0.5">
+      {onChange ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            data-action="ads.overrideDecision"
+            className="inline-flex items-center gap-0.5 rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <Pill decision={row.decision} />
+            <ChevronDown aria-hidden className="size-3.5 text-muted-foreground" />
+            <span className="sr-only">{t('change')}</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-60">
+            <DropdownMenuRadioGroup
+              value={row.decision}
+              onValueChange={(d) => onChange(d as AdsChosenDecision)}
+            >
+              {CHOICES.map((d) => (
+                <DropdownMenuRadioItem key={d} value={d} closeOnClick data-action="ads.setDecision">
+                  {label(d)}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            {row.override && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem data-action="ads.setDecision" onClick={() => onChange(null)}>
+                  {t('useRecommended', { decision: label(row.recommended) })}
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <Pill decision={row.decision} />
+      )}
+      {row.override && (
+        <small className="block text-xs text-muted-foreground">
+          {t('recommended', { decision: label(row.recommended) })}
+        </small>
+      )}
+    </div>
+  );
+}
+
+/** Ads go only where the decision in force says to pay; earn and overlap need none. */
+const PAYS = (d: AdsDecision) => d === 'pay' || d === 'earn_pay';
+
+function Channels({ row }: { row: AdsOpportunity }) {
+  const t = useTranslations('ads.opportunities');
+  if (!PAYS(row.decision)) {
+    return (
+      <span className="text-muted-foreground">
+        <span aria-hidden>—</span>
+        <span className="sr-only">{t('noAdNeeded')}</span>
+      </span>
+    );
+  }
+  return row.adChannels.length
+    ? row.adChannels.map((c) => t(`channels.${c}`)).join(', ')
+    : t('noChannel');
+}
+
+/**
+ * Starter's and the trial's last row (mockup): one line, a data row's height,
+ * with how many more prompts the plan unlocks and Upgrade at its end. It
+ * counts as an upgrade wall, like `UpgradeCard`.
+ */
+function LockRow({ locked }: { locked: number }) {
+  const t = useTranslations('ads.opportunities');
+  const tCommon = useTranslations('common');
+  const { requiredPlanFor } = useFeatureGate();
+  useUpgradeWallShown({ reason: 'plan', feature: 'ads_read', source: 'ads' });
+  return (
+    <TableRow data-slot="ads-lock-row" className="hover:bg-transparent">
+      {/* py-3 and a small button: a two-line data row's height. */}
+      <TableCell colSpan={6} className="py-3">
+        <div className="flex items-center gap-2">
+          <Lock aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+            {t('lock', { count: locked, plan: requiredPlanFor('ads_read') })}
+          </span>
+          <Link
+            href="/dashboard/settings?tab=billing"
+            data-action="plan.upgrade"
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+          >
+            {tCommon('upgrade')}
+          </Link>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/**
+ * Ads' Opportunities (ADS-01 §3.2, §9.3, §9.7, mockup): each buying-intent
+ * prompt with its decision, who AI picks, Google searches and its ad
+ * channels, filtered by decision. The rows come from the server: Starter and
+ * the trial get theirs and a lock row for the rest. Admins and Managers
+ * change a decision where the plan reads every row (`writable`), and export
+ * the filter's rows for Google Ads Editor, as the server allows; Admins set
+ * the thresholds. Open (`ads.openOpportunity`) opens the prompt's
+ * drawer; the last one opened stays while it slides away.
+ */
+export function AdsOpportunities({
+  period,
+  writable,
+  thresholds,
+}: {
+  period: AdsPeriod;
+  writable: boolean;
+  /** The workspace's own plan changes the thresholds: not Starter, not the trial, on any brand. */
+  thresholds: boolean;
+}) {
+  const t = useTranslations('ads.opportunities');
+  const { canManage, canAdmin } = useUserRole();
+  const brandId = useBrandStore((s) => s.activeBrandId);
+  const [reads, setReads] = useState(0);
+  const key = `${brandId}/${period}/${reads}`;
+  const [read, setRead] = useState<{ key: string; page: Page | null } | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [opened, setOpened] = useState<{ id: string; open: boolean } | null>(null);
+  const openedFrom = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!brandId) return;
+    let live = true;
+    const done = (page: Page | null) => {
+      if (live) setRead({ key, page });
+    };
+    readAdsOpportunities(brandId, period).then(done, () => done(null));
+    return () => {
+      live = false;
+    };
+  }, [brandId, period, key]);
+
+  if (read?.key !== key) return <Skeleton className="h-64 w-full rounded-xl" />;
+  const page = read.page;
+  if (!page || !brandId) {
+    return (
+      <p role="alert" className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+        {t('failed')}
+      </p>
+    );
+  }
+
+  const patch = (promptId: string, next: Partial<AdsOpportunity>) =>
+    setRead((r) => {
+      if (!r?.page) return r;
+      const rows = r.page.rows.map((x) => (x.promptId === promptId ? { ...x, ...next } : x));
+      return { ...r, page: { ...r.page, rows } };
+    });
+  // Shown at once, then as saved; put back when the server refuses it.
+  const change = async (row: AdsOpportunity, decision: AdsChosenDecision | null) => {
+    const { override, recommended } = row;
+    patch(row.promptId, {
+      decision: decision ?? recommended,
+      override: decision && {
+        decision,
+        setBy: override?.setBy ?? '',
+        setAt: override?.setAt ?? '',
+      },
+    });
+    try {
+      const saved = await setAdsDecision(brandId, row.promptId, decision);
+      patch(row.promptId, {
+        decision: saved.override?.decision ?? recommended,
+        override: saved.override,
+      });
+    } catch {
+      patch(row.promptId, { decision: row.decision, override });
+      toast.error(t('saveFailed'));
+    }
+  };
+
+  const count = (f: Filter) =>
+    f === 'all' ? page.rows.length : page.rows.filter((r) => r.decision === f).length;
+  const rows = filter === 'all' ? page.rows : page.rows.filter((r) => r.decision === filter);
+  const openedRow = page.rows.find((r) => r.promptId === opened?.id);
+  const leader = (r: AdsOpportunity) =>
+    r.leader === 'us'
+      ? t('leaderUs')
+      : r.leader === 'none'
+        ? t('leaderNone')
+        : (r.leaderName ?? t('leaderRival'));
+
+  if (page.rows.length === 0 && page.locked === 0) {
+    return (
+      <div data-slot="ads-empty" className="rounded-xl border border-dashed py-12 text-center">
+        <h2 className="text-sm font-medium">{t('emptyTitle')}</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{t('empty')}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div data-slot="ads-opportunities" className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label={t('filter')}
+          className="flex h-8 w-fit overflow-hidden rounded-md border"
+        >
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              type="button"
+              aria-pressed={filter === f}
+              data-action="ads.filterDecision"
+              data-filter={f}
+              onClick={() => setFilter(f)}
+              className={cn(
+                'px-3 text-xs font-medium transition-colors',
+                filter === f
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card text-foreground hover:bg-muted',
+              )}
+            >
+              {t('filterCount', {
+                label: f === 'all' ? t('all') : t(`decisions.${f}`),
+                count: count(f),
+              })}
+            </button>
+          ))}
+        </div>
+        <span className="flex-1" />
+        {canManage && writable && (
+          <AdsExportMenu brandId={brandId} decision={filter} period={period} />
+        )}
+        {canAdmin && thresholds && <AdsThresholds onSaved={() => setReads((n) => n + 1)} />}
+      </div>
+      {page.rows.some((r) => !r.paidMeasured) && (
+        <p className="text-xs text-muted-foreground">{t('paidNotMeasured')}</p>
+      )}
+
+      <div className="rounded-xl border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('columns.prompt')}</TableHead>
+              <TableHead>{t('columns.decision')}</TableHead>
+              <TableHead>{t('columns.leader')}</TableHead>
+              <TableHead className="text-right">{t('columns.searches')}</TableHead>
+              <TableHead>{t('columns.channels')}</TableHead>
+              <TableHead>
+                <span className="sr-only">{t('open')}</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow
+                key={r.promptId}
+                data-prompt-id={r.promptId}
+                data-state={opened?.open && opened.id === r.promptId ? 'selected' : undefined}
+              >
+                <TableCell className="max-w-md whitespace-normal">
+                  {r.text}
+                  {r.topic?.name && (
+                    <small className="block text-xs text-muted-foreground">
+                      {t('topic', { name: r.topic.name })}
+                    </small>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Decision
+                    row={r}
+                    onChange={canManage && writable ? (d) => void change(r, d) : null}
+                  />
+                </TableCell>
+                <TableCell>
+                  {leader(r)}
+                  <small className="block text-xs text-muted-foreground">
+                    {t('you', {
+                      at: r.ourPosition ?? (r.weNamed ? 'named' : 'none'),
+                      cited: String(r.weCited),
+                    })}
+                  </small>
+                </TableCell>
+                <TableCell className="text-right tabular-nums" data-slot="ads-searches">
+                  {r.volume === null ? (
+                    <span className="text-muted-foreground">{t('notMeasured')}</span>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span
+                            tabIndex={0}
+                            className="underline decoration-muted-foreground/60 decoration-dotted underline-offset-4"
+                          />
+                        }
+                      >
+                        {formatCompactNumber(r.volume)}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {t(r.estAiVolume === null ? 'searchesTip' : 'searchesTipAi', {
+                          google: formatNumber(r.volume),
+                          ai: formatNumber(r.estAiVolume ?? 0),
+                        })}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </TableCell>
+                <TableCell data-slot="ads-channels">
+                  <Channels row={r} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-action="ads.openOpportunity"
+                    onClick={(e) => {
+                      openedFrom.current = e.currentTarget;
+                      setOpened({ id: r.promptId, open: true });
+                    }}
+                  >
+                    {t('open')}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                  {t('noneFiltered')}
+                </TableCell>
+              </TableRow>
+            )}
+            {page.locked > 0 && <LockRow locked={page.locked} />}
+          </TableBody>
+        </Table>
+      </div>
+      {openedRow && (
+        <AdsOpportunityDrawer
+          key={openedRow.promptId}
+          row={openedRow}
+          open={opened?.open ?? false}
+          brandId={brandId}
+          period={period}
+          decision={<Decision row={openedRow} onChange={null} />}
+          canSend={canManage && writable}
+          finalFocus={openedFrom}
+          onClose={() => setOpened({ id: openedRow.promptId, open: false })}
+        />
+      )}
+    </div>
+  );
+}

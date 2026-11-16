@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { activeRules, checkRule, readPage, ruleSet } from './rules';
+import {
+  activeRules,
+  checkRule,
+  readPage,
+  ruleSet,
+  type ActiveRule,
+  type RuleStatus,
+} from './rules';
 import {
   NO_TRIED,
+  agentFixable,
   readTried,
   runDecided,
   triedAfter,
@@ -82,5 +90,39 @@ describe('the tried rules', () => {
     expect(readTried('d2')).toEqual(NO_TRIED);
     writeTried('d1', NO_TRIED);
     expect(localStorage.getItem('aeo:agent-tried-rules:d1')).toBeNull();
+  });
+});
+
+describe('agentFixable', () => {
+  const r = (key: string, status: RuleStatus, on = true) => ({
+    rule: { key, on, current: '' } as ActiveRule,
+    status,
+  });
+  const rules = [
+    r('summary', { state: 'bad', code: 'missing' }),
+    r('bannedWords', { state: 'bad', code: 'found', count: 1 }),
+    r('sentence', { state: 'bad', code: 'over', count: 2 }),
+    // Never the agent's: a heading's level; a setting only the person fills.
+    r('oneH1', { state: 'bad', code: 'current', count: 2 }),
+    r('whoFor', { state: 'bad', code: 'notSet' }),
+    // Not checked on this page, met, or off: not open.
+    r('specsTable', { state: 'info', code: 'otherType' }),
+    r('faq', { state: 'ok' }),
+    r('internalLinks', { state: 'bad', code: 'missing' }, false),
+  ];
+  const keys = (list: { rule: ActiveRule }[]) => list.map(({ rule }) => rule.key);
+
+  it('is open, less what it never fixes, a setting, held, tried and not checked here (F1)', () => {
+    const all = agentFixable(rules);
+    expect(keys(all.fixable)).toEqual(['summary', 'bannedWords', 'sentence']);
+    expect(keys(all.yours)).toEqual(['oneH1', 'whoFor']);
+    const some = agentFixable(rules, {
+      held: new Set(['sentence']),
+      tried: new Set(['bannedWords']),
+    });
+    expect(keys(some.fixable)).toEqual(['summary']);
+    expect(keys(some.yours)).toEqual(['bannedWords', 'sentence', 'oneH1', 'whoFor']);
+    // Only the rules named (Ask again's one).
+    expect(keys(agentFixable(rules, { only: ['bannedWords'] }).fixable)).toEqual(['bannedWords']);
   });
 });

@@ -109,6 +109,7 @@ const {
   placeholderAttributions,
   placeholderAttributionsInHtml,
   bannedWordsOf,
+  bannedAdded,
   dropsPlaceholder,
   emptyWhy,
   fixDraftRules,
@@ -251,6 +252,22 @@ describe('the page as the agent reads it', () => {
     );
   });
 
+  it('names the brand’s banned phrases only when it has some', () => {
+    const prompt = (bannedPhrases) =>
+      buildFixPrompt({
+        brand: { name: 'Acme Coffee', language: 'en', bannedPhrases },
+        draft: rows.content_drafts,
+        passages: draftPassages(BODY),
+        lockedKeys: new Set(),
+        input: input(),
+      });
+    expect(prompt(['cheap', 'best price'])).toContain(
+      'The brand never uses these phrases: "cheap", "best price". Never write one in a change.',
+    );
+    expect(prompt([])).not.toContain('never uses these phrases');
+    expect(prompt(undefined)).not.toContain('never uses these phrases');
+  });
+
   describe('with Quality’s phase 2 live', () => {
     afterEach(() => vi.unstubAllEnvs());
 
@@ -380,6 +397,45 @@ describe('keepSuggestions', () => {
   const passages = draftPassages(BODY);
   const locked = new Set(input().locked);
   const ruleKeys = new Set(['dated', 'faq']);
+
+  it('drops a change that brings in one of the brand’s banned phrases, and logs the count', () => {
+    vi.mocked(logger.info).mockClear();
+    const banned = { bannedPhrases: ['cheap', 'best price'], draftId: DRAFT };
+    const keep = (s, over = banned) =>
+      keepSuggestions([s], passages, locked, ruleKeys, null, { ...sourcing, ...over });
+    const replace = (after) => suggestion({ after, sources: [], marks: [] });
+    // In its words, in any case, or across the passage as changed: dropped.
+    expect(keep(replace('cheap coffee and hot water'))).toEqual([]);
+    expect(keep(replace('BEST PRICE coffee and hot water'))).toEqual([]);
+    const best = draftPassages('<p>The best coffee and hot water.</p>');
+    expect(
+      keepSuggestions(
+        [suggestion({ passage: 1, before: 'coffee and hot water', after: 'price beans' })],
+        best,
+        new Set(),
+        ruleKeys,
+        null,
+        { ...sourcing, ...banned },
+      ),
+    ).toEqual([]);
+    expect(
+      keep(suggestion({ kind: 'insert', before: '', after: '<p>Cheap beans.</p>', sources: [] })),
+    ).toEqual([]);
+    expect(logger.info).toHaveBeenCalledWith(
+      { draftId: DRAFT, banned: 1 },
+      expect.stringContaining('banned phrase dropped'),
+    );
+    // Without the list, or a whole word it isn't ("cheaper"): kept.
+    expect(keep(replace('cheap coffee and hot water'), {})).toHaveLength(1);
+    expect(keep(replace('cheaper coffee and hot water'))).toHaveLength(1);
+  });
+
+  it('reads a phrase as brought in only when the old text didn’t have it', () => {
+    expect(bannedAdded(['cheap'], 'a cheap mug', 'a cheap cup')).toEqual([]);
+    expect(bannedAdded(['cheap'], 'a cheap mug', 'an affordable mug')).toEqual([]);
+    expect(bannedAdded(['cheap', 'free'], 'a mug', 'a cheap, free mug')).toEqual(['cheap', 'free']);
+    expect(bannedAdded([], 'a mug', 'a cheap mug')).toEqual([]);
+  });
 
   it('keeps a replace whose words are in its passage, with the rules sent and its sources', () => {
     // A source number the model wrote into its reason ("(S2)") isn't shown on the card.
@@ -2152,6 +2208,27 @@ describe('fixDraftRules', () => {
     expect(usage.value.cost_usd).toBeCloseTo(0.0038, 6);
   });
 
+  it('keeps the first 8 of an answer with more, never failing the run over them', async () => {
+    const tips = 'kettle scale grinder filter dripper mug beans water timer'.split(' ');
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: tips.map((tip) =>
+          suggestion({
+            kind: 'insert',
+            before: '',
+            after: `<p>Warm the ${tip} first.</p>`,
+            rules: ['faq'],
+            sources: [],
+            marks: [],
+          }),
+        ),
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    const { count } = await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    expect(count).toBe(8);
+  });
+
   it('charges the budget, asks the model and keeps one batch for review', async () => {
     generateObject.mockResolvedValue({
       object: {
@@ -2798,6 +2875,26 @@ describe('Quality’s hand-off (CE-051)', () => {
     expect(writes.find((w) => w.table === 'content_draft_suggestions').value[0].after_text).toBe(
       'good coffee and hot water, from $49 per month',
     );
+  });
+
+  it('writes a fact scoped to a place only on a page that names it (00539)', async () => {
+    const after = 'good coffee and hot water, from $49 per month';
+    const written = async (scope) => {
+      rows.brand_facts = [{ quote: 'Pro costs $49 per month', scope }];
+      writes = [];
+      const object = {
+        suggestions: [suggestion({ after, rules: ['trust:brandFacts'], sources: [] })],
+      };
+      generateObject.mockResolvedValue({ object, usage: { inputTokens: 900, outputTokens: 200 } });
+      const rules = [{ key: 'trust:brandFacts', name: 'Match the facts', detail: '' }];
+      const input = handoff({ rules });
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input, handoff: { origin: 'person' } });
+      const kept = writes.find((w) => w.table === 'content_draft_suggestions')?.value ?? [];
+      return kept.map((row) => row.after_text);
+    };
+    // The page's H1 names "pour-over": that place's fact is its own; Bozcaada's isn't.
+    expect(await written('Pour-over')).toEqual([after]);
+    expect(await written('Bozcaada')).not.toContain(after);
   });
 
   it('leaves a placeholder to the person: a change that fills or drops one isn’t kept', () => {

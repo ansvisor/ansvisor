@@ -42,10 +42,19 @@ import {
 } from './attachments';
 import { fitChatUnits, meteredAs, reserveChatStep, type ChatStepUsage } from './budget';
 import { buildDenial } from './denial';
-import { KeyFailureError, ProviderDownError, stepFailure, type RunKeyFailure } from './engine-key';
+import {
+  KeyFailureError,
+  ModelRefusalError,
+  ModelRetentionError,
+  ProviderDownError,
+  endsRun,
+  stepFailure,
+  type RunKeyFailure,
+} from './engine-key';
 import {
   ModelProviderOffError,
   estimateInputTokens,
+  refusedStep,
   resolveChatModels,
   type ChatModels,
   type ChatPhase,
@@ -304,6 +313,7 @@ import {
   AUTO_CHOICE,
   AUTO_MODEL,
   CHAT_EFFORTS,
+  chatModelLabel,
   isCatalogId,
   modelChoiceOpen,
   runChoiceOf,
@@ -325,6 +335,7 @@ import {
   runSubtasks,
   type SubtasksInput,
 } from './subtasks';
+import { replayFrame, replayableThinking, tagThinking } from './thinking-replay';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -980,8 +991,11 @@ export async function startChatRun(
 
 /** What picks a waiting run up again: the card's Approve (or the click), or Skip. */
 export type ResumeAction =
-  /** input: what an editable card's edits made, checked (card-form.ts); else the call's own. */
-  | { kind: 'approve'; dontAskAgain: boolean; input?: Record<string, unknown> }
+  /**
+   * input: what an editable card's edits made, checked (card-form.ts); else the call's own.
+   * via: the OK came from Slack's Approve (slack-approval.ts), which its Activity row says.
+   */
+  | { kind: 'approve'; dontAskAgain: boolean; input?: Record<string, unknown>; via?: 'slack' }
   | { kind: 'skip' }
   /** A question card's answer (CHAT-07 §A), already kept on its row. */
   | { kind: 'answer'; answer: AskAnswer };
@@ -1669,6 +1683,17 @@ function emitText(rc: RunContext, text: string) {
 }
 
 /**
+ * The answer back to what it was before a step the model turned down
+ * (refusedStep): a refusal mid-answer leaves words that aren't an answer,
+ * taken off the person's screen too.
+ */
+function takeBack(rc: RunContext, text: string): void {
+  if (rc.progress.text === text) return;
+  rc.progress.text = text;
+  rc.sink.emit('text.replaced', { text });
+}
+
+/**
  * A how-to question (CHAT-19 §3, §5; W1-30), before any data is read: the
  * answer from the approved Help articles, written by the small model from
  * their matching sections only (no workspace data, no chat history), or the
@@ -1736,6 +1761,7 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
     }
     const { budget } = reservation;
     const called = Date.now();
+    const before = rc.progress.text;
     try {
       const result = streamText({
         model: choice.model,
@@ -1745,8 +1771,10 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
         providerOptions: choice.providerOptions,
         abortSignal: rc.signal,
       });
+      let finished: string | undefined;
       for await (const part of result.fullStream) {
         if (part.type === 'text-delta') out.push(part.text);
+        else if (part.type === 'finish') finished = part.finishReason;
         else if (part.type === 'error') throw part.error;
       }
       out.close();
@@ -1757,6 +1785,10 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
       }
       await budget.charge(stepUsage(await result.usage), Date.now() - called);
       await keyAnswered(rc);
+      if (refusedStep(choice, finished)) {
+        takeBack(rc, before);
+        throw new ModelRefusalError(choice.budgetModel);
+      }
       rc.progress.modelSteps += 1;
     } catch (err) {
       out.close();
@@ -1767,8 +1799,9 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
       }
       await budget.release();
       const failure = stepFailure(rc.models, choice.budgetModel, err);
-      // The own key failed: Chat's answer would run on the same key, so the run stops here.
-      if (failure instanceof KeyFailureError) throw failure;
+      // The own key failed, or the model turned it down or can't run on the key's account:
+      // Chat's answer would meet the same, so the run stops here.
+      if (endsRun(failure)) throw failure;
       // Words already shown: the run ends in error (driveRun), what's shown kept.
       if (rc.progress.text) throw failure ?? err;
       console.error('[chat/engine] a Help answer failed; Chat answers as usual:', err);
@@ -1876,8 +1909,10 @@ async function readAttachedFiles(rc: RunContext): Promise<'none' | 'ended'> {
       providerOptions: choice.providerOptions,
       abortSignal: rc.signal,
     });
+    let finished: string | undefined;
     for await (const part of result.fullStream) {
       if (part.type === 'text-delta') written += part.text;
+      else if (part.type === 'finish') finished = part.finishReason;
       else if (part.type === 'error') throw part.error;
     }
     if (rc.signal.aborted) {
@@ -1887,6 +1922,7 @@ async function readAttachedFiles(rc: RunContext): Promise<'none' | 'ended'> {
     }
     await budget.charge(stepUsage(await result.usage), Date.now() - called);
     await keyAnswered(rc);
+    if (refusedStep(choice, finished)) throw new ModelRefusalError(choice.budgetModel);
   } catch (err) {
     if (rc.signal.aborted) {
       budget.keep();
@@ -1895,8 +1931,9 @@ async function readAttachedFiles(rc: RunContext): Promise<'none' | 'ended'> {
     }
     await budget.release();
     const failure = stepFailure(rc.models, choice.budgetModel, err);
-    // The own key failed: every step after it runs on the same key.
-    if (failure instanceof KeyFailureError) throw failure;
+    // The own key failed, or the model turned the files down or can't run on the key's
+    // account: every step after it meets the same.
+    if (endsRun(failure)) throw failure;
     console.error(
       "[chat/engine] the attached files couldn't be written out; their figures stay unchecked:",
       err,
@@ -2242,8 +2279,13 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
   const choice = rc.models.pick(phase);
   await noteMemory(rc);
   await noteEditorDecisions(rc);
-  const { system, messages } = stepInput(rc, phase, choice.claude);
+  const { system, messages: built } = stepInput(rc, phase, choice.claude);
   const tools = toolSet(rc, phase);
+  // Preserved thinking (Claude Fable 5.2): only the thinking blocks still on what they were made
+  // on go back; the ones before a change to the prompt, the tools or a message are left out.
+  const frame = choice.boundThinking ? await replayFrame(system, tools) : null;
+  const messages = frame ? replayableThinking(frame, built).messages : built;
+  const before = rc.progress.text;
   const reservation = await reserveChatStep({
     organizationId: rc.run.organizationId,
     runId: rc.run.id,
@@ -2299,7 +2341,15 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
     const [usage, response] = await Promise.all([result.usage, result.response]);
     await budget.charge(stepUsage(usage), Date.now() - called);
     await keyAnswered(rc);
-    const responseMessages = response.messages as ModelMessage[];
+    // A refusal is billed as it ran; what the step wrote is taken back, and the run ends.
+    if (refusedStep(choice, finished)) {
+      takeBack(rc, before);
+      throw new ModelRefusalError(choice.budgetModel);
+    }
+    // Each thinking block marked with what it was made on, for the steps that send it back.
+    const responseMessages = frame
+      ? tagThinking(frame, messages, response.messages as ModelMessage[])
+      : (response.messages as ModelMessage[]);
     return {
       kind: 'ok',
       toolCalls,
@@ -2317,8 +2367,9 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
     }
     await budget.release();
     const failure = stepFailure(rc.models, choice.budgetModel, err);
-    // The own key failed: the writing model runs on the same key, a second sure failure.
-    if (failure instanceof KeyFailureError) throw failure;
+    // The own key failed, or the model turned the request down or can't run on the key's
+    // account: the writing model would meet the same, a second sure failure.
+    if (endsRun(failure)) throw failure;
     if (phase === 'read') {
       // The reading model failed: the writing one reads for itself rather than losing the run.
       console.error('[chat/engine] a reading step failed; the writing model reads:', err);
@@ -5184,7 +5235,12 @@ async function resumePending(
       }
       // The person's OK on the card, or their click: whatever the precedence says now.
       const approval =
-        pending.kind === 'click' ? { kind: 'click' as const } : { kind: 'ask' as const };
+        pending.kind === 'click'
+          ? { kind: 'click' as const }
+          : {
+              kind: 'ask' as const,
+              ...(action.kind === 'approve' && action.via ? { via: action.via } : {}),
+            };
       const outcome = await writeCall(rc, tool, call, input, facts, ctx, approval, pending.stepId);
       if (outcome.kind === 'ended') return 'ended';
       if (outcome.kind === 'pause') {
@@ -5599,13 +5655,17 @@ async function rewriteAnswer(rc: RunContext, language: Language): Promise<void> 
       abortSignal: rc.signal,
     });
     const out: string[] = [];
+    let finished: string | undefined;
     for await (const part of result.fullStream) {
       if (part.type === 'text-delta') out.push(part.text);
+      else if (part.type === 'finish') finished = part.finishReason;
       else if (part.type === 'error') throw part.error;
     }
     // Stopped mid-rewrite: what streamed is billed, so the hold is kept (budget.ts).
     if (rc.signal.aborted) return budget.keep();
     await budget.charge(stepUsage(await result.usage), Date.now() - called);
+    // A rewrite the model turned down keeps the answer as it was.
+    if (refusedStep(choice, finished)) return;
     const rewritten = out.join('').trim();
     if (!rewritten || rewriteLanguage(rc.progress.question ?? '', rewritten, rc.answerLanguage)) {
       return;
@@ -5841,7 +5901,11 @@ async function failRun(rc: RunContext, reason?: string): Promise<void> {
 const providerName = (provider: AiProvider) =>
   settingsT(`agent_providers.${provider}.name` as never);
 
-/** A run's end for what failed (AGENT-OWN-KEY §5.2): the own key, a provider that didn't answer, or anything else. */
+/**
+ * A run's end for what failed (AGENT-OWN-KEY §5.2): the own key, a provider
+ * that didn't answer, the model's refusal or its data retention, or anything
+ * else.
+ */
 async function endForFailure(rc: RunContext, err: unknown): Promise<void> {
   if (err instanceof KeyFailureError) {
     return endOnKey(rc.run, rc.sink, workedMs(rc), err.failure, rc.progress);
@@ -5849,6 +5913,15 @@ async function endForFailure(rc: RunContext, err: unknown): Promise<void> {
   if (err instanceof ProviderDownError) {
     const reason = t('error.providerDown', { provider: providerName(err.provider) });
     return endInError(rc.run, rc.sink, workedMs(rc), reason, rc.progress, 'provider_down');
+  }
+  // The model's own answer, in plain words: it turned the request down, or the key's account
+  // has no data retention for it. The key isn't marked failing: it runs other models.
+  if (err instanceof ModelRefusalError) {
+    return failRun(rc, t('error.refused', { model: chatModelLabel(err.model) }));
+  }
+  if (err instanceof ModelRetentionError) {
+    const words = err.source === 'own' ? 'error.retentionOwnKey' : 'error.retention';
+    return failRun(rc, t(words, { model: chatModelLabel(err.model) }));
   }
   return failRun(rc);
 }

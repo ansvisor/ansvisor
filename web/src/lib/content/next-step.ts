@@ -1,12 +1,6 @@
 import type { QualityTodo } from './quality-todos';
-import {
-  REWRITE_OPEN_RULES,
-  openRulesForAgent,
-  type ActiveRule,
-  type RewriteAdvice,
-  type RuleStatus,
-} from './rules';
-import { runDecided } from './tried-rules';
+import { REWRITE_OPEN_RULES, type ActiveRule, type RewriteAdvice, type RuleStatus } from './rules';
+import { agentFixable, runDecided } from './tried-rules';
 
 /**
  * The Content Editor's Next step basket (Next step spec §4): the one step to
@@ -17,9 +11,13 @@ import { runDecided } from './tried-rules';
  */
 
 export type NextStepId =
+  // No page type yet: its rules follow the type, so it's set before any agent run.
+  | 'pageType'
   | 'plan'
   | 'write'
   | 'import'
+  // The rules ask for more than the Length holds (lengthConflict): before Fix or a rewrite.
+  | 'conflict'
   | 'length'
   | 'fixRules'
   | 'proof'
@@ -30,6 +28,10 @@ export type NextStepId =
 
 /** What a step's buttons do: each is a button the editor already has. */
 export type NextAction =
+  | 'setPageType'
+  // The Length raised to what the rules need (raisedLength), or the rules asked for fewer.
+  | 'raiseLength'
+  | 'askFewer'
   | 'buildBrief'
   // No prompt, fan-out or Search Console query kept: the brief has nothing to build from.
   | 'addSources'
@@ -58,26 +60,26 @@ export type NextAction =
 export const FEW_OPEN_RULES = REWRITE_OPEN_RULES - 1;
 
 /**
- * The open rules a run of Fix open rules can close: the ones the agent is
- * asked to fix, less a setting only the person fills (Who it's for) and
- * Length, which its own step takes once it is far off; a page a little off
- * its Length isn't sent round Fix again and again for it; and rules `held` by
- * what the page keeps word for word, which no run can close: what's left is
- * the person's, and Next moves on. Sorted keys, so Skip can tell when the
- * set changes.
+ * The open rules a run of Fix open rules can close: the ones the agent can
+ * still fix (agentFixable: not a setting only the person fills, nor rules
+ * `held` by what the page keeps or that it tried), less Length, which its
+ * own step takes once it is far off; a page a little off its Length isn't
+ * sent round Fix again and again for it. What's left is the person's, and
+ * Next moves on. Sorted keys, so Skip can tell when the set changes.
  */
 export function rulesForNext<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
   held?: ReadonlySet<string>,
+  tried?: ReadonlySet<string>,
 ): string[] {
-  return openRulesForAgent(rules, undefined, held)
-    .forAgent.filter(
-      ({ rule, status }) =>
-        rule.key !== 'length' && !(status.state === 'bad' && status.code === 'notSet'),
-    )
+  return agentFixable(rules, { held, tried })
+    .fixable.filter(({ rule }) => rule.key !== 'length')
     .map(({ rule }) => rule.key)
     .sort();
 }
+
+/** The Length that holds what the rules ask for (lengthConflict's `need`), rounded up to 50. */
+export const raisedLength = (conflict: { need: number }) => Math.ceil(conflict.need / 50) * 50;
 
 export interface NextStepState {
   method: 'create' | 'optimize';
@@ -108,6 +110,12 @@ export interface NextStepState {
   openRules: string[];
   /** Every rule on that the page doesn't meet, as the Rules tab counts them. */
   openTotal?: number;
+  /** The open rules that are the person's (agentFixable): Fix passed, the rest is in Rules. */
+  yours?: number;
+  /** The page has no type yet: Set page type comes first. */
+  noType?: boolean;
+  /** The rules ask for more than the Length holds (lengthConflict), or null. */
+  conflict?: { need: number; max: number } | null;
   /**
    * The open rules a Fix run is sent (openRulesForAgent), as Rules says the
    * agent can fix them: the step's words count these (editor UX review
@@ -180,6 +188,8 @@ export function stepState(id: NextStepId, s: NextStepState): string {
           ? 'long'
           : 'short'
         : '';
+    case 'conflict':
+      return s.conflict ? `${s.conflict.need}:${s.conflict.max}` : '';
     case 'fixRules':
       return s.openRules.join(',');
     case 'proof':
@@ -308,6 +318,16 @@ function steps(s: NextStepState): NextStep[] {
     return [{ id: writeId, primary: 'writeMyself', alternative: null, skippable: false }];
   }
   return [
+    ...(s.noType
+      ? [
+          {
+            id: 'pageType' as const,
+            primary: 'setPageType' as const,
+            alternative: null,
+            skippable: true,
+          },
+        ]
+      : []),
     ...(s.method === 'create' && s.hasBrief === false
       ? [
           {
@@ -328,12 +348,14 @@ function steps(s: NextStepState): NextStep[] {
           },
         ]
       : []),
-    ...(!s.empty && s.rewrite?.reason === 'length'
+    // What the rules ask for first, then the agent's small fixes, then a
+    // rewrite within all the rules (editor test 2026-11-12).
+    ...(!s.empty && s.conflict
       ? [
           {
-            id: 'length' as const,
-            primary: 'rewritePage' as const,
-            alternative: s.openRules.length > 0 ? ('fixRules' as const) : null,
+            id: 'conflict' as const,
+            primary: 'raiseLength' as const,
+            alternative: 'askFewer' as const,
             skippable: true,
           },
         ]
@@ -346,6 +368,16 @@ function steps(s: NextStepState): NextStep[] {
             // Where the Rules tab recommends rewriting it whole (rewriteAdvice):
             // the two say the same, and never for a page too long to send.
             alternative: s.rewrite !== null ? ('rewritePage' as const) : null,
+            skippable: true,
+          },
+        ]
+      : []),
+    ...(!s.empty && s.rewrite?.reason === 'length'
+      ? [
+          {
+            id: 'length' as const,
+            primary: 'rewritePage' as const,
+            alternative: s.openRules.length > 0 ? ('fixRules' as const) : null,
             skippable: true,
           },
         ]
@@ -405,15 +437,15 @@ export function nextStep(s: NextStepState): NextPath {
   const reviewing = s.open && (s.waiting ?? 0) > 0;
   const step = reviewing ? REVIEW : under;
 
-  // The third step is the one the page needs: its Length, or its open rules
-  // (an empty page, its title alone, isn't read against its Length).
-  const third: NextStepId =
-    under.id === 'length' || under.id === 'fixRules'
-      ? under.id
-      : !s.empty && s.rewrite?.reason === 'length'
-        ? 'length'
-        : 'fixRules';
+  // The third step is the one the page needs: the rules against its Length,
+  // its open rules, or its Length (an empty page, its title alone, isn't
+  // read against its Length).
+  const isThird = (id: NextStepId) => id === 'conflict' || id === 'length' || id === 'fixRules';
+  const third: NextStepId = isThird(under.id)
+    ? under.id
+    : (due.find((d) => isThird(d.id))?.id ?? 'fixRules');
   const ids: NextStepId[] = [
+    ...(s.noType ? (['pageType'] as const) : []),
     'plan',
     s.method === 'create' ? 'write' : 'import',
     third,
@@ -434,7 +466,10 @@ export function nextStep(s: NextStepState): NextPath {
           ? tried(id)
             ? 'passed'
             : 'skipped'
-          : 'done') as PathState,
+          : // Nothing left the agent can fix, with rules the person's: as the Rules tab says.
+            id === 'fixRules' && (s.yours ?? 0) > 0
+            ? 'passed'
+            : 'done') as PathState,
   }));
 
   const tips: NextPath['tips'] =
@@ -461,7 +496,7 @@ export function nextStep(s: NextStepState): NextPath {
             ? [{ id: 'lowTrust' as const, action: 'showTrust' as const }]
             : []),
         ]
-          .filter((tip) => tip.action !== step.primary)
+          .filter((tip) => tip.action !== step.primary && tip.action !== step.alternative)
           .slice(0, 2)
       : [];
 

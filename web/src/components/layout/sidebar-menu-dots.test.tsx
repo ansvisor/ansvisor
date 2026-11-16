@@ -6,8 +6,7 @@ import messages from '../../../messages/en.json';
 import type { MenuState } from '@/lib/menu-dots';
 
 /**
- * The simplified menu's dots and the Action Center's count (SIMPLE_NAV,
- * PR 13), on the real menus: green "New results" and yellow "Needs you" on
+ * The simplified menu's dots (SIMPLE_NAV, PR 13), on the real menus: green "New results" and yellow "Needs you" on
  * the entries, on a closed submenu's or an icon's item, on a folded group's
  * title; never colour alone. One read per brand, again only once it is 5
  * minutes old. Yellow for admins and managers only, none off the menu, and
@@ -77,7 +76,6 @@ function afterNight(): MenuState {
     newActionAt: '2026-11-11T04:00:00.000Z',
     newOpportunityAt: '2026-11-11T04:30:00.000Z',
     traffic: { connectedAt: null },
-    openActions: 3,
     navSeen: {
       insights: BEFORE,
       mentions: BEFORE,
@@ -161,7 +159,7 @@ const dotted = (scope: ParentNode = container) =>
   );
 
 describe('the dots after a nightly run', () => {
-  it('reads the brand’s state once, for the areas on the menu and the count', async () => {
+  it('reads the brand’s state once, for the areas on the menu', async () => {
     await render();
     expect(getMenuState).toHaveBeenCalledTimes(1);
     expect(getMenuState).toHaveBeenCalledWith(BRAND, {
@@ -179,7 +177,6 @@ describe('the dots after a nightly run', () => {
         'agents',
         'audit',
       ],
-      count: true,
       waiting: true,
       red: true,
     });
@@ -219,13 +216,12 @@ describe('the dots after a nightly run', () => {
     expect(yellow.getAttribute('title')).toBe('Needs you');
   });
 
-  it('says "New results" beside Visibility, and counts the open actions on the Action Center', async () => {
+  it('says "New results" beside Visibility, and shows no count on the Action Center', async () => {
     await render();
     expect(parent('/dashboard/insights')?.textContent).toBe('VisibilityNew results');
     expect(dotIn(parent('/dashboard/insights'))).toBe('green');
-    const count = parent('/dashboard/action-center')!.querySelector('[data-open-actions]')!;
-    expect(count.textContent).toBe('33 open actions, unassigned or yours');
-    expect(count.getAttribute('title')).toBe('3 open actions, unassigned or yours');
+    // Owner's feedback (14 Nov): its dots say what is new or waiting, not a number.
+    expect(parent('/dashboard/action-center')!.textContent).toBe('Action Center');
     // An open submenu leaves its dots on its entries.
     expect(dotIn(parent('/dashboard/prompts'))).toBeNull();
   });
@@ -293,8 +289,6 @@ describe('the dots after a nightly run', () => {
       'AI Referral Traffic, Needs you',
     );
     expect(link('/dashboard/audit')?.getAttribute('aria-label')).toBeNull();
-    // No count on an icon.
-    expect(container.querySelector('[data-open-actions]')).toBeNull();
   });
 
   it('clears a dot at once when its page is opened here', async () => {
@@ -363,7 +357,6 @@ describe('who sees which dot', () => {
         'agents',
         'audit',
       ],
-      count: true,
       waiting: false,
       red: false,
     });
@@ -384,7 +377,7 @@ describe('who sees which dot', () => {
 });
 
 describe('the mobile menu', () => {
-  it('shows the same dots on its entries, "New results" by Visibility and the count', async () => {
+  it('shows the same dots on its entries, "New results" by Visibility, and no count', async () => {
     await render({ mobile: true });
     await act(async () =>
       container
@@ -405,6 +398,8 @@ describe('the mobile menu', () => {
     expect(sheet.querySelector('a[href="/dashboard/insights"]')?.textContent).toContain(
       'New results',
     );
-    expect(sheet.querySelector('[data-open-actions]')?.textContent).toContain('3');
+    expect(sheet.querySelector('a[href="/dashboard/action-center"]')?.textContent).toBe(
+      'Action Center',
+    );
   });
 });

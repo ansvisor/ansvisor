@@ -84,6 +84,27 @@ export const DEMO_GUARDED = [
   guard('POST /action-center/chat-actions', brandIn('body')),
   guard('POST /action-center/chat-actions/check', brandIn('body')),
 
+  // Ads (ads.js): a person's decision on a prompt; the demo's are the rule's.
+  guard(
+    'PATCH /ads/opportunities/:promptId/decision',
+    brandIn('body'),
+    rowIn('prompts', 'path', 'promptId'),
+  ),
+  // The Earn card's Action Center action: the demo's actions are samples.
+  guard(
+    'POST /ads/opportunities/:promptId/earn',
+    brandIn('body'),
+    rowIn('prompts', 'path', 'promptId'),
+  ),
+  // The Pay card's ad drafts: a model call on the budget, for a sample brand.
+  guard(
+    'POST /ads/opportunities/:promptId/drafts',
+    brandIn('body'),
+    rowIn('prompts', 'path', 'promptId'),
+  ),
+  // Notify me on a later ad platform: logged, and the demo's log stays empty.
+  guard('POST /ads/connections/notify', brandIn('body')),
+
   // Site Audit (audits.js).
   guard('POST /audits', brandIn('body')),
   guard('POST /audits/bulk', brandIn('body')),
@@ -271,6 +292,10 @@ export const DEMO_GUARDED = [
 /** The write routes left open on a demo brand, and why. */
 export const DEMO_OPEN = [
   open(
+    'PATCH /ads/settings',
+    "The organization's own Ads thresholds, changed by its Admins: names no brand, changes no sample data and costs nothing.",
+  ),
+  open(
     'POST /content-drafts/:draftId/audit-estimate',
     "Site Audit's estimate of a draft: its page checks are free and write nothing; its AI checks, which spend, refuse the demo brand in the route itself, so its sample drafts still get an estimate.",
   ),
@@ -329,8 +354,11 @@ export const DEMO_OPEN = [
 
 // ─── Matching a request ─────────────────────────────────────────────────────
 
-/** Express's path syntax as a regex: `:name` matches one segment, a trailing slash is optional. */
-function compile(route) {
+/**
+ * Express's path syntax as a regex: `:name` matches one segment, a trailing
+ * slash is optional. Acting-user.js reads its read routes with it too.
+ */
+export function compileRoute(route) {
   const [method, path] = route.split(' ');
   const params = [];
   const pattern = path
@@ -345,8 +373,8 @@ function compile(route) {
   return { method, regex: new RegExp(`^${pattern}/?$`, 'i'), params: params.length };
 }
 
-const COMPILED_GUARDED = DEMO_GUARDED.map((entry) => ({ ...entry, ...compile(entry.route) }));
-const COMPILED_OPEN = DEMO_OPEN.map((entry) => ({ ...entry, ...compile(entry.route) }));
+const COMPILED_GUARDED = DEMO_GUARDED.map((entry) => ({ ...entry, ...compileRoute(entry.route) }));
+const COMPILED_OPEN = DEMO_OPEN.map((entry) => ({ ...entry, ...compileRoute(entry.route) }));
 
 /**
  * The entry a request reaches, as Express would route it: of the routes its

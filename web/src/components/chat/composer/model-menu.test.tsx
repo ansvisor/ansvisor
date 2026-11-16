@@ -208,8 +208,15 @@ describe('ModelMenu', () => {
   it('shows the month’s AI usage as a percent with its reset, and the plan with See plans', async () => {
     answer();
     await render();
-    expect(text()).toContain('Monthly AI usage');
+    expect(text()).toContain('AI usage this month');
     expect(text()).toContain('23.4% · Resets Dec 1');
+    // Last, after a divider, with its meter.
+    const usage = container.querySelector('[data-slot="model-usage"]')!;
+    expect(usage.className).toContain('border-t');
+    expect(usage.parentElement!.lastElementChild).toBe(usage);
+    expect(usage.querySelector('[role="progressbar"]')!.getAttribute('aria-valuetext')).toBe(
+      '23.4%',
+    );
     expect(container.querySelector('[data-action="model.seePlans"]')?.getAttribute('href')).toBe(
       '/dashboard/settings/billing',
     );

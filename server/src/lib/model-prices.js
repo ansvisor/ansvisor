@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import supabaseAdmin from '../config/supabase.js';
+import { isDirectModel, priceFor } from './improve-cost.js';
 import { logger } from './logger.js';
 import {
   perMillion,
@@ -333,9 +334,15 @@ export async function startModelPriceSync({
   if (!last || Date.now() - Date.parse(last) > STALE_MS) await syncModelPrices({ db, fetcher });
 }
 
-/** A model's blended cost at the price in effect (CHAT-16 item 6); null without a price. */
+/**
+ * A model's blended cost at the price in effect (CHAT-16 item 6); null
+ * without a price. One called on its maker's API only (improve-cost.js
+ * DIRECT_MODELS) at the price the budget charges it, not the catalog's.
+ */
 export function blendedCost(modelId, now = new Date()) {
-  const price = priceInEffect(syncedRow(modelId), { now });
+  const price = isDirectModel(modelId)
+    ? priceFor(modelId)
+    : priceInEffect(syncedRow(modelId), { now });
   return price ? 3 * price.input + price.output : null;
 }
 

@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [create image, create an image, /image, make an image, generate image, cover image, image model, nano banana, gpt image, images in chat, try again, new images]
 synonyms: [ai image, picture, illustration, hero image, blog cover, featured image, draw]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true

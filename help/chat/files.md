@@ -4,8 +4,8 @@ route: /dashboard/chat/files
 keywords: [files, chat files, download files, zip, download selected, storage, storage full, saved answers]
 synonyms: [chat outputs, saved work, my downloads, where did my file go, storage limit]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-11-15
+last_checked: 2026-11-15
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ sources: [web/messages/en.json, web/src/config/plans.ts]
 
 ## Open Files
 
-Click **Files** in the chat menu, under **Settings**. You can also press Ctrl K (⌘K on a Mac) in Chat and type "Files". The newest files come first, 50 at a time; click **Show more** at the bottom to see older ones.
+Click **Files** in the chat menu, under **Scheduled**. You can also press Ctrl K (⌘K on a Mac) in Chat and type "Files". The newest files come first, 50 at a time; click **Show more** at the bottom to see older ones.
 
 Each row shows:
 

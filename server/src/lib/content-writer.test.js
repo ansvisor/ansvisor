@@ -1452,6 +1452,32 @@ describe('Rewrite the page to these rules', () => {
       expect(row().after_chars).toBe(textLength(row().after_text));
     });
 
+    it('keeps every section the rules ask for: told the rules, a cut dropping one is not taken', async () => {
+      const faq = `<h2>FAQ</h2><h3>Why pour-over?</h3><p>${'Long words. '.repeat(6)}</p>`;
+      answers(long + faq, short);
+      const rules = [
+        ...toLength().rules,
+        { key: 'fanoutH2', name: 'Use top fan-outs as H2s', detail: 'aim: 3' },
+        { key: 'faq', name: 'FAQ block', detail: '' },
+      ];
+      await expect(run({ ...toLength(), rules })).resolves.toEqual({ rewritten: true });
+      const { prompt } = generateObject.mock.calls[1][0];
+      expect(prompt).toContain(
+        'Keep every section the rules require; shorten inside sections instead.',
+      );
+      expect(prompt).not.toContain('drop the least useful sections');
+      expect(prompt).toContain('- fanoutH2: Use top fan-outs as H2s — aim: 3\n- faq: FAQ block');
+      expect(prompt).not.toContain('- length:');
+      // The cut dropped the FAQ: the first rewrite stands.
+      expect(row().after_text).toContain('Why pour-over?');
+
+      // With no rule asking for sections, a shorter cut is taken.
+      writes = [];
+      answers(long + faq, short);
+      await run(toLength());
+      expect(row().after_text).not.toContain('Why pour-over?');
+    });
+
     it('rewrites and cuts with the model it was started with, held at its own id', async () => {
       answers(long, short);
       await runDraftWriting({
@@ -2081,5 +2107,58 @@ describe('banned phrases in a new page', () => {
       { brandId: BRAND, count: 1 },
       expect.stringContaining('banned phrases left'),
     );
+  });
+});
+
+describe('banned phrases in a rewrite', () => {
+  const banned = { ...brand, bannedPhrases: ['cheapest'] };
+  const run = () =>
+    runDraftWriting({
+      draft: draftRow({
+        method: 'optimize',
+        status: 'in_review',
+        body_html: '<h1>Pour-over</h1><p>Use good coffee.</p>',
+      }),
+      brand: banned,
+      model: 'model:m',
+      input: input(),
+      budget,
+      rewrite: true,
+    });
+  const html = (text) => ({
+    object: { html: `<h1>Pour-over</h1><h2>The ratio</h2><p>${text}</p>`, reason: 'rules' },
+    usage: { inputTokens: 1 },
+  });
+  const offered = () => writes.find((w) => w.table === 'content_draft_suggestions')?.value;
+
+  it('rewrites those sentences once when a phrase slips through, and offers that', async () => {
+    generateObject
+      .mockResolvedValueOnce(html('The cheapest way to brew.'))
+      .mockResolvedValueOnce(html('An affordable way to brew.'));
+    await expect(run()).resolves.toEqual({ rewritten: true });
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    expect(generateObject.mock.calls[1][0].prompt).toContain('"cheapest"');
+    expect(offered().after_text).toContain('An affordable way to brew.');
+    expect(offered().after_text).not.toContain('cheapest');
+  });
+
+  it('keeps the rewrite when the pass drops a section, and warns with the count', async () => {
+    const { logger } = await import('./logger.js');
+    generateObject.mockResolvedValueOnce(html('The cheapest way to brew.')).mockResolvedValueOnce({
+      object: { html: '<h1>Pour-over</h1><p>An affordable way to brew.</p>', reason: 'x' },
+      usage: { inputTokens: 1 },
+    });
+    await expect(run()).resolves.toEqual({ rewritten: true });
+    expect(offered().after_text).toContain('The cheapest way to brew.');
+    expect(logger.warn).toHaveBeenCalledWith(
+      { brandId: BRAND, count: 1 },
+      expect.stringContaining('banned phrases left in the rewrite'),
+    );
+  });
+
+  it('makes no extra call for a clean rewrite', async () => {
+    generateObject.mockResolvedValue(html('A good way to brew.'));
+    await expect(run()).resolves.toEqual({ rewritten: true });
+    expect(generateObject).toHaveBeenCalledTimes(1);
   });
 });

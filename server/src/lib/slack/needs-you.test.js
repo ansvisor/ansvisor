@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * "An agent needs you" in the brand's Slack channel (#2139, N6): for the
@@ -43,8 +43,21 @@ const INPUT = {
   people: ['u1'],
 };
 
+const POST = '33333333-3333-4333-8333-333333333333';
+const CARD = {
+  state: 'waiting',
+  kind: 'ask',
+  n: 3,
+  digest: 'a1b2c3d4e5f60718293a4b5c6d7e8f90',
+  title: 'Save drafts in Content',
+  target: '“Best <hiking> boots” on Northwind',
+  fromSlack: true,
+};
+
 let deliver;
 let get;
+let card;
+let allowed;
 const emailOf = vi.fn(async (id) => `${id}@acme.test`);
 
 beforeEach(() => {
@@ -56,13 +69,20 @@ beforeEach(() => {
   h.names = [{ id: 'u1', full_name: 'Sam Lee' }];
   deliver = vi.fn(async () => ({ status: 'sent', ts: '1.2' }));
   get = vi.fn(async () => FIX['users.lookupByEmail'].data);
+  card = vi.fn(async () => null);
+  allowed = vi.fn(async () => true);
+  vi.stubEnv('SLACK_SIGNING_SECRET', 'signing-secret');
+  vi.stubEnv('CHAT_INTERNAL_SECRET', 'internal-secret');
+  vi.stubEnv('CHAT_AGENTIC', 'true');
   logger.warn.mockClear();
   logger.error.mockClear();
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe('postNeedsYou', () => {
   it('mentions the person in the channel, once per run, and says it posted for them', async () => {
-    const posted = await postNeedsYou(INPUT, { deliver, emailOf, get });
+    const posted = await postNeedsYou(INPUT, { deliver, emailOf, get, card, allowed });
     expect(posted).toEqual(new Set(['u1']));
     expect(get).toHaveBeenCalledWith(h.slack, 'users.lookupByEmail', { email: 'u1@acme.test' });
     const [input] = deliver.mock.calls[0];
@@ -71,7 +91,7 @@ describe('postNeedsYou', () => {
       kind: 'needs_you',
       dedupeKey: 'needs_you:run-1:u1',
     });
-    const message = input.message();
+    const message = input.message({ postId: POST });
     expect(message.text).toBe('<@U00000SAM> Content Writer needs you on Northwind');
     expect(JSON.stringify(message.blocks)).toContain(
       '<https://app.test/dashboard/chat/chat-1|Open the run>',
@@ -80,14 +100,14 @@ describe('postNeedsYou', () => {
 
   it('names the person when Slack has no account for their e-mail', async () => {
     get.mockRejectedValue(new SlackError('users_not_found'));
-    await postNeedsYou(INPUT, { deliver, emailOf, get });
-    expect(deliver.mock.calls[0][0].message().text).toBe(
+    await postNeedsYou(INPUT, { deliver, emailOf, get, card, allowed });
+    expect(deliver.mock.calls[0][0].message({ postId: POST }).text).toBe(
       'Content Writer needs Sam Lee on Northwind',
     );
     expect(logger.warn).not.toHaveBeenCalled();
     // Another refusal is logged by code.
     get.mockRejectedValue(new SlackError('missing_scope'));
-    await postNeedsYou({ ...INPUT, runId: 'run-2' }, { deliver, emailOf, get });
+    await postNeedsYou({ ...INPUT, runId: 'run-2' }, { deliver, emailOf, get, card, allowed });
     expect(logger.warn).toHaveBeenCalledWith(
       { code: 'missing_scope' },
       '[slack] person not looked up',
@@ -96,7 +116,9 @@ describe('postNeedsYou', () => {
 
   it('counts a post already made for this run as posted', async () => {
     deliver.mockResolvedValue({ status: 'skipped', reason: 'already_sent' });
-    expect(await postNeedsYou(INPUT, { deliver, emailOf, get })).toEqual(new Set(['u1']));
+    expect(await postNeedsYou(INPUT, { deliver, emailOf, get, card, allowed })).toEqual(
+      new Set(['u1']),
+    );
   });
 
   it.each([
@@ -110,7 +132,7 @@ describe('postNeedsYou', () => {
     ],
   ])('posts for no one after %s, so they get the e-mail', async (_name, arrange) => {
     arrange();
-    expect(await postNeedsYou(INPUT, { deliver, emailOf, get })).toEqual(new Set());
+    expect(await postNeedsYou(INPUT, { deliver, emailOf, get, card, allowed })).toEqual(new Set());
   });
 
   it.each([
@@ -126,14 +148,61 @@ describe('postNeedsYou', () => {
     ],
   ])('asks Slack nothing for %s', async (_name, arrange) => {
     arrange();
-    expect(await postNeedsYou(INPUT, { deliver, emailOf, get })).toEqual(new Set());
+    expect(await postNeedsYou(INPUT, { deliver, emailOf, get, card, allowed })).toEqual(new Set());
     expect(get).not.toHaveBeenCalled();
     expect(deliver).not.toHaveBeenCalled();
   });
 
+  it('says what the card asks, with Approve, Reject and Open in Ansvisor when it works from Slack', async () => {
+    card.mockResolvedValue(CARD);
+    await postNeedsYou(INPUT, { deliver, emailOf, get, card, allowed });
+    expect(card).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      brandId: 'b1',
+      agentRunId: 'run-1',
+    });
+    expect(allowed).toHaveBeenCalledWith('org-1', 'slack_approvals');
+    const { blocks } = deliver.mock.calls[0][0].message({ postId: POST });
+    expect(blocks[1].text.text).toContain(
+      'Waiting for an OK on: *Save drafts in Content* · “Best &lt;hiking&gt; boots” on Northwind',
+    );
+    const [approve, reject, open] = blocks[2].elements;
+    expect(approve).toMatchObject({
+      action_id: 'ansvisor_approve',
+      value: `${POST}:3:${CARD.digest}`,
+      style: 'primary',
+    });
+    expect(approve.confirm.title.text).toBe('Approve this step?');
+    expect(reject).toMatchObject({
+      action_id: 'ansvisor_reject',
+      value: `${POST}:3:${CARD.digest}`,
+    });
+    expect(open).toMatchObject({ url: INPUT.runUrl });
+    expect(blocks[3].elements[0].text).toContain('Only <@U00000SAM> can approve or reject it.');
+  });
+
+  it.each([
+    ['a card that needs the app', () => card.mockResolvedValue({ ...CARD, fromSlack: false })],
+    [
+      'a plan without Slack approvals',
+      () => (card.mockResolvedValue(CARD), allowed.mockResolvedValue(false)),
+    ],
+    [
+      'a server without the signing secret',
+      () => (card.mockResolvedValue(CARD), vi.stubEnv('SLACK_SIGNING_SECRET', '')),
+    ],
+    ['a card the web could not read', () => card.mockRejectedValue(new Error('down'))],
+  ])('has no buttons for %s', async (_name, arrange) => {
+    arrange();
+    await postNeedsYou(INPUT, { deliver, emailOf, get, card, allowed });
+    const { blocks } = deliver.mock.calls[0][0].message({ postId: POST });
+    expect(blocks.some((block) => block.type === 'actions')).toBe(false);
+    expect(JSON.stringify(blocks)).toContain('|Open the run>');
+  });
+
   it('never throws', async () => {
     deliver.mockRejectedValue(new Error('boom'));
-    expect(await postNeedsYou(INPUT, { deliver, emailOf, get })).toEqual(new Set());
+    expect(await postNeedsYou(INPUT, { deliver, emailOf, get, card, allowed })).toEqual(new Set());
     expect(logger.error).toHaveBeenCalledOnce();
   });
 });
