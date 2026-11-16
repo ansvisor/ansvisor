@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import type { AdsActionRef, AdsOpportunity, sendAdsEarn } from '@/lib/ads/api';
 import { cn } from '@/lib/utils';
 import type { AdsHalf } from './_do-both';
@@ -65,7 +66,9 @@ export function AdsEarnCard({
           data-action="ads.openAction"
           className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
         >
-          {t(sent && !sent.covered ? 'sent' : 'open', { no: String(action.no) })}
+          {t(sent && !sent.covered ? 'sent' : 'open', {
+            no: actionCodeNo({ actionNo: action.no, brandNo: action.brandNo }),
+          })}
         </Link>
       ) : (
         canSend && (
