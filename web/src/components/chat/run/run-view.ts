@@ -52,18 +52,17 @@ export const doneSteps = (steps: readonly ChatStep[]) =>
 export interface DataUsedChip {
   /** "Citations", or a page's address. */
   label: string;
-  /** Rows read, when the step counted them. */
-  rows?: number;
-  /** What `rows` counts when it isn't rows: saved notes ("Memory · 3 items"). */
-  unit?: 'items';
+  /** Memory's saved notes ("Memory · 3 items"); a read's rows are never shown. */
+  items?: number;
 }
 
 /**
  * "Data used" (items 13–14): one chip per source a read step read, and per
  * page a step opened, in the order first read; a source read twice is one
- * chip, with its largest count. Skills, thinking and checks are no source,
- * nor a read whose words aren't "Read …" (a page of the app it went to);
- * memory is ("Used memory": "Memory · 3 items", CHAT-14 item 17).
+ * chip. Each names its source only, never how many rows it read, 0 or 50.
+ * Skills, thinking and checks are no source, nor a read whose words aren't
+ * "Read …" (a page of the app it went to); memory is ("Used memory":
+ * "Memory · 3 items", CHAT-14 item 17).
  */
 export function dataUsed(steps: readonly ChatStep[]): DataUsedChip[] {
   const chips = new Map<string, DataUsedChip>();
@@ -83,18 +82,14 @@ export function dataUsed(steps: readonly ChatStep[]): DataUsedChip[] {
       const key = `items:${step.scope.subject}`;
       chips.set(key, {
         label: step.scope.subject,
-        ...(step.rowCount === undefined ? {} : { rows: step.rowCount }),
-        unit: 'items',
+        ...(step.rowCount === undefined ? {} : { items: step.rowCount }),
       });
       continue;
     }
     const source = readSource(step.label);
     if (source === null) continue;
     const key = `read:${source}`;
-    const seen = chips.get(key);
-    const rows =
-      step.rowCount === undefined ? seen?.rows : Math.max(step.rowCount, seen?.rows ?? 0);
-    chips.set(key, { label: source, ...(rows === undefined ? {} : { rows }) });
+    if (!chips.has(key)) chips.set(key, { label: source });
   }
   return [...chips.values()];
 }

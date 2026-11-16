@@ -4342,7 +4342,6 @@
       "steps": "{count, plural, one {# step} other {# steps}}",
       "stepsSources": "{steps, plural, one {# step} other {# steps}} · {sources, plural, one {# source} other {# sources}}",
       "stepsClock": "{steps, plural, one {# step} other {# steps}} · {clock}",
-      "rows": "{count, plural, one {# row} other {# rows}}",
       "items": "{count, plural, one {# item} other {# items}}",
       "parts": "{count, plural, one {# part} other {# parts}}",
       "seconds": "{s}s",
@@ -4727,7 +4726,6 @@
     "since": "Since {date}",
     "until": "Until {date}",
     "range": "{from} – {to}",
-    "rows": "{count, plural, one {# row} other {# rows}}",
     "morePlatforms": "+{count}",
     "step": {
       "stopped": "Stopped",
@@ -6001,6 +5999,24 @@
           "not_found": "This e-mail is gone.",
           "failed": "That didn’t work. Try again."
         }
+      },
+      "drafts": {
+        "chatAgent": "Chat",
+        "changeFallback": "Changed the draft",
+        "summary": "{changes, plural, one {# change} other {# changes}} from {agents, plural, one {# agent} other {# agents}}",
+        "approveAll": "Approve all",
+        "approving": "Approving…",
+        "oneByOne": "Approve these one by one: they change the same page.",
+        "made": "{made, plural, one {# change made} other {# changes made}} to “{title}”.",
+        "failedTitle": "{failed, plural, one {# change wasn’t made} other {# changes weren’t made}}",
+        "failedLine": "{agent} · {summary}: {error}",
+        "failedGeneric": "That didn’t work. Approve it from its own chat.",
+        "notMade": "Approved, but not made. Its chat says why.",
+        "changed": "These changes moved on. Review the list and approve again.",
+        "notFound": "Those changes are gone.",
+        "signedOut": "Your session ended. Sign in again.",
+        "readOnly": "Your workspace is read-only. Choose a plan to approve changes.",
+        "failed": "That didn’t work. Try again."
       },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
