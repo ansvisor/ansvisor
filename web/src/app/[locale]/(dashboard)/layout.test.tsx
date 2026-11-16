@@ -493,15 +493,15 @@ describe('the dashboard layout and the sign-up event', () => {
     expect(sent()).toHaveLength(2);
   });
 
-  it('tries again from a later page when Resend refuses it or does not answer', async () => {
+  it('tries again from a later page when Resend refuses it (a 4xx), up to 3 tries', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    resend.mockResolvedValueOnce({ ok: false, status: 500 });
+    resend.mockResolvedValueOnce({ ok: false, status: 422 });
     await open();
     await runLater();
     expect(auth.account!.app_metadata).toMatchObject({ signup_event_tries: 1 });
     expect(auth.account!.app_metadata).not.toHaveProperty('signup_event_at');
 
-    resend.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+    resend.mockResolvedValueOnce({ ok: false, status: 429 });
     await open();
     await runLater();
     await open();
@@ -515,6 +515,34 @@ describe('the dashboard layout and the sign-up event', () => {
     await runLater();
     expect(sent()).toHaveLength(3);
     vi.mocked(console.error).mockRestore();
+  });
+
+  it('keeps the claim when Resend may have the event: a timeout, a network error or a 5xx', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const answers = [
+      () =>
+        resend.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError')),
+      () => resend.mockRejectedValueOnce(new TypeError('fetch failed')),
+      () => resend.mockResolvedValueOnce({ ok: false, status: 500 }),
+      () => resend.mockResolvedValueOnce({ ok: false, status: 503 }),
+    ];
+    for (const [n, answer] of answers.entries()) {
+      // A new account each time.
+      auth.account = { ...auth.account, app_metadata: { provider: 'email' } };
+      answer();
+      await open();
+      await runLater();
+      expect(sent()).toHaveLength(n + 1);
+      expect(auth.account!.app_metadata).toMatchObject({
+        signup_event_at: expect.any(String),
+        signup_event_tries: 1,
+      });
+      // The next page sends no second welcome.
+      await open();
+      await runLater();
+      expect(sent()).toHaveLength(n + 1);
+    }
+    vi.mocked(console.warn).mockRestore();
   });
 
   it('claims nothing for the welcome where the web has no RESEND_API_KEY', async () => {
@@ -552,6 +580,7 @@ describe('the dashboard layout and the sign-up event', () => {
 
   it('draws the page whatever the send does', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     profile = { organization_id: 'org1', onboarding_completed: true, role: 'admin' };
     resend.mockRejectedValueOnce(new Error('Resend down'));
     expect(await open()).toBeNull();
@@ -564,5 +593,6 @@ describe('the dashboard layout and the sign-up event', () => {
     expect(container.textContent).toContain('Page content');
     await expect(runLater()).resolves.toBeUndefined();
     vi.mocked(console.error).mockRestore();
+    vi.mocked(console.warn).mockRestore();
   });
 });

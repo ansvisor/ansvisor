@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAIM_SETTLE_MS, SIGNUP_EVENT_SINCE } from '../lib/welcome-claim.js';
-import { parseArgs, run } from './send-missed-welcome.js';
+import { exitCodeOf, parseArgs, run } from './send-missed-welcome.js';
 
 /** A deep copy, as the Auth server's JSON answers are. */
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -211,12 +211,12 @@ describe('a dry run', () => {
 });
 
 describe('--send', () => {
-  it('claims each account as the web does, sends, and keeps the claim only on a 2xx', async () => {
+  it('claims each account as the web does, sends, and releases the claim only on a 4xx', async () => {
     const admin = authServer(ACCOUNTS);
     // u2 (made first) is refused, u1 accepted.
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce({ ok: false, status: 500 })
+      .mockResolvedValueOnce({ ok: false, status: 422 })
       .mockResolvedValueOnce({ ok: true, status: 200 });
     const result = await run(parseArgs(['--send', '--pause-ms', '700']), {
       admin,
@@ -225,7 +225,14 @@ describe('--send', () => {
       sleep,
       log,
     });
-    expect(result).toMatchObject({ owed: 2, sent: 1, refused: 1, skipped: 0, unreleased: 0 });
+    expect(result).toMatchObject({
+      owed: 2,
+      sent: 1,
+      refused: 1,
+      unknown: 0,
+      skipped: 0,
+      unreleased: 0,
+    });
 
     // Claimed before each send, keyed by the listed account's id.
     expect(admin.updateUserById.mock.calls[0]).toEqual([
@@ -263,21 +270,75 @@ describe('--send', () => {
     // The claim's wait for each, and a pause between the two sends.
     expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([CLAIM_SETTLE_MS, 700, CLAIM_SETTLE_MS]);
     expect(output()).toContain(
-      'made 2026-11-15T12:00:00Z (google): not accepted (HTTP 500); claim released',
+      'made 2026-11-15T12:00:00Z (google): refused (HTTP 422); claim released',
     );
     expect(output()).toContain('made 2026-11-16T08:00:00Z (email): sent');
-    expect(output()).toContain('Done: 1 sent, 1 not accepted (claim released), 0 skipped');
+    expect(lines.at(-1)).toBe(
+      'Done: 1 sent, 1 refused (claim released), 0 kept (unknown), 0 skipped',
+    );
+    expect(exitCodeOf(result)).toBe(1);
     expect(output()).not.toMatch(PRIVATE);
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('releases the claim when Resend does not answer, and a second run sends only what is left', async () => {
+  it('keeps the claim when Resend times out, so a second run never sends it again', async () => {
     const admin = authServer(ACCOUNTS);
     const timedOut = vi.fn(async () => {
       throw Object.assign(new Error('The operation timed out.'), { name: 'TimeoutError' });
     });
-    await run(parseArgs(['--send']), { admin, apiKey: 're_test', fetchImpl: timedOut, sleep, log });
-    expect(output()).toContain('not accepted (TimeoutError); claim released');
+    const result = await run(parseArgs(['--send']), {
+      admin,
+      apiKey: 're_test',
+      fetchImpl: timedOut,
+      sleep,
+      log,
+    });
+    expect(result).toMatchObject({ sent: 0, refused: 0, unknown: 2, unreleased: 0 });
+    expect(output()).toContain(
+      'made 2026-11-16T08:00:00Z (email): unknown (TimeoutError); claim kept, as Resend may have it',
+    );
+    // Claimed, never released.
+    expect(admin.updateUserById).toHaveBeenCalledTimes(2);
+    expect(admin.users.get('u1').app_metadata).toMatchObject({
+      signup_event_at: expect.any(String),
+      signup_event_tries: 1,
+    });
+    expect(exitCodeOf(result)).toBe(1);
+
+    const none = vi.fn();
+    const again = await run(parseArgs(['--send']), {
+      admin,
+      apiKey: 're_test',
+      fetchImpl: none,
+      sleep,
+      log,
+    });
+    expect(again).toMatchObject({ owed: 0, sent: 0 });
+    expect(none).not.toHaveBeenCalled();
+  });
+
+  it('keeps the claim on a network error too', async () => {
+    const admin = authServer([ACCOUNTS[0]]);
+    const down = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    const result = await run(parseArgs(['--send']), {
+      admin,
+      apiKey: 're_test',
+      fetchImpl: down,
+      sleep,
+      log,
+    });
+    expect(result).toMatchObject({ sent: 0, refused: 0, unknown: 1 });
+    expect(output()).toContain('unknown (TypeError); claim kept, as Resend may have it');
+    expect(admin.users.get('u1').app_metadata.signup_event_at).toEqual(expect.any(String));
+  });
+
+  it('releases a refused claim (a 4xx), and a second run sends only what is left', async () => {
+    const admin = authServer(ACCOUNTS);
+    const refused = vi.fn(async () => ({ ok: false, status: 429 }));
+    await run(parseArgs(['--send']), { admin, apiKey: 're_test', fetchImpl: refused, sleep, log });
+    expect(output()).toContain('refused (HTTP 429); claim released');
     expect(admin.users.get('u1').app_metadata).not.toHaveProperty('signup_event_at');
 
     const accepted = vi.fn(async () => ({ ok: true, status: 202 }));
@@ -288,8 +349,9 @@ describe('--send', () => {
       sleep,
       log,
     });
-    expect(again).toMatchObject({ sent: 2, refused: 0 });
+    expect(again).toMatchObject({ sent: 2, refused: 0, unknown: 0 });
     expect(admin.users.get('u1').app_metadata.signup_event_tries).toBe(2);
+    expect(exitCodeOf(again)).toBe(0);
 
     // Everyone has it now: a third run sends nothing.
     const none = vi.fn();
@@ -302,6 +364,72 @@ describe('--send', () => {
     });
     expect(third).toMatchObject({ owed: 0, sent: 0 });
     expect(none).not.toHaveBeenCalled();
+  });
+
+  it('prints each outcome, and a summary that counts "kept (unknown)" apart', async () => {
+    const made = (n) => `2026-11-15T1${n}:00:00Z`;
+    const admin = authServer([1, 2, 3, 4, 5, 6].map((n) => person(n, { created_at: made(n) })));
+    // In order of creation: a 2xx, a 4xx, a 5xx, a timeout, a 4xx whose
+    // release fails, and one a web page claimed meanwhile.
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200 })
+      .mockResolvedValueOnce({ ok: false, status: 400 })
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockRejectedValueOnce(Object.assign(new Error('timed out'), { name: 'TimeoutError' }))
+      .mockResolvedValueOnce({ ok: false, status: 422 });
+    const write = admin.updateUserById.getMockImplementation();
+    admin.updateUserById.mockImplementation(async (id, attrs) =>
+      // u5's release (its claim's null) fails.
+      id === 'u5' && attrs.app_metadata.signup_event_at === null
+        ? { data: null, error: { status: 500 } }
+        : write(id, attrs),
+    );
+    const settle = vi.fn(async () => {
+      const u6 = admin.users.get('u6');
+      if (u6.app_metadata.signup_claim_id) u6.app_metadata.signup_claim_id = 'a-page';
+    });
+    const result = await run(parseArgs(['--send']), {
+      admin,
+      apiKey: 're_test',
+      fetchImpl,
+      sleep: settle,
+      log,
+    });
+    expect(result).toEqual({
+      owed: 6,
+      oldClaims: 0,
+      sent: 1,
+      refused: 2,
+      unknown: 2,
+      skipped: 1,
+      unreleased: 1,
+    });
+    const sends = lines.filter((line) => line.startsWith('  made') && line.includes('):'));
+    expect(sends).toEqual([
+      `  made ${made(1)} (email): sent`,
+      `  made ${made(2)} (email): refused (HTTP 400); claim released`,
+      `  made ${made(3)} (email): unknown (HTTP 503); claim kept, as Resend may have it`,
+      `  made ${made(4)} (email): unknown (TimeoutError); claim kept, as Resend may have it`,
+      `  made ${made(5)} (email): refused (HTTP 422); claim NOT released`,
+      `  made ${made(6)} (email): skipped (no longer owed, claimed elsewhere, or not claimable)`,
+    ]);
+    expect(lines.slice(-2)).toEqual([
+      'Done: 1 sent, 2 refused (claim released), 2 kept (unknown), 1 skipped, ' +
+        '1 claim(s) not released',
+      "Kept (unknown): check Resend's Events for user.signed_up at those times before " +
+        'clearing a claim by hand (see the header of this script).',
+    ]);
+    expect(exitCodeOf(result)).toBe(1);
+    expect(output()).not.toMatch(PRIVATE);
+  });
+
+  it('exits 0 only when every send was accepted or skipped', () => {
+    const none = { sent: 0, refused: 0, unknown: 0, skipped: 0, unreleased: 0 };
+    expect(exitCodeOf({ ...none, sent: 3, skipped: 1 })).toBe(0);
+    expect(exitCodeOf({ ...none, refused: 1 })).toBe(1);
+    expect(exitCodeOf({ ...none, unknown: 1 })).toBe(1);
+    expect(exitCodeOf({ ...none, unreleased: 1 })).toBe(1);
   });
 
   it('with --include-old-claims, claims an old-style claim again the new way, and never picks it twice', async () => {

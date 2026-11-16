@@ -39,9 +39,11 @@ const capturePostHog = vi.fn();
 vi.mock('@/lib/posthog-server', () => ({
   capturePostHog: (...args: unknown[]) => capturePostHog(...args),
 }));
-const ACCEPTED = { accepted: true, reason: 'accepted' };
-const refused = (status: number) => ({ accepted: false, reason: `refused:${status}` });
-const failed = (name: string) => ({ accepted: false, reason: `failed:${name}` });
+const ACCEPTED = { result: 'accepted', reason: 'accepted' };
+/** Surely not taken: a 4xx. */
+const refused = (status: number) => ({ result: 'refused', reason: `refused:${status}` });
+/** May have been taken: a call that threw (its name), or a 5xx (its status). */
+const unknown = (what: string | number) => ({ result: 'unknown', reason: `unknown:${what}` });
 
 const { MAX_TRIES, OAUTH_CALLBACK_SENT_UNTIL, SIGNUP_EVENT_SINCE, sendSignupEventOnce } =
   await import('./signup-event');
@@ -231,7 +233,7 @@ describe('sendSignupEventOnce', () => {
 
     it('made from the cut-off on: a later page sends it, and retries a refused one', async () => {
       sendSignupEventOnce(google('2026-11-14T16:00:00Z'));
-      sendSignedUp.mockResolvedValueOnce(refused(500));
+      sendSignedUp.mockResolvedValueOnce(refused(422));
       await runLater();
       expect(meta().signup_event_at).toBeUndefined();
 
@@ -287,12 +289,12 @@ describe('sendSignupEventOnce', () => {
     expect(logged().join('\n')).not.toMatch(/re_live|phc_test/);
   });
 
-  it(`releases a refused or failed welcome for a later page, up to ${MAX_TRIES} tries`, async () => {
+  it(`releases a refused welcome (a 4xx) for a later page, up to ${MAX_TRIES} tries`, async () => {
     expect(MAX_TRIES).toBe(3);
     sendSignedUp
-      .mockResolvedValueOnce(refused(500))
       .mockResolvedValueOnce(refused(422))
-      .mockResolvedValueOnce(failed('TimeoutError'));
+      .mockResolvedValueOnce(refused(429))
+      .mockResolvedValueOnce(refused(400));
     for (let page = 1; page <= MAX_TRIES; page++) {
       sendSignupEventOnce(page === 1 ? signUp() : session());
       await runLater();
@@ -301,10 +303,10 @@ describe('sendSignupEventOnce', () => {
       expect(meta().signup_event_tries).toBe(page);
     }
     const lines = logged();
-    expect(lines).toContain('[signup-event] resend_refused:500');
-    expect(lines).toContain('[signup-event] released: welcome (2 tries left)');
     expect(lines).toContain('[signup-event] resend_refused:422');
-    expect(lines).toContain('[signup-event] resend_failed:TimeoutError');
+    expect(lines).toContain('[signup-event] released: welcome (2 tries left)');
+    expect(lines).toContain('[signup-event] resend_refused:429');
+    expect(lines).toContain('[signup-event] resend_refused:400');
     expect(lines).toContain('[signup-event] released: welcome (0 tries left)');
 
     // The cap: no more tries, no read for them, and one line that says so.
@@ -320,9 +322,9 @@ describe('sendSignupEventOnce', () => {
     expect(meta().signup_posthog_at).toEqual(AT);
   });
 
-  it(`releases a refused or failed PostHog signed_up the same way, up to ${MAX_TRIES} tries`, async () => {
+  it(`releases a refused PostHog signed_up (a 4xx) the same way, up to ${MAX_TRIES} tries`, async () => {
     capturePostHog
-      .mockResolvedValueOnce(failed('TypeError'))
+      .mockResolvedValueOnce(refused(400))
       .mockResolvedValueOnce(refused(401))
       .mockResolvedValueOnce(ACCEPTED);
     sendSignupEventOnce(signUp());
@@ -330,7 +332,7 @@ describe('sendSignupEventOnce', () => {
     // The welcome stays; PostHog's claim is released, its try counted.
     expect(meta()).toMatchObject({ signup_event_at: AT, signup_posthog_tries: 1 });
     expect(meta()).not.toHaveProperty('signup_posthog_at');
-    expect(logged()).toContain('[signup-event] posthog_failed:TypeError');
+    expect(logged()).toContain('[signup-event] posthog_refused:400');
     expect(logged()).toContain('[signup-event] released: posthog (2 tries left)');
 
     sendSignupEventOnce(session());
@@ -348,9 +350,9 @@ describe('sendSignupEventOnce', () => {
     expect(later.tasks).toHaveLength(0);
   });
 
-  it('releases both in one write when neither was accepted', async () => {
-    sendSignedUp.mockResolvedValueOnce(refused(503));
-    capturePostHog.mockResolvedValueOnce(refused(503));
+  it('releases both in one write when both were refused', async () => {
+    sendSignedUp.mockResolvedValueOnce(refused(429));
+    capturePostHog.mockResolvedValueOnce(refused(429));
     sendSignupEventOnce(signUp());
     await runLater();
     expect(auth.admin.updateUserById).toHaveBeenCalledTimes(2);
@@ -361,9 +363,83 @@ describe('sendSignupEventOnce', () => {
     );
   });
 
+  describe('when the answer is unknown: Resend or PostHog may have the event', () => {
+    const cases = [
+      ['a timeout', unknown('TimeoutError')],
+      ['a network error', unknown('TypeError')],
+      ['an aborted call', unknown('AbortError')],
+      ['a 500', unknown(500)],
+      ['a 502', unknown(502)],
+      ['a 503', unknown(503)],
+      ['a 504', unknown(504)],
+    ] as const;
+
+    it.each(cases)(
+      'keeps the welcome claimed on %s, so no page sends a second one',
+      async (_, outcome) => {
+        sendSignedUp.mockResolvedValueOnce(outcome);
+        sendSignupEventOnce(signUp());
+        await runLater();
+        expect(sendSignedUp).toHaveBeenCalledTimes(1);
+        // The claim's one write, and no release.
+        expect(auth.admin.updateUserById).toHaveBeenCalledTimes(1);
+        expect(meta()).toMatchObject({
+          signup_event_at: AT,
+          signup_event_tries: 1,
+          signup_posthog_at: AT,
+        });
+        expect(console.warn).toHaveBeenCalledWith(
+          `[signup-event] welcome_${outcome.reason} (claim kept)`,
+        );
+        expect(logged().join('\n')).not.toMatch(/released|resend_/);
+
+        // An hour later, the next page: nothing more, and no read for it.
+        vi.advanceTimersByTime(3_600_000);
+        auth.admin.getUserById.mockClear();
+        sendSignupEventOnce(session());
+        expect(later.tasks).toHaveLength(0);
+        expect(auth.admin.getUserById).not.toHaveBeenCalled();
+        expect(sendSignedUp).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it.each(cases)("keeps PostHog's claim on %s too", async (_, outcome) => {
+      capturePostHog.mockResolvedValueOnce(outcome);
+      sendSignupEventOnce(signUp());
+      await runLater();
+      expect(auth.admin.updateUserById).toHaveBeenCalledTimes(1);
+      expect(meta()).toMatchObject({ signup_posthog_at: AT, signup_posthog_tries: 1 });
+      expect(console.warn).toHaveBeenCalledWith(
+        `[signup-event] posthog_${outcome.reason} (claim kept)`,
+      );
+      sendSignupEventOnce(session());
+      expect(later.tasks).toHaveLength(0);
+      expect(capturePostHog).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases only the refused one when the other is unknown', async () => {
+      sendSignedUp.mockResolvedValueOnce(refused(422));
+      capturePostHog.mockResolvedValueOnce(unknown('TimeoutError'));
+      sendSignupEventOnce(signUp());
+      await runLater();
+      expect(auth.admin.updateUserById).toHaveBeenCalledTimes(2);
+      expect(meta()).not.toHaveProperty('signup_event_at');
+      expect(meta()).toMatchObject({ signup_event_tries: 1, signup_posthog_at: AT });
+      expect(logged()).toContain('[signup-event] released: welcome (2 tries left)');
+      expect(logged()).toContain('[signup-event] posthog_unknown:TimeoutError (claim kept)');
+
+      // The next page retries the welcome alone.
+      sendSignupEventOnce(session());
+      await runLater();
+      expect(sendSignedUp).toHaveBeenCalledTimes(2);
+      expect(capturePostHog).toHaveBeenCalledTimes(1);
+      expect(meta()).toMatchObject({ signup_event_at: expect.any(String), signup_event_tries: 2 });
+    });
+  });
+
   it('is right whether the Auth server merges app_metadata or replaces it', async () => {
     auth.writes = 'replace';
-    sendSignedUp.mockResolvedValueOnce(refused(500));
+    sendSignedUp.mockResolvedValueOnce(refused(422));
     sendSignupEventOnce(signUp());
     await runLater();
     // Replaced whole, with what was there kept; the released claim reads as null.
@@ -386,7 +462,7 @@ describe('sendSignupEventOnce', () => {
   });
 
   it('keeps the welcome claimed once Resend accepts a retry', async () => {
-    sendSignedUp.mockResolvedValueOnce(refused(500));
+    sendSignedUp.mockResolvedValueOnce(refused(429));
     sendSignupEventOnce(signUp());
     await runLater();
     sendSignupEventOnce(session());
@@ -541,8 +617,8 @@ describe('sendSignupEventOnce', () => {
     expect(sendSignedUp).not.toHaveBeenCalled();
     expect(logged()).toContain('[signup-event] failed:Error');
 
-    sendSignedUp.mockResolvedValueOnce(refused(500));
-    capturePostHog.mockResolvedValueOnce(failed('TypeError'));
+    sendSignedUp.mockResolvedValueOnce(refused(422));
+    capturePostHog.mockResolvedValueOnce(unknown('TypeError'));
     sendSignupEventOnce(signUp());
     await runLater();
     sendSignupEventOnce(signUp({ invited_at: AT }));

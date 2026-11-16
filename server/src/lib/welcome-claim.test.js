@@ -13,6 +13,7 @@ import {
   firstNameOf,
   isOldClaim,
   releaseWelcome,
+  resultOf,
   sendWelcomeEvent,
   welcomeStatus,
 } from './welcome-claim.js';
@@ -267,7 +268,7 @@ describe('sendWelcomeEvent', () => {
   it("sends Resend's user.signed_up with the e-mail and first name, and says it was accepted", async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, status: 200 }));
     expect(await sendWelcomeEvent(account(), { apiKey: 're_test', fetchImpl })).toEqual({
-      accepted: true,
+      result: 'accepted',
       status: 200,
       error: null,
     });
@@ -282,28 +283,71 @@ describe('sendWelcomeEvent', () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it('says a refusal, a failure and a timeout were not accepted, by status or name only', async () => {
-    const refused = vi.fn(async () => ({ ok: false, status: 422 }));
-    expect(await sendWelcomeEvent(account(), { apiKey: 're_test', fetchImpl: refused })).toEqual({
-      accepted: false,
-      status: 422,
-      error: null,
-    });
-    const timedOut = vi.fn(async () => {
-      throw Object.assign(new Error('The operation timed out for ada@example.com'), {
-        name: 'TimeoutError',
+  it('says a 4xx was refused: Resend surely did not take it', async () => {
+    for (const status of [400, 401, 403, 404, 408, 409, 422, 429]) {
+      const fetchImpl = vi.fn(async () => ({ ok: false, status }));
+      expect(await sendWelcomeEvent(account(), { apiKey: 're_test', fetchImpl })).toEqual({
+        result: 'refused',
+        status,
+        error: null,
       });
-    });
-    expect(await sendWelcomeEvent(account(), { apiKey: 're_test', fetchImpl: timedOut })).toEqual({
-      accepted: false,
-      status: null,
-      error: 'TimeoutError',
-    });
+    }
+  });
+
+  it('says a 5xx is unknown: Resend may have stored the event before it failed', async () => {
+    for (const status of [500, 502, 503, 504]) {
+      const fetchImpl = vi.fn(async () => ({ ok: false, status }));
+      expect(await sendWelcomeEvent(account(), { apiKey: 're_test', fetchImpl })).toEqual({
+        result: 'unknown',
+        status,
+        error: null,
+      });
+    }
+  });
+
+  it('says a timeout, an abort or a network error is unknown, by name only', async () => {
+    const thrown = [
+      Object.assign(new Error('The operation timed out for ada@example.com'), {
+        name: 'TimeoutError',
+      }),
+      Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }),
+      new TypeError('fetch failed'),
+    ];
+    for (const err of thrown) {
+      const fetchImpl = vi.fn(async () => {
+        throw err;
+      });
+      expect(await sendWelcomeEvent(account(), { apiKey: 're_test', fetchImpl })).toEqual({
+        result: 'unknown',
+        status: null,
+        error: err.name,
+      });
+    }
+  });
+
+  it('sends nothing without a key or an address: refused, as Resend never saw it', async () => {
     const none = vi.fn();
-    expect((await sendWelcomeEvent(account(), { apiKey: '', fetchImpl: none })).accepted).toBe(
-      false,
-    );
+    expect(await sendWelcomeEvent(account(), { apiKey: '', fetchImpl: none })).toEqual({
+      result: 'refused',
+      status: null,
+      error: 'not sent',
+    });
+    expect(
+      (await sendWelcomeEvent(account({ email: '' }), { apiKey: 're_test', fetchImpl: none }))
+        .result,
+    ).toBe('refused');
     expect(none).not.toHaveBeenCalled();
+  });
+
+  it('sorts statuses as the web does (lib/send-outcome.ts)', () => {
+    expect([200, 202, 299].map(resultOf)).toEqual(['accepted', 'accepted', 'accepted']);
+    expect([400, 422, 429, 499].map(resultOf)).toEqual([
+      'refused',
+      'refused',
+      'refused',
+      'refused',
+    ]);
+    expect([500, 502, 503, 504, 599, null].map(resultOf)).toEqual(Array(6).fill('unknown'));
   });
 
   it('takes the first word of the full name or the name', () => {

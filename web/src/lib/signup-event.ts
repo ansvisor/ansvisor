@@ -19,9 +19,13 @@ import type { SendOutcome } from '@/lib/send-outcome';
  *   `signup_event_tries`;
  * - PostHog's `signed_up` (NEXT_PUBLIC_POSTHOG_KEY): `signup_posthog_at`,
  *   tries in `signup_posthog_tries`.
- * A claim stays only once the service accepted the event (a 2xx answer). A
- * refusal or a failed call releases it, so a later page tries again, up to
- * MAX_TRIES for each.
+ * A claim is released only when the service surely didn't take the event: it
+ * answered 4xx (lib/send-outcome.ts), so a later page tries again, up to
+ * MAX_TRIES for each. It stays when the service accepted it (a 2xx), and
+ * when it may have: a timeout, an aborted or network error, or a 5xx can all
+ * come after the event was stored, and sending again could send a second
+ * welcome e-mail. A rare missed event is better than that; the log says
+ * `welcome_unknown:<name> (claim kept)`.
  *
  * Every step logs one short `[signup-event]` line with a reason code (never
  * an id, an address or a key), so a sign-up that got nothing shows where it
@@ -78,11 +82,11 @@ const OAUTH_FIRST_PAGE_WITHIN_MS = 10 * 60_000;
 const LOG_NEW_ACCOUNTS_FOR_MS = 24 * 60 * 60_000;
 
 // Where the claims are kept, in the account's app_metadata.
-/** The welcome: when it was claimed. Kept once Resend accepted it. */
+/** The welcome: when it was claimed. Released only if Resend refused it (a 4xx). */
 const WELCOME_CLAIM_KEY = 'signup_event_at';
 /** How many times the welcome was claimed. */
 const WELCOME_TRIES_KEY = 'signup_event_tries';
-/** PostHog's signed_up: when it was claimed. Kept once PostHog accepted it. */
+/** PostHog's signed_up: when it was claimed. Released only if PostHog refused it (a 4xx). */
 const POSTHOG_CLAIM_KEY = 'signup_posthog_at';
 /** How many times PostHog's signed_up was claimed. */
 const POSTHOG_TRIES_KEY = 'signup_posthog_tries';
@@ -234,11 +238,13 @@ async function writeMeta(id: string, appMetadata: Meta): Promise<string | null> 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, CLAIM_SETTLE_MS));
 
 /**
- * Log what became of one event: `welcome_accepted`, or `resend_refused:<status>`,
- * `resend_failed:<error name>`; likewise for PostHog.
+ * Log what became of one event: `welcome_accepted`; `resend_refused:<status>`
+ * (or why nothing was sent), released below; `welcome_unknown:<error name or
+ * status> (claim kept)`. Likewise for PostHog.
  */
 function logOutcome(event: 'welcome' | 'posthog', outcome: SendOutcome): void {
-  if (outcome.accepted) return log(`${event}_accepted`);
+  if (outcome.result === 'accepted') return log(`${event}_accepted`);
+  if (outcome.result === 'unknown') return log(`${event}_${outcome.reason} (claim kept)`, 'warn');
   const service = event === 'welcome' ? 'resend' : 'posthog';
   log(`${service}_${outcome.reason}`, 'error');
 }
@@ -249,8 +255,9 @@ function logOutcome(event: 'welcome' | 'posthog', outcome: SendOutcome): void {
  * a new claim id, left to settle and read back: of two servers that claimed
  * at once, only the one whose claim stayed sends. A failed read or write
  * sends nothing; a rare missed event is better than a second welcome e-mail.
- * An event the service didn't accept is released, in one write, so a later
- * page tries again.
+ * An event the service refused (a 4xx) is released, in one write, so a later
+ * page tries again; one it may have taken (a 5xx, a timeout, a network error)
+ * keeps its claim, for the same reason.
  */
 async function claimAndSend(id: string): Promise<void> {
   if (claiming.has(id)) return log('skip: in_progress');
@@ -301,11 +308,11 @@ async function claimAndSend(id: string): Promise<void> {
 
     const release: Meta = {};
     const left: string[] = [];
-    if (welcomeSent && !welcomeSent.accepted) {
+    if (welcomeSent?.result === 'refused') {
       release[WELCOME_CLAIM_KEY] = null;
       left.push(`welcome (${MAX_TRIES - triesOf(stayed, WELCOME_TRIES_KEY)} tries left)`);
     }
-    if (posthogSent && !posthogSent.accepted) {
+    if (posthogSent?.result === 'refused') {
       release[POSTHOG_CLAIM_KEY] = null;
       left.push(`posthog (${MAX_TRIES - triesOf(stayed, POSTHOG_TRIES_KEY)} tries left)`);
     }

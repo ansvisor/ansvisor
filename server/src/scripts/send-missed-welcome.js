@@ -4,7 +4,7 @@
  * server, which has RESEND_API_KEY and the Supabase service key:
  *
  *   node src/scripts/send-missed-welcome.js            # dry run: counts and dates
- *   node src/scripts/send-missed-welcome.js --send     # claim, send, keep on a 2xx
+ *   node src/scripts/send-missed-welcome.js --send     # claim, send, release on a 4xx
  *
  * Options:
  *   --since <date>         accounts made from then on (ISO date). Default, and
@@ -12,9 +12,12 @@
  *                          Automation started.
  *   --dry-run              the default: list only, claim and send nothing.
  *   --send                 claim each account as the web's pages do
- *                          (lib/welcome-claim.js), send the event, keep the
- *                          claim only when Resend accepted it (2xx), and
- *                          release it otherwise.
+ *                          (lib/welcome-claim.js), send the event, and
+ *                          release the claim only when Resend refused it (a
+ *                          4xx). On a 5xx, a timeout or a network error the
+ *                          claim is kept and the account counted "kept
+ *                          (unknown)": Resend may have the event, and sending
+ *                          again could send a second welcome.
  *   --pause-ms <n>         wait between two sends (default 1000).
  *   --include-early-oauth  also Google and GitHub accounts made before the
  *                          claim went live (14 Nov 2026, 16:00 UTC). The old
@@ -26,9 +29,9 @@
  *                          `signup_claim_id`): written before this change for
  *                          both events, even when Resend got nothing. Off by
  *                          default. Each is claimed again the new way (a new
- *                          claim id, the wait, the read-back), sent, and kept
- *                          only on a 2xx; it is then new-style, so it is never
- *                          picked again.
+ *                          claim id, the wait, the read-back), sent, and
+ *                          released only on a 4xx; it is then new-style, so it
+ *                          is never picked again.
  *
  *   USE --include-old-claims ONLY AFTER CHECKING RESEND'S LOGS show no
  *   `/events/send` request from 13 Nov 2026 until this change went live (as on
@@ -41,6 +44,12 @@
  * once, and no `signup_event_at` in app_metadata (or an old-style one, with
  * --include-old-claims). It prints counts, the accounts' creation dates and
  * sign-in providers: never an e-mail address, a name or a key.
+ *
+ * A "kept (unknown)" account is never picked again: its claim is new-style.
+ * Look for its `user.signed_up` in Resend's Events at the time printed; only
+ * if none arrived, remove that account's `signup_event_at` by hand (find it
+ * by its creation date) and run --send again. The run exits 1 when any send
+ * was refused or unknown, or a claim couldn't be released.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -165,6 +174,7 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
     oldClaims,
     sent: 0,
     refused: 0,
+    unknown: 0,
     skipped: 0,
     unreleased: 0,
   };
@@ -183,25 +193,40 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
       continue;
     }
     const answer = await sendWelcomeEvent(claimed, { apiKey, fetchImpl });
-    if (answer.accepted) {
+    const why = answer.status ? `HTTP ${answer.status}` : answer.error;
+    if (answer.result === 'accepted') {
       result.sent++;
       log(`  ${label(account)}: sent`);
+      continue;
+    }
+    if (answer.result === 'unknown') {
+      // Resend may have it: kept, so it is never sent twice.
+      result.unknown++;
+      log(`  ${label(account)}: unknown (${why}); claim kept, as Resend may have it`);
       continue;
     }
     result.refused++;
     const released = await releaseWelcome(admin, claimed);
     if (!released) result.unreleased++;
-    const why = answer.status ? `HTTP ${answer.status}` : answer.error;
-    log(
-      `  ${label(account)}: not accepted (${why}); claim ${released ? 'released' : 'NOT released'}`,
-    );
+    log(`  ${label(account)}: refused (${why}); claim ${released ? 'released' : 'NOT released'}`);
   }
   log(
-    `Done: ${result.sent} sent, ${result.refused} not accepted (claim released), ` +
-      `${result.skipped} skipped` +
+    `Done: ${result.sent} sent, ${result.refused} refused (claim released), ` +
+      `${result.unknown} kept (unknown), ${result.skipped} skipped` +
       (result.unreleased ? `, ${result.unreleased} claim(s) not released` : ''),
   );
+  if (result.unknown) {
+    log(
+      "Kept (unknown): check Resend's Events for user.signed_up at those times before " +
+        'clearing a claim by hand (see the header of this script).',
+    );
+  }
   return result;
+}
+
+/** The exit code: 1 when a send was refused or unknown, or a claim wasn't released. */
+export function exitCodeOf(result) {
+  return result.refused || result.unknown || result.unreleased ? 1 : 0;
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
@@ -226,7 +251,7 @@ if (isMain) {
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       log: (line) => console.log(line),
     });
-    process.exit(result.refused || result.unreleased ? 1 : 0);
+    process.exit(exitCodeOf(result));
   } catch (err) {
     console.error(`send-missed-welcome: ${err instanceof Error ? err.message : 'failed'}`);
     process.exit(1);

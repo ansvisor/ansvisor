@@ -7,8 +7,10 @@ import { randomUUID } from 'node:crypto';
  * and the script never both send one account its welcome.
  * welcome-claim.test.js checks the two agree.
  *
- * - `signup_event_at`: the welcome, claimed. It stays only once Resend
- *   accepted the event (a 2xx answer); otherwise it is released (removed).
+ * - `signup_event_at`: the welcome, claimed. It is released (removed) only
+ *   when Resend surely didn't take the event (a 4xx answer). It stays when
+ *   Resend accepted it (a 2xx) and when it may have (a 5xx, a timeout, an
+ *   aborted or network error): sending again could send a second welcome.
  * - `signup_event_tries`: how many times it was claimed. The web's pages stop
  *   at WELCOME_MAX_TRIES; the script, run by hand, doesn't.
  * - `signup_claim_id`: a new id with every claim written. The claim is read
@@ -140,8 +142,8 @@ export async function claimWelcome(
 }
 
 /**
- * Release a welcome claim Resend didn't accept (its count of tries stays),
- * on the account as claimWelcome read it back. True when written.
+ * Release a welcome claim Resend refused (its count of tries stays), on the
+ * account as claimWelcome read it back. True when written.
  */
 export async function releaseWelcome(admin, user) {
   const { error } = await admin.updateUserById(user.id, {
@@ -158,13 +160,27 @@ export function firstNameOf(user) {
 }
 
 /**
+ * What became of a send, by the web's rule (web/src/lib/send-outcome.ts):
+ * 'accepted' on a 2xx; 'refused' on a 4xx (Resend surely didn't take it, so
+ * the claim may be released); 'unknown' on a 5xx, as Resend may have stored
+ * the event before it failed.
+ */
+export function resultOf(status) {
+  if (status >= 200 && status < 300) return 'accepted';
+  if (status >= 400 && status < 500) return 'refused';
+  return 'unknown';
+}
+
+/**
  * Send the welcome event, as the web does (lib/resend-event.ts): Resend's
- * `user.signed_up` with the e-mail and the first name. Says whether Resend
- * accepted it (2xx), with the HTTP status or the error's name; never the key
- * or the address. Never throws.
+ * `user.signed_up` with the e-mail and the first name. Says what became of it
+ * (`result`: resultOf; a call that threw, such as a timeout, an abort or a
+ * network error, is 'unknown'; nothing sent is 'refused'), with the HTTP
+ * status or the error's name; never the key or the address. Never throws.
+ * No idempotency key: none is documented for the events endpoint.
  */
 export async function sendWelcomeEvent(user, { apiKey, fetchImpl = fetch }) {
-  if (!apiKey || !user?.email) return { accepted: false, status: null, error: 'not sent' };
+  if (!apiKey || !user?.email) return { result: 'refused', status: null, error: 'not sent' };
   try {
     const res = await fetchImpl(RESEND_EVENTS_URL, {
       method: 'POST',
@@ -176,9 +192,14 @@ export async function sendWelcomeEvent(user, { apiKey, fetchImpl = fetch }) {
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    return { accepted: Boolean(res.ok), status: res.status ?? null, error: null };
+    const status = res.status ?? null;
+    return { result: res.ok ? 'accepted' : resultOf(status), status, error: null };
   } catch (err) {
     const name = err?.name;
-    return { accepted: false, status: null, error: typeof name === 'string' ? name : 'error' };
+    return {
+      result: 'unknown',
+      status: null,
+      error: typeof name === 'string' && name ? name : 'error',
+    };
   }
 }
