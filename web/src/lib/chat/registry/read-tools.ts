@@ -9,7 +9,7 @@ import {
   listActionsPageFor,
 } from '@/lib/mcp/action-center-reads';
 import { getBrandFactsFor } from '@/lib/mcp/brand-facts-reads';
-import { contentDraftsPageFor, getContentDraftFor } from '@/lib/mcp/content';
+import { contentDraftsPageFor, getContentDraftFor, lookUpDraftsFor } from '@/lib/mcp/content';
 import { contentUuid, listDraftsShape } from '@/lib/mcp/content-schemas';
 import {
   actionHistoryPageFor,
@@ -27,6 +27,11 @@ import {
   listCompetitorsFor,
   listPromptSuggestionsFor,
   listTopicsFor,
+  lookUpCitationsFor,
+  lookUpOpportunitiesFor,
+  lookUpPromptPerformanceFor,
+  lookUpPromptsFor,
+  lookUpReportsFor,
   promptVolumesPageFor,
   promptsPageFor,
   reportsPageFor,
@@ -41,7 +46,8 @@ import {
 } from '@/lib/mcp/mentions';
 import { openPageFor } from '@/lib/mcp/pages';
 import { pageMeta, pageWindow } from '@/lib/mcp/list-page';
-import { listSignalsPageFor } from '@/lib/mcp/signal-page';
+import { LOOKUP_MAX, SEARCH_MAX_CHARS } from '@/lib/mcp/lookup';
+import { listSignalsPageFor, lookUpSignalsFor } from '@/lib/mcp/signal-page';
 import { CHECK_RULES_TOOL, checkDraftRules } from '../page-check';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 import { PAGED, countedPage, listPage, pageInput } from './list-paging';
@@ -60,6 +66,21 @@ const model = z.string().optional().describe('A model slug, or comma-separated s
 const region = z.string().optional().describe('A region code, e.g. "US" or "TR".');
 const topicId = contentUuid.optional().describe('Topic id, from list_topics.');
 const rowCap = (max: number) => z.number().int().min(1).max(max).optional();
+
+/**
+ * A lookup's inputs (the owner's plan of 2026-11-16, item 2: "what is X?"
+ * never depends on X being on a page of the list): the ids, or a few words,
+ * of what the person named. scope.ts NAMED_ROWS keeps `limit` off them.
+ */
+const lookupIds = (what: string) =>
+  z.array(contentUuid).min(1).max(LOOKUP_MAX).optional().describe(what);
+const lookupSearch = (what: string) =>
+  z.string().trim().max(SEARCH_MAX_CHARS).optional().describe(what);
+/** Whether a read's input names what it looks up. */
+const looksUp = (...fields: (readonly unknown[] | string | undefined)[]) =>
+  fields.some((field) => (typeof field === 'string' ? field !== '' : Boolean(field?.length)));
+/** What every lookup's description says of what it didn't find. */
+const NOT_FOUND = `Each one asked is in the result or in not_found: say "not found" plainly for those, with where you looked, and never offer others as the closest or similar. Never say one doesn't exist because a page of the list didn't show it.`;
 
 /** Brand Visibility's Mentions tab's filters, the same on both mentions reads. */
 const mentionFilters = {
@@ -232,7 +253,7 @@ export const READ_TOOLS = [
     name: 'list_prompts',
     class: 'read',
     area: 'prompts',
-    description: `The prompts tracked for a brand, with topic, platforms, regions and whether each is active; newest first. Filter by topic or active state.${PAGED}`,
+    description: `The prompts tracked for a brand, with topic, platforms, regions and whether each is active; newest first. Filter by topic or active state.${PAGED} When the person names a prompt by its words or its id (the prompt's page), read that first: search (a few distinctive words of its text, in any order and case; a stem such as "subscri" finds "subscription" and "subscriptions") or ids. A lookup reads every topic and state, active and paused (topic_id and is_active don't apply); search pages like the list. No prompt has the words: search once more with fewer or shorter words before you say the brand doesn't track it. ${NOT_FOUND}`,
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -246,26 +267,37 @@ export const READ_TOOLS = [
       topic_id: topicId,
       is_active: z.boolean().optional(),
       ...pageInput,
+      search: lookupSearch(
+        'Prompts whose text holds every one of these words, in any order and case: a lookup, in every topic and state; pages by offset.',
+      ),
+      ids: lookupIds('Prompts by their ids: a lookup, in every topic and state.'),
     }),
     run: async (ctx, input) =>
-      countedPage(
-        await promptsPageFor(ctx, {
-          brandId: input.brand_id,
-          topicId: input.topic_id,
-          isActive: input.is_active,
-          ...pageWindow(input),
-        }),
-        'prompts',
-        input,
-        { what: 'prompts', order: 'newest first' },
-      ),
+      looksUp(input.ids, input.search)
+        ? lookUpPromptsFor(ctx, {
+            brandId: input.brand_id,
+            ids: input.ids,
+            search: input.search,
+            offset: input.offset,
+          })
+        : countedPage(
+            await promptsPageFor(ctx, {
+              brandId: input.brand_id,
+              topicId: input.topic_id,
+              isActive: input.is_active,
+              ...pageWindow(input),
+            }),
+            'prompts',
+            input,
+            { what: 'prompts', order: 'newest first' },
+          ),
     fixture: { input: { brand_id: BRAND, is_active: true } },
   }),
   defineTool({
     name: 'get_prompt_performance',
     class: 'read',
     area: 'prompts',
-    description: `Visibility, mentions, citations and appearances per prompt over a period, sorted. For "which prompts do best" or "which dropped this week".${PAGED}`,
+    description: `Visibility, mentions, citations and appearances per prompt over a period, sorted. For "which prompts do best" or "which dropped this week".${PAGED} For one prompt or a few (its page, or prompts the person names), read prompt_ids first (ids from list_prompts; by its words: list_prompts' search): those prompts only, every one of them, over the same period, platforms and region, whatever their topic (topic_id, sort, order and the page don't apply). A tracked prompt with no answers in that window is in no_results: say so, it is tracked. ${NOT_FOUND}`,
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -284,8 +316,21 @@ export const READ_TOOLS = [
       ...pageInput,
       model,
       region,
+      prompt_ids: lookupIds(
+        'These prompts only, by id (list_prompts): a lookup, whatever their topic; no page.',
+      ),
     }),
     run: async (ctx, input) => {
+      if (looksUp(input.prompt_ids)) {
+        return lookUpPromptPerformanceFor(ctx, {
+          brandId: input.brand_id,
+          dateFrom: input.date_from,
+          dateTo: input.date_to,
+          model: input.model,
+          region: input.region,
+          promptIds: input.prompt_ids!,
+        });
+      }
       const read = await getPromptPerformanceFor(ctx, {
         brandId: input.brand_id,
         dateFrom: input.date_from,
@@ -492,7 +537,7 @@ export const READ_TOOLS = [
     name: 'list_citations',
     class: 'read',
     area: 'citations',
-    description: `The domains and pages AI answers cite for the brand over a period, owned, competitor or external, most cited first; totals counts them all. One offset pages both lists.${PAGED}`,
+    description: `The domains and pages AI answers cite for the brand over a period, owned, competitor or external, most cited first; totals counts them all. One offset pages both lists.${PAGED} When the person names a domain or a page's address, read that first: domains ("example.com", "www.example.com" and "https://example.com/" are the same; each finds the domain, its subdomains and its most cited pages) or urls (scheme, "www." and a trailing slash don't matter), every one of the message in one read. A lookup reads every source type (source_filter and the page don't apply) over the same period, platforms, region and topic, with the prompts whose answers cite each. One in not_found isn't cited in that period: say so plainly, with the period, and never offer other domains or pages as the closest. Never say one isn't cited because a page of the list didn't show it.`,
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -510,8 +555,36 @@ export const READ_TOOLS = [
       topic_id: topicId,
       ...pageInput,
       source_filter: z.enum(['all', 'owned', 'competitor', 'external']).optional(),
+      domains: z
+        .array(z.string().trim().min(1).max(253))
+        .min(1)
+        .max(LOOKUP_MAX)
+        .optional()
+        .describe(
+          'Cited domains, as the person wrote them: "example.com", "www.example.com", "https://example.com/". A lookup: each with its subdomains, pages and prompts, every source type.',
+        ),
+      urls: z
+        .array(z.string().trim().min(1).max(2048))
+        .min(1)
+        .max(LOOKUP_MAX)
+        .optional()
+        .describe(
+          'Cited pages by their address, with or without "https://" and "www.": a lookup, every source type, with the prompts whose answers cite each.',
+        ),
     }),
     run: async (ctx, input) => {
+      if (looksUp(input.domains, input.urls)) {
+        return lookUpCitationsFor(ctx, {
+          brandId: input.brand_id,
+          dateFrom: input.date_from,
+          dateTo: input.date_to,
+          model: input.model,
+          region: input.region,
+          topicId: input.topic_id,
+          domains: input.domains,
+          urls: input.urls,
+        });
+      }
       const read = await listCitationsFor(ctx, {
         brandId: input.brand_id,
         dateFrom: input.date_from,
@@ -749,7 +822,7 @@ export const READ_TOOLS = [
     name: 'list_signals',
     class: 'read',
     area: 'action_center',
-    description: `The changes the Action Center detected for the brand over a period, as the Signals page shows them: detected by its end and still open or resolved after its start, newest first. Each: title and description in the page's words, kind, category, impact, status, detected day, where, and the actions built on it.${PAGED}`,
+    description: `The changes the Action Center detected for the brand over a period, as the Signals page shows them: detected by its end and still open or resolved after its start, newest first. Each: code (as S-07), title and description in the page's words, kind, category, impact, status, detected day, where, and the actions built on it.${PAGED} When the person names a signal by its code (S-07, "S 7", "s7", "#7", or a number they clearly mean as one) or its id, read that first: codes or ids, every one of the message in one read. It reads every status and every date, in this brand only (the period, status, kind and page don't apply); each row says whether it matched by its code or its id (matched). A code in not_found: say this brand has no signal with that code (codes are per brand), and never offer other signals as the closest. Never say a signal doesn't exist because a page of the list didn't show it. Name each signal by its title, with its code.`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -765,17 +838,28 @@ export const READ_TOOLS = [
       date_from: dateFrom,
       date_to: dateTo,
       ...pageInput,
+      codes: z
+        .array(z.string().trim().min(1).max(40))
+        .min(1)
+        .max(LOOKUP_MAX)
+        .optional()
+        .describe(
+          'Signals by their codes, as the person wrote them: "S-07", "S 7", "s7", "#7", "7". A lookup, every status and date; the other inputs don\'t apply.',
+        ),
+      ids: lookupIds('Signals by their ids. A lookup, every status and date.'),
     }),
     run: (ctx, input) =>
-      listSignalsPageFor(ctx, {
-        brandId: input.brand_id,
-        status: input.status,
-        kind: input.kind,
-        dateFrom: input.date_from,
-        dateTo: input.date_to,
-        limit: input.limit,
-        offset: input.offset,
-      }),
+      looksUp(input.codes, input.ids)
+        ? lookUpSignalsFor(ctx, { brandId: input.brand_id, codes: input.codes, ids: input.ids })
+        : listSignalsPageFor(ctx, {
+            brandId: input.brand_id,
+            status: input.status,
+            kind: input.kind,
+            dateFrom: input.date_from,
+            dateTo: input.date_to,
+            limit: input.limit,
+            offset: input.offset,
+          }),
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
@@ -805,7 +889,7 @@ export const READ_TOOLS = [
     name: 'list_content_opportunities',
     class: 'read',
     area: 'content',
-    description: `The brand's content opportunities, highest score first: the prompts where it loses visibility and the page that would win them. Archived ones only when asked by status.${PAGED}`,
+    description: `The brand's content opportunities, highest score first: the prompts where it loses visibility and the page that would win them. Archived ones only when asked by status.${PAGED} When the person names an opportunity by its title or id, read that first: search (a few distinctive words of its title, in any order and case; a year isn't matched, as Content shows past years as this one) or ids. A lookup reads every status, archived included (status, impact and type don't apply); search pages like the list. ${NOT_FOUND}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -822,27 +906,38 @@ export const READ_TOOLS = [
       impact: z.enum(['high', 'medium', 'low']).optional(),
       type: z.enum(['owned', 'earned']).optional(),
       ...pageInput,
+      search: lookupSearch(
+        'Opportunities whose title holds every one of these words, in any order and case: a lookup, every status; pages by offset.',
+      ),
+      ids: lookupIds('Opportunities by their ids: a lookup, every status.'),
     }),
     run: async (ctx, input) =>
-      countedPage(
-        await contentOpportunitiesPageFor(ctx, {
-          brandId: input.brand_id,
-          status: input.status,
-          impact: input.impact,
-          type: input.type,
-          ...pageWindow(input),
-        }),
-        'opportunities',
-        input,
-        { what: 'opportunities', order: 'highest score first' },
-      ),
+      looksUp(input.ids, input.search)
+        ? lookUpOpportunitiesFor(ctx, {
+            brandId: input.brand_id,
+            ids: input.ids,
+            search: input.search,
+            offset: input.offset,
+          })
+        : countedPage(
+            await contentOpportunitiesPageFor(ctx, {
+              brandId: input.brand_id,
+              status: input.status,
+              impact: input.impact,
+              type: input.type,
+              ...pageWindow(input),
+            }),
+            'opportunities',
+            input,
+            { what: 'opportunities', order: 'highest score first' },
+          ),
     fixture: { input: { brand_id: BRAND, impact: 'high' } },
   }),
   defineTool({
     name: 'list_drafts',
     class: 'read',
     area: 'content',
-    description: `The brand's Content Library drafts, latest changed first: title, status, method, page type and author. Archived drafts are set aside.${PAGED}`,
+    description: `The brand's Content Library drafts, latest changed first: title, status, method, page type and author. Archived drafts are set aside.${PAGED} When the person names a draft by its title or id, read that first: search (a few distinctive words of its title, in any order and case) or ids. A lookup reads every status, archived drafts included and marked archived (status doesn't apply); search pages like the list. ${NOT_FOUND}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -851,14 +946,28 @@ export const READ_TOOLS = [
     route: '/dashboard/content/library',
     mcpTool: 'list_content_drafts',
     specRow: '53',
-    inputSchema: z.object({ ...listDraftsShape, ...pageInput }),
-    run: async (ctx, input) =>
-      countedPage(
-        await contentDraftsPageFor(ctx, input.brand_id, input.status, pageWindow(input)),
-        'drafts',
-        input,
-        { what: 'drafts', order: 'latest changed first' },
+    inputSchema: z.object({
+      ...listDraftsShape,
+      ...pageInput,
+      search: lookupSearch(
+        'Drafts whose title holds every one of these words, in any order and case: a lookup, every status, archived too; pages by offset.',
       ),
+      ids: lookupIds('Drafts by their ids: a lookup, every status, archived too.'),
+    }),
+    run: async (ctx, input) =>
+      looksUp(input.ids, input.search)
+        ? lookUpDraftsFor(ctx, {
+            brandId: input.brand_id,
+            ids: input.ids,
+            search: input.search,
+            offset: input.offset,
+          })
+        : countedPage(
+            await contentDraftsPageFor(ctx, input.brand_id, input.status, pageWindow(input)),
+            'drafts',
+            input,
+            { what: 'drafts', order: 'latest changed first' },
+          ),
     fixture: { input: { brand_id: BRAND, status: 'in_review' } },
   }),
   defineTool({
@@ -875,7 +984,11 @@ export const READ_TOOLS = [
     route: '/dashboard/content/library',
     mcpTool: 'get_content_draft',
     specRow: '53',
-    inputSchema: z.object({ draft_id: contentUuid.describe('Draft id, from list_drafts.') }),
+    inputSchema: z.object({
+      draft_id: contentUuid.describe(
+        'Draft id, from list_drafts (by its title: its search input).',
+      ),
+    }),
     run: (ctx, input) => getContentDraftFor(ctx, input.draft_id),
     fixture: { input: { draft_id: ITEM } },
   }),
@@ -904,7 +1017,7 @@ export const READ_TOOLS = [
     name: 'get_reports',
     class: 'read',
     area: 'reports',
-    description: `The brand's saved reports, newest first: title, template and date range.${PAGED}`,
+    description: `The brand's saved reports, newest first: title, template and date range.${PAGED} When the person names a report by its title or id, read that first: search (a few distinctive words of its title, in any order and case) or ids; search pages like the list. ${NOT_FOUND}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -913,8 +1026,23 @@ export const READ_TOOLS = [
     route: '/dashboard/reports',
     mcpTool: 'list_reports',
     specRow: '63',
-    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
+    inputSchema: z.object({
+      brand_id: brandId,
+      ...pageInput,
+      search: lookupSearch(
+        'Reports whose title holds every one of these words, in any order and case: a lookup; pages by offset.',
+      ),
+      ids: lookupIds('Reports by their ids: a lookup.'),
+    }),
     run: async (ctx, input) => {
+      if (looksUp(input.ids, input.search)) {
+        return lookUpReportsFor(ctx, {
+          brandId: input.brand_id,
+          ids: input.ids,
+          search: input.search,
+          offset: input.offset,
+        });
+      }
       const { limit, offset } = pageWindow(input);
       return countedPage(
         await reportsPageFor(ctx, input.brand_id, limit, offset),

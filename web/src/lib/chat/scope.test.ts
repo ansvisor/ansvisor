@@ -22,6 +22,7 @@ const {
   asksAllTime,
   capRows,
   givesDates,
+  namesRows,
   pagedRead,
   planPlatforms,
   resolveDates,
@@ -488,10 +489,39 @@ describe('rows', () => {
       cap: { rows: ROW_CAP, probe: null },
     });
     expect(scoped.kind === 'read' && 'limit' in scoped.input).toBe(false);
-    for (const [name, field] of Object.entries(NAMED_ROWS)) {
+    for (const [name, fields] of Object.entries(NAMED_ROWS)) {
       const tool = CHAT_TOOLS.find((t) => t.name === name)!;
-      expect(field in tool.inputSchema.shape, name).toBe(true);
+      for (const field of fields) expect(field in tool.inputSchema.shape, name).toBe(true);
     }
+  });
+
+  // The owner's plan (2026-11-16, item 2): "what is X?" never depends on X being on the first page.
+  it.each([
+    ['list_signals', { codes: ['S-07', 's12'] }],
+    ['list_signals', { ids: ['a8e00000-0000-4000-8000-000000000001'] }],
+    ['list_prompts', { search: 'cold brew' }],
+    ['list_prompts', { ids: ['a1e00000-0000-4000-8000-000000000001'] }],
+    ['get_prompt_performance', { prompt_ids: ['a1e00000-0000-4000-8000-000000000001'] }],
+    ['list_citations', { domains: ['www.example.com'] }],
+    ['list_citations', { urls: ['https://example.com/a/'] }],
+    ['list_content_opportunities', { search: 'storage guide' }],
+    ['list_drafts', { search: 'gift boxes' }],
+    ['get_reports', { ids: ['a4e00000-0000-4000-8000-000000000001'] }],
+  ])('never cuts a lookup by %s %j to a limit given beside it', async (name, lookup) => {
+    const tool = CHAT_TOOLS.find((t) => t.name === name)!;
+    const scoped = await scopeRead(tool, { brand_id: BRAND, ...lookup, limit: 1 }, facts());
+    expect(scoped).toMatchObject({ kind: 'read', input: lookup, cap: { rows: ROW_CAP } });
+    expect(scoped.kind === 'read' && 'limit' in scoped.input, name).toBe(false);
+    // The same read without a lookup keeps its page.
+    const page = await scopeRead(tool, { brand_id: BRAND, limit: 1 }, facts());
+    expect(page.kind === 'read' && page.input.limit, name).toBe(1);
+  });
+
+  it('reads blank words or an empty list as no lookup', () => {
+    expect(namesRows('list_prompts', { search: '  ' })).toBe(false);
+    expect(namesRows('list_signals', { codes: [] })).toBe(false);
+    expect(namesRows('list_signals', { codes: ['S-07'] })).toBe(true);
+    expect(namesRows('list_topics', { search: 'x' })).toBe(false);
   });
 
   it('cuts every list to its rows and says how many were left out', () => {

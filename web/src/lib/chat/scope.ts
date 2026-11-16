@@ -55,13 +55,34 @@ export const ROW_LIMITS: Readonly<Record<string, { default: number; max: number 
 export const PAGED_READS: ReadonlySet<string> = new Set(['list_action_center_tasks']);
 
 /**
- * Reads that can name the rows they return, by the input field that names
+ * Reads that can name the rows they return, by the input fields that name
  * them: the actions of the codes a person wrote (list_action_center_tasks'
- * codes, at most 10, each one or two actions). Every row named comes back,
- * never cut by a `limit` given beside it: a code that names two actions
- * shows both (the owner's report, 2026-11-16).
+ * codes, at most 10, each one or two actions), and the other lookups by
+ * code, id, words, domain or address (registry/read-tools.ts, the owner's
+ * plan of 2026-11-16, item 2). Every row named comes back, never cut by a
+ * `limit` given beside it: a code that names two actions shows both (the
+ * owner's report, 2026-11-16); words page by offset.
  */
-export const NAMED_ROWS: Readonly<Record<string, string>> = { list_action_center_tasks: 'codes' };
+export const NAMED_ROWS: Readonly<Record<string, readonly string[]>> = {
+  list_action_center_tasks: ['codes'],
+  list_signals: ['codes', 'ids'],
+  list_prompts: ['ids', 'search'],
+  get_prompt_performance: ['prompt_ids'],
+  list_citations: ['domains', 'urls'],
+  list_content_opportunities: ['ids', 'search'],
+  list_drafts: ['ids', 'search'],
+  get_reports: ['ids', 'search'],
+};
+
+/** Whether a read's input names its rows (NAMED_ROWS): a list or words in one of its fields. */
+export function namesRows(toolName: string, input: Record<string, unknown>): boolean {
+  return (NAMED_ROWS[toolName] ?? []).some((field) => {
+    const value = input[field];
+    return Array.isArray(value)
+      ? value.length > 0
+      : typeof value === 'string' && value.trim() !== '';
+  });
+}
 
 /**
  * The days a `days` read covers when the model names none: Google's
@@ -459,8 +480,7 @@ export async function scopeRead(
   // unless the read counts them itself.
   const limits = ROW_LIMITS[tool.name];
   let cap: RowCap = { rows: limits?.default ?? ROW_CAP, probe: null };
-  const named = NAMED_ROWS[tool.name];
-  if (named && Array.isArray(input[named]) && (input[named] as unknown[]).length > 0) {
+  if (namesRows(tool.name, input)) {
     delete input.limit;
     cap = { rows: ROW_CAP, probe: null };
   } else if (hasField(tool, 'limit')) {

@@ -12,8 +12,18 @@ export function signalCode(signal: Numbered): string | null {
   return signal.brandNo ? `S-${String(signal.brandNo).padStart(2, '0')}` : null;
 }
 
+/**
+ * The signal number a search names, as the app shows it or as typed: "S-03",
+ * "s-3", "S 3", "S3", "#3" or "3". Null for any other text, and for 0.
+ */
+export function searchedSignalNo(query: string): number | null {
+  const match = /^(?:s[-\s]?|#)?(\d{1,9})$/i.exec(query.trim());
+  const no = match ? Number(match[1]) : 0;
+  return no > 0 ? no : null;
+}
+
 /** Whether a search names this signal by its code: "S-03", "s-3", "S3", "#3" or "3". */
 export function matchesSignalCode(signal: Numbered, query: string): boolean {
-  const match = /^(?:s[-\s]?|#)?(\d{1,9})$/i.exec(query.trim());
-  return Boolean(match && signal.brandNo && Number(match[1]) === signal.brandNo);
+  const no = searchedSignalNo(query);
+  return Boolean(no && signal.brandNo && no === signal.brandNo);
 }

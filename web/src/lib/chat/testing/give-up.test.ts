@@ -82,6 +82,11 @@ describe('giveUpPhrases', () => {
     expect(lookedUp([{ brand_id: 'b1', codes: ['AC-481'] }])).toBe(true);
     expect(lookedUp([{ action_id: 'a1' }])).toBe(true);
     expect(lookedUp([{ brand_id: 'b1', codes: [] }])).toBe(false);
+    // The other lookups by code, id, words, domain or address (the owner's plan, 2026-11-16).
+    expect(lookedUp([{ brand_id: 'b1', domains: ['example.com'] }])).toBe(true);
+    expect(lookedUp([{ brand_id: 'b1', urls: ['https://example.com/a'] }])).toBe(true);
+    expect(lookedUp([{ brand_id: 'b1', prompt_ids: ['p1'] }])).toBe(true);
+    expect(lookedUp([{ brand_id: 'b1', search: '' }])).toBe(false);
   });
 });
 
