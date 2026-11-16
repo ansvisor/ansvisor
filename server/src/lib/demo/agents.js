@@ -63,9 +63,8 @@ function runMessage(agent, trigger) {
 const read = (label, dateRange, rows, tool, platforms = ALL_PLATFORMS) => ({
   kind: 'read',
   label,
-  detail: [dateRange, platforms.join(', '), `${rows} ${rows === 1 ? 'row' : 'rows'}`]
-    .filter(Boolean)
-    .join(' · '),
+  // Its period and platforms, as the engine words them: its rows are counted, never shown.
+  detail: [dateRange, platforms.join(', ')].filter(Boolean).join(' · '),
   scope: { dateRange, platforms, brand: BRAND.name },
   rows,
   tool,

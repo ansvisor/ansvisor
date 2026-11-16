@@ -93,16 +93,22 @@ describe('doneSteps and dataUsed', () => {
       scope: { subject: 'Memory', unit: 'items' },
     });
     expect(dataUsed([memory, ...steps])).toEqual([
-      { label: 'Memory', rows: 3, unit: 'items' },
-      { label: 'Citations', rows: 42 },
+      { label: 'Memory', items: 3 },
+      { label: 'Citations' },
       { label: 'ansvisor.com/pricing' },
     ]);
   });
 
-  it('names each source once with its largest count, and each page opened; skills, checks and failed reads aren’t sources', () => {
-    expect(dataUsed(steps)).toEqual([
-      { label: 'Citations', rows: 42 },
-      { label: 'ansvisor.com/pricing' },
-    ]);
+  it('names each source once, never with its rows, and each page opened; skills, checks and failed reads aren’t sources', () => {
+    expect(dataUsed(steps)).toEqual([{ label: 'Citations' }, { label: 'ansvisor.com/pricing' }]);
+  });
+
+  it('names a read of 0 rows as any other source, with no count', () => {
+    expect(
+      dataUsed([
+        step({ n: 1, kind: 'read', label: 'Read Action Center', rowCount: 50 }),
+        step({ n: 2, kind: 'read', label: 'Read Action History', rowCount: 0 }),
+      ]),
+    ).toEqual([{ label: 'Action Center' }, { label: 'Action History' }]);
   });
 });

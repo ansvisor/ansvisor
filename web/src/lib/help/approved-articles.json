@@ -1260,7 +1260,7 @@
         },
         {
           "heading": "See a draft before you approve it",
-          "text": "On a card that asks you to publish a draft, send it to your CMS or send it to your webhook, **Show full text** opens the draft's whole text, read-only, so you can read it before you approve. Click it again to close it. Approving works as before."
+          "text": "On a card that asks you to publish a draft, send it to your CMS or send it to your webhook, **Show full text** opens the draft's whole text, read-only, so you can read it before you approve. Click it again to close it. Approving works as before.\n\nWhen two or more of your agents each wait on a change to the same draft, **Needs you** in your **Inbox** shows one card for it: “N changes from M agents”, with each agent's change. **Approve all** makes every change and says how many were made; a change that wasn't made is listed on the card. When more than one change rewrites the page, they would overwrite each other, so the card says **Approve these one by one**: click each change to open its chat and approve it there."
         },
         {
           "heading": "Agent work: who starts agent work",
@@ -1715,7 +1715,7 @@
         },
         {
           "heading": "Watch the work",
-          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both."
+          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both."
         },
         {
           "heading": "Big requests in parts",

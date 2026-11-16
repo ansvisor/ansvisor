@@ -65,13 +65,31 @@ function scopeOf(json: unknown): ChatStepScope | undefined {
   return Object.keys(scope).length > 0 ? scope : undefined;
 }
 
+/** The row count a read step's words ended with before (" · 42 rows", "0 rows"). */
+const ROW_COUNT = /(?:^| · )(\d[\d,]*) rows?$/;
+
+/**
+ * A read step's words without the row count steps kept in them before
+ * ("Last 30 days · ChatGPT · 0 rows" → "Last 30 days · ChatGPT"): a count
+ * is never shown, an older step's neither. Only the count it read, which
+ * row_count still holds; other words stay as they are.
+ */
+export function withoutRowCount(detail: string, rowCount: number | null): string {
+  const found = ROW_COUNT.exec(detail);
+  if (!found || rowCount === null || Number(found[1].replace(/,/g, '')) !== rowCount) {
+    return detail;
+  }
+  return detail.slice(0, found.index);
+}
+
 /**
  * A stored step as the browser gets it — for the conversation API and a
  * reload (CHAT-03 items 1 and 21) — the one way steps leave the server.
  * Built field by field, never spread from the row, so a row read with the
  * service role gives up its `tool` and `debug_json` here too; a uuid in its
- * words shows as "…". Null for a kind or status this build doesn't know (a
- * newer server's), which the browser skips, as it skips an unknown event.
+ * words shows as "…", and an older read's row count goes (withoutRowCount).
+ * Null for a kind or status this build doesn't know (a newer server's),
+ * which the browser skips, as it skips an unknown event.
  */
 export function toClientStep(row: ChatRunStepMemberRow): ChatStep | null {
   if (!isKind(row.kind) || !isStatus(row.status)) return null;
@@ -81,7 +99,9 @@ export function toClientStep(row: ChatRunStepMemberRow): ChatStep | null {
     status: row.status,
     label: maskIds(row.label),
   };
-  const detail = text(row.detail);
+  const detail = text(
+    row.kind === 'read' && row.detail ? withoutRowCount(row.detail, row.row_count) : row.detail,
+  );
   const scope = scopeOf(row.scope_json);
   if (detail) step.detail = detail;
   if (scope) step.scope = scope;

@@ -39,7 +39,7 @@ const steps: ChatStep[] = [
     kind: 'read',
     label: 'Read Citations',
     status: 'done',
-    detail: 'Perplexity · Last 30 days · 42 rows',
+    detail: 'Perplexity · Last 30 days',
     rowCount: 42,
   },
   { n: 3, kind: 'open_page', label: 'Opened ansvisor.com/pricing', status: 'done' },
@@ -143,11 +143,7 @@ describe('RunAnswer', () => {
 
   it('chips the steps done, the fact check among them, with each detail a click away', async () => {
     await render({ run: run({ steps, text: 'Two pages lost most of it.' }) });
-    expect(chips()).toEqual([
-      'Read Citations · 42 rows',
-      'Opened ansvisor.com/pricing',
-      'Checked facts',
-    ]);
+    expect(chips()).toEqual(['Read Citations', 'Opened ansvisor.com/pricing', 'Checked facts']);
     const check = container.querySelectorAll<HTMLButtonElement>(
       '[data-action="answer.openStep"]',
     )[2];
@@ -169,12 +165,73 @@ describe('RunAnswer', () => {
     });
     expect(status()).toBeNull();
     expect(container.textContent).toContain('Two pages lost most of it.');
-    expect(container.textContent).toContain('Data usedCitations · 42 rowsansvisor.com/pricing');
+    expect(container.textContent).toContain('Data usedCitationsansvisor.com/pricing');
     expect(container.textContent).toContain(
       'Generated Oct 30, 2026 · 09:14 · Data as of Oct 29, 2026, 23:00',
     );
     expect(container.textContent).toContain('Worked for 41s');
     expect(container.textContent).toContain('Next moves');
+  });
+
+  it('never shows how many rows a read read, 0 or 50: in its chip, Data used, its detail or its steps', async () => {
+    const reads: ChatStep[] = [
+      {
+        n: 1,
+        kind: 'read',
+        label: 'Read Action Center',
+        status: 'done',
+        detail: 'Last 30 days',
+        rowCount: 50,
+      },
+      {
+        n: 2,
+        kind: 'read',
+        label: 'Read Action History',
+        status: 'done',
+        detail: 'Last 30 days · ChatGPT',
+        rowCount: 0,
+      },
+    ];
+    await render({
+      run: run({ status: 'done', steps: reads, text: 'Nothing changed.' }),
+    });
+    expect(chips()).toEqual(['Read Action Center', 'Read Action History']);
+    expect(container.textContent).toContain('Data usedAction CenterAction History');
+    // Each chip's detail and the full step list: the period and platforms, never a count.
+    for (const chip of container.querySelectorAll<HTMLButtonElement>(
+      '[data-action="answer.openStep"]',
+    )) {
+      await act(async () => chip.click());
+    }
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-action="answer.toggleSteps"]')!.click(),
+    );
+    expect(container.textContent).toContain('Last 30 days · ChatGPT');
+    expect(container.textContent).not.toMatch(/\brows?\b/);
+    expect(container.textContent).not.toMatch(/\b(0|50)\b/);
+  });
+
+  it('still counts memory’s saved notes, in its chip and under Data used', async () => {
+    await render({
+      run: run({
+        status: 'done',
+        steps: [
+          {
+            n: 1,
+            kind: 'read',
+            label: 'Used memory',
+            status: 'done',
+            scope: { subject: 'Memory', unit: 'items' },
+            rowCount: 3,
+          },
+          { n: 2, kind: 'read', label: 'Read Citations', status: 'done', rowCount: 42 },
+        ],
+        text: 'Ok.',
+      }),
+    });
+    expect(chips()).toEqual(['Used memory · 3 items', 'Read Citations']);
+    expect(container.textContent).toContain('Data usedMemory · 3 itemsCitations');
+    expect(container.textContent).not.toContain('42');
   });
 
   it('styles the answer as the app’s other AI answers: headings, lists and table cells', async () => {
