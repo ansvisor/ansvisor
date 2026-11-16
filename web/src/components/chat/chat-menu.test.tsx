@@ -175,7 +175,7 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openCapabilities')[0].getAttribute('href')).toBe(
       '/dashboard/chat/capabilities',
     );
-    expect(action('chatMenu.openPolicy')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
+    expect(action('chatMenu.openPolicy')[0].getAttribute('href')).toBe('/dashboard/chat/policy');
     expect(action('chatMenu.openSettings')[0].getAttribute('href')).toBe(
       '/dashboard/chat/settings',
     );
@@ -285,7 +285,7 @@ describe('ChatMenuView', () => {
         ['General', '/dashboard/chat/settings', 'chatMenu.openSettings'],
         ['Activity', '/dashboard/chat/activity', 'chatMenu.openActivity'],
         ['What Chat can do', '/dashboard/chat/capabilities', 'chatMenu.openCapabilities'],
-        ['Tool policy', '/dashboard/settings/chat', 'chatMenu.openPolicy'],
+        ['Tool policy', '/dashboard/chat/policy', 'chatMenu.openPolicy'],
       ]);
       // Indented under the row, as Connections' list.
       for (const link of items()!.querySelectorAll('a'))
@@ -349,6 +349,14 @@ describe('ChatMenuView', () => {
       await revisit('/dashboard/chat/capabilities');
       expect(toggle().getAttribute('aria-expanded')).toBe('true');
       expect(action('chatMenu.openCapabilities')[0].getAttribute('aria-current')).toBe('page');
+
+      // Tool policy is a Settings tab in Chat too: its page opens the list and marks it alone.
+      kept.set('ansvisor.chatMenu.sections', JSON.stringify({ settings: true }));
+      await revisit('/dashboard/chat/policy');
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      expect(action('chatMenu.openPolicy')[0].getAttribute('aria-current')).toBe('page');
+      expect(action('chatMenu.openPolicy')[0].className.split(' ')).toContain('bg-sidebar-accent');
+      expect(items()!.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
 
       // Moving to one of its pages from elsewhere opens it too.
       await revisit('/dashboard/chat/inbox');

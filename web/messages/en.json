@@ -6170,8 +6170,6 @@
       "pages": {
         "inbox": "Inbox",
         "allChats": "All chats",
-        "activity": "Activity",
-        "capabilities": "What Chat can do",
         "files": "Files",
         "scheduled": "Scheduled",
         "settings": "Settings",
@@ -6190,9 +6188,6 @@
       },
       "title": "Settings",
       "intro": "How Chat works for you and your team.",
-      "tabs": {
-        "general": "General"
-      },
       "general": {
         "title": "General",
         "intro": "Your own preferences. Workspace rules are in <policy>Tool policy</policy>."
