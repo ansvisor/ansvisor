@@ -13,6 +13,12 @@ import { randomUUID } from 'node:crypto';
  *   at WELCOME_MAX_TRIES; the script, run by hand, doesn't.
  * - `signup_claim_id`: a new id with every claim written. The claim is read
  *   back after CLAIM_SETTLE_MS, and only the writer whose id stayed sends.
+ * - `signup_posthog_at`: PostHog's `signed_up`, claimed apart.
+ *
+ * An old-style claim is a `signup_event_at` with neither a count of tries nor
+ * a claim id: written before this split, for both events at once, and kept
+ * whether or not Resend got the welcome. The script re-sends those only with
+ * --include-old-claims.
  */
 
 /** The welcome Automation started then (13 Nov 2026, 00:00 Istanbul time). */
@@ -29,6 +35,7 @@ export const WELCOME_MAX_TRIES = 3;
 export const WELCOME_CLAIM_KEY = 'signup_event_at';
 export const WELCOME_TRIES_KEY = 'signup_event_tries';
 export const CLAIM_ID_KEY = 'signup_claim_id';
+export const POSTHOG_CLAIM_KEY = 'signup_posthog_at';
 export const CLAIM_SETTLE_MS = 1500;
 
 const RESEND_EVENTS_URL = 'https://api.resend.com/events/send';
@@ -37,16 +44,31 @@ const TIMEOUT_MS = 10_000;
 const triesOf = (meta) => Number(meta?.[WELCOME_TRIES_KEY]) || 0;
 
 /**
+ * Whether the welcome claim is old-style: from before the welcome and
+ * PostHog had their own claims (no count of tries, no claim id). Such a claim
+ * was written whether or not Resend got the event.
+ */
+export function isOldClaim(meta) {
+  return (
+    Boolean(meta?.[WELCOME_CLAIM_KEY]) &&
+    meta[WELCOME_TRIES_KEY] == null &&
+    meta[CLAIM_ID_KEY] == null
+  );
+}
+
+/**
  * Whether an account missed the welcome: 'owed', or why it is left out.
  * From the user record alone. Made since `since` (never before
  * SIGNUP_EVENT_SINCE), not invited, with a confirmed e-mail, signed in at
- * least once, and no welcome claim. A Google or GitHub account made before
- * OAUTH_CALLBACK_SENT_UNTIL may have had it from the old sign-in callback,
- * so it is left out unless `includeEarlyOAuth`.
+ * least once, and no welcome claim. With `includeOldClaims`, an old-style
+ * claim (isOldClaim) doesn't count as one; a new-style claim always does. A
+ * Google or GitHub account made before OAUTH_CALLBACK_SENT_UNTIL may have had
+ * it from the old sign-in callback, so it is left out unless
+ * `includeEarlyOAuth`.
  */
 export function welcomeStatus(
   user,
-  { since = SIGNUP_EVENT_SINCE, includeEarlyOAuth = false } = {},
+  { since = SIGNUP_EVENT_SINCE, includeEarlyOAuth = false, includeOldClaims = false } = {},
 ) {
   const made = Date.parse(user?.created_at ?? '');
   if (!(made >= since) || !(made >= SIGNUP_EVENT_SINCE)) return 'before-since';
@@ -55,7 +77,10 @@ export function welcomeStatus(
   if (!user.email_confirmed_at) return 'unconfirmed';
   if (!user.last_sign_in_at) return 'never-signed-in';
   const meta = user.app_metadata ?? {};
-  if (meta[WELCOME_CLAIM_KEY]) return 'claimed';
+  if (meta[WELCOME_CLAIM_KEY]) {
+    if (!isOldClaim(meta)) return 'claimed';
+    if (!includeOldClaims) return 'old-claim';
+  }
   if (meta.provider !== 'email' && made < OAUTH_CALLBACK_SENT_UNTIL && !includeEarlyOAuth) {
     return 'early-oauth';
   }
@@ -73,6 +98,11 @@ async function readUser(admin, id) {
  * `admin` is the service client's auth.admin. Returns the account as read
  * back when this claim stayed, else null: no longer owed (`isOwed`), a
  * failed read or write, or another writer's claim stayed.
+ *
+ * An old-style claim (owed only with --include-old-claims) is replaced by a
+ * new-style one, so it is never picked as old-style again. It covered
+ * PostHog's `signed_up` too, so PostHog's own claim is written from it: the
+ * web's pages never send that event again.
  */
 export async function claimWelcome(
   admin,
@@ -83,11 +113,15 @@ export async function claimWelcome(
   if (!current || !isOwed(current)) return null;
   const at = new Date(now()).toISOString();
   const claimId = newClaimId();
+  const before = current.app_metadata ?? {};
   const { error } = await admin.updateUserById(id, {
     app_metadata: {
       [CLAIM_ID_KEY]: claimId,
       [WELCOME_CLAIM_KEY]: at,
-      [WELCOME_TRIES_KEY]: triesOf(current.app_metadata) + 1,
+      [WELCOME_TRIES_KEY]: triesOf(before) + 1,
+      ...(isOldClaim(before)
+        ? { [POSTHOG_CLAIM_KEY]: before[POSTHOG_CLAIM_KEY] ?? before[WELCOME_CLAIM_KEY] }
+        : {}),
     },
   });
   if (error) return null;

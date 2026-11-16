@@ -4,12 +4,14 @@ import {
   CLAIM_ID_KEY,
   CLAIM_SETTLE_MS,
   OAUTH_CALLBACK_SENT_UNTIL,
+  POSTHOG_CLAIM_KEY,
   SIGNUP_EVENT_SINCE,
   WELCOME_CLAIM_KEY,
   WELCOME_MAX_TRIES,
   WELCOME_TRIES_KEY,
   claimWelcome,
   firstNameOf,
+  isOldClaim,
   releaseWelcome,
   sendWelcomeEvent,
   welcomeStatus,
@@ -39,6 +41,7 @@ describe('the welcome claim on both sides', () => {
     expect(constant('WELCOME_CLAIM_KEY')).toBe(`'${WELCOME_CLAIM_KEY}'`);
     expect(constant('WELCOME_TRIES_KEY')).toBe(`'${WELCOME_TRIES_KEY}'`);
     expect(constant('CLAIM_ID_KEY')).toBe(`'${CLAIM_ID_KEY}'`);
+    expect(constant('POSTHOG_CLAIM_KEY')).toBe(`'${POSTHOG_CLAIM_KEY}'`);
     expect(WELCOME_CLAIM_KEY).toBe('signup_event_at');
   });
 
@@ -76,8 +79,51 @@ describe('welcomeStatus', () => {
     expect(welcomeStatus(account({ last_sign_in_at: null }))).toBe('never-signed-in');
     expect(welcomeStatus(account({ email: '' }))).toBe('no-email');
     expect(
-      welcomeStatus(account({ app_metadata: { provider: 'email', signup_event_at: 'x' } })),
+      welcomeStatus(
+        account({
+          app_metadata: { provider: 'email', signup_event_at: 'x', signup_event_tries: 1 },
+        }),
+      ),
     ).toBe('claimed');
+  });
+
+  describe('an old-style claim (from before the split: no tries, no claim id)', () => {
+    const claimed = (extra) =>
+      account({ app_metadata: { provider: 'email', signup_event_at: 'x', ...extra } });
+
+    it('is left out by default, and owed with includeOldClaims', () => {
+      expect(isOldClaim(claimed().app_metadata)).toBe(true);
+      expect(welcomeStatus(claimed())).toBe('old-claim');
+      expect(welcomeStatus(claimed(), { includeOldClaims: true })).toBe('owed');
+      // Still only from --since, and only as the other rules allow.
+      expect(
+        welcomeStatus(claimed(), {
+          includeOldClaims: true,
+          since: Date.parse('2026-11-16T00:00:00Z'),
+        }),
+      ).toBe('before-since');
+      expect(welcomeStatus(claimed({ provider: 'github' }), { includeOldClaims: true })).toBe(
+        'owed',
+      );
+      const early = account({
+        created_at: '2026-11-14T10:00:00Z',
+        app_metadata: { provider: 'google', signup_event_at: 'x' },
+      });
+      expect(welcomeStatus(early, { includeOldClaims: true })).toBe('early-oauth');
+    });
+
+    it('a new-style claim is never included, either way', () => {
+      for (const extra of [
+        { signup_event_tries: 1, signup_claim_id: 'c1' },
+        { signup_event_tries: 1 },
+        { signup_claim_id: 'c1' },
+      ]) {
+        expect(isOldClaim(claimed(extra).app_metadata)).toBe(false);
+        expect(welcomeStatus(claimed(extra))).toBe('claimed');
+        expect(welcomeStatus(claimed(extra), { includeOldClaims: true })).toBe('claimed');
+      }
+      expect(isOldClaim({ provider: 'email' })).toBe(false);
+    });
   });
 
   it('takes a later --since, never an earlier one', () => {
@@ -157,6 +203,29 @@ describe('claimWelcome', () => {
     const failing = adminOver(account());
     failing.admin.updateUserById.mockResolvedValueOnce({ data: null, error: { status: 500 } });
     expect(await claimWelcome(failing.admin, 'u1', { isOwed, sleep, now })).toBeNull();
+  });
+
+  it('replaces an old-style claim with a new-style one, keeping PostHog had it', async () => {
+    const { admin, state } = adminOver(
+      account({ app_metadata: { provider: 'google', signup_event_at: '2026-11-16T07:00:30Z' } }),
+    );
+    const isOwedOld = (user) => welcomeStatus(user, { includeOldClaims: true }) === 'owed';
+    const claimed = await claimWelcome(admin, 'u1', {
+      isOwed: isOwedOld,
+      sleep: async () => {},
+      now,
+      newClaimId: () => 'c2',
+    });
+    expect(claimed).not.toBeNull();
+    expect(state.user.app_metadata).toEqual({
+      provider: 'google',
+      signup_claim_id: 'c2',
+      signup_event_at: '2026-11-16T10:00:00.000Z',
+      signup_event_tries: 1,
+      signup_posthog_at: '2026-11-16T07:00:30Z',
+    });
+    expect(isOldClaim(state.user.app_metadata)).toBe(false);
+    expect(welcomeStatus(state.user, { includeOldClaims: true })).toBe('claimed');
   });
 
   it('releases a claim, keeping the count of tries', async () => {

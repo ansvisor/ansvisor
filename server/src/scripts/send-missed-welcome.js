@@ -21,11 +21,26 @@
  *                          sign-in callback may have sent theirs, keeping no
  *                          claim: include them only once Resend's Events tab
  *                          shows it received no `user.signed_up` then.
+ *   --include-old-claims   also accounts whose `signup_event_at` is an
+ *                          old-style claim (no `signup_event_tries`, no
+ *                          `signup_claim_id`): written before this change for
+ *                          both events, even when Resend got nothing. Off by
+ *                          default. Each is claimed again the new way (a new
+ *                          claim id, the wait, the read-back), sent, and kept
+ *                          only on a 2xx; it is then new-style, so it is never
+ *                          picked again.
+ *
+ *   USE --include-old-claims ONLY AFTER CHECKING RESEND'S LOGS show no
+ *   `/events/send` request from 13 Nov 2026 until this change went live (as on
+ *   production on 16 Nov 2026). An old-style claim written while the web had
+ *   RESEND_API_KEY may have sent the welcome already: with the flag, that
+ *   person would get a second one. Requests after this change went live come
+ *   from new-style claims, which are never included.
  *
  * Who: made since --since, e-mail confirmed, not invited, signed in at least
- * once, and no `signup_event_at` in app_metadata. It prints counts, the
- * accounts' creation dates and sign-in providers: never an e-mail address,
- * a name or a key.
+ * once, and no `signup_event_at` in app_metadata (or an old-style one, with
+ * --include-old-claims). It prints counts, the accounts' creation dates and
+ * sign-in providers: never an e-mail address, a name or a key.
  */
 
 import { pathToFileURL } from 'node:url';
@@ -33,6 +48,7 @@ import {
   OAUTH_CALLBACK_SENT_UNTIL,
   SIGNUP_EVENT_SINCE,
   claimWelcome,
+  isOldClaim,
   releaseWelcome,
   sendWelcomeEvent,
   welcomeStatus,
@@ -40,7 +56,7 @@ import {
 
 export const USAGE =
   'Usage: node src/scripts/send-missed-welcome.js [--dry-run | --send] [--since <ISO date>] ' +
-  '[--pause-ms <n>] [--include-early-oauth]';
+  '[--pause-ms <n>] [--include-early-oauth] [--include-old-claims]';
 
 const PER_PAGE = 1000;
 
@@ -51,6 +67,7 @@ export function parseArgs(argv) {
     since: SIGNUP_EVENT_SINCE,
     pauseMs: 1000,
     includeEarlyOAuth: false,
+    includeOldClaims: false,
     help: false,
   };
   let dryRun = false;
@@ -63,6 +80,7 @@ export function parseArgs(argv) {
     if (flag === '--send') opts.send = true;
     else if (flag === '--dry-run') dryRun = true;
     else if (flag === '--include-early-oauth') opts.includeEarlyOAuth = true;
+    else if (flag === '--include-old-claims') opts.includeOldClaims = true;
     else if (flag === '--help' || flag === '-h') opts.help = true;
     else if (flag === '--since') {
       const text = value() ?? '';
@@ -98,6 +116,8 @@ async function listAccounts(admin) {
 
 const SKIPPED = {
   claimed: 'already claimed (signup_event_at)',
+  'old-claim':
+    'old-style claim (signup_event_at from before the split; --include-old-claims, read the header first)',
   'early-oauth': `Google or GitHub, made before ${new Date(OAUTH_CALLBACK_SENT_UNTIL).toISOString()} (may have had it from the old sign-in callback; --include-early-oauth)`,
   unconfirmed: 'e-mail never confirmed (never welcomed, by design)',
   invited: 'invited to a workspace (never welcomed)',
@@ -123,6 +143,7 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
         id: user.id,
         created: user.created_at,
         provider: user.app_metadata?.provider ?? 'unknown',
+        oldClaim: isOldClaim(user.app_metadata),
       });
     }
   }
@@ -131,11 +152,22 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
   log(
     `Accounts made since ${new Date(opts.since).toISOString()} that missed the welcome: ${owed.length}`,
   );
-  for (const account of owed) log(`  made ${account.created} (${account.provider})`);
+  const label = (account) =>
+    `made ${account.created} (${account.provider}${account.oldClaim ? ', old-style claim' : ''})`;
+  for (const account of owed) log(`  ${label(account)}`);
+  const oldClaims = owed.filter((account) => account.oldClaim).length;
+  if (opts.includeOldClaims) log(`Of these, old-style claims (--include-old-claims): ${oldClaims}`);
   for (const [status, label] of Object.entries(SKIPPED)) {
     if (counts[status]) log(`Left out, ${label}: ${counts[status]}`);
   }
-  const result = { owed: owed.length, sent: 0, refused: 0, skipped: 0, unreleased: 0 };
+  const result = {
+    owed: owed.length,
+    oldClaims,
+    sent: 0,
+    refused: 0,
+    skipped: 0,
+    unreleased: 0,
+  };
   if (!opts.send) {
     log('Dry run: nothing claimed or sent. Run again with --send to send.');
     return result;
@@ -147,15 +179,13 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
     const claimed = await claimWelcome(admin, account.id, { isOwed, sleep, now });
     if (!claimed) {
       result.skipped++;
-      log(
-        `  made ${account.created}: skipped (no longer owed, claimed elsewhere, or not claimable)`,
-      );
+      log(`  ${label(account)}: skipped (no longer owed, claimed elsewhere, or not claimable)`);
       continue;
     }
     const answer = await sendWelcomeEvent(claimed, { apiKey, fetchImpl });
     if (answer.accepted) {
       result.sent++;
-      log(`  made ${account.created}: sent`);
+      log(`  ${label(account)}: sent`);
       continue;
     }
     result.refused++;
@@ -163,7 +193,7 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
     if (!released) result.unreleased++;
     const why = answer.status ? `HTTP ${answer.status}` : answer.error;
     log(
-      `  made ${account.created}: not accepted (${why}); claim ${released ? 'released' : 'NOT released'}`,
+      `  ${label(account)}: not accepted (${why}); claim ${released ? 'released' : 'NOT released'}`,
     );
   }
   log(

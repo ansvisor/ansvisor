@@ -28,7 +28,15 @@ const ACCOUNTS = [
     created_at: '2026-11-15T12:00:00Z',
     app_metadata: { provider: 'google', providers: ['google'] },
   }),
-  person(3, { app_metadata: { provider: 'email', signup_event_at: '2026-11-15T09:02:00Z' } }),
+  // A new-style claim: never picked, with or without --include-old-claims.
+  person(3, {
+    app_metadata: {
+      provider: 'email',
+      signup_event_at: '2026-11-15T09:02:00Z',
+      signup_event_tries: 1,
+      signup_claim_id: 'c3',
+    },
+  }),
   person(4, { email_confirmed_at: null, last_sign_in_at: null }),
   person(5, { invited_at: '2026-11-15T08:00:00Z' }),
   person(6, { last_sign_in_at: null }),
@@ -37,7 +45,18 @@ const ACCOUNTS = [
     created_at: '2026-11-13T10:00:00Z',
     app_metadata: { provider: 'github', providers: ['github'] },
   }),
+  // An old-style claim (no tries, no claim id): a Google sign-up whose first
+  // page claimed both events while the web had no Resend key.
+  person(9, {
+    created_at: '2026-11-16T07:00:00Z',
+    app_metadata: {
+      provider: 'google',
+      providers: ['google'],
+      signup_event_at: '2026-11-16T07:00:30.000Z',
+    },
+  }),
 ];
+const OLD_CLAIM_AT = '2026-11-16T07:00:30.000Z';
 
 /** The service client's auth.admin over these accounts. */
 function authServer(accounts, { perPage } = {}) {
@@ -91,18 +110,27 @@ describe('parseArgs', () => {
       since: SIGNUP_EVENT_SINCE,
       pauseMs: 1000,
       includeEarlyOAuth: false,
+      includeOldClaims: false,
     });
     expect(parseArgs(['--dry-run']).send).toBe(false);
   });
 
-  it('reads --send, --since, --pause-ms and --include-early-oauth', () => {
+  it('reads --send, --since, --pause-ms, --include-early-oauth and --include-old-claims', () => {
     expect(
-      parseArgs(['--send', '--since', '2026-11-15', '--pause-ms=250', '--include-early-oauth']),
+      parseArgs([
+        '--send',
+        '--since',
+        '2026-11-15',
+        '--pause-ms=250',
+        '--include-early-oauth',
+        '--include-old-claims',
+      ]),
     ).toMatchObject({
       send: true,
       since: Date.parse('2026-11-15'),
       pauseMs: 250,
       includeEarlyOAuth: true,
+      includeOldClaims: true,
     });
     expect(parseArgs(['--since=2026-11-14T00:00:00+03:00']).since).toBe(
       Date.parse('2026-11-13T21:00:00Z'),
@@ -131,6 +159,8 @@ describe('a dry run', () => {
       '  made 2026-11-16T08:00:00Z (email)',
     ]);
     expect(output()).toContain('already claimed (signup_event_at): 1');
+    expect(output()).toMatch(/old-style claim .*--include-old-claims.*: 1/);
+    expect(output()).not.toContain('Of these, old-style claims');
     expect(output()).toContain('e-mail never confirmed (never welcomed, by design): 1');
     expect(output()).toContain('invited to a workspace (never welcomed): 1');
     expect(output()).toContain('never signed in: 1');
@@ -148,6 +178,23 @@ describe('a dry run', () => {
     const result = await run(parseArgs(['--include-early-oauth']), { admin, sleep, log });
     expect(result.owed).toBe(3);
     expect(output()).toContain('  made 2026-11-13T10:00:00Z (github)');
+  });
+
+  it('leaves out an old-style claim by default, and includes it with --include-old-claims', async () => {
+    const admin = authServer(ACCOUNTS);
+    const result = await run(parseArgs(['--include-old-claims']), { admin, sleep, log });
+    expect(result).toMatchObject({ owed: 3, oldClaims: 1 });
+    expect(lines.slice(1, 4)).toEqual([
+      '  made 2026-11-15T12:00:00Z (google)',
+      '  made 2026-11-16T07:00:00Z (google, old-style claim)',
+      '  made 2026-11-16T08:00:00Z (email)',
+    ]);
+    expect(output()).toContain('Of these, old-style claims (--include-old-claims): 1');
+    // The new-style claim stays left out.
+    expect(output()).toContain('already claimed (signup_event_at): 1');
+    expect(output()).not.toMatch(/old-style claim \(signup_event_at/);
+    expect(output()).not.toMatch(PRIVATE);
+    expect(admin.updateUserById).not.toHaveBeenCalled();
   });
 
   it('reads every page of accounts', async () => {
@@ -206,16 +253,17 @@ describe('--send', () => {
       signup_event_at: expect.any(String),
       signup_event_tries: 1,
     });
-    // Nobody else touched.
+    // Nobody else touched: not the old-style claim either, without the flag.
     expect(new Set(admin.updateUserById.mock.calls.map(([id]) => id))).toEqual(
       new Set(['u1', 'u2']),
     );
+    expect(admin.users.get('u9').app_metadata).toEqual(ACCOUNTS[8].app_metadata);
     // The claim's wait for each, and a pause between the two sends.
     expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([CLAIM_SETTLE_MS, 700, CLAIM_SETTLE_MS]);
     expect(output()).toContain(
-      'made 2026-11-15T12:00:00Z: not accepted (HTTP 500); claim released',
+      'made 2026-11-15T12:00:00Z (google): not accepted (HTTP 500); claim released',
     );
-    expect(output()).toContain('made 2026-11-16T08:00:00Z: sent');
+    expect(output()).toContain('made 2026-11-16T08:00:00Z (email): sent');
     expect(output()).toContain('Done: 1 sent, 1 not accepted (claim released), 0 skipped');
     expect(output()).not.toMatch(PRIVATE);
     expect(fetch).not.toHaveBeenCalled();
@@ -252,6 +300,75 @@ describe('--send', () => {
     });
     expect(third).toMatchObject({ owed: 0, sent: 0 });
     expect(none).not.toHaveBeenCalled();
+  });
+
+  it('with --include-old-claims, claims an old-style claim again the new way, and never picks it twice', async () => {
+    const admin = authServer(ACCOUNTS);
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200 }));
+    const send = parseArgs(['--send', '--include-old-claims']);
+    const result = await run(send, { admin, apiKey: 're_test', fetchImpl, sleep, log });
+    expect(result).toMatchObject({ owed: 3, oldClaims: 1, sent: 3, refused: 0 });
+
+    // Claimed again before the send: a new claim id, a try, and PostHog's own
+    // claim from the old one (it covered both), so the web never sends PostHog's again.
+    const claim = admin.updateUserById.mock.calls.find(([id]) => id === 'u9');
+    expect(claim[1]).toEqual({
+      app_metadata: {
+        signup_claim_id: expect.any(String),
+        signup_event_at: expect.any(String),
+        signup_event_tries: 1,
+        signup_posthog_at: OLD_CLAIM_AT,
+      },
+    });
+    expect(claim[1].app_metadata.signup_event_at).not.toBe(OLD_CLAIM_AT);
+    expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(init.body).email)).toContain(
+      'person9@example.com',
+    );
+    expect(admin.users.get('u9').app_metadata).toMatchObject({
+      provider: 'google',
+      signup_event_tries: 1,
+      signup_claim_id: expect.any(String),
+      signup_posthog_at: OLD_CLAIM_AT,
+    });
+    // The new-style claim was never touched.
+    expect(admin.users.get('u3').app_metadata).toEqual(ACCOUNTS[2].app_metadata);
+    expect(output()).toContain('made 2026-11-16T07:00:00Z (google, old-style claim): sent');
+    expect(output()).not.toMatch(PRIVATE);
+
+    // Now new-style: a second run with the flag picks nobody.
+    lines = [];
+    const again = await run(send, { admin, apiKey: 're_test', fetchImpl, sleep, log });
+    expect(again).toMatchObject({ owed: 0, oldClaims: 0, sent: 0 });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it('with --include-old-claims, releases a refused old-style claim as a new-style account still owed', async () => {
+    const admin = authServer([ACCOUNTS[8]]);
+    const refused = vi.fn(async () => ({ ok: false, status: 429 }));
+    const result = await run(parseArgs(['--send', '--include-old-claims']), {
+      admin,
+      apiKey: 're_test',
+      fetchImpl: refused,
+      sleep,
+      log,
+    });
+    expect(result).toMatchObject({ sent: 0, refused: 1 });
+    const meta = admin.users.get('u9').app_metadata;
+    expect(meta).not.toHaveProperty('signup_event_at');
+    expect(meta).toMatchObject({ signup_event_tries: 1, signup_posthog_at: OLD_CLAIM_AT });
+
+    // No longer old-style: the next run sends it without the flag.
+    lines = [];
+    const accepted = vi.fn(async () => ({ ok: true, status: 200 }));
+    const again = await run(parseArgs(['--send']), {
+      admin,
+      apiKey: 're_test',
+      fetchImpl: accepted,
+      sleep,
+      log,
+    });
+    expect(again).toMatchObject({ owed: 1, oldClaims: 0, sent: 1 });
+    expect(admin.users.get('u9').app_metadata.signup_event_tries).toBe(2);
   });
 
   it('skips an account a web page claimed meanwhile', async () => {
