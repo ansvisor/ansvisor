@@ -934,6 +934,13 @@ async function runScenario(scenario: AgentEvalScenario): Promise<EvalResult> {
       message: scenario.message ?? '',
       brandId: BRAND,
       mode: scenario.mode,
+      // Asked beside a page: the side panel's context, as it posts it.
+      ...(scenario.page
+        ? {
+            origin: 'panel' as const,
+            context: { route: scenario.page.route, chips: [...scenario.page.chips] },
+          }
+        : {}),
     });
     if (!startedRun.ok) throw new Error(`${scenario.id}: not started: ${startedRun.code}`);
     chatRunId = startedRun.runId;
@@ -1480,6 +1487,56 @@ describe('the agents’ test set harness, on a scripted model', () => {
       ).toMatchObject({ must: true, ok: true });
     }
     expect(result.passed).toBe(true);
+  });
+
+  it("reads Citations' top domains over the page's 24 hours, on ChatGPT and Brand sources", async () => {
+    const scenario = skillOf('citations-page-scope');
+    scripted([
+      calls(toolCall('r1', 'list_citations', { brand_id: BRAND })),
+      text(
+        'Last 24 hours, ChatGPT, as on the page: citation counts for all sources, lists for Brand sources. AI answers cited you 418 times in all. Your top cited pages are the subscriptions page with 31 citations, the freshness guide with 26 and the subscriptions blog post with 21.',
+      ),
+    ]);
+    const result = await runScenario(scenario);
+    // No range card: the page's range is read, and kept as nobody's default.
+    expect(result.run.questions).toBe(0);
+    expect(db.tables.chat_user_prefs ?? []).toEqual([]);
+    // The lists on Brand sources, and the same read over every source beside them.
+    expect(result.run.reads).toEqual(['list_citations', 'list_citations']);
+    const [filtered, every] = result.run.readInputs;
+    expect(filtered).toMatchObject({ model: 'chatgpt-web', source_filter: 'owned' });
+    expect(every).toMatchObject({ model: 'chatgpt-web', source_filter: 'all', limit: 1 });
+    expect(every.date_from).toBe(filtered.date_from);
+    expect(Date.now() - Date.parse(String(filtered.date_from))).toBeLessThanOrEqual(
+      24 * 60 * 60 * 1000 + 60_000,
+    );
+    for (const name of [
+      "reads with the page's period and filters",
+      'says what the answer covers, as on the page',
+      'no invented numbers',
+    ]) {
+      expect(
+        result.checks.find((c) => c.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails a read that leaves the page's platform out, and an answer that doesn't say its scope", async () => {
+    scripted([
+      calls(toolCall('r1', 'list_citations', { brand_id: BRAND, model: '' })),
+      text('Your subscriptions page leads with 31 citations.'),
+    ]);
+    const result = await runScenario(skillOf('citations-page-scope'));
+    const failed = Object.fromEntries(
+      result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(failed).toMatchObject({
+      "reads with the page's period and filters": 'model null',
+      'says what the answer covers, as on the page': 'no "as on the page"',
+    });
+    expect(result.passed).toBe(false);
   });
 
   it('refuses every network call but the model’s', async () => {

@@ -4,6 +4,7 @@ import { platformFamily, platformName } from '@/lib/signals/names';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { oldestFirst } from './fit';
+import { pageFilterInputs, type PageScope } from './page-scope';
 import { FALLBACK_RANGE, rangeDaysBack, rangeWindow, type ChatRange } from './range';
 import type { ChatTool } from './registry/define-tool';
 
@@ -11,12 +12,13 @@ import type { ChatTool } from './registry/define-tool';
  * Chat's scope decisions, in one place (CHAT-04 items 2–4, Rule 1; CHAT-20
  * §7 "Platforms by plan"): which dates, platforms and how many rows a read
  * covers. The server sets them, not the model: a read with no dates gets the
- * person's date range (range.ts: their default, or one their message named),
- * or the app's last 30 days, unless the person asked for all time; a plan
- * that tracks some platforms reads only those, and every list stops at its
- * row limit and says it was cut (`truncated`). The engine scopes each read
- * here before it runs (scopeRead) and cuts its rows after (capRows). Server
- * only.
+ * person's date range (range.ts: one their message named, the page's in the
+ * side panel, or their default), or the app's last 30 days, unless the
+ * person asked for all time; the page's filters fill the inputs the model
+ * left out (page-scope.ts); a plan that tracks some platforms reads only
+ * those, and every list stops at its row limit and says it was cut
+ * (`truncated`). The engine scopes each read here before it runs
+ * (scopeRead) and cuts its rows after (capRows). Server only.
  */
 
 /** A read with no dates and no range set covers the app's last this many days (CHAT-04 item 2). */
@@ -138,7 +140,7 @@ interface DatesUsed {
   dateTo: string | null;
   dates: DateChoice;
   days?: number;
-  /** The range a read with no dates took (range.ts): the person's, or the app's 30 days. */
+  /** The range a read with no dates took (range.ts): the page's, the person's or the app's. */
   range?: ChatRange;
 }
 
@@ -279,6 +281,8 @@ export interface ScopeUsed extends DatesUsed {
   platforms: string[] | null;
   /** The rows it asked for, or its lists were cut to. */
   rows: number;
+  /** What the page set (page-scope.ts): `period`, and its filters' keys (`platform`, `sources`). */
+  page?: string[];
 }
 
 /** A read the plan doesn't cover: the model says so, it doesn't run (CHAT-04 item 2). */
@@ -295,11 +299,22 @@ export interface ScopeFacts {
   /** The person's question: an all-time ask lifts the default window. */
   question: string | null | undefined;
   /**
-   * The range a read with no dates covers (range.ts): the person's default,
-   * or one their message named. Null or left out: none is set, and the app's
-   * last 30 days are read (Google's reads keep their pages' 28).
+   * The range a read with no dates covers (range.ts): one their message
+   * named, the page's, or the person's default. Null or left out: none is
+   * set, and the app's last 30 days are read (Google's reads keep their
+   * pages' 28).
    */
   range?: ChatRange | null;
+  /**
+   * Where the range came from: a period the message named (or a short
+   * range), the page the question was asked on (range.ts pageDatesOf), or
+   * the person's default (picked on the card, or kept). Left out: default.
+   */
+  rangeFrom?: 'message' | 'page' | 'default';
+  /** The page shows all time: a read with no dates covers all of it, as asked. */
+  allTime?: boolean;
+  /** The page's filters, for the reads that take them (page-scope.ts). */
+  page?: PageScope | null;
   /** The plan's platform limits; null when they couldn't be read. */
   limits: PlatformLimits | null;
   planName: string;
@@ -346,18 +361,22 @@ const accepts = (tool: Pick<ChatTool, 'inputSchema'>, input: Record<string, unkn
   tool.inputSchema.safeParse(input).success;
 
 /**
- * A read's input with the server's scope (CHAT-04 item 4): its dates, its
- * platforms and its rows. A platform the plan doesn't track is refused
- * (`not_on_plan`) rather than read empty or read anyway.
+ * A read's input with the server's scope (CHAT-04 item 4): its dates, the
+ * page's filters, its platforms and its rows. A platform the plan doesn't
+ * track (the page's too) is refused (`not_on_plan`) rather than read empty
+ * or read anyway.
  */
 export async function scopeRead(
-  tool: Pick<ChatTool, 'name' | 'inputSchema' | 'planGate'>,
+  tool: Pick<ChatTool, 'name' | 'inputSchema' | 'planGate'> & Partial<Pick<ChatTool, 'route'>>,
   raw: Record<string, unknown>,
   facts: ScopeFacts,
 ): Promise<ScopedRead> {
   const now = facts.now ?? new Date();
-  const allTime = asksAllTime(facts.question);
-  const input: Record<string, unknown> = { ...raw };
+  const askedAllTime = asksAllTime(facts.question);
+  const allTime = askedAllTime || facts.allTime === true;
+  // The page's filters, where the read takes them and the model gave none (page-scope.ts).
+  const fromPage = pageFilterInputs(tool, raw, facts.page ?? null, facts.question);
+  const input = fromPage.input;
 
   // Platforms: what was asked must be on the plan; nothing asked, the plan's.
   const plan = planPlatforms(facts.limits);
@@ -438,7 +457,24 @@ export async function scopeRead(
       days: fits,
       ...(range && fits === days ? { range } : {}),
     };
+  } else if (hasField(tool, 'period') && input.period === undefined && facts.range && !allTime) {
+    // A read of a named period (Ads' 7d, 30d, 90d) takes one the message named, or its own
+    // page's; never the person's default nor another page's range: else its own default, as
+    // its page opens on (the owner, 2026-11-16).
+    const ownPage = !!tool.route && facts.page?.route === tool.route;
+    const named = facts.rangeFrom === 'message' || (facts.rangeFrom === 'page' && ownPage);
+    if (named && accepts(tool, { ...input, period: facts.range })) {
+      input.period = facts.range;
+      const window = rangeWindow(facts.range, now);
+      dates = { ...window, dates: 'default', range: facts.range };
+    }
   }
+  // The page's period: a read that took the range, or all time, the page set.
+  const pagePeriod =
+    facts.rangeFrom === 'page' &&
+    !askedAllTime &&
+    (dates.range !== undefined || dates.dates === 'all_time');
+  const page = [...(pagePeriod ? ['period'] : []), ...fromPage.applied];
 
   // Rows: the model's count, held to the tool's max; one more read to see if there are more,
   // unless the read counts them itself.
@@ -460,7 +496,7 @@ export async function scopeRead(
   return {
     kind: 'read',
     input,
-    used: { ...dates, platforms, rows: cap.rows },
+    used: { ...dates, platforms, rows: cap.rows, ...(page.length > 0 ? { page } : {}) },
     platformNames,
     cap,
   };

@@ -1008,6 +1008,11 @@ function evalCitationsRead(input: Record<string, unknown>, workspace: EvalWorksp
       owned: OWNED_CITATIONS,
       external: EXTERNAL_CITATIONS,
       competitors: COMPETITOR_CITATIONS,
+      // Its totals: Brand sources' with that filter (Citations' Sources on Brand), else every one.
+      totals:
+        input.source_filter === 'owned'
+          ? { domains: 1, citations: SUMMARY.owned_citations, avg_citations_per_result: 0.1 }
+          : { citations: SUMMARY.citations, avg_citations_per_result: 0.4 },
     };
   }
   const list = (value: unknown) => (Array.isArray(value) ? value.map(String) : undefined);
