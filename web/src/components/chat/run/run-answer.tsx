@@ -211,12 +211,11 @@ export function RunAnswer({
                 <Check className="size-3 shrink-0 text-green-600 dark:text-green-500" aria-hidden />
                 <span className="truncate">
                   {step.label}
-                  {step.rowCount !== undefined && (
+                  {/* Saved notes are counted; a read's rows never are, 0 or 50. */}
+                  {step.scope?.unit === 'items' && step.rowCount !== undefined && (
                     <>
                       {' · '}
-                      {tSteps(step.scope?.unit === 'items' ? 'items' : 'rows', {
-                        count: step.rowCount,
-                      })}
+                      {tSteps('items', { count: step.rowCount })}
                     </>
                   )}
                 </span>
@@ -303,9 +302,7 @@ export function RunAnswer({
                 className="rounded-full border px-2 py-0.5 text-foreground/80"
               >
                 {chip.label}
-                {chip.rows !== undefined && (
-                  <> · {tSteps(chip.unit === 'items' ? 'items' : 'rows', { count: chip.rows })}</>
-                )}
+                {chip.items !== undefined && <> · {tSteps('items', { count: chip.items })}</>}
               </span>
             ))}
           </div>

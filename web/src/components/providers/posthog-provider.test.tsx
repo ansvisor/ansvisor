@@ -63,4 +63,23 @@ describe('PostHogProvider', () => {
     act(() => root.render(<PostHogProvider />));
     expect(posthog.init).not.toHaveBeenCalled();
   });
+
+  it('starts nothing in a browser a program drives, so crawlers stay out of the funnels', () => {
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
+    // jsdom has no navigator.webdriver: set it as an automated browser does.
+    Object.defineProperty(navigator, 'webdriver', { configurable: true, get: () => true });
+    try {
+      act(() => root.render(<PostHogProvider />));
+      expect(posthog.init).not.toHaveBeenCalled();
+    } finally {
+      delete (navigator as { webdriver?: boolean }).webdriver;
+    }
+
+    const agent = vi
+      .spyOn(navigator, 'userAgent', 'get')
+      .mockReturnValue('Mozilla/5.0 (compatible; GPTBot/1.0; +https://openai.com/gptbot)');
+    act(() => root.render(<PostHogProvider key="again" />));
+    expect(posthog.init).not.toHaveBeenCalled();
+    agent.mockRestore();
+  });
 });

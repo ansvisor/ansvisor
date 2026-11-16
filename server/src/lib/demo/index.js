@@ -45,8 +45,9 @@ import { demoWriter } from './write.js';
  * 9: Action Center › Today (SIMPLE_NAV): the build night's Up, Down and Rival, a topic
  *    gap and a product sent this week, a result in last week, the weekly Business Hub
  *    reminder (with BUSINESS_HUB_ENABLED).
+ * 11: Chat's read steps say their period and platforms, never how many rows they read.
  */
-export const DEMO_VERSION = 10;
+export const DEMO_VERSION = 11;
 
 /** Data older than this is rebuilt, so the demo's latest run stays recent. */
 export const DEMO_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;

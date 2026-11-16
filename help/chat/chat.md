@@ -276,9 +276,9 @@ If your message holds something that looks like an API key, Chat doesn't send it
 
 ## Watch the work
 
-While Chat works, one line says what it is doing now, such as "Reading Citations…". Steps it finished show as chips with a check mark above the answer: click one for its detail, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.
+While Chat works, one line says what it is doing now, such as "Reading Citations…". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.
 
-Under the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
+Under the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
 Each Action Center action an answer names, such as AC-1497, is a link: click it to open that action in Action Center in a new tab.
 
