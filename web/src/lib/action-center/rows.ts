@@ -31,6 +31,8 @@ import { WINNING_TASK_KEY, parseWinningFindings } from './winning-findings';
 export interface ActionRow {
   id: string;
   action_no: number;
+  /** Its number in its brand (00534); null until its brand is numbered. */
+  brand_no?: number | null;
   category: string;
   kind: string;
   impact: string;
@@ -49,7 +51,7 @@ export interface ActionRow {
 }
 
 export const ACTION_COLUMNS =
-  'id, action_no, category, kind, impact, status, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, priority_updated_at, stale_at';
+  'id, action_no, brand_no, category, kind, impact, status, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, priority_updated_at, stale_at';
 
 export const TASK_COLUMNS =
   'id, position, task_key, title, status, skip_reason, title_params, depends_on, details, output';
@@ -73,6 +75,7 @@ export function actionItemFromRow(
   return {
     id: row.id,
     actionNo: Number(row.action_no),
+    brandNo: row.brand_no ?? null,
     category: row.category as ActionCategory,
     kind: row.kind,
     impact: row.impact as ActionImpact,

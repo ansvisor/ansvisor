@@ -17,13 +17,13 @@ export const DEFAULT_OPPORTUNITY_SORT: OpportunitySort = OPPORTUNITY_SORTS[0];
 export type OpportunityScope =
   | { kind: 'group'; count: number; topic: string | null }
   | { kind: 'single' }
-  | { kind: 'action'; actionNo: number | null };
+  | { kind: 'action'; actionNo: number | null; brandNo?: number | null };
 
 export function opportunityScope(
   opp: Pick<ContentOpportunity, 'clusterId' | 'sourceData'>,
 ): OpportunityScope {
   const from = opp.sourceData?.fromAction;
-  if (from) return { kind: 'action', actionNo: from.actionNo ?? null };
+  if (from) return { kind: 'action', actionNo: from.actionNo ?? null, brandNo: from.brandNo };
   if (!opp.clusterId) return { kind: 'single' };
   return {
     kind: 'group',

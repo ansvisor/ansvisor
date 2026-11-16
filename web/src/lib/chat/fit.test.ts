@@ -148,3 +148,68 @@ describe('a series by date', () => {
     expect(newest.daily[0].date).toBe(days(300)[299].date);
   });
 });
+
+describe('a page of a list read (lib/mcp/list-page.ts)', () => {
+  // 451 signals, 50 to a page: the "38 actions missing" case, for any list.
+  const page = (offset: number, n: number, extra: Record<string, Json> = {}) => ({
+    scope: { period: 'Last 30 days' },
+    total: 451,
+    offset,
+    next_offset: offset + n < 451 ? offset + n : null,
+    note: `Showing ${offset + 1}–${offset + n} of 451 signals, newest first.`,
+    signals: rows(n, { title: 'Visibility dropped sharply on ChatGPT', ...extra }),
+  });
+
+  it('cuts a page by size into a shorter page that says where the next one starts', () => {
+    const fitted = fitResult(page(0, 50), 2_000);
+    expect(fitted.cut).toBe(true);
+    expect(fitted.chars).toBeLessThanOrEqual(2_000);
+    const value = fitted.value as Record<string, Json> & { signals: Json[] };
+    const kept = value.signals.length;
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(50);
+    expect(value).toMatchObject({ total: 451, offset: 0, next_offset: kept });
+    expect(value.note).toBe(
+      `Showing 1–${kept} of 451. Read the next page with offset ${kept}, or say how many you judged.`,
+    );
+    // Never the rest as missing: no count left out, no rest line, no cut flag.
+    expect(Object.keys(value).some((key) => key.endsWith('_more') || key.endsWith('_rest'))).toBe(
+      false,
+    );
+    expect(value).not.toHaveProperty('truncated');
+  });
+
+  it('counts the next page from its own offset, and cuts the last page too', () => {
+    const value = fitResult(page(450, 1, { body: 'x'.repeat(100) }), 10_000).value;
+    expect(value).toMatchObject({ offset: 450, next_offset: null });
+    const last = fitResult({ ...page(400, 51), next_offset: null }, 3_000).value as {
+      signals: Json[];
+      next_offset: number;
+    };
+    expect(last.next_offset).toBe(400 + last.signals.length);
+  });
+
+  it('shortens long texts before it leaves rows for the next page', () => {
+    const fitted = fitResult(page(0, 5, { body: 'x'.repeat(2_000) }), 4_000).value as {
+      signals: Json[];
+      texts_shortened: boolean;
+      next_offset: number;
+    };
+    expect(fitted.signals).toHaveLength(5);
+    expect(fitted).toMatchObject({ texts_shortened: true, next_offset: 5 });
+  });
+
+  it('pages every list of a page to the same count (citations: domains and pages)', () => {
+    const value = {
+      total: 120,
+      offset: 50,
+      next_offset: 100,
+      note: 'Showing 51–100 of 120.',
+      top_domains: rows(50),
+      top_urls: rows(50, { url: 'https://site.com/a-long-page-address' }),
+    };
+    const fitted = fitResult(value, 3_000).value as typeof value;
+    expect(fitted.top_domains.length).toBe(fitted.top_urls.length);
+    expect(fitted.next_offset).toBe(50 + fitted.top_urls.length);
+  });
+});

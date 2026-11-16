@@ -1,17 +1,21 @@
 ---
 title: Change your Chat settings
 route: /dashboard/chat/settings
-keywords: [chat settings, general settings, date range, default date range, time range, ask me before the first analysis, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, slack when an agent waits, thought for, thinking time, ask chat on every page, full auto]
+keywords: [chat settings, general settings, settings tabs, activity tab, what chat can do, tool policy tab, date range, default date range, time range, ask me before the first analysis, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, slack when an agent waits, thought for, thinking time, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
-updated: 2026-11-15
-last_checked: 2026-11-15
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, web/src/lib/chat/range.ts]
 ---
 Click **Settings** in the chat menu, then **General**, for your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so.
+
+## Settings tabs
+
+The **Settings** page has its own tabs on the left: **General**, **Activity**, **What Chat can do** and **Tool policy**, in the same order as under **Settings** in the chat menu. Click one to open it on the right: the page's title and the tabs stay, and the tab you are on is highlighted. **General** holds your own preferences, below. **Activity** logs every change Chat made, with **Undo**. **What Chat can do** lists the tools Chat may use, by area. **Tool policy** holds the workspace's rules: everyone reads them, and only Admins change them. On a narrow screen the tabs sit in a row above the page.
 
 ## Default mode
 
@@ -45,4 +49,4 @@ When one of your agents stops to ask you something or to wait for your OK on a c
 
 **Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.
 
-Workspace rules, such as which tools Chat may use on its own, are in **Tool policy**, also under **Settings** in the chat menu; only Admins change them.
+Workspace rules, such as which tools Chat may use on its own, are in the **Tool policy** tab; only Admins change them.

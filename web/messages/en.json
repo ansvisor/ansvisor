@@ -443,12 +443,13 @@
     "saved": "Setup saved. Tracking starts {trial, select, yes {when you start the free trial or buy a plan} other {when you choose a plan}}.",
     "trackingStartsNow": "Your plan is active. Tracking starts as soon as you finish.",
     "finishFailed": "We couldn't finish setup. Please try again.",
+    "planLapsed": "Your plan isn't active any more, so setup is paused. Choose a plan in Billing, then set up your brand.",
     "managePlan": "Manage your plan",
     "start": {
       "title": "How do you want to start?",
       "intro": "{trial, select, yes {With the {days}-day free trial, you add a card and nothing is charged until it ends.} other {Pick a plan and add a card.}} Cancel any time. Then set up your brand, and its tracking starts.",
       "workspaceName": "My workspace",
-      "workspaceFailed": "We couldn't set up your workspace. Reload the page to try again."
+      "workspaceFailed": "We couldn't set up your workspace. Please try again."
     },
     "connectSite": {
       "trackingStarted": "Your first tracking run has started.",
@@ -2148,6 +2149,7 @@
       },
       "drawer": {
         "actionId": "Action ID",
+        "previousCode": "Previously {code}",
         "tabs": {
           "overview": "Overview",
           "affected": "Affected",
@@ -4093,7 +4095,7 @@
     "date": "Date",
     "answer": "Answer",
     "openAnswer": "Open the answer for {prompt}",
-    "partial": "Some answers couldn't be read, so this covers the answers that could.",
+    "partial": "Causes are drawn only from prompts whose answers were all compared.",
     "notCited": "not cited",
     "noRows": "No single prompt explains this part.",
     "detection": "Detection from stored snapshots, no model reads",
@@ -4732,8 +4734,8 @@
       "skipped": "Skipped",
       "auto": "Done automatically",
       "failed": "Something went wrong",
-      "readFailed": "Couldn't read this",
-      "timedOut": "Timed out",
+      "readFailed": "Not available right now",
+      "timedOut": "Took too long this time",
       "stoppedAtLimit": "Stopped at its limit",
       "actionClosed": "This action was closed. Nothing more was changed.",
       "limit": "Over this run's limit",
@@ -6206,8 +6208,6 @@
       "pages": {
         "inbox": "Inbox",
         "allChats": "All chats",
-        "activity": "Activity",
-        "capabilities": "What Chat can do",
         "files": "Files",
         "scheduled": "Scheduled",
         "settings": "Settings",
@@ -6226,9 +6226,6 @@
       },
       "title": "Settings",
       "intro": "How Chat works for you and your team.",
-      "tabs": {
-        "general": "General"
-      },
       "general": {
         "title": "General",
         "intro": "Your own preferences. Workspace rules are in <policy>Tool policy</policy>."

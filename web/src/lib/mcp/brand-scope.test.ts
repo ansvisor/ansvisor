@@ -60,11 +60,13 @@ const data = await import('./data');
 const mentions = await import('./mentions');
 const content = await import('./content');
 const taskReviews = await import('./task-reviews');
+const { listSignalsPageFor, lookUpSignalsFor } = await import('./signal-page');
 const { exportActionFor } = await import('./action-export');
 const { getContentDraftPackageFor } = await import('./content-package');
 const { getContentPlanFor } = await import('./content-plan');
 const { explainChangeFor } = await import('./why');
 const { createMcpServer } = await import('./server');
+const { listActionsByCodeFor, listActionsPageFor } = await import('./action-center-reads');
 
 const ALL: McpAuthContext = {
   userId: 'user-1',
@@ -150,6 +152,13 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     ],
     ['getPromptPerformanceFor', () => data.getPromptPerformanceFor(SELECTED, { brandId: 'b1' })],
     ['listActionsFor', () => data.listActionsFor(SELECTED, { brandId: 'b1' })],
+    // Chat's page of actions (list_action_center_tasks).
+    ['listActionsPageFor', () => listActionsPageFor(SELECTED, { brandId: 'b1' })],
+    // Chat's read of actions by their codes (list_action_center_tasks' codes).
+    [
+      'listActionsByCodeFor',
+      () => listActionsByCodeFor(SELECTED, { brandId: 'b1', codes: ['AC-481'] }),
+    ],
     ['listSignalsFor', () => data.listSignalsFor(SELECTED, { brandId: 'b1' })],
     ['listActionHistoryFor', () => data.listActionHistoryFor(SELECTED, { brandId: 'b1' })],
     ['listCompetitorsFor', () => data.listCompetitorsFor(SELECTED, 'b1')],
@@ -162,6 +171,74 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
       () => explainChangeFor(SELECTED, { brandId: 'b1', metric: 'mention_rate' }),
     ],
     ['listTaskReviewsFor', () => taskReviews.listTaskReviewsFor(SELECTED, { brandId: 'b1' })],
+    // Chat's list reads, a page at a time.
+    ['listSignalsPageFor', () => listSignalsPageFor(SELECTED, { brandId: 'b1', offset: 50 })],
+    ['actionHistoryPageFor', () => data.actionHistoryPageFor(SELECTED, { brandId: 'b1' })],
+    [
+      'contentOpportunitiesPageFor',
+      () => data.contentOpportunitiesPageFor(SELECTED, { brandId: 'b1', offset: 50 }),
+    ],
+    ['promptsPageFor', () => data.promptsPageFor(SELECTED, { brandId: 'b1', offset: 50 })],
+    ['promptVolumesPageFor', () => data.promptVolumesPageFor(SELECTED, { brandId: 'b1' })],
+    ['reportsPageFor', () => data.reportsPageFor(SELECTED, 'b1', 50, 50)],
+    ['siteAuditsPageFor', () => data.siteAuditsPageFor(SELECTED, 'b1', { offset: 50 })],
+    ['contentDraftsPageFor', () => content.contentDraftsPageFor(SELECTED, 'b1', undefined, {})],
+    [
+      'listMentionsFor (a page by offset)',
+      () => mentions.listMentionsFor(SELECTED, { brandId: 'b1', offset: 50, limit: 50 }),
+    ],
+    // Chat's lookups by code, id, words, domain or address (the owner's plan, 2026-11-16).
+    [
+      'lookUpSignalsFor',
+      () =>
+        lookUpSignalsFor(SELECTED, {
+          brandId: 'b1',
+          codes: ['S-07'],
+          ids: ['5a000000-0000-4000-8000-000000000007'],
+        }),
+    ],
+    [
+      'lookUpPromptsFor',
+      () =>
+        data.lookUpPromptsFor(SELECTED, {
+          brandId: 'b1',
+          search: 'skip a month',
+          ids: ['a1000000-0000-4000-8000-000000000005'],
+        }),
+    ],
+    [
+      'lookUpPromptPerformanceFor',
+      () =>
+        data.lookUpPromptPerformanceFor(SELECTED, {
+          brandId: 'b1',
+          promptIds: ['a1000000-0000-4000-8000-000000000005'],
+        }),
+    ],
+    [
+      'lookUpCitationsFor',
+      () =>
+        data.lookUpCitationsFor(SELECTED, {
+          brandId: 'b1',
+          domains: ['beanbulletin.example'],
+          urls: ['https://beanbulletin.example/best'],
+        }),
+    ],
+    [
+      'lookUpOpportunitiesFor',
+      () => data.lookUpOpportunitiesFor(SELECTED, { brandId: 'b1', search: 'storage guide' }),
+    ],
+    [
+      'lookUpDraftsFor',
+      () => content.lookUpDraftsFor(SELECTED, { brandId: 'b1', search: 'gift boxes' }),
+    ],
+    [
+      'lookUpReportsFor',
+      () =>
+        data.lookUpReportsFor(SELECTED, {
+          brandId: 'b1',
+          ids: ['ae000000-0000-4000-8000-000000000001'],
+        }),
+    ],
   ];
 
   it.each(byBrand)('%s reads it as not found, reading nothing of it', async (_name, call) => {
@@ -302,4 +379,49 @@ describe('the MCP server for a Selected-brands key', () => {
     expect(result.isError).toBe(true);
     expect(text(result)).toBe('Brand not found');
   });
+
+  it('answers a code on a brand it may not use as not found, reading none of its actions', async () => {
+    const hidden = '11111111-1111-4111-8111-111111111111';
+    db.rows.brands = { id: hidden, name: 'Acme' };
+    const client = await connect(SELECTED);
+    const result = await client.callTool({
+      name: 'list_actions',
+      arguments: { brand_id: hidden, codes: ['AC-481', '#12'] },
+    });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe('Brand not found');
+    expect(new Set(db.reads)).toEqual(new Set(['brands']));
+    expect(db.rpcs).toEqual([]);
+  });
+
+  // The list tools' lookups (Chat's reads, over MCP): what a person names on a brand they may not use.
+  const lookups: [string, Record<string, unknown>][] = [
+    ['list_signals', { codes: ['S-07'], ids: ['5a000000-0000-4000-8000-000000000007'] }],
+    ['list_prompts', { search: 'skip a month', ids: ['a1000000-0000-4000-8000-000000000005'] }],
+    ['get_prompt_performance', { prompt_ids: ['a1000000-0000-4000-8000-000000000005'] }],
+    [
+      'list_citations',
+      { domains: ['beanbulletin.example'], urls: ['https://beanbulletin.example/best'] },
+    ],
+    ['list_content_opportunities', { search: 'storage guide' }],
+    [
+      'list_content_drafts',
+      { search: 'gift boxes', ids: ['a4000000-0000-4000-8000-000000000001'] },
+    ],
+    ['list_reports', { ids: ['ae000000-0000-4000-8000-000000000001'] }],
+  ];
+
+  it.each(lookups)(
+    '%s answers a lookup on a brand it may not use as not found, reading none of its rows',
+    async (name, args) => {
+      const hidden = '11111111-1111-4111-8111-111111111111';
+      db.rows.brands = { id: hidden, name: 'Acme' };
+      const client = await connect(SELECTED);
+      const result = await client.callTool({ name, arguments: { brand_id: hidden, ...args } });
+      expect(result.isError).toBe(true);
+      expect(text(result)).toBe('Brand not found');
+      expect(new Set(db.reads)).toEqual(new Set(['brands']));
+      expect(db.rpcs).toEqual([]);
+    },
+  );
 });

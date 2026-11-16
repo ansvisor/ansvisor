@@ -9,6 +9,7 @@ import type {
 } from '@/lib/actions/chat-action-center';
 import type { ChatWritePlace } from '@/lib/chat/registry/define-tool';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { actionCode } from '@/lib/action-center/action-ref';
 
 /**
  * Send to Action Center through the API (CHAT-09 §E, CHAT-20 §12): the
@@ -132,14 +133,18 @@ function apiRefusal(status: number, body: Record<string, unknown>): ChatActionFa
 
 /** A 409 duplicate's body, as the model reads it. */
 function duplicateOf(body: Record<string, unknown>): ChatActionDuplicate {
-  const action = (body.action ?? {}) as { id?: string; no?: number };
+  const action = (body.action ?? {}) as { id?: string; no?: number; brandNo?: number | null };
   const no = Number(action.no);
+  const brandNo = action.brandNo ?? null;
+  const code = actionCode({ actionNo: no, brandNo });
   return {
     ok: false,
     reason: 'duplicate',
-    message: `AC-${no} already covers this.`,
+    message: `${code} already covers this.`,
     action_id: String(action.id ?? ''),
     action_no: no,
+    brand_no: brandNo,
+    code,
     can_create_anyway: body.canCreateAnyway === true,
   };
 }
@@ -164,11 +169,11 @@ export const coverRequest = (
 /** The check's answer: the first action covering the finding, or none (`{ ok: true }`). */
 export function coverResult(res: ActionApiAnswer): { ok: true } | ChatActionDuplicate {
   const first = (res?.ok ? (res.body.covering as unknown[] | undefined) : null)?.[0] as
-    | { actionId: string; actionNo: number; covers: 'all' | 'some' }
+    | { actionId: string; actionNo: number; brandNo?: number | null; covers: 'all' | 'some' }
     | undefined;
   if (!first) return { ok: true };
   return duplicateOf({
-    action: { id: first.actionId, no: first.actionNo },
+    action: { id: first.actionId, no: first.actionNo, brandNo: first.brandNo },
     canCreateAnyway: first.covers === 'some',
   });
 }
@@ -200,10 +205,16 @@ export function sendResult(res: ActionApiAnswer): CreateChatActionResult {
   if (res.status === 409 && res.body.code === 'duplicate') return duplicateOf(res.body);
   if (!res.ok) return apiRefusal(res.status, res.body);
   const actionId = String(res.body.actionId);
+  const numbers = {
+    actionNo: Number(res.body.actionNo),
+    brandNo: (res.body.brandNo as number | null | undefined) ?? null,
+  };
   return {
     ok: true,
     action_id: actionId,
-    action_no: Number(res.body.actionNo),
+    action_no: numbers.actionNo,
+    brand_no: numbers.brandNo,
+    code: actionCode(numbers),
     created: res.body.created === true,
     href: actionHref(actionId),
     ...dailyLimitOf(res.body),

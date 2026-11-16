@@ -264,6 +264,7 @@ export async function sendOpportunityToActionCenter(
 export interface OpportunityActionResult {
   id: string;
   actionNo: number;
+  brandNo?: number | null;
   title: string | null;
   status: string;
   outcome: string;
@@ -281,7 +282,9 @@ export async function getOpportunityActions(ids: string[]): Promise<OpportunityA
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('actions')
-    .select('id, action_no, status, outcome, completed_at, validated_at, validation, payload')
+    .select(
+      'id, action_no, brand_no, status, outcome, completed_at, validated_at, validation, payload',
+    )
     .in('id', ids)
     .order('created_at');
   if (error) throw new Error(error.message);
@@ -293,6 +296,7 @@ export async function getOpportunityActions(ids: string[]): Promise<OpportunityA
     return {
       id: row.id,
       actionNo: Number(row.action_no),
+      brandNo: row.brand_no,
       title: payload.title ?? null,
       status: row.status,
       outcome: row.outcome,

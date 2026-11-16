@@ -77,6 +77,7 @@ export async function getSignals(brandId: string, filters: SignalFilters): Promi
 export interface SignalAction {
   id: string;
   actionNo: number;
+  brandNo?: number | null;
   kind: string;
   status: ActionStatus;
   payload: Record<string, unknown>;
@@ -93,7 +94,7 @@ export async function getSignalActions(brandId: string, signalId: string): Promi
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('action_signals')
-    .select('actions!inner(id, action_no, kind, status, payload)')
+    .select('actions!inner(id, action_no, brand_no, kind, status, payload)')
     .eq('signal_id', signalId)
     .eq('actions.brand_id', brandId)
     .order('linked_at', { ascending: false });
@@ -107,6 +108,7 @@ export async function getSignalActions(brandId: string, signalId: string): Promi
   return rows.map((row) => ({
     id: row.id,
     actionNo: Number(row.action_no),
+    brandNo: row.brand_no,
     kind: row.kind,
     status: row.status as ActionStatus,
     payload: withEntityCounts((row.payload ?? {}) as Record<string, unknown>, counts.get(row.id)),

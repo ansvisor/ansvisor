@@ -39,6 +39,7 @@ import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-av
 import { cn } from '@/lib/utils';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
+import { actionCode } from '@/lib/action-center/action-ref';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { PLANS, hasFeature, type PlanId } from '@/config/plans';
 import {
@@ -410,7 +411,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
           {sentLatest && (
             <span className="mt-1 flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
               <CircleCheck className="h-3.5 w-3.5" />
-              Sent {formatDate(sentLatest.sentAt)} · AC-{sentLatest.actionNo}
+              Sent {formatDate(sentLatest.sentAt)} · {actionCode(sentLatest)}
             </span>
           )}
         </span>

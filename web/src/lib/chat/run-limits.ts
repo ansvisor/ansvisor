@@ -100,6 +100,60 @@ export function readBudget(
 }
 
 /**
+ * One result's share of the run, by tool, where the whole page is the point
+ * of the read: a page of 50 actions with their titles (list_action_center_tasks)
+ * is about 15,000 characters, and an answer about "the most important" judges
+ * all of it (the owner's report, 2026-11-14). Never less than the run's own.
+ */
+export const RESULT_CHARS: Readonly<Record<string, number>> = {
+  list_action_center_tasks: 20_000,
+};
+
+/**
+ * A page of any list read's share (scope.ts pagedRead): a page of 50 compact
+ * items, so an answer about "all of them" judges the page it read, and a
+ * page cut for size still ends where the next one starts (fit.ts).
+ */
+export const PAGE_CHARS = 20_000;
+
+/** How many characters one result of this tool may send the model; `paged`: a list read's page. */
+export function resultCharsFor(
+  budget: Pick<ReadBudget, 'resultChars'>,
+  toolName: string,
+  paged = false,
+): number {
+  return Math.max(budget.resultChars, RESULT_CHARS[toolName] ?? 0, paged ? PAGE_CHARS : 0);
+}
+
+/**
+ * A next page of a list (a paged read with an offset past 0, of a list this
+ * run already read) counts lightly against the run's reads: PAGES_PER_READ
+ * next pages cost one read (the owner's rule, 2026-11-16: reading on
+ * through a list beats guessing). MAX_NEXT_PAGES is the hard ceiling, so a
+ * run can't page forever; the data budget (dataChars) still holds too.
+ */
+export const PAGES_PER_READ = 4;
+export const MAX_NEXT_PAGES = 12;
+
+/** The reads a run has used: its reads, and its next pages at PAGES_PER_READ to a read. */
+export function readsUsed(progress: { reads: number; pages?: number }): number {
+  return progress.reads + Math.floor((progress.pages ?? 0) / PAGES_PER_READ);
+}
+
+/**
+ * What the model is told when a run's reads are used up (its reads, its next
+ * pages or its data): what to do with what it read, never "a limit". An
+ * agent's run still makes the changes its task asks for (the agents' test
+ * set, 2026-11-03: "answer" alone read as "stop").
+ */
+export const READS_USED_UP =
+  'Reads for this run are used up. Go on with what was read: make the changes the task asks for with their tools, then answer. Say what the answer covers in plain words ("the newest 50 of 451 signals") and offer the rest as a next move; never mention a limit or reading.';
+
+/** A read with its own cap per run (READ_CAPS) used up. */
+export const TOOL_READS_USED_UP =
+  'Enough of these for this run: answer from what they gave and offer more as a next move; never mention a limit.';
+
+/**
  * WRITE caps per run (§14), by tool name; a write not named here gets
  * DEFAULT_WRITE_CAP. A batch row's cap counts its items (add_prompts: 50
  * prompts, add_competitors: 5 competitors), any other's its calls. Rows that

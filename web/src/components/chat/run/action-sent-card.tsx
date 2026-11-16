@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { ArrowUpRight, ListChecks } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
+import { actionCodeNo } from '@/lib/action-center/action-ref';
 import type { ChatActionSent } from '@/lib/chat/events';
 
 /**
@@ -26,7 +27,7 @@ export function ActionSentCard({ sent }: { sent: ChatActionSent }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">
-          {created ? t('created', { no: sent.actionNo }) : t('added', { no: sent.actionNo })}
+          {t(created ? 'created' : 'added', { no: actionCodeNo(sent) })}
         </p>
         <p className="truncate text-xs text-muted-foreground" title={sent.title}>
           {sent.title}

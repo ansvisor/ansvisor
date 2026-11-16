@@ -25,6 +25,7 @@ import { getActionSignals } from '@/lib/actions/action-center';
 import type { Signal } from '@/lib/signals/map';
 import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
+import { actionCode } from '@/lib/action-center/action-ref';
 
 /**
  * One metric an action moved, as before → after.
@@ -156,7 +157,7 @@ export function HistoryDrawer({
               <PriorityBadge score={item.priorityScore} level={item.priorityLevel} />
             )}
             <HistoryStatusBadge status={item.status} />
-            <span className="ml-auto text-muted-foreground">AC-{item.actionNo}</span>
+            <span className="ml-auto text-muted-foreground">{actionCode(item)}</span>
           </div>
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">

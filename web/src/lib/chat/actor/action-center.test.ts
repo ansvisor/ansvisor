@@ -108,6 +108,8 @@ describe('createChatActionFor', () => {
       ok: true,
       action_id: ACTION,
       action_no: 1271,
+      brand_no: null,
+      code: 'AC-1271',
       created: true,
       href: `/dashboard/action-center/actions/${ACTION}`,
     });

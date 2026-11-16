@@ -6,6 +6,7 @@ import type { TeamRole } from '@/components/providers/role-provider';
 import type { ChatTool } from './define-tool';
 import { clientEventProblems, type ChatEvent } from '../events';
 import { pageExists } from '@/lib/app-pages';
+import { actionRef } from '@/lib/action-center/action-ref';
 
 /**
  * The registry's rows (CHAT-20 §9, §21): each has its label and a fixture,
@@ -15,11 +16,34 @@ import { pageExists } from '@/lib/app-pages';
  */
 
 const calls = vi.hoisted(() => [] as { from: string; args: unknown[] }[]);
+/**
+ * What the functions of the list reads return here, empty: the row makes a
+ * page of it (lib/mcp/list-page.ts), so it returns that page, not this.
+ */
+const pageSources = vi.hoisted((): Record<string, unknown> => {
+  const counted = { rows: [], total: 0 };
+  return {
+    'mcp/data.listBrandsFor': [],
+    'mcp/data.listTopicsFor': [],
+    'mcp/data.listCompetitorsFor': [],
+    'mcp/data.listPromptSuggestionsFor': { suggestions: [], stale: false },
+    'mcp/data.getPromptPerformanceFor': { total: 0, prompts: [] },
+    'mcp/data.listCitationsFor': { totals: { domains: 0, urls: 0 }, top_domains: [], top_urls: [] },
+    'mcp/mentions.listMentionsFor': { total: 0, prompts: 0, mentions: [] },
+    'mcp/data.actionHistoryPageFor': counted,
+    'mcp/data.contentOpportunitiesPageFor': counted,
+    'mcp/data.promptVolumesPageFor': counted,
+    'mcp/data.promptsPageFor': counted,
+    'mcp/data.reportsPageFor': counted,
+    'mcp/data.siteAuditsPageFor': counted,
+    'mcp/content.contentDraftsPageFor': counted,
+  };
+});
 const tracked = vi.hoisted(() => {
   const track = (from: string) =>
     vi.fn(async (...args: unknown[]) => {
       calls.push({ from, args });
-      return { from };
+      return from in pageSources ? pageSources[from] : { from };
     });
   return {
     track,
@@ -79,6 +103,9 @@ vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
 );
 vi.mock('@/lib/mcp/ready-agents', async (importOriginal) =>
   tracked.all('mcp/ready-agents', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/signal-page', async (importOriginal) =>
+  tracked.all('mcp/signal-page', await importOriginal<Record<string, unknown>>()),
 );
 vi.mock('@/lib/mcp/ads-reads', () => ({
   getAdsOpportunitiesFor: tracked.track('mcp/ads-reads.getAdsOpportunitiesFor'),
@@ -320,7 +347,12 @@ describe('the Chat tool registry', () => {
         return;
       }
       expect(calls).toHaveLength(1);
-      expect(result).toEqual({ from: calls[0].from });
+      if (calls[0].from in pageSources) {
+        // A list read: a page of what its function returned, with its total and no next page.
+        expect(result).toMatchObject({ total: 0, offset: 0, next_offset: null });
+      } else {
+        expect(result).toEqual({ from: calls[0].from });
+      }
       if (tool.area === 'images') {
         // Chat's own image functions, with the member's context.
         expect(calls[0].from).toMatch(/^chat\/images\./);
@@ -339,6 +371,33 @@ describe('the Chat tool registry', () => {
       }
     },
   );
+
+  it('pages the list reads: a whole list cut to a page, a counted one by its offset', async () => {
+    const run = (name: string, input: Record<string, unknown>) => {
+      const tool = chatTool(name)!;
+      return tool.run(ctx, tool.inputSchema.parse(input));
+    };
+    const { brand } = FIXTURE_IDS;
+    const topics = Array.from({ length: 120 }, (_, i) => ({ id: `t${i}`, name: `Topic ${i}` }));
+    pageSources['mcp/data.listTopicsFor'] = topics;
+    try {
+      expect(await run('list_topics', { brand_id: brand, offset: 100 })).toEqual({
+        total: 120,
+        offset: 100,
+        next_offset: null,
+        note: 'Showing 101–120 of 120 topics. This is the last page.',
+        topics: topics.slice(100),
+      });
+    } finally {
+      pageSources['mcp/data.listTopicsFor'] = [];
+    }
+    calls.length = 0;
+    await run('get_reports', { brand_id: brand, offset: 50 });
+    expect(calls[0]).toMatchObject({ from: 'mcp/data.reportsPageFor', args: [ctx, brand, 50, 50] });
+    calls.length = 0;
+    await run('list_mentions', { brand_id: brand, offset: 70 });
+    expect(calls[0].args[1]).toMatchObject({ brandId: brand, limit: 50, offset: 70 });
+  });
 
   it('hands the app the same arguments its pages pass', async () => {
     const run = (name: string, input: unknown) => {
@@ -753,6 +812,251 @@ describe('the Chat tool registry', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it('reads the actions a page at a time, all of them ranked, and asks for titles (owner, 2026-11-14)', async () => {
+    const tool = chatTool_('list_action_center_tasks');
+    const brand = FIXTURE_IDS.brand;
+    await tool.run(ctx, tool.inputSchema.parse({ brand_id: brand, offset: 50 }));
+    expect(calls.map((call) => [call.from, call.args])).toEqual([
+      [
+        'mcp/action-center-reads.listActionsPageFor',
+        [
+          ctx,
+          {
+            brandId: brand,
+            status: undefined,
+            category: undefined,
+            sort: undefined,
+            limit: undefined,
+            offset: 50,
+          },
+        ],
+      ],
+    ]);
+    // A page is at most 50 rows; the rest come by offset. Open actions unless one status is asked.
+    expect(tool.inputSchema.safeParse({ brand_id: brand, limit: 50 }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ brand_id: brand, limit: 51 }).success).toBe(false);
+    expect(tool.inputSchema.safeParse({ brand_id: brand, status: 'open' }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ brand_id: brand, offset: -1 }).success).toBe(false);
+    // What the model is told: judge the whole page, say "N of M", and name actions by title.
+    expect(tool.description).toContain(
+      'every one that matches is counted and ranked on the server',
+    );
+    expect(tool.description).toContain('read the default page (50 rows) before you judge');
+    expect(tool.description).toContain('say how many you judged ("the top 50 of 53")');
+    expect(tool.description).toContain('or read the next page with next_offset');
+    expect(tool.description).toContain(`ref (its number, as ${actionRef(12)})`);
+    expect(tool.description).toContain(
+      'Name each action by its title, with its ref after it: never a ref alone.',
+    );
+  });
+
+  it('reads actions by the codes a person wrote, in one read, and never answers with others (owner, 2026-11-16)', async () => {
+    const tool = chatTool_('list_action_center_tasks');
+    const brand = FIXTURE_IDS.brand;
+    calls.length = 0;
+    await tool.run(
+      ctx,
+      tool.inputSchema.parse({ brand_id: brand, codes: [' AC 481 ', 'AC-63'], status: 'open' }),
+    );
+    // By code, every status: the page's inputs don't apply.
+    expect(calls.map((call) => [call.from, call.args])).toEqual([
+      [
+        'mcp/action-center-reads.listActionsByCodeFor',
+        [ctx, { brandId: brand, codes: ['AC 481', 'AC-63'] }],
+      ],
+    ]);
+    const parses = (codes: unknown) =>
+      tool.inputSchema.safeParse({ brand_id: brand, codes }).success;
+    expect(parses(['AC-481', 'AC 481', 'ac481', '#481', '481', 'AC-07', 'AC-7'])).toBe(true);
+    expect(parses([])).toBe(false);
+    expect(parses(Array.from({ length: 11 }, (_, i) => `AC-${i + 1}`))).toBe(false);
+    // Read the code first, say "not found" plainly, never the closest, never "doesn't exist".
+    expect(tool.description).toContain(
+      'When the person names an action by its code (AC-12, "AC 12", "#12", or a number they clearly mean as one), read that code first: codes, every code of the message in one read.',
+    );
+    expect(tool.description).toContain('every status, Completed and Dismissed included');
+    expect(tool.description).toContain(
+      'a code that names two actions returns both: name both, never pick one',
+    );
+    expect(tool.description).toContain(
+      'say this brand has no action with that code (codes are per brand), and never offer other actions as the closest',
+    );
+    expect(tool.description).toContain(
+      "Never say an action doesn't exist because a page of the list didn't show it.",
+    );
+    expect(chatTool_('get_action').description).toContain(
+      "an action the person names by its code is read with list_action_center_tasks' codes first",
+    );
+  });
+
+  // The owner's plan (2026-11-16, item 2): "what is X?" never depends on X being on a page.
+  it('looks an item up by the code, id, words, domain or address the person named', async () => {
+    const { brand } = FIXTURE_IDS;
+    const id = (n: number) => `a1000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+    const run = async (name: string, input: Record<string, unknown>) => {
+      const tool = chatTool_(name);
+      calls.length = 0;
+      await tool.run(ctx, tool.inputSchema.parse({ brand_id: brand, ...input }));
+      return calls.map((call) => [call.from, call.args]);
+    };
+    // A lookup's inputs only: the list's own filters, sort and page don't apply.
+    expect(
+      await run('list_signals', {
+        codes: [' S 7 ', '#12'],
+        status: 'new',
+        date_from: '2026-11-01',
+      }),
+    ).toEqual([
+      [
+        'mcp/signal-page.lookUpSignalsFor',
+        [ctx, { brandId: brand, codes: ['S 7', '#12'], ids: undefined }],
+      ],
+    ]);
+    expect(await run('list_signals', { ids: [id(1)] })).toEqual([
+      [
+        'mcp/signal-page.lookUpSignalsFor',
+        [ctx, { brandId: brand, codes: undefined, ids: [id(1)] }],
+      ],
+    ]);
+    expect(
+      await run('list_prompts', {
+        search: ' skip a month ',
+        topic_id: id(2),
+        is_active: true,
+        offset: 50,
+      }),
+    ).toEqual([
+      [
+        'mcp/data.lookUpPromptsFor',
+        [ctx, { brandId: brand, ids: undefined, search: 'skip a month', offset: 50 }],
+      ],
+    ]);
+    expect(
+      await run('get_prompt_performance', {
+        prompt_ids: [id(3)],
+        topic_id: id(2),
+        sort_by: 'mentions',
+        date_from: '2026-10-01',
+        date_to: '2026-10-31',
+        region: 'US',
+      }),
+    ).toEqual([
+      [
+        'mcp/data.lookUpPromptPerformanceFor',
+        [
+          ctx,
+          {
+            brandId: brand,
+            dateFrom: '2026-10-01',
+            dateTo: '2026-10-31',
+            model: undefined,
+            region: 'US',
+            promptIds: [id(3)],
+          },
+        ],
+      ],
+    ]);
+    expect(
+      await run('list_citations', {
+        domains: ['www.example.com'],
+        urls: ['https://example.com/a/'],
+        source_filter: 'owned',
+        topic_id: id(2),
+        date_from: '2026-10-01',
+      }),
+    ).toEqual([
+      [
+        'mcp/data.lookUpCitationsFor',
+        [
+          ctx,
+          {
+            brandId: brand,
+            dateFrom: '2026-10-01',
+            dateTo: undefined,
+            model: undefined,
+            region: undefined,
+            topicId: id(2),
+            domains: ['www.example.com'],
+            urls: ['https://example.com/a/'],
+          },
+        ],
+      ],
+    ]);
+    expect(
+      await run('list_content_opportunities', {
+        search: 'storage guide',
+        status: 'new',
+        impact: 'high',
+      }),
+    ).toEqual([
+      [
+        'mcp/data.lookUpOpportunitiesFor',
+        [ctx, { brandId: brand, ids: undefined, search: 'storage guide', offset: undefined }],
+      ],
+    ]);
+    expect(await run('list_drafts', { ids: [id(4)], status: 'in_review' })).toEqual([
+      [
+        'mcp/content.lookUpDraftsFor',
+        [ctx, { brandId: brand, ids: [id(4)], search: undefined, offset: undefined }],
+      ],
+    ]);
+    expect(await run('get_reports', { search: 'benchmark' })).toEqual([
+      [
+        'mcp/data.lookUpReportsFor',
+        [ctx, { brandId: brand, ids: undefined, search: 'benchmark', offset: undefined }],
+      ],
+    ]);
+    // Without one, each reads its page as before.
+    expect((await run('list_signals', {}))[0][0]).toBe('mcp/signal-page.listSignalsPageFor');
+    expect((await run('get_reports', { search: '' }))[0][0]).toBe('mcp/data.reportsPageFor');
+
+    // What the model may send: codes as typed, ids as ids, short words, at most 10 of each.
+    const parses = (name: string, input: Record<string, unknown>) =>
+      chatTool_(name).inputSchema.safeParse({ brand_id: brand, ...input }).success;
+    expect(parses('list_signals', { codes: ['S-07', 'S 7', 's7', '#7', '7'] })).toBe(true);
+    expect(parses('list_signals', { codes: Array.from({ length: 11 }, (_, i) => `S-${i}`) })).toBe(
+      false,
+    );
+    expect(parses('list_prompts', { ids: ['not-an-id'] })).toBe(false);
+    expect(parses('list_prompts', { search: 'x'.repeat(201) })).toBe(false);
+    expect(parses('list_citations', { domains: [] })).toBe(false);
+
+    // Each read says to read by what was named first, and never to answer with the closest.
+    for (const name of [
+      'list_signals',
+      'list_prompts',
+      'get_prompt_performance',
+      'list_citations',
+      'list_content_opportunities',
+      'list_drafts',
+      'get_reports',
+    ]) {
+      const { description } = chatTool_(name);
+      expect(description, name).toMatch(/read (?:that|prompt_ids) first/);
+      expect(description, name).toMatch(/never offer (?:other [\w ]+? |others )as the closest/);
+    }
+    expect(chatTool_('list_signals').description).toContain(
+      'When the person names a signal by its code (S-07, "S 7", "s7", "#7", or a number they clearly mean as one) or its id, read that first',
+    );
+    expect(chatTool_('list_signals').description).toContain('every status and every date');
+    expect(chatTool_('list_signals').description).toContain('(codes are per brand)');
+    expect(chatTool_('list_prompts').description).toContain(
+      "A lookup reads every topic and state, active and paused (topic_id and is_active don't apply)",
+    );
+    expect(chatTool_('list_citations').description).toContain(
+      "A lookup reads every source type (source_filter and the page don't apply)",
+    );
+    expect(chatTool_('list_content_opportunities').description).toContain(
+      "A lookup reads every status, archived included (status, impact and type don't apply)",
+    );
+    expect(chatTool_('list_drafts').description).toContain(
+      "archived drafts included and marked archived (status doesn't apply)",
+    );
+    expect(chatTool_('get_prompt_performance').description).toContain(
+      "whatever their topic (topic_id, sort, order and the page don't apply)",
+    );
   });
 
   it('never offers a tool that marks a task done (CHAT-09 item 15)', () => {

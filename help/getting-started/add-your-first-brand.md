@@ -90,7 +90,7 @@ Someone else edits your site? **Email this to my developer** opens your email ap
 
 ## Set up your brand with a plan active
 
-Whenever your workspace has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor: after checkout on the first screen, after buying from the sample brand, or once the only brand was deleted. On the last step, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once; **Connect your site** follows. If you leave part-way, you pick up where you stopped. Admins who want to change or cancel the plan first can use **Manage your plan** under the steps: it opens Billing, and setup waits for half an hour.
+Whenever your workspace has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor: after checkout on the first screen, after buying from the sample brand, or once the only brand was deleted. On the last step, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once; **Connect your site** follows. If you leave part-way, you pick up where you stopped. Admins who want to change or cancel the plan first can use **Manage your plan** under the steps: it opens Billing, and setup waits for half an hour. If the trial is canceled, the plan ends or a payment fails before you finish, Ansvisor opens read-only instead, so you can choose a plan in Billing.
 
 ## A brand set up before choosing a plan
 

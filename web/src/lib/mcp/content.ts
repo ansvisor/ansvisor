@@ -10,6 +10,16 @@ import {
 } from './content-delivery';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { brandAllowed, mayUseBrand } from '@/lib/mcp/data';
+import { PAGE_ROWS, pageRows } from '@/lib/mcp/list-page';
+import {
+  LOOKUP_MAX,
+  LOOKUP_WORDS,
+  askedIds,
+  containsPattern,
+  idAndSearchLookup,
+  keysOf,
+  searchWords,
+} from '@/lib/mcp/lookup';
 import {
   draftPassages,
   keepAgentSuggestions,
@@ -155,6 +165,8 @@ export interface McpDraftSummary {
   last_send: McpLastSend | null;
   /** Whether its shopping links still sell. */
   shopping_links: McpShoppingLinks;
+  /** Set aside in the Library (00233): only on a lookup's rows, which read archived drafts too. */
+  archived?: true;
 }
 
 /** How many agent suggestions wait for review on each draft, by draft id. */
@@ -177,31 +189,137 @@ export async function listContentDraftsFor(
   brandId: string,
   status?: string,
 ): Promise<McpDraftSummary[] | null> {
+  return (await contentDraftsPageFor(auth, brandId, status))?.rows ?? null;
+}
+
+/** The brand's drafts from `offset`, latest changed first, with how many match in all. */
+export async function contentDraftsPageFor(
+  auth: McpAuthContext,
+  brandId: string,
+  status?: string,
+  page: { limit?: number; offset?: number } = {},
+  /**
+   * Chat's lookup: these drafts only, by id (checked ids), or those with
+   * every word in their title; any status, archived too, each archived one
+   * marked, its organization joined on the rows.
+   */
+  find?: { ids?: readonly string[]; search?: string },
+): Promise<{ rows: McpDraftSummary[]; total: number } | null> {
   if (!(await brandAllowed(auth, brandId))) return null;
-  let query = supabaseAdmin
-    .from('content_drafts')
-    .select(
-      `id, title, status, method, page_type, author, source_url, updated_at, ${SHOPPING_COLUMNS}`,
-    )
-    .eq('brand_id', brandId)
-    // Archived drafts (00233) are set aside in the Library, and here.
-    .is('archived_at', null)
-    .order('updated_at', { ascending: false })
-    .limit(LIST_LIMIT);
-  if (status) query = query.eq('status', status);
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  const rows = data ?? [];
+  const limit = Math.min(Math.max(Math.trunc(page.limit ?? LIST_LIMIT), 1), LIST_LIMIT);
+  const offset = Math.max(Math.trunc(page.offset ?? 0), 0);
+  const words = searchWords(find?.search);
+  if (find && (find.ids?.length === 0 || (find.search !== undefined && !words.length))) {
+    return { rows: [], total: 0 };
+  }
+  const organizationId = auth.organizationId as string;
+  const matching = (head = false) => {
+    if (find) {
+      let query = supabaseAdmin
+        .from('content_drafts')
+        .select(
+          `id, title, status, method, page_type, author, source_url, updated_at, archived_at, ${SHOPPING_COLUMNS}, brands!inner(organization_id)`,
+          { count: 'exact', head },
+        )
+        .eq('brand_id', brandId)
+        .eq('brands.organization_id', organizationId);
+      if (find.ids) query = query.in('id', [...find.ids]);
+      // Each word as an escaped pattern: the text is data, never part of the filter's syntax.
+      for (const word of words) query = query.ilike('title', containsPattern(word));
+      return query;
+    }
+    const query = supabaseAdmin
+      .from('content_drafts')
+      .select(
+        `id, title, status, method, page_type, author, source_url, updated_at, ${SHOPPING_COLUMNS}`,
+        { count: 'exact', head },
+      )
+      .eq('brand_id', brandId)
+      // Archived drafts (00233) are set aside in the Library, and here.
+      .is('archived_at', null);
+    return status ? query.eq('status', status) : query;
+  };
+  const { rows, total } = await pageRows(
+    await matching()
+      .order('updated_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
   const ids = rows.map((r) => r.id);
   const [open, sends] = await Promise.all([openSuggestionCounts(ids), lastSendsOf(ids)]);
-  return rows.map(({ shopping_built, content_shopping_checks, ...row }) => ({
-    ...row,
-    open_suggestions: open.get(row.id) ?? 0,
-    editor_path: contentEditorPath(row.id),
-    last_send: sends.get(row.id) ?? null,
-    shopping_links: mcpShoppingLinks(shopping_built, content_shopping_checks),
-  }));
+  const drafts = rows.map((read) => {
+    const { shopping_built, content_shopping_checks, ...rest } = read;
+    // A lookup's own columns: the join stays out of the row, archived becomes a mark.
+    const row = { ...rest } as typeof rest & { brands?: unknown; archived_at?: string | null };
+    const archivedAt = row.archived_at;
+    delete row.brands;
+    delete row.archived_at;
+    return {
+      ...row,
+      open_suggestions: open.get(row.id) ?? 0,
+      editor_path: contentEditorPath(row.id),
+      last_send: sends.get(row.id) ?? null,
+      shopping_links: mcpShoppingLinks(shopping_built, content_shopping_checks),
+      ...(archivedAt ? { archived: true as const } : {}),
+    };
+  });
+  return { rows: drafts, total };
+}
+
+/**
+ * The brand's drafts by the ids or title words a person named, for Chat
+ * (the owner's plan of 2026-11-16, item 2): any status, archived included
+ * and marked, the latest changed first. Only this brand of the caller's
+ * organization: an id of another brand or workspace is not found. Null for
+ * a brand outside the caller's organization or access.
+ */
+export async function lookUpDraftsFor(
+  auth: McpAuthContext,
+  params: { brandId: string; ids?: readonly string[]; search?: string; offset?: number },
+): Promise<
+  | ({ note: string; drafts: McpDraftSummary[]; not_found: string[] } & {
+      total?: number;
+      offset?: number;
+      next_offset?: number | null;
+    })
+  | null
+> {
+  if (!(await brandAllowed(auth, params.brandId))) return null;
+  const asked = askedIds(params.ids);
+  const ids = keysOf<string>(asked, 'id');
+  const terms = searchWords(params.search);
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
+  const none = { rows: [], total: 0 };
+  const [byIds, bySearch] = await Promise.all([
+    ids.length > 0
+      ? contentDraftsPageFor(auth, params.brandId, undefined, { limit: LOOKUP_MAX }, { ids })
+      : none,
+    terms.length > 0
+      ? contentDraftsPageFor(
+          auth,
+          params.brandId,
+          undefined,
+          { limit: PAGE_ROWS, offset },
+          { search: params.search },
+        )
+      : none,
+  ]);
+  if (!byIds || !bySearch) return null;
+  const lookup = idAndSearchLookup(
+    LOOKUP_WORDS.drafts,
+    asked.length > 0 ? { asked, rows: byIds.rows } : null,
+    params.search !== undefined
+      ? { text: params.search, terms, rows: bySearch.rows, total: bySearch.total, offset }
+      : null,
+  );
+  return {
+    note: lookup.note,
+    ...lookup.page,
+    drafts: lookup.rows,
+    not_found: lookup.not_found,
+  };
 }
 
 export interface McpDraft {

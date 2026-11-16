@@ -24,6 +24,7 @@ import {
   EVAL_IDS,
   EVAL_OTHER_BRAND,
   EVAL_PROMPTS,
+  evalActions,
 } from './testing/agent-eval-data';
 import {
   AGENT_EVAL_PRICES,
@@ -176,6 +177,8 @@ const fakes = vi.hoisted(() => ({
     approving: string | null;
     sessionless: boolean;
     mode: string;
+    /** The workspace its reads answer from (agent-eval-data.ts). */
+    workspace?: import('./testing/agent-eval-data').EvalWorkspace;
   },
   resolveModels: vi.fn(),
   /** What the workspace's month has left of its AI limit, in dollars (Growth: $25, 40% used). */
@@ -340,7 +343,11 @@ vi.mock('./registry/tools', async (importOriginal) => {
         run: async (ctx: Parameters<typeof tool.run>[0], input: Parameters<typeof tool.run>[1]) => {
           const value = AS_IS.has(tool.name)
             ? await tool.run(ctx, input)
-            : data.evalReadResult(tool.name, (input ?? {}) as Record<string, unknown>);
+            : data.evalReadResult(
+                tool.name,
+                (input ?? {}) as Record<string, unknown>,
+                fakes.run?.workspace,
+              );
           fakes.run?.reads.push(tool.name);
           fakes.run?.readInputs.push((input ?? {}) as Record<string, unknown>);
           fakes.run?.readValues.push(JSON.stringify(value ?? null));
@@ -887,7 +894,22 @@ async function runScenario(scenario: AgentEvalScenario): Promise<EvalResult> {
     approving: null,
     sessionless: agentRun && scenario.trigger !== 'manual',
     mode: scenario.mode,
+    workspace: scenario.workspace,
   };
+  // The brand's other actions, where the scenario's workspace has them: a call by one's id finds
+  // its brand as the engine looks it up (precedence-context.ts resolveCallBrand).
+  for (const action of evalActions(scenario.workspace)) {
+    if (db.tables.actions.some((row) => row.id === action.id)) continue;
+    db.tables.actions.push({
+      id: action.id,
+      brand_id: BRAND,
+      action_no: Number(action.number.slice(3)),
+      kind: 'signal',
+      status: action.status,
+      deleted_at: null,
+      payload: { title: action.title },
+    });
+  }
   const started = Date.now();
   let actor: import('./engine').ChatActor;
   let chatRunId: string;
@@ -1298,6 +1320,166 @@ describe('the agents’ test set harness, on a scripted model', () => {
       false,
     );
     expect(result.passed).toBe(false);
+  });
+
+  it('answers actions asked for by their code from a read of those codes, one past the first page', async () => {
+    const scenario = skillOf('action-by-code');
+    expect(scenario).toMatchObject({
+      message: 'AC 481 ve AC-63 nedir',
+      workspace: 'action_backlog',
+    });
+    // The brand has 55 open actions: AC-63 is on the list's first page of 50, AC-481 isn't.
+    const { evalReadResult } = await import('./testing/agent-eval-data');
+    const first = evalReadResult('list_action_center_tasks', { brand_id: BRAND }, 'action_backlog');
+    expect(first).toMatchObject({ total: 55, next_offset: 50 });
+    const refs = (first as { actions: { ref: string }[] }).actions.map((a) => a.ref);
+    expect(refs).toContain('AC-63');
+    expect(refs).not.toContain('AC-481');
+
+    scripted([
+      calls(
+        toolCall('r1', 'list_action_center_tasks', {
+          brand_id: BRAND,
+          codes: ['AC 481', 'AC-63'],
+        }),
+      ),
+      text(
+        '- **Expand visibility on 1 platform** (AC-481): its code. New, priority 8, growth.\n- **Build on your gain on "Which coffee subscription lets you skip a month?"** (AC-63): its code. New, priority 69, growth.',
+      ),
+    ]);
+    const result = await runScenario(scenario);
+    expect(result.run.reads).toEqual(['list_action_center_tasks']);
+    // Both found by the one read, each by its code.
+    const read = JSON.parse(result.run.readValues[0]) as {
+      actions: { ref: string; matched: string }[];
+      not_found: string[];
+    };
+    expect(read.actions.map((a) => [a.ref, a.matched])).toEqual([
+      ['AC-481', 'its code'],
+      ['AC-63', 'its code'],
+    ]);
+    expect(read.not_found).toEqual([]);
+    for (const name of [
+      'reads the actions by their codes',
+      'names each action asked by its title and code',
+      'names no other action in their place',
+      'never gives up on data it could read',
+    ]) {
+      expect(
+        result.checks.find((c) => c.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails an answer from a page of the list that offers the closest actions instead', async () => {
+    scripted([
+      calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+      text(
+        'There is no AC-481 in the data I read. The closest is **Refresh the cold brew guide** (AC-53), and **Build on your gain on "Which coffee subscription lets you skip a month?"** (AC-63).',
+      ),
+    ]);
+    const result = await runScenario(skillOf('action-by-code'));
+    const failed = Object.fromEntries(
+      result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(failed).toMatchObject({
+      'reads the actions by their codes': 'AC-481, AC-63 not read by its code',
+      'names each action asked by its title and code': 'AC-481 without its title and code',
+      'names no other action in their place': 'also names AC-53',
+    });
+    expect(result.passed).toBe(false);
+  });
+
+  // The owner's plan (2026-11-16, item 2): "S-07 nedir" with S-07 past the first page of signals.
+  it('answers a signal asked for by its code from a read of that code, one past the first page', async () => {
+    const scenario = skillOf('signal-by-code');
+    const { EVAL_CODE_SIGNAL } = await import('./testing/agent-eval-data');
+    scripted([
+      calls(toolCall('r1', 'list_signals', { brand_id: BRAND, codes: ['S-07'] })),
+      text(
+        `**${EVAL_CODE_SIGNAL.title}** (S-07): Northbound Roasters bu prompttaki yanıtlarda sizi geçmişti. Sinyal çözüldü.`,
+      ),
+    ]);
+    const result = await runScenario(scenario);
+    expect(result.run.reads).toEqual(['list_signals']);
+    // The page's window doesn't hide it: the lookup read every date and status.
+    const read = JSON.parse(result.run.readValues[0]) as {
+      signals: { code: string; matched: string; status: string }[];
+      not_found: string[];
+    };
+    expect(read.signals.map((s) => [s.code, s.matched, s.status])).toEqual([
+      ['S-07', 'its code', 'resolved'],
+    ]);
+    expect(read.not_found).toEqual([]);
+    for (const name of [
+      'reads the signals by their codes',
+      'names each signal asked by its title and code',
+      'names no other signal in their place',
+      'never gives up on data it could read',
+    ]) {
+      expect(
+        result.checks.find((c) => c.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails an answer about a signal from a page of the list, with the closest instead', async () => {
+    scripted([
+      calls(toolCall('r1', 'list_signals', { brand_id: BRAND })),
+      text('S-07 okuduğum sinyallerde yok. En yakını S-11.'),
+    ]);
+    const result = await runScenario(skillOf('signal-by-code'));
+    const failed = Object.fromEntries(
+      result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(failed).toMatchObject({
+      'reads the signals by their codes': 'S-07 not read by its code',
+      'names each signal asked by its title and code': 'S-07 without its title and code',
+      'names no other signal in their place': 'also names S-11',
+    });
+    expect(result.passed).toBe(false);
+  });
+
+  it('answers a cited domain from a read of that domain, one past the first page', async () => {
+    const scenario = skillOf('citation-by-domain');
+    scripted([
+      calls(
+        toolCall('r1', 'list_citations', {
+          brand_id: BRAND,
+          domains: ['https://www.decafdigest.example/'],
+        }),
+      ),
+      text(
+        'decafdigest.example, yapay zekâ yanıtlarında 3 kez kaynak gösterildi (2 yanıtta). En çok decafdigest.example/best-decaf-subscriptions sayfası.',
+      ),
+    ]);
+    const result = await runScenario(scenario);
+    expect(result.run.reads).toEqual(['list_citations']);
+    const read = JSON.parse(result.run.readValues[0]) as {
+      domains: { domain: string; total_citations: number }[];
+      note: string;
+    };
+    expect(read.domains.map((d) => [d.domain, d.total_citations])).toEqual([
+      ['decafdigest.example', 3],
+    ]);
+    // Over the person's own period, which the note names.
+    expect(read.note).toMatch(/AI answers from \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}/);
+    for (const name of [
+      'reads the citations by domain',
+      'names each domain asked with how often it is cited',
+      'names no other domain in their place',
+      'never gives up on data it could read',
+    ]) {
+      expect(
+        result.checks.find((c) => c.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
   });
 
   it('refuses every network call but the model’s', async () => {

@@ -43,6 +43,7 @@ import { captureWorkspaceEvent } from '../core-loop-events.js';
 import { measureBasket } from './basket-metrics.js';
 import { readPlatformStates } from './improve-outcome.js';
 import { priorityOnCreate } from './priority-data.js';
+import { actionCode } from './action-code.js';
 
 export const CHAT_ACTION_KIND = 'chat_finding';
 /** The `source` Chat's actions and History events carry (CHAT-20 §10a). */
@@ -326,7 +327,7 @@ export async function findCoveringActions(brandId, entities, { category } = {}) 
 
   const { data: actions, error } = await supabaseAdmin
     .from('actions')
-    .select('id, action_no, kind, category, status, payload, dedup_key, priority_score')
+    .select('id, action_no, brand_no, kind, category, status, payload, dedup_key, priority_score')
     .eq('brand_id', brandId)
     .in('status', ACTIVE)
     .is('deleted_at', null)
@@ -364,6 +365,7 @@ export async function findCoveringActions(brandId, entities, { category } = {}) 
     covering.push({
       actionId: action.id,
       actionNo: Number(action.action_no),
+      brandNo: action.brand_no ?? null,
       title: typeof action.payload?.title === 'string' ? action.payload.title : null,
       kind: action.kind,
       category: action.category,
@@ -490,7 +492,7 @@ export function chatTaskRows(actionId, tasks, source = CHAT_SOURCE) {
 async function sentWithKey(brandId, idempotencyKey) {
   const { data, error } = await supabaseAdmin
     .from('actions')
-    .select('id, action_no, status, deleted_at')
+    .select('id, action_no, brand_no, status, deleted_at')
     .eq('brand_id', brandId)
     .eq('kind', CHAT_ACTION_KIND)
     .eq('payload->>idempotencyKey', idempotencyKey)
@@ -580,10 +582,11 @@ export async function verifiedPlace(userId, { conversationId, runId, idempotency
 
 /** A duplicate, as the route answers it (409) and Chat says it (CHAT-20 §11a `duplicate`). */
 function duplicateError(found) {
-  return httpError(`AC-${found.actionNo} already covers this.`, 409, 'duplicate', {
+  return httpError(`${actionCode(found)} already covers this.`, 409, 'duplicate', {
     action: {
       id: found.actionId,
       no: found.actionNo,
+      brandNo: found.brandNo ?? null,
       title: found.title,
       covers: found.covers,
     },
@@ -604,7 +607,7 @@ function duplicateError(found) {
  * @param {string} opts.idempotencyKey - one per approval: a retry finds what it made
  * @param {boolean} [opts.createAnyway] - the person chose Create anyway (entities differ)
  * @param {'chat' | 'ads'} [opts.source] - `ads`: Ads' Earn card, with no conversation or run
- * @returns {Promise<{ actionId: string, actionNo: number, created: boolean,
+ * @returns {Promise<{ actionId: string, actionNo: number, brandNo: number|null, created: boolean,
  *   dailyLimit?: { used: number, limit: number, reached: boolean } }>}
  */
 export async function sendChatAction(
@@ -632,7 +635,14 @@ export async function sendChatAction(
   );
 
   const again = await sentWithKey(brandId, idempotencyKey);
-  if (again) return { actionId: again.id, actionNo: Number(again.action_no), created: false };
+  if (again) {
+    return {
+      actionId: again.id,
+      actionNo: Number(again.action_no),
+      brandNo: again.brand_no ?? null,
+      created: false,
+    };
+  }
 
   const { keys, dedupKey, covering } = await findCoveringActions(brandId, proposal.entities, {
     category: proposal.category,
@@ -716,7 +726,7 @@ export async function sendChatAction(
         payload,
       })),
     })
-    .select('id, action_no')
+    .select('id, action_no, brand_no')
     .single();
   if (error) {
     // The same proposal sent twice at once: the open-action dedup index (00084) let one in.
@@ -773,6 +783,7 @@ export async function sendChatAction(
   return {
     actionId: action.id,
     actionNo: Number(action.action_no),
+    brandNo: action.brand_no ?? null,
     created: true,
     ...(used === null
       ? {}

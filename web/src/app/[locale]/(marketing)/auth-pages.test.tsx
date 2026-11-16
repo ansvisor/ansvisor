@@ -1,13 +1,15 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { NextIntlClientProvider } from 'next-intl';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
+import { newUserThemeScript } from '@/components/theme/new-user-theme';
 
 /**
  * What each page in the auth frame shows (the owner's options D and E,
  * 2026-11-10): sign-up under one headline, sign-in with the logo above its
  * card, both with the agent animation behind; forgot and reset password and
- * the consent page with nothing behind them.
+ * the consent page with nothing behind them. On Ansvisor Cloud, sign-up,
+ * sign-in and the password pages start a browser with no theme yet on dark.
  */
 
 vi.mock('next/image', () => ({
@@ -190,5 +192,38 @@ describe('the other pages in the auth frame', () => {
     // Nothing behind the consent page.
     expect(markup).not.toContain('data-slot="agent-backdrop"');
     expect(markup).not.toContain('data-slot="auth-headline"');
+  });
+});
+
+describe('a browser with no theme yet starts on dark (config/theme.ts)', () => {
+  const script = `<script>${newUserThemeScript('dark', 'theme')}</script>`;
+  const pages = [
+    ['sign-up', async () => html(<SignUpPage />)],
+    ['sign-in', async () => html(await SignInPage({ searchParams: Promise.resolve({}) }))],
+    ['forgot password', async () => html(<ForgotPasswordPage />)],
+    ['reset password', async () => html(<ResetPasswordPage />)],
+  ] as const;
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each(pages)('%s: the script comes before the page, on Ansvisor Cloud', async (_, page) => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    const markup = await page();
+    // First, after the logo's preload links React puts on top; and once.
+    expect(markup.replace(/^(<link [^>]*\/>)*/, '').startsWith(script)).toBe(true);
+    expect(markup.split(script)).toHaveLength(2);
+  });
+
+  it.each(pages)('%s: nothing self-hosted', async (_, page) => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await page()).not.toContain('<script');
+  });
+
+  it('the consent page leaves the theme alone (signed out, it sends a person to sign-in)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    const markup = html(
+      await ConsentPage({ searchParams: Promise.resolve({ error: 'invalid_request' }) }),
+    );
+    expect(markup).not.toContain('<script');
   });
 });

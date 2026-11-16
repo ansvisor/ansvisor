@@ -153,7 +153,7 @@ export function summaryBytes(value) {
  * as the web's does for an action whose payload names nothing.
  *
  * @param {object} input
- * @param {object} input.action the action's row: action_no, kind, category, impact,
+ * @param {object} input.action the action's row: action_no, brand_no, kind, category, impact,
  *   created_at, priority_score, priority_level, priority_reason
  * @param {object} input.payload its payload
  * @param {{ score: number, wait: { days: number, points: number }, startNow: string|null,
@@ -164,6 +164,8 @@ export function buildSummary({ action, payload, pick }) {
     version: SUMMARY_VERSION,
     action: {
       no: action.action_no ?? null,
+      // Its number in its brand (00534), which its code shows once there.
+      brandNo: action.brand_no ?? null,
       kind: action.kind,
       category: action.category,
       impact: action.impact ?? null,

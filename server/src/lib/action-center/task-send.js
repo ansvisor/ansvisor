@@ -69,7 +69,7 @@ export async function loadTask(taskId) {
   const { data: action, error: actionError } = await supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, brand_id, kind, category, impact, status, priority_score, priority_level, deleted_at',
+      'id, action_no, brand_no, brand_id, kind, category, impact, status, priority_score, priority_level, deleted_at',
     )
     .eq('id', task.action_id)
     .single();
@@ -145,6 +145,7 @@ export function opportunityFromTask({ task, title, action, brandDomains, questio
       fromAction: {
         actionId: action.id,
         actionNo: action.action_no,
+        brandNo: action.brand_no ?? null,
         taskId: task.id,
         task: {
           url: text(d.url),
@@ -275,6 +276,7 @@ async function joinOpportunity(target, { task, action, title, question }) {
       source: 'action',
       actionId: action.id,
       actionNo: action.action_no ?? null,
+      brandNo: action.brand_no ?? null,
       taskId: task.id,
       title,
     },
