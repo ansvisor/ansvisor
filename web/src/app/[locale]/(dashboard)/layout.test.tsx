@@ -157,6 +157,10 @@ vi.mock('@/lib/actions/brand', () => ({
   getBrandById: vi.fn(),
 }));
 
+// The theme provider, as KeepCurrentTheme reads it: what it saves.
+const themes = vi.hoisted(() => ({ setTheme: vi.fn() }));
+vi.mock('next-themes', () => ({ useTheme: () => themes }));
+
 const { default: DashboardLayout } = await import('./layout');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
@@ -401,6 +405,37 @@ describe('the dashboard layout and the demo brand', () => {
       'See plans',
       'See the demo',
     ]);
+  });
+});
+
+describe('the dashboard layout and the theme', () => {
+  beforeEach(() => window.localStorage.removeItem('theme'));
+  afterEach(() => window.localStorage.removeItem('theme'));
+
+  it('keeps someone who already uses Ansvisor on light, the theme they see, on Cloud', async () => {
+    expect(await open()).toBeNull();
+    expect(themes.setTheme).toHaveBeenCalledTimes(1);
+    expect(themes.setTheme).toHaveBeenCalledWith('light');
+  });
+
+  // Dark: what a new person got on sign-up, sign-in or onboarding. Either: a picked one.
+  it.each(['dark', 'light'])('keeps a saved theme (%s)', async (saved) => {
+    window.localStorage.setItem('theme', saved);
+    expect(await open()).toBeNull();
+    expect(themes.setTheme).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem('theme')).toBe(saved);
+  });
+
+  it('saves nothing on the way to onboarding, where a new person starts on dark', async () => {
+    profile = { ...profile, onboarding_completed: false };
+    expect(await open()).toBe('/dashboard/onboarding');
+    expect(themes.setTheme).not.toHaveBeenCalled();
+  });
+
+  it('saves nothing self-hosted', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await open()).toBeNull();
+    expect(themes.setTheme).not.toHaveBeenCalled();
   });
 });
 
