@@ -409,9 +409,7 @@ export const READ_TOOLS = [
       if (!read) return null;
       const { offset } = pageWindow(input);
       const words = { what: 'prompts with results', order: PROMPT_SORT_WORDS[sort] };
-      const meta = pageMeta(words, read.total, offset, read.prompts.length);
-      if (read.answers_cut) meta.note = `${meta.note} ${read.answers_cut.note}`;
-      return { ...meta, ...read };
+      return { ...pageMeta(words, read.total, offset, read.prompts.length), ...read };
     },
     fixture: { input: { brand_id: BRAND, sort_by: 'visibility' } },
   }),
@@ -669,7 +667,7 @@ export const READ_TOOLS = [
       const total = Math.max(read.totals.domains, read.totals.urls);
       const words = { what: 'cited domains and pages', order: 'most cited first' };
       const meta = pageMeta(words, total, offset, shown);
-      // A window past what one read adds up: the note says what the counts cover.
+      // A window past the bounded read of its answers: the note says what the pages cover.
       if (read.answers_cut) meta.note = `${meta.note} ${read.answers_cut.note}`;
       return { ...meta, ...read };
     },

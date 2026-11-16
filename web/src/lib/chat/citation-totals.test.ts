@@ -104,7 +104,8 @@ vi.mock('@/lib/supabase/admin', () => ({
       scans.push(name);
       return table(TABLES[name] ?? []);
     },
-    rpc: vi.fn(),
+    // The page's daily functions read their rollups by brand: the service role runs them too.
+    rpc: async (fn: string) => pageRpc(fn),
   },
 }));
 vi.mock('@/lib/supabase/server', () => ({

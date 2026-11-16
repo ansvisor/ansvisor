@@ -7,10 +7,11 @@ import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
  * Chat counts and ranks as the pages do (the owner's plan of 2026-11-16,
  * item 7: its numbers and its "top" lists equal the screen). Each fixture
  * is read the way Chat reads it and the way the page reads it, with the
- * page's own function or rule: citations past PostgREST's 1,000 rows,
- * Overview's and Citations' Last 24 hours, the Prompts table's Visibility
- * and order, the Actions and Content lists' default order, the Why read's
- * periods, and a trend's every day.
+ * page's own function or rule: citations past PostgREST's 1,000 rows (from
+ * the page's daily rollups, never pages of answers), Overview's and
+ * Citations' Last 24 hours, the Prompts table's Visibility and order (the
+ * page's own function, on Starter too), the Actions and Content lists'
+ * default order, the Why read's periods, and a trend's every day.
  */
 
 vi.mock('@/lib/supabase/admin', async () => ({
@@ -29,7 +30,7 @@ const { fitResult } = await import('./fit');
 const { readBudget, resultCharsFor } = await import('./run-limits');
 const { pageOrderLine, pageOrderOf } = await import('./page-order');
 const { latestRunDaysFor } = await import('@/lib/mcp/overview-reads');
-const { promptScoresOfAnswers } = await import('@/lib/mcp/prompt-scores');
+const { PLANS } = await import('@/config/plans');
 const { whyPeriods } = await import('@/lib/mcp/why');
 const { getCitationsOverview } = await import('@/lib/actions/citations');
 const { getTrackingWindow, getPromptVisibilitySummaries } = await import('@/lib/actions/tracking');
@@ -103,6 +104,26 @@ function rpc(fn: string, args: Row = {}) {
 }
 (db as unknown as { rpc: typeof rpc }).rpc = rpc;
 
+/**
+ * Each table a read selected from, and those it paged with an offset
+ * (`.range()`): the reads the review asked to leave behind (2026-11-16).
+ */
+const reads: { table: string; ranged: boolean }[] = [];
+const plainFrom = db.from.bind(db);
+db.from = (table: string) => {
+  const builder = plainFrom(table);
+  const read = { table, ranged: false };
+  reads.push(read);
+  const range = builder.range.bind(builder);
+  builder.range = (from: number, to: number) => {
+    read.ranged = true;
+    return range(from, to);
+  };
+  return builder;
+};
+/** The selects of a table since the last reset: how many, and whether any paged by offset. */
+const readsOf = (table: string) => reads.filter((r) => r.table === table);
+
 const answers = () => (db.tables.prompt_results ?? []) as Row[];
 const day = (at: unknown) => String(at).slice(0, 10);
 const inDays = (row: Row, args: Row) =>
@@ -118,6 +139,7 @@ beforeEach(() => {
   db.log = [];
   db.maxRows = 1000;
   calls.length = 0;
+  reads.length = 0;
   for (const key of Object.keys(fns)) delete fns[key];
 });
 afterEach(() => {
@@ -170,11 +192,12 @@ describe('citations past 1,000 answers in the window', () => {
     fns.citations_urls_daily = () => [];
   };
 
-  it("counts every answer, as the page's cards do, where one read stopped at 1,000", async () => {
+  it("counts every answer from the page's daily rollups, where one read stopped at 1,000", async () => {
     db.tables.prompt_results = busyWindow();
     citationFunctions();
     // One plain select of the window: PostgREST's 1,000 rows, as Chat read it before.
     expect(((await db.from('prompt_results').select('*')).data as Row[]).length).toBe(1_000);
+    reads.length = 0;
 
     const chat = (await run('list_citations', {
       brand_id: BRAND,
@@ -183,9 +206,20 @@ describe('citations past 1,000 answers in the window', () => {
     })) as {
       totals: { citations: number; domains: number; avg_citations_per_result: number };
       top_domains: { domain: string; total_citations: number; results_citing: number }[];
-      answers_cut?: unknown;
+      answers_cut?: { counted_from: string | null; note: string };
       note: string;
     };
+    // The page's own daily functions over the window's days, the service role's after the brand check.
+    const daily = calls.filter((c) => c.fn.endsWith('_daily')).map((c) => c.fn);
+    expect(daily.sort()).toEqual(['citations_domains_daily', 'citations_window_stats_daily']);
+    expect(calls.find((c) => c.fn === 'citations_domains_daily')!.args).toMatchObject({
+      p_brand_id: BRAND,
+      p_day_from: '2026-11-10',
+      p_day_to: '2026-11-12',
+    });
+    // The answers: one bounded request for the pages, never pages of them by offset.
+    expect(readsOf('prompt_results')).toHaveLength(1);
+    expect(readsOf('prompt_results').some((r) => r.ranged)).toBe(false);
     const page = await getCitationsOverview(BRAND, {
       datePreset: 'custom',
       dateFrom: '2026-11-10',
@@ -199,8 +233,57 @@ describe('citations past 1,000 answers in the window', () => {
     expect(chat.top_domains.map((d) => [d.domain, d.total_citations, d.results_citing])).toEqual(
       page.rows.map((r) => [r.domain, r.totalCitations, r.resultsCiting]),
     );
+    // The pages come from the newest answers read, and the result says so; the totals don't.
+    expect(chat.answers_cut?.counted_from).toBe(answers()[999].created_at);
+    expect(chat.note).toContain('The domains and citation totals cover the whole period');
+    expect(chat.note).toContain('from 2026-11-12 on');
+  });
+
+  it("looks a named domain up in the page's rollups, its prompts in the one bounded read", async () => {
+    db.tables.prompt_results = busyWindow();
+    db.tables.prompts = [0, 1, 2, 3].map((n) => ({
+      id: uuid('9a000000', n),
+      text: `Prompt ${n}`,
+      prompt_sets: { brand_id: BRAND },
+    }));
+    citationFunctions();
+    const found = (await run('list_citations', {
+      brand_id: BRAND,
+      date_from: '2026-11-10',
+      date_to: '2026-11-12',
+      domains: ['beanbulletin.example'],
+    })) as {
+      domains: { domain: string; total_citations: number; prompts: { prompt_id: string }[] }[];
+      answers_cut?: unknown;
+    };
+    const page = await getCitationsOverview(BRAND, {
+      datePreset: 'custom',
+      dateFrom: '2026-11-10',
+      dateTo: '2026-11-12',
+    });
+    const row = page.rows.find((r) => r.domain === 'beanbulletin.example')!;
+    // The domain's count is the page's row; the prompts citing it come from the newest answers read.
+    expect(found.domains.map((d) => [d.domain, d.total_citations])).toEqual([
+      ['beanbulletin.example', row.totalCitations],
+    ]);
+    expect(found.domains[0].prompts.length).toBeGreaterThan(0);
+    expect(found.answers_cut).toBeDefined();
+    expect(readsOf('prompt_results')).toHaveLength(1);
+    expect(readsOf('prompt_results').some((r) => r.ranged)).toBe(false);
+  });
+
+  it('reads a window that fits the bounded read whole, with no cut', async () => {
+    db.tables.prompt_results = busyWindow().slice(0, 600);
+    citationFunctions();
+    const chat = (await run('list_citations', {
+      brand_id: BRAND,
+      date_from: '2026-11-12',
+      date_to: '2026-11-12',
+    })) as { totals: { citations: number }; answers_cut?: unknown; top_urls: unknown[] };
     expect(chat.answers_cut).toBeUndefined();
-    expect(chat.note).not.toMatch(/newest AI answers/);
+    expect(chat.totals.citations).toBe(300 + 200);
+    expect(chat.top_urls).toHaveLength(2);
+    expect(readsOf('prompt_results')).toHaveLength(1);
   });
 
   it('adds up the visibility summary of a window inside a day over every answer too', async () => {
@@ -211,6 +294,19 @@ describe('citations past 1,000 answers in the window', () => {
       sentiment: 'neutral',
       competitor_mentions: [],
     }));
+    // The Visibility page's raw aggregates for a window inside a day, as their SQL adds the answers up.
+    fns.competitor_aggregates = (args) => {
+      const rows = answers().filter((r) => inWindow(r, args));
+      return {
+        brand_row_count: rows.length,
+        brand_sum_visibility: rows.reduce((s, r) => s + Number(r.visibility_score), 0),
+        brand_total_mentions: rows.reduce((s, r) => s + Number(r.mention_count), 0),
+        brand_total_citations: rows.reduce((s, r) => s + Number(r.citation_count), 0),
+        brand_prompt_count: 4,
+        brand_visible_prompts: 4,
+        by_competitor: [],
+      };
+    };
     fns.visible_prompt_stats = () => ({ visible_prompts: 4, visible_results: 1_200 });
     fns.tracked_prompt_count = () => 4;
     fns.ai_visibility_aggregates = () => ({ answers: 2_400, mention_answers: 1_200 });
@@ -218,13 +314,58 @@ describe('citations past 1,000 answers in the window', () => {
       brand_id: BRAND,
       date_from: '2026-11-10T06:00:00Z',
       date_to: '2026-11-12T23:30:00Z',
-    })) as { totals: { resultCount: number; totalMentions: number; totalCitations: number } };
+    })) as {
+      totals: { resultCount: number; totalMentions: number; totalCitations: number };
+      answers_cut?: unknown;
+    };
     // The KPI card's aggregate counts the same 2,400 answers.
     expect(summary.totals).toMatchObject({
       resultCount: 2_400,
       totalMentions: 1_200,
       totalCitations: 2_400,
+      avgVisibility: 50,
+      visiblePrompts: 4,
+      promptCount: 4,
     });
+    expect(summary).not.toHaveProperty('answers_cut');
+    // From the page's aggregates: no answer row leaves the database.
+    expect(readsOf('prompt_results')).toHaveLength(0);
+    expect(calls.map((c) => c.fn).sort()).toEqual([
+      'ai_visibility_aggregates',
+      'competitor_aggregates',
+      'tracked_prompt_count',
+      'visible_prompt_stats',
+    ]);
+  });
+});
+
+// ─── A product's appearances ────────────────────────────────────────────────
+
+describe("a product's appearances", () => {
+  it('counts every one in one bounded read, never pages of them', async () => {
+    const { getProductVisibility } = await import('@/lib/mcp/data');
+    db.tables.prompt_result_shopping_cards = Array.from({ length: 1_200 }, (_, i) => ({
+      id: uuid('ca000000', i),
+      brand_id: BRAND,
+      product_title: 'Brewline Starter Kit',
+      platform: i % 3 === 0 ? 'chatgpt-shopping' : 'google-aimode',
+      region: 'US',
+      created_at: new Date(NOW.getTime() - i * 60 * MIN).toISOString(),
+      price_amount: 39,
+      price_currency: 'USD',
+      rating: 4.5,
+      review_count: 10,
+      merchant_domain: 'brewline.example',
+    }));
+    const read = (await getProductVisibility(AUTH, {
+      brandId: BRAND,
+      productTitle: 'Brewline Starter Kit',
+    })) as { total_appearances: number; answers_cut?: { note: string } };
+    // Every appearance counted; the breakdowns of the newest, and the result says so.
+    expect(read.total_appearances).toBe(1_200);
+    expect(read.answers_cut?.note).toContain('total_appearances counts every appearance');
+    expect(readsOf('prompt_result_shopping_cards')).toHaveLength(1);
+    expect(readsOf('prompt_result_shopping_cards').some((r) => r.ranged)).toBe(false);
   });
 });
 
@@ -457,29 +598,121 @@ describe("prompts ranked by the Prompts page's Visibility", () => {
     expect(old.prompts.map((p) => p.prompt_id)).toEqual(byAnswerScore.map((p) => p.prompt_id));
   });
 
-  it("adds a platform's answers up as the page's function does", async () => {
-    db.tables.prompt_results = answerRows('gpt-5-5');
-    promptFunctions();
-    const from = new Date(NOW.getTime() - 24 * 60 * MIN).toISOString();
-    const chat = (await run('get_prompt_performance', {
+  it("scores Starter's prompts with the page's function, off-plan answers too, as the page counts them", async () => {
+    // Prompt 4 also has answers on a platform Starter doesn't track, named first each time.
+    const offPlan = Array.from({ length: 10 }, (_, i) => ({
+      id: uuid('a9000000', i),
       brand_id: BRAND,
-      date_from: from,
-      date_to: '2026-11-16',
-      model: 'gpt-5-5',
-    })) as { prompts: { prompt_id: string; ai_visibility_score: number; coverage_pct: number }[] };
-    // From the platform's answers: the page's function takes no platform.
-    expect(calls.map((c) => c.fn)).not.toContain('prompt_visibility_summaries');
-    // The page's function over the same answers (every answer here is that platform's).
+      prompt_id: id(4),
+      platform: 'perplexity-web',
+      model_used: 'perplexity-web',
+      region: 'US',
+      created_at: new Date(NOW.getTime() - (i + 1) * 60 * MIN).toISOString(),
+      visibility_score: 90,
+      mention_count: 1,
+      citation_count: 1,
+      mention_position: 1,
+      competitor_mentions: [],
+    }));
+    db.tables.prompt_results = [...answerRows(), ...offPlan];
+    promptFunctions();
+    // Chat's scope holds a Starter read to the plan's platforms (scope.ts).
+    const scoped = await scopeRead(
+      tool('get_prompt_performance'),
+      { brand_id: BRAND },
+      {
+        question: 'What are my top prompts?',
+        range: '24h',
+        rangeFrom: 'page',
+        limits: PLANS.starter.limits,
+        planName: 'Starter',
+        now: NOW,
+        modelsOf: async () => ['chatgpt-web', 'perplexity-web'],
+      },
+    );
+    if (scoped.kind !== 'read') throw new Error(scoped.kind);
+    expect(scoped.input.model).toBe('chatgpt-web');
+    const chat = (await run('get_prompt_performance', scoped.input)) as {
+      prompts: { prompt_id: string; ai_visibility_score: number; coverage_pct: number }[];
+    };
+    // The page's own function, whatever the plan: no answer row leaves the database.
+    expect(calls.map((c) => c.fn)).toContain('prompt_visibility_summaries');
+    expect(readsOf('prompt_results')).toHaveLength(0);
+    // The page: its function over every platform's answers, sorted by its Visibility column.
+    const from = String(scoped.input.date_from);
     const page = await getPromptVisibilitySummaries(BRAND, { from });
+    const pageOrder = Object.keys(page).sort((a, b) =>
+      comparePromptSortRows(
+        'visibility',
+        { createdAt: '', visibility: { ...page[a], lastRunAt: '' } },
+        { createdAt: '', visibility: { ...page[b], lastRunAt: '' } },
+        'desc',
+      ),
+    );
     for (const prompt of chat.prompts) {
       expect(prompt.ai_visibility_score).toBe(page[prompt.prompt_id].score);
       expect(prompt.coverage_pct).toBe(page[prompt.prompt_id].visibilityRate);
     }
-    expect(chat.prompts).toHaveLength(4);
-    expect(promptScoresOfAnswers(answerRows()).get(id(3))).toEqual({
-      score: page[id(3)].score,
-      coverage_pct: 100,
+    expect(chat.prompts.map((p) => p.prompt_id)).toEqual(pageOrder);
+    // The off-plan answers count, as on the page: prompt 4 scores above its ChatGPT answers alone.
+    const withOffPlan = await getPromptVisibilitySummaries(BRAND, { from });
+    db.tables.prompt_results = answerRows();
+    const chatgptOnly = await getPromptVisibilitySummaries(BRAND, { from });
+    expect(withOffPlan[id(4)].score!).toBeGreaterThan(chatgptOnly[id(4)].score!);
+  });
+
+  it('sorts ties and prompts without a score as the Prompts table does', async () => {
+    db.tables.prompt_results = answerRows();
+    promptFunctions();
+    // The page's function: a score, a prompt with no runs (no score: 0 on the page), a 0, and none.
+    const summary = (n: number, runs: number, named: number) => ({
+      prompt_id: id(n),
+      avg_visibility: 0,
+      avg_visibility_visible: null,
+      total_mentions: named,
+      total_citations: 0,
+      runs,
+      visible_runs: named,
+      mention_answers: named,
+      citation_answers: 0,
+      position_factor: named > 0 ? 1 : null,
+      last_run_at: NOW.toISOString(),
     });
+    fns.prompt_visibility_summaries = () => [
+      summary(1, 10, 6),
+      summary(2, 0, 0),
+      summary(3, 10, 0),
+    ];
+    const from = new Date(NOW.getTime() - 24 * 60 * MIN).toISOString();
+    const order = async (dir: 'asc' | 'desc') =>
+      (
+        (await run('get_prompt_performance', {
+          brand_id: BRAND,
+          date_from: from,
+          date_to: '2026-11-16',
+          order: dir,
+        })) as { prompts: { prompt_id: string; ai_visibility_score: number | null }[] }
+      ).prompts.map((p) => p.prompt_id);
+    const page = await getPromptVisibilitySummaries(BRAND, { from });
+    expect(page[id(2)].score).toBeNull();
+    // The page's comparator over the same rows (a prompt it doesn't score has no row: last).
+    const pageOrder = (dir: 'asc' | 'desc') =>
+      [1, 2, 3, 4]
+        .map(id)
+        .sort(
+          (a, b) =>
+            comparePromptSortRows(
+              'visibility',
+              { createdAt: '', visibility: page[a] && { ...page[a], lastRunAt: '' } },
+              { createdAt: '', visibility: page[b] && { ...page[b], lastRunAt: '' } },
+              dir,
+            ) || a.localeCompare(b),
+        );
+    // No score counts as 0, beside the 0 (ties in a fixed order); unscored last, either way.
+    expect(await order('desc')).toEqual([1, 2, 3, 4].map(id));
+    expect(await order('desc')).toEqual(pageOrder('desc'));
+    expect(await order('asc')).toEqual([2, 3, 1, 4].map(id));
+    expect(await order('asc')).toEqual(pageOrder('asc'));
   });
 
   it("reads a preset over the Prompts and AI Traffic pages' own window: the last N × 24 hours", async () => {
