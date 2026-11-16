@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { answered, notSent, threw, type SendOutcome } from '@/lib/send-outcome';
 
 /**
  * PostHog events the web's server code sends (the core-loop funnel,
@@ -15,16 +16,40 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 const DEFAULT_HOST = 'https://us.i.posthog.com';
 const TIMEOUT_MS = 2000;
 
+/**
+ * The capture endpoint, or null when NEXT_PUBLIC_POSTHOG_HOST isn't an
+ * absolute URL (a proxy path such as /ingest works in the browser only).
+ */
+function captureUrl(): string | null {
+  const host = (process.env.NEXT_PUBLIC_POSTHOG_HOST || DEFAULT_HOST).replace(/\/+$/, '');
+  try {
+    new URL(`${host}/capture/`);
+    return `${host}/capture/`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Send one event. Says what became of it (lib/send-outcome.ts): accepted on
+ * a 2xx; refused on a 4xx, or when nothing could be sent (no key, no id, a
+ * relative host); unknown on a 5xx or a call that threw (a timeout, a network
+ * error), as PostHog may have the event then. Logs nothing, so a caller that
+ * needs the event (the sign-up's signed_up) can keep or release its claim
+ * and log why.
+ */
 export async function capturePostHog(
   event: string,
   distinctId: string,
   properties: Record<string, unknown> = {},
-): Promise<void> {
+): Promise<SendOutcome> {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-  if (!key || !distinctId) return;
+  if (!key) return notSent('no_key');
+  if (!distinctId) return notSent('no_id');
+  const url = captureUrl();
+  if (!url) return notSent('bad_host');
   try {
-    const host = (process.env.NEXT_PUBLIC_POSTHOG_HOST || DEFAULT_HOST).replace(/\/+$/, '');
-    await fetch(`${host}/capture/`, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -36,8 +61,10 @@ export async function capturePostHog(
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  } catch {
+    return answered(res);
+  } catch (err) {
     // Dropped, as a browser's event would be.
+    return threw(err);
   }
 }
 
