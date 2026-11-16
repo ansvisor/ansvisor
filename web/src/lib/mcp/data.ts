@@ -2294,6 +2294,18 @@ export interface ListCitationsParams {
   offset?: number;
   /** Restrict to owned / competitor / external citations. Default `all`. */
   sourceFilter?: CitationSourceFilter;
+  /**
+   * Chat's, when Sources came from the Citations page: beside the filtered
+   * lists, the citations of every source and their average per answer, as
+   * the page's cards count them (`all_sources_totals`), from the same scan.
+   */
+  allSourcesTotals?: boolean;
+}
+
+/** What the Citations page's cards count over every source, whatever Sources the table shows. */
+export interface AllSourcesTotals {
+  citations: number;
+  avg_citations_per_result: number;
 }
 
 export interface CitationsOverviewOutput {
@@ -2328,6 +2340,12 @@ export interface CitationsOverviewOutput {
     usage_pct: number;
     article_type: string | null;
   }>;
+  /**
+   * Only with allSourcesTotals and a source filter: the citations of every
+   * source and their average per answer (the page's cards), beside the
+   * filtered lists and totals.
+   */
+  all_sources_totals?: AllSourcesTotals;
 }
 
 const CITATIONS_DEFAULT_LIMIT = 50;
@@ -2357,6 +2375,8 @@ interface CitationAggregates {
   /** The answers read (chatgpt-shopping aside). */
   results: number;
   totalCitations: number;
+  /** Every source's citations, whatever the filter: the Citations page's cards. */
+  allSourcesCitations: number;
   resultsWithCitations: number;
   domains: CitedDomainAgg[];
   urls: CitedUrlAgg[];
@@ -2448,6 +2468,8 @@ async function readCitationAggregates(
   const urlMap = new Map<string, CitedUrlAgg>();
   const promptOf = new Map<string, string>();
   let totalCitations = 0;
+  // Every source's, in the same pass: what the page's cards count beside a filtered table.
+  let allSourcesCitations = 0;
   let resultsWithCitations = 0;
   const sourceFilter = params.sourceFilter ?? 'all';
   const hasSourceFilter = sourceFilter !== 'all';
@@ -2466,6 +2488,7 @@ async function readCitationAggregates(
     for (const cite of citations) {
       const host = extractHostname(cite.url);
       if (!host) continue;
+      allSourcesCitations += 1;
 
       const category = classifyDomain(host, classifyCtx);
       if (hasSourceFilter && !citationCategoryMatches(category, sourceFilter)) continue;
@@ -2527,6 +2550,7 @@ async function readCitationAggregates(
   return {
     results: results.length,
     totalCitations,
+    allSourcesCitations,
     resultsWithCitations,
     domains: Array.from(domainMap.values()).sort((a, b) => b.totalCitations - a.totalCitations),
     urls: Array.from(urlMap.values()).sort((a, b) => b.totalCitations - a.totalCitations),
@@ -2632,6 +2656,15 @@ export async function listCitationsFor(
     source_type_breakdown: sourceTypeBreakdown,
     top_domains: topDomains,
     top_urls: topUrls,
+    ...(params.allSourcesTotals && (params.sourceFilter ?? 'all') !== 'all'
+      ? {
+          all_sources_totals: {
+            citations: agg.allSourcesCitations,
+            avg_citations_per_result:
+              totalResults > 0 ? Math.round((agg.allSourcesCitations / totalResults) * 10) / 10 : 0,
+          },
+        }
+      : {}),
   };
 }
 

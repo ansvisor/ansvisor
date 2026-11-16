@@ -1001,18 +1001,25 @@ const CITED_URLS = [
  * prompts citing each), or a page of the domains, most cited first, with
  * the total. The default workspace keeps its own answer.
  */
-function evalCitationsRead(input: Record<string, unknown>, workspace: EvalWorkspace): unknown {
+function evalCitationsRead(
+  input: Record<string, unknown>,
+  workspace: EvalWorkspace,
+  ctx: EvalReadContext,
+): unknown {
   if (workspace !== 'long_lists') {
+    const owned = input.source_filter === 'owned';
+    const every = { citations: SUMMARY.citations, avg_citations_per_result: 0.4 };
     return {
       ...window,
       owned: OWNED_CITATIONS,
       external: EXTERNAL_CITATIONS,
       competitors: COMPETITOR_CITATIONS,
       // Its totals: Brand sources' with that filter (Citations' Sources on Brand), else every one.
-      totals:
-        input.source_filter === 'owned'
-          ? { domains: 1, citations: SUMMARY.owned_citations, avg_citations_per_result: 0.1 }
-          : { citations: SUMMARY.citations, avg_citations_per_result: 0.4 },
+      totals: owned
+        ? { domains: 1, citations: SUMMARY.owned_citations, avg_citations_per_result: 0.1 }
+        : every,
+      // Sources from the page: every source's beside them, from the same scan (citation-totals.ts).
+      ...(owned && ctx.allSourcesTotals ? { all_sources_totals: every } : {}),
     };
   }
   const list = (value: unknown) => (Array.isArray(value) ? value.map(String) : undefined);
@@ -1122,6 +1129,11 @@ export const EVAL_PAGES: Readonly<Record<string, { title: string; text: string }
   },
 };
 
+/** What the engine tells a read beside its input (ChatToolContext): the citations read's Sources. */
+export interface EvalReadContext {
+  allSourcesTotals?: boolean;
+}
+
 /**
  * What each read answers, by tool name. A read of the other brand answers
  * as that brand: a run that wanders shows it.
@@ -1130,6 +1142,7 @@ export function evalReadResult(
   tool: string,
   input: Record<string, unknown>,
   workspace: EvalWorkspace = 'default',
+  ctx: EvalReadContext = {},
 ): unknown {
   const brandId = typeof input.brand_id === 'string' ? input.brand_id : null;
   if (brandId && brandId !== EVAL_IDS.brand) {
@@ -1256,7 +1269,7 @@ export function evalReadResult(
         ],
       };
     case 'list_citations':
-      return evalCitationsRead(input, workspace);
+      return evalCitationsRead(input, workspace, ctx);
     case 'list_competitors':
       return { competitors: COMPETITORS };
     case 'get_competitor_comparison':

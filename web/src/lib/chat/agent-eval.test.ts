@@ -347,6 +347,7 @@ vi.mock('./registry/tools', async (importOriginal) => {
                 tool.name,
                 (input ?? {}) as Record<string, unknown>,
                 fakes.run?.workspace,
+                { allSourcesTotals: ctx.allSourcesTotals },
               );
           fakes.run?.reads.push(tool.name);
           fakes.run?.readInputs.push((input ?? {}) as Record<string, unknown>);
@@ -1501,12 +1502,13 @@ describe('the agents’ test set harness, on a scripted model', () => {
     // No range card: the page's range is read, and kept as nobody's default.
     expect(result.run.questions).toBe(0);
     expect(db.tables.chat_user_prefs ?? []).toEqual([]);
-    // The lists on Brand sources, and the same read over every source beside them.
-    expect(result.run.reads).toEqual(['list_citations', 'list_citations']);
-    const [filtered, every] = result.run.readInputs;
+    // One read: the lists on Brand sources, every source's totals beside them from the same scan.
+    expect(result.run.reads).toEqual(['list_citations']);
+    const [filtered] = result.run.readInputs;
     expect(filtered).toMatchObject({ model: 'chatgpt-web', source_filter: 'owned' });
-    expect(every).toMatchObject({ model: 'chatgpt-web', source_filter: 'all', limit: 1 });
-    expect(every.date_from).toBe(filtered.date_from);
+    expect(JSON.parse(result.run.readValues[0])).toMatchObject({
+      all_sources_totals: { citations: 418 },
+    });
     expect(Date.now() - Date.parse(String(filtered.date_from))).toBeLessThanOrEqual(
       24 * 60 * 60 * 1000 + 60_000,
     );
