@@ -9984,7 +9984,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     expect(runRow(started.runId).status).toBe('done');
     // The writer is told the period is the page's, to say once what the answer covers.
     const written = promptOf(sonnet.seen[0]);
-    expect(written).toContain('\\"from_page\\":[\\"period\\"]');
+    expect(written).toContain('\\"from_page\\":{\\"took\\":[\\"period\\"]}');
     expect(written).toContain('as on the page');
     expect(written).toContain('with any filter of the page no read took');
     expect(written).toContain('never how many rows were read');
@@ -10167,7 +10167,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     expect(written).toContain(
       '\\"all_sources_totals\\":{\\"citations\\":6,\\"avg_citations_per_result\\":1.5}',
     );
-    expect(written).toContain('\\"from_page\\":[\\"period\\",\\"sources\\"]');
+    expect(written).toContain('\\"from_page\\":{\\"took\\":[\\"period\\",\\"sources\\"]}');
     expect(written).toContain('citation counts for all sources, lists for Brand sources');
     const message = db.tables.chat_runs.find((r) => r.id === started.runId)!.message_id;
     expect(db.tables.chat_messages.find((m) => m.id === message)!.content_md).toContain(
@@ -10230,7 +10230,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     const runId = await ask('How are we doing?');
     expect(readInput()).toMatchObject({ brand_id: BRAND, platform: 'chatgpt-web' });
     expect(stepsOf(runId)[0]).toMatchObject({ detail: 'Last 30 days · ChatGPT' });
-    expect(promptOf(sonnet.seen[0])).toContain('\\"from_page\\":[\\"platform\\"]');
+    expect(promptOf(sonnet.seen[0])).toContain('\\"from_page\\":{\\"took\\":[\\"platform\\"]}');
 
     // The model's own platform, or "" for all of them, wins.
     useModels(reads({ platform: 'gemini-web' }), [text('Up 12%.')]);

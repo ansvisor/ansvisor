@@ -8,7 +8,8 @@ import type { ChatPageSort, ChatPageView } from './page-view';
  * person chose there once the panel sends it (item 8, page-view.ts). A
  * sort the read doesn't take stays words, and the rows on screen are read
  * by their refs. A search on the page is the read's search where it has
- * one. The search's text and an unknown sort's name are the browser's, so
+ * one: the app applies it to the page's own list (page-scope.ts), and this
+ * line says so. The search's text and an unknown sort's name are the browser's, so
  * they stay in the untrusted page_view block: this line only points there.
  * "What should I do first" keeps the read's own order (priority, score).
  * Plain module: the engine adds the line beside <page_context>.
@@ -208,7 +209,7 @@ export function pageOrderLine(
   if (searched) {
     lines.push(
       order.search
-        ? `The page is searched (page_view's search): for its rows, read ${order.search.tool} with ${order.search.field} set to that search${order.search.then ? `, ${order.search.then}` : ''}.`
+        ? `The page is searched (page_view's search): the app applies that search to ${order.search.tool}'s ${order.search.field} unless you give your own, so for its rows read ${order.search.tool}${order.search.then ? `, ${order.search.then}` : ''}.`
         : `The page is searched (page_view's search), which ${order.tool} doesn't take: its rows are the ones page_view lists.`,
     );
   }

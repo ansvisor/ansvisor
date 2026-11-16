@@ -5,8 +5,9 @@ import { pageOrderLine } from './page-order';
  * The page's chosen sort and search (the owner's plan of 2026-11-16, item
  * 8): the order line takes the person's sort over the page's default,
  * mapped to the read's input where it has one; a sort it doesn't take
- * stays words and the rows are read by their refs; the search goes into
- * the read's search input. The browser's text stays in page_view.
+ * stays words and the rows are read by their refs; the line says the app
+ * applies the search to the read's search input (page-scope.ts). The
+ * browser's text stays in page_view.
  */
 
 const ACTIONS = '/dashboard/action-center/actions';
@@ -60,17 +61,17 @@ describe("the page's chosen sort", () => {
 });
 
 describe("the page's search", () => {
-  it("goes into the read's search input, its text left in page_view", () => {
+  it("says the app applies it to the read's search input, its text left in page_view", () => {
     const line = pageOrderLine('/dashboard/prompts/tracked', [], { search: 'decaf beans' })!;
     expect(line).toContain(
-      "The page is searched (page_view's search): for its rows, read list_prompts with search set to that search, then get_prompt_performance with their ids as prompt_ids.",
+      "The page is searched (page_view's search): the app applies that search to list_prompts's search unless you give your own, so for its rows read list_prompts, then get_prompt_performance with their ids as prompt_ids.",
     );
     expect(line).not.toContain('decaf');
     expect(pageOrderLine('/dashboard/content', [], { search: 'x' })).toContain(
-      'read list_content_opportunities with search set to that search',
+      "the app applies that search to list_content_opportunities's search",
     );
     expect(pageOrderLine('/dashboard/mentions', [], { search: 'x' })).toContain(
-      'read list_mentions with search set to that search',
+      "the app applies that search to list_mentions's search",
     );
     // Actions' read has no search: its rows are the ones on screen.
     expect(pageOrderLine(ACTIONS, [], { search: 'x' })).toContain(

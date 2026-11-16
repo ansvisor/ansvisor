@@ -1430,6 +1430,16 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
   if (scenario.pageSearch) {
     const missed = pageSearchMissed(run, scenario.pageSearch);
     checks.push(check("reads with the page's search", true, missed === null, missed ?? ''));
+    // The read's scope names it (from_page.search): the answer says what it covers.
+    const search = scenario.pageSearch.search;
+    checks.push(
+      check(
+        "says the page's search",
+        true,
+        run.answer.toLowerCase().includes(search.toLowerCase()),
+        `no "${search}"`,
+      ),
+    );
   }
   if (scenario.pageRows) {
     const unnamed = unnamedPageRows(run.answer, scenario.pageRows);

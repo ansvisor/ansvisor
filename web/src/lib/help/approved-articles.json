@@ -1601,7 +1601,7 @@
         },
         {
           "heading": "Numbers that match the page",
-          "text": "Chat ranks and counts as the page does. \"My top 5 prompts\" on Prompts are the table's top 5 by Visibility, and \"the first ones\" on Actions or Content are the rows you see, in the page's order. On Overview and Citations, **Last 24 hours** is the latest tracking run, as on those pages.\n\nChat also sees the open tab, the sort and search you picked, and the items on screen, and reads those items before it answers: \"these\" are the rows you see."
+          "text": "Chat ranks and counts as the page does. \"My top 5 prompts\" on Prompts are the table's top 5 by Visibility, and \"the first ones\" on Actions or Content are the rows you see, in the page's order. On Overview and Citations, **Last 24 hours** is the latest tracking run, as on those pages.\n\nChat also sees the open tab, the sort and search you picked, and the items on screen, and reads those items before it answers: \"these\" are the rows you see. On Prompts, Content and Mentions, Chat's lists follow the page's search, and the answer says so."
         },
         {
           "heading": "Chats in the panel",

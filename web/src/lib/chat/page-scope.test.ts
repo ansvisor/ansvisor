@@ -287,3 +287,112 @@ describe('a question that asks for all of them', () => {
     }
   });
 });
+
+// The owner's plan (2026-11-16, item 8): the page's search, from its view, is one more list
+// filter: on the reads of the page's own list that take a search, in the lookups' words.
+describe("the page's search", () => {
+  /** A page with a search, as the side panel posts its context and view. */
+  const searched = (route: string, search: string, filters: [string, string, string][] = []) =>
+    pageScopeOf({
+      route,
+      chips: [
+        { key: 'brand', label: 'Northwind', value: BRAND },
+        ...filters.map(([key, label, value]) => ({ key: `filter:${key}`, label, value })),
+      ],
+      view: { search },
+    });
+
+  it('comes from the view, trimmed, and is none when empty', () => {
+    expect(
+      pageScopeOf({ route: '/dashboard/content', chips: [], view: { search: '  decaf ' } }),
+    ).toMatchObject({ search: 'decaf' });
+    expect(
+      pageScopeOf({ route: '/dashboard/content', chips: [], view: { search: ' ' } }),
+    ).not.toHaveProperty('search');
+  });
+
+  it("fills the search of its own list's reads only, beside its filters", () => {
+    const prompts = searched('/dashboard/prompts/tracked', 'skip a month');
+    expect(added('list_prompts', prompts)).toEqual({
+      input: { search: 'skip a month' },
+      applied: ['search'],
+    });
+    // A read of another page's list, or one with no search, takes none.
+    expect(added('list_content_opportunities', prompts)).toEqual({ input: {}, applied: [] });
+    expect(added('get_prompt_performance', prompts).applied).toEqual([]);
+    const content = searched('/dashboard/content', 'office coffee', [['status', 'New', 'new']]);
+    expect(added('list_content_opportunities', content)).toEqual({
+      input: { status: 'new', search: 'office coffee' },
+      applied: ['status', 'search'],
+    });
+    expect(added('list_drafts', content)).toEqual({ input: {}, applied: [] });
+    // Mentions' search is the whole page's: every one of its reads that takes one.
+    const mentions = searched('/dashboard/mentions', 'espresso');
+    for (const name of ['list_mentions', 'get_mentions_summary', 'get_mentions_perception']) {
+      expect(added(name, mentions), name).toEqual({
+        input: { search: 'espresso' },
+        applied: ['search'],
+      });
+    }
+    // Actions' read takes no search: its rows are read by their codes.
+    expect(
+      added('list_action_center_tasks', searched('/dashboard/action-center/actions', 'gift box')),
+    ).toEqual({
+      input: {},
+      applied: [],
+    });
+  });
+
+  it("takes the lookups' words: 8 at most, of the first 200 characters, no wildcard", () => {
+    const long = searched(
+      '/dashboard/prompts/tracked',
+      'one two three four five six seven eight nine ten',
+    );
+    expect(added('list_prompts', long).input).toEqual({
+      search: 'one two three four five six seven eight',
+    });
+    const odd = searched('/dashboard/prompts/tracked', `*decaf*, "beans"! ${'x'.repeat(300)}`);
+    const search = String(added('list_prompts', odd).input.search);
+    expect(search.startsWith('decaf beans ')).toBe(true);
+    expect(search.length).toBeLessThanOrEqual(200);
+    expect(search).not.toContain('*');
+    expect(
+      added('list_prompts', searched('/dashboard/prompts/tracked', '** ,, !')).applied,
+    ).toEqual([]);
+  });
+
+  it("never over the model's own search or named rows, nor when the question asks for all", () => {
+    const page = searched('/dashboard/prompts/tracked', 'skip a month');
+    expect(added('list_prompts', page, { search: 'decaf' })).toEqual({
+      input: { search: 'decaf' },
+      applied: [],
+    });
+    expect(added('list_prompts', page, { search: '' })).toEqual({
+      input: { search: '' },
+      applied: [],
+    });
+    expect(added('list_prompts', page, { ids: [PROMPT] })).toEqual({
+      input: { ids: [PROMPT] },
+      applied: [],
+    });
+    for (const question of [
+      'How are all prompts doing?',
+      'Tüm promptlar nasıl?',
+      'Show every prompt',
+      'Top 5 without the search',
+    ]) {
+      expect(added('list_prompts', page, {}, question).applied, question).toEqual([]);
+    }
+    expect(added('list_prompts', page, {}, 'How are these doing?').applied).toEqual(['search']);
+    // Another brand's read, or no brand chip: none.
+    expect(pageFilterInputs(tool('list_prompts'), { brand_id: OTHER }, page, 'Hi').applied).toEqual(
+      [],
+    );
+    const noBrand = pageScopeOf({
+      route: '/dashboard/prompts/tracked',
+      chips: [],
+      view: { search: 'x' },
+    });
+    expect(added('list_prompts', noBrand).applied).toEqual([]);
+  });
+});

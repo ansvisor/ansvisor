@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 
 const { PAGE_LABEL_CHARS, messageScopeOf, startRunInput } = await import('./engine');
-const { PAGE_VIEW_CHARS, pageViewBlock, pageViewNote, viewRefKind } =
+const { PAGE_VIEW_BLOCK_LABEL_CHARS, PAGE_VIEW_CHARS, pageViewBlock, pageViewNote, viewRefKind } =
   await import('./page-view-scope');
+const { PAGE_QUERY_KEYS } = await import('./page-view');
+/** The block of a view with every field at its limit, in characters (the PR states it). */
+const PAGE_VIEW_BLOCK_WORST = 42_391;
 
 /**
  * The page's view as the engine takes it (the owner's plan of 2026-11-16,
@@ -100,14 +103,17 @@ describe('the view a message takes', () => {
     expect(send(view, '/dashboard/settings/account').data!.context).not.toHaveProperty('view');
   });
 
-  it(`keeps the whole within ${PAGE_VIEW_CHARS} characters, its last rows going first`, () => {
-    const url = (i: number) => `https://example.com/${'p'.repeat(250)}/${i}`;
-    const rows = Array.from({ length: 100 }, (_, i) => ({ ref: url(i), label: 'l'.repeat(190) }));
-    const view = send({ tab: 'urls', rows }, '/dashboard/citations').data!.context!.view!;
-    expect(JSON.stringify(view).length).toBeLessThanOrEqual(PAGE_VIEW_CHARS);
-    expect(view.rows!.length).toBeGreaterThan(30);
-    expect(view.rows!.length).toBeLessThan(100);
-    expect(view.rows![0].ref).toBe(url(0));
+  it('keeps 100 rows of the longest refs and labels; past its cap, text that escapes long goes last rows first', () => {
+    const url = (i: number) => `https://example.com/${'p'.repeat(270)}/${i}`;
+    const rows = Array.from({ length: 100 }, (_, i) => ({ ref: url(i), label: 'l'.repeat(200) }));
+    const whole = send({ tab: 'urls', rows }, '/dashboard/citations').data!.context!.view!;
+    expect(whole.rows).toHaveLength(100);
+    // Quotes double as JSON: the safety net cuts the last rows, never the first.
+    const quoted = rows.map((row) => ({ ...row, label: '"'.repeat(200) }));
+    const cut = send({ tab: 'urls', rows: quoted }, '/dashboard/citations').data!.context!.view!;
+    expect(JSON.stringify(cut).length).toBeLessThanOrEqual(PAGE_VIEW_CHARS);
+    expect(cut.rows!.length).toBeLessThan(100);
+    expect(cut.rows![0].ref).toBe(url(0));
   });
 
   it('tells a code, an id, a domain and an address from anything else', () => {
@@ -127,7 +133,7 @@ describe('the view a message takes', () => {
     }
   });
 
-  it("drops another brand's rows, URL state and count, keeping its words", () => {
+  it("drops another brand's search, rows, URL state and count, keeping its tab and sort", () => {
     const parsed = startRunInput.safeParse({
       message: 'What are these?',
       context: {
@@ -146,10 +152,8 @@ describe('the view a message takes', () => {
       },
     });
     const scope = messageScopeOf(parsed.data!, { id: BRAND, name: 'Acme' });
-    expect(scope!.context!.view).toEqual({
-      sort: { key: 'priority', dir: 'desc' },
-      search: 'citations',
-    });
+    // Its search too: the server applies a page's search to its list, as it would its filters.
+    expect(scope!.context!.view).toEqual({ sort: { key: 'priority', dir: 'desc' } });
     // The run's own brand: all of it.
     const own = messageScopeOf(send({ rows: [{ ref: 'AC-41', label: 'Win' }], total: 1 }).data!, {
       id: BRAND,
@@ -194,6 +198,52 @@ describe('the view as the models read it', () => {
     // No item held open on a page that holds none, or with a ref of the wrong kind.
     expect(pageViewBlock(view, '/dashboard/mentions')).not.toContain('open:');
     expect(pageViewBlock({ query: { action: 'AC-41' } }, ACTIONS)).not.toContain('open:');
+  });
+
+  it(`cuts each label to ${PAGE_VIEW_BLOCK_LABEL_CHARS} characters in the block, never half an emoji`, () => {
+    const label = `${'a'.repeat(PAGE_VIEW_BLOCK_LABEL_CHARS - 2)}😀😀 and more`;
+    const block = pageViewBlock({ rows: [{ ref: 'AC-1', label }] }, ACTIONS);
+    const line = block
+      .split('\n')
+      .find((l) => l.startsWith('AC-1 — '))!
+      .slice('AC-1 — '.length);
+    expect(line).toHaveLength(PAGE_VIEW_BLOCK_LABEL_CHARS - 1);
+    expect(line.endsWith('a…')).toBe(true);
+    expect(pageViewBlock({ rows: [{ ref: 'AC-2', label: 'Short' }] }, ACTIONS)).toContain(
+      'AC-2 — Short\n',
+    );
+  });
+
+  it('is at most the worst case the PR states, 100 rows of the longest refs', () => {
+    // Every field at its limit, on the page with the most URL keys.
+    const route = '/dashboard/prompts/tracked';
+    // The longest ref a row keeps: an https address of 298 characters (viewRefKind).
+    const url = (i: number) =>
+      `https://example.com/${'p'.repeat(274)}/${String(i).padStart(3, '0')}`;
+    const view = {
+      tab: 't'.repeat(40),
+      sort: { key: 'k'.repeat(40), dir: 'desc' as const },
+      search: 's'.repeat(200),
+      total: 100_000_000,
+      rows: Array.from({ length: 100 }, (_, i) => ({ ref: url(i), label: 'l'.repeat(200) })),
+      query: Object.fromEntries(PAGE_QUERY_KEYS[route].map((key) => [key, 'v'.repeat(300)])),
+    };
+    expect(viewRefKind(url(1))).toBe('url');
+    expect(url(1)).toHaveLength(298);
+    expect(viewRefKind(`${url(1)}x`)).toBeNull();
+    const block = pageViewBlock(view, route);
+    expect(block.length).toBe(PAGE_VIEW_BLOCK_WORST);
+    // A typical one: 100 actions by code with long titles.
+    const actions = pageViewBlock(
+      {
+        rows: Array.from({ length: 100 }, (_, i) => ({
+          ref: `AC-${i + 100}`,
+          label: 'l'.repeat(200),
+        })),
+      },
+      ACTIONS,
+    );
+    expect(actions.length).toBe(9_129);
   });
 
   it('tells the reader to read the rows by their refs, and the writer to name them from the reads', () => {

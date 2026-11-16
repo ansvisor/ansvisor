@@ -306,8 +306,10 @@ export interface ScopeUsed extends DatesUsed {
   platforms: string[] | null;
   /** The rows it asked for, or its lists were cut to. */
   rows: number;
-  /** What the page set (page-scope.ts): `period`, and its filters' keys (`platform`, `sources`). */
+  /** What the page set (page-scope.ts): `period`, and its filters' keys (`platform`, `sources`, `search`). */
   page?: string[];
+  /** The page's search, as the read took it (page-scope.ts), when it took one. */
+  pageSearch?: string;
 }
 
 /** A read the plan doesn't cover: the model says so, it doesn't run (CHAT-04 item 2). */
@@ -549,7 +551,13 @@ export async function scopeRead(
   return {
     kind: 'read',
     input,
-    used: { ...dates, platforms, rows: cap.rows, ...(page.length > 0 ? { page } : {}) },
+    used: {
+      ...dates,
+      platforms,
+      rows: cap.rows,
+      ...(page.length > 0 ? { page } : {}),
+      ...(fromPage.applied.includes('search') ? { pageSearch: String(input.search) } : {}),
+    },
     platformNames,
     cap,
   };

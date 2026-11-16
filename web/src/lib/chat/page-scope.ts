@@ -1,4 +1,5 @@
 import type { ZodType } from 'zod';
+import { searchWords } from '@/lib/mcp/lookup';
 import type { ChatTool } from './registry/define-tool';
 
 /**
@@ -17,7 +18,15 @@ import type { ChatTool } from './registry/define-tool';
  * mean one thing on each page (Actions' "In progress" is not Content's), so
  * they apply only to the reads of the page's own list. A read of another
  * brand, or one that names its rows (codes, ids, domains, urls), takes
- * none. Plain module: scope.ts applies it to every read.
+ * none.
+ *
+ * The page's search (its view, the owner's plan of 2026-11-16, item 8) is
+ * one more list filter: it fills `search` on the reads of the page's own
+ * list that take one (Prompts' list_prompts, Content's
+ * list_content_opportunities, Mentions' reads), as the lookups' own words
+ * (#2460: at most 8 words of the first 200 characters, escaped by the read),
+ * unless the model gave its own search or named rows, or the question asks
+ * for all of them. Plain module: scope.ts applies it to every read.
  */
 
 /** A page's filter, as its chip carries it (`filter:platform` → `platform`). */
@@ -34,6 +43,8 @@ export interface PageScope {
   /** The brand chip's brand (the run's own, messageScopeOf); null when it was left out. */
   brandId: string | null;
   filters: PageFilter[];
+  /** The page's search box, from its view; absent when it has none. */
+  search?: string;
 }
 
 interface ScopeChip {
@@ -44,7 +55,10 @@ interface ScopeChip {
 
 /** The page's scope from a message's context; null when it came from no page. */
 export function pageScopeOf(
-  context: { route?: string; chips: readonly ScopeChip[] } | null | undefined,
+  context:
+    | { route?: string; chips: readonly ScopeChip[]; view?: { search?: string } }
+    | null
+    | undefined,
 ): PageScope | null {
   if (!context) return null;
   const route = context.route?.trim().replace(/\/+$/, '') || null;
@@ -54,7 +68,8 @@ export function pageScopeOf(
       ? [{ key: chip.key.slice('filter:'.length), label: chip.label, value: chip.value }]
       : [],
   );
-  return { route, brandId, filters };
+  const search = context.view?.search?.trim();
+  return { route, brandId, filters, ...(search ? { search } : {}) };
 }
 
 /**
@@ -140,6 +155,16 @@ const ASKS_ALL: Readonly<Record<string, RegExp>> = {
   category: allOf('categor(?:y|ies)', 'kategori'),
   impact: allOf('impacts?|impact levels?', 'etki'),
   type: allOf('types?', 'tür|tip'),
+  // The page's search: "all prompts", "every opportunity", "tüm promptlar", "without the search".
+  search: new RegExp(
+    `${
+      allOf(
+        'prompts?|queries|questions|opportunit(?:y|ies)|drafts?|reports?|mentions?|answers?|items?|rows?|results?',
+        'prompt|soru|sorgu|fırsat|taslak|rapor|bahsetme|yanıt|cevap|öğe|satır|sonuç',
+      ).source
+    }|\\b(?:without|ignoring|ignore)\\s+(?:the\\s+|my\\s+|this\\s+)?search\\b|aramasız|arama(?:yı)?\\s+(?:olmadan|yok\\s+say)`,
+    'iu',
+  ),
 };
 
 /** Whether the question asks for all of a filter's values ("all platforms"). */
@@ -182,6 +207,20 @@ export function pageFilterInputs(
       if (!value || !schema.safeParse(value).success) continue;
       input[rule.field] = value;
       applied.push(filter.key);
+    }
+    // The page's search, on its own list's reads that take one, in the lookups' words.
+    const search = searchWords(page.search).join(' ');
+    const schema = fieldOf(tool, 'search');
+    if (
+      search &&
+      ownList &&
+      schema &&
+      !('search' in raw) &&
+      !asksAllOf('search', question) &&
+      schema.safeParse(search).success
+    ) {
+      input.search = search;
+      applied.push('search');
     }
   }
   for (const name of PAGE_FIELDS) {

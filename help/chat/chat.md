@@ -65,7 +65,7 @@ The speech bubble icon next to a table's or chart's title, on a tracked prompt a
 
 Chat ranks and counts as the page does. "My top 5 prompts" on Prompts are the table's top 5 by Visibility, and "the first ones" on Actions or Content are the rows you see, in the page's order. On Overview and Citations, **Last 24 hours** is the latest tracking run, as on those pages.
 
-Chat also sees the open tab, the sort and search you picked, and the items on screen, and reads those items before it answers: "these" are the rows you see.
+Chat also sees the open tab, the sort and search you picked, and the items on screen, and reads those items before it answers: "these" are the rows you see. On Prompts, Content and Mentions, Chat's lists follow the page's search, and the answer says so.
 
 ## Chats in the panel
 

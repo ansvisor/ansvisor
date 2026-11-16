@@ -1642,14 +1642,15 @@ describe('the agents’ test set harness, on a scripted model', () => {
     expect(result.passed).toBe(false);
   });
 
-  it('reads the prompts a search shows with that search, and names each', async () => {
+  it('reads the prompts a search shows: the app applies the page’s search, and the answer says it', async () => {
     const { EVAL_PAGE_SEARCH, EVAL_PAGE_SEARCH_PROMPTS, EVAL_PROMPTS } =
       await import('./testing/agent-eval-data');
     const shown = EVAL_PAGE_SEARCH_PROMPTS.map(
       (p) => EVAL_PROMPTS.find((prompt) => prompt.id === p.id)!,
     );
-    scripted([
-      calls(toolCall('r1', 'list_prompts', { brand_id: BRAND, search: EVAL_PAGE_SEARCH })),
+    const model = scripted([
+      // The model gives no search: the server fills the page's (page-scope.ts).
+      calls(toolCall('r1', 'list_prompts', { brand_id: BRAND })),
       calls(
         toolCall('r2', 'get_prompt_performance', {
           brand_id: BRAND,
@@ -1657,13 +1658,23 @@ describe('the agents’ test set harness, on a scripted model', () => {
         }),
       ),
       text(
-        `By Visibility, highest first:\n${shown.map((p) => `- ${p.text}: ${p.visibility_pct}`).join('\n')}`,
+        `Matching "${EVAL_PAGE_SEARCH}", as on the page, by Visibility, highest first:\n${shown.map((p) => `- ${p.text}: ${p.visibility_pct}`).join('\n')}`,
       ),
     ]);
     const result = await runScenario(skillOf('prompts-page-search'));
     expect(result.run.reads).toEqual(['list_prompts', 'get_prompt_performance']);
+    expect(result.run.readInputs[0].search).toBe(EVAL_PAGE_SEARCH);
+    // Only that page's list takes it: the figures read by ids don't.
+    expect(result.run.readInputs[1]).not.toHaveProperty('search');
+    // The read's scope says the search came from the page, for the writer to say so.
+    const written = JSON.stringify(model.doStreamCalls.at(-1)!.prompt);
+    expect(written).toContain(
+      `\\"from_page\\":{\\"took\\":[\\"search\\"],\\"search\\":\\"${EVAL_PAGE_SEARCH}\\"}`,
+    );
+    expect(written).toContain('with a search, \\"matching \\"skip a month\\", as on the page\\"');
     for (const name of [
       "reads with the page's search",
+      "says the page's search",
       'names the rows on screen',
       'no invented numbers',
     ]) {
@@ -1684,7 +1695,10 @@ describe('the agents’ test set harness, on a scripted model', () => {
     const failed = Object.fromEntries(
       result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
     );
-    expect(failed).toMatchObject({ "reads with the page's search": 'list_prompts not read' });
+    expect(failed).toMatchObject({
+      "reads with the page's search": 'list_prompts not read',
+      "says the page's search": 'no "coffee subscription"',
+    });
     expect(failed['names the rows on screen']).toContain('missing');
     expect(result.passed).toBe(false);
   });
