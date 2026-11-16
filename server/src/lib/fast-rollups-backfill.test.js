@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 // whose config hard-exits when SUPABASE_* env is absent (as in CI).
 vi.mock('../config/supabase.js', () => ({ default: { rpc: vi.fn(), from: vi.fn() } }));
 
-const { backfillFastRollups, brandChunks } = await import('./fast-rollups-backfill.js');
+const { backfillFastRollups, backfillOptions, brandChunks, PACKED_TERMS } =
+  await import('./fast-rollups-backfill.js');
 
 const A = '00000000-0000-0000-0000-00000000000a';
 const B = '00000000-0000-0000-0000-00000000000b';
@@ -113,5 +114,89 @@ describe('backfillFastRollups', () => {
     expect(log).toHaveBeenCalledWith(
       '2 brand(s), 3 call(s) of up to 14 days, 0 ms apart (dry run)',
     );
+  });
+});
+
+describe('backfillFastRollups over the packed Perception terms (00540)', () => {
+  const ranges = [
+    { brand_id: A, day_from: '2026-10-20', day_to: '2026-11-12', ready: false },
+    { brand_id: B, day_from: '2026-11-01', day_to: '2026-11-12', ready: true },
+  ];
+
+  it('walks the packed functions, names what each call wrote, and marks ready the same way', async () => {
+    const calls = [];
+    const log = vi.fn();
+    const rpc = vi.fn(async (fn, args) => {
+      if (fn === 'mentions_terms_packed_backfill_ranges') return { data: ranges, error: null };
+      calls.push([
+        fn,
+        args.p_brand_id.slice(-1),
+        args.p_day_from,
+        args.p_day_to,
+        args.p_mark_ready,
+      ]);
+      return { data: { packed_rows: 19 }, error: null };
+    });
+    await run(rpc, { rollups: PACKED_TERMS, log });
+    expect(calls).toEqual([
+      ['backfill_mention_terms_packed', 'a', '2026-10-20', '2026-11-02', false],
+      ['backfill_mention_terms_packed', 'a', '2026-11-03', TODAY, true],
+    ]);
+    expect(rpc).not.toHaveBeenCalledWith('fast_rollups_backfill_ranges');
+    expect(log).toHaveBeenLastCalledWith(
+      expect.stringMatching(/rows written: 19 entity-day · ready$/),
+    );
+  });
+
+  it('names the packed ranges function when it fails', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: { message: 'permission denied' } }));
+    await expect(run(rpc, { rollups: PACKED_TERMS })).rejects.toThrow(
+      'mentions_terms_packed_backfill_ranges: permission denied',
+    );
+  });
+});
+
+describe('backfillOptions', () => {
+  it('reads the defaults and every option', () => {
+    expect(backfillOptions([])).toEqual({
+      chunkDays: 14,
+      pauseMs: 250,
+      brand: null,
+      fromBrand: null,
+      fromDay: null,
+      lastDays: null,
+      dryRun: false,
+    });
+    expect(
+      backfillOptions([
+        '--chunk-days',
+        '7',
+        '--pause-ms',
+        '0',
+        '--from-brand',
+        A,
+        '--from-day',
+        '2026-11-03',
+        '--last-days',
+        '3',
+        '--dry-run',
+      ]),
+    ).toMatchObject({
+      chunkDays: 7,
+      pauseMs: 0,
+      fromBrand: A,
+      fromDay: '2026-11-03',
+      lastDays: 3,
+      dryRun: true,
+    });
+  });
+
+  it('refuses a bad brand id, day, count, or a day without a brand', () => {
+    expect(() => backfillOptions(['--brand', 'B1'])).toThrow('--brand must be a brand id');
+    expect(() => backfillOptions(['--from-brand', A, '--from-day', '3 Nov'])).toThrow('YYYY-MM-DD');
+    expect(() => backfillOptions(['--chunk-days', '0'])).toThrow(
+      '--chunk-days must be a whole number >= 1',
+    );
+    expect(() => backfillOptions(['--from-day', '2026-11-03'])).toThrow('--from-day needs');
   });
 });

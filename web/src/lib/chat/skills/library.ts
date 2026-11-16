@@ -82,6 +82,14 @@ export const SKILL_ORDER = [
   'prompts',
   // A 30-day plan whose actions go to the Action Center (create_action).
   'plan',
+  // AGENTS plan §8.3 and §8.1: the Content Plan Builder's, the Seasonal Prompt
+  // Planner's and AI Traffic → Signups'.
+  'content-plan',
+  'seasonal',
+  'traffic',
+  // Ads Phase 0 PR 15: only with Ads on (flagged.ts ADS_SKILLS).
+  'earn-or-pay',
+  'ad-drafts',
 ] as const;
 
 export interface LibrarySkill {

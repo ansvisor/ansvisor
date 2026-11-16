@@ -78,8 +78,12 @@ export function resetChannelSlots() {
   channelSlots.clear();
 }
 
-/** Whether the organization's plan has Slack notifications now (every paid plan; self-host). */
-export async function slackAllowed(organizationId) {
+/**
+ * Whether the organization's plan has Slack notifications now (every paid
+ * plan; self-host), or `feature`: slack_approvals, Approve and Reject from
+ * Slack (Growth and up).
+ */
+export async function slackAllowed(organizationId, feature = 'slack_notifications') {
   if (!isCloud()) return true;
   const { data: org, error } = await supabaseAdmin
     .from('organizations')
@@ -88,7 +92,7 @@ export async function slackAllowed(organizationId) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!org || !isSubscriptionActive(org.subscription_status)) return false;
-  return hasFeature(applyPlanOverrides(getPlan(org.plan), org), 'slack_notifications');
+  return hasFeature(applyPlanOverrides(getPlan(org.plan), org), feature);
 }
 
 /** Keeps the message before it is sent: its row's id, or null when it was kept already. */
@@ -128,8 +132,10 @@ async function afterRefusal(code, slack, brandId) {
  *   brand: { id: string, organization_id: string, is_demo?: boolean },
  *   kind: 'pulse' | 'drop' | 'suggestion' | 'needs_you',
  *   dedupeKey: string,
- *   message: { text: string, blocks?: object[] } | (() => { text: string, blocks?: object[] }),
+ *   message: { text: string, blocks?: object[] }
+ *     | ((post: { postId: string }) => { text: string, blocks?: object[] }),
  * }} input `message`, or a function making it once every check above has passed
+ *   (with its slack_posts row's id, which a button names)
  * @param {{ post?: typeof slackPost, now?: () => number, sleep?: (ms: number) => Promise<void> }} [deps]
  */
 export async function deliverToSlack(
@@ -181,7 +187,7 @@ export async function deliverToSlack(
     if (!id) return { status: 'skipped', reason: 'already_sent' };
     let body;
     try {
-      body = typeof message === 'function' ? message() : message;
+      body = typeof message === 'function' ? message({ postId: id }) : message;
     } catch (err) {
       await settle(id, { status: 'failed', error_code: 'render_failed', attempts: 0 });
       throw err;

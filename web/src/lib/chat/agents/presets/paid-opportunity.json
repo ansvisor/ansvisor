@@ -1,0 +1,22 @@
+{
+  "id": "paid-opportunity",
+  "goal": "visibility",
+  "businessTypes": [],
+  "industries": [],
+  "roles": [],
+  "skills": [
+    "earn-or-pay",
+    "ad-drafts"
+  ],
+  "triggers": [
+    {
+      "kind": "schedule",
+      "repeat": "MO",
+      "time": "09:00"
+    }
+  ],
+  "mode": "auto",
+  "connections": [],
+  "status": "ready",
+  "needs": []
+}

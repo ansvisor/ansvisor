@@ -1113,19 +1113,13 @@ export function ChatComposer({
         </div>
       </div>
       {/*
-        One line under the box that keeps its height: the run's status on the left (two short
-        lines at most, the whole text in its tooltip), the run mode, or Read-only, and the
-        model on the right, by their full names.
+        One line under the box that keeps its height, all of it on the left (the owner's change
+        after testing it live, 2026-11-15): the run mode, or Read-only, and the model, by their
+        full names, then the run's status (two short lines at most, the whole text in its
+        tooltip). The menus open from the left, so they stay inside a narrow panel.
       */}
       <div data-slot="composer-under" className="mt-1 flex h-7 items-center gap-2">
-        <p
-          data-slot="composer-status"
-          title={status ?? undefined}
-          className="line-clamp-2 min-w-0 flex-1 px-0.5 text-[11.5px] leading-[14px] text-muted-foreground"
-        >
-          {status}
-        </p>
-        <div data-slot="composer-settings" className="flex min-w-0 items-center gap-0.5">
+        <div data-slot="composer-settings" className="relative flex min-w-0 items-center gap-0.5">
           {readOnly ? (
             <Link
               data-action="access.see"
@@ -1143,7 +1137,7 @@ export function ChatComposer({
               offByAdmin={fullAutoOffByAdmin}
             />
           )}
-          <span data-slot="composer-model" className="relative flex min-w-0">
+          <span data-slot="composer-model" className="flex min-w-0">
             {onModelChoice || onOpenModel ? (
               <button
                 type="button"
@@ -1176,6 +1170,13 @@ export function ChatComposer({
             )}
           </span>
         </div>
+        <p
+          data-slot="composer-status"
+          title={status ?? undefined}
+          className="line-clamp-2 min-w-0 flex-1 px-0.5 text-[11.5px] leading-[14px] text-muted-foreground"
+        >
+          {status}
+        </p>
       </div>
       {keyInText && (
         <p

@@ -25,6 +25,8 @@
  *    engine scores it on creation (priority.js sentByHand).
  *  - History gets `created` with source `chat`, the conversation, the run
  *    and how it was approved (`execution.mode`: assisted or automated).
+ *    Ads' Earn card sends through here too, with source `ads`: its action,
+ *    tasks and History event say so, and name no conversation or run.
  *
  * Tasks follow AC-004: each names its page or where it is done, says when it
  * is done, and none is an analyze / identify / validate / measure to-do or a
@@ -46,6 +48,8 @@ import { actionCode } from './action-code.js';
 export const CHAT_ACTION_KIND = 'chat_finding';
 /** The `source` Chat's actions and History events carry (CHAT-20 §10a). */
 export const CHAT_SOURCE = 'chat';
+/** Where else a send comes from: Ads' Earn card (ADS-01 §3.2). */
+const SOURCES = [CHAT_SOURCE, 'ads'];
 
 export const CHAT_CATEGORIES = ['growth', 'protect', 'recover', 'fix', 'compete'];
 export const CHAT_TASK_TYPES = ['content', 'on_page', 'technical', 'outreach', 'pr', 'product'];
@@ -459,7 +463,7 @@ async function readBaseline(brandId, { promptIds, pages, platforms }, now) {
 }
 
 /** One task row per proposed task, in its order, with AC-004's details. */
-export function chatTaskRows(actionId, tasks) {
+export function chatTaskRows(actionId, tasks, source = CHAT_SOURCE) {
   return tasks.map((task, i) => ({
     action_id: actionId,
     position: i + 1,
@@ -479,7 +483,7 @@ export function chatTaskRows(actionId, tasks) {
         ? { change: { before: task.change.before || null, after: task.change.after } }
         : {}),
       check: task.check ?? 'manual',
-      source: CHAT_SOURCE,
+      source,
     },
   }));
 }
@@ -602,6 +606,7 @@ function duplicateError(found) {
  * @param {'assisted' | 'automated' | null} [opts.executionMode] - read again here (verifiedPlace)
  * @param {string} opts.idempotencyKey - one per approval: a retry finds what it made
  * @param {boolean} [opts.createAnyway] - the person chose Create anyway (entities differ)
+ * @param {'chat' | 'ads'} [opts.source] - `ads`: Ads' Earn card, with no conversation or run
  * @returns {Promise<{ actionId: string, actionNo: number, brandNo: number|null, created: boolean,
  *   dailyLimit?: { used: number, limit: number, reached: boolean } }>}
  */
@@ -614,15 +619,20 @@ export async function sendChatAction(
     runId = null,
     idempotencyKey,
     createAnyway = false,
+    source = CHAT_SOURCE,
     now = new Date(),
   },
 ) {
+  if (!SOURCES.includes(source)) throw new Error(`Unknown source: ${source}`);
   const problems = proposalProblems(proposal);
   if (problems.length) {
     throw httpError(problems.join(' '), 400, 'invalid', { problems });
   }
-  // Where it was sent from and how it was approved, as the database has them.
-  const place = await verifiedPlace(userId, { conversationId, runId, idempotencyKey });
+  // Where it was sent from and how it was approved, as the database has them; Ads names neither.
+  const place = await verifiedPlace(
+    userId,
+    source === CHAT_SOURCE ? { conversationId, runId, idempotencyKey } : {},
+  );
 
   const again = await sentWithKey(brandId, idempotencyKey);
   if (again) {
@@ -666,7 +676,7 @@ export async function sendChatAction(
         : competitors;
 
   const payload = {
-    source: CHAT_SOURCE,
+    source,
     title: proposal.title,
     why: proposal.why,
     ...(proposal.goal ? { goal: proposal.goal } : {}),
@@ -731,7 +741,7 @@ export async function sendChatAction(
 
   const { error: tasksError } = await supabaseAdmin
     .from('action_tasks')
-    .insert(chatTaskRows(action.id, proposal.tasks));
+    .insert(chatTaskRows(action.id, proposal.tasks, source));
   if (tasksError) {
     // Never an action without the tasks the person approved: it goes again,
     // with its kept list, so the same approval tried again makes it whole.
@@ -750,7 +760,7 @@ export async function sendChatAction(
     event: 'created',
     actor_id: userId,
     data: {
-      source: CHAT_SOURCE,
+      source,
       conversationId: place.conversationId,
       runId: place.runId,
       execution: place.executionMode ? { mode: place.executionMode } : null,
@@ -764,7 +774,7 @@ export async function sendChatAction(
   void captureWorkspaceEvent(
     brandId,
     'action_created',
-    { source: 'chat', kind: CHAT_ACTION_KIND, task_count: proposal.tasks.length },
+    { source, kind: CHAT_ACTION_KIND, task_count: proposal.tasks.length },
     { userId },
   );
 

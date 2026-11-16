@@ -653,7 +653,7 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-14",
       "sections": [
         {
           "heading": null,
@@ -668,12 +668,16 @@
           "text": "The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones that are yours or no one's), **Done** (this week) and **Results** (your score and its change)."
         },
         {
-          "heading": "Since yesterday and Today's focus",
-          "text": "- **Since yesterday**: the 3 to 5 biggest changes the nightly checks found since your last visit, each marked **Up**, **Down** or **Rival**, with a link to the action it added. Only high and medium impact signals count; the rest are in **All signals**. On a Monday it reads \"Since Friday\". A quiet day says so.\n- **Today's focus**: your three highest-impact actions, ranked as Chat's daily suggestion ranks them. They stay until you finish them; **Skip for now** hides one from your focus for 7 days without changing it. A new one is marked **New**."
+          "heading": "Waiting for you and Where you stand",
+          "text": "Under the loop strip, two cards sit side by side, one under the other on a narrow screen:\n\n- **Waiting for you**: this brand's agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.\n- **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand. Before a score is in, it says so.\n\nEach card keeps its place while Today loads and fills in as soon as its own data is in. To ask about any of it, use **Ask Chat** in the header, on every page."
         },
         {
-          "heading": "Beside them",
-          "text": "- **Waiting for you**: this brand's agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.\n- **Finish setting up**: the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise.\n- **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand.\n- **Ask Chat**: with Chat on, a question goes to Chat's side panel."
+          "heading": "Since yesterday and Today's focus",
+          "text": "Both run across the page, under the two cards.\n\n- **Since yesterday**: the 3 to 5 biggest changes the nightly checks found since your last visit, each marked **Up**, **Down** or **Rival**, with a link to the action it added. Only high and medium impact signals count; the rest are in **All signals**. On a Monday it reads \"Since Friday\". A quiet day says so.\n- **Today's focus**: your three highest-impact actions, ranked as Chat's daily suggestion ranks them. They stay until you finish them; **Skip for now** hides one from your focus for 7 days without changing it. A new one is marked **New**."
+        },
+        {
+          "heading": "Finish setting up",
+          "text": "Under **Today's focus**, **Finish setting up** lists the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise."
         },
         {
           "heading": "Prompts waiting for a spot",
@@ -689,7 +693,7 @@
         },
         {
           "heading": "New area to track",
-          "text": "On your Monday, or once today's focus is finished, admins and managers may see **New area to track**: one topic you don't track yet, when what Ansvisor already has makes a strong case for it. That is a catalog category with 3 or more products, 3 or more Search Console or Analytics prompt ideas about it, or prompt ideas from ChatGPT Business Hub. The card says why, and how many prompt spots it needs and has left on your plan. It waits until your workspace is two weeks old.\n\n**Suggest 5 prompts** adds the topic and lists the prompt ideas you already have for it; with none, it writes 5. Tick the ones to track: past your plan's spots, they are saved as waiting for a spot. **Not now** hides that topic for you for 30 days."
+          "text": "On your Monday, or once today's focus is finished, admins and managers may see **New area to track** under the focus: one topic you don't track yet, when what Ansvisor already has makes a strong case for it. That is a catalog category with 3 or more products, 3 or more Search Console or Analytics prompt ideas about it, or prompt ideas from ChatGPT Business Hub. The card says why, and how many prompt spots it needs and has left on your plan. It waits until your workspace is two weeks old.\n\n**Suggest 5 prompts** adds the topic and lists the prompt ideas you already have for it; with none, it writes 5. Tick the ones to track: past your plan's spots, they are saved as waiting for a spot. **Not now** hides that topic for you for 30 days."
         },
         {
           "heading": "After a plan or trial ends",
@@ -1088,6 +1092,14 @@
         "prompt portfolio manager",
         "prompts to add",
         "prompts to pause",
+        "content plan builder",
+        "/content-plan",
+        "seasonal prompt planner",
+        "/seasonal",
+        "ai traffic signups",
+        "ai traffic",
+        "sign-ups",
+        "/traffic",
         "when a brand is added",
         "brand added",
         "new brand trigger",
@@ -1123,10 +1135,18 @@
         "what did my agent do",
         "did my agent work",
         "run an agent on a new brand",
-        "agent for new brands"
+        "agent for new brands",
+        "content plan",
+        "weekly plan",
+        "what to write this week",
+        "seasonal prompts",
+        "holiday prompts",
+        "black friday",
+        "ai traffic report",
+        "ai visitors who sign up"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -1134,7 +1154,7 @@
         },
         {
           "heading": "Open Agents",
-          "text": "Click **Agents** under **Action Center** on the left menu. It is also in the chat menu, under **Inbox**, as **Agents · in Action Center**, with **New** until you first open it. Old links to Agent Center still open it.\n\n**Your agents** comes first, with **Ready to use** under it. **Ask Chat to make one** opens Chat with a request filled in for you to send; **New agent** opens the form. In **Your agents**, the filters above the list show how many agents each holds:\n\n- **Mine**: the agents you own.\n- **Workspace**: the agents shared with everyone in your workspace. Admins also see their teammates' private agents here.\n- **Paused** and **Archived**: agents that are off.\n\nType in **Search by name or skill** to find an agent by its name or by a skill it uses."
+          "text": "Click **Agents** under **Action Center** on the left menu. It is also in the chat menu, under **Inbox**, as **Agents**, with **New** until you first open it. Old links to Agent Center still open it.\n\n**Your agents** comes first, with **Ready to use** under it. **Ask Chat to make one** opens Chat with a request filled in for you to send; **New agent** opens the form. In **Your agents**, the filters above the list show how many agents each holds:\n\n- **Mine**: the agents you own.\n- **Workspace**: the agents shared with everyone in your workspace. Admins also see their teammates' private agents here.\n- **Paused** and **Archived**: agents that are off.\n\nType in **Search by name or skill** to find an agent by its name or by a skill it uses."
         },
         {
           "heading": "Ready-to-use agents",
@@ -1159,6 +1179,18 @@
         {
           "heading": "Prompt Portfolio Manager",
           "text": "**Prompt Portfolio Manager** runs every Monday at 09:00 on **Ask me first**. It is made for the **AEO/GEO & Audit** work area. It proposes prompts to track, from your prompt suggestions, the sub-questions AI engines searched and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each proposal shows its evidence and is a card: nothing is added or paused until you approve it, and the **Activity** log can undo each change. A prompt counts as out of scope only when you say so. Search Console is optional. In Chat, the same skill is **/prompts**."
+        },
+        {
+          "heading": "Content Plan Builder",
+          "text": "**Content Plan Builder** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for the **Content** work area. It reads your content opportunities, the sub-questions AI engines searched where your brand is missing, your open Action Center actions and your drafts. Then it plans three to five pages for the week, in order: what to write or update, for which prompts and topics, and why, with a brief for each page. It starts with what changed since last week, and leaves out a page that an open action or a draft already covers. Starting a draft or sending an action is a card you approve. In Chat, the same skill is **/content-plan**."
+        },
+        {
+          "heading": "Seasonal Prompt Planner",
+          "text": "**Seasonal Prompt Planner** runs on the 1st of each month at 09:00 on **Ask me first**. It is made for **E-commerce** brands. It looks at the events and seasons coming in the next three months for your markets and products, and proposes prompts to track before them and the pages to prepare, with the evidence from your data, such as Search Console queries. It dates only fixed days, such as Christmas Day. Events that move, such as Black Friday or back-to-school, get a date only when you give one: add it to the agent's instructions. Each prompt it adds is a card you approve. Search Console is optional. In Chat, the same skill is **/seasonal**."
+        },
+        {
+          "heading": "AI Traffic → Signups",
+          "text": "**AI Traffic → Signups** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for the **Growth** work area. It reports the visits AI assistants sent to your site last week, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, and the sessions that came from AI. Without it, sign-ups show as **Not measured**. Sign-ups by assistant or by page, and the prompt behind a visit, aren't measured, and the report says so. Sending a page to the Action Center is a card you approve. Google Analytics is optional. In Chat, the same skill is **/traffic**."
         },
         {
           "heading": "What each card shows",
@@ -1350,6 +1382,8 @@
         "chat menu",
         "governance",
         "open governance",
+        "settings in the chat menu",
+        "general settings",
         "agents at work",
         "hide menu",
         "inbox",
@@ -1505,7 +1539,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -1529,7 +1563,7 @@
         },
         {
           "heading": "Ask Chat",
-          "text": "Type in the box and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nOn the right under the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; there it says **Read-only**, linking to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
+          "text": "Type in the box and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nOn the left under the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; there it says **Read-only**, linking to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -1545,7 +1579,7 @@
         },
         {
           "heading": "Stop or steer",
-          "text": "While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the line with the steps says how long it worked, such as **Stopped after 41s · 5 steps**.\n\nYou can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example \"only blog pages\".\n\nThe line under the box says on its left what Enter and Esc do now, such as **Answering · Esc to stop**, next to the run mode and the model."
+          "text": "While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the line with the steps says how long it worked, such as **Stopped after 41s · 5 steps**.\n\nYou can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example \"only blog pages\".\n\nThe line under the box says what Enter and Esc do now, such as **Answering · Esc to stop**, after the run mode and the model."
         },
         {
           "heading": "When Chat asks you",
@@ -1561,7 +1595,7 @@
         },
         {
           "heading": "Change the date range",
-          "text": "Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings** in the chat menu has it too.\n\nOr send a short range as your message, such as \"last 7d\", \"last 24h\" or \"use 90 days by default\". Chat changes your default at once, says so, and answers your last question again over the new range.\n\nA period inside a question, such as \"How was last week?\", is used for that answer only: your default stays as it is."
+          "text": "Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings › General** in the chat menu has it too.\n\nOr send a short range as your message, such as \"last 7d\", \"last 24h\" or \"use 90 days by default\". Chat changes your default at once, says so, and answers your last question again over the new range.\n\nA period inside a question, such as \"How was last week?\", is used for that answer only: your default stays as it is."
         },
         {
           "heading": "Change what you track",
@@ -1705,15 +1739,15 @@
         },
         {
           "heading": "The chat menu",
-          "text": "The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Governance**, closed until you click it, holds the **Activity** log, **What Chat can do** and the **Tool policy**.\n\n**Agents at work** lists the chats that need your OK, the ones still working, and finished results you haven't opened yet, with the step each one is on. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.\n\n**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat."
+          "text": "The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Settings**, closed until you click it, holds **General** (your own Chat settings), the **Activity** log, **What Chat can do** and the **Tool policy**.\n\n**Agents at work** lists the chats that need your OK, the ones still working, and finished results you haven't opened yet, with the step each one is on. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.\n\n**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat."
         },
         {
           "heading": "Dots on chats",
           "text": "Chats have the same dots as the main menu. A grey dot that pulses means Chat is working in that chat. Yellow means it waits for your answer or OK. Green means it finished while you were away, until you open the chat. Red with a **!** means its last run stopped with an error, and it stays until the next run. A chat you have seen, with nothing running, has no dot. Point at a dot to read what it means."
         },
         {
-          "heading": "Open and close Governance",
-          "text": "Click the **▾** beside **Governance** in the chat menu to show or hide **Activity**, **What Chat can do** and **Tool policy**, as beside **Menu** and **Chats**. It turns to **▴** while Governance is open. It stays closed until you open it, and it opens by itself while you are on **Activity** or **What Chat can do**. Chat remembers whether you left it open or closed, in this browser."
+          "heading": "Open and close Settings in the chat menu",
+          "text": "Click **Settings** in the chat menu to show or hide its pages: **General**, your own Chat settings, then Chat's governance pages, **Activity**, **What Chat can do** and **Tool policy**. The **▾** beside it turns to **▴** while they show, as beside **Menu** and **Chats**. They stay hidden until you open them, and they show by themselves while you are on **General**, **Activity** or **What Chat can do**. Chat remembers whether you left them open or closed, in this browser."
         },
         {
           "heading": "Hide the chat menu",
@@ -1755,6 +1789,7 @@
       "route": "/dashboard/chat/settings",
       "keywords": [
         "chat settings",
+        "general settings",
         "date range",
         "default date range",
         "time range",
@@ -1780,11 +1815,11 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
-          "text": "**Settings** in the chat menu holds your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so. The bar next to **Settings** shows how much of this month's AI usage your workspace has used."
+          "text": "Click **Settings** in the chat menu, then **General**, for your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so."
         },
         {
           "heading": "Default mode",
@@ -1816,7 +1851,7 @@
         },
         {
           "heading": "Product tour",
-          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**; only Admins change them."
+          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**, also under **Settings** in the chat menu; only Admins change them."
         }
       ]
     },
@@ -1854,7 +1889,7 @@
         },
         {
           "heading": "In the chat menu",
-          "text": "Under **Skills** in the chat menu, the **Connections** row has **Manage** and an arrow. Click the arrow to open the list under the row: connected tools first, with a green dot and ✓, then the ones you can connect, then the ones coming soon. With more than 20 tools, a **Search connections** box shows above the list. The menu remembers whether you left the list open. **Manage** opens the Connections page."
+          "text": "Under **Skills** in the chat menu, click **Connections** to open the Connections page, or the arrow beside it to open the list under the row: connected tools first, with a green dot and ✓, then the ones you can connect, then the ones coming soon. With more than 20 tools, a **Search connections** box shows above the list. The menu remembers whether you left the list open."
         },
         {
           "heading": "The Connections page",
@@ -1945,7 +1980,7 @@
         "storage limit"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -1953,7 +1988,7 @@
         },
         {
           "heading": "Open Files",
-          "text": "Click **Files** in the chat menu, under **Settings**. You can also press Ctrl K (⌘K on a Mac) in Chat and type \"Files\". The newest files come first, 50 at a time; click **Show more** at the bottom to see older ones.\n\nEach row shows:\n\n- The file's name and the formats it comes in, and **Used in Content draft** when it was opened in the Content Editor.\n- **Made by**: you, a teammate, **Agent** (an Action Center task) or **Scheduled** (a scheduled job).\n- **From chat**: the chat it was made in. Click it to open that chat. It shows only for chats you can open.\n- **Updated**: when it was made, and **Data as of** when it used your workspace data. Hover over it to see the time zone."
+          "text": "Click **Files** in the chat menu, under **Scheduled**. You can also press Ctrl K (⌘K on a Mac) in Chat and type \"Files\". The newest files come first, 50 at a time; click **Show more** at the bottom to see older ones.\n\nEach row shows:\n\n- The file's name and the formats it comes in, and **Used in Content draft** when it was opened in the Content Editor.\n- **Made by**: you, a teammate, **Agent** (an Action Center task) or **Scheduled** (a scheduled job).\n- **From chat**: the chat it was made in. Click it to open that chat. It shows only for chats you can open.\n- **Updated**: when it was made, and **Data as of** when it used your workspace data. Hover over it to see the time zone."
         },
         {
           "heading": "Find a file",
@@ -1994,7 +2029,7 @@
         "simpler chat home"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -2014,7 +2049,7 @@
         },
         {
           "heading": "Change it later",
-          "text": "Under the greeting on Chat Home, a line shows your focus, such as **Focused on Product and Markets and sources**, or **Default view**. Select **Edit** to open the picker with your areas ticked; **Cancel** leaves everything as it was.\n\nYou can also change it in **Settings** in the chat menu, under **Your focus**. Tick **Default view**, or tick the areas you work on. Each change is kept at once and follows you to every device. Clearing every area goes back to the Default view."
+          "text": "Under the greeting on Chat Home, a line shows your focus, such as **Focused on Product and Markets and sources**, or **Default view**. Select **Edit** to open the picker with your areas ticked; **Cancel** leaves everything as it was.\n\nYou can also change it in **Settings › General** in the chat menu, under **Your focus**. Tick **Default view**, or tick the areas you work on. Each change is kept at once and follows you to every device. Clearing every area goes back to the Default view."
         },
         {
           "heading": "What focus doesn't change",
@@ -2285,7 +2320,7 @@
         "tour again"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -2321,7 +2356,7 @@
         },
         {
           "heading": "Take the tour again",
-          "text": "The tour is kept as a chat named **Ansvisor tour** in your chats, so you can read it again. To take it again, open **Settings** in the chat menu and click **Take the tour** under **Product tour**. It starts from the first topic and adds to the same chat."
+          "text": "The tour is kept as a chat named **Ansvisor tour** in your chats, so you can read it again. To take it again, open **Settings › General** in the chat menu and click **Take the tour** under **Product tour**. It starts from the first topic and adds to the same chat."
         },
         {
           "heading": "When the tour isn't offered",
@@ -2505,7 +2540,17 @@
         "/plan",
         "monthly plan",
         "task list",
-        "plan actions"
+        "plan actions",
+        "weekly content plan",
+        "/content-plan",
+        "content brief",
+        "seasonal prompts",
+        "/seasonal",
+        "holiday prompts",
+        "ai traffic and sign-ups",
+        "/traffic",
+        "ai visitors",
+        "sign-ups from ai"
       ],
       "synonyms": [
         "slash commands",
@@ -2516,11 +2561,11 @@
         "skills directory"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-five Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan** and **Setup guide**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-eight Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan**, **Weekly content plan** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -2564,7 +2609,7 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio and 30-day plan.\n\n**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio, 30-day plan, Weekly content plan, Seasonal prompts and AI traffic and sign-ups.\n\n**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
         },
         {
           "heading": "Fan-out gaps",
@@ -2577,6 +2622,18 @@
         {
           "heading": "30-day plan",
           "text": "**30-day plan** (**/plan**) reads your brand's visibility, prompts, competitors, content opportunities and open actions over your date range, and proposes a plan for four weeks: 8 to 12 actions, each with why, its effort and the prompts and pages it covers. Chat asks you once before it adds them to the **Action Center**, then links each one (AC-n) and says what to do first. Where an open action already covers something, the plan links that action instead of adding another."
+        },
+        {
+          "heading": "Weekly content plan",
+          "text": "**Weekly content plan** (**/content-plan**) turns your content opportunities, the sub-questions AI engines search where your brand is missing, and your open content actions into a plan for the week: three to five pages to write or update, in order, each with the prompts it serves, why now and a brief. It leaves out pages an open action or a draft already covers. Starting a draft or sending an action is a card you approve."
+        },
+        {
+          "heading": "Seasonal prompts",
+          "text": "**Seasonal prompts** (**/seasonal**) is for online stores. It proposes prompts to track and pages to prepare before the events and seasons coming for your markets, with the evidence from your data. It dates only fixed days, such as Christmas Day; for events that move, such as Black Friday, it asks you for the date. Each prompt it adds is a card you approve."
+        },
+        {
+          "heading": "AI traffic and sign-ups",
+          "text": "**AI traffic and sign-ups** (**/traffic**) reports the visits AI assistants send to your site, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, from AI sessions. It says plainly what isn't measured: sign-ups by assistant or page, and the prompt behind a visit."
         }
       ]
     },
@@ -3161,7 +3218,7 @@
         },
         {
           "heading": "The side panel",
-          "text": "The side panel's tabs are **Chat** (with Chat on, see below), **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**, or on **Chat** for a page Chat made.\n\n**Hide side panel**, at the right end of the header's second row, above the panel, closes it, and in its place **Show side panel** opens it again. While it's closed, its tabs also run down the editor's right edge under **Show side panel**: click one to open the panel there.\n\nBuilding the brief and running the Content Agent use your workspace's monthly AI usage."
+          "text": "The side panel's tabs are **Chat** (with Chat on, see below), **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**, or on **Chat** for a page Chat made.\n\nThe panel is as tall as the window. Its tabs stay on top and each tab scrolls inside it, the Chat box at its bottom. The page scrolls on its own.\n\n**Hide side panel**, at the right end of the header's second row, above the panel, closes it, and in its place **Show side panel** opens it again. While it's closed, its tabs also run down the editor's right edge under **Show side panel**: click one to open the panel there.\n\nBuilding the brief and running the Content Agent use your workspace's monthly AI usage."
         },
         {
           "heading": "Chat beside the page",
@@ -3470,7 +3527,7 @@
         },
         {
           "heading": "Fix open rules",
-          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage."
+          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**. A suggestion that would break a rule the page meets now says which, in amber under its label; the bar shows an amber sign with how many rules, named when you hover it.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage."
         },
         {
           "heading": "Rules that are yours",
@@ -5541,21 +5598,25 @@
         "drop alert",
         "daily suggestion",
         "agent needs me",
-        "notifications"
+        "notifications",
+        "approve from slack",
+        "reject from slack"
       ],
       "synonyms": [
         "post to slack",
         "slack integration",
         "send updates to a channel",
         "slack app",
-        "team chat alerts"
+        "team chat alerts",
+        "approve in slack",
+        "slack buttons"
       ],
       "plan": "starter",
-      "updated": "2026-11-10",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
-          "text": "Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, an alert when visibility or citations drop more than usual, one daily suggestion, and a message when an agent needs someone. Each message links back to Ansvisor. Slack is on every paid plan."
+          "text": "Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, an alert when visibility or citations drop more than usual, one daily suggestion, and a message when an agent needs someone, which on Growth and up can approve or reject the agent's step. Each message links back to Ansvisor. Slack is on every paid plan."
         },
         {
           "heading": "Connect Slack",
@@ -5576,6 +5637,10 @@
         {
           "heading": "Agents that need someone",
           "text": "With **Agents that need someone** on, when an agent's run on the brand stops to ask someone or wait for their OK, the channel gets a message that mentions them, with **Open the run**. Only for people who chose **Inbox + Slack** under **Notify me when an agent needs me** in their Chat settings, and only once per run. Ansvisor finds their Slack account by their email; when it can't, the message names them. If the brand doesn't post these, they get the email instead."
+        },
+        {
+          "heading": "Approve or reject from Slack",
+          "text": "On Growth and up, when an agent waits for an OK on a change, its message says what the change is, with **Approve**, **Reject** and **Open in Ansvisor**. **Reject** is the card's **Skip**.\n\nOnly the person the agent waits for can use them, as in Ansvisor. Ansvisor matches them to the Slack account with their Ansvisor sign-in email, in the brand's Slack workspace. Their role and brand access are checked as in Ansvisor, and a workspace whose plan has ended can't approve.\n\nAnyone else who clicks, or someone Ansvisor can't match, gets a note only they see, and nothing changes. Some changes need you signed in to Ansvisor, and questions are answered there: those messages only have the link.\n\nOnce decided, the message shows who decided and when, without buttons. A click on a step already decided says so. The Activity log shows **Approved in Slack**."
         },
         {
           "heading": "When the card asks you to reconnect",
@@ -5728,7 +5793,7 @@
         "ai used up"
       ],
       "plan": "starter",
-      "updated": "2026-10-31",
+      "updated": "2026-11-15",
       "sections": [
         {
           "heading": null,
@@ -5736,7 +5801,7 @@
         },
         {
           "heading": "Where you see it",
-          "text": "- The **AI** button at the top right of each page reads **Trial credit**, then **Almost used** from 80%, and **Used up** once it's spent. Click it to see what the credit covers and when the trial ends.\n- The AI usage card in **Settings › Billing** shows the same, and so does the usage next to **Settings** in Chat's menu.\n- From 80%, a note under the page header says the credit is almost used."
+          "text": "- The **AI** button at the top right of each page reads **Trial credit**, then **Almost used** from 80%, and **Used up** once it's spent. Click it to see what the credit covers and when the trial ends.\n- The AI usage card in **Settings › Billing** shows the same.\n- From 80%, a note under the page header says the credit is almost used."
         },
         {
           "heading": "Start your plan now",

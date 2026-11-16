@@ -4,8 +4,8 @@ route: /dashboard/action-center/today
 keywords: [today, action center, todays focus, since yesterday, waiting for you, finish setting up, where you stand, new area to track, waiting for a spot]
 synonyms: [start page, home page, daily summary, what to do today, my day]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-14
+last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -23,17 +23,25 @@ Beside **Actions** is how many open actions are yours or unassigned, beside **Si
 
 The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones that are yours or no one's), **Done** (this week) and **Results** (your score and its change).
 
+## Waiting for you and Where you stand
+
+Under the loop strip, two cards sit side by side, one under the other on a narrow screen:
+
+- **Waiting for you**: this brand's agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.
+- **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand. Before a score is in, it says so.
+
+Each card keeps its place while Today loads and fills in as soon as its own data is in. To ask about any of it, use **Ask Chat** in the header, on every page.
+
 ## Since yesterday and Today's focus
+
+Both run across the page, under the two cards.
 
 - **Since yesterday**: the 3 to 5 biggest changes the nightly checks found since your last visit, each marked **Up**, **Down** or **Rival**, with a link to the action it added. Only high and medium impact signals count; the rest are in **All signals**. On a Monday it reads "Since Friday". A quiet day says so.
 - **Today's focus**: your three highest-impact actions, ranked as Chat's daily suggestion ranks them. They stay until you finish them; **Skip for now** hides one from your focus for 7 days without changing it. A new one is marked **New**.
 
-## Beside them
+## Finish setting up
 
-- **Waiting for you**: this brand's agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.
-- **Finish setting up**: the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise.
-- **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand.
-- **Ask Chat**: with Chat on, a question goes to Chat's side panel.
+Under **Today's focus**, **Finish setting up** lists the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise.
 
 ## Prompts waiting for a spot
 
@@ -51,7 +59,7 @@ On Mondays, once the brand has a full week of answers, **Last week** sums up vis
 
 ## New area to track
 
-On your Monday, or once today's focus is finished, admins and managers may see **New area to track**: one topic you don't track yet, when what Ansvisor already has makes a strong case for it. That is a catalog category with 3 or more products, 3 or more Search Console or Analytics prompt ideas about it, or prompt ideas from ChatGPT Business Hub. The card says why, and how many prompt spots it needs and has left on your plan. It waits until your workspace is two weeks old.
+On your Monday, or once today's focus is finished, admins and managers may see **New area to track** under the focus: one topic you don't track yet, when what Ansvisor already has makes a strong case for it. That is a catalog category with 3 or more products, 3 or more Search Console or Analytics prompt ideas about it, or prompt ideas from ChatGPT Business Hub. The card says why, and how many prompt spots it needs and has left on your plan. It waits until your workspace is two weeks old.
 
 **Suggest 5 prompts** adds the topic and lists the prompt ideas you already have for it; with none, it writes 5. Tick the ones to track: past your plan's spots, they are saved as waiting for a spot. **Not now** hides that topic for you for 30 days.
 

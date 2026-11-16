@@ -85,7 +85,8 @@ const logger = vi.hoisted(() => {
 vi.mock('../lib/logger.js', () => ({ logger, default: logger }));
 
 const { default: Middleware } = await import('./index.js');
-const { ACTING_USER_ROUTES, MIN_SECRET_LENGTH } = await import('./acting-user.js');
+const { ACTING_USER_READS, ACTING_USER_ROUTES, MIN_SECRET_LENGTH } =
+  await import('./acting-user.js');
 const { DEMO_GUARDED, MAX_IDS, clearDemoBrandCache } = await import('./demo-brand.js');
 const { apiLimiterKey } = await import('./rate-limiter.js');
 const { clearVerifiedTokens, markTokenVerified } = await import('./verified-tokens.js');
@@ -102,13 +103,14 @@ function makeReq({
   method = 'POST',
   path = '/action-center/chat-actions',
   body = { brandId: BRAND },
+  query = {},
   authorization = `Bearer ${SECRET}`,
   actingFor = MANAGER,
 } = {}) {
   const headers = {};
   if (authorization) headers.authorization = authorization;
   if (actingFor) headers['x-acting-user'] = actingFor;
-  return { method, path, body, query: {}, headers, ip: '203.0.113.9', log: logger };
+  return { method, path, body, query, headers, ip: '203.0.113.9', log: logger };
 }
 
 async function run(options) {
@@ -234,6 +236,29 @@ describe('the internal secret with a member to act for', () => {
   it('names its brand on every allowed route, as the demo brand check reads it', () => {
     const guarded = new Set(DEMO_GUARDED.map((entry) => entry.route));
     for (const route of ACTING_USER_ROUTES) expect(guarded.has(route), route).toBe(true);
+  });
+
+  it('takes the reads only the API serves, checking the brand their query names', async () => {
+    // Ads' Opportunities and a prompt's drawer (Ads Phase 0 PR 18): the route decides the rows.
+    expect(ACTING_USER_READS).toEqual([
+      'GET /ads/opportunities',
+      'GET /ads/opportunities/:promptId',
+    ]);
+    const read = (path, brandId = BRAND, over = {}) =>
+      run({ method: 'GET', path, body: undefined, query: { brandId }, ...over });
+    expectPassedAs(await read('/ads/opportunities'), MANAGER);
+    expectPassedAs(await read(`/ads/opportunities/${OPP}`), MANAGER);
+    expectRefused(await read('/ads/opportunities', OTHER_BRAND), 403, 'not_in_workspace');
+    expectRefused(await read(`/ads/opportunities/${OPP}`, OTHER_BRAND), 403, 'not_in_workspace');
+    expectRefused(await read('/ads/opportunities', BRAND, { actingFor: NARROWED }), 403);
+    expectRefused(await read('/ads/opportunities', [BRAND, OTHER_BRAND]), 403);
+    // No other read, and not these paths by another method.
+    for (const path of ['/ads/overview', '/ads/activity', '/ads/export/editor', '/ads/settings']) {
+      expectRefused(await read(path), 401);
+    }
+    expectRefused(await read('/ads/opportunities', BRAND, { method: 'HEAD' }), 401);
+    expectRefused(await read('/ads/opportunities', BRAND, { method: 'POST' }), 401);
+    expect(supabase.getUser).not.toHaveBeenCalled();
   });
 
   it('refuses a brand of another workspace, or one the member was not given', async () => {

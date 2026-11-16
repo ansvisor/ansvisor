@@ -638,6 +638,9 @@ describe('actionEventText', () => {
     expect(actionEventText(event('created', { source: 'chat' }), tPage, t)).toBe(
       'Action created from Chat',
     );
+    expect(actionEventText(event('created', { source: 'ads' }), tPage, t)).toBe(
+      'Action created from Ads',
+    );
     expect(actionEventText(event('created', { source: 'traffic_pages' }), tPage, t)).toBe(
       'Action created',
     );

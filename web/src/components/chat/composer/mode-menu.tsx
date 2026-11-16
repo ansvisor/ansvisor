@@ -53,7 +53,7 @@ export function ModeMenu({
       >
         {t(`short.${mode}`)} <span aria-hidden>▾</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" className="w-64">
+      <DropdownMenuContent align="start" side="bottom" className="w-64">
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t('label')}</DropdownMenuLabel>
           <DropdownMenuRadioGroup

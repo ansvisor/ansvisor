@@ -1,4 +1,8 @@
+import { adsEnabled } from '@/lib/ads/flag';
 import { businessHubEnabled } from '@/lib/business-hub/flag';
+
+/** Ads' skills (ADS-01 §6, Ads Phase 0 PR 15): only with Ads on, as its Chat tools are. */
+export const ADS_SKILLS: ReadonlySet<string> = new Set(['earn-or-pay', 'ad-drafts']);
 
 /**
  * Library skills that wait on a feature flag. While its flag is off, a skill
@@ -13,6 +17,7 @@ const SKILL_FLAGS: Readonly<Record<string, () => boolean>> = {
   // The ChatGPT profile check (ChatGPT Business Hub plan, PR 7): until a person
   // with Business Hub access has checked its pages and field names.
   'chatgpt-profile': businessHubEnabled,
+  ...Object.fromEntries([...ADS_SKILLS].map((name) => [name, adsEnabled])),
 };
 
 /** Whether this install offers a library skill now: every skill but a flagged one whose flag is off. */

@@ -25,8 +25,11 @@ const store = await import('./store');
 const { offAgentSkill } = await import('../agent-skills');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 const { SKILL_LIBRARY } = await import('./library');
-// The library this install offers: the ChatGPT profile check waits on BUSINESS_HUB_ENABLED (flagged.ts).
-const OFFERED = SKILL_LIBRARY.filter((s) => s.name !== 'chatgpt-profile');
+// The library this install offers: the ChatGPT profile check waits on BUSINESS_HUB_ENABLED,
+// and Ads' skills on ADS_ENABLED (flagged.ts).
+const OFFERED = SKILL_LIBRARY.filter(
+  (s) => !['chatgpt-profile', 'earn-or-pay', 'ad-drafts'].includes(s.name),
+);
 const { SHORTCUT_IDS } = await import('../shortcuts');
 
 const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';

@@ -307,7 +307,7 @@ describe('ChatComposer', () => {
     }
   });
 
-  it('puts the mode and the model on one line under the box, on the right, by their full labels (owner’s change after testing it live)', async () => {
+  it('puts the mode and the model on one line under the box, on the left, by their full labels, then the status (owner’s changes after testing it live)', async () => {
     for (const variant of ['home', 'dock', 'panel'] as const) {
       await render({
         variant,
@@ -318,9 +318,14 @@ describe('ChatComposer', () => {
       // After the box, its next sibling: chips above, the box, then this line.
       expect(line.previousElementSibling!.getAttribute('data-slot')).toBe('composer-box');
       expect([...line.children].map((el) => el.getAttribute('data-slot'))).toEqual([
-        'composer-status',
         'composer-settings',
+        'composer-status',
       ]);
+      // Nothing pushes them right: the status after them reads from the left too.
+      expect(line.className).not.toContain('justify-end');
+      expect(container.querySelector('[data-slot="composer-status"]')!.className).not.toContain(
+        'text-right',
+      );
       expect(
         [...settings().children].map(
           (el) => el.getAttribute('data-action') ?? el.getAttribute('data-slot'),

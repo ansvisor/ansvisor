@@ -108,6 +108,30 @@ export async function logAdsActivity(entry) {
 }
 
 /**
+ * Notify me on an ad platform that comes later (ADS-01 §3.5, `conn.notify`):
+ * one connection.notify entry per person and platform in the workspace,
+ * naming only the platform, on the brand it was asked from. Asked again,
+ * from any of its brands, nothing more is logged. The log is the list of
+ * who asked; nothing is sent yet.
+ * @returns {Promise<boolean>} whether it was logged now
+ */
+export async function logNotifyMe({ orgId, brandId, userId, platform }) {
+  const { data, error } = await supabaseAdmin
+    .from('ads_activity_log')
+    .select('id')
+    .eq('organization_id', orgId)
+    .eq('actor_user_id', userId)
+    .eq('event', 'connection.notify')
+    .eq('target->>platform', platform)
+    .limit(1);
+  if (error) throw new Error(`ads activity read failed: ${error.message}`);
+  if (data?.length) return false;
+  const target = { platform };
+  await logAdsActivity({ orgId, brandId, actor: { userId }, event: 'connection.notify', target });
+  return true;
+}
+
+/**
  * The workspace's log (and only its own), newest first: `limit` rows older
  * than `before`, of one brand or all, and the time to ask for the next page.
  * @returns {Promise<{ entries: object[], next: string | null }>}

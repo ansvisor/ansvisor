@@ -620,6 +620,8 @@ export const EVAL_PRICES: Readonly<Record<string, { input: number; output: numbe
   'anthropic/claude-haiku-5.5': { input: 0.1, output: 0.5 },
   'anthropic/claude-sonnet-5.5': { input: 2, output: 10 },
   'anthropic/claude-opus-5.5': { input: 4, output: 20 },
+  // On Anthropic's API only (lib/chat/models.ts directOnly): Anthropic's list price.
+  'anthropic/claude-fable-5-2': { input: 8, output: 40 },
   'openai/gpt-6.1-sol': { input: 2, output: 10 },
   'openai/gpt-6.1-terra': { input: 1, output: 5 },
   'openai/gpt-6-luna': { input: 0.1, output: 0.5 },

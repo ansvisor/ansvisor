@@ -4,7 +4,15 @@
  * from the rollups they sum, brand by brand, a chunk of days per
  * backfill_fast_rollups call, and lists each brand in fast_rollups_ready
  * with its last chunk. Only then do its Topics and Perception reads use
- * them. Run by src/scripts/backfill-fast-rollups.js, which has the options.
+ * them. Run by src/scripts/backfill-fast-rollups.js.
+ *
+ * The 00540 backfill walks the same way over other functions (PACKED_TERMS):
+ * it packs Perception's summed terms one row per entity and day
+ * (mentions_terms_daily_packed) for the brands in fast_rollups_ready, a
+ * chunk per backfill_mention_terms_packed call, and lists each brand in
+ * mentions_terms_packed_ready with its last chunk. Run by
+ * src/scripts/backfill-perception-packed.js. Both scripts take the options
+ * backfillOptions reads.
  *
  * A call takes the brand's refresh locks and makes its days match the
  * sources, so any chunk can be run again; a run that stops can be resumed
@@ -13,11 +21,85 @@
  * filled them in one statement and took production down (out of memory).
  */
 
+import { parseArgs } from 'node:util';
 import { addDays, dayChunks } from './citations-rollups.js';
 import { utcDay } from './insights-rollups.js';
 
 export const FAST_ROLLUPS_CHUNK_DAYS = 14;
 export const FAST_ROLLUPS_PAUSE_MS = 250;
+
+/**
+ * What a backfill walks: the SQL function listing each brand's days
+ * (`ranges`, one jsonb array of { brand_id, day_from, day_to, ready }), the
+ * one filling a chunk (`backfill`, taking p_brand_id, p_day_from, p_day_to
+ * and p_mark_ready), and how a chunk's result reads in the log (`written`).
+ */
+export const FAST_ROLLUPS = {
+  ranges: 'fast_rollups_backfill_ranges',
+  backfill: 'backfill_fast_rollups',
+  written: (rows) =>
+    `${rows?.prompt_rows ?? 0} prompt, ${rows?.competitor_rows ?? 0} competitor, ` +
+    `${rows?.term_rows ?? 0} term`,
+};
+
+/** Perception's packed terms (00540): the brands in fast_rollups_ready only. */
+export const PACKED_TERMS = {
+  ranges: 'mentions_terms_packed_backfill_ranges',
+  backfill: 'backfill_mention_terms_packed',
+  written: (rows) => `${rows?.packed_rows ?? 0} entity-day`,
+};
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function count(value, name, fallback, min) {
+  if (value === undefined) return fallback;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < min) throw new Error(`${name} must be a whole number >= ${min}`);
+  return n;
+}
+
+/**
+ * The backfill scripts' options (their headers list them), from the command
+ * line by default. Throws with the option at fault.
+ *
+ * @param {string[]} [args]
+ */
+export function backfillOptions(args = process.argv.slice(2)) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      'chunk-days': { type: 'string' },
+      'pause-ms': { type: 'string' },
+      brand: { type: 'string' },
+      'from-brand': { type: 'string' },
+      'from-day': { type: 'string' },
+      'last-days': { type: 'string' },
+      'dry-run': { type: 'boolean' },
+    },
+  });
+  for (const name of ['brand', 'from-brand']) {
+    if (values[name] !== undefined && !UUID.test(values[name])) {
+      throw new Error(`--${name} must be a brand id (lower-case uuid)`);
+    }
+  }
+  if (values['from-day'] !== undefined) {
+    if (!DAY.test(values['from-day'])) throw new Error('--from-day must be YYYY-MM-DD');
+    if (!values['from-brand'] && !values.brand) {
+      throw new Error('--from-day needs --from-brand or --brand');
+    }
+  }
+  return {
+    chunkDays: count(values['chunk-days'], '--chunk-days', FAST_ROLLUPS_CHUNK_DAYS, 1),
+    pauseMs: count(values['pause-ms'], '--pause-ms', FAST_ROLLUPS_PAUSE_MS, 0),
+    brand: values.brand ?? null,
+    fromBrand: values['from-brand'] ?? null,
+    fromDay: values['from-day'] ?? null,
+    lastDays:
+      values['last-days'] === undefined ? null : count(values['last-days'], '--last-days', 0, 1),
+    dryRun: values['dry-run'] ?? false,
+  };
+}
 
 const sleepFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -43,6 +125,7 @@ export function brandChunks({ dayFrom, dayTo, chunkDays, today }) {
  *
  * @param {object} options
  * @param {(fn: string, args?: object) => PromiseLike<{ data: any, error: any }>} options.rpc
+ * @param {typeof FAST_ROLLUPS} [options.rollups]  what to fill: FAST_ROLLUPS or PACKED_TERMS
  * @param {number} [options.chunkDays]  days per call
  * @param {number} [options.pauseMs]    wait after each call
  * @param {string|null} [options.brand]      this brand only
@@ -54,6 +137,7 @@ export function brandChunks({ dayFrom, dayTo, chunkDays, today }) {
  */
 export async function backfillFastRollups({
   rpc,
+  rollups = FAST_ROLLUPS,
   chunkDays = FAST_ROLLUPS_CHUNK_DAYS,
   pauseMs = FAST_ROLLUPS_PAUSE_MS,
   brand = null,
@@ -66,8 +150,8 @@ export async function backfillFastRollups({
   sleep = sleepFor,
   clock = Date.now,
 }) {
-  const { data, error } = await rpc('fast_rollups_backfill_ranges');
-  if (error) throw new Error(`fast_rollups_backfill_ranges: ${error.message}`);
+  const { data, error } = await rpc(rollups.ranges);
+  if (error) throw new Error(`${rollups.ranges}: ${error.message}`);
 
   let ranges = data ?? [];
   if (brand) ranges = ranges.filter((r) => r.brand_id === brand);
@@ -105,7 +189,7 @@ export async function backfillFastRollups({
     for (const [c, [from, to]] of chunks.entries()) {
       const last = c === chunks.length - 1;
       const t0 = clock();
-      const { data: rows, error: failed } = await rpc('backfill_fast_rollups', {
+      const { data: rows, error: failed } = await rpc(rollups.backfill, {
         p_brand_id: brandId,
         p_day_from: from,
         p_day_to: to,
@@ -123,8 +207,7 @@ export async function backfillFastRollups({
       chunksDone++;
       log(
         `[${i + 1}/${plan.length}] ${brandId} ${from}..${to} ${ms} ms · ` +
-          `rows written: ${rows?.prompt_rows ?? 0} prompt, ${rows?.competitor_rows ?? 0} competitor, ` +
-          `${rows?.term_rows ?? 0} term${mark && last ? ' · ready' : ''}`,
+          `rows written: ${rollups.written(rows)}${mark && last ? ' · ready' : ''}`,
       );
       if (pauseMs > 0) await sleep(pauseMs);
     }
