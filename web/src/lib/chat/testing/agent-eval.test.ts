@@ -11,12 +11,18 @@ import {
   numbersIn,
   promptCauseClaims,
   readByCodes,
+  readCitationsByDomain,
+  readSignalsByCodes,
   skillReads,
   substituteActions,
+  substituteDomains,
+  substituteSignals,
   unnamedActionRefs,
   unnamedAskedActions,
+  unnamedAskedDomains,
+  unnamedAskedSignals,
 } from './agent-eval';
-import { EVAL_IDS, evalReadResult } from './agent-eval-data';
+import { EVAL_CITED_DOMAIN, EVAL_CODE_SIGNAL, EVAL_IDS, evalReadResult } from './agent-eval-data';
 import { PROMPT_ASSOCIATION_LABEL } from '@/lib/traffic-conversions';
 import { safetyChecks, safetyFindings } from './safety-checks';
 
@@ -334,6 +340,105 @@ describe('actions asked for by their code', () => {
     expect(checkLabel('names no other action in their place')).toBe(
       'yerlerine başka aksiyon saymadı',
     );
+  });
+});
+
+// The owner's plan (2026-11-16, item 2): an item named by its code or address is looked up,
+// never answered from the first page of a list that doesn't hold it.
+describe('a signal asked for by its code, and a cited domain by its address', () => {
+  const run = (reads: [string, Record<string, unknown>][]) => ({
+    reads: reads.map(([tool]) => tool),
+    readInputs: reads.map(([, input]) => input),
+  });
+
+  it('asks about S-07 on a brand where it is past the first page of 60 signals', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'signal-by-code')!;
+    expect(scenario).toMatchObject({ message: 'S-07 nedir', workspace: 'long_lists' });
+    expect(scenario.askedSignals).toEqual([{ code: 'S-07', title: EVAL_CODE_SIGNAL.title }]);
+    const page = evalReadResult('list_signals', {}, 'long_lists') as {
+      total: number;
+      next_offset: number;
+      signals: { code: string }[];
+    };
+    expect(page).toMatchObject({ total: 60, next_offset: 50 });
+    expect(page.signals.map((s) => s.code)).not.toContain('S-07');
+    // By its code, however written, in every status; a code the brand hasn't, not found.
+    expect(evalReadResult('list_signals', { codes: ['s 7', 'S-99'] }, 'long_lists')).toMatchObject({
+      signals: [{ code: 'S-07', asked: 's 7', matched: 'its code', status: 'resolved' }],
+      not_found: ['S-99'],
+    });
+    // The default workspace keeps its 3 signals.
+    expect(evalReadResult('list_signals', {})).toMatchObject({ signals: { length: 3 } });
+  });
+
+  it('wants S-07 read by its code, named by its title and code, and no other signal', () => {
+    const asked = [{ code: 'S-07', title: EVAL_CODE_SIGNAL.title }];
+    expect(readSignalsByCodes(run([['list_signals', { codes: ['#7'] }]]), ['S-07'])).toEqual([]);
+    expect(readSignalsByCodes(run([['list_signals', { offset: 50 }]]), ['S-07'])).toEqual(['S-07']);
+    const answer = `**${EVAL_CODE_SIGNAL.title}** (S-07): çözüldü.`;
+    expect(unnamedAskedSignals(answer, asked)).toEqual([]);
+    expect(substituteSignals(answer, asked)).toEqual([]);
+    expect(unnamedAskedSignals('S-07 çözüldü.', asked)).toEqual(['S-07']);
+    expect(substituteSignals('S-07 yok; en yakını S-08.', asked)).toEqual(['S-08']);
+    expect(checkLabel('names no other signal in their place')).toBe(
+      'yerlerine başka sinyal saymadı',
+    );
+  });
+
+  it('asks about a domain past the first page of 70, and finds it by any of its forms', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'citation-by-domain')!;
+    expect(scenario.askedDomains).toEqual([{ domain: 'decafdigest.example', citations: 3 }]);
+    const page = evalReadResult('list_citations', {}, 'long_lists') as {
+      total: number;
+      top_domains: { domain: string }[];
+    };
+    expect(page.total).toBe(70);
+    expect(page.top_domains.map((d) => d.domain)).not.toContain(EVAL_CITED_DOMAIN.domain);
+    expect(
+      evalReadResult(
+        'list_citations',
+        {
+          domains: ['https://www.decafdigest.example/'],
+          date_from: '2026-10-17',
+          date_to: '2026-11-16',
+        },
+        'long_lists',
+      ),
+    ).toMatchObject({
+      domains: [
+        {
+          domain: 'decafdigest.example',
+          matched: 'the domain',
+          total_citations: 3,
+          pages_total: 2,
+          prompts: EVAL_CITED_DOMAIN.prompts,
+        },
+      ],
+      not_found: [],
+    });
+    expect(
+      readCitationsByDomain(run([['list_citations', { domains: ['WWW.decafdigest.example/'] }]]), [
+        'decafdigest.example',
+      ]),
+    ).toEqual([]);
+    expect(
+      readCitationsByDomain(run([['list_citations', { offset: 50 }]]), ['decafdigest.example']),
+    ).toEqual(['decafdigest.example']);
+  });
+
+  it('wants the domain named with its count, and no other domain in its place', () => {
+    const asked = [{ domain: 'decafdigest.example', citations: 3 }];
+    const answer =
+      'decafdigest.example, 2 yanıtta 3 kez kaynak gösterildi; en çok www.decafdigest.example/swiss-water-guide.';
+    expect(unnamedAskedDomains(answer, asked)).toEqual([]);
+    expect(substituteDomains(answer, asked)).toEqual([]);
+    expect(unnamedAskedDomains('decafdigest.example kaynak gösterildi.', asked)).toEqual([
+      'decafdigest.example',
+    ]);
+    expect(substituteDomains('decafdigest.example yok; en yakını beanmap.example.', asked)).toEqual(
+      ['beanmap.example'],
+    );
+    expect(checkLabel('reads the citations by domain')).toBe('kaynakları alan adıyla okudu');
   });
 });
 

@@ -93,3 +93,50 @@ export const INJECTION_NOTE =
  */
 export const ANSWER_NOTE =
   "Note from the app, not from the person: your last reply had no text for the person. Write your answer to them now, in their language. Its next moves are already kept: don't suggest them again.";
+
+/**
+ * Words an answer never uses about the data it read (the owner's rule,
+ * 2026-11-16): they make Chat look as if it gave up, and Chat can read on,
+ * look the item up or narrow the read instead. In every language Chat
+ * answers in; Turkish named, as the language the reports came in.
+ */
+export const GIVE_UP_WORDS = [
+  '"couldn\'t read"',
+  '"couldn\'t reach"',
+  '"couldn\'t access"',
+  '"read limit"',
+  '"hit the limit"',
+  '"rows"',
+  'a count of missing items ("38 are missing")',
+  'Turkish "okuyamadım", "ulaşamadım", "erişemedim", "okuma sınırı", "sınırına takıldım", "eksik" about the data, or "bulamadım" before a direct lookup',
+].join(', ');
+
+/**
+ * Reading all of it, for the reader (the owner's rule, 2026-11-16: Chat
+ * reads all a page shows and reaches any other page's data): look an item
+ * up by what the person named, read on through a list that has more, and
+ * try a narrower read after one that failed or ran long.
+ */
+export const READ_ON_RULES = [
+  'Reading all of it:',
+  "- When the person names an item (a code such as AC-12 or S-03, an id, a title, a prompt's words, a domain or a URL), read it by that first, with the read's own input for it.",
+  '- A list result with next_offset has more. When the question needs all of them ("the most important", "how many", an item past this page), read the next page with that offset while reads are left; a long list is better read narrower first (a filter, a status, a shorter period).',
+  '- A result cut short (truncated: true): read the rest by its next page, or read it narrower.',
+  '- A read that failed or took too long: try once more, narrower (a shorter period, a filter, a smaller page), never with the same input.',
+].join('\n');
+
+/**
+ * Saying what was read, for the writer, who may read too: no answer gives up
+ * on data it could have read (the owner's rule, 2026-11-16: "I couldn't
+ * read it", "I hit the read limit" and "38 actions are missing" make Chat
+ * look incompetent). A true refusal says why and what the person can do.
+ */
+export const NEVER_GIVE_UP_RULES = [
+  'Before you say anything is missing:',
+  '- Read on first: the next page of a list (its next_offset), or the item itself by its code, id, title or words. Say "not found" only after a direct lookup returned nothing, and say where you looked ("This brand has no action AC-481").',
+  '- Never offer substitutes ("the closest", "similar ones") for what was asked.',
+  '- An answer from part of a list says what it covers, in plain and positive words ("the newest 50 of 451 signals"), and offers the rest as a next move.',
+  "- A read that failed or took too long, after a narrower try: say that figure isn't available right now and offer to try again. Never blame a limit.",
+  '- Only a true refusal is a "no" (the plan, the person\'s role, the AI budget, an Admin setting or a feature that is off): say plainly why, once, and what the person can do.',
+  `- Never write, in any language: ${GIVE_UP_WORDS}.`,
+].join('\n');

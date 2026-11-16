@@ -15,13 +15,13 @@ Ansvisor has a light and a dark mode. You can switch between them at any time, f
 
 ## Which mode you start in
 
-On Ansvisor Cloud, a browser where no mode has been picked yet starts in dark mode for now. That happens on the sign-up, sign-in and password reset pages, so new people start in dark mode, and so does anyone who signs in on a new browser or device. The mode is then kept in that browser, as if you had picked it. If you never picked a mode, you may find Ansvisor in dark mode after you next sign in. A mode you picked with the sun or moon button is never changed. Self-hosted installs start in light mode.
+On Ansvisor Cloud, new people start in dark mode for now. The sign-up, sign-in and password reset pages give it to a browser where no mode has been picked yet, and the browser then keeps it, as if you had picked it. People who already use Ansvisor keep the mode they have: if you never picked one, each browser where you open Ansvisor signed in keeps light mode. A mode you picked with the sun or moon button is never changed. Self-hosted installs start in light mode.
 
 ## Switch the mode
 
 Open the main menu: its sun or moon button sits beside the Ansvisor logo, at the top. When the menu is folded to icons, the button is hidden until you open it. On a phone, it is at the top of the menu. The moon switches to dark mode, and the sun to light mode.
 
-Your choice is kept in this browser, so each page opens in it. Another browser or device keeps its own mode: on Ansvisor Cloud, it starts in dark mode when you sign in there, until you switch.
+Your choice is kept in this browser, so each page opens in it. Another browser or device keeps its own mode. On Ansvisor Cloud, one where you never used Ansvisor starts in dark mode when you sign in there, until you switch.
 
 ## The account menu
 

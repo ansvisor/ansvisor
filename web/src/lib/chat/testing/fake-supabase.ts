@@ -46,6 +46,11 @@ interface Builder extends PromiseLike<Result> {
   eq(column: string, value: unknown): Builder;
   neq(column: string, value: unknown): Builder;
   in(column: string, values: unknown[]): Builder;
+  /**
+   * PostgREST's `ilike`: the pattern's `%` (and the `*` PostgREST reads as
+   * one) any text, `_` one character, `\` the next one as written; any case.
+   */
+  ilike(column: string, pattern: string): Builder;
   is(column: string, value: null): Builder;
   not(column: string, operator: 'is', value: null): Builder;
   lt(column: string, value: string): Builder;
@@ -83,10 +88,20 @@ export const fakeId = () => {
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-/** A filter's column of a row: a JSON field (`data->>key`, `data->a->>b`) as PostgREST reads it. */
+/**
+ * A filter's column of a row: a JSON field (`data->>key`, `data->a->>b`) as
+ * PostgREST reads it, or an embedded row's (`prompt_sets.brand_id`, a join's
+ * filter) from the row's nested object, the first of a list.
+ */
 function cellOf(row: Row, column: string): unknown {
   const [base, ...keys] = column.split(/->>?/);
-  let value: unknown = row[base];
+  let value: unknown =
+    base in row || !base.includes('.')
+      ? row[base]
+      : base.split('.').reduce<unknown>((at, key) => {
+          const one = Array.isArray(at) ? at[0] : at;
+          return one && typeof one === 'object' ? (one as Row)[key] : undefined;
+        }, row);
   for (const key of keys) {
     value = value && typeof value === 'object' ? (value as Row)[key] : undefined;
   }
@@ -283,6 +298,24 @@ export function createFakeSupabase(): FakeSupabase {
         },
         in(column, values) {
           filters.push((row) => values.includes(cellOf(row, column)));
+          return builder;
+        },
+        ilike(column, pattern) {
+          let source = '';
+          for (let i = 0; i < pattern.length; i += 1) {
+            const ch = pattern[i];
+            if (ch === '\\' && i + 1 < pattern.length) {
+              i += 1;
+              source += pattern[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            } else if (ch === '%' || ch === '*') source += '.*';
+            else if (ch === '_') source += '.';
+            else source += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          }
+          const like = new RegExp(`^${source}$`, 'is');
+          filters.push(
+            (row) =>
+              typeof cellOf(row, column) === 'string' && like.test(cellOf(row, column) as string),
+          );
           return builder;
         },
         is(column, value) {
