@@ -15,6 +15,7 @@ vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { rpc: vi.fn() } }));
 
 const {
   DEFAULT_RANGE_DAYS,
+  NAMED_ROWS,
   PAGED_READS,
   ROW_CAP,
   ROW_LIMITS,
@@ -326,6 +327,25 @@ describe('rows', () => {
       await scopeRead(actions, { brand_id: BRAND, limit: 200, offset: 50 }, facts()),
     ).toMatchObject({ input: { limit: 50, offset: 50 }, cap: { rows: 50, probe: null } });
     expect([...PAGED_READS].every((name) => CHAT_TOOLS.some((t) => t.name === name))).toBe(true);
+  });
+
+  it('never cuts the actions a read names by their codes, whatever limit came with them', async () => {
+    // The owner's report (2026-11-16): a code can name two actions, and both come back.
+    const actions = CHAT_TOOLS.find((t) => t.name === 'list_action_center_tasks')!;
+    const scoped = await scopeRead(
+      actions,
+      { brand_id: BRAND, codes: ['AC-59', 'AC 481'], limit: 1 },
+      facts(),
+    );
+    expect(scoped).toMatchObject({
+      input: { brand_id: BRAND, codes: ['AC-59', 'AC 481'] },
+      cap: { rows: ROW_CAP, probe: null },
+    });
+    expect(scoped.kind === 'read' && 'limit' in scoped.input).toBe(false);
+    for (const [name, field] of Object.entries(NAMED_ROWS)) {
+      const tool = CHAT_TOOLS.find((t) => t.name === name)!;
+      expect(field in tool.inputSchema.shape, name).toBe(true);
+    }
   });
 
   it('cuts every list to its rows and says how many were left out', () => {

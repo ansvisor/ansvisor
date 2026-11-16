@@ -3,14 +3,19 @@ import { AGENT_PRESETS } from '../agents/catalog';
 import { SKILL_LIBRARY } from '../skills/library';
 import {
   AGENT_SCENARIOS,
+  QUESTION_SCENARIOS,
   SKILL_SCENARIOS,
   agentEvalCost,
   checkLabel,
   inventedNumbers,
   numbersIn,
+  readByCodes,
   skillReads,
+  substituteActions,
   unnamedActionRefs,
+  unnamedAskedActions,
 } from './agent-eval';
+import { evalReadResult } from './agent-eval-data';
 import { safetyChecks, safetyFindings } from './safety-checks';
 
 describe('the agents’ and skills’ test set (agent-eval.ts)', () => {
@@ -18,8 +23,12 @@ describe('the agents’ and skills’ test set (agent-eval.ts)', () => {
     const ready = AGENT_PRESETS.filter((p) => p.status === 'ready').map((p) => p.id);
     expect(AGENT_SCENARIOS.filter((s) => !s.id.includes('@')).map((s) => s.id)).toEqual(ready);
     expect(AGENT_SCENARIOS.filter((s) => s.mode === 'full_auto').length).toBeGreaterThanOrEqual(2);
-    expect(SKILL_SCENARIOS.map((s) => s.id)).toEqual(SKILL_LIBRARY.map((s) => s.name));
-    for (const scenario of SKILL_SCENARIOS) {
+    // Every skill by its /name, then the questions a person types with no skill.
+    expect(SKILL_SCENARIOS.map((s) => s.id)).toEqual([
+      ...SKILL_LIBRARY.map((s) => s.name),
+      ...QUESTION_SCENARIOS.map((s) => s.id),
+    ]);
+    for (const scenario of SKILL_SCENARIOS.filter((s) => s.skill)) {
       expect(scenario.message).toMatch(new RegExp(`^/${scenario.id} \\S`));
     }
     expect(skillReads('faq')).toEqual([
@@ -133,6 +142,94 @@ describe('how an answer names Action Center actions (the owner’s report, 2026-
     ].join('\n');
     expect(unnamedActionRefs(answer)).toEqual(['AC-251']);
     expect(checkLabel('names actions by title')).toBe('aksiyonları başlığıyla andı');
+  });
+});
+
+// The owner's report (2026-11-16): "AC 481 ve AC-63 nedir" was answered "there is no AC-481"
+// from a page of the list that didn't hold it, with the closest others in its place.
+describe('actions asked for by their code', () => {
+  const asked = QUESTION_SCENARIOS.find((s) => s.id === 'action-by-code')!.askedActions!;
+
+  it('asks about AC-481 and AC-63 on a brand where AC-481 is past the first page', () => {
+    expect(asked.map((a) => a.ref)).toEqual(['AC-481', 'AC-63']);
+    const page = (offset: number) =>
+      evalReadResult('list_action_center_tasks', { offset }, 'action_backlog') as {
+        total: number;
+        actions: { ref: string }[];
+      };
+    expect(page(0).total).toBe(55);
+    expect(page(0).actions.map((a) => a.ref)).toContain('AC-63');
+    expect(page(0).actions.map((a) => a.ref)).not.toContain('AC-481');
+    expect(page(50).actions.map((a) => a.ref)).toContain('AC-481');
+    // The other scenarios' workspace keeps its 4 actions.
+    expect(evalReadResult('list_action_center_tasks', {})).toMatchObject({ total: 4 });
+    // By code, however written, every one of them in one read; a code it hasn't, not found.
+    expect(
+      evalReadResult(
+        'list_action_center_tasks',
+        { codes: ['ac481', '#63', 'AC-999'] },
+        'action_backlog',
+      ),
+    ).toMatchObject({
+      actions: [
+        { ref: 'AC-481', asked: 'ac481', matched: 'its code' },
+        { ref: 'AC-63', asked: '#63', matched: 'its code' },
+      ],
+      not_found: ['AC-999'],
+    });
+  });
+
+  it('checks the codes were read, by any of their forms, across reads', () => {
+    const run = (reads: [string, Record<string, unknown>][]) => ({
+      reads: reads.map(([tool]) => tool),
+      readInputs: reads.map(([, input]) => input),
+    });
+    const refs = ['AC-481', 'AC-63'];
+    expect(
+      readByCodes(run([['list_action_center_tasks', { codes: ['AC 481', '63'] }]]), refs),
+    ).toEqual([]);
+    expect(
+      readByCodes(
+        run([
+          ['list_action_center_tasks', { codes: ['#481'] }],
+          ['list_action_center_tasks', { codes: ['ac63'] }],
+        ]),
+        refs,
+      ),
+    ).toEqual([]);
+    // A page of the list, or another read, isn't a read by code.
+    expect(
+      readByCodes(
+        run([
+          ['list_action_center_tasks', { offset: 50 }],
+          ['get_action', { codes: ['AC-63'] }],
+        ]),
+        refs,
+      ),
+    ).toEqual(refs);
+  });
+
+  it('wants each named by its title and its code, and no other action in their place', () => {
+    const answer =
+      '**Expand visibility on 1 platform** ([AC-481](/dashboard/action-center/actions/code/AC-481)) ve **Build on your gain on “Which coffee subscription lets you skip a month?”** (AC-63).';
+    expect(unnamedAskedActions(answer, asked)).toEqual([]);
+    expect(substituteActions(answer, asked, 'action_backlog')).toEqual([]);
+    // A title without its code, or a code without its title.
+    expect(unnamedAskedActions('Expand visibility on 1 platform. AC-63 is new.', asked)).toEqual([
+      'AC-481',
+      'AC-63',
+    ]);
+    // "The closest" others, by code or by title alone.
+    expect(
+      substituteActions(
+        'No AC-481 here; the closest are AC-62 and **Refresh the cold brew guide**.',
+        asked,
+        'action_backlog',
+      ),
+    ).toEqual(['AC-62', 'AC-53']);
+    expect(checkLabel('names no other action in their place')).toBe(
+      'yerlerine başka aksiyon saymadı',
+    );
   });
 });
 

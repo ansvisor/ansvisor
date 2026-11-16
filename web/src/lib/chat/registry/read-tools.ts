@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { actionRef } from '@/lib/action-center/action-ref';
+import { ACTION_CODES_MAX } from '@/lib/action-center/action-codes';
 import { getAiUsageFor, getMeFor } from '@/lib/mcp/account';
-import { ACTIONS_PAGE_MAX, listActionsPageFor } from '@/lib/mcp/action-center-reads';
+import {
+  ACTIONS_PAGE_MAX,
+  listActionsByCodeFor,
+  listActionsPageFor,
+} from '@/lib/mcp/action-center-reads';
 import { getBrandFactsFor } from '@/lib/mcp/brand-facts-reads';
 import { getContentDraftFor, listContentDraftsFor } from '@/lib/mcp/content';
 import { contentUuid, listDraftsShape } from '@/lib/mcp/content-schemas';
@@ -630,7 +635,7 @@ export const READ_TOOLS = [
     name: 'list_action_center_tasks',
     class: 'read',
     area: 'action_center',
-    description: `The brand's Action Center actions, a page at a time: every one that matches is counted and ranked on the server, highest Priority Score first (sort "updated": most recently changed first), so a page is the top of all of them. Open actions (New, In progress, On hold) unless you ask for one status. Each row: ref (its number, as ${actionRef(12)}), title, category, status, priority (0–100) and priority_level, stale_since (only when stale), due, assignee, tasks (done/total) and updated. total is how many match; note says how many this page shows. For "what matters most", "what should I do first" or an overview, read the default page (${ACTIONS_PAGE_MAX} rows) before you judge. When total is more than the page, say how many you judged ("the top ${ACTIONS_PAGE_MAX} of 53"), or read the next page with next_offset. Name each action by its title, with its ref after it: never a ref alone.`,
+    description: `The brand's Action Center actions, a page at a time: every one that matches is counted and ranked on the server, highest Priority Score first (sort "updated": most recently changed first), so a page is the top of all of them. Open actions (New, In progress, On hold) unless you ask for one status. Each row: ref (its number, as ${actionRef(12)}), title, category, status, priority (0–100) and priority_level, stale_since (only when stale), due, assignee, tasks (done/total) and updated. total is how many match; note says how many this page shows. For "what matters most", "what should I do first" or an overview, read the default page (${ACTIONS_PAGE_MAX} rows) before you judge. When total is more than the page, say how many you judged ("the top ${ACTIONS_PAGE_MAX} of 53"), or read the next page with next_offset. Name each action by its title, with its ref after it: never a ref alone. When the person names an action by its code (${actionRef(12)}, "AC 12", "#12", or a number they clearly mean as one), read that code first: codes, every code of the message in one read. It reads every status, Completed and Dismissed included, in this brand only; each row says whether the code is its code or its previous code (matched), and a code that names two actions returns both: name both, never pick one. A code in not_found: say this brand has no action with that code (codes are per brand), and never offer other actions as the closest. Never say an action doesn't exist because a page of the list didn't show it.`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -654,16 +659,26 @@ export const READ_TOOLS = [
         .min(0)
         .optional()
         .describe("The next page: the last page's next_offset."),
+      codes: z
+        .array(z.string().trim().min(1).max(40))
+        .min(1)
+        .max(ACTION_CODES_MAX)
+        .optional()
+        .describe(
+          `Actions by their codes, as the person wrote them: "${actionRef(12)}", "AC 12", "#12", "12", "${actionRef('07')}". Reads only these, in any status; the other inputs don't apply.`,
+        ),
     }),
     run: (ctx, input) =>
-      listActionsPageFor(ctx, {
-        brandId: input.brand_id,
-        status: input.status,
-        category: input.category,
-        sort: input.sort,
-        limit: input.limit,
-        offset: input.offset,
-      }),
+      input.codes?.length
+        ? listActionsByCodeFor(ctx, { brandId: input.brand_id, codes: input.codes })
+        : listActionsPageFor(ctx, {
+            brandId: input.brand_id,
+            status: input.status,
+            category: input.category,
+            sort: input.sort,
+            limit: input.limit,
+            offset: input.offset,
+          }),
     fixture: { input: { brand_id: BRAND, status: 'new' } },
   }),
   defineTool({
@@ -671,7 +686,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'action_center',
     description:
-      'One Action Center action in full: what it is about, why, its priority, signals, tasks (What, Where, Why, How, Done when) and outcome.',
+      "One Action Center action in full: what it is about, why, its priority, signals, tasks (What, Where, Why, How, Done when) and outcome. By its id only: an action the person names by its code is read with list_action_center_tasks' codes first, which gives its id.",
     minRole: 'analyst',
     planGate: null,
     brandOf: { lookup: 'actions', idField: 'action_id' },
@@ -681,7 +696,9 @@ export const READ_TOOLS = [
     mcpTool: 'get_action',
     specRow: '39',
     inputSchema: z.object({
-      action_id: contentUuid.describe('Action id, from list_action_center_tasks.'),
+      action_id: contentUuid.describe(
+        'Action id, from list_action_center_tasks (by its code: its codes input).',
+      ),
     }),
     run: (ctx, input) => getActionFor(ctx, input.action_id),
     fixture: { input: { action_id: ITEM } },

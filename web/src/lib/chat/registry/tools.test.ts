@@ -794,6 +794,45 @@ describe('the Chat tool registry', () => {
     );
   });
 
+  it('reads actions by the codes a person wrote, in one read, and never answers with others (owner, 2026-11-16)', async () => {
+    const tool = chatTool_('list_action_center_tasks');
+    const brand = FIXTURE_IDS.brand;
+    calls.length = 0;
+    await tool.run(
+      ctx,
+      tool.inputSchema.parse({ brand_id: brand, codes: [' AC 481 ', 'AC-63'], status: 'open' }),
+    );
+    // By code, every status: the page's inputs don't apply.
+    expect(calls.map((call) => [call.from, call.args])).toEqual([
+      [
+        'mcp/action-center-reads.listActionsByCodeFor',
+        [ctx, { brandId: brand, codes: ['AC 481', 'AC-63'] }],
+      ],
+    ]);
+    const parses = (codes: unknown) =>
+      tool.inputSchema.safeParse({ brand_id: brand, codes }).success;
+    expect(parses(['AC-481', 'AC 481', 'ac481', '#481', '481', 'AC-07', 'AC-7'])).toBe(true);
+    expect(parses([])).toBe(false);
+    expect(parses(Array.from({ length: 11 }, (_, i) => `AC-${i + 1}`))).toBe(false);
+    // Read the code first, say "not found" plainly, never the closest, never "doesn't exist".
+    expect(tool.description).toContain(
+      'When the person names an action by its code (AC-12, "AC 12", "#12", or a number they clearly mean as one), read that code first: codes, every code of the message in one read.',
+    );
+    expect(tool.description).toContain('every status, Completed and Dismissed included');
+    expect(tool.description).toContain(
+      'a code that names two actions returns both: name both, never pick one',
+    );
+    expect(tool.description).toContain(
+      'say this brand has no action with that code (codes are per brand), and never offer other actions as the closest',
+    );
+    expect(tool.description).toContain(
+      "Never say an action doesn't exist because a page of the list didn't show it.",
+    );
+    expect(chatTool_('get_action').description).toContain(
+      "an action the person names by its code is read with list_action_center_tasks' codes first",
+    );
+  });
+
   it('never offers a tool that marks a task done (CHAT-09 item 15)', () => {
     const names = CHAT_TOOLS.map((tool) => tool.name).join(' ');
     expect(names).not.toMatch(/complete|mark_done|dismiss_action|delete_action|close_task/);
