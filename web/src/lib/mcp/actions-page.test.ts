@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
@@ -9,7 +11,8 @@ import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
  * brand with 53 was judged from the first 10. Every open action is counted
  * and ranked on the server, a page holds 50 compact rows with the total and
  * a note saying how many it shows, the rest come by offset, and only the
- * caller's brand of their organization is ever read.
+ * caller's brand of their organization is ever read. The actions of the
+ * codes a person names are read the same for Chat and MCP's list_actions.
  */
 
 vi.mock('@/lib/supabase/admin', async () => ({
@@ -24,7 +27,9 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { ACTIONS_PAGE_MAX, actionsPageNote, listActionsByCodeFor, listActionsPageFor } =
   await import('./action-center-reads');
-const { ACTION_CODES_MAX } = await import('@/lib/action-center/action-codes');
+const { ACTION_CODES_MAX, ACTION_CODES_NOTE_END } =
+  await import('@/lib/action-center/action-codes');
+const { createMcpServer } = await import('./server');
 const { readBudget, resultCharsFor } = await import('@/lib/chat/run-limits');
 
 const ORG = 'org-1';
@@ -451,5 +456,154 @@ describe('the brand’s actions by their codes', () => {
     expect(found).toMatchObject({ actions: [], not_found: [] });
     expect(found!.note).toMatch(/^"citations" is not an action code\./);
     expect(db.log.filter(([table]) => table === 'actions')).toEqual([]);
+  });
+});
+
+// MCP's list_actions reads codes as Chat does: an MCP client asked "what is AC-481?" could only
+// page by priority, and could conclude it doesn't exist when the page didn't hold it.
+describe('MCP list_actions by codes', () => {
+  async function connect(auth: McpAuthContext) {
+    const server = createMcpServer(auth);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientTransport);
+    return client;
+  }
+  async function listActions(
+    args: Record<string, unknown>,
+    { auth = ALL, brandId = BRAND }: { auth?: McpAuthContext; brandId?: string } = {},
+  ) {
+    const result = await (
+      await connect(auth)
+    ).callTool({
+      name: 'list_actions',
+      arguments: { brand_id: brandId, ...args },
+    });
+    const text = (result.content as { text: string }[])[0].text;
+    return {
+      isError: Boolean(result.isError),
+      text,
+      json: result.isError ? null : JSON.parse(text),
+    };
+  }
+  type Row = { ref: string; title: string; status: string; asked: string; matched: string };
+  const rows = (found: { json: { actions: Row[] } }) => found.json.actions;
+
+  it('finds a code however it is written, past the first page of the list', async () => {
+    const list = await listActions({});
+    expect(list.json).toHaveLength(50);
+    expect(list.json.map((a: { code: string }) => a.code)).not.toContain('AC-101');
+    for (const code of ['AC-101', 'AC 101', 'ac101', 'ac-101', '#101', '101']) {
+      const found = await listActions({ codes: [code] });
+      expect(
+        rows(found).map((a) => [a.ref, a.title, a.asked, a.matched]),
+        code,
+      ).toEqual([['AC-101', 'Finding 1', code, 'its code']]);
+      expect(found.json.not_found, code).toEqual([]);
+    }
+  });
+
+  it("matches the brand's number, and the old global number as its previous code", async () => {
+    db.tables.actions.push(
+      action(70, { brand_no: 7, action_no: 648, payload: { title: 'Fix the pricing page' } }),
+    );
+    for (const code of ['AC-07', 'AC-7', 'ac 7', '#07', '7']) {
+      const found = await listActions({ codes: [code] });
+      expect(found.json.actions, code).toEqual([
+        expect.objectContaining({
+          ref: 'AC-07',
+          title: 'Fix the pricing page',
+          matched: 'its code',
+          previous_ref: 'AC-648',
+        }),
+      ]);
+    }
+    const byOldNo = await listActions({ codes: ['AC-648'] });
+    expect(rows(byOldNo).map((a) => [a.ref, a.matched])).toEqual([['AC-07', 'its previous code']]);
+    expect(byOldNo.json.note).toMatch(
+      /^AC-648: one action, by its previous code; its code now is AC-07\./,
+    );
+  });
+
+  it('returns both actions a code names, whatever limit, status, category or sort it is given', async () => {
+    db.tables.actions = [
+      action(6, { brand_no: 12, action_no: 59, payload: { title: 'Old 59' } }),
+      action(7, { brand_no: 59, action_no: 700, payload: { title: 'Brand 59' } }),
+      action(381),
+    ];
+    const found = await listActions({
+      codes: ['AC-59', 'AC-481'],
+      limit: 1,
+      status: 'completed',
+      category: 'growth',
+      sort: 'updated',
+    });
+    expect(rows(found).map((a) => [a.asked, a.ref, a.title, a.matched])).toEqual([
+      ['AC-59', 'AC-59', 'Brand 59', 'its code'],
+      ['AC-59', 'AC-12', 'Old 59', 'its previous code'],
+      ['AC-481', 'AC-481', 'Finding 381', 'its code'],
+    ]);
+    expect(found.json.note).toContain(
+      'AC-59 names 2 different actions (AC-59 by its code, AC-12 by its previous code): name each, say which is which, and never pick one.',
+    );
+  });
+
+  it('finds a Completed or Dismissed action, never a deleted one, and says what it did not find', async () => {
+    const found = await listActions({ codes: ['AC-191', 'AC-192', 'AC-193', 'AC-999'] });
+    expect(rows(found).map((a) => [a.ref, a.status])).toEqual([
+      ['AC-191', 'completed'],
+      ['AC-192', 'dismissed'],
+    ]);
+    expect(found.json.not_found).toEqual(['AC-193', 'AC-999']);
+    expect(found.json.note).toContain(
+      'AC-999: no action of this brand has this code, now or before (codes are per brand). Say so plainly; never offer other actions in its place.',
+    );
+    expect(found.json.note.endsWith(ACTION_CODES_NOTE_END)).toBe(true);
+  });
+
+  it("never reads another brand's action, of the workspace or another one", async () => {
+    const found = await listActions({ codes: ['AC-194', 'AC-195'] });
+    expect(found.json).toMatchObject({ actions: [], not_found: ['AC-194', 'AC-195'] });
+    const sister = await listActions({ codes: ['AC-194'] }, { brandId: SISTER });
+    expect(rows(sister).map((a) => a.ref)).toEqual(['AC-194']);
+    db.log = [];
+    const refusals: [McpAuthContext, string][] = [
+      [ALL, FOREIGN],
+      [{ ...ALL, brandAccess: [SISTER] }, BRAND],
+      [{ ...ALL, organizationId: null }, BRAND],
+    ];
+    for (const [auth, brandId] of refusals) {
+      const refused = await listActions({ codes: ['AC-195', 'AC-101'] }, { auth, brandId });
+      expect(refused).toMatchObject({ isError: true, text: 'Brand not found' });
+    }
+    expect(db.log.filter(([table]) => table !== 'brands')).toEqual([]);
+  });
+
+  it("answers as Chat's read does, from the same rows and note", async () => {
+    db.tables.actions = [action(381), action(63, { brand_no: 63, action_no: 777 })];
+    const codes = ['AC 481', 'AC-63', '#481', 'AC-999'];
+    const found = await listActions({ codes });
+    expect(found.json).toEqual(await listActionsByCodeFor(ALL, { brandId: BRAND, codes }));
+    expect(rows(found).map((a) => a.ref)).toEqual(['AC-481', 'AC-63']);
+  });
+
+  it('tells an MCP client to read a code first, and never to answer with the closest actions', async () => {
+    const { tools } = await (await connect(ALL)).listTools();
+    const list = tools.find((tool) => tool.name === 'list_actions')!;
+    expect(list.description).toContain('read that code first with `codes`');
+    expect(list.description).toContain(
+      'this brand has no action with that code (codes are per brand)',
+    );
+    expect(list.description).toContain('never offer the closest actions instead');
+    expect(list.description).toContain(
+      "Never say an action doesn't exist because a page of this list didn't show it.",
+    );
+    const codes = (list.inputSchema.properties as Record<string, { maxItems?: number }>).codes;
+    expect(codes.maxItems).toBe(ACTION_CODES_MAX);
+    expect(list.inputSchema.required).toEqual(['brand_id']);
+    const get = tools.find((tool) => tool.name === 'get_action')!;
+    const id = (get.inputSchema.properties as Record<string, { description?: string }>).action_id;
+    expect(id.description).toContain('its `codes` input');
   });
 });

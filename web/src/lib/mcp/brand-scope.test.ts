@@ -310,4 +310,18 @@ describe('the MCP server for a Selected-brands key', () => {
     expect(result.isError).toBe(true);
     expect(text(result)).toBe('Brand not found');
   });
+
+  it('answers a code on a brand it may not use as not found, reading none of its actions', async () => {
+    const hidden = '11111111-1111-4111-8111-111111111111';
+    db.rows.brands = { id: hidden, name: 'Acme' };
+    const client = await connect(SELECTED);
+    const result = await client.callTool({
+      name: 'list_actions',
+      arguments: { brand_id: hidden, codes: ['AC-481', '#12'] },
+    });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe('Brand not found');
+    expect(new Set(db.reads)).toEqual(new Set(['brands']));
+    expect(db.rpcs).toEqual([]);
+  });
 });
