@@ -16,11 +16,34 @@ import { actionRef } from '@/lib/action-center/action-ref';
  */
 
 const calls = vi.hoisted(() => [] as { from: string; args: unknown[] }[]);
+/**
+ * What the functions of the list reads return here, empty: the row makes a
+ * page of it (lib/mcp/list-page.ts), so it returns that page, not this.
+ */
+const pageSources = vi.hoisted((): Record<string, unknown> => {
+  const counted = { rows: [], total: 0 };
+  return {
+    'mcp/data.listBrandsFor': [],
+    'mcp/data.listTopicsFor': [],
+    'mcp/data.listCompetitorsFor': [],
+    'mcp/data.listPromptSuggestionsFor': { suggestions: [], stale: false },
+    'mcp/data.getPromptPerformanceFor': { total: 0, prompts: [] },
+    'mcp/data.listCitationsFor': { totals: { domains: 0, urls: 0 }, top_domains: [], top_urls: [] },
+    'mcp/mentions.listMentionsFor': { total: 0, prompts: 0, mentions: [] },
+    'mcp/data.actionHistoryPageFor': counted,
+    'mcp/data.contentOpportunitiesPageFor': counted,
+    'mcp/data.promptVolumesPageFor': counted,
+    'mcp/data.promptsPageFor': counted,
+    'mcp/data.reportsPageFor': counted,
+    'mcp/data.siteAuditsPageFor': counted,
+    'mcp/content.contentDraftsPageFor': counted,
+  };
+});
 const tracked = vi.hoisted(() => {
   const track = (from: string) =>
     vi.fn(async (...args: unknown[]) => {
       calls.push({ from, args });
-      return { from };
+      return from in pageSources ? pageSources[from] : { from };
     });
   return {
     track,
@@ -80,6 +103,9 @@ vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
 );
 vi.mock('@/lib/mcp/ready-agents', async (importOriginal) =>
   tracked.all('mcp/ready-agents', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/signal-page', async (importOriginal) =>
+  tracked.all('mcp/signal-page', await importOriginal<Record<string, unknown>>()),
 );
 vi.mock('@/lib/mcp/ads-reads', () => ({
   getAdsOpportunitiesFor: tracked.track('mcp/ads-reads.getAdsOpportunitiesFor'),
@@ -321,7 +347,12 @@ describe('the Chat tool registry', () => {
         return;
       }
       expect(calls).toHaveLength(1);
-      expect(result).toEqual({ from: calls[0].from });
+      if (calls[0].from in pageSources) {
+        // A list read: a page of what its function returned, with its total and no next page.
+        expect(result).toMatchObject({ total: 0, offset: 0, next_offset: null });
+      } else {
+        expect(result).toEqual({ from: calls[0].from });
+      }
       if (tool.area === 'images') {
         // Chat's own image functions, with the member's context.
         expect(calls[0].from).toMatch(/^chat\/images\./);
@@ -340,6 +371,33 @@ describe('the Chat tool registry', () => {
       }
     },
   );
+
+  it('pages the list reads: a whole list cut to a page, a counted one by its offset', async () => {
+    const run = (name: string, input: Record<string, unknown>) => {
+      const tool = chatTool(name)!;
+      return tool.run(ctx, tool.inputSchema.parse(input));
+    };
+    const { brand } = FIXTURE_IDS;
+    const topics = Array.from({ length: 120 }, (_, i) => ({ id: `t${i}`, name: `Topic ${i}` }));
+    pageSources['mcp/data.listTopicsFor'] = topics;
+    try {
+      expect(await run('list_topics', { brand_id: brand, offset: 100 })).toEqual({
+        total: 120,
+        offset: 100,
+        next_offset: null,
+        note: 'Showing 101–120 of 120 topics. This is the last page.',
+        topics: topics.slice(100),
+      });
+    } finally {
+      pageSources['mcp/data.listTopicsFor'] = [];
+    }
+    calls.length = 0;
+    await run('get_reports', { brand_id: brand, offset: 50 });
+    expect(calls[0]).toMatchObject({ from: 'mcp/data.reportsPageFor', args: [ctx, brand, 50, 50] });
+    calls.length = 0;
+    await run('list_mentions', { brand_id: brand, offset: 70 });
+    expect(calls[0].args[1]).toMatchObject({ brandId: brand, limit: 50, offset: 70 });
+  });
 
   it('hands the app the same arguments its pages pass', async () => {
     const run = (name: string, input: unknown) => {

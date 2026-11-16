@@ -60,6 +60,7 @@ const data = await import('./data');
 const mentions = await import('./mentions');
 const content = await import('./content');
 const taskReviews = await import('./task-reviews');
+const { listSignalsPageFor } = await import('./signal-page');
 const { exportActionFor } = await import('./action-export');
 const { getContentDraftPackageFor } = await import('./content-package');
 const { getContentPlanFor } = await import('./content-plan');
@@ -170,6 +171,22 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
       () => explainChangeFor(SELECTED, { brandId: 'b1', metric: 'mention_rate' }),
     ],
     ['listTaskReviewsFor', () => taskReviews.listTaskReviewsFor(SELECTED, { brandId: 'b1' })],
+    // Chat's list reads, a page at a time.
+    ['listSignalsPageFor', () => listSignalsPageFor(SELECTED, { brandId: 'b1', offset: 50 })],
+    ['actionHistoryPageFor', () => data.actionHistoryPageFor(SELECTED, { brandId: 'b1' })],
+    [
+      'contentOpportunitiesPageFor',
+      () => data.contentOpportunitiesPageFor(SELECTED, { brandId: 'b1', offset: 50 }),
+    ],
+    ['promptsPageFor', () => data.promptsPageFor(SELECTED, { brandId: 'b1', offset: 50 })],
+    ['promptVolumesPageFor', () => data.promptVolumesPageFor(SELECTED, { brandId: 'b1' })],
+    ['reportsPageFor', () => data.reportsPageFor(SELECTED, 'b1', 50, 50)],
+    ['siteAuditsPageFor', () => data.siteAuditsPageFor(SELECTED, 'b1', { offset: 50 })],
+    ['contentDraftsPageFor', () => content.contentDraftsPageFor(SELECTED, 'b1', undefined, {})],
+    [
+      'listMentionsFor (a page by offset)',
+      () => mentions.listMentionsFor(SELECTED, { brandId: 'b1', offset: 50, limit: 50 }),
+    ],
   ];
 
   it.each(byBrand)('%s reads it as not found, reading nothing of it', async (_name, call) => {

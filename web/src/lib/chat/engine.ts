@@ -210,6 +210,7 @@ import {
   brandModels,
   capRows,
   givesDates,
+  pagedRead,
   scopeRead,
   takesDates,
   type ScopeUsed,
@@ -4499,7 +4500,7 @@ async function readCall(
   const rows = read.rows ?? undefined;
   const asOf = read.dataAsOf;
   const room = Math.min(
-    resultCharsFor(rc.budget, tool.name),
+    resultCharsFor(rc.budget, tool.name, pagedRead(tool)),
     rc.budget.dataChars - rc.progress.dataChars,
   );
   const fitted = fitResult(

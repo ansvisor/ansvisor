@@ -109,9 +109,20 @@ export const RESULT_CHARS: Readonly<Record<string, number>> = {
   list_action_center_tasks: 20_000,
 };
 
-/** How many characters one result of this tool may send the model. */
-export function resultCharsFor(budget: Pick<ReadBudget, 'resultChars'>, toolName: string): number {
-  return Math.max(budget.resultChars, RESULT_CHARS[toolName] ?? 0);
+/**
+ * A page of any list read's share (scope.ts pagedRead): a page of 50 compact
+ * items, so an answer about "all of them" judges the page it read, and a
+ * page cut for size still ends where the next one starts (fit.ts).
+ */
+export const PAGE_CHARS = 20_000;
+
+/** How many characters one result of this tool may send the model; `paged`: a list read's page. */
+export function resultCharsFor(
+  budget: Pick<ReadBudget, 'resultChars'>,
+  toolName: string,
+  paged = false,
+): number {
+  return Math.max(budget.resultChars, RESULT_CHARS[toolName] ?? 0, paged ? PAGE_CHARS : 0);
 }
 
 /**

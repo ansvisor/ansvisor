@@ -58,6 +58,7 @@ import {
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
+import { pageRows } from './list-page';
 import { getOrgLocationUsage, placeNewPrompt, waitingPromptColumns } from '@/lib/prompt-locations';
 import { NO_TOPICS, brandHasTopics } from '@/lib/topics-required';
 import {
@@ -1025,6 +1026,8 @@ export interface ListPromptsParams {
   topicId?: string;
   isActive?: boolean;
   limit?: number;
+  /** Rows before this page (Chat's pages). */
+  offset?: number;
 }
 
 const PROMPT_LIST_DEFAULT_LIMIT = 100;
@@ -1034,6 +1037,14 @@ export async function listPromptsFor(
   auth: McpAuthContext,
   params: ListPromptsParams,
 ): Promise<PromptRow[] | null> {
+  return (await promptsPageFor(auth, params))?.rows ?? null;
+}
+
+/** The brand's prompts from `offset`, newest first, with how many match in all. */
+export async function promptsPageFor(
+  auth: McpAuthContext,
+  params: ListPromptsParams,
+): Promise<{ rows: PromptRow[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   const { data: brand } = await supabaseAdmin
@@ -1049,22 +1060,28 @@ export async function listPromptsFor(
     PROMPT_LIST_MAX_LIMIT,
   );
 
-  let query = supabaseAdmin
-    .from('prompts')
-    .select(
-      'id, text, topic_id, platforms, models, regions, is_active, created_at, prompt_sets!inner(brand_id), topics(name)',
-    )
-    .eq('prompt_sets.brand_id', params.brandId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (params.topicId) query = query.eq('topic_id', params.topicId);
-  if (typeof params.isActive === 'boolean') {
-    query = query.eq('is_active', params.isActive);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
+  const matching = (head = false) => {
+    let query = supabaseAdmin
+      .from('prompts')
+      .select(
+        'id, text, topic_id, platforms, models, regions, is_active, created_at, prompt_sets!inner(brand_id), topics(name)',
+        { count: 'exact', head },
+      )
+      .eq('prompt_sets.brand_id', params.brandId);
+    if (params.topicId) query = query.eq('topic_id', params.topicId);
+    if (typeof params.isActive === 'boolean') {
+      query = query.eq('is_active', params.isActive);
+    }
+    return query;
+  };
+  const { rows: data, total } = await pageRows(
+    await matching()
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
   // Supabase's generated types model the prompts→topics FK as an array (it
   // can't tell single vs many from the schema alone), so the join returns
@@ -1083,7 +1100,7 @@ export async function listPromptsFor(
       topics: Array<{ name: string }> | { name: string } | null;
     }> | null) ?? [];
 
-  return rows.map((r) => {
+  const page = rows.map((r) => {
     const topic = Array.isArray(r.topics) ? (r.topics[0] ?? null) : r.topics;
     return {
       id: r.id,
@@ -1097,6 +1114,7 @@ export async function listPromptsFor(
       created_at: r.created_at,
     };
   });
+  return { rows: page, total };
 }
 
 // ── Content Opportunities ───────────────────────────────────────────────────
@@ -1122,12 +1140,22 @@ export interface ListContentOpportunitiesParams {
   impact?: 'high' | 'medium' | 'low';
   type?: 'owned' | 'earned';
   limit?: number;
+  /** Rows before this page (Chat's pages). */
+  offset?: number;
 }
 
 export async function listContentOpportunitiesFor(
   auth: McpAuthContext,
   params: ListContentOpportunitiesParams,
 ): Promise<ContentOpportunityRow[] | null> {
+  return (await contentOpportunitiesPageFor(auth, params))?.rows ?? null;
+}
+
+/** The opportunities from `offset`, highest score first, with how many match in all. */
+export async function contentOpportunitiesPageFor(
+  auth: McpAuthContext,
+  params: ListContentOpportunitiesParams,
+): Promise<{ rows: ContentOpportunityRow[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   // Ownership check
@@ -1140,24 +1168,30 @@ export async function listContentOpportunitiesFor(
   if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
 
-  let query = supabaseAdmin
-    .from('content_opportunities')
-    .select(
-      'id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, brief, prompts(text)',
-    )
-    .eq('brand_id', params.brandId)
-    .order('opportunity_score', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  // The archived per-prompt backlog (#857) only when asked for by status.
-  query = params.status ? query.eq('status', params.status) : query.neq('status', 'archived');
-  if (params.impact) query = query.eq('impact', params.impact);
-  if (params.type) query = query.eq('type', params.type);
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
+  const matching = (head = false) => {
+    let query = supabaseAdmin
+      .from('content_opportunities')
+      .select(
+        'id, title, description, type, impact, opportunity_score, status, prompt_id, created_at, updated_at, brief, prompts(text)',
+        { count: 'exact', head },
+      )
+      .eq('brand_id', params.brandId);
+    // The archived per-prompt backlog (#857) only when asked for by status.
+    query = params.status ? query.eq('status', params.status) : query.neq('status', 'archived');
+    if (params.impact) query = query.eq('impact', params.impact);
+    if (params.type) query = query.eq('type', params.type);
+    return query;
+  };
+  const { rows: data, total } = await pageRows(
+    await matching()
+      .order('opportunity_score', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
   const rows =
     (data as unknown as Array<{
@@ -1175,7 +1209,7 @@ export async function listContentOpportunitiesFor(
       prompts: Array<{ text: string }> | { text: string } | null;
     }> | null) ?? [];
 
-  return rows.map((r) => {
+  const page = rows.map((r) => {
     const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
     return {
       id: r.id,
@@ -1193,6 +1227,7 @@ export async function listContentOpportunitiesFor(
       updated_at: r.updated_at ?? '',
     };
   });
+  return { rows: page, total };
 }
 
 export interface ContentOpportunityDetail {
@@ -1336,6 +1371,15 @@ export async function listSiteAuditsFor(
   auth: McpAuthContext,
   brandId: string,
 ): Promise<SiteAuditListRow[] | null> {
+  return (await siteAuditsPageFor(auth, brandId))?.rows ?? null;
+}
+
+/** The brand's Site Audits from `offset`, newest first, with how many there are in all. */
+export async function siteAuditsPageFor(
+  auth: McpAuthContext,
+  brandId: string,
+  page: { limit?: number; offset?: number } = {},
+): Promise<{ rows: SiteAuditListRow[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   const { data: brand } = await supabaseAdmin
@@ -1346,15 +1390,25 @@ export async function listSiteAuditsFor(
     .maybeSingle();
   if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
-  const { data, error } = await supabaseAdmin
-    .from('site_audits')
-    .select('id, url, status, total_score, signals_evaluated, signals_total, created_at')
-    .eq('brand_id', brandId)
-    .order('created_at', { ascending: false })
-    .limit(50);
-  if (error) throw new Error(error.message);
+  const limit = Math.min(Math.max(Math.trunc(page.limit ?? 50), 1), 50);
+  const offset = Math.max(Math.trunc(page.offset ?? 0), 0);
+  const matching = (head = false) =>
+    supabaseAdmin
+      .from('site_audits')
+      .select('id, url, status, total_score, signals_evaluated, signals_total, created_at', {
+        count: 'exact',
+        head,
+      })
+      .eq('brand_id', brandId);
+  const { rows, total } = await pageRows(
+    await matching()
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
-  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+  const audits = (rows as Array<Record<string, unknown>>).map((r) => ({
     id: r.id as string,
     url: r.url as string,
     status: r.status as string,
@@ -1363,6 +1417,7 @@ export async function listSiteAuditsFor(
     signalsTotal: r.signals_total == null ? null : Number(r.signals_total),
     createdAt: r.created_at as string,
   }));
+  return { rows: audits, total };
 }
 
 export interface SiteAuditQuota {
@@ -2077,6 +2132,8 @@ export interface ListCitationsParams {
   topicId?: string;
   /** Cap on the top_domains / top_urls arrays. Default 50, max 200. */
   limit?: number;
+  /** Domains and pages before this page, most cited first (Chat's pages). */
+  offset?: number;
   /** Restrict to owned / competitor / external citations. Default `all`. */
   sourceFilter?: CitationSourceFilter;
 }
@@ -2301,11 +2358,12 @@ export async function listCitationsFor(
 
   const totalResults = results.length;
   const limit = Math.min(Math.max(params.limit ?? CITATIONS_DEFAULT_LIMIT, 1), CITATIONS_MAX_LIMIT);
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
 
   const allDomains = Array.from(domainMap.values()).sort(
     (a, b) => b.totalCitations - a.totalCitations,
   );
-  const topDomains = allDomains.slice(0, limit).map((agg) => {
+  const topDomains = allDomains.slice(offset, offset + limit).map((agg) => {
     const resultsCiting = agg.resultsCiting.size;
     const articleTypes = Array.from(agg.articleTypeCounts.entries())
       .map(([type, count]) => ({ type, count }))
@@ -2323,7 +2381,7 @@ export async function listCitationsFor(
   });
 
   const allUrls = Array.from(urlMap.values()).sort((a, b) => b.totalCitations - a.totalCitations);
-  const topUrls = allUrls.slice(0, limit).map((agg) => {
+  const topUrls = allUrls.slice(offset, offset + limit).map((agg) => {
     const resultsCiting = agg.resultsCiting.size;
     return {
       url: agg.url,
@@ -2636,6 +2694,8 @@ export interface PromptVolumesParams {
   brandId: string;
   /** Row cap on the returned prompts. Default 100, max 500. */
   limit?: number;
+  /** Rows before this page (Chat's pages). */
+  offset?: number;
 }
 
 export interface PromptVolumeRow {
@@ -2691,6 +2751,14 @@ export async function getPromptVolumesFor(
   auth: McpAuthContext,
   params: PromptVolumesParams,
 ): Promise<PromptVolumeRow[] | null> {
+  return (await promptVolumesPageFor(auth, params))?.rows ?? null;
+}
+
+/** Per-prompt volumes from `offset`, most AI demand first, with how many there are in all. */
+export async function promptVolumesPageFor(
+  auth: McpAuthContext,
+  params: PromptVolumesParams,
+): Promise<{ rows: PromptVolumeRow[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   const { data: brand } = await supabaseAdmin
@@ -2706,19 +2774,25 @@ export async function getPromptVolumesFor(
     PROMPT_VOLUMES_MAX_LIMIT,
   );
 
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
   // prompt_volumes → prompts (1:1) → prompt_sets, filtered to this brand via
   // the nested inner joins. Sorted by AI demand so the highest-opportunity
   // prompts come first.
-  const { data, error } = await supabaseAdmin
-    .from('prompt_volumes')
-    .select(
-      'prompt_id, intent, keywords, google_volumes, total_google_volume, est_ai_volume, ai_volume_multiplier, competition_index, competition, fetched_at, prompts!inner(text, prompt_sets!inner(brand_id))',
-    )
-    .eq('prompts.prompt_sets.brand_id', params.brandId)
-    .order('est_ai_volume', { ascending: false })
-    .limit(limit);
-
-  if (error) throw new Error(error.message);
+  const matching = (head = false) =>
+    supabaseAdmin
+      .from('prompt_volumes')
+      .select(
+        'prompt_id, intent, keywords, google_volumes, total_google_volume, est_ai_volume, ai_volume_multiplier, competition_index, competition, fetched_at, prompts!inner(text, prompt_sets!inner(brand_id))',
+        { count: 'exact', head },
+      )
+      .eq('prompts.prompt_sets.brand_id', params.brandId);
+  const { rows: data, total } = await pageRows(
+    await matching()
+      .order('est_ai_volume', { ascending: false })
+      .order('prompt_id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
   const rows =
     (data as unknown as Array<{
@@ -2740,7 +2814,7 @@ export async function getPromptVolumesFor(
     rows.map((r) => r.prompt_id),
   );
   const now = new Date();
-  return rows.map((r) => {
+  const page = rows.map((r) => {
     const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
     const estimate = promptVolumeEstimate(
       {
@@ -2771,6 +2845,7 @@ export async function getPromptVolumesFor(
       measured_demand: demand.get(r.prompt_id) ?? null,
     };
   });
+  return { rows: page, total };
 }
 
 // ── Shopping Cards ────────────────────────────────────────────────────────────
@@ -3034,6 +3109,8 @@ export interface PromptPerformanceParams {
   sortBy?: 'visibility' | 'mentions' | 'citations' | 'appearances';
   order?: 'desc' | 'asc';
   limit?: number;
+  /** Prompts before this page, in the same order (Chat's pages). */
+  offset?: number;
   model?: string;
   region?: string;
 }
@@ -3041,6 +3118,8 @@ export interface PromptPerformanceParams {
 export interface PromptPerformanceOutput {
   brand: { id: string; name: string };
   window: { dateFrom: string | null; dateTo: string | null };
+  /** Every prompt with results in the window, not only this page's. */
+  total: number;
   prompts: Array<{
     prompt_id: string;
     prompt_text: string;
@@ -3153,9 +3232,11 @@ export async function getPromptPerformanceFor(
     return a.prompt_id.localeCompare(b.prompt_id);
   });
 
-  // Limiting
+  // Limiting: a page from `offset` (Chat's pages), with how many prompts there are in all.
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 100);
-  prompts = prompts.slice(0, limit);
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
+  const total = prompts.length;
+  prompts = prompts.slice(offset, offset + limit);
 
   return {
     brand: {
@@ -3166,6 +3247,7 @@ export async function getPromptPerformanceFor(
       dateFrom: params.dateFrom ?? null,
       dateTo: params.dateTo ?? null,
     },
+    total,
     prompts,
   };
 }
@@ -3651,7 +3733,7 @@ type LinkedAction = {
  * link first. They only add used_by_actions, so a failed read is logged and
  * leaves every signal's list empty rather than taking the signals down.
  */
-async function signalActionRefs(
+export async function signalActionRefs(
   brandId: string,
   signalIds: string[],
 ): Promise<Map<string, SignalActionRef[]>> {
@@ -3830,24 +3912,36 @@ export async function listActionHistoryFor(
   auth: McpAuthContext,
   params: { brandId: string; limit?: number },
 ): Promise<ActionHistoryRow[] | null> {
+  return (await actionHistoryPageFor(auth, params))?.rows ?? null;
+}
+
+/** Closed actions from `offset`, latest first, with how many there are in all (Chat's pages). */
+export async function actionHistoryPageFor(
+  auth: McpAuthContext,
+  params: { brandId: string; limit?: number; offset?: number },
+): Promise<{ rows: ActionHistoryRow[]; total: number } | null> {
   if (!(await brandAllowed(auth, params.brandId))) return null;
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
-  const read = (columns: string) =>
+  const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
+  const matching = (columns: string, head = false) =>
     supabaseAdmin
       .from('actions')
-      .select(columns)
+      .select(columns, { count: 'exact', head })
       .eq('brand_id', params.brandId)
       .in('status', ['completed', 'dismissed'])
-      .is('deleted_at', null)
+      .is('deleted_at', null);
+  const read = (columns: string) =>
+    matching(columns)
       .order('completed_at', { ascending: false, nullsFirst: false })
-      .limit(limit);
-  let { data, error } = await read(`${ACTION_HISTORY_COLUMNS}, dismiss_reason`);
+      .order('id')
+      .range(offset, offset + limit - 1);
+  let found = await read(`${ACTION_HISTORY_COLUMNS}, dismiss_reason`);
   // A database without 00366 has no dismiss_reason (42703): the rest is read, no reason given.
-  if (missingDismissReason(error)) ({ data, error } = await read(ACTION_HISTORY_COLUMNS));
-  if (error) throw new Error(error.message);
+  if (missingDismissReason(found.error)) found = await read(ACTION_HISTORY_COLUMNS);
+  const { rows: data, total } = await pageRows(found, () => matching('id', true));
 
-  return ((data ?? []) as unknown as ActionHistoryDbRow[]).map((r) => {
+  const rows = (data as unknown as ActionHistoryDbRow[]).map((r) => {
     const validation = r.validation as ValidationSnapshot | null;
     const metrics = validation?.metrics ?? [];
     const days = (Array.isArray(validation?.readings) ? validation.readings : [])
@@ -3885,6 +3979,7 @@ export async function listActionHistoryFor(
       dismiss_reason: r.status === 'dismissed' ? dismissReasonOf(r.dismiss_reason) : null,
     };
   });
+  return { rows, total };
 }
 
 export interface UpdatedTaskStatus {
@@ -4130,6 +4225,16 @@ export async function listReportsFor(
   brandId: string,
   requestedLimit = 50,
 ): Promise<McpReportListItem[] | null> {
+  return (await reportsPageFor(auth, brandId, requestedLimit))?.rows ?? null;
+}
+
+/** Saved reports from `offset`, newest first, with how many there are in all (Chat's pages). */
+export async function reportsPageFor(
+  auth: McpAuthContext,
+  brandId: string,
+  requestedLimit = 50,
+  requestedOffset = 0,
+): Promise<{ rows: McpReportListItem[]; total: number } | null> {
   if (!auth.organizationId) return null;
 
   const { data: brand, error: brandError } = await supabaseAdmin
@@ -4144,18 +4249,26 @@ export async function listReportsFor(
   const limit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
     : 50;
-  const { data, error } = await supabaseAdmin
-    .from('reports')
-    .select(
-      'id, brand_id, title, template, date_from, date_to, created_at, brands!inner(organization_id)',
-    )
-    .eq('brand_id', brandId)
-    .eq('brands.organization_id', auth.organizationId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) throw new Error(error.message);
+  const offset = Math.max(Math.trunc(requestedOffset), 0);
+  const organizationId = auth.organizationId;
+  const matching = (head = false) =>
+    supabaseAdmin
+      .from('reports')
+      .select(
+        'id, brand_id, title, template, date_from, date_to, created_at, brands!inner(organization_id)',
+        { count: 'exact', head },
+      )
+      .eq('brand_id', brandId)
+      .eq('brands.organization_id', organizationId);
+  const { rows, total } = await pageRows(
+    await matching()
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(offset, offset + limit - 1),
+    () => matching(true),
+  );
 
-  return (data ?? []).map((row) => ({
+  const page = rows.map((row) => ({
     id: row.id as string,
     brand_id: row.brand_id as string,
     title: row.title as string,
@@ -4164,6 +4277,7 @@ export async function listReportsFor(
     date_to: row.date_to as string,
     created_at: row.created_at as string,
   }));
+  return { rows: page, total };
 }
 
 export interface McpReportDetail extends McpReportListItem {

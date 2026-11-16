@@ -22,6 +22,7 @@ const {
   asksAllTime,
   capRows,
   givesDates,
+  pagedRead,
   planPlatforms,
   resolveDates,
   scopeRead,
@@ -298,14 +299,14 @@ describe('rows', () => {
   const listed = readTool({ limit: z.number().int().min(1).max(100).optional() });
 
   it("reads the tool's default, the model's count up to the max, and one more to see if there are more", async () => {
-    const named = { ...listed, name: 'list_signals' };
+    const named = { ...listed, name: 'get_gsc_queries' };
     expect(await scopeRead(named, { brand_id: BRAND }, facts())).toMatchObject({
-      input: { limit: 11 },
-      cap: { rows: 10, probe: 11 },
+      input: { limit: 26 },
+      cap: { rows: 25, probe: 26 },
     });
     expect(await scopeRead(named, { brand_id: BRAND, limit: 500 }, facts())).toMatchObject({
-      input: { limit: ROW_CAP + 1 },
-      cap: { rows: ROW_CAP, probe: ROW_CAP + 1 },
+      input: { limit: 50 },
+      cap: { rows: 49, probe: 50 },
     });
     // A schema that can't take one more: no probe.
     const tight = readTool({ limit: z.number().int().min(1).max(10).optional() });
@@ -397,10 +398,11 @@ describe('rows', () => {
       const shape = tool.inputSchema.shape as Record<string, unknown>;
       const limits = ROW_LIMITS[tool.name];
       if ('limit' in shape) {
-        expect(limits, tool.name).toBeDefined();
+        // A list read pages ROW_CAP at a time; any other read has its own limit.
+        expect(limits !== undefined || pagedRead(tool), tool.name).toBe(true);
         // One more for the probe, unless the read counts its rows itself.
-        const probe = PAGED_READS.has(tool.name) ? 0 : 1;
-        const input = { ...tool.fixture.input, limit: limits.max + probe };
+        const probe = pagedRead(tool) ? 0 : 1;
+        const input = { ...tool.fixture.input, limit: (limits?.max ?? ROW_CAP) + probe };
         expect(tool.inputSchema.safeParse(input).success, tool.name).toBe(true);
       }
       expect(limits ? limits.max <= ROW_CAP : true, tool.name).toBe(true);
@@ -411,5 +413,40 @@ describe('rows', () => {
         name,
       ).toBe(true);
     }
+  });
+
+  // The owner's rule (2026-11-16): Chat reads all a page shows, a page of 50 at a time.
+  const LIST_READS = [
+    'list_brands',
+    'list_prompts',
+    'get_prompt_performance',
+    'list_prompt_suggestions',
+    'get_prompt_volumes',
+    'list_topics',
+    'list_mentions',
+    'list_citations',
+    'list_competitors',
+    'get_site_audit_summary',
+    'list_action_center_tasks',
+    'list_signals',
+    'get_action_history',
+    'list_content_opportunities',
+    'list_drafts',
+    'get_reports',
+    'get_ads_opportunities',
+  ];
+
+  it.each(LIST_READS)('pages %s: 50 by default, its offset kept, no extra row', async (name) => {
+    const tool = CHAT_TOOLS.find((t) => t.name === name)!;
+    expect(pagedRead(tool)).toBe(true);
+    expect(ROW_LIMITS[name]?.max ?? ROW_CAP).toBe(ROW_CAP);
+    expect(await scopeRead(tool, { ...tool.fixture.input }, facts())).toMatchObject({
+      input: { limit: ROW_CAP },
+      cap: { rows: ROW_CAP, probe: null },
+    });
+    expect(
+      await scopeRead(tool, { ...tool.fixture.input, limit: 200, offset: 100 }, facts()),
+    ).toMatchObject({ input: { limit: ROW_CAP, offset: 100 }, cap: { probe: null } });
+    expect(tool.description).toContain('next_offset');
   });
 });

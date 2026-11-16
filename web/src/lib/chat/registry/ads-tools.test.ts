@@ -83,6 +83,20 @@ describe('get_ads_opportunities', () => {
     expect(read).toHaveProperty('lockedNote', expect.stringContaining('5 more prompts'));
   });
 
+  it('gives Chat the rows a page at a time: the rows the plan shows counted, the locked ones apart', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => row(i + 1));
+    answer(200, { period: '30d', rows, total: 65, locked: 5 });
+    const tool = ADS_READS[0];
+    const input = tool.inputSchema.parse({ brand_id: BRAND, offset: 50 });
+    const read = await tool.run(auth as never, input);
+    expect(read).toMatchObject({ total: 60, offset: 50, next_offset: null, locked: 5 });
+    expect((read as { rows: unknown[] }).rows).toEqual(rows.slice(50));
+    expect(read).toHaveProperty(
+      'note',
+      'Showing 51–60 of 60 prompts this plan shows, most Google searches first. This is the last page.',
+    );
+  });
+
   it("reads nothing of a brand outside the person's scope, or without their session or the acting way", async () => {
     data.brandAllowed.mockResolvedValueOnce(false);
     expect(await getAdsOpportunitiesFor(auth, { brandId: BRAND })).toBeNull();

@@ -9,29 +9,28 @@ import {
   listActionsPageFor,
 } from '@/lib/mcp/action-center-reads';
 import { getBrandFactsFor } from '@/lib/mcp/brand-facts-reads';
-import { getContentDraftFor, listContentDraftsFor } from '@/lib/mcp/content';
+import { contentDraftsPageFor, getContentDraftFor } from '@/lib/mcp/content';
 import { contentUuid, listDraftsShape } from '@/lib/mcp/content-schemas';
 import {
+  actionHistoryPageFor,
+  contentOpportunitiesPageFor,
   getActionFor,
   getAiTrafficFor,
   getCompetitorComparisonFor,
   getProductVisibility,
   getPromptPerformanceFor,
-  getPromptVolumesFor,
   getSiteAuditFor,
   getVisibilitySummaryFor,
   getVisibilityTrendFor,
-  listActionHistoryFor,
   listBrandsFor,
   listCitationsFor,
   listCompetitorsFor,
-  listContentOpportunitiesFor,
   listPromptSuggestionsFor,
-  listPromptsFor,
-  listReportsFor,
-  listSignalsFor,
-  listSiteAuditsFor,
   listTopicsFor,
+  promptVolumesPageFor,
+  promptsPageFor,
+  reportsPageFor,
+  siteAuditsPageFor,
 } from '@/lib/mcp/data';
 import {
   getMentionCompetitorsFor,
@@ -41,8 +40,11 @@ import {
   listMentionsFor,
 } from '@/lib/mcp/mentions';
 import { openPageFor } from '@/lib/mcp/pages';
+import { pageMeta, pageWindow } from '@/lib/mcp/list-page';
+import { listSignalsPageFor } from '@/lib/mcp/signal-page';
 import { CHECK_RULES_TOOL, checkDraftRules } from '../page-check';
 import { FIXTURE_IDS, defineTool } from './define-tool';
+import { PAGED, countedPage, listPage, pageInput } from './list-paging';
 
 /**
  * Chat's READ rows (CHAT-20 §9): each one calls the data function the MCP
@@ -126,8 +128,7 @@ export const READ_TOOLS = [
     name: 'list_brands',
     class: 'read',
     area: 'brands',
-    description:
-      'The brands the user can access: id, name, slug, industry, region. Call it first when the user has not named a brand.',
+    description: `The brands the user can access: id, name, slug, industry, region. Call it first when the user has not named a brand.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: null,
@@ -137,8 +138,9 @@ export const READ_TOOLS = [
     route: '/dashboard/brands',
     mcpTool: 'list_brands',
     specRow: '7',
-    inputSchema: z.object({}),
-    run: (ctx) => listBrandsFor(ctx),
+    inputSchema: z.object(pageInput),
+    run: async (ctx, input) =>
+      listPage(await listBrandsFor(ctx), 'brands', input, { what: 'brands' }),
     fixture: { input: {} },
   }),
   // CHAT-20 §8a's Brands read "brand facts": no MCP tool does this yet.
@@ -230,8 +232,7 @@ export const READ_TOOLS = [
     name: 'list_prompts',
     class: 'read',
     area: 'prompts',
-    description:
-      'The prompts tracked for a brand, with topic, platforms, regions and whether each is active; newest first. Filter by topic or active state.',
+    description: `The prompts tracked for a brand, with topic, platforms, regions and whether each is active; newest first. Filter by topic or active state.${PAGED}`,
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -244,23 +245,27 @@ export const READ_TOOLS = [
       brand_id: brandId,
       topic_id: topicId,
       is_active: z.boolean().optional(),
-      limit: rowCap(500).describe('Row cap, default 100.'),
+      ...pageInput,
     }),
-    run: (ctx, input) =>
-      listPromptsFor(ctx, {
-        brandId: input.brand_id,
-        topicId: input.topic_id,
-        isActive: input.is_active,
-        limit: input.limit,
-      }),
+    run: async (ctx, input) =>
+      countedPage(
+        await promptsPageFor(ctx, {
+          brandId: input.brand_id,
+          topicId: input.topic_id,
+          isActive: input.is_active,
+          ...pageWindow(input),
+        }),
+        'prompts',
+        input,
+        { what: 'prompts', order: 'newest first' },
+      ),
     fixture: { input: { brand_id: BRAND, is_active: true } },
   }),
   defineTool({
     name: 'get_prompt_performance',
     class: 'read',
     area: 'prompts',
-    description:
-      'Visibility, mentions, citations and appearances per prompt over a period, sorted. For "which prompts do best" or "which dropped this week".',
+    description: `Visibility, mentions, citations and appearances per prompt over a period, sorted. For "which prompts do best" or "which dropped this week".${PAGED}`,
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -276,30 +281,34 @@ export const READ_TOOLS = [
       topic_id: topicId,
       sort_by: z.enum(['visibility', 'mentions', 'citations', 'appearances']).optional(),
       order: z.enum(['desc', 'asc']).optional(),
-      limit: rowCap(100).describe('Row cap, default 10.'),
+      ...pageInput,
       model,
       region,
     }),
-    run: (ctx, input) =>
-      getPromptPerformanceFor(ctx, {
+    run: async (ctx, input) => {
+      const read = await getPromptPerformanceFor(ctx, {
         brandId: input.brand_id,
         dateFrom: input.date_from,
         dateTo: input.date_to,
         topicId: input.topic_id,
         sortBy: input.sort_by,
         order: input.order,
-        limit: input.limit,
         model: input.model,
         region: input.region,
-      }),
+        ...pageWindow(input),
+      });
+      if (!read) return null;
+      const { offset } = pageWindow(input);
+      const words = { what: 'prompts with results', order: `by ${input.sort_by ?? 'visibility'}` };
+      return { ...pageMeta(words, read.total, offset, read.prompts.length), ...read };
+    },
     fixture: { input: { brand_id: BRAND, sort_by: 'visibility' } },
   }),
   defineTool({
     name: 'list_prompt_suggestions',
     class: 'read',
     area: 'prompts',
-    description:
-      "The brand's pending prompt suggestions with topic, reason and an estimated volume. The volume is an AI guess, low confidence: say so when quoting it.",
+    description: `The brand's pending prompt suggestions with topic, reason and an estimated volume. The volume is an AI guess, low confidence: say so when quoting it.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -308,16 +317,23 @@ export const READ_TOOLS = [
     route: '/dashboard/prompts/suggestions',
     mcpTool: 'list_prompt_suggestions',
     specRow: '15',
-    inputSchema: z.object({ brand_id: brandId }),
-    run: (ctx, input) => listPromptSuggestionsFor(ctx, input.brand_id),
+    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
+    run: async (ctx, input) => {
+      const read = await listPromptSuggestionsFor(ctx, input.brand_id);
+      if (!read) return null;
+      const page = listPage(read.suggestions, 'suggestions', input, {
+        what: 'pending suggestions',
+        order: 'newest first',
+      });
+      return { ...page, stale: read.stale };
+    },
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
     name: 'get_prompt_volumes',
     class: 'read',
     area: 'prompts',
-    description:
-      "Each tracked prompt's estimated AI searches a month, with its range and confidence. An estimate, not a measurement.",
+    description: `Each tracked prompt's estimated AI searches a month, with its range and confidence, most first. An estimate, not a measurement.${PAGED}`,
     minRole: 'analyst',
     planGate: { feature: 'prompt_volumes' },
     brandOf: { input: 'brand_id' },
@@ -326,18 +342,21 @@ export const READ_TOOLS = [
     route: '/dashboard/prompts/tracked',
     mcpTool: 'get_prompt_volumes',
     specRow: '17',
-    inputSchema: z.object({
-      brand_id: brandId,
-      limit: rowCap(500).describe('Row cap, default 100.'),
-    }),
-    run: (ctx, input) => getPromptVolumesFor(ctx, { brandId: input.brand_id, limit: input.limit }),
+    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
+    run: async (ctx, input) =>
+      countedPage(
+        await promptVolumesPageFor(ctx, { brandId: input.brand_id, ...pageWindow(input) }),
+        'volumes',
+        input,
+        { what: 'prompts with volumes', order: 'most AI searches first' },
+      ),
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
     name: 'list_topics',
     class: 'read',
     area: 'topics',
-    description: "The brand's topics, each with its number of prompts.",
+    description: `The brand's topics, each with its number of prompts, oldest first.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -346,8 +365,11 @@ export const READ_TOOLS = [
     route: '/dashboard/prompts/topics',
     mcpTool: 'list_topics',
     specRow: '24',
-    inputSchema: z.object({ brand_id: brandId }),
-    run: (ctx, input) => listTopicsFor(ctx, input.brand_id),
+    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
+    run: async (ctx, input) => {
+      const topics = await listTopicsFor(ctx, input.brand_id);
+      return topics && listPage(topics, 'topics', input, { what: 'topics' });
+    },
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
@@ -372,8 +394,7 @@ export const READ_TOOLS = [
     name: 'list_mentions',
     class: 'read',
     area: 'mentions',
-    description:
-      'The AI answers naming the brand, 100 a page: prompt, platform, sentiment, position, competitors named alongside and an excerpt.',
+    description: `The AI answers naming the brand: prompt, platform, sentiment, position, competitors named alongside and an excerpt; newest first unless sorted.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -390,16 +411,25 @@ export const READ_TOOLS = [
         .optional()
         .describe('Only answers also naming this competitor, or "none" for none.'),
       sort: z.enum(MENTION_SORTS).optional(),
-      page: z.number().int().min(1).optional(),
+      ...pageInput,
     }),
-    run: (ctx, input) =>
-      listMentionsFor(ctx, {
+    run: async (ctx, input) => {
+      const read = await listMentionsFor(ctx, {
         ...mentionParams(input),
         sentiment: input.sentiment,
         competitorId: input.competitor_id,
         sort: input.sort,
-        page: input.page,
-      }),
+        ...pageWindow(input),
+      });
+      if (!read) return null;
+      const { offset } = pageWindow(input);
+      const words = { what: 'answers naming the brand', order: input.sort ?? 'newest first' };
+      return {
+        ...pageMeta(words, read.total, offset, read.mentions.length),
+        prompts: read.prompts,
+        mentions: read.mentions,
+      };
+    },
     fixture: { input: { brand_id: BRAND, sentiment: 'negative' } },
   }),
   // Not in CHAT-20 §9 yet: the Mentions area's reads (§8a "snippets, themes")
@@ -462,8 +492,7 @@ export const READ_TOOLS = [
     name: 'list_citations',
     class: 'read',
     area: 'citations',
-    description:
-      'The domains and pages AI answers cite for the brand over a period, owned, competitor or external.',
+    description: `The domains and pages AI answers cite for the brand over a period, owned, competitor or external, most cited first; totals counts them all. One offset pages both lists.${PAGED}`,
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -479,27 +508,34 @@ export const READ_TOOLS = [
       model,
       region,
       topic_id: topicId,
-      limit: rowCap(200).describe('Cap on the top domains and pages, default 50.'),
+      ...pageInput,
       source_filter: z.enum(['all', 'owned', 'competitor', 'external']).optional(),
     }),
-    run: (ctx, input) =>
-      listCitationsFor(ctx, {
+    run: async (ctx, input) => {
+      const read = await listCitationsFor(ctx, {
         brandId: input.brand_id,
         dateFrom: input.date_from,
         dateTo: input.date_to,
         model: input.model,
         region: input.region,
         topicId: input.topic_id,
-        limit: input.limit,
         sourceFilter: input.source_filter,
-      }),
+        ...pageWindow(input),
+      });
+      if (!read) return null;
+      const { offset } = pageWindow(input);
+      const shown = Math.max(read.top_domains.length, read.top_urls.length);
+      const total = Math.max(read.totals.domains, read.totals.urls);
+      const words = { what: 'cited domains and pages', order: 'most cited first' };
+      return { ...pageMeta(words, total, offset, shown), ...read };
+    },
     fixture: { input: { brand_id: BRAND, source_filter: 'competitor' } },
   }),
   defineTool({
     name: 'list_competitors',
     class: 'read',
     area: 'competitors',
-    description: 'The competitors set up for the brand: id, name and domain. Not a ranking.',
+    description: `The competitors set up for the brand: id, name and domain. Not a ranking.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -508,8 +544,11 @@ export const READ_TOOLS = [
     route: '/dashboard/competitors',
     mcpTool: 'list_competitors',
     specRow: '29',
-    inputSchema: z.object({ brand_id: brandId }),
-    run: (ctx, input) => listCompetitorsFor(ctx, input.brand_id),
+    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
+    run: async (ctx, input) => {
+      const competitors = await listCompetitorsFor(ctx, input.brand_id);
+      return competitors && listPage(competitors, 'competitors', input, { what: 'competitors' });
+    },
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
@@ -597,8 +636,7 @@ export const READ_TOOLS = [
     name: 'get_site_audit_summary',
     class: 'read',
     area: 'site_audit',
-    description:
-      "The brand's recent Site Audits, newest first: page, status, score and date. Read one with its issues through list_site_audit_issues.",
+    description: `The brand's Site Audits, newest first: page, status, score and date. Read one with its issues through list_site_audit_issues.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -607,8 +645,12 @@ export const READ_TOOLS = [
     route: '/dashboard/audit',
     mcpTool: 'list_site_audits',
     specRow: '36',
-    inputSchema: z.object({ brand_id: brandId }),
-    run: (ctx, input) => listSiteAuditsFor(ctx, input.brand_id),
+    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
+    run: async (ctx, input) =>
+      countedPage(await siteAuditsPageFor(ctx, input.brand_id, input), 'audits', input, {
+        what: 'Site Audits',
+        order: 'newest first',
+      }),
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
@@ -707,8 +749,7 @@ export const READ_TOOLS = [
     name: 'list_signals',
     class: 'read',
     area: 'action_center',
-    description:
-      'The changes the Action Center detected for the brand, newest first: what moved, by how much, where, and the actions built on each.',
+    description: `The changes the Action Center detected for the brand over a period, as the Signals page shows them: detected by its end and still open or resolved after its start, newest first. Each: title and description in the page's words, kind, category, impact, status, detected day, where, and the actions built on it.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -721,14 +762,19 @@ export const READ_TOOLS = [
       brand_id: brandId,
       status: z.enum(['new', 'acknowledged', 'resolved', 'dismissed']).optional(),
       kind: z.string().optional().describe('A signal kind, as returned in earlier rows.'),
-      limit: rowCap(200).describe('Row cap, default 50.'),
+      date_from: dateFrom,
+      date_to: dateTo,
+      ...pageInput,
     }),
     run: (ctx, input) =>
-      listSignalsFor(ctx, {
+      listSignalsPageFor(ctx, {
         brandId: input.brand_id,
         status: input.status,
         kind: input.kind,
+        dateFrom: input.date_from,
+        dateTo: input.date_to,
         limit: input.limit,
+        offset: input.offset,
       }),
     fixture: { input: { brand_id: BRAND } },
   }),
@@ -736,8 +782,7 @@ export const READ_TOOLS = [
     name: 'get_action_history',
     class: 'read',
     area: 'action_center',
-    description:
-      'Closed actions with their measured outcome, latest first. An outcome before day 30 is a reading so far, and a change is never claimed as caused by the action.',
+    description: `Closed actions with their measured outcome, latest first. An outcome before day 30 is a reading so far, and a change is never claimed as caused by the action.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -746,19 +791,21 @@ export const READ_TOOLS = [
     route: '/dashboard/action-center/history',
     mcpTool: 'list_action_history',
     specRow: '42',
-    inputSchema: z.object({
-      brand_id: brandId,
-      limit: rowCap(200).describe('Row cap, default 50.'),
-    }),
-    run: (ctx, input) => listActionHistoryFor(ctx, { brandId: input.brand_id, limit: input.limit }),
+    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
+    run: async (ctx, input) =>
+      countedPage(
+        await actionHistoryPageFor(ctx, { brandId: input.brand_id, ...pageWindow(input) }),
+        'actions',
+        input,
+        { what: 'closed actions', order: 'latest first' },
+      ),
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
     name: 'list_content_opportunities',
     class: 'read',
     area: 'content',
-    description:
-      "The brand's content opportunities, highest score first: the prompts where it loses visibility and the page that would win them.",
+    description: `The brand's content opportunities, highest score first: the prompts where it loses visibility and the page that would win them. Archived ones only when asked by status.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -774,24 +821,28 @@ export const READ_TOOLS = [
         .optional(),
       impact: z.enum(['high', 'medium', 'low']).optional(),
       type: z.enum(['owned', 'earned']).optional(),
-      limit: rowCap(200).describe('Row cap, default 50.'),
+      ...pageInput,
     }),
-    run: (ctx, input) =>
-      listContentOpportunitiesFor(ctx, {
-        brandId: input.brand_id,
-        status: input.status,
-        impact: input.impact,
-        type: input.type,
-        limit: input.limit,
-      }),
+    run: async (ctx, input) =>
+      countedPage(
+        await contentOpportunitiesPageFor(ctx, {
+          brandId: input.brand_id,
+          status: input.status,
+          impact: input.impact,
+          type: input.type,
+          ...pageWindow(input),
+        }),
+        'opportunities',
+        input,
+        { what: 'opportunities', order: 'highest score first' },
+      ),
     fixture: { input: { brand_id: BRAND, impact: 'high' } },
   }),
   defineTool({
     name: 'list_drafts',
     class: 'read',
     area: 'content',
-    description:
-      "The brand's Content Library drafts, latest changed first: title, status, method, page type and author.",
+    description: `The brand's Content Library drafts, latest changed first: title, status, method, page type and author. Archived drafts are set aside.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -800,8 +851,14 @@ export const READ_TOOLS = [
     route: '/dashboard/content/library',
     mcpTool: 'list_content_drafts',
     specRow: '53',
-    inputSchema: z.object(listDraftsShape),
-    run: (ctx, input) => listContentDraftsFor(ctx, input.brand_id, input.status),
+    inputSchema: z.object({ ...listDraftsShape, ...pageInput }),
+    run: async (ctx, input) =>
+      countedPage(
+        await contentDraftsPageFor(ctx, input.brand_id, input.status, pageWindow(input)),
+        'drafts',
+        input,
+        { what: 'drafts', order: 'latest changed first' },
+      ),
     fixture: { input: { brand_id: BRAND, status: 'in_review' } },
   }),
   defineTool({
@@ -847,7 +904,7 @@ export const READ_TOOLS = [
     name: 'get_reports',
     class: 'read',
     area: 'reports',
-    description: "The brand's saved reports, newest first: title, template and date range.",
+    description: `The brand's saved reports, newest first: title, template and date range.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -856,11 +913,19 @@ export const READ_TOOLS = [
     route: '/dashboard/reports',
     mcpTool: 'list_reports',
     specRow: '63',
-    inputSchema: z.object({
-      brand_id: brandId,
-      limit: rowCap(100).describe('Row cap, default 50.'),
-    }),
-    run: (ctx, input) => listReportsFor(ctx, input.brand_id, input.limit),
+    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
+    run: async (ctx, input) => {
+      const { limit, offset } = pageWindow(input);
+      return countedPage(
+        await reportsPageFor(ctx, input.brand_id, limit, offset),
+        'reports',
+        input,
+        {
+          what: 'saved reports',
+          order: 'newest first',
+        },
+      );
+    },
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
