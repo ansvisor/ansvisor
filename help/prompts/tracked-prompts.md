@@ -1,17 +1,28 @@
 ---
 title: Tracked Prompts list, statuses and columns
 route: /dashboard/prompts/tracked
-keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags]
+keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume]
 synonyms: [prompt list, my prompts, prompt table, tracked queries]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/prompts.mdx]
 ---
-**Tracked Prompts** lists every prompt Ansvisor asks the AI engines for your brand, with its results over the date range you pick (24h, 7d, 30d, 90d or custom). It sits on the **Prompts** tab of the **Prompts** page: a switch above the filters picks **Tracked Prompts** or **Prompt Suggestions**. A range you pick carries over to Topics and Query Fan-out.
+**Tracked Prompts** lists every prompt Ansvisor asks the AI engines for your brand, with its results over the date range you pick (24h, 7d, 30d, 90d or custom). It sits on the **Prompts** tab of the **Prompts** page: the **Tracked** | **Suggestions** switch, at the left of the date range, picks this list or **Prompt Suggestions**. A range you pick carries over to Topics and Query Fan-out.
+
+## Where the page's actions are
+
+Beside the tabs, admins and managers have **Add prompt**. The rest is in the **…** menu (More actions) next to it:
+
+- **Export CSV** downloads the list.
+- **Manage prompts** opens the page for managing the brand's prompts.
+- **Plan & usage** opens your plan and billing.
+- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, the menu says so under **Show usage**.
+
+The **Location** filter, for a brand tracked in more than one place, sits in the table's filter row, beside **Status** and **Work**.
 
 ## Prompt statuses
 
@@ -22,9 +33,11 @@ Each row has a status:
 - **Paused**: kept, but not tracked.
 - **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.
 
-While prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the cards under **Plan & usage** (click **Show**), show one status or all of them.
+While prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them.
 
 ## Rows without figures
+
+When some active prompts have no volume yet, a line under the filters says how many are not analyzed yet; admins and managers click **Analyze** to fill in their **Volume** and **Competition**.
 
 A new prompt has no results until it's first asked. Until then, for its first two days, the row says **Within 24h** in its first figure column, such as Visibility. While a new brand's first tracking runs, it says **Arriving now** instead: that tracking is asking it. A paused prompt says **Paused** there when the Status column is hidden. An older prompt with no results in the range, such as days without a run, shows a dash, as does a range that ended before today.
 
@@ -61,4 +74,4 @@ The **Tags** filter beside the search box narrows the table to one or more tags.
 
 Click a prompt's text to open its own page, with its visibility, mentions, citations and per-platform results. For admins and managers, each row's **…** menu offers **Edit**, **Pause tracking** (or **Resume tracking**), **Improve position…**, **Suggest content** (or **Open content suggestion**), **Create content** (or **Open draft**) and **Delete**.
 
-**Export CSV** downloads the list. Estimated volumes in it are marked as estimates, with their confidence and range, so a spreadsheet doesn't read them as counts.
+**Export CSV**, in the **…** menu, downloads the list. Estimated volumes in it are marked as estimates, with their confidence and range, so a spreadsheet doesn't read them as counts.

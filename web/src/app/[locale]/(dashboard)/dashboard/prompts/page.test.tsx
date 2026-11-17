@@ -13,7 +13,10 @@ import type { FirstRun } from '@/hooks/use-first-run';
  * with what was clicked, and write nothing; on an active plan they work as
  * before. The volumes the server refuses it don't read as an outage. The
  * Location filter stays off Query Fan-out, which doesn't use it, and Chat's
- * side panel hears of a location only on the tab that reads one.
+ * side panel hears of a location only on the tab that reads one. The header
+ * (the owner's simpler one, 2026-11-17): Add prompt and a "…" menu, the
+ * Tracked | Suggestions switch beside the date range, Location in the
+ * table's filter row and a quiet line for the prompts not analyzed yet.
  */
 
 const actions = vi.hoisted(() => ({
@@ -88,6 +91,13 @@ vi.mock('./_topics-tab', () => ({
   },
 }));
 vi.mock('./_fanout-tab', () => ({ QueryFanoutTab: () => <div data-testid="fanout-tab" /> }));
+vi.mock('./_suggestions-tab', () => ({
+  SuggestionsTab: () => <div data-testid="suggestions-tab" />,
+}));
+// A download's name, without reading the workspace's white-label kit.
+vi.mock('@/lib/white-label/export-name', () => ({
+  exportFileName: vi.fn(async (rest: string) => `Ansvisor_${rest}`),
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: unknown) => unknown) =>
     select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
@@ -167,6 +177,9 @@ const button = (name: string) =>
     (b) => b.textContent?.trim() === name,
   );
 const dialog = () => document.querySelector('[role="dialog"]');
+// The quiet line above the table for the prompts not analyzed yet, and its Analyze.
+const notAnalyzed = () => container.querySelector<HTMLElement>('[data-not-analyzed]');
+const analyzeButton = () => notAnalyzed()?.querySelector<HTMLButtonElement>('button') ?? null;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -362,13 +375,18 @@ describe('prompts waiting for a spot', () => {
 });
 
 describe('the Location filter', () => {
-  const locationFilter = () =>
-    [...container.querySelectorAll('label')].find((l) => l.textContent === 'Location');
+  const locationFilter = () => document.querySelector<HTMLElement>('[aria-label="Location"]');
 
   it('shows on Tracked Prompts for a brand tracked in more than one location', async () => {
     filterOptions.regions = ['US', 'GB'];
     await render(false);
-    expect(locationFilter()).toBeDefined();
+    expect(locationFilter()).not.toBeNull();
+  });
+
+  it('is left off for a brand tracked in one location', async () => {
+    filterOptions.regions = ['US'];
+    await render(false);
+    expect(locationFilter()).toBeNull();
   });
 
   it("is left off Query Fan-out, which doesn't use it", async () => {
@@ -376,7 +394,7 @@ describe('the Location filter', () => {
     nav.pathname = '/dashboard/prompts/fan-outs';
     await render(false);
     expect(container.querySelector('[data-testid="fanout-tab"]')).not.toBeNull();
-    expect(locationFilter()).toBeUndefined();
+    expect(locationFilter()).toBeNull();
   });
 });
 
@@ -748,7 +766,7 @@ describe('locations on a read-only workspace (PROMPT-015)', () => {
 });
 
 describe('volumes on a read-only workspace', () => {
-  // The prompt has no volume yet: the banner offers "Analyze 1 prompt".
+  // The prompt has no volume yet: the not-analyzed line offers Analyze.
   const pageData = (volumesDegraded: boolean) => ({
     volumes: [],
     quota: null,
@@ -761,7 +779,7 @@ describe('volumes on a read-only workspace', () => {
 
   it('starts no analysis: Analyze opens the upgrade dialog', async () => {
     await render(true);
-    await act(async () => button('Analyze 1 prompt')!.click());
+    await act(async () => analyzeButton()!.click());
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Analyzing prompts needs a plan');
     expect(volumes.startPromptVolumeAnalysis).not.toHaveBeenCalled();
   });
@@ -772,7 +790,7 @@ describe('volumes on a read-only workspace', () => {
       code: 'subscription_inactive',
     });
     await render(false);
-    await act(async () => button('Analyze 1 prompt')!.click());
+    await act(async () => analyzeButton()!.click());
     expect(volumes.startPromptVolumeAnalysis).toHaveBeenCalledWith('b1', false);
     expect(openUpgrade).toHaveBeenCalledTimes(1);
     expect(toast.error).not.toHaveBeenCalled();
@@ -805,12 +823,13 @@ describe('the volume quota without an active plan', () => {
   });
   const reds = () => container.querySelectorAll('.text-red-500');
 
-  it('offers Analyze on Tracked, not "limit is reached", and it opens the upgrade dialog', async () => {
+  it('offers Analyze on Tracked, not "limit reached", and it opens the upgrade dialog', async () => {
     actions.getPromptsPageData.mockResolvedValue(pageData(noPlan));
     await render(true);
-    expect(container.textContent).toContain('Run volume analysis to fill in');
-    expect(container.textContent).not.toContain('limit is reached');
-    const analyze = button('Analyze 1 prompt')!;
+    expect(notAnalyzed()?.textContent).toContain('1 prompt not analyzed yet');
+    expect(notAnalyzed()?.getAttribute('title')).toContain('Run volume analysis to fill in');
+    expect(container.textContent).not.toContain('limit reached');
+    const analyze = analyzeButton()!;
     expect(analyze.disabled).toBe(false);
     await act(async () => analyze.click());
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Analyzing prompts needs a plan');
@@ -925,5 +944,321 @@ describe('the Prompt Volumes chart', () => {
     expect(container.textContent).toContain('AI Adoption Rate40%');
     expect(container.textContent).toContain('Google volume × the 40% AI adoption rate');
     expect(container.textContent).not.toMatch(/~\d+% of Google searches/);
+  });
+});
+
+describe('the header', () => {
+  const usageSummary = (locationsUsed: number) => ({
+    plan: { key: 'starter', name: 'Starter plan', locationLimit: 50, cta: 'upgrade_growth' },
+    brand: { active: 1, paused: 0, total: 1 },
+    account: { activePrompts: 1, brands: 1, locationsUsed },
+    updatedAt: '2026-11-17T09:00:00.000Z',
+  });
+  // The usage cards' read (GET /api/prompts/usage) answers with these counts.
+  const usageReads = (locationsUsed = 10) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => usageSummary(locationsUsed) })),
+    );
+  const more = () => container.querySelector<HTMLElement>('[aria-label="More actions"]');
+  const openMore = async () => {
+    const trigger = more()!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  };
+  const item = (items: HTMLElement[], text: string) =>
+    items.find((el) => el.textContent?.startsWith(text))!;
+  const usagePanel = () => container.querySelector('section[aria-label="Prompt usage"]');
+
+  it('says only "Prompts" under the title, and keeps Add prompt and "…" beside the tabs', async () => {
+    await render(false);
+    expect(container.querySelector('h1')?.textContent).toBe('Prompts');
+    expect(container.textContent).not.toContain('Manage every tracked prompt');
+    expect(button('Add prompt')).toBeDefined();
+    expect(more()?.tagName).toBe('BUTTON');
+    // Gone from the row: they are in "…" now, and so is the Tracked Prompts card.
+    expect(button('Export CSV')).toBeUndefined();
+    expect(container.querySelector('a[href="/dashboard/brands/b1/prompts"]')).toBeNull();
+    expect(container.textContent).not.toContain('Every tracked prompt for this brand');
+    expect(usagePanel()).toBeNull();
+  });
+
+  it('holds Export CSV, Manage prompts, Plan & usage and Show usage in "…"', async () => {
+    usageReads();
+    await render(false);
+    const items = await openMore();
+    expect(items.map((el) => el.textContent)).toEqual([
+      'Export CSV',
+      'Manage prompts',
+      'Plan & usage',
+      'Show usage',
+    ]);
+    expect(item(items, 'Manage prompts').getAttribute('href')).toBe('/dashboard/brands/b1/prompts');
+    expect(item(items, 'Plan & usage').getAttribute('href')).toBe(
+      '/dashboard/settings?tab=billing',
+    );
+  });
+
+  it('downloads the prompts as a CSV from Export CSV', async () => {
+    const urls = { create: vi.fn((blob: Blob) => (blob.type ? 'blob:prompts' : '')) };
+    URL.createObjectURL = urls.create;
+    URL.revokeObjectURL = vi.fn();
+    const downloads: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push(this.download);
+    });
+    await render(false);
+    const items = await openMore();
+    await act(async () => item(items, 'Export CSV').click());
+    expect(urls.create).toHaveBeenCalledOnce();
+    expect(urls.create.mock.calls[0][0].type).toBe('text/csv;charset=utf-8;');
+    expect(downloads).toEqual([
+      expect.stringMatching(/^Ansvisor_acme_prompts_\d{4}-\d{2}-\d{2}\.csv$/),
+    ]);
+    click.mockRestore();
+  });
+
+  it('says Export CSV has nothing to export while the brand has no prompts', async () => {
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [] }],
+      visibility: {},
+      positions: {},
+    });
+    await render(false);
+    const exportItem = item(await openMore(), 'Export CSV');
+    expect(exportItem.textContent).toBe('Export CSVNo prompts yet: add prompts first.');
+    expect(exportItem.hasAttribute('data-disabled')).toBe(true);
+  });
+
+  it('opens the usage cards from Show usage, and folds them from Hide usage or their Hide', async () => {
+    usageReads();
+    await render(false);
+    await act(async () => item(await openMore(), 'Show usage').click());
+    expect(usagePanel()?.textContent).toContain('This brand');
+    // The cards still filter the table.
+    await act(async () => button('Total prompts')!.click());
+    expect(container.textContent).toContain('All prompts (1)');
+
+    await act(async () => item(await openMore(), 'Hide usage').click());
+    expect(usagePanel()).toBeNull();
+
+    await act(async () => item(await openMore(), 'Show usage').click());
+    await act(async () => button('Hide')!.click());
+    expect(usagePanel()).toBeNull();
+  });
+
+  it('says beside Show usage when the prompt locations are nearly used', async () => {
+    usageReads(46);
+    await render(false);
+    expect(item(await openMore(), 'Show usage').textContent).toBe(
+      'Show usage46 / 50 prompt locations',
+    );
+  });
+
+  it('gives a member "…" too, without Add prompt', async () => {
+    role.canManage = false;
+    await render(false);
+    expect(button('Add prompt')).toBeUndefined();
+    // Plan & usage waits for the counts, which this test's read refuses.
+    expect((await openMore()).map((el) => el.textContent)).toEqual([
+      'Export CSV',
+      'Manage prompts',
+      'Show usage',
+    ]);
+  });
+
+  it('keeps Manage prompts in "…" on Query Fan-out and Insights, and Topics its own buttons', async () => {
+    nav.pathname = '/dashboard/prompts/fan-outs';
+    await render(false);
+    expect(button('Add prompt')).toBeUndefined();
+    expect((await openMore()).map((el) => el.textContent)).toEqual(['Manage prompts']);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    nav.pathname = '/dashboard/prompts/insights';
+    await render(false);
+    expect((await openMore()).map((el) => el.textContent)).toEqual(['Manage prompts']);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    nav.pathname = '/dashboard/prompts/topics';
+    await render(false);
+    expect(more()).toBeNull();
+  });
+});
+
+describe('the Tracked | Suggestions switch', () => {
+  const links = () => [
+    ...container.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Prompt list"] a'),
+  ];
+  const current = () => links().find((a) => a.getAttribute('aria-current') === 'page');
+  afterEach(() => window.history.replaceState(null, '', '/dashboard/prompts/tracked'));
+
+  it('links each view to its route, Tracked with its count, beside the date range', async () => {
+    await render(false);
+    expect(links().map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['Tracked1', '/dashboard/prompts/tracked'],
+      ['Suggestions', '/dashboard/prompts/suggestions'],
+    ]);
+    expect(current()?.textContent).toBe('Tracked1');
+    // The date range in the same row, without its label.
+    const row = links()[0].closest('nav')!.parentElement!;
+    expect(row.querySelector('[role="group"][aria-label="Date Range"]')).not.toBeNull();
+    expect([...container.querySelectorAll('label')].map((l) => l.textContent)).not.toContain(
+      'Date Range',
+    );
+  });
+
+  it('moves to Suggestions and back in place, on their routes', async () => {
+    await render(false);
+    await act(async () => links()[1].click());
+    expect(window.location.pathname).toBe('/dashboard/prompts/suggestions');
+    expect(current()?.textContent).toBe('Suggestions');
+    expect(container.querySelector('[data-testid="suggestions-tab"]')).not.toBeNull();
+    expect(container.querySelector('[data-tour="positions"]')).toBeNull();
+
+    await act(async () => links()[0].click());
+    expect(window.location.pathname).toBe('/dashboard/prompts/tracked');
+    expect(current()?.textContent).toBe('Tracked1');
+    expect(container.querySelector('[data-tour="positions"]')).not.toBeNull();
+  });
+
+  it('opens on Suggestions from its route', async () => {
+    nav.pathname = '/dashboard/prompts/suggestions';
+    await render(false);
+    expect(current()?.textContent).toBe('Suggestions');
+    expect(container.querySelector('[data-testid="suggestions-tab"]')).not.toBeNull();
+  });
+
+  it('is left off the other tabs, which keep the date range', async () => {
+    nav.pathname = '/dashboard/prompts/topics';
+    await render(false);
+    expect(links()).toHaveLength(0);
+    expect(container.querySelector('[role="group"][aria-label="Date Range"]')).not.toBeNull();
+  });
+});
+
+describe('the prompts not analyzed yet', () => {
+  const paused: Prompt = { ...prompt, id: 'p9', text: 'Paused one?', isActive: false };
+  const second: Prompt = { ...prompt, id: 'p2', text: 'Best espresso beans?' };
+  const analyzed = {
+    id: 'v1',
+    promptId: 'p1',
+    promptText: prompt.text,
+    promptCategory: 'Coffee',
+    intent: 'commercial',
+    keywords: ['coffee subscription'],
+    googleVolumes: { 'coffee subscription': 1000 },
+    totalGoogleVolume: 1000,
+    aiVolumeMultiplier: 0.4,
+    estAiVolume: 400,
+    competitionIndex: null,
+    competition: null,
+    fetchedAt: '2026-10-20T00:00:00.000Z',
+  };
+  const withPrompts = (list: Prompt[], extra: object = {}) =>
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: list }],
+      visibility: {},
+      positions: {},
+      ...extra,
+    });
+
+  it('says how many in one quiet line in the table card, under the filters, with Analyze', async () => {
+    withPrompts([prompt, paused]);
+    await render(false);
+    const line = notAnalyzed()!;
+    expect(line.textContent).toBe('1 prompt not analyzed yet·Analyze');
+    expect(line.closest('[data-tour="positions"]')).not.toBeNull();
+    const filters = container.querySelector('[data-filter-row]')!;
+    expect(filters.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The count line on its left.
+    expect(line.parentElement?.textContent).toContain('Tracked prompts (1)');
+    expect(analyzeButton()?.getAttribute('aria-label')).toBe('Analyze 1 prompt');
+    // No banner any more.
+    expect(container.textContent).not.toContain("haven't been analyzed");
+  });
+
+  it('counts in the plural', async () => {
+    withPrompts([prompt, second]);
+    await render(false);
+    expect(notAnalyzed()?.textContent).toBe('2 prompts not analyzed yet·Analyze');
+    expect(analyzeButton()?.getAttribute('aria-label')).toBe('Analyze 2 prompts');
+  });
+
+  it('is hidden once every active prompt has a volume', async () => {
+    withPrompts([prompt, paused], { volumes: [analyzed] });
+    await render(false);
+    expect(notAnalyzed()).toBeNull();
+  });
+
+  it('runs the volume analysis from Analyze, as the banner did', async () => {
+    volumes.startPromptVolumeAnalysis.mockResolvedValue({ ok: true, started: 0, running: false });
+    await render(false);
+    await act(async () => analyzeButton()!.click());
+    expect(volumes.startPromptVolumeAnalysis).toHaveBeenCalledExactlyOnceWith('b1', false);
+    expect(toast.success).toHaveBeenCalledWith('Every active prompt already has volume data.');
+  });
+
+  it('says it is analyzing while the run starts', async () => {
+    volumes.startPromptVolumeAnalysis.mockReturnValue(new Promise(() => {}));
+    await render(false);
+    await act(async () => analyzeButton()!.click());
+    expect(notAnalyzed()?.textContent).toBe('1 prompt not analyzed yet·Analyzing…');
+    expect(analyzeButton()).toBeNull();
+  });
+
+  it('offers no Analyze to a member, or once the month’s analyses are used up', async () => {
+    role.canManage = false;
+    await render(false);
+    expect(notAnalyzed()?.textContent).toBe('1 prompt not analyzed yet');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    role.canManage = true;
+    withPrompts([prompt], { quota: { used: 10, limit: 10, remaining: 0 } });
+    await render(false);
+    expect(notAnalyzed()?.textContent).toBe('1 prompt not analyzed yet·Monthly limit reached');
+    expect(notAnalyzed()?.getAttribute('title')).toContain('upgrade your plan');
+    expect(analyzeButton()).toBeNull();
+  });
+});
+
+describe('Location in the filter row', () => {
+  afterEach(() => window.history.replaceState(null, '', '/dashboard/prompts/tracked'));
+
+  it('sits beside the table filters, with no label, and reads the table for the picked one', async () => {
+    filterOptions.regions = ['US', 'GB'];
+    await render(false);
+    const trigger = container.querySelector<HTMLElement>(
+      '[data-filter-row] [aria-label="Location"]',
+    )!;
+    expect(trigger.textContent).toContain('All Locations');
+    expect([...container.querySelectorAll('label')].map((l) => l.textContent)).not.toContain(
+      'Location',
+    );
+    await act(async () => trigger.click());
+    const gb = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((el) =>
+      el.textContent?.includes('United Kingdom'),
+    )!;
+    await act(async () => {
+      gb.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await act(async () => gb.click());
+    await act(async () => {});
+    expect(actions.getPromptsPageData).toHaveBeenLastCalledWith(
+      'b1',
+      expect.objectContaining({ region: 'GB' }),
+    );
+    expect(new URLSearchParams(window.location.search).get('region')).toBe('GB');
   });
 });
