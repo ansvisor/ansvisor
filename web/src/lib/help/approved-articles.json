@@ -919,7 +919,10 @@
         "ai visit conversions",
         "signups from ai",
         "consent",
-        "shopify pixel"
+        "shopify pixel",
+        "ask chat",
+        "revenue from ai",
+        "which pages bring customers"
       ],
       "synonyms": [
         "track leads from chatgpt",
@@ -928,7 +931,7 @@
         "first touch"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -953,6 +956,10 @@
         {
           "heading": "Where you see the results",
           "text": "The Content Editor shows what came of it: the **Live page** tab for each page, and the **From AI visits** line on the Content **Plan** for the whole site."
+        },
+        {
+          "heading": "Ask Chat",
+          "text": "Chat answers which pages and AI assistants bring sign-ups, forms, orders, bookings and revenue, and how many of each. It reads the conversions above, by assistant, landing page and type, with each currency's revenue on its own. With Google Analytics connected, it adds **Top converting pages from AI**; with HubSpot, the AI-sourced pipeline.\n\nChat first checks what is set up. Where something isn't, it says **Not measured** and gives the step and the page where an admin or manager sets it up: the tracking snippet, conversions, the conversion call or Shopify pixel for orders, Google Analytics or HubSpot.\n\nAsked which prompts bring customers, Chat lists the prompts whose answers cite pages that converted. It labels this an association, not a measurement: AI assistants don't pass on the question."
         },
         {
           "heading": "What it can't see",
@@ -2574,7 +2581,11 @@
         "ai traffic and sign-ups",
         "/traffic",
         "ai visitors",
-        "sign-ups from ai"
+        "sign-ups from ai",
+        "customers and revenue from ai",
+        "/ai-revenue",
+        "which pages bring customers",
+        "revenue from ai"
       ],
       "synonyms": [
         "slash commands",
@@ -2585,11 +2596,11 @@
         "skills directory"
       ],
       "plan": "all",
-      "updated": "2026-11-15",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-eight Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan**, **Weekly content plan** and **Setup guide**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-nine Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan**, **Weekly content plan** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -2633,7 +2644,7 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio, 30-day plan, Weekly content plan, Seasonal prompts and AI traffic and sign-ups.\n\n**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio, 30-day plan, Weekly content plan, Seasonal prompts, AI traffic and sign-ups and Customers and revenue from AI.\n\n**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
         },
         {
           "heading": "Fan-out gaps",
@@ -2657,7 +2668,11 @@
         },
         {
           "heading": "AI traffic and sign-ups",
-          "text": "**AI traffic and sign-ups** (**/traffic**) reports the visits AI assistants send to your site, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, from AI sessions. It says plainly what isn't measured: sign-ups by assistant or page, and the prompt behind a visit."
+          "text": "**AI traffic and sign-ups** (**/traffic**) reports the visits AI assistants send to your site, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, from AI sessions. It says plainly what isn't measured: sign-ups by assistant or page, and the prompt behind a visit. For sign-ups, orders and revenue by page and assistant, use **Customers and revenue from AI**."
+        },
+        {
+          "heading": "Customers and revenue from AI",
+          "text": "**Customers and revenue from AI** (**/ai-revenue**) answers which pages and AI assistants bring sign-ups, forms, orders and revenue, from your conversions from AI visits, and from Google Analytics and HubSpot when they are connected. It starts with what isn't set up yet, with the step and the page to set it up, and says **Not measured** where nothing measures it. Each currency's revenue is shown on its own. Prompts come only as an association: AI assistants don't pass on the question. It ends with one to three next steps."
         }
       ]
     },

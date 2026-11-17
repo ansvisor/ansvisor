@@ -86,6 +86,13 @@ vi.mock('@/lib/mcp/action-center-reads', async (importOriginal) =>
 vi.mock('@/lib/mcp/google-reads', async (importOriginal) =>
   tracked.all('mcp/google-reads', await importOriginal<Record<string, unknown>>()),
 );
+// Customers and revenue from AI visits: each read pages itself (lib/mcp/list-page.ts).
+vi.mock('@/lib/mcp/ai-conversions', async (importOriginal) =>
+  tracked.all('mcp/ai-conversions', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/tracking-setup', async (importOriginal) =>
+  tracked.all('mcp/tracking-setup', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/mcp/workspace-reads', async (importOriginal) =>
   tracked.all('mcp/workspace-reads', await importOriginal<Record<string, unknown>>()),
 );
@@ -1497,15 +1504,18 @@ describe("the model's tool list on the registry's rows", () => {
   const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });
-  // Starter's plan doesn't open Product Visibility. Ads' read has no plan gate:
-  // the server shows Starter its first rows, as on the Ads page.
-  const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');
+  // Starter's plan opens neither Product Visibility nor the AI-sourced pipeline (CRM
+  // integrations), as their pages. Ads' read has no plan gate: the server shows Starter its
+  // first rows, as on the Ads page.
+  const starterReads = reads.filter(
+    (name) => !['get_shopping_visibility', 'get_ai_pipeline'].includes(name),
+  );
 
   it('gives every role the reads its plan opens, and Analysts and Agency partners daily work only', () => {
     // Memory (W3-11): everyone keeps their own Me.
     const memory = ['save_memory', 'forget_memory'];
     expect(list('analyst', starter)).toEqual([
-      ...withoutShopping,
+      ...starterReads,
       'create_draft',
       'dismiss_prompt_suggestion',
       'request_access',
@@ -1519,7 +1529,7 @@ describe("the model's tool list on the registry's rows", () => {
     ]);
     // Running another agent and saving ad drafts are Growth and up (CHAT-27 decision 4, ADS-01 §8).
     expect(list('manager', starter)).toEqual([
-      ...withoutShopping,
+      ...starterReads,
       ...writes.filter((name) => !['run_agent', 'save_ad_drafts'].includes(name)),
     ]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
@@ -1536,7 +1546,7 @@ describe("the model's tool list on the registry's rows", () => {
     const ended = facts({ plan: 'growth', subscription_status: 'canceled' });
     // Work in parts runs a model in each part, which neither may spend (CHAT-27).
     const free = (names: string[]) => names.filter((name) => name !== 'run_subtasks');
-    expect(list('admin', ended)).toEqual(free(withoutShopping));
+    expect(list('admin', ended)).toEqual(free(starterReads));
     expect(list('admin', growth, { brandId: FIXTURE_IDS.brand, brandIsDemo: true })).toEqual(
       free(reads),
     );

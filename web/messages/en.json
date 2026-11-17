@@ -4167,6 +4167,27 @@
       "step": "Read Search Console queries"
     },
     "gaSummary": { "name": "Read Google Analytics", "step": "Read Google Analytics" },
+    "trackingSetup": {
+      "name": "Check what measures customers from AI",
+      "step": "Checked tracking setup"
+    },
+    "aiConversions": {
+      "name": "Read conversions from AI visits",
+      "step": "Read conversions from AI visits"
+    },
+    "aiConvertingPages": {
+      "name": "Read where AI visitors convert",
+      "step": "Read AI Traffic · Where AI visitors convert"
+    },
+    "aiPipeline": {
+      "name": "Read the AI-sourced pipeline",
+      "step": "Read AI Traffic · AI-sourced pipeline"
+    },
+    "aiVisits": { "name": "Read AI visits", "step": "Read AI Traffic · Visits" },
+    "promptConversions": {
+      "name": "Read prompts cited on pages that convert",
+      "step": "Read prompts and conversions"
+    },
     "members": { "name": "Read team members", "step": "Read Team" },
     "connections": { "name": "Read connected tools", "step": "Read Integrations" },
     "chatPolicy": { "name": "Read Chat's rules", "step": "Read Settings › Chat" },
@@ -7236,6 +7257,7 @@
       "content-plan": "Weekly content plan",
       "seasonal": "Seasonal prompts",
       "traffic": "AI traffic and sign-ups",
+      "ai-revenue": "Customers and revenue from AI",
       "earn-or-pay": "Earn or pay",
       "ad-drafts": "Ad drafts"
     },

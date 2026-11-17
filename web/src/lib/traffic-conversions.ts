@@ -43,3 +43,11 @@ export function widensToLast30Days(
   const to = window.to ? Date.parse(window.to) : Date.now();
   return to - Date.parse(window.from) < CONVERSIONS_FALLBACK_DAYS * DAY_MS - 60 * 60 * 1000;
 }
+
+/**
+ * What Chat says with every list of prompts beside the pages that converted
+ * (get_prompt_conversions): AI assistants don't pass the question on, so a
+ * prompt is never known to have brought a buyer.
+ */
+export const PROMPT_ASSOCIATION_LABEL =
+  "Association, not measured attribution: AI assistants don't pass the question, so no one can see which prompt brought a buyer. These are prompts whose tracked answers cite pages that converted from AI visits in the period.";

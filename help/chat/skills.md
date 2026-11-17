@@ -1,17 +1,17 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [manager adds library skill, skills, skill, setup guide, /setup, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, skill from skills.sh, skills.sh, review a skill, skill update, update available, library, skill library, library skills, add a skill from the library, third-party skills, mit skills, pending approval, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, fan-out gaps, fanout, sub-questions ai searches, prompt portfolio, prompts to add, prompts to pause, 30-day plan, /plan, monthly plan, task list, plan actions, weekly content plan, /content-plan, content brief, seasonal prompts, /seasonal, holiday prompts, ai traffic and sign-ups, /traffic, ai visitors, sign-ups from ai]
+keywords: [manager adds library skill, skills, skill, setup guide, /setup, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, skill from skills.sh, skills.sh, review a skill, skill update, update available, library, skill library, library skills, add a skill from the library, third-party skills, mit skills, pending approval, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, fan-out gaps, fanout, sub-questions ai searches, prompt portfolio, prompts to add, prompts to pause, 30-day plan, /plan, monthly plan, task list, plan actions, weekly content plan, /content-plan, content brief, seasonal prompts, /seasonal, holiday prompts, ai traffic and sign-ups, /traffic, ai visitors, sign-ups from ai, customers and revenue from ai, /ai-revenue, which pages bring customers, revenue from ai]
 synonyms: [slash commands, playbooks, how-tos, templates, marketplace, skills directory]
 plan: all
-updated: 2026-11-15
-last_checked: 2026-11-15
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json, skills/README.md, skills/content-plan/SKILL.md, skills/seasonal/SKILL.md, skills/traffic/SKILL.md]
+sources: [web/messages/en.json, skills/README.md, skills/content-plan/SKILL.md, skills/seasonal/SKILL.md, skills/traffic/SKILL.md, skills/ai-revenue/SKILL.md]
 ---
-Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-eight Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan**, **Weekly content plan** and **Setup guide**.
+Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-nine Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan**, **Weekly content plan** and **Setup guide**.
 
 ## Use a skill
 
@@ -72,7 +72,7 @@ A skill shapes how Chat works, not what it may do. It gives Chat no new tools, d
 
 ## The Ansvisor skills
 
-Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio, 30-day plan, Weekly content plan, Seasonal prompts and AI traffic and sign-ups.
+Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio, 30-day plan, Weekly content plan, Seasonal prompts, AI traffic and sign-ups and Customers and revenue from AI.
 
 **Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent.
 
@@ -98,4 +98,8 @@ Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fa
 
 ## AI traffic and sign-ups
 
-**AI traffic and sign-ups** (**/traffic**) reports the visits AI assistants send to your site, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, from AI sessions. It says plainly what isn't measured: sign-ups by assistant or page, and the prompt behind a visit.
+**AI traffic and sign-ups** (**/traffic**) reports the visits AI assistants send to your site, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, from AI sessions. It says plainly what isn't measured: sign-ups by assistant or page, and the prompt behind a visit. For sign-ups, orders and revenue by page and assistant, use **Customers and revenue from AI**.
+
+## Customers and revenue from AI
+
+**Customers and revenue from AI** (**/ai-revenue**) answers which pages and AI assistants bring sign-ups, forms, orders and revenue, from your conversions from AI visits, and from Google Analytics and HubSpot when they are connected. It starts with what isn't set up yet, with the step and the page to set it up, and says **Not measured** where nothing measures it. Each currency's revenue is shown on its own. Prompts come only as an association: AI assistants don't pass on the question. It ends with one to three next steps.

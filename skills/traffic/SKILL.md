@@ -15,6 +15,7 @@ A weekly report of the visits AI assistants send to the brand's site, by assista
 
 - "How much traffic does AI send us?", "Did AI visitors sign up this week?", "Which pages do ChatGPT visitors land on?"
 - For citations, mentions and share of voice, the Weekly report skill fits better.
+- For sign-ups, orders and revenue by page or assistant, the Customers and revenue from AI skill (/ai-revenue) fits better.
 
 ## What to read
 
@@ -32,11 +33,11 @@ This week is the last seven full days; last week is the seven days before.
 3. Sign-ups: Google Analytics' key events from AI sessions, this week and last week, and the change, with the AI sessions and engaged sessions beside them, and revenue when it reports any. Key events are what the brand marked as conversions in Google Analytics, such as sign-ups. Call them sign-ups only when the person says their key event is the sign-up.
 4. When Analytics isn't connected, sign-ups are "Not measured: connect Google Analytics", and the report gives the visits only.
 5. Say what isn't measured, every time:
-   - Sign-ups by assistant and by landing page: not measured. Analytics counts key events for AI sessions as a whole.
+   - Sign-ups by assistant and by landing page: not measured here, where Analytics counts key events for AI sessions as a whole. The Customers and revenue from AI skill (/ai-revenue) gives them from conversions from AI visits, or says what to set up.
    - The prompt behind a visit: not measured. AI assistants don't pass on what was asked. A landing page AI cites shows which pages answers send people to, not which prompts.
    - Ansvisor's AI visits and Analytics' AI sessions are counted in different ways: show them side by side, never add them up or treat them as one number.
 6. For a landing page that lost AI visits, say whether it lost citations too. Say what moved together, never that one caused the other.
-7. Offer one to three next steps, the most visits at stake first: install the tracking snippet, or connect Google Analytics, when either is missing; win back the citations of a landing page that lost them, with the Win back lost citations skill (/winback); or send that page to the Action Center. Where an open action already covers a page, name it instead.
+7. Offer one to three next steps, the most visits at stake first: install the tracking snippet, or connect Google Analytics, when either is missing; win back the citations of a landing page that lost them, with the Win back lost citations skill (/winback); see which pages and assistants bring customers, with the Customers and revenue from AI skill (/ai-revenue); or send that page to the Action Center. Where an open action already covers a page, name it instead.
 8. To send a page, ask once; on a yes, call `create_action`: a title that names the page, category recover, why with its numbers, the page, and one to three tasks, each with its page and Done when. When it answers `duplicate`, nothing was made: link the action it names, and never create one anyway. In an agent's run nobody is there to ask: call the tool anyway, one action at most, and the app holds it for approval where the agent's mode needs it.
 
 ## Each week
