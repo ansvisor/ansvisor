@@ -4,13 +4,14 @@ route: /dashboard/chat
 keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range above the box, add date range, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, settings in the chat menu, general settings, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, action code, what is ac, open action from answer, action link, most important actions, what should i do first, top actions, action title, signal code, what is s-07, look up a prompt, find a prompt, cited domain, cited page, find a draft, find a report]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-11-16
-last_checked: 2026-11-16
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json, web/src/lib/chat/range.ts, web/src/components/chat/agents-for-you.tsx, web/src/lib/chat/agents-for-you.ts, web/src/lib/actions/agents-for-you.ts, web/src/components/chat/run/run-answer.tsx]
+sources: [web/messages/en.json, web/src/lib/chat/range.ts, web/src/components/chat/agents-for-you.tsx, web/src/lib/chat/agents-for-you.ts, web/src/lib/actions/agents-for-you.ts, web/src/components/chat/run/run-answer.tsx, web/src/components/chat/run/run-steps-line.tsx]
 ---
+
 Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on the Action Center's **Today** tab, whatever your plan; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off.
 
 ## Chat Home
@@ -71,7 +72,7 @@ The panel isn't on Chat's own pages, where **Ctrl J** takes you to the message b
 
 ## Stop or steer
 
-While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the line with the steps says how long it worked, such as **Stopped after 41s · 5 steps**.
+While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the grey steps line says how long it worked, such as **Stopped after 41s · 5 steps**.
 
 You can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example "only blog pages".
 
@@ -294,25 +295,29 @@ If your message holds something that looks like an API key, Chat doesn't send it
 
 ## Watch the work
 
-While Chat works, one line says what it is doing now, such as "Reading Citations…". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.
+While Chat works, a grey line at the end of the answer says what it is doing now, such as "Thinking…", "Reading Citations…" or "Writing the answer…". A soft light moves across it, and from 2 seconds it counts how long Chat has been on it, such as **Thinking… · 6s**, so a pause never looks stuck. The line goes once the answer is done or Chat waits for your OK.
 
-Under the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
+The steps it finished show as one grey line above the answer, such as **✓ Read 3 sources**. Click it for the list of steps, and click a step for its detail, such as the period and platforms a read covered. A fact check of the answer's figures shows as **Checked facts**. Chat and the side panel show this the same way.
+
+## Data used and action links
+
+Once Chat is done, **Data used** under the answer names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
 Each Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both.
 
 ## Big requests in parts
 
-For a bigger request, such as comparing five competitors, Chat can split the work into 2 to 5 parts and work on them at the same time. The steps show **Working on 5 parts** and how many are done, with a dot for each part: working, done, failed, or paused at the AI limit. Click a part to see its own steps. Then Chat writes one answer from all the parts. A part that failed is named, and the others still count.
+For a bigger request, such as comparing five competitors, Chat can split the work into 2 to 5 parts and work on them at the same time. The grey line at the end says **Working on 5 parts…**, with how many are done and a dot for each part under it: working, done, failed, or paused at the AI limit. Click a part to see its own steps. Then Chat writes one answer from all the parts. A part that failed is named, and the others still count.
 
 Parts only read, on the same brand and with the same access as you. When a part finds something to change, Chat asks you in this chat with the usual approval card. **Stop** stops every part. An agent's limit for one run covers the run and its parts together: when they reach it, they all pause.
 
 ## When something goes wrong
 
-A step that fails shows a red mark and why, such as **Took too long this time**. Chat retries once with a narrower read, such as a shorter period. If a figure still isn't there, the answer says it isn't available right now and offers to retry. Something off for you, such as another plan's feature, is named with why and what you can do.
+The steps line counts a failed step, such as **1 step failed**; its list shows a red mark and why, such as **Took too long this time**. Chat retries once with a narrower read. If a figure still isn't there, the answer says it isn't available now and offers to retry. Something off for you, such as another plan's feature, is named with why and what to do.
 
 If the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.
 
-If your connection drops while Chat works, the line with the steps says **Reconnecting…**. Chat keeps working meanwhile and picks up where it was; reloading the page shows where it is too. When the monthly AI usage runs out mid-answer, the step it was on shows **Stopped at the AI limit**.
+If your connection drops while Chat works, the grey line at the end says **Reconnecting…**. Chat keeps working meanwhile and picks up where it was, as a reload shows. When the monthly AI usage runs out mid-answer, the step it was on shows **Stopped at the AI limit**.
 
 ## When your AI key fails
 

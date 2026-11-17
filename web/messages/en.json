@@ -4980,6 +4980,27 @@
       "other": "{label}…",
       "reconnecting": "Reconnecting…"
     },
+    "live": {
+      "seconds": "{s}s",
+      "minutes": "{m}m {s}s"
+    },
+    "stepsLine": {
+      "sources": "Read {count, plural, one {# source} other {# sources}}",
+      "pages": "Opened {count, plural, one {# page} other {# pages}}",
+      "sourcesAndPages": "Read {sources, plural, one {# source} other {# sources}} and {pages, plural, one {# page} other {# pages}}",
+      "checked": "{words} · checked facts",
+      "steps": "{count, plural, one {# step} other {# steps}}",
+      "items": "{label} · {count, plural, one {# item} other {# items}}",
+      "parts": "{label} · {count, plural, one {# part} other {# parts}}",
+      "failedSteps": "{count, plural, one {# step failed} other {# steps failed}}",
+      "waiting": "Waiting for your OK",
+      "stoppedAfter": "Stopped after {duration}",
+      "failed": "Stopped: something went wrong",
+      "workedFor": "Worked for {duration}",
+      "list": "Steps",
+      "skipped": "Skipped",
+      "waitingStep": "Waiting for you"
+    },
     "dataUsed": "Data used",
     "retry": "Retry",
     "preview": {
