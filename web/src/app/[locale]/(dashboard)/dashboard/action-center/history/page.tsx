@@ -24,7 +24,7 @@ import {
   HISTORY_PAGE_SIZE,
   HISTORY_SORTS,
   HISTORY_STATUSES,
-  compareHistory,
+  filterHistory,
   summarize,
   type ActionHistoryItem,
   type HistorySort,
@@ -188,28 +188,19 @@ export default function ActionCenterHistoryPage() {
     setPage(1);
   }, [status, type, priority, source, search, sort, range]);
 
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const rows = (items ?? []).filter((item) => {
-      if (status !== 'all' && item.status !== status) return false;
-      if (type !== 'all' && item.type !== type) return false;
-      if (priority !== 'all' && item.priorityLevel !== priority) return false;
-      if (source !== 'all' && !item.sources.includes(source)) return false;
-      if (needle) {
+  const filtered = useMemo(
+    () =>
+      filterHistory(items ?? [], { status, type, priority, source, search }, sort, (item) => {
         // Titles are composed from i18n templates rather than stored, so the
         // search has to run against what the row actually renders.
         const texts = actionTexts(
           { kind: item.kind, payload: item.payload } as Parameters<typeof actionTexts>[0],
           tTexts,
         );
-        const haystack = `${texts.title} ${texts.description} ${actionCode(item)}`.toLowerCase();
-        if (!haystack.includes(needle)) return false;
-      }
-      return true;
-    });
-
-    return rows.sort(compareHistory(sort));
-  }, [items, status, type, priority, source, search, sort, tTexts]);
+        return `${texts.title} ${texts.description} ${actionCode(item)}`;
+      }),
+    [items, status, type, priority, source, search, sort, tTexts],
+  );
 
   // The scorecard hides the filters, so its cards count the whole range.
   const summary = useMemo(

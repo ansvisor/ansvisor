@@ -4326,6 +4326,10 @@
     "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" },
     "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" },
     "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agents" },
+    "today": { "name": "Read Today", "step": "Read Today" },
+    "myAgents": { "name": "Read your agents", "step": "Read your agents" },
+    "agentRuns": { "name": "Read an agent's runs", "step": "Read agent runs" },
+    "signalsSummary": { "name": "Read the signals summary", "step": "Read Signals summary" },
     "adsOpportunities": { "name": "Read Ads opportunities", "step": "Read Ads opportunities" },
     "adDrafts": { "name": "Save ad drafts", "step": "Saved ad drafts" }
   },
@@ -5006,6 +5010,28 @@
       "check": "Checking facts…",
       "other": "{label}…",
       "reconnecting": "Reconnecting…"
+    },
+    "live": {
+      "seconds": "{s}s",
+      "minutes": "{m}m {s}s"
+    },
+    "stepsLine": {
+      "sources": "Read {count, plural, one {# source} other {# sources}}",
+      "pages": "Opened {count, plural, one {# page} other {# pages}}",
+      "sourcesAndPages": "Read {sources, plural, one {# source} other {# sources}} and {pages, plural, one {# page} other {# pages}}",
+      "checked": "{words} · checked facts",
+      "checkedFacts": "Checked facts",
+      "steps": "{count, plural, one {# step} other {# steps}}",
+      "items": "{label} · {count, plural, one {# item} other {# items}}",
+      "parts": "{label} · {count, plural, one {# part} other {# parts}}",
+      "failedSteps": "{count, plural, one {# step failed} other {# steps failed}}",
+      "waiting": "Waiting for your OK",
+      "stoppedAfter": "Stopped after {duration}",
+      "failed": "Stopped: something went wrong",
+      "workedFor": "Worked for {duration}",
+      "list": "Steps",
+      "skipped": "Skipped",
+      "waitingStep": "Waiting for you"
     },
     "dataUsed": "Data used",
     "retry": "Retry",
@@ -14480,11 +14506,11 @@
         "all": "All Locations"
       },
       "notAnalyzed": {
-        "count": "{count, plural, one {# prompt not analyzed yet} other {# prompts not analyzed yet}}",
+        "count": "Volume and competition missing for {count, plural, one {# prompt} other {# prompts}}",
         "hint": "Run volume analysis to fill in their Volume & Competition.",
         "limitHint": "Their Volume & Competition stay empty until analyzed. Your monthly volume analysis limit is reached: upgrade your plan to analyze more.",
         "analyze": "Analyze",
-        "analyzeLabel": "{count, plural, one {Analyze # prompt} other {Analyze # prompts}}",
+        "analyzeLabel": "Analyze volume and competition",
         "analyzing": "Analyzing…",
         "analyzingProgress": "Analyzing {done}/{total}…",
         "limitReached": "Monthly limit reached"

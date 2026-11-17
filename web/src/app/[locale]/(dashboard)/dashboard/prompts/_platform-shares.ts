@@ -59,15 +59,18 @@ const AIO_SHARE = (() => {
  * Unlike raw chatbot-only market-share charts, this distribution reflects the
  * "any query that gets an AI-generated answer" universe — which is the
  * relevant denominator for Answer Engine Optimisation (AEO). Shares sum to 1.
+ *
+ * The chart colors each engine by its name from the product's platform
+ * palette (`@/lib/platform-colors`), as AI Traffic does.
  */
-const OTHER_ENGINE_WEIGHTS: { name: string; weight: number; color: string }[] = [
-  { name: 'ChatGPT', weight: 0.27, color: '#10a37f' },
-  { name: 'Google Gemini', weight: 0.055, color: '#8ab4f8' },
-  { name: 'Microsoft Copilot', weight: 0.029, color: '#0ea5e9' },
-  { name: 'Perplexity', weight: 0.018, color: '#6366f1' },
-  { name: 'Claude', weight: 0.013, color: '#d97706' },
-  { name: 'Google AI Mode', weight: 0.008, color: '#1a73e8' },
-  { name: 'Grok', weight: 0.005, color: '#18181b' },
+const OTHER_ENGINE_WEIGHTS: { name: string; weight: number }[] = [
+  { name: 'ChatGPT', weight: 0.27 },
+  { name: 'Google Gemini', weight: 0.055 },
+  { name: 'Microsoft Copilot', weight: 0.029 },
+  { name: 'Perplexity', weight: 0.018 },
+  { name: 'Claude', weight: 0.013 },
+  { name: 'Google AI Mode', weight: 0.008 },
+  { name: 'Grok', weight: 0.005 },
 ];
 
 const OTHER_WEIGHT = OTHER_ENGINE_WEIGHTS.reduce((sum, e) => sum + e.weight, 0);
@@ -75,12 +78,10 @@ const OTHER_WEIGHT = OTHER_ENGINE_WEIGHTS.reduce((sum, e) => sum + e.weight, 0);
 export const AI_PLATFORM_SHARES: {
   name: string;
   share: number;
-  color: string;
 }[] = [
-  { name: 'Google AI Overviews', share: AIO_SHARE, color: '#4285f4' },
-  ...OTHER_ENGINE_WEIGHTS.map(({ name, weight, color }) => ({
+  { name: 'Google AI Overviews', share: AIO_SHARE },
+  ...OTHER_ENGINE_WEIGHTS.map(({ name, weight }) => ({
     name,
     share: ((1 - AIO_SHARE) * weight) / OTHER_WEIGHT,
-    color,
   })),
 ];

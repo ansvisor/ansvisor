@@ -14,7 +14,7 @@
  * not been measured yet carries no results and says so.
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import type { ActionCategory } from '@/lib/action-center/registry';
 import {
   ACTION_OUTCOMES,
@@ -256,7 +256,8 @@ export async function getActionHistory(
   brandId: string,
   opts?: { from?: string; to?: string },
 ): Promise<ActionHistoryItem[]> {
-  const supabase = await createClient();
+  // The person's own client, or Chat's (get_action_history: the service role, after its brand check).
+  const supabase = await dbClient();
 
   const read = (columns: string) => {
     let query = supabase
