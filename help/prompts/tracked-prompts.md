@@ -42,7 +42,7 @@ The line then says **Tracking N prompts now**, and **See answers** opens **Visib
 
 ## Rows without figures
 
-When some active prompts have no volume yet, a line under the filters says how many are not analyzed yet; admins and managers click **Analyze** to fill in their **Volume** and **Competition**.
+When some active prompts have no volume yet, a line under the filters says **Volume and competition missing for N prompts**. Those prompts are tracked as usual, with their visibility, mentions, citations and positions; only these two columns wait for a volume check. Admins and managers click **Analyze** to run it.
 
 A new prompt has no results until it's first asked. Until then, for its first two days, the row says **Within 24h** in its first figure column, such as Visibility. While a new brand's first tracking runs, it says **Arriving now** instead: that tracking is asking it. A paused prompt says **Paused** there when the Status column is hidden. An older prompt with no results in the range, such as days without a run, shows a dash, as does a range that ended before today.
 
