@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useId } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter, Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -17,13 +17,28 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { brandPagePath } from '@/lib/brand-path';
+import { brandPromptsLink } from '@/lib/brand-prompts-link';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ChevronsUpDown, MessageSquareText, Settings, Tag } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  ChevronsUpDown,
+  MessageSquareText,
+  Settings,
+  Tag,
+} from 'lucide-react';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
+/**
+ * The brand's tabs. Topics and Settings are pages of this brand; Prompts
+ * leaves them for the Prompts page (Tracked Prompts), with this brand picked,
+ * as the brand card's prompts row does: the brand's own prompts page is going
+ * away. That page's address keeps the tab marked only when someone lands
+ * there.
+ */
 const SUB_NAV = [
   { href: 'topics', label: 'Topics', icon: Tag },
-  { href: 'prompts', label: 'Prompts', icon: MessageSquareText },
+  { href: 'prompts', label: 'Prompts', icon: MessageSquareText, opensPromptsPage: true },
   { href: 'settings', label: 'Settings', icon: Settings },
 ] as const;
 
@@ -41,6 +56,7 @@ export default function BrandDetailLayout({
   const t = useTranslations('brands');
   const { brands, setActiveBrand } = useBrandStore();
   const brand = brands.find((b) => b.id === id);
+  const promptsHintId = useId();
   // Another brand from the header opens the same page of that brand (its
   // settings, from the settings), and becomes the brand the app shows.
   const switchTo = (brandId: string) => {
@@ -106,10 +122,18 @@ export default function BrandDetailLayout({
       <nav className="flex gap-1 border-b">
         {SUB_NAV.map((item) => {
           const fullHref = `/dashboard/brands/${id}/${item.href}`;
-          const isActive = pathname.includes(`/${item.href}`);
+          const isActive = pathname === fullHref || pathname.startsWith(`${fullHref}/`);
+          const leaves = 'opensPromptsPage' in item;
+          const link = leaves
+            ? {
+                ...brandPromptsLink(id, setActiveBrand),
+                'aria-describedby': promptsHintId,
+                title: t('opensPromptsPage'),
+              }
+            : { href: fullHref };
 
           return (
-            <Link key={item.href} href={fullHref}>
+            <Link key={item.href} {...link}>
               <span
                 className={cn(
                   'inline-flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition-colors',
@@ -120,10 +144,14 @@ export default function BrandDetailLayout({
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
+                {leaves && <ArrowUpRight className="-ml-1 h-3.5 w-3.5" aria-hidden="true" />}
               </span>
             </Link>
           );
         })}
+        <span id={promptsHintId} hidden>
+          {t('opensPromptsPage')}
+        </span>
       </nav>
 
       {/* Page content */}
