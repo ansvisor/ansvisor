@@ -1622,6 +1622,10 @@
           "text": "Chat reads any list the same way, such as signals, prompts, mentions, citations, opportunities or drafts: 50 at a time, with how many there are in all. Signals are read over your date range the way the Signals page reads its window: those found by its end that were still open, or resolved, after it began. When your question needs more, Chat reads the next 50 before it answers. When an answer covers part of a list, it says which part, such as \"the newest 50 of 451 signals\", and offers the rest as a next move.\n\nAsk about one item by what you see: a signal's code (S-07), a prompt's words, a cited domain or address, or an opportunity, draft or report title. Chat looks it up directly, in any status, and says plainly if the brand has none."
         },
         {
+          "heading": "Topics, fan-outs and head to head",
+          "text": "Ask about topics, fan-outs, a competitor head to head, AI bots and Search Console pages: Chat reads the same tables those pages show, such as the prompts where a competitor is ahead of you."
+        },
+        {
           "heading": "Change what you track",
           "text": "Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.\n\nChat asks first, except in **Full auto**. Removing a competitor, or pausing more than five prompts in one run, always asks.\n\nEach change is in the **Activity** log, with **Undo** for 7 days (30 days for paused prompts). Undo leaves alone anything someone changed since, and says so. Undoing new prompts pauses them; their first answers, and what they cost, stay. A removed competitor comes back without its timeline events."
         },

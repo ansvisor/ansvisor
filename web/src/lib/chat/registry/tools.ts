@@ -17,6 +17,7 @@ import { FOLLOW_UP_TOOLS } from './followup-tools';
 import { SKILL_TOOLS } from './skill-tools';
 import { SUBTASK_TOOLS } from './subtask-tools';
 import { TOPIC_TOOLS } from './topic-tools';
+import { VISIBILITY_EXTRA_READS } from './visibility-extra-tools';
 import { WHY_TOOLS } from './why-tools';
 import { WRITE_TOOLS } from './write-tools';
 import { AREA_READS } from './areas';
@@ -40,6 +41,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...WHY_TOOLS,
   ...IMAGE_READS,
   ...ADS_READS,
+  ...VISIBILITY_EXTRA_READS,
   ...WRITE_TOOLS,
   ...PROMPT_TOOLS,
   ...TOPIC_TOOLS,
