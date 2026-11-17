@@ -827,6 +827,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
           <SnippetDialog
             trackingCode={brand.trackingCode}
             conversions={conversions}
+            domain={primaryDomain}
             open={codeOpen}
             onOpenChange={setCodeOpen}
           />

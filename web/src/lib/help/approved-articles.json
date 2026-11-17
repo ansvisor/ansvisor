@@ -985,7 +985,8 @@
         "add tracking code",
         "link analytics",
         "ga4",
-        "gsc"
+        "gsc",
+        "send the snippet to my developer"
       ],
       "plan": "all",
       "updated": "2026-11-16",
@@ -1000,7 +1001,7 @@
         },
         {
           "heading": "Add the tracking snippet",
-          "text": "Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page.\n\nOn the cloud, the same snippet is offered at the end of brand setup, on **Connect your site**. Until its first visit, it's also the first step of **Finish setting up** on the Action Center's **Today** tab."
+          "text": "Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page. **Email this to my developer** opens your email app with the snippet and steps; **Copy message** copies the same text.\n\nOn the cloud, the same snippet is offered at the end of brand setup, on **Connect your site**. Until its first visit, it's also the first step of **Finish setting up** on the Action Center's **Today** tab."
         },
         {
           "heading": "Check that the snippet works",
@@ -3880,7 +3881,8 @@
         "set up a brand after buying",
         "start the free trial",
         "explore the demo",
-        "add the tracking snippet during setup"
+        "add the tracking snippet during setup",
+        "send the snippet to my developer"
       ],
       "plan": "all",
       "updated": "2026-11-16",
@@ -3915,7 +3917,7 @@
         },
         {
           "heading": "Last, optional: Connect your site",
-          "text": "On the cloud, once **Start tracking with N competitors** has started your brand's first run, **Connect your site** shows your brand's AI Traffic snippet: one line for your site's head. Without it, AI Traffic shows no AI visits, conversions or revenue.\n\n1. Copy the snippet with the copy button.\n2. Paste it just before the head closes on every page of your site, then publish.\n3. Click **Check again** to see whether your home page has it.\n\n**Done, go to my dashboard** and **I'll do it later** both open the dashboard while the first run goes on. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab."
+          "text": "On the cloud, once **Start tracking with N competitors** has started your brand's first run, **Connect your site** shows your brand's AI Traffic snippet: one line for your site's head. Without it, AI Traffic shows no AI visits, conversions or revenue.\n\n1. Copy the snippet with the copy button.\n2. Paste it just before the head closes on every page of your site, then publish.\n3. Click **Check again** to see whether your home page has it.\n\nSomeone else edits your site? **Email this to my developer** opens your email app with the snippet and these steps; **Copy message** copies the same text.\n\n**Done, go to my dashboard** and **I'll do it later** both open the dashboard while the first run goes on. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab."
         },
         {
           "heading": "Set up your brand with a plan active",

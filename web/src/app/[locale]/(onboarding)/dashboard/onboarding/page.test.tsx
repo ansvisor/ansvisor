@@ -1617,6 +1617,34 @@ describe('setup after purchase', () => {
       });
     });
 
+    it('offers the message for the developer, by email or copied, and counts each', async () => {
+      await finish();
+      const email = [...container.querySelectorAll<HTMLAnchorElement>('a')].find(
+        (a) => a.textContent === 'Email this to my developer',
+      )!;
+      const mail = new URL(email.href);
+      expect(mail.pathname).toBe('');
+      expect(mail.searchParams.get('subject')).toBe(
+        'Please add the Ansvisor tracking code to acme.com',
+      );
+      expect(mail.searchParams.get('body')).toContain(`\r\n\r\n${TAG}\r\n\r\n`);
+      email.addEventListener('click', (e) => e.preventDefault());
+      await act(async () => email.click());
+      expect(track).toHaveBeenCalledWith('onboarding_snippet_emailed', {
+        setup_after_purchase: true,
+      });
+
+      await act(async () => button('Copy message')!.click());
+      expect(clipboard.writeText).toHaveBeenCalledWith(
+        mail.searchParams.get('body')!.replace(/\r\n/g, '\n'),
+      );
+      expect(track).toHaveBeenCalledWith('onboarding_snippet_message_copied', {
+        setup_after_purchase: true,
+      });
+      // The snippet's own copy is counted apart.
+      expect(track).not.toHaveBeenCalledWith('onboarding_snippet_copied', expect.anything());
+    });
+
     it("checks the brand's home page, saying what it found", async () => {
       await finish();
       checkTrackingSnippet.mockResolvedValueOnce({

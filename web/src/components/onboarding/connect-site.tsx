@@ -14,8 +14,9 @@ import type { SnippetCheckStatus } from '@/lib/traffic-snippet-client';
  * "Connect your site", the last, optional screen of setup after purchase
  * (lib/onboarding/connect-site.ts): the brand's first run has started, and
  * the AI Traffic snippet is offered as AI Traffic shows it, with its copy
- * button and Check again. Done and Later both go on to the dashboard; the
- * snippet stays first in Today's "Finish setting up" until its first visit.
+ * button, the message for the developer, and Check again. Done and Later
+ * both go on to the dashboard; the snippet stays first in Today's "Finish
+ * setting up" until its first visit.
  */
 export function ConnectSite({
   brandId,
@@ -23,6 +24,8 @@ export function ConnectSite({
   snippet,
   leaving,
   onCopy,
+  onEmailed,
+  onMessageCopied,
   onChecked,
   onDone,
   onLater,
@@ -35,6 +38,10 @@ export function ConnectSite({
   /** Done or Later was pressed: the dashboard is opening. */
   leaving: 'done' | 'later' | null;
   onCopy: () => void;
+  /** "Email this to my developer" opened the person's mail app. */
+  onEmailed: () => void;
+  /** "Copy message" copied the developer's message. */
+  onMessageCopied: () => void;
   onChecked: (outcome: SnippetCheckStatus | 'failed') => void;
   onDone: () => void;
   onLater: () => void;
@@ -57,7 +64,13 @@ export function ConnectSite({
       </div>
 
       <div className="rounded-lg border p-4">
-        <SnippetCode snippet={snippet} onCopy={onCopy} />
+        <SnippetCode
+          snippet={snippet}
+          domain={domain}
+          onCopy={onCopy}
+          onEmailed={onEmailed}
+          onMessageCopied={onMessageCopied}
+        />
         <CheckAgain
           brandId={brandId}
           domain={domain}
