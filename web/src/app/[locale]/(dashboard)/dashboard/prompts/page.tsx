@@ -137,19 +137,20 @@ import {
   startPromptVolumeAnalysis,
   getVolumeAnalysisStatus,
   refreshVolumes,
+  type VolumeAnalysisStatus,
   type VolumeQuota,
   type VolumeErrorCode,
 } from '@/lib/actions/volumes';
 import {
   deletePrompt,
   deletePrompts,
-  getPromptsPageData,
   importPrompts,
   setPromptActive,
   setPromptsActive,
   updatePrompt,
   type LocationQuota,
 } from '@/lib/actions/prompt';
+import { readPromptsPageData, readPromptVolumes } from '@/lib/prompts-reads';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
@@ -168,7 +169,8 @@ import {
   type PromptRangePreset,
 } from '@/config/prompt-options';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
-import { getBrandFilterOptions } from '@/lib/actions/tracking';
+// Through /api/visibility/read, as the Visibility tabs read it: a fetch, beside the table's.
+import { getBrandFilterOptions } from '@/lib/visibility-reads';
 import { formatRegionDisplay, regionLabel } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
 import { brandLocation, useAllowedEngines } from './_prompt-defaults';
@@ -226,7 +228,8 @@ import {
 } from './_location-matrix';
 import { AddLocationsDialog, type AddLocationsPreset } from './_add-locations-dialog';
 import { BulkTagsDialog, type BulkTagsPreset } from './_bulk-tags-dialog';
-import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt-table-views';
+import type { PromptTableViews } from '@/lib/actions/prompt-table-views';
+import type { ImprovingAction } from '@/lib/improve-outcome';
 import {
   effectiveView,
   parseLocationColumn,
@@ -422,6 +425,11 @@ const promptExportHeaders = (suffix: string) => [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const VALID_TABS = ['all', 'topics', 'fanout', 'insights'] as const;
+
+/** Today's columns: no view of the person's or the brand's (PROMPT-015a). */
+const NO_TABLE_VIEWS: PromptTableViews = { mine: null, brand: null };
+/** No Improve action tracked for any prompt (PROMPT-008). */
+const NO_IMPROVING: Record<string, ImprovingAction> = {};
 
 /**
  * The window a tab opens on. Query Fan-out opens on 7 days: one day of
@@ -1315,6 +1323,14 @@ const VOLUME_POLL_MS = 10_000;
 const VOLUME_WATCH_MS = 30 * 60_000;
 
 /**
+ * How many times a failed volumes read is tried again, at once, before the
+ * page says the volumes are unavailable: a first read that hits a blip
+ * otherwise left every Volume cell empty and every prompt "not analyzed"
+ * until the range was changed.
+ */
+const VOLUME_READ_RETRIES = 1;
+
+/**
  * Wording for the closed set of failure codes. Server text never reaches a
  * customer: it names batch sizes, upstream APIs and Postgres columns, none of
  * which mean anything to the person reading the toast.
@@ -1448,6 +1464,9 @@ export default function PromptsPage() {
   // routes from the sidebar (PROMPT-001).
   const [regionFilter, setRegionFilter] = useState(() => searchParams.get('region') ?? '');
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
+  // The brand whose locations have been read: until then the Location filter
+  // keeps its place for a brand whose prompts track more than one.
+  const [regionsFor, setRegionsFor] = useState<string | null>(null);
   const [customFrom, setCustomFrom] = useState(() => searchParams.get('from') ?? '');
   const [customTo, setCustomTo] = useState(() => searchParams.get('to') ?? '');
 
@@ -1574,11 +1593,35 @@ export default function PromptsPage() {
     }
   }, [tab, loading]);
 
+  // The table's column views (PROMPT-015a), read with the brand's first rows
+  // so the table opens on its own columns; Columns' changes land here too.
+  const [columnViews, setColumnViews] = useState<{
+    brandId: string;
+    views: PromptTableViews;
+  } | null>(null);
+  // The Improve actions still tracked, by prompt id (PROMPT-008), read with the rows.
+  const [improvingRead, setImprovingRead] = useState<{
+    brandId: string;
+    byPrompt: Record<string, ImprovingAction>;
+  } | null>(null);
+  // The active prompts with no answers yet (Track now), read with the rows;
+  // null when that read failed.
+  const [withoutAnswers, setWithoutAnswers] = useState<{
+    brandId: string;
+    ids: string[] | null;
+  } | null>(null);
+  // The brand whose first read (with its column views) came back.
+  const firstReadFor = useRef<string | null>(null);
+  // The latest table read: one sent earlier that lands after it is dropped,
+  // so a slow read of the old range never overwrites the new one's rows.
+  const loadSeq = useRef(0);
+
   const loadData = useCallback(
     async (isCancelled?: () => boolean) => {
+      const seq = ++loadSeq.current;
+      const stale = () => seq !== loadSeq.current || Boolean(isCancelled?.());
       if (!activeBrandId) {
-        if (isCancelled?.()) return;
-        setVolumes([]);
+        if (stale()) return;
         setAllPrompts([]);
         setVisibility({});
         setPositions({});
@@ -1586,41 +1629,49 @@ export default function PromptsPage() {
         return;
       }
 
+      const brandId = activeBrandId;
+      const first = firstReadFor.current !== brandId;
       setLoading(true);
       setLoadFailed(false);
       try {
-        // One consolidated server action: Next.js queues client-fired server
-        // actions sequentially, so the old three separate calls cost their
-        // SUM on a cold load — the main culprit behind the slow first paint.
-        const page = await getPromptsPageData(activeBrandId, {
+        // Everything the table shows in one read, run in parallel on the
+        // server, through /api/prompts/read: a fetch, so it doesn't wait in
+        // Next's server-action queue behind the menu's and the page's other
+        // actions, as it did as a server action. The volumes are read beside
+        // it (loadVolumes), so the rows never wait for the volumes API.
+        const page = await readPromptsPageData(brandId, {
           days: range?.days,
           from: range?.from,
           to: range?.to,
           region: regionFilter || undefined,
+          first,
+          withoutAnswers: canManage,
+          volumes: false,
         });
-        if (isCancelled?.()) return;
-        setVolumes(page.volumes);
-        if (page.quota) setQuota(page.quota);
+        if (stale()) return;
         const prompts = page.promptSets.flatMap((ps) => ps.prompts);
         setAllPrompts(prompts);
         setVisibility(page.visibility);
         setPositions(page.positions);
-        // A read-only workspace's volumes are refused (402): their columns
-        // stay empty, without a warning that something broke.
-        if (page.volumesDegraded && !isLocked) {
-          toast.warning('Volume data is temporarily unavailable — showing prompts without it.');
+        setImprovingRead({ brandId, byPrompt: page.improving ?? {} });
+        if (page.withoutAnswers !== undefined) {
+          setWithoutAnswers({ brandId, ids: page.withoutAnswers });
+        }
+        if (first) {
+          firstReadFor.current = brandId;
+          setColumnViews(page.tableViews ? { brandId, views: page.tableViews } : null);
         }
         if (page.visibilityDegraded) toast.warning(tPrompts('visibilityDegraded'));
       } catch (err) {
-        if (isCancelled?.()) return;
+        if (stale()) return;
         console.error('Failed to load prompt data:', err);
         setLoadFailed(true);
         toast.error('Failed to load prompt data');
       } finally {
-        if (!isCancelled?.()) setLoading(false);
+        if (!stale()) setLoading(false);
       }
     },
-    [activeBrandId, range, regionFilter, tPrompts, isLocked],
+    [activeBrandId, range, regionFilter, tPrompts, canManage],
   );
 
   useEffect(() => {
@@ -1632,14 +1683,79 @@ export default function PromptsPage() {
     };
   }, [loadData, promptDataWanted]);
 
+  // The volumes (and the quota), read beside the rows. They have no date, so
+  // a range or location change doesn't read them again. 'loading' until the
+  // brand's are in: the Volume and Competition cells wait in place, and
+  // neither the not-analyzed line nor Insights' "No volume data yet" is said
+  // before the volumes are known. A failed read is tried once more before the
+  // page says so ('failed'). A read-only workspace's volumes are refused
+  // (402): their columns stay empty, without a warning that something broke.
+  const [volumesState, setVolumesState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const volumesSeq = useRef(0);
+  // The brand whose volumes are on screen: read again, they stay up meanwhile.
+  const volumesFor = useRef<string | null>(null);
+  // Whether a volume analysis was running when the brand's volumes first came.
+  const [arrivalStatus, setArrivalStatus] = useState<{
+    brandId: string;
+    status: VolumeAnalysisStatus | null;
+  } | null>(null);
+  const loadVolumes = useCallback(async () => {
+    const seq = ++volumesSeq.current;
+    const stale = () => seq !== volumesSeq.current;
+    if (!activeBrandId) return;
+    const brandId = activeBrandId;
+    const shown = volumesFor.current === brandId;
+    if (!shown) setVolumesState('loading');
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        const read = await readPromptVolumes(brandId);
+        if (stale()) return;
+        volumesFor.current = brandId;
+        setVolumes(read.volumes);
+        if (read.quota) setQuota(read.quota);
+        setVolumesState('ready');
+        setArrivalStatus((prev) =>
+          prev?.brandId === brandId ? prev : { brandId, status: read.status ?? null },
+        );
+        return;
+      } catch (err) {
+        if (stale()) return;
+        if (isLocked) {
+          volumesFor.current = brandId;
+          setVolumes([]);
+          setVolumesState('ready');
+          return;
+        }
+        if (attempt < VOLUME_READ_RETRIES) continue;
+        console.error('Failed to load volumes:', err);
+        toast.warning('Volume data is temporarily unavailable — showing prompts without it.');
+        // A failed re-read keeps the volumes already shown.
+        if (!shown) {
+          setVolumes([]);
+          setVolumesState('failed');
+        }
+        return;
+      }
+    }
+  }, [activeBrandId, isLocked]);
+
+  useEffect(() => {
+    if (!promptDataWanted) return undefined;
+    void loadVolumes();
+    return () => {
+      volumesSeq.current += 1;
+    };
+  }, [loadVolumes, promptDataWanted]);
+
   // After prompts are added, paused, resumed, deleted or retargeted: reload
-  // the table and the usage cards together, and read the locations' figures
-  // (PROMPT-015b) anew.
+  // the table, its volumes and the usage cards together, and read the
+  // locations' figures (PROMPT-015b) anew.
   const reloadAfterChange = useCallback(() => {
     clearLocationMatrixCache();
     setUsageVersion((v) => v + 1);
+    void loadVolumes();
     return loadData();
-  }, [loadData]);
+  }, [loadData, loadVolumes]);
 
   // The swap dialog is for those who can act, on a plan that hasn't ended.
   const canSwap = canManage && !isLocked;
@@ -1672,12 +1788,18 @@ export default function PromptsPage() {
     }
     if (!promptDataWanted) return;
     let cancelled = false;
-    getBrandFilterOptions(activeBrandId)
+    const brandId = activeBrandId;
+    getBrandFilterOptions(brandId)
       .then((options) => {
         if (cancelled) return;
         setAvailableRegions([...options.regions].sort((a, b) => a.localeCompare(b)));
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setAvailableRegions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRegionsFor(brandId);
+      });
     return () => {
       cancelled = true;
     };
@@ -1691,12 +1813,12 @@ export default function PromptsPage() {
     }
   }, [availableRegions, regionFilter]);
 
-  // loadData changes identity whenever the date range does. The watch below
-  // must not restart for that, so it reaches the current one through a ref.
-  const loadDataRef = useRef(loadData);
+  // The watch below reaches the current loadVolumes through a ref, so it
+  // doesn't restart when that changes.
+  const loadVolumesRef = useRef(loadVolumes);
   useEffect(() => {
-    loadDataRef.current = loadData;
-  }, [loadData]);
+    loadVolumesRef.current = loadVolumes;
+  }, [loadVolumes]);
 
   /**
    * Follow a run that is already going.
@@ -1738,30 +1860,28 @@ export default function PromptsPage() {
    * reopened, a return to this brand — the page has to ask whether one is
    * already going. Without this it offers the Analyze button again while the
    * work is still in flight, which reads as though nothing were happening.
+   * The answer comes with the brand's first volumes read (loadVolumes), not
+   * as a server action of its own.
    *
    * Leaving the brand ends the watch. The run itself carries on; only this
    * page's narration of it stops.
    */
+  const arrival = arrivalStatus?.brandId === activeBrandId ? arrivalStatus : null;
   useEffect(() => {
-    if (!activeBrandId || !promptDataWanted) return undefined;
-
-    const brandId = activeBrandId;
+    if (!arrival?.status?.running) return undefined;
+    const { brandId, status } = arrival;
     const gen = ++analysisGenRef.current;
+    setAnalyzing(true);
+    setAnalysisProgress(status.done === null ? null : { done: status.done, total: status.total });
 
     (async () => {
-      const status = await getVolumeAnalysisStatus(brandId);
-      if (analysisGenRef.current !== gen || !status?.running) return;
-
-      setAnalyzing(true);
-      setAnalysisProgress(status.done === null ? null : { done: status.done, total: status.total });
-
       const { finished, superseded } = await watchVolumeAnalysis(brandId, gen);
       if (superseded || analysisGenRef.current !== gen) return;
 
       setAnalyzing(false);
       setAnalysisProgress(null);
       if (finished) {
-        await loadDataRef.current();
+        await loadVolumesRef.current();
         toast.success('Volume analysis finished.');
       }
     })();
@@ -1771,7 +1891,17 @@ export default function PromptsPage() {
       setAnalyzing(false);
       setAnalysisProgress(null);
     };
-  }, [activeBrandId, promptDataWanted, watchVolumeAnalysis]);
+  }, [arrival, watchVolumeAnalysis]);
+
+  // Another brand ends any watch of this one's run, the page's own included.
+  useEffect(
+    () => () => {
+      analysisGenRef.current += 1;
+      setAnalyzing(false);
+      setAnalysisProgress(null);
+    },
+    [activeBrandId],
+  );
 
   /**
    * Start a run, then follow it to the end.
@@ -1837,7 +1967,7 @@ export default function PromptsPage() {
       const { finished, superseded } = await watchVolumeAnalysis(activeBrandId, gen);
       if (superseded) return;
 
-      await loadData();
+      await loadVolumes();
       if (analysisGenRef.current === gen) {
         toast.success(
           finished
@@ -1884,7 +2014,7 @@ export default function PromptsPage() {
         });
       }
       toast.success(`Refreshed volumes for ${result.refreshed} prompts`);
-      await loadData();
+      await loadVolumes();
     } catch (err: unknown) {
       console.error('Volume refresh failed:', err);
       toast.error('Volumes could not be refreshed. Please try again.');
@@ -1956,28 +2086,24 @@ export default function PromptsPage() {
   );
 
   // Track now (moved from the brand's Manage prompts page): the active
-  // prompts with no answers yet, read as that page read them, for admins and
-  // managers, who can track them now. Read only when the table has an
-  // active prompt with no answers in its window, and again after a change.
+  // prompts with no answers yet, for admins and managers, who can track them
+  // now. They come with the table's read (getPromptsPageData), again after
+  // a change, rather than from a read of their own once the table is in.
   const activePromptIds = useMemo(
     () => new Set(allPrompts.filter((p) => p.isActive).map((p) => p.id)),
     [allPrompts],
   );
-  const mayLackAnswers = useMemo(
-    () => allPrompts.some((p) => p.isActive && !visibility[p.id]),
-    [allPrompts, visibility],
-  );
   const trackNow = useTrackNow({
     brandId: activeBrandId,
-    wanted: canManage && promptDataWanted && mayLackAnswers,
-    version: usageVersion,
+    ids: canManage && withoutAnswers?.brandId === activeBrandId ? withoutAnswers.ids : null,
     activeIds: activePromptIds,
   });
   const startTrackNow = guard((ids: string[]) => void trackNow.start(ids), {
     action: tActions('trackPrompts'),
   });
 
-  const canExport = !loading && allPrompts.length > 0;
+  // The export carries the volumes: it waits for them, as the table's cells do.
+  const canExport = !loading && volumesState !== 'loading' && allPrompts.length > 0;
 
   // Tracked's count in the switch: the table's own (Active + New), once the
   // prompts are read. Suggestions has no count without a read of its own.
@@ -2218,14 +2344,26 @@ export default function PromptsPage() {
                 positionsWindow={positionsWindow}
                 positionsPreset={range ? rangePreset : '30d'}
                 regionFilter={regionFilter}
+                tableViews={
+                  columnViews?.brandId === activeBrandId ? columnViews.views : NO_TABLE_VIEWS
+                }
+                onTableViewsChange={(views) => setColumnViews({ brandId: activeBrandId, views })}
+                improvingSeed={
+                  improvingRead?.brandId === activeBrandId ? improvingRead.byPrompt : NO_IMPROVING
+                }
+                volumesPending={volumesState === 'loading'}
                 // Location, in the table's filter row: for a brand tracked in more than one.
+                // Until the brand's locations are read, a brand whose prompts
+                // track more than one keeps the filter's place.
                 locationFilter={
-                  availableRegions.length > 1 && tabUsesLocation(tab) ? (
+                  !tabUsesLocation(tab) ? null : availableRegions.length > 1 ? (
                     <LocationFilter
                       regions={availableRegions}
                       value={regionFilter}
                       onChange={setRegionFilter}
                     />
+                  ) : regionsFor !== activeBrandId && matrixLocations(allPrompts).length > 1 ? (
+                    <Skeleton data-location-filter-pending className="h-8 w-44" />
                   ) : null
                 }
                 // The status line's quiet notes: the plan's prompt locations
@@ -2238,7 +2376,7 @@ export default function PromptsPage() {
                     {usageWarning && (
                       <LocationsWarningLine warning={usageWarning} planHref={planHref} />
                     )}
-                    {!loading && unanalyzedCount > 0 && (
+                    {!loading && volumesState === 'ready' && unanalyzedCount > 0 && (
                       <NotAnalyzedLine
                         count={unanalyzedCount}
                         onAnalyze={canManage ? handleAnalyzeNew : undefined}
@@ -2378,10 +2516,26 @@ export default function PromptsPage() {
               )}
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
+          {/* "No volume data yet" only once the read has said so: while the
+              volumes are on their way, their cards and chart wait in place. */}
+          {loading || volumesState === 'loading' ? (
+            <InsightsSkeleton />
+          ) : volumesState === 'failed' ? (
+            <Card data-volumes-failed>
+              <CardContent className="py-14 text-center text-sm">
+                <AlertCircle className="mx-auto h-9 w-9 text-destructive/60" />
+                <p className="mt-2 font-medium">Volume data couldn&apos;t be loaded.</p>
+                <Button
+                  className="mt-4 gap-2"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void loadVolumes()}
+                >
+                  <RotateCw className="h-4 w-4" />
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
           ) : volumes.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
@@ -2716,6 +2870,20 @@ export default function PromptsPage() {
   );
 }
 
+/** Insights while its volumes load: the KPI cards and the chart, in place. */
+function InsightsSkeleton() {
+  return (
+    <div data-insights-loading className="space-y-6" aria-busy="true">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-28 w-full rounded-xl" />
+        ))}
+      </div>
+      <Skeleton className="h-72 w-full rounded-xl" />
+    </div>
+  );
+}
+
 // ─── Positions cell (All Prompts) ─────────────────────────────────────────────
 
 /**
@@ -3018,6 +3186,10 @@ function AllPromptsTab({
   positionsWindow,
   positionsPreset,
   regionFilter,
+  tableViews,
+  onTableViewsChange,
+  improvingSeed,
+  volumesPending,
   locationFilter,
   notices,
   trackNow,
@@ -3047,6 +3219,16 @@ function AllPromptsTab({
   positionsPreset: PromptRangePreset;
   /** Selected location; empty means every location. */
   regionFilter: string;
+  /**
+   * The columns' views (PROMPT-015a), read with the rows: the person's, the
+   * brand's, or none (today's columns). Columns' changes go back up.
+   */
+  tableViews: PromptTableViews;
+  onTableViewsChange: (views: PromptTableViews) => void;
+  /** The Improve actions still tracked, by prompt id, read with the rows (PROMPT-008). */
+  improvingSeed: Record<string, ImprovingAction>;
+  /** The volumes aren't in yet: Volume and Competition wait in their cells. */
+  volumesPending: boolean;
   /** The page's Location filter, in the filter row; null when there is one location. */
   locationFilter?: React.ReactNode;
   /**
@@ -3108,24 +3290,8 @@ function AllPromptsTab({
     (st) => st.brands.find((b) => b.id === activeBrandId)?.name ?? '',
   );
   // The columns shown and their order (PROMPT-015a): the person's view, else
-  // the brand's shared one, else today's. Today's until read.
-  const [columnViews, setColumnViews] = useState<{
-    brandId: string;
-    views: PromptTableViews;
-  } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    getPromptTableViews(activeBrandId)
-      .then((views) => {
-        if (!cancelled) setColumnViews({ brandId: activeBrandId, views });
-      })
-      .catch((err) => console.error('Failed to read the Tracked Prompts columns:', err));
-    return () => {
-      cancelled = true;
-    };
-  }, [activeBrandId]);
-  const tableViews =
-    columnViews?.brandId === activeBrandId ? columnViews.views : { mine: null, brand: null };
+  // the brand's shared one, else today's. Read with the rows, so the table
+  // opens on them.
   const columns = visibleColumns(effectiveView(tableViews.mine, tableViews.brand));
   const tLocations = useTranslations('prompts.locations');
   const tMetrics = useTranslations('prompts.locations.metrics');
@@ -3384,7 +3550,12 @@ function AllPromptsTab({
   const [contentUsageFailed, setContentUsageFailed] = useState(false);
   const [usageVersion, setUsageVersion] = useState(0);
   const [suggestingIds, setSuggestingIds] = useState<Set<string>>(new Set());
+  // Only the row menu and the bulk bar use it: read once the rows are in,
+  // not before them, where it held the table's read up in the action queue.
+  const [contentUsageWanted, setContentUsageWanted] = useState(false);
+  if (!loading && !contentUsageWanted) setContentUsageWanted(true);
   useEffect(() => {
+    if (!contentUsageWanted) return undefined;
     let cancelled = false;
     getContentUsage().then(
       (usage) => {
@@ -3401,7 +3572,7 @@ function AllPromptsTab({
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, usageVersion]);
+  }, [activeBrandId, usageVersion, contentUsageWanted]);
   const hasOpportunityLimit =
     hasContentQuota(contentUsage) && contentUsage.opportunities.limit !== -1;
   // Without an active plan the quota reads 0 of 0: Suggest content stays
@@ -3866,9 +4037,15 @@ function AllPromptsTab({
       ? filtered.slice(promptsPager.start, promptsPager.end).map((p) => p.id)
       : [],
     positionsId !== null,
+    improvingSeed,
   );
 
-  const state = promptsTableState({ loading, failed, rows: prompts.length });
+  // Sorted by volume, the rows wait for the volumes rather than move when they come.
+  const state = promptsTableState({
+    loading: loading || (volumesPending && activeSort === 'volume' && !latenessOrder),
+    failed,
+    rows: prompts.length,
+  });
   if (state === 'loading') {
     return (
       <div className="flex items-center justify-center py-10">
@@ -4159,7 +4336,7 @@ function AllPromptsTab({
               brandName={brandName}
               canManage={canManage}
               views={tableViews}
-              onViewsChange={(views) => setColumnViews({ brandId: activeBrandId, views })}
+              onViewsChange={onTableViewsChange}
               locations={trackedLocations}
             />
           )}
@@ -4498,7 +4675,9 @@ function AllPromptsTab({
                   ),
                   volume: (
                     <TableCell key="volume" className="text-right">
-                      {vol ? (
+                      {volumesPending ? (
+                        <Skeleton data-volume-pending className="ml-auto h-4 w-16" />
+                      ) : vol ? (
                         <EstimateRange
                           estimate={estimateByPromptId.get(p.id)!}
                           handle={volumeNote}
@@ -4512,10 +4691,14 @@ function AllPromptsTab({
                   competition: (
                     <TableCell key="competition" className="text-center">
                       <div className="flex justify-center">
-                        <CompetitionBars
-                          index={vol?.competitionIndex ?? null}
-                          label={vol?.competition ?? null}
-                        />
+                        {volumesPending ? (
+                          <Skeleton data-volume-pending className="h-4 w-10" />
+                        ) : (
+                          <CompetitionBars
+                            index={vol?.competitionIndex ?? null}
+                            label={vol?.competition ?? null}
+                          />
+                        )}
                       </div>
                     </TableCell>
                   ),
