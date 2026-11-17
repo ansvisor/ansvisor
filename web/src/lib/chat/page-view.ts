@@ -191,18 +191,37 @@ export const PAGE_QUERY_KEYS: Readonly<Record<string, readonly string[]>> = {
   '/dashboard/audit': ['tab'],
   '/dashboard/content/library': ['tab', 'created', 'madeIn', 'sent', 'shopping', 'action'],
   '/dashboard/content/plan': ['days'],
+  // An item's own page (its id in the path, ID_PAGES), by its pattern. A product's page opens on
+  // the shelf its "Why not you?" names: a question (prompt) and its channel (platform).
+  '/dashboard/shopping/products/[productId]': ['prompt', 'platform'],
 };
 
 /** A path as the panel sends it, without a trailing slash. */
 export const viewRoute = (route: string | null | undefined) =>
   route?.trim().replace(/\/+$/, '') || null;
 
-/** Pages whose path holds an id: the page they are, by its pattern. */
+/** An item's id in a path, as the app writes one (a guid: the demo brand's are made by hand). */
+const PATH_ID = '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})';
+const idPage = (parent: string, page: string): [RegExp, string] => [
+  new RegExp(`^${parent}/${PATH_ID}$`, 'i'),
+  page,
+];
+
+/**
+ * Pages whose path holds an id, an item's own page: the page they are, by
+ * its pattern. Since step 9's detail pages: a topic's, a prompt's, a saved
+ * report's, a Site Audit report's, a product's, a content opportunity's and
+ * an AI answer's.
+ */
 const ID_PAGES: readonly [RegExp, string][] = [
-  [
-    /^\/dashboard\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    '/dashboard/agents/[id]',
-  ],
+  idPage('/dashboard/agents', '/dashboard/agents/[id]'),
+  idPage('/dashboard/prompts/topics', '/dashboard/prompts/topics/[id]'),
+  idPage('/dashboard/prompts', '/dashboard/prompts/[id]'),
+  idPage('/dashboard/reports', '/dashboard/reports/[id]'),
+  idPage('/dashboard/audit', '/dashboard/audit/[id]'),
+  idPage('/dashboard/shopping/products', '/dashboard/shopping/products/[productId]'),
+  idPage('/dashboard/content', '/dashboard/content/[id]'),
+  idPage('/dashboard/insights', '/dashboard/insights/[id]'),
 ];
 
 /**
@@ -214,6 +233,17 @@ export function viewPage(route: string | null | undefined): string | null {
   const path = viewRoute(route);
   if (!path) return null;
   return ID_PAGES.find(([pattern]) => pattern.test(path))?.[1] ?? path;
+}
+
+/** The id an item's own page holds in its path ("/dashboard/reports/1b2…"); null on any other page. */
+export function viewPathId(route: string | null | undefined): string | null {
+  const path = viewRoute(route);
+  if (!path) return null;
+  for (const [pattern] of ID_PAGES) {
+    const id = pattern.exec(path)?.[1];
+    if (id) return id;
+  }
+  return null;
 }
 
 /** The URL keys a page keeps, by its path; null for a page with none listed. */

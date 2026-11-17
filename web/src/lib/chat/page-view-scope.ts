@@ -5,6 +5,7 @@ import {
   PAGE_VIEW_ROWS,
   pageQueryOf,
   viewPage,
+  viewPathId,
   type ChatPageView,
   type ChatPageViewRow,
 } from './page-view';
@@ -70,8 +71,10 @@ const REF_PATTERNS: readonly [ViewRefKind, RegExp][] = [
     /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/i,
   ],
   ['url', /^https?:\/\/[^\s<>"'`\\]{3,290}$/i],
-  // ai_visibility, content_opportunity: kept only on a page that names its rows so (PAGE_REFS).
-  ['key', /^[a-z][a-z0-9_]{1,63}$/],
+  // ai_visibility, content_opportunity, a Site Audit check's json-ld-validity: kept only on a
+  // page that names its rows so (PAGE_REFS). Each word after a dash starts with a letter, so a
+  // code written in lower case (ac-12) is none.
+  ['key', /^(?=.{2,64}$)[a-z][a-z0-9_]*(?:-[a-z][a-z0-9_]*)*$/],
 ];
 
 /** A ref's kind; null for anything a page doesn't send as one. */
@@ -142,7 +145,7 @@ export const PAGE_REFS: Readonly<Record<string, readonly PageRef[]>> = {
       read: 'agent ids with list_agent_runs agent_id (its runs; the agent itself in list_my_agents)',
     },
   ],
-  // One agent: the page holds it open (VIEW_OPEN); its runs carry no ref a read takes.
+  // One agent: the page holds it open (PATH_OPEN); its runs carry no ref a read takes.
   '/dashboard/agents/[id]': [],
   '/dashboard/competitors': [
     { kind: 'id', read: 'competitor ids with get_competitor_head_to_head competitor_id' },
@@ -166,6 +169,29 @@ export const PAGE_REFS: Readonly<Record<string, readonly PageRef[]>> = {
   ],
   // One cited page: the page holds its address open (OPEN_ITEMS); no rows.
   '/dashboard/citations/url': [],
+  // An item's own page, its id in the path (PATH_OPEN), since step 9's detail pages.
+  '/dashboard/prompts/topics/[id]': [
+    {
+      kind: 'id',
+      read: "prompt ids (the topic's prompts the page ranks) with get_prompt_performance prompt_ids",
+    },
+  ],
+  '/dashboard/prompts/[id]': [
+    { kind: 'domain', read: 'domains (its Top Sources) with list_citations domains' },
+    { kind: 'id', read: 'content opportunity ids with get_content_opportunity opportunity_id' },
+  ],
+  '/dashboard/audit/[id]': [
+    {
+      kind: 'key',
+      read: "a check's key with list_site_audit_issues (the open audit's audit_id), its check with that key",
+    },
+  ],
+  // A snapshot of its period: get_report reads it whole, and a row read by its id would be today's.
+  '/dashboard/reports/[id]': [],
+  // Its shelves are questions on a channel, which no shopping read takes; the product is open.
+  '/dashboard/shopping/products/[productId]': [],
+  '/dashboard/content/[id]': [],
+  '/dashboard/insights/[id]': [],
 };
 
 /** The refs a page's rows may carry, by its path; null for a page not listed (any but a key). */
@@ -267,15 +293,21 @@ export function pageViewOf(
 }
 
 /**
- * An item the page says it holds open, as the message keeps it: only on a
- * page that holds one outside its URL (VIEW_OPEN), with a ref of its kind,
- * or by its label alone where the page has no ref for it.
+ * An item the page says it holds open, as the message keeps it: on an
+ * item's own page (PATH_OPEN) only with its path's id; else only on a page
+ * that holds one outside its URL (VIEW_OPEN), with a ref of its kind, or by
+ * its label alone where the page has no ref for it.
  */
 function viewOpenOf(
   open: { ref?: string; label: string } | undefined,
   route: string | null | undefined,
 ): ChatPageView['open'] {
   const page = viewPage(route);
+  // An item's own page: the item its path names, and no other.
+  if (open && page && Object.hasOwn(PATH_OPEN, page)) {
+    const id = viewPathId(route);
+    return id && open.ref === id ? { ref: id, label: open.label } : undefined;
+  }
   const spec = page && Object.hasOwn(VIEW_OPEN, page) ? VIEW_OPEN[page] : null;
   if (!open || !spec) return undefined;
   if (spec.kind === null) return { label: open.label };
@@ -333,11 +365,45 @@ const VIEW_OPEN: Readonly<Record<string, ViewOpenItem>> = {
     what: 'product',
     read: 'get_shopping_visibility with its title as product_title',
   },
+};
+
+/**
+ * An item's own page, its id in the path (page-view.ts viewPathId): what
+ * the item is and the read that reads it. Its ref is the path's id; the
+ * view adds what the page shows of it (its open: its name or title), kept
+ * only when its ref is that id.
+ */
+const PATH_OPEN: Readonly<Record<string, { what: string; read: string }>> = {
   '/dashboard/agents/[id]': {
-    kind: 'id',
     what: 'agent',
     read: 'list_agent_runs with agent_id (its runs; the agent itself in list_my_agents)',
   },
+  // Since step 9's detail pages.
+  '/dashboard/prompts/topics/[id]': {
+    what: 'topic',
+    read: 'get_topics_overview (its row with that topic_id) and its prompts with get_prompt_performance with topic_id',
+  },
+  '/dashboard/prompts/[id]': {
+    what: 'prompt',
+    read: 'get_prompt_performance with prompt_ids (its answers: list_ai_answers with prompt_id)',
+  },
+  '/dashboard/reports/[id]': {
+    what: 'report',
+    read: 'get_report with report_id (a snapshot of its period)',
+  },
+  '/dashboard/audit/[id]': {
+    what: 'Site Audit report',
+    read: 'list_site_audit_issues with audit_id',
+  },
+  '/dashboard/shopping/products/[productId]': {
+    what: 'product',
+    read: 'get_product_ai_says with product_id (its readiness, AI visits and orders: list_catalog_products searched by its title)',
+  },
+  '/dashboard/content/[id]': {
+    what: 'content opportunity',
+    read: 'get_content_opportunity with opportunity_id',
+  },
+  '/dashboard/insights/[id]': { what: 'AI answer', read: 'get_mention with id' },
 };
 
 const OPEN_PROMPT: OpenItem = {
@@ -379,18 +445,26 @@ const OPEN_ITEMS: Readonly<Record<string, OpenItem>> = {
 };
 
 /**
- * The item the page holds open: the one its URL names as it should, else
- * the one its view says it holds outside its URL (a drawer, the page's
- * agent), with what the page shows of it.
+ * The item the page holds open: on an item's own page the one its path
+ * names; else the one its URL names as it should, else the one its view
+ * says it holds outside its URL (a drawer), with what the page shows of it.
  */
 export function openItemOf(
   view: ChatPageView | null | undefined,
   route: string | null | undefined,
 ): { what: string; ref?: string; label?: string; read: string } | null {
   const page = viewPage(route);
+  const open = view?.open;
+  // An item's own page: the item its path names, with what the page shows of it.
+  const own = page && Object.hasOwn(PATH_OPEN, page) ? PATH_OPEN[page] : undefined;
+  if (own) {
+    const id = viewPathId(route);
+    if (!id) return null;
+    const label = open?.ref === id ? open.label : undefined;
+    return { what: own.what, ref: id, ...(label ? { label } : {}), read: own.read };
+  }
   const item = page && Object.hasOwn(OPEN_ITEMS, page) ? OPEN_ITEMS[page] : undefined;
   const ref = item ? view?.query?.[item.key] : undefined;
-  const open = view?.open;
   if (item && ref && viewRefKind(ref) === item.kind) {
     const label = open?.ref === ref ? open.label : undefined;
     return { what: item.what, ref, ...(label ? { label } : {}), read: item.read };

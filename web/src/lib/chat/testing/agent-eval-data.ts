@@ -1162,12 +1162,16 @@ const ANSWER_SCORES = [48, 41, 63, 70, 66, 37, 52, 44];
  */
 function evalPromptPerformance(input: Record<string, unknown>) {
   const byAnswer = input.sort_by === 'answer_score';
+  const ascending = input.order === 'asc';
   // A lookup: by every word of a search, in any order and case (list_prompts), or by ids.
   const words =
     typeof input.search === 'string' ? input.search.toLowerCase().split(/\s+/).filter(Boolean) : [];
   const ids = Array.isArray(input.prompt_ids ?? input.ids)
     ? ((input.prompt_ids ?? input.ids) as unknown[]).map(String)
     : null;
+  // A topic's prompts, unless it is a lookup (which reads every topic).
+  const topic =
+    !ids && !words.length ? TOPICS.find((t) => t.id === input.topic_id)?.name : undefined;
   const prompts = PROMPTS.map((prompt, i) => ({
     ...prompt,
     ai_visibility_score: prompt.visibility_pct,
@@ -1175,14 +1179,17 @@ function evalPromptPerformance(input: Record<string, unknown>) {
   }))
     .filter((prompt) => words.every((word) => prompt.text.toLowerCase().includes(word)))
     .filter((prompt) => !ids || ids.includes(prompt.id))
-    .sort((a, b) =>
-      byAnswer
-        ? b.avg_visibility - a.avg_visibility
-        : b.ai_visibility_score - a.ai_visibility_score,
+    .filter((prompt) => !topic || prompt.topic === topic)
+    .sort(
+      (a, b) =>
+        (ascending ? -1 : 1) *
+        (byAnswer
+          ? b.avg_visibility - a.avg_visibility
+          : b.ai_visibility_score - a.ai_visibility_score),
     );
-  const order = byAnswer
-    ? 'by average answer score'
-    : 'by AI Visibility Score, as the Prompts page lists them';
+  const order = `${
+    byAnswer ? 'by average answer score' : 'by AI Visibility Score, as the Prompts page lists them'
+  }${ascending ? ', lowest first' : ''}`;
   return {
     ...window,
     total: prompts.length,
@@ -1192,6 +1199,17 @@ function evalPromptPerformance(input: Record<string, unknown>) {
     prompts,
   };
 }
+
+/**
+ * A topic's page (step 9's detail pages): Coffee subscriptions, with the
+ * prompts it ranks, best first. Its weakest isn't the brand's weakest
+ * overall, so "our weakest prompt on this topic" read over every topic
+ * names another.
+ */
+export const EVAL_OPEN_TOPIC = TOPICS[0];
+export const EVAL_TOPIC_PROMPTS: readonly { id: string; text: string }[] = evalPromptPerformance({
+  topic_id: EVAL_OPEN_TOPIC.id,
+}).prompts.map((prompt) => ({ id: prompt.id, text: prompt.text }));
 
 /** The Prompts page's top 5, by its Visibility: what "my top 5 prompts" names, in order. */
 export const EVAL_PAGE_TOP_PROMPTS: readonly string[] = evalPromptPerformance({})

@@ -264,7 +264,7 @@ import {
   pageViewOf,
   viewOffBrand,
 } from './page-view-scope';
-import type { ChatPageView } from './page-view';
+import { viewPage, viewPathId, type ChatPageView } from './page-view';
 import { needsAllSources } from './citation-totals';
 import {
   cacheKey,
@@ -692,7 +692,9 @@ export type MessageScope = Pick<z.infer<typeof startRunInput>, 'context' | 'refe
  * or goes when the run has none. A page's filters are its brand's: posted
  * from a page of another brand than the run's, they keep their words only,
  * so no read takes another brand's topic or prompt (page-scope.ts), and its
- * view keeps its tab and sort: not its search, rows, URL state or count.
+ * view keeps its tab and sort: not its search, rows, URL state or count. An
+ * item's own page of another brand keeps its pattern for its path
+ * ("/dashboard/prompts/topics/[id]"): its item's id goes too.
  */
 export function messageScopeOf(
   input: MessageScope,
@@ -710,12 +712,12 @@ export function messageScopeOf(
   // The page's view goes with its chips; another brand's keeps its words only.
   const sentView = input.context?.view;
   const view = sentView && otherBrand ? viewOffBrand(sentView) : sentView;
+  const sentRoute = input.context?.route;
+  const route = otherBrand && viewPathId(sentRoute) ? viewPage(sentRoute)! : sentRoute;
   const references = input.references ?? [];
   if (chips.length === 0 && references.length === 0) return null;
   return {
-    ...(chips.length > 0
-      ? { context: { route: input.context?.route, chips, ...(view ? { view } : {}) } }
-      : {}),
+    ...(chips.length > 0 ? { context: { route, chips, ...(view ? { view } : {}) } } : {}),
     ...(references.length > 0 ? { references } : {}),
   };
 }

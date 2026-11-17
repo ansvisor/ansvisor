@@ -9,6 +9,7 @@ import {
   pageQueryOf,
   viewLabel,
   viewPage,
+  viewPathId,
   viewRows,
 } from './page-view';
 
@@ -176,5 +177,58 @@ describe('the URL state of the pages that send their context since step 9', () =
     expect(viewPage(null)).toBeNull();
     // A key that only an object's prototype has is no page's.
     expect(pageQueryOf('constructor', 'tab=x')).toBeUndefined();
+  });
+});
+
+// Step 9's detail pages: an item's own page, its id in the path.
+describe('the pages of one item, by the id in their path', () => {
+  const ID = '0b2c3d4e-5f60-4a1b-8c2d-3e4f5a6b7c8d';
+  it.each([
+    [`/dashboard/prompts/topics/${ID}`, '/dashboard/prompts/topics/[id]'],
+    [`/dashboard/prompts/${ID}`, '/dashboard/prompts/[id]'],
+    [`/dashboard/reports/${ID}`, '/dashboard/reports/[id]'],
+    [`/dashboard/audit/${ID}`, '/dashboard/audit/[id]'],
+    [`/dashboard/shopping/products/${ID}`, '/dashboard/shopping/products/[productId]'],
+    [`/dashboard/content/${ID}`, '/dashboard/content/[id]'],
+    [`/dashboard/insights/${ID}`, '/dashboard/insights/[id]'],
+    [`/dashboard/agents/${ID}/`, '/dashboard/agents/[id]'],
+  ])('%s is %s, and its id the path’s', (route, page) => {
+    expect(viewPage(route)).toBe(page);
+    expect(viewPathId(route)).toBe(ID);
+  });
+
+  it('is no item’s page for a list, a word, a deeper path or the Content Editor', () => {
+    for (const route of [
+      '/dashboard/prompts/topics',
+      '/dashboard/prompts/tracked',
+      '/dashboard/reports/impact',
+      `/dashboard/content/editor/${ID}`,
+      `/dashboard/agents/${ID}/edit`,
+      `/dashboard/brands/${ID}/topics`,
+      `/dashboard/prompts/${ID}x`,
+      null,
+    ]) {
+      expect(viewPathId(route), String(route)).toBeNull();
+      expect(viewPage(route), String(route)).toBe(route);
+    }
+  });
+
+  it("keeps a product's page's shelf (?prompt=, ?platform=); the other items' pages keep none", () => {
+    expect(
+      pageQueryOf(
+        `/dashboard/shopping/products/${ID}`,
+        `prompt=${ID}&platform=chatgpt-shopping&token=x&utm_source=mail`,
+      ),
+    ).toEqual({ prompt: ID, platform: 'chatgpt-shopping' });
+    for (const route of [
+      `/dashboard/prompts/topics/${ID}`,
+      `/dashboard/prompts/${ID}`,
+      `/dashboard/reports/${ID}`,
+      `/dashboard/audit/${ID}`,
+      `/dashboard/content/${ID}`,
+      `/dashboard/insights/${ID}`,
+    ]) {
+      expect(pageQueryOf(route, 'tab=x&prompt=y&q=z'), route).toBeUndefined();
+    }
   });
 });

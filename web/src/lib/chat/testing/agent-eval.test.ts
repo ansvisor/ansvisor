@@ -35,6 +35,9 @@ import {
   EVAL_PAGE_TOP_PROMPTS,
   EVAL_HEAD_TO_HEAD_LOSSES,
   EVAL_OPEN_COMPETITOR,
+  EVAL_OPEN_TOPIC,
+  EVAL_PROMPTS,
+  EVAL_TOPIC_PROMPTS,
   EVAL_PAGE_VIEW_ACTIONS,
   EVAL_PAGE_VIEW_SIGNALS,
   EVAL_SIGNAL_BACKLOG,
@@ -582,6 +585,42 @@ describe('the pages that send their context since step 9', () => {
     expect(evalReadResult('get_competitor_head_to_head', { competitor: 'Nobody' })).toEqual({
       not_found: ['Nobody'],
     });
+  });
+
+  it('asks "bu konuda en zayıf promptumuz hangisi?" on a topic’s page, whose weakest isn’t the brand’s', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'topic-page-weakest')!;
+    expect(scenario.page!.route).toBe(`/dashboard/prompts/topics/${EVAL_OPEN_TOPIC.id}`);
+    expect(scenario.page!.view!.open).toEqual({
+      ref: EVAL_OPEN_TOPIC.id,
+      label: EVAL_OPEN_TOPIC.name,
+    });
+    // The topic's prompts, best first: the weakest is named, read for that topic.
+    expect(EVAL_TOPIC_PROMPTS.map((p) => p.text)).toEqual([
+      'Which coffee subscription lets you pause or skip a delivery?',
+      'What are the best coffee subscriptions in 2026?',
+      'Cheapest specialty coffee subscription',
+    ]);
+    expect(scenario.pageOpen).toEqual({
+      tool: 'get_prompt_performance',
+      input: { topic_id: EVAL_OPEN_TOPIC.id },
+      names: ['Cheapest specialty coffee subscription'],
+    });
+    const weakest = (input: Record<string, unknown>) =>
+      (
+        evalReadResult('get_prompt_performance', { ...input, order: 'asc' }) as {
+          prompts: { text: string }[];
+        }
+      ).prompts[0].text;
+    expect(weakest({ topic_id: EVAL_OPEN_TOPIC.id })).toBe(scenario.pageOpen!.names[0]);
+    // Over every topic, the weakest is another topic's.
+    expect(weakest({})).toBe('Light roast vs dark roast for espresso');
+    expect(EVAL_PROMPTS.find((p) => p.text === weakest({}))!.topic).not.toBe(EVAL_OPEN_TOPIC.name);
+    // A lookup reads its prompts in every topic.
+    const looked = evalReadResult('get_prompt_performance', {
+      topic_id: EVAL_OPEN_TOPIC.id,
+      prompt_ids: [EVAL_PROMPTS[6].id],
+    }) as { prompts: { id: string }[] };
+    expect(looked.prompts.map((p) => p.id)).toEqual([EVAL_PROMPTS[6].id]);
   });
 
   it('checks the read of the item the page holds open, by its read and inputs', () => {

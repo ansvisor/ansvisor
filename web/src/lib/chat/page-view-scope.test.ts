@@ -15,6 +15,7 @@ const {
   viewRefKind,
 } = await import('./page-view-scope');
 const { PAGE_QUERY_KEYS } = await import('./page-view');
+const { pageScopeOf } = await import('./page-scope');
 /** The block of a view with every field at its limit, in characters (the PR states it). */
 const PAGE_VIEW_BLOCK_WORST = 42_391;
 
@@ -281,13 +282,21 @@ describe('the rows of the pages that send their context since step 9: each ref a
       { rows: refs.map((ref) => ({ ref, label: `Row ${ref}` })) },
       route,
     ).data!.context!.view?.rows?.map((row) => row.ref) ?? [];
-  const ALL = ['AC-12', 'S-07', ID, 'rival.example', 'https://a.example/p', 'ai_visibility'];
+  const ALL = [
+    'AC-12',
+    'S-07',
+    ID,
+    'rival.example',
+    'https://a.example/p',
+    'ai_visibility',
+    'json-ld-validity',
+  ];
 
   it.each([
     ['/dashboard/action-center/today', ['AC-12', 'S-07', ID]],
     [SIGNALS, ['S-07', ID]],
-    ['/dashboard/action-center/history', ['AC-12', 'ai_visibility']],
-    ['/dashboard/action-center/kpis', ['ai_visibility']],
+    ['/dashboard/action-center/history', ['AC-12', 'ai_visibility', 'json-ld-validity']],
+    ['/dashboard/action-center/kpis', ['ai_visibility', 'json-ld-validity']],
     ['/dashboard/action-center/review', [ID]],
     ['/dashboard/agents', [ID]],
     [`/dashboard/agents/${OTHER}`, []],
@@ -299,12 +308,33 @@ describe('the rows of the pages that send their context since step 9: each ref a
     ['/dashboard/reports', [ID]],
     ['/dashboard/prompts/topics', [ID]],
     ['/dashboard/citations/url', []],
+    // Step 9's detail pages: an item's own page.
+    [`/dashboard/prompts/topics/${OTHER}`, [ID]],
+    [`/dashboard/prompts/${OTHER}`, [ID, 'rival.example']],
+    [`/dashboard/audit/${OTHER}`, ['ai_visibility', 'json-ld-validity']],
+    [`/dashboard/reports/${OTHER}`, []],
+    [`/dashboard/shopping/products/${OTHER}`, []],
+    [`/dashboard/content/${OTHER}`, []],
+    [`/dashboard/insights/${OTHER}`, []],
   ])('%s keeps %j and drops the kinds no read takes', (route, refs) => {
     expect(kept(route, ALL)).toEqual(refs);
   });
 
   it('keeps on the first 8 pages any code, id, domain or address, never a key', () => {
     expect(kept(ACTIONS, ALL)).toEqual(ALL.slice(0, 5));
+    // A key's words may be joined by dashes (a Site Audit check's), never a code in lower case.
+    expect(['json-ld-validity', 'faq-schema', 'h1-heading'].map(viewRefKind)).toEqual([
+      'key',
+      'key',
+      'key',
+    ]);
+    expect(['ac-12', 'json--ld', '-faq', 'faq-', 'faq-1'].map(viewRefKind)).toEqual([
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
     expect(viewRefKind('ai_visibility')).toBe('key');
     expect(pageTakesRef('/dashboard/mentions', 'ai_visibility')).toBe(false);
     // A code of another kind than the page's: a signal's on History, an action's on Signals.
@@ -405,5 +435,110 @@ describe('the item a page holds open (step 9)', () => {
     });
     const scope = messageScopeOf(parsed.data!, { id: BRAND, name: 'Acme' });
     expect(scope?.context?.view).toEqual({ tab: 'gaps' });
+  });
+});
+
+// Step 9's detail pages: the item a page is about, its id in the path.
+describe("the item an item's own page holds open, by the id in its path", () => {
+  const view = (route: string, open?: { ref?: string; label: string }) =>
+    send({ ...(open ? { open } : {}), tab: 'x' }, route).data!.context!.view!;
+
+  it.each([
+    [
+      `/dashboard/prompts/topics/${ID}`,
+      'Coffee subscriptions',
+      'topic',
+      'get_topics_overview (its row with that topic_id) and its prompts with get_prompt_performance with topic_id',
+    ],
+    [
+      `/dashboard/prompts/${ID}`,
+      'Best coffee subscriptions?',
+      'prompt',
+      'get_prompt_performance with prompt_ids (its answers: list_ai_answers with prompt_id)',
+    ],
+    [
+      `/dashboard/reports/${ID}`,
+      'October review',
+      'report',
+      'get_report with report_id (a snapshot of its period)',
+    ],
+    [
+      `/dashboard/audit/${ID}`,
+      'https://a.example/pricing',
+      'Site Audit report',
+      'list_site_audit_issues with audit_id',
+    ],
+    [
+      `/dashboard/shopping/products/${ID}`,
+      'Trail Runner 2',
+      'product',
+      'get_product_ai_says with product_id (its readiness, AI visits and orders: list_catalog_products searched by its title)',
+    ],
+    [
+      `/dashboard/content/${ID}`,
+      'Compare coffee subscriptions',
+      'content opportunity',
+      'get_content_opportunity with opportunity_id',
+    ],
+    [`/dashboard/insights/${ID}`, 'Best coffee (ChatGPT)', 'AI answer', 'get_mention with id'],
+  ])('%s holds its %s open', (route, label, what, read) => {
+    const kept = view(route, { ref: ID, label });
+    expect(kept.open).toEqual({ ref: ID, label });
+    expect(openItemOf(kept, route)).toEqual({ what, ref: ID, label, read });
+    expect(pageViewBlock(kept, route)).toContain(`open: ${what} ${ID} — ${label}`);
+    expect(pageViewNote(kept, route, 'read')).toContain(
+      `"This one" or "this ${what}" is the ${what} the page holds open (page_view's open): read it with ${read} first.`,
+    );
+  });
+
+  it("is the path's item whatever the view says: another id's open is dropped, none is its id alone", () => {
+    const route = `/dashboard/reports/${ID}`;
+    const other = view(route, { ref: OTHER, label: 'Another report' });
+    expect(other.open).toBeUndefined();
+    expect(openItemOf(other, route)).toEqual({
+      what: 'report',
+      ref: ID,
+      read: 'get_report with report_id (a snapshot of its period)',
+    });
+    expect(view(route, { label: 'No ref' }).open).toBeUndefined();
+    expect(pageViewBlock(other, route)).toContain(`open: report ${ID}\n`);
+    // An agent's page too: its agent is the path's.
+    expect(view(`/dashboard/agents/${ID}`, { ref: OTHER, label: 'Another' }).open).toBeUndefined();
+    // A list page has no item of its path.
+    expect(openItemOf({ tab: 'x' }, '/dashboard/reports')).toBeNull();
+  });
+
+  it("tells the reader the rows' own lookups: a topic's prompts, a prompt's sources and opportunities, an audit's checks", () => {
+    const note = (route: string, ref: string) =>
+      pageViewNote({ rows: [{ ref, label: 'A row' }] }, route, 'read');
+    expect(note(`/dashboard/prompts/topics/${ID}`, OTHER)).toContain(
+      "prompt ids (the topic's prompts the page ranks) with get_prompt_performance prompt_ids.",
+    );
+    expect(note(`/dashboard/prompts/${ID}`, 'rival.example')).toContain(
+      'domains (its Top Sources) with list_citations domains; content opportunity ids with get_content_opportunity opportunity_id.',
+    );
+    expect(note(`/dashboard/audit/${ID}`, 'faq-schema')).toContain(
+      "a check's key with list_site_audit_issues (the open audit's audit_id), its check with that key.",
+    );
+  });
+
+  it("goes with another brand's view, and so does its path's id: the page is its pattern", () => {
+    const parsed = startRunInput.safeParse({
+      message: 'What about this one?',
+      context: {
+        route: `/dashboard/prompts/topics/${ID}`,
+        chips: [{ key: 'brand', label: 'Other', value: OTHER }],
+        view: { tab: 'x', open: { ref: ID, label: 'Coffee' }, rows: [{ ref: OTHER, label: 'y' }] },
+      },
+    });
+    const scope = messageScopeOf(parsed.data!, { id: BRAND, name: 'Acme' });
+    expect(scope?.context?.view).toEqual({ tab: 'x' });
+    expect(scope?.context?.route).toBe('/dashboard/prompts/topics/[id]');
+    expect(openItemOf(scope!.context!.view, scope!.context!.route)).toBeNull();
+    expect(pageScopeOf(scope!.context)?.filters).toEqual([]);
+    // The run's own brand keeps its path.
+    expect(messageScopeOf(parsed.data!, { id: OTHER, name: 'Other' })?.context?.route).toBe(
+      `/dashboard/prompts/topics/${ID}`,
+    );
   });
 });

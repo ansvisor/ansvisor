@@ -558,3 +558,68 @@ describe("the filters of the pages that send their context since step 9: each on
     });
   });
 });
+
+// Step 9's detail pages: an item's own page whose id a read takes.
+describe("the id in an item's own page's path", () => {
+  const TOPIC_PAGE = `/dashboard/prompts/topics/${TOPIC}`;
+  const pathPage = (route: string, chips: [string, string, string][] = []) =>
+    pageScopeOf({
+      route,
+      chips: [
+        { key: 'brand', label: 'Northwind', value: BRAND },
+        ...chips.map(([key, label, value]) => ({ key: `filter:${key}`, label, value })),
+      ],
+    });
+
+  it("is a topic's page's topic: topic_id on every read of its brand that takes one", () => {
+    const topic = pathPage(TOPIC_PAGE);
+    expect(topic?.filters).toEqual([{ key: 'topic', label: TOPIC, value: TOPIC }]);
+    for (const name of [
+      'get_prompt_performance',
+      'list_prompts',
+      'list_citations',
+      'get_competitor_comparison',
+    ]) {
+      expect(added(name, topic), name).toEqual({ input: { topic_id: TOPIC }, applied: ['topic'] });
+    }
+    // get_topics_overview lists every topic: none to fill.
+    expect(added('get_topics_overview', topic)).toEqual({ input: {}, applied: [] });
+  });
+
+  it('never over the model’s own topic, a lookup by ids, another brand, or "all topics"', () => {
+    const topic = pathPage(TOPIC_PAGE);
+    expect(added('get_prompt_performance', topic, { topic_id: ID }).input).toEqual({
+      topic_id: ID,
+    });
+    expect(added('list_prompts', topic, { ids: [PROMPT] }).applied).toEqual([]);
+    expect(
+      pageFilterInputs(tool('get_prompt_performance'), { brand_id: OTHER }, topic, 'How?').applied,
+    ).toEqual([]);
+    for (const question of ['Compare all topics', 'tüm konularda en zayıf prompt hangisi?']) {
+      expect(added('get_prompt_performance', topic, {}, question).applied, question).toEqual([]);
+    }
+    // A topic chip the page sent wins over its path.
+    expect(pathPage(TOPIC_PAGE, [['topic', 'Pricing', ID]])?.filters).toEqual([
+      { key: 'topic', label: 'Pricing', value: ID },
+    ]);
+  });
+
+  it("is no filter on the other items' pages: their reads name the item, or look it up alone", () => {
+    for (const route of [
+      `/dashboard/prompts/${PROMPT}`,
+      `/dashboard/reports/${ID}`,
+      `/dashboard/audit/${ID}`,
+      `/dashboard/shopping/products/${ID}`,
+      `/dashboard/content/${ID}`,
+      `/dashboard/insights/${ID}`,
+      '/dashboard/prompts/topics',
+    ]) {
+      expect(pathPage(route)?.filters, route).toEqual([]);
+    }
+    // A prompt's page never turns a ranking into a lookup of its prompt alone.
+    expect(added('get_prompt_performance', pathPage(`/dashboard/prompts/${PROMPT}`))).toEqual({
+      input: {},
+      applied: [],
+    });
+  });
+});

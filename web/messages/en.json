@@ -5507,7 +5507,10 @@
       "all": "All time"
     },
     "pageNames": {
-      "citedPage": "Cited page"
+      "citedPage": "Cited page",
+      "prompt": "Prompt",
+      "siteAuditReport": "Site Audit report",
+      "aiAnswer": "AI answer"
     }
   },
   "chatRange": {

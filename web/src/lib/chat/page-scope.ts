@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod';
 import { searchWords } from '@/lib/mcp/lookup';
+import { viewPage, viewPathId } from './page-view';
 import type { ChatTool } from './registry/define-tool';
 
 /**
@@ -28,7 +29,12 @@ import type { ChatTool } from './registry/define-tool';
  * list_catalog_products), as the lookups' own words
  * (#2460: at most 8 words of the first 200 characters, escaped by the read),
  * unless the model gave its own search or named rows, or the question asks
- * for all of them. Plain module: scope.ts applies it to every read.
+ * for all of them.
+ *
+ * An item's own page whose id is one of these filters (since step 9's
+ * detail pages, PATH_FILTERS): a topic's page is its brand's data for that
+ * topic, so the id in its path is the page's topic filter, as a topic chip.
+ * Plain module: scope.ts applies it to every read.
  */
 
 /** A page's filter, as its chip carries it (`filter:platform` → `platform`). */
@@ -57,6 +63,21 @@ interface ScopeChip {
   value?: string;
 }
 
+/**
+ * An item's own page whose id is one of the page's filters (page-view.ts
+ * viewPathId), by its pattern: a topic's page shows its brand's data for
+ * that topic, so its id fills topic_id on every read of its brand that takes
+ * one, unless the model gave its own, and "all topics" drops it. The other
+ * items' pages name their item to the reader instead (page-view-scope.ts):
+ * their reads' id is required (get_report, list_site_audit_issues,
+ * get_product_ai_says), or makes a read a lookup of that item alone
+ * (get_prompt_performance's prompt_ids), which a ranking asked there must
+ * not become.
+ */
+const PATH_FILTERS: Readonly<Record<string, string>> = {
+  '/dashboard/prompts/topics/[id]': 'topic',
+};
+
 /** The page's scope from a message's context; null when it came from no page. */
 export function pageScopeOf(
   context:
@@ -76,6 +97,13 @@ export function pageScopeOf(
       ? [{ key: chip.key.slice('filter:'.length), label: chip.label, value: chip.value }]
       : [],
   );
+  // An item's own page: its id as the page's filter, where the page sent none of that key.
+  const page = viewPage(route);
+  const pathFilter = page && Object.hasOwn(PATH_FILTERS, page) ? PATH_FILTERS[page] : null;
+  const pathId = pathFilter ? viewPathId(route) : null;
+  if (pathFilter && pathId && !filters.some((filter) => filter.key === pathFilter)) {
+    filters.push({ key: pathFilter, label: pathId, value: pathId });
+  }
   const search = context.view?.search?.trim();
   const tab = context.view?.tab?.trim();
   return { route, brandId, filters, ...(search ? { search } : {}), ...(tab ? { tab } : {}) };

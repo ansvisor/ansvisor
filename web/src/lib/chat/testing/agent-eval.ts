@@ -19,6 +19,8 @@ import {
   EVAL_PAGE_TOP_PROMPTS,
   EVAL_HEAD_TO_HEAD_LOSSES,
   EVAL_OPEN_COMPETITOR,
+  EVAL_OPEN_TOPIC,
+  EVAL_TOPIC_PROMPTS,
   EVAL_PAGE_VIEW_ACTIONS,
   EVAL_PAGE_VIEW_SIGNALS,
   EVAL_SIGNAL_BACKLOG,
@@ -487,6 +489,35 @@ export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
       tool: 'get_competitor_head_to_head',
       input: { competitor_id: EVAL_OPEN_COMPETITOR.id },
       names: EVAL_HEAD_TO_HEAD_LOSSES.map((row) => row.prompt),
+    },
+  },
+  // Step 9's detail pages: on a topic's page, "this topic" is the topic its path names. Its
+  // prompts are read for that topic (the app fills topic_id from the path), and the weakest named.
+  {
+    id: 'topic-page-weakest',
+    group: 'skills',
+    name: 'The weakest prompt of the topic on screen',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'bu konuda en zayıf promptumuz hangisi?',
+    promises: [],
+    page: {
+      route: `/dashboard/prompts/topics/${EVAL_OPEN_TOPIC.id}`,
+      chips: [
+        { key: 'page', label: EVAL_OPEN_TOPIC.name },
+        { key: 'brand', label: EVAL_BRAND.name, value: EVAL_BRAND.id },
+        { key: 'dates', label: 'All time', value: 'all/' },
+      ],
+      view: {
+        open: { ref: EVAL_OPEN_TOPIC.id, label: EVAL_OPEN_TOPIC.name },
+        rows: EVAL_TOPIC_PROMPTS.map((p) => ({ ref: p.id, label: p.text })),
+      },
+    },
+    pageOpen: {
+      tool: 'get_prompt_performance',
+      input: { topic_id: EVAL_OPEN_TOPIC.id },
+      names: [EVAL_TOPIC_PROMPTS.at(-1)!.text],
     },
   },
   // On Prompts searched for a few words: "these" are the search's prompts, read with it.

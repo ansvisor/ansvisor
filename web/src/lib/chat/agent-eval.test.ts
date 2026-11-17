@@ -1807,6 +1807,52 @@ describe('the agents’ test set harness, on a scripted model', () => {
     expect(result.passed).toBe(false);
   });
 
+  // Step 9's detail pages: on a topic's page, its prompts are that topic's.
+  it('reads the prompts of the topic its page holds open, the topic filled from the path, and names the weakest', async () => {
+    const { EVAL_OPEN_TOPIC, EVAL_TOPIC_PROMPTS } = await import('./testing/agent-eval-data');
+    const weakest = EVAL_TOPIC_PROMPTS.at(-1)!;
+    const model = scripted([
+      // The model gives no topic: the server fills the page's, from its path (page-scope.ts).
+      calls(toolCall('r1', 'get_prompt_performance', { brand_id: BRAND, order: 'asc' })),
+      text(`Bu konudaki en zayıf promptunuz **${weakest.text}**.`),
+    ]);
+    const result = await runScenario(skillOf('topic-page-weakest'));
+    expect(result.run.reads).toEqual(['get_prompt_performance']);
+    expect(result.run.readInputs[0]).toMatchObject({ topic_id: EVAL_OPEN_TOPIC.id });
+    expect(JSON.parse(result.run.readValues[0]).prompts[0].text).toBe(weakest.text);
+    // The reader was told which topic "this topic" is, and the read that reads it.
+    const seen = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(seen).toContain(`open: topic ${EVAL_OPEN_TOPIC.id} — ${EVAL_OPEN_TOPIC.name}`);
+    expect(seen).toContain('its prompts with get_prompt_performance with topic_id first');
+    for (const name of ['reads the item the page holds open', 'names what that read found']) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails "this topic" answered from another topic’s prompts', async () => {
+    const { EVAL_IDS } = await import('./testing/agent-eval-data');
+    scripted([
+      calls(
+        toolCall('r1', 'get_prompt_performance', {
+          brand_id: BRAND,
+          topic_id: EVAL_IDS.topics[1],
+          order: 'asc',
+        }),
+      ),
+      text('Bu konudaki en zayıf promptunuz **Light roast vs dark roast for espresso**.'),
+    ]);
+    const result = await runScenario(skillOf('topic-page-weakest'));
+    const failed = result.checks.filter((check) => check.must && !check.ok).map((c) => c.name);
+    expect(failed).toEqual(
+      expect.arrayContaining(['reads the item the page holds open', 'names what that read found']),
+    );
+    expect(result.passed).toBe(false);
+  });
+
   it('refuses every network call but the model’s', async () => {
     await expect(fetch('https://example.com/')).rejects.toThrow('no network call');
   });
