@@ -14428,7 +14428,8 @@
       "save": "Add to {count, plural, one {# prompt} other {# prompts}}",
       "removeSave": "Remove from {count, plural, one {# prompt} other {# prompts}}",
       "done": "{count, plural, one {# prompt tagged} other {# prompts tagged}}",
-      "removed": "{count, plural, one {Tags removed from # prompt} other {Tags removed from # prompts}}"
+      "removed": "{count, plural, one {Tags removed from # prompt} other {Tags removed from # prompts}}",
+      "saveFailed": "Couldn't save the tags. Try again."
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
