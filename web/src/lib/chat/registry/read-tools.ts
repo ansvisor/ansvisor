@@ -610,7 +610,7 @@ export const READ_TOOLS = [
     name: 'list_competitors',
     class: 'read',
     area: 'competitors',
-    description: `The competitors set up for the brand: id, name, domain and type, the kind of competitor it is: ${COMPETITOR_TYPE_WORDS} With type, only those of that type. Not a ranking.${PAGED}`,
+    description: `The competitors set up for the brand: id, name, domain and type, the kind of competitor it is: ${COMPETITOR_TYPE_WORDS} With type, only those of that type. Also aliases: the names and domains of competitors merged into it, which count as its own from the merge on; a merged one is never listed on its own. Not a ranking.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },

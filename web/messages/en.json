@@ -226,6 +226,8 @@
       "deleteCompetitors": "Deleting competitors needs a plan",
       "suggestCompetitors": "Suggesting competitors needs a plan",
       "setCompetitorTypes": "Setting competitor types needs a plan",
+      "mergeCompetitors": "Merging competitors needs a plan",
+      "unmergeCompetitors": "Unmerging competitors needs a plan",
       "pinCompetitors": "Pinning competitors needs a plan",
       "generateOpportunities": "Generating opportunities needs a plan",
       "sendToWorkflow": "Sending to your workflow needs a plan",
@@ -15166,6 +15168,54 @@
       "groupByType": "Group by type",
       "groupCount": "{count, plural, one {# competitor} other {# competitors}}",
       "noneOfType": "None of your competitors has this type."
+    },
+    "merge": {
+      "open": "Merge",
+      "openHint": "Merge competitors that are the same company",
+      "title": "Merge competitors",
+      "description": "Pick the competitors that are the same company, then the one to keep.",
+      "pickLabel": "Same company",
+      "keep": "Keep this one",
+      "kept": "Kept",
+      "pickMore": "Pick at least two competitors.",
+      "pickKept": "Pick the one to keep.",
+      "summary": "{others} will be merged into {kept}.",
+      "summaryCount": "From now on, answers naming any of them count for {kept}.",
+      "summaryKeeps": "{kept} keeps its name, type and logo. The others' names and domains become its other names.",
+      "summaryHistory": "Numbers from before the merge aren't combined: each keeps its own history, hidden while merged.",
+      "summaryUndo": "You can unmerge later under Merged competitors.",
+      "action": "Merge {count, plural, one {# competitor} other {# competitors}}",
+      "success": "Merged into {kept}.",
+      "already": "{names} {count, plural, one {was} other {were}} already merged. Nothing changed for {count, plural, one {it} other {them}}.",
+      "error": "The competitors couldn't be merged. Try again.",
+      "aliases": "Also: {names}",
+      "aliasesLabel": "Other names counted for {name}",
+      "addMerged": "{name} is merged into {kept}: answers naming it already count for {kept}. To track it on its own, unmerge it under Merged competitors.",
+      "deleteNote": "{count, plural, one {The competitor merged into it is} other {The # competitors merged into it are}} removed too."
+    },
+    "merged": {
+      "title": "Merged competitors",
+      "description": "Answers naming these count for the competitor they were merged into. Numbers from before the merge aren't combined.",
+      "into": "into {kept}",
+      "intoUnknown": "into another competitor",
+      "anotherCompetitor": "the other competitor",
+      "meta": "Merged {date} by {name}",
+      "metaNoName": "Merged {date}",
+      "unmerge": "Unmerge",
+      "unmergeFor": "Unmerge {name}"
+    },
+    "unmerge": {
+      "title": "Unmerge {name}?",
+      "description": "{name} comes back as its own competitor, with its numbers from before the merge. Answers counted for {kept} while they were merged stay with {kept}.",
+      "action": "Unmerge",
+      "success": "{name} is its own competitor again.",
+      "notMerged": "{name} wasn't merged. Nothing changed.",
+      "error": "The competitor couldn't be unmerged. Try again."
+    },
+    "duplicateHint": {
+      "text": "These may be the same company: {a} and {b}.",
+      "merge": "Merge…",
+      "dismiss": "Not now"
     },
     "h2h": {
       "title": "{brand} vs {competitor}",

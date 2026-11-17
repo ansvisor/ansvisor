@@ -16,6 +16,7 @@ const competitorActions = vi.hoisted(() => ({
   addCompetitor: vi.fn(),
   deleteCompetitor: vi.fn(),
   setCompetitorTypes: vi.fn(),
+  getMergedCompetitors: vi.fn(async () => []),
   getCompetitorTimeline: vi.fn(async () => ({ weeks: [], events: [] })),
 }));
 vi.mock('@/lib/actions/competitor', () => competitorActions);

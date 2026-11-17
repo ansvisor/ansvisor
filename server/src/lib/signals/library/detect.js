@@ -34,6 +34,7 @@ import { chooseProductPages } from '../../action-center/product-page-groups.js';
 import { pageKey } from '../../audit/history.js';
 import { siteTypeOf } from '../../content-page-types.js';
 import { ownDomainMatcher } from '../../response-parser.js';
+import { mergedCompetitorDomains } from '../../competitor-aliases.js';
 import { readSourceRules, sourceAllowed } from '../../content-rules.js';
 
 const { library: t } = resolve();
@@ -173,6 +174,17 @@ export function cap(candidates, score) {
 }
 
 /**
+ * Whether a competitor id is one the brand still tracks: a deleted one, or
+ * one merged into another (00543), keeps its rollup rows (its history) but
+ * raises no signal. A context without the read (a test's) takes every id.
+ */
+async function trackedCompetitors(ctx) {
+  if (typeof ctx.liveCompetitorIds !== 'function') return () => true;
+  const ids = await ctx.liveCompetitorIds();
+  return (id) => ids.has(id);
+}
+
+/**
  * Lazily-loaded, memoised reads shared between families, so the prompt
  * summary two families need is fetched once.
  */
@@ -197,6 +209,15 @@ function context(brandId, now, sources) {
     week,
     prompts: () => once('prompts', () => rpc('ae_prompt_stats', week)),
     dimensions: () => once('dimensions', () => rpc('ae_dimension_stats', week)),
+    // The brand's tracked competitors: one deleted, or merged into another
+    // (00543), is out of the table, and its past rollup rows raise nothing.
+    liveCompetitorIds: () =>
+      once('liveCompetitorIds', async () => {
+        const rows = await selectAll(() =>
+          supabaseAdmin.from('competitors').select('id').eq('brand_id', brandId).order('id'),
+        );
+        return new Set(rows.map((r) => r.id));
+      }),
     promptTexts: () =>
       once('promptTexts', async () => {
         const sets = await selectAll(() =>
@@ -432,10 +453,10 @@ const FAMILIES = [
     requires: ['tracking', 'competitors'],
     kinds: ['competitor_leads', 'competitor_momentum'],
     async run(ctx) {
-      const dims = await ctx.dimensions();
+      const [dims, live] = await Promise.all([ctx.dimensions(), trackedCompetitors(ctx)]);
       const brandMentions = (dims.platforms ?? []).reduce((s, p) => s + (p.cur_mentions ?? 0), 0);
       const found = [];
-      for (const competitor of dims.competitors ?? []) {
+      for (const competitor of (dims.competitors ?? []).filter((x) => live(x.key))) {
         for (const kind of c.classifyCompetitor(competitor, brandMentions, t)) {
           found.push(
             single(
@@ -465,12 +486,14 @@ const FAMILIES = [
     requires: ['tracking', 'competitors'],
     kinds: ['competitor_high_value_lead', 'competitor_topic_lead', 'competitor_uncovered_topic'],
     async run(ctx) {
-      const [prompts, compRows, texts, dims] = await Promise.all([
+      const [prompts, allCompRows, texts, dims, live] = await Promise.all([
         ctx.prompts(),
         rpc('ae_competitor_prompt_stats', ctx.week),
         ctx.promptTexts(),
         ctx.dimensions(),
+        trackedCompetitors(ctx),
       ]);
+      const compRows = allCompRows.filter((row) => live(row.competitor_id));
       const names = new Map((dims.competitors ?? []).map((x) => [x.key, x.name]));
       const leader = new Map();
       for (const row of compRows) {
@@ -553,7 +576,7 @@ const FAMILIES = [
       'competitor_winning_source',
     ],
     async run(ctx) {
-      const [domains, competitors] = await Promise.all([
+      const [domains, competitors, mergedDomains] = await Promise.all([
         rpc('ae_citation_sources', {
           p_brand_id: ctx.brandId,
           p_from: new Date(ctx.now.getTime() - t.windowDays * DAY_MS).toISOString(),
@@ -565,10 +588,15 @@ const FAMILIES = [
             .eq('brand_id', ctx.brandId)
             .order('id'),
         ),
+        mergedCompetitorDomains(ctx.brandId),
       ]);
       // A tracked competitor's own site (its blog too) is never a source to
       // earn a link or a citation from: same host rule as the brand's own.
-      const isCompetitor = ownDomainMatcher(competitors.map((row) => row.domain));
+      // Nor is a merged one's (00543): it is the kept competitor's site.
+      const isCompetitor = ownDomainMatcher([
+        ...competitors.map((row) => row.domain),
+        ...mergedDomains,
+      ]);
       // The brand's Content rules: never a blocked domain; "only these" keeps its allowed ones
       // and its own site.
       const rules = await readSourceRules(ctx.brandId);

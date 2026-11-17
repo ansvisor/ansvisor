@@ -12,6 +12,7 @@
 
 import { Router } from 'express';
 import supabaseAdmin from '../config/supabase.js';
+import { loadTrackedCompetitors } from '../lib/competitor-aliases.js';
 import {
   isLegacyChatgptTask,
   parseScraperResponse,
@@ -173,10 +174,11 @@ router.post('/', async (req, res) => {
     }
 
     // Fetch context for result handler
-    const [{ data: brand }, { data: domains }, { data: competitorRows }] = await Promise.all([
+    // The competitors with the names and domains merged into each (00543).
+    const [{ data: brand }, { data: domains }, competitors] = await Promise.all([
       supabaseAdmin.from('brands').select('id, name').eq('id', pending.brand_id).single(),
       supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', pending.brand_id),
-      supabaseAdmin.from('competitors').select('id, name, domain').eq('brand_id', pending.brand_id),
+      loadTrackedCompetitors(pending.brand_id),
     ]);
 
     if (!brand) {
@@ -192,11 +194,6 @@ router.post('/', async (req, res) => {
       brandName: brand.name,
       domains: (domains || []).map((d) => d.domain),
     };
-    const competitors = (competitorRows || []).map((c) => ({
-      id: c.id,
-      name: c.name,
-      domain: c.domain || '',
-    }));
 
     // A completed task with nothing to store — google-aio for a query Google
     // shows no AI Overview for — is a finished task, not a failed delivery.

@@ -15,6 +15,7 @@ import {
   type WhyResult,
 } from '@/lib/chat/why/explain';
 import { explainScoreChange, movedScoreCells } from '@/lib/chat/why/score';
+import { competitorDomainRows } from '@/lib/competitor-merge';
 
 /**
  * Why did it move (CHAT-22 §1): explain_change's reads for Chat. The brand
@@ -337,7 +338,8 @@ export async function explainChangeFor(
       : movedCells(params.metric, sameList, EVIDENCE_CELLS);
 
   const [competitors, brandDomains, topic] = await Promise.all([
-    supabaseAdmin.from('competitors').select('domain').eq('brand_id', params.brandId),
+    // With the merged ones' (00543): the kept competitor's sites too.
+    competitorDomainRows(supabaseAdmin, params.brandId),
     supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', params.brandId),
     params.topicId
       ? supabaseAdmin

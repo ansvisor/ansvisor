@@ -79,6 +79,7 @@ import {
   type BreakdownRow,
   type InsightsBreakdown,
 } from '@/lib/insights-breakdown';
+import { competitorDomainRows } from '@/lib/competitor-merge';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
   competitorScoreIn,
@@ -1676,7 +1677,8 @@ export async function getPromptDetail(
   const [{ data: brandDomainRows }, { data: competitorRows }, { data: lastRunRows }] =
     await Promise.all([
       supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
-      supabase.from('competitors').select('domain').eq('brand_id', brandId),
+      // With the merged ones' (00543): the kept competitor's sites too.
+      competitorDomainRows(supabase, brandId),
       supabase
         .from('prompt_results')
         .select('created_at')

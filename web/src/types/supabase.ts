@@ -6667,6 +6667,63 @@ export type Database = {
           },
         ]
       }
+      merged_competitors: {
+        Row: {
+          brand_id: string
+          created_at: string
+          domain: string
+          id: string
+          merged_at: string
+          merged_by: string | null
+          merged_into_id: string
+          name: string
+          page_events: Json
+          scanned_at: string | null
+          type: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at: string
+          domain?: string
+          id: string
+          merged_at?: string
+          merged_by?: string | null
+          merged_into_id: string
+          name: string
+          page_events?: Json
+          scanned_at?: string | null
+          type?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          domain?: string
+          id?: string
+          merged_at?: string
+          merged_by?: string | null
+          merged_into_id?: string
+          name?: string
+          page_events?: Json
+          scanned_at?: string | null
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merged_competitors_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merged_competitors_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_ai_keys: {
         Row: {
           active: boolean
@@ -9517,6 +9574,19 @@ export type Database = {
           p_search?: string
           p_topic_id?: string
         }
+        Returns: Json
+      }
+      merge_competitors: {
+        Args: {
+          p_brand_id: string
+          p_kept_id: string
+          p_merged_ids: string[]
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      unmerge_competitor: {
+        Args: { p_brand_id: string; p_competitor_id: string; p_user_id?: string }
         Returns: Json
       }
       override_mention_sentiment: {
