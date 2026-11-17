@@ -29,6 +29,12 @@ import type { Json } from '@/types/supabase';
  * after it the run is tainted (§16a).
  */
 export const TRUSTED_READS: ReadonlySet<string> = new Set([
+  // The workspace's own numbers, as MCP reads them (mcp-wrapped-reads.ts): action kinds and
+  // their results, prompt slots, the month's audits, and its tracked prompts by location.
+  'get_action_scorecard',
+  'get_prompt_usage',
+  'get_site_audit_quota',
+  'get_prompt_locations',
   'get_visibility_summary',
   'get_visibility_trend',
   'get_prompt_performance',

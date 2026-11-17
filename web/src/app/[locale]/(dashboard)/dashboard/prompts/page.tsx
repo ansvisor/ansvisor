@@ -25,17 +25,26 @@ import {
   PromptUsageCards,
   countByStatus,
   locationQuotaFromUsage,
+  locationsWarning,
   matchesStatusFilter,
   newFirst,
+  planUsageHref,
   promptStatus,
   usePromptUsage,
   type PromptStatus,
   type PromptStatusFilter,
 } from './_usage-cards';
+import {
+  LocationFilter,
+  LocationsWarningLine,
+  NotAnalyzedLine,
+  PromptsListSwitch,
+  PromptsMoreMenu,
+} from './_prompts-header';
 import { INTENT_LABELS, INTENT_COLORS } from '@/config/intent-labels';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -47,7 +56,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger, tabsListVariants } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -89,14 +98,10 @@ import {
   RefreshCw,
   Pencil,
   Plus,
-  Settings2,
-  Download,
   ChevronUp,
   ChevronDown,
   Trash2,
   X,
-  ListChecks,
-  Sparkles,
   ArrowUp,
   ArrowDown,
   MoreHorizontal,
@@ -148,7 +153,6 @@ import {
 } from '@/lib/actions/prompt';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
-import { usePlanContext } from '@/components/providers/plan-provider';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { isNoPlan } from '@/lib/billing/no-plan';
@@ -166,9 +170,10 @@ import {
 } from '@/config/prompt-options';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getBrandFilterOptions } from '@/lib/actions/tracking';
-import { formatRegionDisplay, isValidLocation, locationCode, regionLabel } from '@/lib/region';
+import { formatRegionDisplay, regionLabel } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
-import { PLANS } from '@/config/plans';
+import { brandLocation, useAllowedEngines } from './_prompt-defaults';
+import { TrackNowLine, useTrackNow } from './_track-now';
 import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import { getTopics } from '@/lib/actions/topic';
 import type { PromptVisibilitySummary } from '@/lib/actions/tracking';
@@ -212,6 +217,7 @@ import { TagFilter } from './_tag-filter';
 import { ColumnsPanel } from './_columns-panel';
 import { PlanLimitButtons } from './_plan-limit-buttons';
 import { PromptLimitDialog } from './_prompt-limit-dialog';
+import { ImprovingLink, useImprovingPrompts } from './_improving-link';
 import { WaitingBanner, oldestWaiting } from './_waiting-banner';
 import {
   LocationMatrix,
@@ -414,8 +420,6 @@ const promptExportHeaders = (suffix: string) => [
   'last_run_at',
 ];
 
-const PROMPT_EXPORT_HINT = 'No prompts yet - add prompts first.';
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const VALID_TABS = ['all', 'topics', 'fanout', 'insights'] as const;
@@ -455,35 +459,6 @@ function visibilityBarClass(score: number): string {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-/**
- * Plan- and brand-scoped engine lists shared by the Add / Edit prompt dialogs.
- * Shopping tracking is opt-in per brand (#155): the engine is hidden entirely
- * when the pref is off. The write actions strip it server-side too.
- */
-function useAllowedEngines(shoppingEnabled: boolean) {
-  const { planId, allowedModelIds: planAllowedModelIds } = usePlanContext();
-
-  const allowedScraperIds = useMemo(() => {
-    const allowed = PLANS[planId].limits.allowedScrapers;
-    const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
-    return shoppingEnabled ? ids : ids.filter((id) => id !== 'chatgpt-shopping');
-  }, [planId, shoppingEnabled]);
-  const allowedModelIds = useMemo(
-    () => planAllowedModelIds ?? ALL_MODELS.map((m) => m.id),
-    [planAllowedModelIds],
-  );
-  const visibleScrapers = useMemo(
-    () => ALL_SCRAPERS.filter((s) => allowedScraperIds.includes(s.id)),
-    [allowedScraperIds],
-  );
-  const visibleModels = useMemo(
-    () => ALL_MODELS.filter((m) => allowedModelIds.includes(m.id)),
-    [allowedModelIds],
-  );
-
-  return { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels };
-}
 
 /**
  * Shared form body of the Add / Edit prompt dialogs (#460, #484): text input,
@@ -659,13 +634,6 @@ function PromptFormFields({
       </div>
     </>
   );
-}
-
-/** The brand's tracking location, as new prompts get it (addPromptToSet). */
-function brandLocation(region: string | undefined, state: string | undefined): string {
-  const country = region ?? 'US';
-  const candidate = locationCode(country, state ?? null);
-  return isValidLocation(candidate) ? candidate : country;
 }
 
 // ─── Tracked prompt limit (PROMPT-009) ────────────────────────────────────────
@@ -1385,6 +1353,9 @@ export default function PromptsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
+  // The usage cards (PROMPT-012), opened from the "…" menu's Show usage:
+  // folded whenever the page opens, so the table sits right under the controls.
+  const [usageOpen, setUsageOpen] = useState(false);
   // "Add a topic" was asked for on a tab: the Topics tab opens Add Topic once it shows.
   const [addTopicPending, setAddTopicPending] = useState(false);
   // Where a tab's own buttons go: beside the tabs, as the Prompts tab's do.
@@ -1402,7 +1373,6 @@ export default function PromptsPage() {
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   // The brand's first run while it goes on: the table's answers are still coming.
   const firstRun = useFirstRun();
-  const tCommon = useTranslations('common');
   const tNav = useTranslations('nav');
   const tPrompts = useTranslations('prompts');
   const tVolumes = useTranslations('prompts.volumeInsights');
@@ -1420,6 +1390,8 @@ export default function PromptsPage() {
   const [usageVersion, setUsageVersion] = useState(0);
   const { state: usageState, retry: retryUsage } = usePromptUsage(activeBrandId, usageVersion);
   const usage = usageState.status === 'ready' ? usageState.usage : null;
+  const tHeader = useTranslations('prompts.header');
+  const now = useNow({ updateInterval: 60_000 });
   const locationQuota = useMemo(() => (usage ? locationQuotaFromUsage(usage) : null), [usage]);
   const searchParams = useSearchParams();
   // Prompts saved past the plan's limit wait for a spot (00535), with their
@@ -1986,7 +1958,40 @@ export default function PromptsPage() {
     [allPrompts, volumeByPromptId],
   );
 
+  // Track now (moved from the brand's Manage prompts page): the active
+  // prompts with no answers yet, read as that page read them, for admins and
+  // managers, who can track them now. Read only when the table has an
+  // active prompt with no answers in its window, and again after a change.
+  const activePromptIds = useMemo(
+    () => new Set(allPrompts.filter((p) => p.isActive).map((p) => p.id)),
+    [allPrompts],
+  );
+  const mayLackAnswers = useMemo(
+    () => allPrompts.some((p) => p.isActive && !visibility[p.id]),
+    [allPrompts, visibility],
+  );
+  const trackNow = useTrackNow({
+    brandId: activeBrandId,
+    wanted: canManage && promptDataWanted && mayLackAnswers,
+    version: usageVersion,
+    activeIds: activePromptIds,
+  });
+  const startTrackNow = guard((ids: string[]) => void trackNow.start(ids), {
+    action: tActions('trackPrompts'),
+  });
+
   const canExport = !loading && allPrompts.length > 0;
+
+  // Tracked's count in the switch: the table's own (Active + New), once the
+  // prompts are read. Suggestions has no count without a read of its own.
+  const trackedCount =
+    allPrompts.length > 0 || (!loading && !loadFailed)
+      ? countByStatus(allPrompts, now.getTime()).tracked
+      : undefined;
+  // The plan's prompt locations once nearly or fully used: said beside the
+  // menu's Show usage and in the table's status line. Plan & usage's link.
+  const usageWarning = locationsWarning(usageState);
+  const planHref = planUsageHref(usageState);
 
   const handleExportCsv = useCallback(async () => {
     if (!canExport) return;
@@ -2088,25 +2093,18 @@ export default function PromptsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header: the title alone, with the AI meter and Ask Chat at the right. */}
       <HeaderWithAiUsage>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Prompts</h1>
-            <p className="text-muted-foreground text-sm">
-              Manage every tracked prompt and review estimated AI demand
-            </p>
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight">{tHeader('title')}</h1>
       </HeaderWithAiUsage>
 
       <Tabs value={tab} onValueChange={(v) => showSection(v as TabId, view)}>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <TabsList data-tour="prompts">
-            <TabsTrigger value="all">Prompts</TabsTrigger>
+            <TabsTrigger value="all">{tHeader('tabs.prompts')}</TabsTrigger>
             <TabsTrigger value="topics">{tNav('topics')}</TabsTrigger>
-            <TabsTrigger value="fanout">Query Fan-out</TabsTrigger>
-            <TabsTrigger value="insights">Insights</TabsTrigger>
+            <TabsTrigger value="fanout">{tHeader('tabs.fanout')}</TabsTrigger>
+            <TabsTrigger value="insights">{tHeader('tabs.insights')}</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
             {/* A tab's own buttons, portalled in (Topics). `contents` keeps
@@ -2115,126 +2113,61 @@ export default function PromptsPage() {
             {tab === 'all' && canManage && (
               <Button type="button" size="sm" className="gap-2" onClick={openAddPrompt}>
                 <Plus className="h-4 w-4" />
-                Add prompt
+                {tHeader('addPrompt')}
               </Button>
             )}
+            {/* The rest in "…": Export CSV, Plan & usage and the usage cards,
+                all the Prompts tab's. Topics has its own buttons in its place;
+                Query Fan-out and Insights have none here. */}
             {tab === 'all' && (
-              <span title={!canExport ? PROMPT_EXPORT_HINT : undefined}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={handleExportCsv}
-                  disabled={!canExport}
-                >
-                  <Download className="h-4 w-4" />
-                  {tCommon('exportCsv')}
-                </Button>
-              </span>
-            )}
-
-            {/* Topics has Manage topics in its place. */}
-            {tab !== 'topics' && (
-              <Link
-                href={`/dashboard/brands/${activeBrandId}/prompts`}
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
-              >
-                <Settings2 className="h-4 w-4" />
-                Manage prompts
-              </Link>
+              <PromptsMoreMenu
+                onExportCsv={handleExportCsv}
+                exportDisabled={!canExport}
+                planHref={planHref}
+                usage={
+                  view === 'tracked'
+                    ? {
+                        open: usageOpen,
+                        onToggle: () => setUsageOpen((o) => !o),
+                        warning: usageWarning,
+                      }
+                    : undefined
+                }
+              />
             )}
           </div>
         </div>
 
-        {/* Tracked vs suggested: two views of the same roster. A segmented
-            control rather than a second Tabs, so it reads as a filter on
-            this panel and not as another level of page navigation. It sits
-            above the filter bar so the controls go from general to specific:
-            which area, which list, then which period. It looks like the tabs
-            above it (the muted track, the selected item a card), so the
-            selected item reads the same in both. */}
-        {tab === 'all' && (
-          <div
-            className={cn(tabsListVariants(), 'mt-4 h-8')}
-            role="tablist"
-            aria-label="Prompt view"
-          >
-            {(
-              [
-                { id: 'tracked' as const, label: 'Tracked Prompts', Icon: ListChecks },
-                { id: 'suggestions' as const, label: 'Prompt Suggestions', Icon: Sparkles },
-              ] satisfies { id: PromptsView; label: string; Icon: typeof ListChecks }[]
-            ).map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={view === id}
-                onClick={() => showSection(tab, id)}
-                className={cn(
-                  'flex h-[calc(100%-1px)] items-center gap-2 rounded-md border border-transparent px-2.5 text-sm font-medium transition-all',
-                  view === id
-                    ? 'bg-card text-foreground shadow-sm dark:border-input dark:bg-input/30'
-                    : 'text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground',
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Filter bar — same shape and position as Visibility and Citations
-            (#713). It sits outside the tab panels because the range governs
-            All Prompts, Topics and Query Fan-out. Location doesn't apply to
-            Topics or Query Fan-out (it reads every location), so it is left
-            off there.
+        {/* Which list, then which period. Tracked vs suggested are two views
+            of the same roster: a compact switch rather than a second Tabs, so
+            it reads as a filter on this panel and not as another level of
+            page navigation. The range governs All Prompts, Topics and Query
+            Fan-out, so it sits outside the tab panels, at the right on each.
             Hidden on Insights: that tab shows keyword volume estimates, which
             carry no date dimension, so a range there would be a control that
-            changes nothing. */}
+            changes nothing. Location, which only the table reads, is in the
+            table's own filter row. */}
         {tab !== 'insights' && (
-          <div className="mt-4 flex flex-wrap items-end gap-3">
-            <DateRangeFilter
-              value={rangePreset}
-              presets={PROMPT_RANGE_PRESETS}
-              onChange={setRangePreset}
-              from={customFrom}
-              to={customTo}
-              onFromChange={setCustomFrom}
-              onToChange={setCustomTo}
-            />
-
-            {availableRegions.length > 1 && tabUsesLocation(tab) && (
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Location
-                </label>
-                <Select
-                  value={regionFilter || null}
-                  onValueChange={(v) => setRegionFilter(!v || v === '__all__' ? '' : String(v))}
-                >
-                  <SelectTrigger className="h-8 w-48 text-xs">
-                    <SelectValue placeholder="All Locations">
-                      {(value) =>
-                        value && value !== '__all__'
-                          ? formatRegionDisplay(String(value))
-                          : 'All Locations'
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">All Locations</SelectItem>
-                    {availableRegions.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {formatRegionDisplay(r)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+            {tab === 'all' && (
+              <PromptsListSwitch
+                view={view}
+                onSelect={(next) => showSection(tab, next)}
+                trackedCount={trackedCount}
+              />
             )}
+            <div className="ml-auto flex flex-wrap items-end justify-end gap-3">
+              <DateRangeFilter
+                value={rangePreset}
+                presets={PROMPT_RANGE_PRESETS}
+                onChange={setRangePreset}
+                from={customFrom}
+                to={customTo}
+                onFromChange={setCustomFrom}
+                onToChange={setCustomTo}
+                labelHidden
+              />
+            </div>
           </div>
         )}
 
@@ -2261,15 +2194,15 @@ export default function PromptsPage() {
             )
           ) : (
             <>
-              {activeBrandId && (
+              {usageOpen && (
                 <PromptUsageCards
                   state={usageState}
                   brandName={activeBrand?.name}
-                  readOnly={!canManage}
                   prompts={allPrompts}
                   filter={statusFilter}
                   onFilter={setStatusFilter}
                   onRetry={retryUsage}
+                  onHide={() => setUsageOpen(false)}
                 />
               )}
               {!loading && waitingFirst && (
@@ -2279,44 +2212,6 @@ export default function PromptsPage() {
                   onShow={() => setStatusFilter('waiting')}
                   onFreeUp={canSwap ? () => setSwapFor(waitingFirst.id) : undefined}
                 />
-              )}
-              {!loading && unanalyzedCount > 0 && (
-                <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/50 dark:bg-amber-950/30">
-                  <div className="flex items-start gap-2.5">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
-                    <div className="text-sm">
-                      <p className="font-medium text-amber-900 dark:text-amber-200">
-                        {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'} haven&apos;t been
-                        analyzed yet
-                      </p>
-                      <p className="text-amber-800/80 dark:text-amber-300/80">
-                        {quotaExhausted
-                          ? 'Their Volume & Competition stay empty until analyzed — but your monthly volume analysis limit is reached. Upgrade your plan to analyze more.'
-                          : 'Run volume analysis to fill in their Volume & Competition.'}
-                      </p>
-                    </div>
-                  </div>
-                  {canManage && (
-                    <Button
-                      size="sm"
-                      className="shrink-0"
-                      onClick={handleAnalyzeNew}
-                      disabled={analyzing || quotaExhausted}
-                    >
-                      {analyzing ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          {analyzingLabel}
-                        </>
-                      ) : (
-                        <>
-                          <BarChart3 className="mr-2 h-4 w-4" />
-                          Analyze {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'}
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
               )}
               {firstRun && allPrompts.length > 0 && <FirstRunEmptyState run={firstRun} />}
               <AllPromptsTab
@@ -2333,6 +2228,54 @@ export default function PromptsPage() {
                 positionsWindow={positionsWindow}
                 positionsPreset={range ? rangePreset : '30d'}
                 regionFilter={regionFilter}
+                // Location, in the table's filter row: for a brand tracked in more than one.
+                locationFilter={
+                  availableRegions.length > 1 && tabUsesLocation(tab) ? (
+                    <LocationFilter
+                      regions={availableRegions}
+                      value={regionFilter}
+                      onChange={setRegionFilter}
+                    />
+                  ) : null
+                }
+                // The status line's quiet notes: the plan's prompt locations
+                // near the limit, kept in sight with the usage cards folded;
+                // active prompts with no volume yet, whose Volume and
+                // Competition cells are blank until Analyze fills them in; and
+                // active prompts with no answers yet, which Track now runs.
+                notices={
+                  <>
+                    {usageWarning && (
+                      <LocationsWarningLine warning={usageWarning} planHref={planHref} />
+                    )}
+                    {!loading && unanalyzedCount > 0 && (
+                      <NotAnalyzedLine
+                        count={unanalyzedCount}
+                        onAnalyze={canManage ? handleAnalyzeNew : undefined}
+                        analyzing={analyzing}
+                        progress={analysisProgress}
+                        limitReached={quotaExhausted}
+                      />
+                    )}
+                    {!loading && canManage && (
+                      <TrackNowLine
+                        count={trackNow.noAnswers.size}
+                        starting={trackNow.starting}
+                        startedCount={trackNow.startedCount}
+                        onTrack={() => startTrackNow([...trackNow.noAnswers])}
+                      />
+                    )}
+                  </>
+                }
+                trackNow={
+                  canManage
+                    ? {
+                        noAnswers: trackNow.noAnswers,
+                        busy: trackNow.starting,
+                        onTrack: (prompts: Prompt[]) => startTrackNow(prompts.map((p) => p.id)),
+                      }
+                    : undefined
+                }
                 statusFilter={statusFilter}
                 onStatusFilterChange={setStatusFilter}
                 onSwap={canSwap ? (p: Prompt) => setSwapFor(p.id) : undefined}
@@ -3086,6 +3029,9 @@ function AllPromptsTab({
   positionsWindow,
   positionsPreset,
   regionFilter,
+  locationFilter,
+  notices,
+  trackNow,
   statusFilter,
   onStatusFilterChange,
   onSwap,
@@ -3113,6 +3059,24 @@ function AllPromptsTab({
   positionsPreset: PromptRangePreset;
   /** Selected location; empty means every location. */
   regionFilter: string;
+  /** The page's Location filter, in the filter row; null when there is one location. */
+  locationFilter?: React.ReactNode;
+  /**
+   * Quiet notes under the filter row, at the right of the count: the prompt
+   * locations near the plan's limit, and the prompts not analyzed yet.
+   */
+  notices?: React.ReactNode;
+  /**
+   * Track now in the bulk bar, for the selected prompts with no answers yet;
+   * undefined for those who can't track.
+   */
+  trackNow?: {
+    /** The active prompts with no answers yet. */
+    noAnswers: ReadonlySet<string>;
+    /** A run is starting: the button waits for it. */
+    busy: boolean;
+    onTrack: (prompts: Prompt[]) => void;
+  };
   /** Which rows show, set by the usage cards above (PROMPT-012) or the Status filter. */
   statusFilter: PromptStatusFilter;
   onStatusFilterChange: (filter: PromptStatusFilter) => void;
@@ -3132,6 +3096,7 @@ function AllPromptsTab({
   onChatView?: (view: ChatPageView | null) => void;
 }) {
   const tCommon = useTranslations('common');
+  const tManagers = useTranslations('managersOnly');
   const failureToast = useFailureToast();
   const tPrompts = useTranslations('prompts');
   // One tooltip for every prompt and topic the table cuts short.
@@ -3929,6 +3894,16 @@ function AllPromptsTab({
     });
   }, []);
 
+  // Improve actions still tracked for the rows on screen (PROMPT-008), one
+  // read a page: a link under the Work chip opens the Improve tab.
+  const improving = useImprovingPrompts(
+    activeBrandId,
+    !loading && layout === 'table' && columns.includes('work')
+      ? filtered.slice(promptsPager.start, promptsPager.end).map((p) => p.id)
+      : [],
+    positionsId !== null,
+  );
+
   const state = promptsTableState({ loading, failed, rows: prompts.length });
   if (state === 'loading') {
     return (
@@ -3964,20 +3939,14 @@ function AllPromptsTab({
               Add prompts to your brand to start tracking their AI visibility.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {onAddPrompt && (
-              <Button size="sm" className="gap-2" onClick={onAddPrompt}>
-                <Plus className="h-4 w-4" />
-                Add prompt
-              </Button>
-            )}
-            <Link href={`/dashboard/brands/${activeBrandId}/prompts`}>
-              <Button size="sm" variant={onAddPrompt ? 'outline' : 'default'} className="gap-2">
-                <Pencil className="h-4 w-4" />
-                Manage prompts
-              </Button>
-            </Link>
-          </div>
+          {onAddPrompt ? (
+            <Button size="sm" className="gap-2" onClick={onAddPrompt}>
+              <Plus className="h-4 w-4" />
+              Add prompt
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">{tManagers('addPrompts')}</p>
+          )}
         </CardContent>
       </Card>
     );
@@ -3986,6 +3955,8 @@ function AllPromptsTab({
   const pageRows = filtered.slice(promptsPager.start, promptsPager.end);
   const pageIds = pageRows.map((p) => p.id);
   const selectedPrompts = pageRows.filter((p) => selectedIds.has(p.id));
+  // The selected prompts Track now can start: active, with no answers yet.
+  const trackable = trackNow ? selectedPrompts.filter((p) => trackNow.noAnswers.has(p.id)) : [];
   // A delete that fits in one call is over before the bar could say so.
   const showDeleteProgress = deleteProgress !== null && deleteProgress.total > PROMPT_DELETE_BATCH;
 
@@ -4115,8 +4086,121 @@ function AllPromptsTab({
 
   return (
     <Card data-tour="positions">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+      {/* The filters first, then what they show: the count, the status
+          filter's note and, at the right, the prompts not analyzed yet. */}
+      <CardHeader className="gap-2 pb-3">
+        <div className="flex flex-wrap items-center gap-2" data-filter-row>
+          <div
+            role="group"
+            aria-label={tLocations('view')}
+            className="inline-flex gap-0.5 rounded-full bg-muted p-0.5"
+          >
+            {(['table', 'locations'] as const).map((l) => (
+              <button
+                key={l}
+                type="button"
+                aria-pressed={layout === l}
+                onClick={() => changeLayout(l)}
+                // Read ahead, so the Locations view opens on its data.
+                onPointerEnter={l === 'locations' ? prefetchLocations : undefined}
+                onFocus={l === 'locations' ? prefetchLocations : undefined}
+                className={cn(
+                  'h-7 rounded-full px-3 text-xs transition-colors',
+                  layout === l
+                    ? 'bg-background font-medium text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {tLocations(l)}
+              </button>
+            ))}
+          </div>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => onStatusFilterChange((v as PromptStatusFilter | null) ?? 'all')}
+            items={STATUS_FILTERS.map((value) => ({ value, label: statusLabel(value) }))}
+          >
+            <SelectTrigger
+              // "Waiting for a spot" needs the room.
+              className="h-8 w-40 text-xs"
+              aria-label={tStatus('label')}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_FILTERS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {statusLabel(value)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={workFilter}
+            onValueChange={(v) => setWorkFilter((v as typeof workFilter) ?? 'all')}
+          >
+            <SelectTrigger className="h-8 w-32 text-xs">
+              <SelectValue placeholder="All work">
+                {(value) => WORK_FILTER_LABELS[(value as string) ?? 'all'] ?? 'All work'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All work</SelectItem>
+              <SelectItem value="todo">To do</SelectItem>
+              <SelectItem value="in_progress">In progress</SelectItem>
+              <SelectItem value="done">Done</SelectItem>
+              <SelectItem value="none">No status</SelectItem>
+            </SelectContent>
+          </Select>
+          {locationFilter}
+          <TagFilter
+            tagOptions={tagOptions}
+            tagFilter={tagFilter}
+            tagMatch={tagMatch}
+            onFilterChange={setTagFilter}
+            onMatchChange={setTagMatch}
+          />
+          <Select
+            value={performanceFilter}
+            onValueChange={(v) => changePerformance((v as PerformanceFilter | null) ?? 'all')}
+            items={performanceItems}
+          >
+            <SelectTrigger
+              className="h-8 w-36 text-xs"
+              aria-label={tPerformance('label')}
+              title={tPerformance('title')}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {performanceItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="relative w-60">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search prompts…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 h-8 text-xs"
+            />
+          </div>
+          {layout === 'table' && (
+            <ColumnsPanel
+              brandId={activeBrandId}
+              brandName={brandName}
+              canManage={canManage}
+              views={tableViews}
+              onViewsChange={(views) => setColumnViews({ brandId: activeBrandId, views })}
+              locations={trackedLocations}
+            />
+          )}
+        </div>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
             <CardTitle className="text-sm font-medium">
               {statusFilter === 'waiting'
@@ -4138,115 +4222,8 @@ function AllPromptsTab({
               </span>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div
-              role="group"
-              aria-label={tLocations('view')}
-              className="inline-flex gap-0.5 rounded-full bg-muted p-0.5"
-            >
-              {(['table', 'locations'] as const).map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  aria-pressed={layout === l}
-                  onClick={() => changeLayout(l)}
-                  // Read ahead, so the Locations view opens on its data.
-                  onPointerEnter={l === 'locations' ? prefetchLocations : undefined}
-                  onFocus={l === 'locations' ? prefetchLocations : undefined}
-                  className={cn(
-                    'h-7 rounded-full px-3 text-xs transition-colors',
-                    layout === l
-                      ? 'bg-background font-medium text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {tLocations(l)}
-                </button>
-              ))}
-            </div>
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => onStatusFilterChange((v as PromptStatusFilter | null) ?? 'all')}
-              items={STATUS_FILTERS.map((value) => ({ value, label: statusLabel(value) }))}
-            >
-              <SelectTrigger
-                // "Waiting for a spot" needs the room.
-                className="h-8 w-40 text-xs"
-                aria-label={tStatus('label')}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_FILTERS.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {statusLabel(value)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={workFilter}
-              onValueChange={(v) => setWorkFilter((v as typeof workFilter) ?? 'all')}
-            >
-              <SelectTrigger className="h-8 w-32 text-xs">
-                <SelectValue placeholder="All work">
-                  {(value) => WORK_FILTER_LABELS[(value as string) ?? 'all'] ?? 'All work'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All work</SelectItem>
-                <SelectItem value="todo">To do</SelectItem>
-                <SelectItem value="in_progress">In progress</SelectItem>
-                <SelectItem value="done">Done</SelectItem>
-                <SelectItem value="none">No status</SelectItem>
-              </SelectContent>
-            </Select>
-            <TagFilter
-              tagOptions={tagOptions}
-              tagFilter={tagFilter}
-              tagMatch={tagMatch}
-              onFilterChange={setTagFilter}
-              onMatchChange={setTagMatch}
-            />
-            <Select
-              value={performanceFilter}
-              onValueChange={(v) => changePerformance((v as PerformanceFilter | null) ?? 'all')}
-              items={performanceItems}
-            >
-              <SelectTrigger
-                className="h-8 w-36 text-xs"
-                aria-label={tPerformance('label')}
-                title={tPerformance('title')}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {performanceItems.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="relative w-60">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Search prompts…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 h-8 text-xs"
-              />
-            </div>
-            {layout === 'table' && (
-              <ColumnsPanel
-                brandId={activeBrandId}
-                brandName={brandName}
-                canManage={canManage}
-                views={tableViews}
-                onViewsChange={(views) => setColumnViews({ brandId: activeBrandId, views })}
-                locations={trackedLocations}
-              />
-            )}
+          <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1" data-notices>
+            {notices}
           </div>
         </div>
       </CardHeader>
@@ -4267,6 +4244,9 @@ function AllPromptsTab({
                   }))
             }
             deleting={showDeleteProgress ? deleteProgress : null}
+            trackNowCount={trackable.length}
+            trackNowBusy={trackNow?.busy ?? false}
+            onTrackNow={trackNow ? () => trackNow.onTrack(trackable) : undefined}
             onPause={guard(() => void setActiveFor(selectedPrompts, false), {
               action: tActions('pausePrompts'),
             })}
@@ -4467,6 +4447,12 @@ function AllPromptsTab({
                           >
                             {p.citedUrlCount}/{p.targetUrlCount} cited
                           </span>
+                        )}
+                        {improving[p.id] && (
+                          <ImprovingLink
+                            action={improving[p.id]}
+                            onOpen={() => openPositionsPanel(p.id, 'improve')}
+                          />
                         )}
                       </div>
                     </TableCell>

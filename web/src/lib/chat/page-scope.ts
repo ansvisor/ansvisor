@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod';
 import { searchWords } from '@/lib/mcp/lookup';
+import { pageRoute, samePage } from './page-route';
 import type { ChatTool } from './registry/define-tool';
 
 /**
@@ -38,7 +39,10 @@ export interface PageFilter {
 
 /** What the page a question came from shows: its path, its brand and its filters. */
 export interface PageScope {
-  /** The page's path ("/dashboard/citations"); null when the panel didn't send one. */
+  /**
+   * The page's path as Chat matches it ("/dashboard/citations"; page-route.ts:
+   * "/dashboard/prompts" is "/dashboard/prompts/tracked"); null when the panel didn't send one.
+   */
   route: string | null;
   /** The brand chip's brand (the run's own, messageScopeOf); null when it was left out. */
   brandId: string | null;
@@ -61,7 +65,8 @@ export function pageScopeOf(
     | undefined,
 ): PageScope | null {
   if (!context) return null;
-  const route = context.route?.trim().replace(/\/+$/, '') || null;
+  // As Chat matches pages: /dashboard/prompts is Tracked Prompts (page-route.ts).
+  const route = pageRoute(context.route);
   const brandId = context.chips.find((chip) => chip.key === 'brand')?.value || null;
   const filters = context.chips.flatMap((chip) =>
     chip.key.startsWith('filter:') && chip.value
@@ -196,7 +201,8 @@ export function pageFilterInputs(
     input.brand_id === page.brandId &&
     !LOOKUP_FIELDS.some((field) => Array.isArray(raw[field]) && raw[field].length > 0)
   ) {
-    const ownList = !!page.route && tool.route === page.route;
+    // The read's route is the page's, an alias as its page (page-route.ts).
+    const ownList = samePage(tool.route, page.route);
     for (const filter of page.filters) {
       const rule = ruleOf(filter.key, page.route);
       if (!rule || (rule.ownList && !ownList)) continue;

@@ -34,7 +34,7 @@ import { menuSectionOf } from '@/lib/menu-access';
 import { NEW_RESULTS_ITEM } from '@/lib/menu-dots';
 import { MenuDot, NewResultsWords, useMenuDots } from '@/components/layout/menu-dots';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { Crown, Menu, MessageSquareText } from 'lucide-react';
+import { Crown, Menu } from 'lucide-react';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
 
@@ -53,7 +53,6 @@ export function MobileNav() {
   const agentKeyStatus = useAgentKeyStatus(isCloud && !chatAgentic);
   const agentKeyMissing = isCloud && !chatAgentic && agentKeyStatus === 'missing';
   const chatSetUp = agentKeyMissing ? t('chatSetUp') : null;
-  const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
   const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
   const childGates = { brandPrefs, canUse, chatAgentic };
@@ -103,25 +102,8 @@ export function MobileNav() {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <nav className="space-y-0.5 p-3">
-            {/* The brand's prompts: the Prompts section, off the menu with it. */}
-            {activeBrandId && !hiddenSections.has('prompts') && (
-              <Link
-                href={`/dashboard/brands/${activeBrandId}/prompts`}
-                onClick={() => setOpen(false)}
-              >
-                <span
-                  className={cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                    pathname.includes(`/brands/${activeBrandId}/prompts`)
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                  )}
-                >
-                  <MessageSquareText className="h-4 w-4 shrink-0" />
-                  {t('prompts')}
-                </span>
-              </Link>
-            )}
+            {/* The brand's prompts are managed on the Prompts page, which the
+                menu's own Prompts item opens, as the sidebar has it. */}
             {nav.flatMap((group) =>
               group.items.map((item) => {
                 if (

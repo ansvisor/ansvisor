@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 /**
  * The page's filters as a read's inputs (the owner's rule, 2026-11-16): each
@@ -117,6 +118,32 @@ describe("each page's filters", () => {
     });
     expect(added('get_visibility_summary', page).input).toEqual({ region: 'US' });
     expect(added('list_prompts', page)).toEqual({ input: {}, applied: [] });
+  });
+
+  it('Prompts: /dashboard/prompts is Tracked Prompts, whose own list its filters reach', () => {
+    // The maintainer's review of 2026-11-17: the base path opens on Tracked Prompts
+    // (page-route.ts), so its scope is that page's and a read of that page's list is its own.
+    expect(pageOf('/dashboard/prompts', [])!.route).toBe('/dashboard/prompts/tracked');
+    const ownList = {
+      route: '/dashboard/prompts/tracked',
+      inputSchema: z.object({ brand_id: z.string(), status: z.string().optional() }),
+    };
+    const status: [string, string, string][] = [['status', 'Paused', 'paused']];
+    for (const route of ['/dashboard/prompts', '/dashboard/prompts/', '/dashboard/prompts/tracked']) {
+      expect(
+        pageFilterInputs(ownList, { brand_id: BRAND }, pageOf(route, status), 'Which ones?'),
+        route,
+      ).toEqual({ input: { brand_id: BRAND, status: 'paused' }, applied: ['status'] });
+    }
+    // Another view of the Prompts area is another page: its list filters stay its own.
+    expect(
+      pageFilterInputs(
+        ownList,
+        { brand_id: BRAND },
+        pageOf('/dashboard/prompts/topics', status),
+        'Which ones?',
+      ),
+    ).toEqual({ input: { brand_id: BRAND }, applied: [] });
   });
 
   it("AI Traffic: its platform is the visit's source, which no read takes", () => {

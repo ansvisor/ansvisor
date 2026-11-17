@@ -100,14 +100,15 @@ export interface NavGroup {
 }
 
 /**
- * The left menu (the owner's decisions of 2026-11-11). Chat, then the
- * Action Center, where everyone lands, as a group of its own tabs: Today,
- * Actions, Signals, Agents (Agent Center at its own address, so its menu
- * section, links and Chat's routes stay; only with the new Chat on and a
- * plan with agents) and History. ANALYTICS, with Prompts first (adding
- * prompts is the way in), then Visibility, AI Referral Traffic and Ads,
- * last and only with ADS_ENABLED. MORE: Content, Site Audit, Reports and
- * Competitors.
+ * The left menu (the owner's decisions of 2026-11-17, from the mockup,
+ * replacing 2026-11-11's order): analytics before execution. Chat first, in
+ * no group. ANALYTICS, with Prompts first (adding prompts is the way in, and
+ * where everyone lands: config/home.ts), then Visibility, Competitors, AI
+ * Referral Traffic and Ads, last and only with ADS_ENABLED. EXECUTION:
+ * the Action Center first, as a group of its own tabs (Today, Actions,
+ * Signals, Agents, at its own address so its menu section, links and Chat's
+ * routes stay, only with the new Chat on and a plan with agents, and
+ * History), then Content, Site Audit and Reports.
  *
  * The brands page has no item here: the brand switcher above the menu opens
  * it ("Show My All Brands") and the selected brand's settings.
@@ -126,30 +127,6 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/agent',
         icon: Sparkles,
         requiredFeature: 'ai_agent',
-      },
-      {
-        title: 'Action Center',
-        href: '/dashboard/action-center',
-        icon: Target,
-        children: [
-          { title: 'Today', href: '/dashboard/action-center/today' },
-          { title: 'Actions', href: '/dashboard/action-center/actions' },
-          { title: 'Signals', href: '/dashboard/action-center/signals' },
-          {
-            title: 'Agents',
-            href: '/dashboard/agents',
-            icon: Bot,
-            // Where menu access lists the sections: under the Action Center's row.
-            sectionTitle: 'Agents · in Action Center',
-            requiredFeature: 'ai_agent',
-            requiresChatAgentic: true,
-          },
-          {
-            title: 'History',
-            href: '/dashboard/action-center/history',
-            currentOn: ['/dashboard/action-center/kpis'],
-          },
-        ],
       },
     ],
   },
@@ -196,6 +173,14 @@ export const dashboardNav: NavGroup[] = [
           },
         ],
       },
+      // The head-to-head with each competitor, after Visibility, whose
+      // Leaderboard still opens it.
+      {
+        title: 'Competitors',
+        href: '/dashboard/competitors',
+        icon: Users,
+        requiredFeature: 'competitor_tracking',
+      },
       {
         title: 'AI Referral Traffic',
         href: '/dashboard/traffic',
@@ -217,8 +202,33 @@ export const dashboardNav: NavGroup[] = [
     ],
   },
   {
-    title: 'More',
+    title: 'Execution',
     items: [
+      // The Action Center first: where the work is, on every menu.
+      {
+        title: 'Action Center',
+        href: '/dashboard/action-center',
+        icon: Target,
+        children: [
+          { title: 'Today', href: '/dashboard/action-center/today' },
+          { title: 'Actions', href: '/dashboard/action-center/actions' },
+          { title: 'Signals', href: '/dashboard/action-center/signals' },
+          {
+            title: 'Agents',
+            href: '/dashboard/agents',
+            icon: Bot,
+            // Where menu access lists the sections: under the Action Center's row.
+            sectionTitle: 'Agents · in Action Center',
+            requiredFeature: 'ai_agent',
+            requiresChatAgentic: true,
+          },
+          {
+            title: 'History',
+            href: '/dashboard/action-center/history',
+            currentOn: ['/dashboard/action-center/kpis'],
+          },
+        ],
+      },
       // Content Editor (CE-001): a group, like Prompts, and new as a whole.
       // Its pages in the order the work goes: Opportunities (today's page,
       // keeping /dashboard/content) finds what to write, the Plan says what
@@ -250,14 +260,6 @@ export const dashboardNav: NavGroup[] = [
         title: 'Reports',
         href: '/dashboard/reports',
         icon: FileBarChart,
-      },
-      // The head-to-head with each competitor; Brand Visibility's
-      // Leaderboard still opens it.
-      {
-        title: 'Competitors',
-        href: '/dashboard/competitors',
-        icon: Users,
-        requiredFeature: 'competitor_tracking',
       },
     ],
   },

@@ -240,8 +240,11 @@ describe('MenuPeopleCard and Agents', () => {
     ).toBe('true');
     expect(container.querySelector('[aria-label="Mert Aydın sees Agent Center"]')).toBeNull();
     const boxes = [...row('mert').querySelectorAll('label')].map((l) => l.textContent);
-    expect(boxes.slice(0, 3)).toEqual([
-      'Chat',
+    expect(boxes[0]).toBe('Chat');
+    // The Action Center first in Execution, Agents right under it.
+    const at = boxes.indexOf('Action Centeralways on');
+    expect(boxes[at - 1]).toBe('AI Referral Traffic');
+    expect(boxes.slice(at, at + 2)).toEqual([
       'Action Centeralways on',
       'Agents · in Action Center',
     ]);
