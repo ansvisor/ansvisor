@@ -120,6 +120,7 @@ export const GIVE_UP_WORDS = [
 export const READ_ON_RULES = [
   'Reading all of it:',
   "- When the person names an item (a code such as AC-12 or S-03, an id, a title, a prompt's words, a domain or a URL), read it by that first, with the read's own input for it.",
+  '- Asked on Today (/dashboard/action-center/today) for "the first action" or "what to do first": that is the first card of Today\'s focus. Read get_today and name that card by its title and ref; elsewhere, what matters most is the actions\' Priority Score order.',
   '- A list result with next_offset has more. When the question needs all of them ("the most important", "how many", an item past this page), read the next page with that offset while reads are left; a long list is better read narrower first (a filter, a status, a shorter period).',
   '- A result cut short (truncated: true): read the rest by its next page, or read it narrower.',
   '- A read that failed or took too long: try once more, narrower (a shorter period, a filter, a smaller page), never with the same input.',

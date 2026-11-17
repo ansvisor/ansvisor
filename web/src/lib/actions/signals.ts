@@ -12,6 +12,7 @@
 
 import { readEntityCounts, withEntityCounts } from '@/lib/action-center/entity-counts';
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import { after } from 'next/server';
 import { API_BASE_URL } from '@/config/api';
 import {
@@ -142,7 +143,8 @@ export async function getSignalsSummary(
   dayFrom: string,
   dayTo: string,
 ): Promise<SignalsSummary> {
-  const supabase = await createClient();
+  // The person's own client, or Chat's (get_signals_summary: the service role, after its brand check).
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc('signals_summary', {
     p_brand_id: brandId,
     p_from: `${dayFrom}T00:00:00.000Z`,
