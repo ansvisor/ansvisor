@@ -66,6 +66,10 @@ vi.mock('@/lib/plan-engines', () => ({ alignPromptsToPlanForOrg: align }));
 const addOns = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/billing/add-on-webhook', () => ({ handleAddOnEvent: addOns }));
 
+// The trial reminder (lib/billing/trial-ending.ts): its own module, tested on its own.
+const trialEnding = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/billing/trial-ending', () => ({ handleTrialWillEnd: trialEnding }));
+
 const { POST } = await import('./route');
 
 const deliver = (type: string, object: unknown, previous?: Record<string, unknown>) => {
@@ -101,6 +105,7 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   align.mockResolvedValue({ promptCount: 0, platforms: [], models: [] });
   addOns.mockResolvedValue(false);
+  trialEnding.mockResolvedValue('done');
   db.eq.mockResolvedValue({ error: null });
   brands.filters = [];
   brands.answer = { error: null };
@@ -397,5 +402,33 @@ describe('add-on packs (CHAT-18)', () => {
     await deliver('checkout.session.completed', { customer: 'cus1', subscription: 'sub1' });
     expect(addOns).toHaveBeenCalled();
     expect(db.update).toHaveBeenCalled();
+  });
+});
+
+describe('customer.subscription.trial_will_end', () => {
+  it('hands the subscription to the trial reminder, and touches nothing else', async () => {
+    const res = await deliver('customer.subscription.trial_will_end', subscription('trialing'));
+    expect(res.status).toBe(200);
+    expect(trialEnding).toHaveBeenCalledTimes(1);
+    expect(trialEnding.mock.calls[0][1]).toBe('sub1');
+    expect(db.update).not.toHaveBeenCalled();
+    expect(api).not.toHaveBeenCalled();
+  });
+
+  it('answers 500 when Resend refused it, so Stripe sends the event again', async () => {
+    trialEnding.mockResolvedValue('retry');
+    const res = await deliver('customer.subscription.trial_will_end', subscription('trialing'));
+    expect(res.status).toBe(500);
+  });
+
+  it('answers 500 when it could not read what it needs, before anything was sent', async () => {
+    trialEnding.mockRejectedValue(new Error('down'));
+    const res = await deliver('customer.subscription.trial_will_end', subscription('trialing'));
+    expect(res.status).toBe(500);
+  });
+
+  it('is never called for other events', async () => {
+    await deliver('customer.subscription.updated', subscription('trialing'));
+    expect(trialEnding).not.toHaveBeenCalled();
   });
 });

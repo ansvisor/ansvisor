@@ -5851,7 +5851,8 @@
         "start my plan now",
         "ai usage",
         "trial ends",
-        "buy now"
+        "buy now",
+        "trial reminder email"
       ],
       "synonyms": [
         "trial ai limit",
@@ -5861,7 +5862,7 @@
         "ai used up"
       ],
       "plan": "starter",
-      "updated": "2026-11-15",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
@@ -5886,6 +5887,10 @@
         {
           "heading": "Once the credit is used up",
           "text": "AI features stop until the plan starts, now or when the trial ends. Chat keeps working only where it runs on your workspace's own AI key: own keys come with the Enterprise plan, and a key saved before Chat was turned on for your workspace keeps running it for 30 days. Where Chat isn't turned on yet, Agent Chat on your own AI key keeps working."
+        },
+        {
+          "heading": "Before your trial ends",
+          "text": "We email you 3 days before your free trial ends, with what will be charged and a link to change or cancel your plan."
         }
       ]
     },
