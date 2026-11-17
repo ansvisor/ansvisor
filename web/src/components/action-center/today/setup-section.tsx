@@ -28,8 +28,8 @@ const SETUP_CARD = 'setup';
 
 /**
  * Finish setting up on Action Center › Today: the 7 set-up
- * steps (KPIs, competitors, topics, prompts, Search Console, Analytics and
- * the AI traffic snippet), worked out from the brand's data, so the steps a
+ * steps (the AI traffic snippet, KPIs, competitors, topics, prompts, Search
+ * Console and Analytics), worked out from the brand's data, so the steps a
  * brand already did count. The next 2 open steps with how long each takes,
  * Show all steps and Hide; gone at 7 of 7. Hide skips Getting started for
  * the brand when an admin or manager hides it, and hides the card for the

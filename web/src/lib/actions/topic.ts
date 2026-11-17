@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import type { Topic } from '@/types';
@@ -431,7 +432,8 @@ export async function getTopicsOverview(
   brandId: string,
   window?: TopicsWindow,
 ): Promise<TopicOverviewSummary> {
-  const supabase = await createClient();
+  // dbClient: the person's own client; Chat's read runs it with the service role (asService).
+  const supabase = await dbClient();
 
   // Only the sparkline's day keys are built here now; every window boundary
   // is resolved inside the aggregate, from the database's clock.
