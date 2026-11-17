@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
   }
 
   let trackingJobId: string | null = null;
-  // Where the person lands once the plan is written: their start page by the
-  // new subscription (Chat Home in the free trial), else /dashboard picks it.
+  // Where the person lands once the plan is written: the home (config/home.ts),
+  // else /dashboard picks it.
   let landing = '/dashboard';
 
   try {
@@ -63,7 +63,8 @@ export async function GET(req: NextRequest) {
           console.error('[stripe/success] DB update error:', updateError);
         } else {
           console.log('[stripe/success] DB updated for org:', orgId);
-          // The buyer, on the workspace they just paid for: Action Center › Today.
+          // The buyer, on the workspace they just paid for: the home, Prompts ›
+          // Tracked Prompts (config/home.ts), or setup after purchase first.
           landing = DASHBOARD_HOME;
 
           // Align onboarding-created prompts to the just-confirmed plan's

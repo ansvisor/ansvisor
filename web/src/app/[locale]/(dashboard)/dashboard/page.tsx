@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { DASHBOARD_HOME } from '@/config/home';
 
-/** Everyone starts on Action Center › Today. */
+/** Everyone starts on Prompts › Tracked Prompts. */
 export default function DashboardPage() {
   redirect(DASHBOARD_HOME);
 }

@@ -255,9 +255,10 @@ export function setupFlowProps(afterPurchase: boolean): { setup_after_purchase?:
 }
 
 /**
- * Where setup after purchase lands: the dashboard's home, with the first
- * run's job, as the Stripe return page lands (TrackingJobHandoff keeps it for
- * the progress bar).
+ * Where setup after purchase lands: the dashboard's home, Prompts › Tracked
+ * Prompts (config/home.ts), with the first run's job, as the Stripe return
+ * page lands (TrackingJobHandoff keeps it for the progress bar; the page's
+ * "Your first answers are arriving" reads the run).
  */
 export function setupLanding(jobId: string | null): string {
   return jobId ? `${DASHBOARD_HOME}?jobId=${encodeURIComponent(jobId)}` : DASHBOARD_HOME;

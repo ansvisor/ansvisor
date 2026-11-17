@@ -1,20 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { DASHBOARD_HOME, isDashboardHomeItem } from './home';
-import { ACTION_CENTER_TABS } from '@/lib/action-center/tabs';
+import { PROMPTS_SECTIONS } from '@/lib/prompts-routes';
 
-/** Where everyone lands: Action Center › Today, whatever the plan, role or install. */
+/**
+ * Where everyone lands (the owner's decision of 2026-11-17): Prompts ›
+ * Tracked Prompts, whatever the plan, role, demo or install.
+ */
 
 describe('the dashboard home', () => {
-  it('is Action Center › Today, the first tab', () => {
-    expect(DASHBOARD_HOME).toBe('/dashboard/action-center/today');
-    expect(ACTION_CENTER_TABS[0].href).toBe(DASHBOARD_HOME);
+  it('is Prompts › Tracked Prompts, the first Prompts view', () => {
+    expect(DASHBOARD_HOME).toBe('/dashboard/prompts/tracked');
+    expect(PROMPTS_SECTIONS[0].href).toBe(DASHBOARD_HOME);
   });
 
-  it('makes Today the home, under the Action Center item', () => {
-    expect(isDashboardHomeItem('/dashboard/action-center')).toBe(true);
-    expect(isDashboardHomeItem('/dashboard/action-center/today')).toBe(true);
-    expect(isDashboardHomeItem('/dashboard/action-center/actions')).toBe(false);
-    expect(isDashboardHomeItem('/dashboard/insights')).toBe(false);
-    expect(isDashboardHomeItem('/dashboard/action')).toBe(false);
+  it('makes Tracked Prompts the home, under the Prompts item', () => {
+    expect(isDashboardHomeItem('/dashboard/prompts')).toBe(true);
+    expect(isDashboardHomeItem('/dashboard/prompts/tracked')).toBe(true);
+    expect(isDashboardHomeItem('/dashboard/prompts/suggestions')).toBe(false);
+    expect(isDashboardHomeItem('/dashboard/action-center')).toBe(false);
+    expect(isDashboardHomeItem('/dashboard/action-center/today')).toBe(false);
+    expect(isDashboardHomeItem('/dashboard/prompt')).toBe(false);
   });
 });

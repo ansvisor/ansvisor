@@ -92,7 +92,7 @@ describe('DemoSetupDialog', () => {
     await show({ startedAt, answeredAt: startedAt + 1000, failed: false });
     for (const key of ['brand', 'answers', 'reports']) expect(row(key).dataset.state).toBe('done');
     expect(count('reports')).toBe('2');
-    expect(document.body.textContent).toContain('Ready. Opening the Action Center…');
+    expect(document.body.textContent).toContain('Ready. Opening Prompts…');
   });
 
   it('says a failure, with Try again and Close', async () => {

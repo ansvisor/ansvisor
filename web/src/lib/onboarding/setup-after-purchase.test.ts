@@ -316,8 +316,8 @@ describe('setupFlowProps', () => {
 });
 
 describe('setupLanding', () => {
-  it("lands on the dashboard's home with the first run's job, as the Stripe return page", () => {
-    expect(setupLanding('job 1')).toBe('/dashboard/action-center/today?jobId=job%201');
-    expect(setupLanding(null)).toBe('/dashboard/action-center/today');
+  it("lands on the dashboard's home, Prompts › Tracked Prompts, with the first run's job, as the Stripe return page", () => {
+    expect(setupLanding('job 1')).toBe('/dashboard/prompts/tracked?jobId=job%201');
+    expect(setupLanding(null)).toBe('/dashboard/prompts/tracked');
   });
 });
