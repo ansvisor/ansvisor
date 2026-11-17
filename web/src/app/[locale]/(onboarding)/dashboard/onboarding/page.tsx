@@ -29,6 +29,11 @@ import {
   startPositionProps,
 } from '@/lib/onboarding/start-choice';
 import { ensureOrganization, nameWorkspaceFromBrand } from '@/lib/onboarding/organization';
+import {
+  CONNECT_SITE_STEP,
+  connectSiteSnippet,
+  setupAfterPurchaseSteps,
+} from '@/lib/onboarding/connect-site';
 import { countPlanBrands } from '@/lib/plan-brand-count';
 import { getFaviconUrl } from '@/lib/favicon';
 import { addCompetitorChoice, mergeCompetitorSuggestions } from '@/lib/competitor-list';
@@ -77,6 +82,7 @@ const ONBOARDING_STEP_NAMES: Record<number, string> = {
   4: 'prompts',
   5: 'competitors',
   [PLAN_STEP]: 'plan',
+  [CONNECT_SITE_STEP]: 'connect_site',
 };
 import type { Brand } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -104,6 +110,7 @@ import {
 } from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
 import { ExploreDemoChoice, ExploreDemoLine } from '@/components/onboarding/explore-demo-card';
+import { ConnectSite } from '@/components/onboarding/connect-site';
 import { DemoSetupDialog } from '@/components/demo/demo-setup-dialog';
 import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
 import { wantsDemoAhead } from '@/lib/demo/demo-ahead';
@@ -284,6 +291,12 @@ export default function OnboardingPage() {
   // The admin, who manages the plan: in setup after purchase, "Manage your
   // plan" puts setup off for a while and opens Billing.
   const [managesPlan, setManagesPlan] = useState(false);
+  // "Connect your site", after Finish in setup after purchase: where Done and
+  // Later land (setupLanding, with the first run's job), which was pressed,
+  // and whether the snippet was copied, for their events.
+  const [landing, setLanding] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState<'done' | 'later' | null>(null);
+  const snippetCopied = useRef(false);
 
   // Setup after purchase whose plan lapsed meanwhile (a trial canceled, a
   // payment failed): setup's writes would refuse it, so nothing is written.
@@ -468,8 +481,17 @@ export default function OnboardingPage() {
     };
   }, [step, planBrandId]);
 
-  // Self-host has no plan step, nor setup after purchase.
-  const totalSteps = isCloud() && !afterPurchase ? PLAN_STEP : 5;
+  // The brand's AI Traffic snippet, for "Connect your site" (null without a
+  // tracking code or the server's URL: setup after purchase then ends at Finish).
+  const siteSnippet = createdBrand ? connectSiteSnippet(createdBrand) : null;
+  // Self-host has no plan step, nor setup after purchase, which ends on
+  // "Connect your site" as its sixth step when there is a snippet to show.
+  const totalSteps =
+    isCloud() && !afterPurchase
+      ? PLAN_STEP
+      : afterPurchase
+        ? setupAfterPurchaseSteps(siteSnippet, createdBrand != null)
+        : 5;
 
   // Determine which scrapers/models are available based on the plan
   const currentPlan = getPlan(currentPlanId);
@@ -691,6 +713,10 @@ export default function OnboardingPage() {
               language: b.language ?? undefined,
               shoppingModeEnabled: !!b.shopping_mode_enabled,
               isActive: (b as { is_active?: boolean }).is_active ?? true,
+              // For "Connect your site", after Finish in setup after purchase.
+              trackingCode: b.tracking_code ?? undefined,
+              conversionsEnabled: b.conversions_enabled === true,
+              conversionsConsent: b.conversions_consent === 'always' ? 'always' : 'wait',
               domains: (b.brand_domains || []).map((d: Record<string, unknown>) => ({
                 id: d.id as string,
                 brandId: d.brand_id as string,
@@ -1190,6 +1216,14 @@ export default function OnboardingPage() {
           });
           track('onboarding_finished', { paid: true, ...setupFlowProps(true) });
           setPersonProperties({ onboarding_completed: true, ...setupFlowProps(true) });
+          // Tracking has started. One more, optional screen when the brand
+          // has a snippet: "Connect your site" (which says so), then the same landing.
+          if (connectSiteSnippet(createdBrand)) {
+            setLanding(setupLanding(finished.jobId));
+            setSavingCompetitors(false);
+            setStep(CONNECT_SITE_STEP);
+            return;
+          }
           toast.success(tSetup('setup.setupComplete'));
           // A full page navigation, as below: the layout reads the fresh flag.
           window.location.href = setupLanding(finished.jobId);
@@ -1268,6 +1302,19 @@ export default function OnboardingPage() {
     document.cookie = setupDeferredCookie({ secure: window.location.protocol === 'https:' });
     track('onboarding_manage_plan_opened', { step, ...setupFlowProps(true) });
     window.location.href = SETUP_BILLING_HREF;
+  };
+
+  // ── "Connect your site": Done or Later, to the dashboard with the run ──
+
+  const leaveConnectSite = (how: 'done' | 'later') => {
+    if (leaving || !landing) return;
+    setLeaving(how);
+    track(how === 'done' ? 'onboarding_connect_site_done' : 'onboarding_connect_site_skipped', {
+      copied: snippetCopied.current,
+      ...setupFlowProps(true),
+    });
+    // A full page navigation, as Finish's: the layout reads the fresh flag.
+    window.location.href = landing;
   };
 
   // The organization a choice goes on with (Checkout or the sample brand):
@@ -2103,6 +2150,38 @@ export default function OnboardingPage() {
       );
     }
 
+    // ── Connect your site (setup after purchase, after Finish) ──
+
+    if (step === CONNECT_SITE_STEP) {
+      if (!createdBrand || !siteSnippet) return null;
+      return (
+        <div className="flex flex-col p-6 md:p-10">
+          <div className="mx-auto w-full max-w-lg flex-1">
+            <BrandHeader name={brandName} domain={domain} />
+            <ConnectSite
+              brandId={createdBrand.id}
+              domain={domain || undefined}
+              snippet={siteSnippet}
+              leaving={leaving}
+              onCopy={() => {
+                snippetCopied.current = true;
+                track('onboarding_snippet_copied', setupFlowProps(true));
+              }}
+              onChecked={(outcome) =>
+                track('onboarding_snippet_checked', { outcome, ...setupFlowProps(true) })
+              }
+              onDone={() => leaveConnectSite('done')}
+              onLater={() => leaveConnectSite('later')}
+            />
+          </div>
+          {/* Setup's last step: nothing to go back to once tracking has started. */}
+          <div className="mx-auto mt-8 flex w-full max-w-lg justify-center">
+            <StepDots current={totalSteps} total={totalSteps} />
+          </div>
+        </div>
+      );
+    }
+
     // ── Choose Plan (cloud only) ──
 
     if (step !== PLAN_STEP) return null;
@@ -2283,7 +2362,8 @@ export default function OnboardingPage() {
       }
     >
       {renderStep()}
-      {!initialLoading && afterPurchase && managesPlan && step !== PLAN_STEP && (
+      {/* On setup's own steps (1-5): not the plan step, nor "Connect your site" after Finish. */}
+      {!initialLoading && afterPurchase && managesPlan && step < PLAN_STEP && (
         <div className="flex justify-center px-6 pb-6">
           <a
             href={SETUP_BILLING_HREF}

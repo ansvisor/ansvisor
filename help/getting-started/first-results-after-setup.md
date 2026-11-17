@@ -33,7 +33,7 @@ To add another brand, admins and managers pick **Add Brand** in the brand switch
 
 ## Add the tracking snippet
 
-Setup doesn't include the tracking snippet. It's an optional step you do separately for **AI Referral Traffic**: real visits that arrive on your site from AI answer engines.
+The optional tracking snippet fills **AI Referral Traffic**: real visits that arrive on your site from AI answer engines. On the cloud, setup ends with **Connect your site**, which offers it. Skipped it? It's the first step of **Finish setting up** on **Today**. You can also add it yourself:
 
 1. Pick **AI Referral Traffic** in the sidebar. Until the snippet sends its first visit, the code is shown at the top of the page. After that, **Code** beside **Tracking snippet** in the **Data sources** strip shows it again.
 2. Copy the snippet.

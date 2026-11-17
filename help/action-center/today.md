@@ -4,8 +4,8 @@ route: /dashboard/action-center/today
 keywords: [today, action center, todays focus, since yesterday, waiting for you, finish setting up, where you stand, new area to track, waiting for a spot]
 synonyms: [start page, home page, daily summary, what to do today, my day]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -41,7 +41,7 @@ Both run across the page, under the two cards.
 
 ## Finish setting up
 
-Under **Today's focus**, **Finish setting up** lists the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise.
+Under **Today's focus**, **Finish setting up** lists the next of the 7 set-up steps (the AI traffic snippet, KPIs, competitors, topics, prompts, Search Console, Analytics), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise.
 
 ## Prompts waiting for a spot
 

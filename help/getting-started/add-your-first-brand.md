@@ -1,8 +1,8 @@
 ---
 title: Add your first brand
 route: /dashboard/brands/new
-keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial, plan already active, how do you want to start, sample brand]
-synonyms: [get started, create a brand, set up my account, onboard, add another brand, set up a brand after buying, start the free trial, explore the demo]
+keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial, plan already active, how do you want to start, sample brand, connect your site]
+synonyms: [get started, create a brand, set up my account, onboard, add another brand, set up a brand after buying, start the free trial, explore the demo, add the tracking snippet during setup]
 plan: all
 updated: 2026-11-16
 last_checked: 2026-11-16
@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/add-your-first-brand.mdx]
 ---
-When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. On the cloud, you first choose how to start: the free trial, a plan, or the sample brand. The setup itself has five steps. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
+When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. On the cloud, you first choose how to start: the free trial, a plan, or the sample brand. The setup itself has five steps, then on the cloud an optional last screen, **Connect your site**. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
 
 ## On the cloud: choose how to start
 
@@ -76,9 +76,19 @@ Select at least one competitor to continue. **Start tracking with N competitors*
 
 If your site looks like an online store, Ansvisor turns on Product Visibility for the brand and says so on this step. You can turn it off in the brand settings.
 
+## Last, optional: Connect your site
+
+On the cloud, once **Start tracking with N competitors** has started your brand's first run, **Connect your site** shows your brand's AI Traffic snippet: one line for your site's head. Without it, AI Traffic shows no AI visits, conversions or revenue.
+
+1. Copy the snippet with the copy button.
+2. Paste it just before the head closes on every page of your site, then publish.
+3. Click **Check again** to see whether your home page has it.
+
+**Done, go to my dashboard** and **I'll do it later** both open the dashboard while the first run goes on. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab.
+
 ## Set up your brand with a plan active
 
-Whenever your workspace has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor: after checkout on the first screen, after buying from the sample brand, or once the only brand was deleted. On the last step, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once. If you leave part-way, you pick up where you stopped. Admins who want to change or cancel the plan first can use **Manage your plan** under the steps: it opens Billing, and setup waits for half an hour. If the trial is canceled, the plan ends or a payment fails before you finish, Ansvisor opens read-only instead, so you can choose a plan in Billing.
+Whenever your workspace has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor: after checkout on the first screen, after buying from the sample brand, or once the only brand was deleted. On the last step, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once; **Connect your site** follows. If you leave part-way, you pick up where you stopped. Admins who want to change or cancel the plan first can use **Manage your plan** under the steps: it opens Billing, and setup waits for half an hour. If the trial is canceled, the plan ends or a payment fails before you finish, Ansvisor opens read-only instead, so you can choose a plan in Billing.
 
 ## A brand set up before choosing a plan
 
