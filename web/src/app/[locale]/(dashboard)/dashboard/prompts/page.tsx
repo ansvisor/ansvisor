@@ -2083,8 +2083,9 @@ export default function PromptsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header: the title alone, with the AI meter and Ask Chat at the right. */}
-      <HeaderWithAiUsage>
+      {/* Header: the title alone, with the AI meter and Ask Chat at the right.
+          The meter keeps its room on every tab, read or not, so the row never moves. */}
+      <HeaderWithAiUsage reserveMeter>
         <h1 className="text-2xl font-bold tracking-tight">{tHeader('title')}</h1>
       </HeaderWithAiUsage>
 
