@@ -190,7 +190,7 @@ describe('useExploreDemo while the demo is still being prepared', () => {
     await advance(600);
     // Everything done a moment, then the demo opens.
     expect(step('reports')).toBe('done');
-    expect(dialogText()).toContain('Ready. Opening the Action Center…');
+    expect(dialogText()).toContain('Ready. Opening Prompts…');
     expect(router.push).not.toHaveBeenCalled();
     await advance(600);
     expect(router.push).toHaveBeenCalledWith('/dashboard');

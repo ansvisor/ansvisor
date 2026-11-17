@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { pageExists } from '@/lib/app-pages';
@@ -11,7 +13,7 @@ import { PROMPT_ASSOCIATION_LABEL, conversionRate } from '@/lib/traffic-conversi
  * organization and brand, say what to set up for each missing source, page
  * their lists, never add two currencies, always label the prompt
  * association, and give the AI Traffic page's own numbers for the same
- * period.
+ * period. The MCP Server's tools of the same names answer from them.
  */
 
 type Call = [string, ...unknown[]];
@@ -70,6 +72,7 @@ vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 const reads = await import('./ai-conversions');
 const setup = await import('./tracking-setup');
 const traffic = await import('@/lib/actions/traffic');
+const { createMcpServer } = await import('./server');
 
 const ORG = 'org-1';
 const BRAND = 'b1000000-0000-4000-8000-000000000001';
@@ -739,5 +742,401 @@ describe('prompts cited on pages that converted: an association, always labelled
     expect(reads.pageKeyOf('https://Brew.example/Caf%C3%A9/?a=1#top')).toBe('/café');
     expect(reads.pageKeyOf('https://brew.example')).toBe('/');
     expect(reads.pageKeyOf('/Shop//')).toBe('/shop');
+  });
+});
+
+// ─── Over MCP: the same reads, for a client such as Claude ──────────────────
+
+describe('the MCP Server’s tools of the same names', () => {
+  const ORIGIN = 'https://app.ansvisor.test';
+  const TOOLS = [
+    'get_tracking_setup',
+    'get_ai_conversions',
+    'get_ai_converting_pages',
+    'get_ai_pipeline',
+    'list_ai_visits',
+    'get_prompt_conversions',
+  ];
+  const PIPELINE = {
+    connected: true,
+    contactsConsent: true,
+    currency: 'EUR',
+    syncedAt: '2026-11-16T03:00:00Z',
+    syncError: null,
+    totals: {
+      contacts: 14,
+      contactsPrev: 9,
+      deals: 4,
+      wonDeals: 2,
+      wonRevenue: 8200,
+      wonRevenuePrev: 3100,
+      openDeals: 2,
+      openPipeline: 5400,
+    },
+    byEngine: [
+      {
+        source: 'chatgpt.com',
+        contacts: 10,
+        deals: 3,
+        wonDeals: 2,
+        wonRevenue: 8200,
+        openPipeline: 2000,
+      },
+    ],
+    byPage: [
+      {
+        page: 'https://brew.example/pricing',
+        contacts: 6,
+        deals: 2,
+        wonRevenue: 8200,
+        topSource: 'chatgpt.com',
+      },
+    ],
+    hubspotNative: { contacts: 3, deals: 0, wonRevenue: 0 },
+  };
+  const gaPage = (page: string, sessions: number, keyEvents: number, revenue: number) => ({
+    page,
+    sessions,
+    key_events: keyEvents,
+    key_event_sessions: Math.max(0, keyEvents - 1),
+    transactions: 1,
+    revenue,
+    best_platform: 'chatgpt.com',
+  });
+  const GA_PAGES = [
+    gaPage('/Gifts', 80, 9, 640.4),
+    gaPage('/pricing', 45, 6, 210.6),
+    gaPage('/blog/brew', 12, 2, 0),
+  ];
+  const cite = (url: number, result: string, prompt: string, platform: string, text: string) => ({
+    url_id: url,
+    prompt_result_id: result,
+    prompt_results: { prompt_id: prompt, platform, prompts: { text } },
+  });
+
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', `${ORIGIN}/`);
+    gaConnected = true;
+    db.rpcs.ai_traffic_conversions = (args) => ({
+      sessions: 137,
+      has_revenue: true,
+      page_count: GA_PAGES.length,
+      answer_count: 0,
+      pages: GA_PAGES.slice(0, args.p_limit as number),
+      answers: [],
+    });
+    db.rpcs.brand_ai_pipeline = () => PIPELINE;
+    db.tables.ai_traffic_logs = (calls) => {
+      if (calls.some(([m, c]) => m === 'in' && c === 'visit_of')) return { data: [], error: null };
+      const range = calls.find(([m]) => m === 'range') as [string, number, number] | undefined;
+      const logs = Array.from({ length: 3 }, (_, i) => ({
+        id: `v${i}`,
+        brand_id: BRAND,
+        url: `https://brew.example/p${i}`,
+        referrer: 'https://chatgpt.com/',
+        source_platform: 'chatgpt.com',
+        country: 'TR',
+        language: 'tr',
+        screen: null,
+        created_at: `2026-11-1${i}T10:00:00.000Z`,
+      }));
+      return {
+        data: range ? logs.slice(range[1], range[2] + 1) : [],
+        error: null,
+        count: range ? 41 : 57,
+      };
+    };
+    db.tables.brand_domains = () => ({ data: [{ domain: 'brew.example' }], error: null });
+    db.tables.citation_urls = () => ({
+      data: [
+        { id: 1, url: 'https://brew.example/pricing' },
+        { id: 2, url: 'https://brew.example/shop' },
+      ],
+      error: null,
+    });
+    db.tables.prompt_result_citations = () => ({
+      data: [
+        cite(1, 'r1', 'p1', 'chatgpt-web', 'best coffee subscription'),
+        cite(2, 'r2', 'p1', 'chatgpt-web', 'best coffee subscription'),
+        cite(2, 'r3', 'p2', 'perplexity-web', 'coffee gift ideas'),
+      ],
+      error: null,
+    });
+  });
+
+  async function connect(auth: McpAuthContext = ctx) {
+    const server = createMcpServer(auth);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientTransport);
+    return client;
+  }
+
+  /** A tool's answer to an MCP client, as `auth`: its JSON, or its error's text. */
+  async function callMcp(name: string, args: Record<string, unknown>, auth = ctx) {
+    const result = await (await connect(auth)).callTool({ name, arguments: args });
+    const text = (result.content as { text: string }[])[0].text;
+    return {
+      isError: Boolean(result.isError),
+      text,
+      json: result.isError ? null : JSON.parse(text),
+    };
+  }
+
+  /** Chat's result as an MCP client gets it: each app page's path a full address. */
+  const linked = (value: unknown) =>
+    JSON.parse(JSON.stringify(value).replaceAll('"where":"/', `"where":"${ORIGIN}/`));
+
+  const WINDOW = { dateFrom: '2026-11-09', dateTo: '2026-11-15' };
+  const MCP_WINDOW = { date_from: WINDOW.dateFrom, date_to: WINDOW.dateTo };
+  const sameAsChat: [string, Record<string, unknown>, () => Promise<unknown>][] = [
+    ['get_tracking_setup', {}, () => setup.getTrackingSetupFor(ctx, { brandId: BRAND })],
+    [
+      'get_ai_conversions',
+      { ...MCP_WINDOW, limit: 2, offset: 1 },
+      () => reads.getAiConversionsFor(ctx, { brandId: BRAND, ...WINDOW, limit: 2, offset: 1 }),
+    ],
+    [
+      'get_ai_converting_pages',
+      { ...MCP_WINDOW, limit: 2 },
+      () => reads.getAiConvertingPagesFor(ctx, { brandId: BRAND, ...WINDOW, limit: 2 }),
+    ],
+    [
+      'get_ai_pipeline',
+      MCP_WINDOW,
+      () => reads.getAiPipelineFor(ctx, { brandId: BRAND, ...WINDOW }),
+    ],
+    [
+      'list_ai_visits',
+      { ...MCP_WINDOW, limit: 2, assistant: 'chatgpt.com', search: 'p' },
+      () =>
+        reads.listAiVisitsFor(ctx, {
+          brandId: BRAND,
+          ...WINDOW,
+          limit: 2,
+          assistant: 'chatgpt.com',
+          search: 'p',
+        }),
+    ],
+    [
+      'get_prompt_conversions',
+      { ...MCP_WINDOW, limit: 1 },
+      () => reads.getPromptConversionsFor(ctx, { brandId: BRAND, ...WINDOW, limit: 1 }),
+    ],
+  ];
+
+  it.each(sameAsChat)('%s answers as Chat’s read for the same input', async (name, args, chat) => {
+    const mcp = await callMcp(name, { brand_id: BRAND, ...args });
+    expect(mcp.isError, mcp.text).toBe(false);
+    const expected = linked(await chat());
+    expect(expected).toBeTruthy();
+    expect(mcp.json).toEqual(expected);
+  });
+
+  it('lists them as reads that say what they answer, to read the setup first and never to add currencies', async () => {
+    const { tools } = await (await connect()).listTools();
+    const tool = (name: string) => tools.find((t) => t.name === name)!;
+    for (const name of TOOLS) {
+      expect(tool(name).annotations, name).toEqual({
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      });
+      expect(tool(name).inputSchema.required, name).toEqual(['brand_id']);
+    }
+    expect(tool('get_tracking_setup').description).toContain('Read it first');
+    for (const name of TOOLS.filter((n) => !['get_tracking_setup', 'list_ai_visits'].includes(n))) {
+      expect(tool(name).description, name).toContain('read get_tracking_setup first');
+      expect(tool(name).description, name).toContain('"Not measured"');
+    }
+    expect(tool('get_ai_conversions').description).toContain(
+      'Which AI assistants and landing pages bring customers',
+    );
+    expect(tool('get_ai_conversions').description).toContain('never added to another');
+    expect(tool('get_ai_converting_pages').description).toContain(
+      "never add it to another source's",
+    );
+    expect(tool('get_ai_pipeline').description).toContain('never add them to the totals');
+    expect(tool('get_ai_pipeline').description).toContain('plan_limit');
+    expect(tool('get_prompt_conversions').description).toContain(
+      'never say or imply that a prompt caused a sale',
+    );
+    // Paged as Chat's: 50 at most, from an offset.
+    const props = tool('list_ai_visits').inputSchema.properties as Record<
+      string,
+      { maximum?: number }
+    >;
+    expect(props.limit.maximum).toBe(50);
+    expect(Object.keys(props)).toEqual(
+      expect.arrayContaining(['date_from', 'date_to', 'offset', 'assistant', 'search']),
+    );
+    expect((await callMcp('get_ai_conversions', { brand_id: BRAND, limit: 51 })).isError).toBe(
+      true,
+    );
+  });
+
+  it('says "Not measured" with its step and a link to its page, and no figure, when a source isn’t set up', async () => {
+    brand.conversions_enabled = false;
+    events = [];
+    gaConnected = false;
+    db.rpcs.brand_ai_pipeline = () => ({ ...PIPELINE, connected: false });
+    const tracking = `${ORIGIN}/dashboard/brands/${BRAND}/settings?tab=tracking`;
+    const integrations = `${ORIGIN}/dashboard/settings?tab=integrations`;
+
+    expect((await callMcp('get_ai_conversions', { brand_id: BRAND })).json).toEqual({
+      measured: false,
+      enabled: false,
+      period: { from: null, to: '2026-11-16T12:00:00.000Z' },
+      not_measured: expect.stringContaining('Not measured'),
+      next_step: expect.stringContaining('Track conversions from AI visits'),
+      where: tracking,
+    });
+    expect((await callMcp('get_ai_converting_pages', { brand_id: BRAND })).json).toEqual({
+      measured: false,
+      connected: false,
+      not_measured: expect.stringContaining('Not measured'),
+      next_step: expect.stringContaining('Connect Google Analytics'),
+      where: integrations,
+    });
+    const pipeline = (await callMcp('get_ai_pipeline', { brand_id: BRAND })).json;
+    expect(pipeline).toMatchObject({
+      measured: false,
+      state: 'not_connected',
+      next_step: expect.stringContaining('Connect HubSpot'),
+      where: `${ORIGIN}/dashboard/settings/integrations#hubspot`,
+    });
+    expect(pipeline).not.toHaveProperty('totals');
+    const prompts = (await callMcp('get_prompt_conversions', { brand_id: BRAND })).json;
+    expect(prompts).toEqual({
+      label: PROMPT_ASSOCIATION_LABEL,
+      measured: false,
+      not_measured: expect.stringContaining('Not measured'),
+      next_steps: [
+        { next_step: expect.any(String), where: tracking },
+        { next_step: expect.stringContaining('Connect Google Analytics'), where: integrations },
+      ],
+    });
+    const setupResult = (await callMcp('get_tracking_setup', { brand_id: BRAND })).json;
+    const steps = setupResult.items.filter((item: { where?: string }) => item.where);
+    expect(steps.map((item: { item: string }) => item.item)).toEqual([
+      'snippet',
+      'conversions',
+      'google_analytics',
+      'hubspot',
+    ]);
+    for (const item of steps) expect(item.where.startsWith(`${ORIGIN}/dashboard/`)).toBe(true);
+    // Nothing of Analytics was read for a brand without it.
+    expect(db.rpcCalls.map((c) => c.name)).not.toContain('ai_traffic_conversions');
+  });
+
+  it.each(TOOLS)(
+    '%s answers another workspace’s brand, or one not shared with the key, as not found, reading nothing of it',
+    async (name) => {
+      const refusals: [McpAuthContext, string][] = [
+        [{ ...ctx, organizationId: 'org-2' }, BRAND],
+        [{ ...ctx, brandAccess: ['b-other'] }, BRAND],
+        [{ ...ctx, organizationId: null }, BRAND],
+        [ctx, 'b9000000-0000-4000-8000-000000000009'],
+      ];
+      for (const [auth, brandId] of refusals) {
+        db.reads.length = 0;
+        db.rpcCalls.length = 0;
+        const refused = await callMcp(name, { brand_id: brandId }, auth);
+        expect(refused, `${name} for ${brandId}`).toMatchObject({
+          isError: true,
+          text: 'Brand not found',
+        });
+        expect(db.reads.filter((r) => r.table !== 'brands').map((r) => r.table)).toEqual([]);
+        expect(db.rpcCalls).toEqual([]);
+      }
+    },
+  );
+
+  it('gives the pipeline on a plan with CRM integrations only, as AI Traffic’s section: plan_limit with the step otherwise', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    let org = { plan: 'starter', subscription_status: 'active', plan_overrides: null };
+    db.tables.organizations = () => ({ data: [org], error: null });
+    const refused = await callMcp('get_ai_pipeline', { brand_id: BRAND, ...MCP_WINDOW });
+    expect(refused.isError).toBe(true);
+    expect(JSON.parse(refused.text)).toEqual({
+      error: 'plan_limit',
+      message: expect.stringContaining('comes with the Growth plan and above'),
+      next_step: expect.stringContaining('an admin upgrades in Settings › Billing'),
+      where: `${ORIGIN}/dashboard/settings/billing`,
+    });
+    expect(db.rpcCalls.map((c) => c.name)).not.toContain('brand_ai_pipeline');
+    // Its setup check says the same of HubSpot.
+    const setupResult = (await callMcp('get_tracking_setup', { brand_id: BRAND })).json;
+    expect(setupResult.items.find((i: { item: string }) => i.item === 'hubspot')).toMatchObject({
+      state: 'not_on_plan',
+      where: `${ORIGIN}/dashboard/settings/billing`,
+    });
+
+    org = { plan: 'growth', subscription_status: 'active', plan_overrides: null };
+    const growth = await callMcp('get_ai_pipeline', { brand_id: BRAND, ...MCP_WINDOW });
+    expect(growth.json).toMatchObject({ measured: true, currency: 'EUR' });
+    // A plan that ended keeps its reads, as the page and the other MCP plan reads do.
+    org = { plan: 'growth', subscription_status: 'canceled', plan_overrides: null };
+    const ended = await callMcp('get_ai_pipeline', { brand_id: BRAND, ...MCP_WINDOW });
+    expect(ended.json).toMatchObject({ measured: true, totals: { won_revenue: 8200 } });
+  });
+
+  it('pages its lists as Chat does: total, offset, next_offset and a note', async () => {
+    const conversions = (
+      await callMcp('get_ai_conversions', { brand_id: BRAND, limit: 1, offset: 1 })
+    ).json;
+    expect(conversions).toMatchObject({
+      total: 3,
+      offset: 1,
+      next_offset: 2,
+      landing_pages: [{ page: '/shop', conversions: 3 }],
+    });
+    expect(conversions.note).toContain('Showing 2–2 of 3 landing pages');
+    const pages = (
+      await callMcp('get_ai_converting_pages', { brand_id: BRAND, limit: 2, offset: 2 })
+    ).json;
+    expect(pages).toMatchObject({
+      total: 3,
+      offset: 2,
+      next_offset: null,
+      pages: [{ page: '/blog/brew' }],
+    });
+    const visits = (await callMcp('list_ai_visits', { brand_id: BRAND, limit: 2 })).json;
+    expect(visits).toMatchObject({ total: 41, offset: 0, next_offset: 2, pageviews: 57 });
+    expect(visits.visits).toHaveLength(2);
+    expect(visits.note).toContain('Read the next page with offset 2');
+    const prompts = (await callMcp('get_prompt_conversions', { brand_id: BRAND, limit: 1 })).json;
+    expect(prompts).toMatchObject({
+      total: 2,
+      next_offset: 1,
+      prompts: [{ prompt: 'best coffee subscription' }],
+    });
+  });
+
+  it('keeps each currency apart, and always labels the prompts as an association', async () => {
+    const conversions = await callMcp('get_ai_conversions', { brand_id: BRAND });
+    expect(conversions.json.revenue).toEqual([
+      { currency: 'EUR', value: 170 },
+      { currency: 'USD', value: 80.5 },
+    ]);
+    expect(conversions.text).not.toMatch(/250\.5|200\.5|170\.5/);
+    const prompts = await callMcp('get_prompt_conversions', { brand_id: BRAND });
+    expect(prompts.json).toMatchObject({
+      label: PROMPT_ASSOCIATION_LABEL,
+      measured: true,
+      prompts: [
+        {
+          prompt: 'best coffee subscription',
+          revenue_on_cited_pages: [
+            { currency: 'EUR', value: 120 },
+            { currency: 'USD', value: 80.5 },
+          ],
+        },
+        { prompt: 'coffee gift ideas' },
+      ],
+    });
+    expect(prompts.json.label).toMatch(/^Association, not measured attribution/);
+    expect(prompts.text).not.toMatch(/200\.5/);
   });
 });

@@ -9,8 +9,10 @@ import {
   PromptUsageCards,
   countByStatus,
   locationQuotaFromUsage,
+  locationsWarning,
   matchesStatusFilter,
   newFirst,
+  planUsageHref,
   promptStatus,
   type PromptUsageState,
 } from './_usage-cards';
@@ -37,8 +39,9 @@ let container: HTMLDivElement;
 let root: Root;
 const onFilter = vi.fn();
 const onRetry = vi.fn();
+const onHide = vi.fn();
 
-function render(state: PromptUsageState, newCount = 0, { open = true } = {}) {
+function render(state: PromptUsageState, newCount = 0) {
   // Added an hour before the provider's clock, so they read as New.
   const prompts = Array.from({ length: newCount }, () => ({
     isActive: true,
@@ -55,18 +58,15 @@ function render(state: PromptUsageState, newCount = 0, { open = true } = {}) {
         <PromptUsageCards
           state={state}
           brandName="Acme Coffee"
-          readOnly={false}
           prompts={prompts}
           filter="tracked"
           onFilter={onFilter}
           onRetry={onRetry}
+          onHide={onHide}
         />
       </NextIntlClientProvider>,
     );
   });
-  // The cards open folded; most tests read them open.
-  const toggle = container.querySelector('button[aria-expanded]') as HTMLButtonElement;
-  if (open && toggle.getAttribute('aria-expanded') === 'false') act(() => toggle.click());
 }
 
 const values = () =>
@@ -201,11 +201,11 @@ describe('PromptUsageCards', () => {
               usage: summary({ brand: { active: 44, paused: 3, total: 47 } }),
             }}
             brandName="Acme Coffee"
-            readOnly={false}
             prompts={[waiting, waiting]}
             filter="tracked"
             onFilter={onFilter}
             onRetry={onRetry}
+            onHide={onHide}
           />
         </NextIntlClientProvider>,
       );
@@ -233,85 +233,18 @@ describe('PromptUsageCards', () => {
     expect(container.textContent).toContain('of 500 on Team plan');
   });
 
-  it('opens folded, with Show on the right after Plan & usage, and the whole bar opens it', () => {
-    render({ status: 'ready', usage: summary() }, 0, { open: false });
-    const toggle = container.querySelector('button[aria-expanded]') as HTMLButtonElement;
-    expect(toggle.textContent).toBe('Tracked Prompts: Show');
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    const body = document.getElementById(toggle.getAttribute('aria-controls')!)!;
-    expect(body.className).toContain('hidden');
-    // Show sits after Plan & usage, at the bar's right end.
-    const plan = [...container.querySelectorAll('a')].find(
-      (a) => a.textContent === 'Plan & usage',
-    )!;
-    expect(plan.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-    act(() => toggle.click());
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(toggle.textContent).toBe('Tracked Prompts: Hide');
-    expect(body.className).not.toContain('hidden');
-    expect(values()[0]).toBe('44');
-
-    // The bar itself, e.g. its title, folds it again.
-    act(() => (container.querySelector('h2') as HTMLElement).click());
-    expect(body.className).toContain('hidden');
-
-    // Plan & usage goes to its page without folding or unfolding.
-    plan.addEventListener('click', (e) => e.preventDefault());
-    act(() => plan.click());
-    expect(body.className).toContain('hidden');
-  });
-
-  it('says in the folded title when the prompt locations are nearly or fully used', () => {
-    render({ status: 'ready', usage: summary() }, 0, { open: false });
-    const pill = () =>
-      [...container.querySelectorAll('h2 ~ span')].find((el) =>
-        el.textContent?.includes('prompt locations'),
-      ) as HTMLElement | undefined;
-    expect(pill()?.textContent).toBe('46 / 50 prompt locations');
-    expect(pill()?.className).toContain('amber');
-
-    render(
-      {
-        status: 'ready',
-        usage: summary({ account: { activePrompts: 50, brands: 1, locationsUsed: 52 } }),
-      },
-      0,
-      { open: false },
+  it('is a labelled panel with no title bar, and Hide folds it away', () => {
+    render({ status: 'ready', usage: summary() });
+    const panel = container.querySelector('section')!;
+    expect(panel.getAttribute('aria-label')).toBe('Prompt usage');
+    // The Tracked Prompts bar is gone: its Plan & usage and Show are in the page's "…" menu.
+    expect(container.querySelector('h2')).toBeNull();
+    expect(container.textContent).not.toContain('Every tracked prompt for this brand');
+    expect([...container.querySelectorAll('a')].map((a) => a.textContent)).not.toContain(
+      'Plan & usage',
     );
-    expect(pill()?.textContent).toBe('52 / 50 prompt locations');
-    expect(pill()?.className).toContain('red');
-
-    // Open, the cards carry it instead.
-    act(() => (container.querySelector('button[aria-expanded]') as HTMLButtonElement).click());
-    expect(pill()).toBeUndefined();
-  });
-
-  it('adds nothing to the folded title well under the limit, or with no limit', () => {
-    render(
-      {
-        status: 'ready',
-        usage: summary({ account: { activePrompts: 10, brands: 1, locationsUsed: 10 } }),
-      },
-      0,
-      { open: false },
-    );
-    expect(container.querySelector('h2')?.parentElement?.textContent).not.toContain(
-      'prompt locations',
-    );
-    render(
-      {
-        status: 'ready',
-        usage: summary({
-          plan: { key: 'self_hosted', name: 'Self-Hosted', locationLimit: null, cta: null },
-        }),
-      },
-      0,
-      { open: false },
-    );
-    expect(container.querySelector('h2')?.parentElement?.textContent).not.toContain(
-      'prompt locations',
-    );
+    act(() => button('Hide').click());
+    expect(onHide).toHaveBeenCalledOnce();
   });
 
   it('shows skeletons, not zeros, while loading', () => {
@@ -319,6 +252,56 @@ describe('PromptUsageCards', () => {
 
     expect(values()).toEqual([]);
     expect(container.querySelectorAll('[data-slot=skeleton]').length).toBeGreaterThan(0);
+  });
+});
+
+describe("the menu's Plan & usage and Show usage", () => {
+  it('links Plan & usage to billing once the counts are read, and never on self-hosted', () => {
+    expect(planUsageHref({ status: 'ready', usage: summary() })).toBe(
+      '/dashboard/settings?tab=billing',
+    );
+    expect(planUsageHref({ status: 'loading' })).toBeUndefined();
+    expect(planUsageHref({ status: 'error' })).toBeUndefined();
+    expect(
+      planUsageHref({
+        status: 'ready',
+        usage: summary({
+          plan: { key: 'self_hosted', name: 'Self-Hosted plan', locationLimit: null, cta: null },
+        }),
+      }),
+    ).toBeUndefined();
+  });
+
+  it('says when the prompt locations are nearly or fully used', () => {
+    expect(locationsWarning({ status: 'ready', usage: summary() })).toEqual({
+      used: 46,
+      limit: 50,
+      tone: 'warning',
+    });
+    expect(
+      locationsWarning({
+        status: 'ready',
+        usage: summary({ account: { activePrompts: 50, brands: 1, locationsUsed: 52 } }),
+      }),
+    ).toEqual({ used: 52, limit: 50, tone: 'full' });
+  });
+
+  it('says nothing well under the limit, with no limit, or before the counts are read', () => {
+    expect(
+      locationsWarning({
+        status: 'ready',
+        usage: summary({ account: { activePrompts: 10, brands: 1, locationsUsed: 10 } }),
+      }),
+    ).toBeNull();
+    expect(
+      locationsWarning({
+        status: 'ready',
+        usage: summary({
+          plan: { key: 'self_hosted', name: 'Self-Hosted', locationLimit: null, cta: null },
+        }),
+      }),
+    ).toBeNull();
+    expect(locationsWarning({ status: 'loading' })).toBeNull();
   });
 });
 

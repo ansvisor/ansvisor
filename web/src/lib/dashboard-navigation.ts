@@ -46,7 +46,7 @@ export const dashboardNavLabelKeys: Record<string, string> = {
 /** Map from the static group title string in dashboard.ts to its nav key. */
 export const dashboardNavGroupKeys: Record<string, string> = {
   Analytics: 'analytics',
-  More: 'more',
+  Execution: 'execution',
 };
 
 /** Resolve a NavGroup.title to its translated label, or return the raw string

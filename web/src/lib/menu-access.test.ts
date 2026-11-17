@@ -50,11 +50,19 @@ describe('menuSectionOf', () => {
 });
 
 describe('MENU_SECTIONS', () => {
-  // Chat, the Action Center and its Agents first, then Analytics; Ads
-  // (ADS-01) closes Analytics, after AI Referral Traffic.
-  it('lists the left menu, Chat, the Action Center and Agents first, then Analytics', () => {
-    expect(MENU_SECTIONS.slice(0, 3)).toEqual(['agent', ALWAYS_ON_SECTION, 'agents']);
+  // Chat first, then Analytics with Prompts first; Ads (ADS-01) closes
+  // Analytics, after AI Referral Traffic. Then Execution: the Action Center
+  // and its Agents first (the owner's mockup, 2026-11-17).
+  it('lists the left menu, Chat, Analytics, then Execution with the Action Center and Agents first', () => {
+    expect(MENU_SECTIONS.slice(0, 2)).toEqual(['agent', 'prompts']);
     expect(MENU_SECTIONS.indexOf('ads')).toBe(MENU_SECTIONS.indexOf('traffic') + 1);
+    expect(MENU_SECTIONS.slice(MENU_SECTIONS.indexOf('ads') + 1)).toEqual([
+      ALWAYS_ON_SECTION,
+      'agents',
+      'content',
+      'audit',
+      'reports',
+    ]);
     expect(MENU_SECTIONS).toEqual(
       expect.arrayContaining(['agent', 'content', 'audit', 'insights', 'shopping', 'reports']),
     );
@@ -70,7 +78,7 @@ describe('MENU_SECTIONS', () => {
       'mentions',
       'citations',
       'shopping',
-      'traffic',
+      'competitors',
     ]);
     expect(cleanMenuSections(['citations', 'mentions'])).toEqual(['mentions', 'citations']);
     // Product Visibility keeps its name and icon where the sections are listed,
@@ -83,8 +91,9 @@ describe('MENU_SECTIONS', () => {
     expect(hidden({ roleHidden: ['mentions'] })).toEqual(['mentions']);
   });
 
-  it('lists Competitors right after Reports, so roles and people can hide it', () => {
-    expect(MENU_SECTIONS.indexOf('competitors')).toBe(MENU_SECTIONS.indexOf('reports') + 1);
+  it('lists Competitors right after Visibility’s tabs, so roles and people can hide it', () => {
+    expect(MENU_SECTIONS.indexOf('competitors')).toBe(MENU_SECTIONS.indexOf('shopping') + 1);
+    expect(MENU_SECTIONS.indexOf('traffic')).toBe(MENU_SECTIONS.indexOf('competitors') + 1);
     expect(cleanMenuSections(['competitors'])).toEqual(['competitors']);
     expect(hidden({ roleHidden: ['competitors'] })).toEqual(['competitors']);
   });

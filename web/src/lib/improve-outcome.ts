@@ -103,7 +103,17 @@ export interface ImprovingAction {
   avgAfter: number | null;
 }
 
-const TRACKED = ['new', 'in_progress', 'on_hold', 'completed'];
+/**
+ * The statuses an Improve action is still tracked in: open, or completed
+ * (until its final read, which pickImprovingAction checks). Dismissed and
+ * No improvement never are.
+ */
+export const IMPROVE_TRACKED_STATUSES: readonly string[] = [
+  'new',
+  'in_progress',
+  'on_hold',
+  'completed',
+];
 
 /**
  * The newest of a prompt's Improve actions that is still tracked: open, or
@@ -119,7 +129,7 @@ export function pickImprovingAction(
   }[],
 ): ImprovingAction | null {
   for (const row of rows) {
-    if (!TRACKED.includes(row.status)) continue;
+    if (!IMPROVE_TRACKED_STATUSES.includes(row.status)) continue;
     const outcome = parseImproveOutcome(row.position_outcome);
     if (outcome?.final) continue;
     return {

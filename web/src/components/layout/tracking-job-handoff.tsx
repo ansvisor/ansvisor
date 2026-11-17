@@ -9,8 +9,8 @@ import { readUrlParam, writeUrlParams } from '@/lib/url-state';
 
 /**
  * The first tracking run starts with the payment, and the Stripe success
- * route lands on the person's start page (Chat Home in the free trial, else
- * the Action Center) with ?jobId=. Visibility shows a run's progress from
+ * route and setup after purchase land on the home, Prompts › Tracked Prompts
+ * (config/home.ts), with ?jobId=. Visibility shows a run's progress from
  * the saved job, so the id is kept for it here and taken out of the
  * address. Visibility's header reads ?jobId= itself, on each of its tabs,
  * so it is left alone there.
