@@ -14585,6 +14585,11 @@
         "runs": "AI answers collected over the {range}. One run is one AI platform answering this prompt once.",
         "added": "When this prompt was added.",
         "lastRun": "When this prompt was last checked."
+      },
+      "improving": {
+        "label": "{code} · Improving",
+        "title": "Open the Improve tab · {code} is still being tracked",
+        "aria": "{code} · Improving: open the Improve tab"
       }
     },
     "locations": {

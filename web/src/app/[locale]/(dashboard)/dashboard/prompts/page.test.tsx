@@ -65,9 +65,17 @@ vi.mock('@/lib/actions/content-drafts', () => ({ getDraftForPrompt: vi.fn(async 
 vi.mock('@/lib/actions/prompt-workflow', () => ({ setPromptWorkStatus: vi.fn() }));
 // Start (New content) and the Positions panel have tests of their own.
 vi.mock('@/components/content/new-content-dialog', () => ({ NewContentDialog: () => null }));
+// The panel's props, as the page opens it.
+const sheet = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }));
 vi.mock('@/components/prompts/prompt-positions-sheet', () => ({
-  PromptPositionsSheet: () => null,
+  PromptPositionsSheet: (props: Record<string, unknown>) => {
+    sheet.props = props;
+    return null;
+  },
 }));
+// Improve actions still tracked, by prompt id (PROMPT-008): none unless a test says so.
+const improving = vi.hoisted(() => ({ getImprovingPrompts: vi.fn() }));
+vi.mock('@/lib/actions/prompt-positions', () => improving);
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -178,6 +186,8 @@ beforeEach(() => {
   firstRun.run = null;
   contentUsage.value = null;
   getOpenSuggestionForPrompt.mockResolvedValue(null);
+  improving.getImprovingPrompts.mockResolvedValue({});
+  sheet.props = null;
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({ ok: false, json: async () => ({}) })),
@@ -265,6 +275,58 @@ describe('Tracked Prompts on a read-only workspace', () => {
     await act(async () => button('Pause')!.click());
     expect(actions.setPromptsActive).toHaveBeenCalledWith(['p1'], false);
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe("the Work cell's Improve link (PROMPT-008)", () => {
+  const other: Prompt = { ...prompt, id: 'p2', text: 'Cheapest coffee beans?' };
+  const AC12 = { actionId: 'a12', actionNo: 1497, brandNo: 12, avgBefore: null, avgAfter: null };
+  const links = () =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
+      (b) => b.textContent === 'AC-12 · Improving',
+    );
+
+  beforeEach(() => {
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [prompt, other] }],
+      visibility: {},
+      positions: {},
+    });
+    improving.getImprovingPrompts.mockResolvedValue({ p1: AC12 });
+  });
+
+  it('shows it under the Work chip only on rows whose Improve action is still tracked', async () => {
+    await render(false);
+    // Read for the whole page at once, never a row at a time.
+    expect(improving.getImprovingPrompts).toHaveBeenCalledTimes(1);
+    for (const [brandId, ids] of improving.getImprovingPrompts.mock.calls) {
+      expect(brandId).toBe('b1');
+      expect([...ids].sort()).toEqual(['p1', 'p2']);
+    }
+    expect(links()).toHaveLength(1);
+    const cell = links()[0].closest('td')!;
+    expect(cell.closest('tr')!.textContent).toContain(prompt.text);
+    expect(cell.querySelector('[aria-label="Set work status"]')).not.toBeNull();
+    expect(links()[0].title).toBe('Open the Improve tab · AC-12 is still being tracked');
+  });
+
+  it("opens the prompt's panel on its Improve tab", async () => {
+    await render(false);
+    expect(sheet.props?.prompt).toBeNull();
+    await act(async () => links()[0].click());
+    expect(sheet.props).toMatchObject({
+      prompt: { id: 'p1', text: prompt.text },
+      initialTab: 'improve',
+    });
+  });
+
+  it('leaves the Work cell as it was on rows without one', async () => {
+    improving.getImprovingPrompts.mockResolvedValue({});
+    await render(false);
+    expect(links()).toHaveLength(0);
+    expect(container.textContent).not.toContain('Improving');
   });
 });
 
