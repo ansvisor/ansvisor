@@ -153,9 +153,10 @@ export function GenerateByTopic({
 
   /**
    * Save the ticked prompts in one call, the way Add prompt's list does: each
-   * under the topic it was written for, with every engine the plan allows and
-   * the brand's location. Past the plan's limit the rest wait for a spot; a
-   * prompt the brand already tracks is left out.
+   * under the topic it was written for, by its id (a topic renamed since
+   * keeps them; its name only without one), with every engine the plan
+   * allows and the brand's location. Past the plan's limit the rest wait for
+   * a spot; a prompt the brand already tracks is left out.
    */
   const addSelected = async () => {
     if (!brand || selected.length === 0 || adding) return;
@@ -168,6 +169,7 @@ export function GenerateByTopic({
           idx,
           text: item.text,
           topic: item.topic,
+          ...(item.topicId ? { topicId: item.topicId } : {}),
           platforms: allowedScraperIds,
           models: allowedModelIds,
           regions: [region],
