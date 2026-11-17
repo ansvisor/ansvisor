@@ -1,3 +1,4 @@
+import { pageRoute } from './page-route';
 import type { ChatPageSort, ChatPageView } from './page-view';
 
 /**
@@ -9,7 +10,7 @@ import type { ChatPageSort, ChatPageView } from './page-view';
  * sort the read doesn't take stays words, and the rows on screen are read
  * by their refs. A search on the page is the read's search where it has
  * one: the app applies it to the page's own list (page-scope.ts), and this
- * line says so. The search's text and an unknown sort's name are the browser's, so
+ * line says so only where the app does (the engine's `takes`). The search's text and an unknown sort's name are the browser's, so
  * they stay in the untrusted page_view block: this line only points there.
  * "What should I do first" keeps the read's own order (priority, score).
  * Plain module: the engine adds the line beside <page_context>.
@@ -145,7 +146,7 @@ export const PAGE_ORDERS: Readonly<Record<string, PageOrder>> = {
     sort: opportunitySort,
     search: { tool: 'list_content_opportunities', field: 'search' },
   },
-  '/dashboard/prompts': PROMPTS,
+  // And /dashboard/prompts, which opens on it (page-route.ts).
   '/dashboard/prompts/tracked': PROMPTS,
   '/dashboard/mentions': {
     tool: 'list_mentions',
@@ -158,11 +159,18 @@ export const PAGE_ORDERS: Readonly<Record<string, PageOrder>> = {
   },
 };
 
-/** The page's order, by its path (a trailing slash aside); null for a page with none listed. */
+/** The page's order, by its path as Chat matches pages (page-route.ts); null for a page with none listed. */
 export function pageOrderOf(route: string | null | undefined): PageOrder | null {
-  const path = route?.trim().replace(/\/+$/, '');
-  return (path && PAGE_ORDERS[path]) || null;
+  const path = pageRoute(route);
+  return (path && Object.hasOwn(PAGE_ORDERS, path) && PAGE_ORDERS[path]) || null;
 }
+
+/**
+ * The page's filters and search, by their keys ("status", "search"), that
+ * the app applies to a read of this name when the model gives none of them:
+ * page-scope.ts pageFilterInputs, as scope.ts applies it to every read.
+ */
+export type PageTakes = (tool: string) => readonly string[];
 
 /** "read list_action_center_tasks with status "all" and sort "updated"", or the read alone. */
 const readWith = (tool: string, input: readonly [string, string][]) =>
@@ -172,21 +180,29 @@ const readWith = (tool: string, input: readonly [string, string][]) =>
 
 /**
  * What the models are told of the page's order, given the keys of the
- * filters it has set (`status` for a `filter:status` chip) and the sort and
- * search the person chose (the page's view); null on a page with none
- * listed, or on a quiet one with neither.
+ * filters it has set (`status` for a `filter:status` chip), the sort and
+ * search the person chose (the page's view), and what of them the app
+ * applies to a read (`takes`, the engine's: the maintainer's review of
+ * 2026-11-17). The line says the app applies the page's search, or leaves
+ * out a filter's "all", only where `takes` says it does: without it, the
+ * search is never said to be applied and the filters are the chips' keys.
+ * Null on a page with none listed, or on a quiet one with neither.
  */
 export function pageOrderLine(
   route: string | null | undefined,
   filters: readonly string[] = [],
   view?: Pick<ChatPageView, 'sort' | 'search'> | null,
+  takes?: PageTakes,
 ): string | null {
   const order = pageOrderOf(route);
   if (!order) return null;
   const sort = view?.sort ?? null;
   const searched = !!view?.search;
   if (order.quiet && !sort && !searched) return null;
-  const whole = Object.entries(order.unfiltered ?? {}).filter(([key]) => !filters.includes(key));
+  // A filter the app fills on the list's read needs no "all"; one it doesn't (a question
+  // that asks for all of them), the read's "all" reads what the page would without it.
+  const filled = takes ? takes(order.tool) : filters;
+  const whole = Object.entries(order.unfiltered ?? {}).filter(([key]) => !filled.includes(key));
   const chosen = sort ? (order.sort?.(sort) ?? null) : null;
   const rowsOnPage = `When the person means the rows on the page ("the first ones", "the top 5 on the page", "the third one")`;
   const lines: string[] = [];
@@ -207,11 +223,18 @@ export function pageOrderLine(
     );
   }
   if (searched) {
-    lines.push(
-      order.search
-        ? `The page is searched (page_view's search): the app applies that search to ${order.search.tool}'s ${order.search.field} unless you give your own, so for its rows read ${order.search.tool}${order.search.then ? `, ${order.search.then}` : ''}.`
-        : `The page is searched (page_view's search), which ${order.tool} doesn't take: its rows are the ones page_view lists.`,
-    );
+    const search = order.search;
+    if (search && takes?.(search.tool).includes(search.field)) {
+      lines.push(
+        `The page is searched (page_view's search): the app applies that search to ${search.tool}'s ${search.field}, within the list as the page filters it, unless you give your own, so for its rows read ${search.tool}${search.then ? `, ${search.then}` : ''}.`,
+      );
+    } else {
+      lines.push(
+        search
+          ? `The page is searched (page_view's search), which the app doesn't apply to this question's reads: the rows on screen are the ones page_view lists.`
+          : `The page is searched (page_view's search), which ${order.tool} doesn't take: its rows are the ones page_view lists.`,
+      );
+    }
   }
   if (order.readDefault) {
     lines.push(

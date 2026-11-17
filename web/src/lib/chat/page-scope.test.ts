@@ -339,17 +339,21 @@ describe("the page's search", () => {
   });
 
   it("fills the search of its own list's reads only, beside its filters", () => {
+    // On both Prompts routes: /dashboard/prompts opens on Tracked Prompts (page-route.ts).
+    for (const route of ['/dashboard/prompts/tracked', '/dashboard/prompts']) {
+      // A lookup read's search reads its list as listed with it (as_listed).
+      expect(added('list_prompts', searched(route, 'skip a month')), route).toEqual({
+        input: { search: 'skip a month', as_listed: true },
+        applied: ['search'],
+      });
+    }
     const prompts = searched('/dashboard/prompts/tracked', 'skip a month');
-    expect(added('list_prompts', prompts)).toEqual({
-      input: { search: 'skip a month' },
-      applied: ['search'],
-    });
     // A read of another page's list, or one with no search, takes none.
     expect(added('list_content_opportunities', prompts)).toEqual({ input: {}, applied: [] });
     expect(added('get_prompt_performance', prompts).applied).toEqual([]);
     const content = searched('/dashboard/content', 'office coffee', [['status', 'New', 'new']]);
     expect(added('list_content_opportunities', content)).toEqual({
-      input: { status: 'new', search: 'office coffee' },
+      input: { status: 'new', search: 'office coffee', as_listed: true },
       applied: ['status', 'search'],
     });
     expect(added('list_drafts', content)).toEqual({ input: {}, applied: [] });
@@ -377,6 +381,7 @@ describe("the page's search", () => {
     );
     expect(added('list_prompts', long).input).toEqual({
       search: 'one two three four five six seven eight',
+      as_listed: true,
     });
     const odd = searched('/dashboard/prompts/tracked', `*decaf*, "beans"! ${'x'.repeat(300)}`);
     const search = String(added('list_prompts', odd).input.search);
@@ -393,6 +398,29 @@ describe("the page's search", () => {
     expect(added('list_prompts', page, { search: 'decaf' })).toEqual({
       input: { search: 'decaf' },
       applied: [],
+    });
+    // The model's own search on a lookup read names rows: none of the page's list filters
+    // either, which the lookup (every status) wouldn't apply (the review of 2026-11-17).
+    const content = searched('/dashboard/content', 'office coffee', [
+      ['status', 'New', 'new'],
+      ['impact', 'High', 'high'],
+    ]);
+    expect(added('list_content_opportunities', content, { search: 'gift box' })).toEqual({
+      input: { search: 'gift box' },
+      applied: [],
+    });
+    // Asked to search the list as listed, it takes them.
+    expect(
+      added('list_content_opportunities', content, { search: 'gift box', as_listed: true }),
+    ).toEqual({
+      input: { search: 'gift box', as_listed: true, status: 'new', impact: 'high' },
+      applied: ['status', 'impact'],
+    });
+    // A read whose search is a filter (Mentions') keeps the page's other filters beside it.
+    const mentions = searched('/dashboard/mentions', 'espresso', [['region', 'US', 'US']]);
+    expect(added('list_mentions', mentions, { search: 'decaf' })).toEqual({
+      input: { search: 'decaf', region: 'US' },
+      applied: ['region'],
     });
     expect(added('list_prompts', page, { search: '' })).toEqual({
       input: { search: '' },

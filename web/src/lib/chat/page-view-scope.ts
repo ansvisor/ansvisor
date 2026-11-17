@@ -192,7 +192,7 @@ const OPEN_ITEMS: Readonly<Record<string, OpenItem>> = {
     what: 'content opportunity',
     read: 'list_content_opportunities with ids',
   },
-  '/dashboard/prompts': OPEN_PROMPT,
+  // And /dashboard/prompts, which opens on it (page-route.ts, through viewRoute).
   '/dashboard/prompts/tracked': OPEN_PROMPT,
   '/dashboard/citations/url': {
     key: 'u',

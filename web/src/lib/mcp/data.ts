@@ -1016,8 +1016,15 @@ export interface ListPromptsParams {
   /**
    * Chat's lookup: the prompts whose text holds every word of this, in any
    * order and case (lookup.ts searchWords), whatever their topic or state.
+   * With asListed, the list's own search instead.
    */
   search?: string;
+  /**
+   * With search: the list as filtered (topic, active state), the prompts
+   * whose text holds every word, newest first: the page's search (Chat's
+   * as_listed, the maintainer's review of 2026-11-17), not a lookup.
+   */
+  asListed?: boolean;
 }
 
 const PROMPT_LIST_DEFAULT_LIMIT = 100;
@@ -1051,10 +1058,11 @@ export async function promptsPageFor(
   );
 
   const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
-  // A lookup (Chat's ids or search) reads every topic and state, its organization joined on the rows.
-  const lookup = params.ids !== undefined || params.search !== undefined;
+  // A lookup (Chat's ids or search) reads every topic and state, its organization joined on the
+  // rows; a search as listed (asListed) reads the list as filtered, with its words.
+  const lookup = params.ids !== undefined || (params.search !== undefined && !params.asListed);
   const words = searchWords(params.search);
-  if (lookup && (params.ids?.length === 0 || (params.search !== undefined && !words.length))) {
+  if (params.ids?.length === 0 || (params.search !== undefined && !words.length)) {
     return { rows: [], total: 0 };
   }
   const organizationId = auth.organizationId;
@@ -1079,6 +1087,8 @@ export async function promptsPageFor(
     if (typeof params.isActive === 'boolean') {
       query = query.eq('is_active', params.isActive);
     }
+    // The list's search (asListed): each word, escaped, as the lookup matches it.
+    for (const word of words) query = query.ilike('text', containsPattern(word));
     return query;
   };
   const { rows: data, total } = await pageRows(
@@ -1223,8 +1233,18 @@ export interface ListContentOpportunitiesParams {
   offset?: number;
   /** Chat's lookup: these opportunities only, by id (checked ids), in any status, archived too. */
   ids?: readonly string[];
-  /** Chat's lookup: the opportunities whose title holds every word of this, in any status, archived too. */
+  /**
+   * Chat's lookup: the opportunities whose title holds every word of this,
+   * in any status, archived too. With asListed, the list's own search instead.
+   */
   search?: string;
+  /**
+   * With search: the list as filtered (status, impact, type; archived set
+   * aside unless asked by status) and sorted, the opportunities whose title
+   * holds every word: the page's search (Chat's as_listed, the maintainer's
+   * review of 2026-11-17), not a lookup.
+   */
+  asListed?: boolean;
   /**
    * The Content page's Sort (lib/content/opportunity-list.ts), in its order:
    * newest or oldest by when each was suggested, score by its score, then
@@ -1261,13 +1281,14 @@ export async function contentOpportunitiesPageFor(
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
-  // A lookup (Chat's ids or search) reads every status, archived too, its organization joined.
-  const lookup = params.ids !== undefined || params.search !== undefined;
+  // A lookup (Chat's ids or search) reads every status, archived too, its organization joined;
+  // a search as listed (asListed) reads the list as filtered and sorted, with its words.
+  const lookup = params.ids !== undefined || (params.search !== undefined && !params.asListed);
   const searched = searchWords(params.search);
   const words = searched.some((w) => !YEAR.test(w))
     ? searched.filter((w) => !YEAR.test(w))
     : searched;
-  if (lookup && (params.ids?.length === 0 || (params.search !== undefined && !words.length))) {
+  if (params.ids?.length === 0 || (params.search !== undefined && !words.length)) {
     return { rows: [], total: 0 };
   }
   const organizationId = auth.organizationId;
@@ -1293,6 +1314,8 @@ export async function contentOpportunitiesPageFor(
     query = params.status ? query.eq('status', params.status) : query.neq('status', 'archived');
     if (params.impact) query = query.eq('impact', params.impact);
     if (params.type) query = query.eq('type', params.type);
+    // The list's search (asListed): each word, escaped, as the lookup matches it.
+    for (const word of words) query = query.ilike('title', containsPattern(word));
     return query;
   };
   // The Content page's sorts as its list orders them (server/src/routes/content.js), else the score's.

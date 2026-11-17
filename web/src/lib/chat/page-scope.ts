@@ -27,7 +27,14 @@ import type { ChatTool } from './registry/define-tool';
  * list_content_opportunities, Mentions' reads), as the lookups' own words
  * (#2460: at most 8 words of the first 200 characters, escaped by the read),
  * unless the model gave its own search or named rows, or the question asks
- * for all of them. Plain module: scope.ts applies it to every read.
+ * for all of them. Where a read's search is a lookup in every status
+ * (list_prompts, list_content_opportunities: it has AS_LISTED), the page's
+ * search also sets AS_LISTED, so it reads the list as the page lists it:
+ * with the page's filters, archived set aside, in the read's sort (the
+ * maintainer's review of 2026-11-17). The model's own search on such a read
+ * is a lookup by name, in every status: like named rows, it takes none of
+ * the page's filters, so none is said to be applied.
+ * Plain module: scope.ts applies it to every read.
  */
 
 /** A page's filter, as its chip carries it (`filter:platform` → `platform`). */
@@ -134,7 +141,10 @@ function ruleOf(key: string, route: string | null): FilterRule | null {
 /** Every input a page's filter may fill: a model's "" in one asks for all. */
 const PAGE_FIELDS = ['model', 'platform', 'region'] as const;
 
-/** Inputs that name a read's rows: each named row comes back, whatever the page shows. */
+/**
+ * Inputs that name a read's rows: each named row comes back, whatever the
+ * page shows. A lookup read's own search names them too (searchLooksUp).
+ */
 const LOOKUP_FIELDS = ['codes', 'ids', 'domains', 'urls'] as const;
 
 const EDGE = String.raw`(?<![\p{L}\d])`;
@@ -182,6 +192,19 @@ const fieldOf = (tool: Pick<ChatTool, 'inputSchema'>, field: string): ZodType | 
   (tool.inputSchema.shape as Record<string, ZodType | undefined>)[field];
 
 /**
+ * The input of a read whose `search` is a lookup in every status that
+ * searches its list as the page lists it instead: its filters and sort apply.
+ */
+export const AS_LISTED = 'as_listed';
+
+/** The model's own search on a read whose search is a lookup by name, in every status. */
+const searchLooksUp = (tool: Pick<ChatTool, 'inputSchema'>, raw: Record<string, unknown>) =>
+  !!fieldOf(tool, AS_LISTED) &&
+  typeof raw.search === 'string' &&
+  raw.search.trim() !== '' &&
+  raw[AS_LISTED] !== true;
+
+/**
  * A read's input with the page's filters where they apply, and the keys of
  * those that did ("platform", "sources"), in the page's order. The model's
  * own inputs stay; a "" it gave for a platform, model or region is taken out
@@ -199,7 +222,8 @@ export function pageFilterInputs(
     page &&
     page.brandId &&
     input.brand_id === page.brandId &&
-    !LOOKUP_FIELDS.some((field) => Array.isArray(raw[field]) && raw[field].length > 0)
+    !LOOKUP_FIELDS.some((field) => Array.isArray(raw[field]) && raw[field].length > 0) &&
+    !searchLooksUp(tool, raw)
   ) {
     // The read's route is the page's, an alias as its page (page-route.ts).
     const ownList = samePage(tool.route, page.route);
@@ -226,6 +250,8 @@ export function pageFilterInputs(
       schema.safeParse(search).success
     ) {
       input.search = search;
+      // Within the list as the page lists it, its filters and sort with it: not a lookup.
+      if (fieldOf(tool, AS_LISTED)) input[AS_LISTED] = true;
       applied.push('search');
     }
   }

@@ -61,21 +61,37 @@ describe("the page's chosen sort", () => {
 });
 
 describe("the page's search", () => {
+  /** The app applies the page's search to every read that takes it (the engine asks page-scope.ts). */
+  const searches = () => ['search'];
+
   it("says the app applies it to the read's search input, its text left in page_view", () => {
-    const line = pageOrderLine('/dashboard/prompts/tracked', [], { search: 'decaf beans' })!;
-    expect(line).toContain(
-      "The page is searched (page_view's search): the app applies that search to list_prompts's search unless you give your own, so for its rows read list_prompts, then get_prompt_performance with their ids as prompt_ids.",
-    );
-    expect(line).not.toContain('decaf');
-    expect(pageOrderLine('/dashboard/content', [], { search: 'x' })).toContain(
+    for (const route of ['/dashboard/prompts/tracked', '/dashboard/prompts']) {
+      const line = pageOrderLine(route, [], { search: 'decaf beans' }, searches)!;
+      expect(line, route).toContain(
+        "The page is searched (page_view's search): the app applies that search to list_prompts's search, within the list as the page filters it, unless you give your own, so for its rows read list_prompts, then get_prompt_performance with their ids as prompt_ids.",
+      );
+      expect(line).not.toContain('decaf');
+    }
+    expect(pageOrderLine('/dashboard/content', [], { search: 'x' }, searches)).toContain(
       "the app applies that search to list_content_opportunities's search",
     );
-    expect(pageOrderLine('/dashboard/mentions', [], { search: 'x' })).toContain(
+    expect(pageOrderLine('/dashboard/mentions', [], { search: 'x' }, searches)).toContain(
       "the app applies that search to list_mentions's search",
     );
     // Actions' read has no search: its rows are the ones on screen.
-    expect(pageOrderLine(ACTIONS, [], { search: 'x' })).toContain(
+    expect(pageOrderLine(ACTIONS, [], { search: 'x' }, searches)).toContain(
       "which list_action_center_tasks doesn't take: its rows are the ones page_view lists",
     );
+  });
+
+  it("says nothing of applying it where the app doesn't (the maintainer's review of 2026-11-17)", () => {
+    const none = () => [];
+    for (const takes of [none, undefined]) {
+      const line = pageOrderLine('/dashboard/prompts', [], { search: 'decaf beans' }, takes)!;
+      expect(line).not.toContain('the app applies');
+      expect(line).toContain(
+        "The page is searched (page_view's search), which the app doesn't apply to this question's reads: the rows on screen are the ones page_view lists.",
+      );
+    }
   });
 });

@@ -10,6 +10,8 @@
  * or grants anything. Plain module: the browser and the server read it.
  */
 
+import { pageRoute } from './page-route';
+
 /** The page's sort: its own key for it (the `?sort=` value), and which way. */
 export interface ChatPageSort {
   key: string;
@@ -123,7 +125,7 @@ export const PAGE_QUERY_KEYS: Readonly<Record<string, readonly string[]>> = {
     // The open drawer.
     'opportunity',
   ],
-  '/dashboard/prompts': PROMPTS_KEYS,
+  // And /dashboard/prompts, which opens on it (page-route.ts).
   '/dashboard/prompts/tracked': PROMPTS_KEYS,
   '/dashboard/prompts/suggestions': PROMPTS_KEYS,
   '/dashboard/prompts/topics': PROMPTS_KEYS,
@@ -149,9 +151,11 @@ export const PAGE_QUERY_KEYS: Readonly<Record<string, readonly string[]>> = {
   '/dashboard/insights': ['range', 'from', 'to', 'region', 'model', 'topic'],
 };
 
-/** A path as the panel sends it, without a trailing slash. */
-export const viewRoute = (route: string | null | undefined) =>
-  route?.trim().replace(/\/+$/, '') || null;
+/**
+ * A path as the panel sends it, as Chat matches pages: without a trailing
+ * slash, /dashboard/prompts as the Tracked Prompts page it opens on (page-route.ts).
+ */
+export const viewRoute = (route: string | null | undefined) => pageRoute(route);
 
 /** The URL keys a page keeps, by its path; null for a page with none listed. */
 export function pageQueryKeysOf(route: string | null | undefined): readonly string[] | null {

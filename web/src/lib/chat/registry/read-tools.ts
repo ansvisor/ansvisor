@@ -80,6 +80,18 @@ const lookupSearch = (what: string) =>
 /** Whether a read's input names what it looks up. */
 const looksUp = (...fields: (readonly unknown[] | string | undefined)[]) =>
   fields.some((field) => (typeof field === 'string' ? field !== '' : Boolean(field?.length)));
+/**
+ * A lookup read's switch to search its list as the page lists it (page-scope.ts
+ * AS_LISTED, which the app sets with the page's search): its filters and sort
+ * apply, archived set aside as on the list (the maintainer's review of 2026-11-17).
+ */
+const asListed = (what: string) => z.boolean().optional().describe(what);
+/** Whether a read searches its list as listed: as_listed with words to search and no ids. */
+const searchesAsListed = (input: {
+  ids?: readonly unknown[];
+  search?: string;
+  as_listed?: boolean;
+}) => input.as_listed === true && !input.ids?.length && looksUp(input.search);
 /** What every lookup's description says of what it didn't find. */
 const NOT_FOUND = `Each one asked is in the result or in not_found: say "not found" plainly for those, with where you looked, and never offer others as the closest or similar. Never say one doesn't exist because a page of the list didn't show it.`;
 
@@ -308,7 +320,7 @@ export const READ_TOOLS = [
     name: 'list_prompts',
     class: 'read',
     area: 'prompts',
-    description: `The prompts tracked for a brand, with topic, platforms, regions and whether each is active; newest first. Filter by topic or active state.${PAGED} When the person names a prompt by its words or its id (the prompt's page), read that first: search (a few distinctive words of its text, in any order and case; a stem such as "subscri" finds "subscription" and "subscriptions") or ids. A lookup reads every topic and state, active and paused (topic_id and is_active don't apply); search pages like the list. No prompt has the words: search once more with fewer or shorter words before you say the brand doesn't track it. ${NOT_FOUND}`,
+    description: `The prompts tracked for a brand, with topic, platforms, regions and whether each is active; newest first. Filter by topic or active state.${PAGED} When the person names a prompt by its words or its id (the prompt's page), read that first: search (a few distinctive words of its text, in any order and case; a stem such as "subscri" finds "subscription" and "subscriptions") or ids. A lookup reads every topic and state, active and paused (topic_id and is_active don't apply); search pages like the list. With as_listed, search reads the list instead, as the Prompts page's search box does: topic_id and is_active apply, newest first (the app sets it with the page's search). No prompt has the words: search once more with fewer or shorter words before you say the brand doesn't track it. ${NOT_FOUND}`,
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -326,9 +338,12 @@ export const READ_TOOLS = [
         'Prompts whose text holds every one of these words, in any order and case: a lookup, in every topic and state; pages by offset.',
       ),
       ids: lookupIds('Prompts by their ids: a lookup, in every topic and state.'),
+      as_listed: asListed(
+        "With search: search the list as listed (topic_id and is_active apply, newest first, paged like the list), as the Prompts page's search box does, rather than look up every topic and state. The app sets it with the page's search.",
+      ),
     }),
     run: async (ctx, input) =>
-      looksUp(input.ids, input.search)
+      looksUp(input.ids, input.search) && !searchesAsListed(input)
         ? lookUpPromptsFor(ctx, {
             brandId: input.brand_id,
             ids: input.ids,
@@ -340,11 +355,18 @@ export const READ_TOOLS = [
               brandId: input.brand_id,
               topicId: input.topic_id,
               isActive: input.is_active,
+              // The page's search, within the list as filtered (page-scope.ts AS_LISTED).
+              ...(searchesAsListed(input) ? { search: input.search, asListed: true } : {}),
               ...pageWindow(input),
             }),
             'prompts',
             input,
-            { what: 'prompts', order: 'newest first' },
+            {
+              what: searchesAsListed(input)
+                ? 'prompts whose text holds every word of the search'
+                : 'prompts',
+              order: 'newest first',
+            },
           ),
     fixture: { input: { brand_id: BRAND, is_active: true } },
   }),
@@ -961,7 +983,7 @@ export const READ_TOOLS = [
     name: 'list_content_opportunities',
     class: 'read',
     area: 'content',
-    description: `The brand's content opportunities, highest score first (sort "newest" or "oldest": by when each was suggested, as the Content page's Sort; the page opens on newest): the prompts where it loses visibility and the page that would win them. Archived ones only when asked by status; one in full: get_content_opportunity.${PAGED} When the person names an opportunity by its title or id, read that first: search (a few distinctive words of its title, in any order and case; a year isn't matched, as Content shows past years as this one) or ids. A lookup reads every status, archived included (status, impact and type don't apply); search pages like the list. ${NOT_FOUND}`,
+    description: `The brand's content opportunities, highest score first (sort "newest" or "oldest": by when each was suggested, as the Content page's Sort; the page opens on newest): the prompts where it loses visibility and the page that would win them. Archived ones only when asked by status; one in full: get_content_opportunity.${PAGED} When the person names an opportunity by its title or id, read that first: search (a few distinctive words of its title, in any order and case; a year isn't matched, as Content shows past years as this one) or ids. A lookup reads every status, archived included (status, impact and type don't apply); search pages like the list. With as_listed, search reads the list instead, as the Content page's search box does: status, impact, type and sort apply, archived set aside unless asked by status (the app sets it with the page's search). ${NOT_FOUND}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -988,9 +1010,12 @@ export const READ_TOOLS = [
         'Opportunities whose title holds every one of these words, in any order and case: a lookup, every status; pages by offset.',
       ),
       ids: lookupIds('Opportunities by their ids: a lookup, every status.'),
+      as_listed: asListed(
+        "With search: search the list as listed (status, impact, type and sort apply, archived set aside unless asked by status; paged like the list), as the Content page's search box does, rather than look up every status. The app sets it with the page's search.",
+      ),
     }),
     run: async (ctx, input) =>
-      looksUp(input.ids, input.search)
+      looksUp(input.ids, input.search) && !searchesAsListed(input)
         ? lookUpOpportunitiesFor(ctx, {
             brandId: input.brand_id,
             ids: input.ids,
@@ -1004,11 +1029,18 @@ export const READ_TOOLS = [
               impact: input.impact,
               type: input.type,
               sort: input.sort,
+              // The page's search, within the list as filtered (page-scope.ts AS_LISTED).
+              ...(searchesAsListed(input) ? { search: input.search, asListed: true } : {}),
               ...pageWindow(input),
             }),
             'opportunities',
             input,
-            { what: 'opportunities', order: OPPORTUNITY_ORDER_WORDS[input.sort ?? 'default'] },
+            {
+              what: searchesAsListed(input)
+                ? 'opportunities whose title holds every word of the search'
+                : 'opportunities',
+              order: OPPORTUNITY_ORDER_WORDS[input.sort ?? 'default'],
+            },
           ),
     fixture: { input: { brand_id: BRAND, impact: 'high' } },
   }),
