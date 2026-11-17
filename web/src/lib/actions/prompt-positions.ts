@@ -1,5 +1,6 @@
 'use server';
 
+import { z } from 'zod';
 import { dbClient } from '@/lib/supabase/scoped';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { effectivePlanForBrand } from '@/lib/demo/demo-brand';
@@ -17,7 +18,8 @@ import {
 } from '@/lib/prompt-positions';
 import { isTimeZone } from '@/lib/time-zone';
 import type { Sentiment } from '@/types';
-import { pickImprovingAction, type ImprovingAction } from '@/lib/improve-outcome';
+import type { ImprovingAction } from '@/lib/improve-outcome';
+import { MAX_IMPROVING_PROMPTS, readImprovingActions } from '@/lib/improving-actions';
 
 export interface PromptPositionsData {
   prompt: { id: string; text: string; topicName: string | null; isActive: boolean };
@@ -76,22 +78,19 @@ export async function getPromptPositions(
   const brandId = promptSet?.brand_id as string | undefined;
   if (!brandId) return null;
 
-  const [{ data: brand }, { data: domainRows }, { data: topic }, { data: improveRows }] =
-    await Promise.all([
-      supabase.from('brands').select('organization_id, is_demo').eq('id', brandId).maybeSingle(),
-      supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
-      prompt.topic_id
-        ? supabase.from('topics').select('name').eq('id', prompt.topic_id).maybeSingle()
-        : Promise.resolve({ data: null }),
-      supabase
-        .from('actions')
-        .select('id, action_no, brand_no, status, position_outcome')
-        .eq('brand_id', brandId)
-        .eq('kind', 'prompt_improve')
-        .eq('payload->>promptId', promptId)
-        .order('created_at', { ascending: false })
-        .limit(10),
-    ]);
+  const [{ data: brand }, { data: domainRows }, { data: topic }, improving] = await Promise.all([
+    supabase.from('brands').select('organization_id, is_demo').eq('id', brandId).maybeSingle(),
+    supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
+    prompt.topic_id
+      ? supabase.from('topics').select('name').eq('id', prompt.topic_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    // The table's Work cell reads the same (getImprovingPrompts). A failed
+    // read shows no chip rather than failing the panel.
+    readImprovingActions(supabase, brandId, [promptId]).catch((err: unknown) => {
+      console.error('[prompt-positions] could not read the Improve actions:', err);
+      return new Map<string, ImprovingAction>();
+    }),
+  ]);
   if (!brand?.organization_id) return null;
 
   const plan = effectivePlanForBrand(
@@ -181,11 +180,36 @@ export async function getPromptPositions(
     window,
     summary,
     platforms: rowsByPlatform,
-    improving: pickImprovingAction(improveRows ?? []),
+    improving: improving.get(promptId) ?? null,
     // Newest answer first, so a tie goes to the page cited most recently.
     citedPage: brandCitedPage(
       citedIds.map((id) => sourcesById.get(id)),
       brandDomains,
     ),
   };
+}
+
+/**
+ * The prompts on one Tracked Prompts page with an Improve action still being
+ * tracked (PROMPT-008), by prompt id: the link under each row's Work chip.
+ * One read of the brand's actions for every id, by the panel's own rule
+ * (readImprovingActions), through the caller's RLS-scoped client. A brand
+ * outside the caller's organisation, or brand access, reads as none.
+ */
+export async function getImprovingPrompts(
+  brandId: string,
+  promptIds: string[],
+): Promise<Record<string, ImprovingAction>> {
+  const ids = z.array(z.guid()).max(MAX_IMPROVING_PROMPTS).safeParse(promptIds);
+  if (!z.guid().safeParse(brandId).success || !ids.success) throw new Error('invalid');
+  if (ids.data.length === 0) return {};
+
+  const supabase = await dbClient();
+  const [{ data: brand, error }, improving] = await Promise.all([
+    supabase.from('brands').select('id').eq('id', brandId).maybeSingle(),
+    readImprovingActions(supabase, brandId, ids.data),
+  ]);
+  if (error) throw new Error(error.message);
+  if (!brand) return {};
+  return Object.fromEntries(improving);
 }

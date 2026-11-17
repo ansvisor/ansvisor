@@ -4,8 +4,8 @@ route: /dashboard/brands/new
 keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial, plan already active, how do you want to start, sample brand, connect your site]
 synonyms: [get started, create a brand, set up my account, onboard, add another brand, set up a brand after buying, start the free trial, explore the demo, add the tracking snippet during setup, send the snippet to my developer]
 plan: all
-updated: 2026-11-16
-last_checked: 2026-11-16
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -86,7 +86,7 @@ On the cloud, once **Start tracking with N competitors** has started your brand'
 
 Someone else edits your site? **Email this to my developer** opens your email app with the snippet and these steps; **Copy message** copies the same text.
 
-**Done, go to my dashboard** and **I'll do it later** both open the dashboard while the first run goes on. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab.
+**Done, go to my dashboard** and **I'll do it later** both open **Prompts › Tracked Prompts** while the first run goes on, with its progress above the table. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab.
 
 ## Set up your brand with a plan active
 

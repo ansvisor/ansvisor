@@ -5,7 +5,7 @@ import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
 import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
-import { DASHBOARD_HOME } from '@/config/home';
+import { readMyHome } from '@/lib/my-home';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
   }
 
   let trackingJobId: string | null = null;
-  // Where the person lands once the plan is written: their start page by the
-  // new subscription (Chat Home in the free trial), else /dashboard picks it.
+  // Where the person lands once the plan is written: their home (readMyHome),
+  // else /dashboard picks it.
   let landing = '/dashboard';
 
   try {
@@ -63,8 +63,10 @@ export async function GET(req: NextRequest) {
           console.error('[stripe/success] DB update error:', updateError);
         } else {
           console.log('[stripe/success] DB updated for org:', orgId);
-          // The buyer, on the workspace they just paid for: Action Center › Today.
-          landing = DASHBOARD_HOME;
+          // The buyer, on the workspace they just paid for: their home by their
+          // menu (Tracked Prompts, or Action Center › Today when Prompts is off
+          // it: config/home.ts), or setup after purchase first.
+          landing = await readMyHome();
 
           // Align onboarding-created prompts to the just-confirmed plan's
           // engine set. Onboarding saves prompts at step 4 with the default

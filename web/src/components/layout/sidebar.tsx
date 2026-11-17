@@ -95,13 +95,13 @@ function submenuKey(href: string) {
 
 /**
  * Where a titled group's open/closed state is remembered:
- * ansvisor.sidebar.group.analyticsOpen, ansvisor.sidebar.group.moreOpen.
+ * ansvisor.sidebar.group.analyticsOpen, ansvisor.sidebar.group.executionOpen.
  */
 function groupKey(title: string) {
   return `ansvisor.sidebar.group.${title.toLowerCase()}Open`;
 }
 
-/** The titled groups (Analytics, More), which fold under their title. */
+/** The titled groups (Analytics, Execution), which fold under their title. */
 const GROUP_TITLES = dashboardNav.flatMap((group) => (group.title ? [group.title] : []));
 
 /**
@@ -175,7 +175,7 @@ export function Sidebar() {
   // an item is under the page shown when one of its entries is.
   const underMenu =
     expandableItemsOf(nav).find((item) => isNavItemActive(item, pathname))?.href ?? null;
-  // Each titled group (Execution, Analytics) folds under its title the same
+  // Each titled group (Analytics, Execution) folds under its title the same
   // way: remembered per browser, open until closed, and open whenever one of
   // its pages is showing.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});

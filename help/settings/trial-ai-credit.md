@@ -1,11 +1,11 @@
 ---
 title: Your free trial's AI credit, and starting your plan now
 route: /dashboard/settings/billing
-keywords: [trial ai credit, free trial, start my plan now, ai usage, trial ends, buy now]
+keywords: [trial ai credit, free trial, start my plan now, ai usage, trial ends, buy now, trial reminder email]
 synonyms: [trial ai limit, out of ai credit, end my trial, upgrade from trial, ai used up]
 plan: starter
-updated: 2026-11-15
-last_checked: 2026-11-15
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -36,3 +36,7 @@ Only admins can start or buy the plan. Other members see a note to ask an admin 
 ## Once the credit is used up
 
 AI features stop until the plan starts, now or when the trial ends. Chat keeps working only where it runs on your workspace's own AI key: own keys come with the Enterprise plan, and a key saved before Chat was turned on for your workspace keeps running it for 30 days. Where Chat isn't turned on yet, Agent Chat on your own AI key keeps working.
+
+## Before your trial ends
+
+We email you 3 days before your free trial ends, with what will be charged and a link to change or cancel your plan.

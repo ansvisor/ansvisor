@@ -162,6 +162,30 @@ timestamps (`date_from` / `date_to`).
   `payload`. It doesn't regenerate: the numbers are its own window's,
   as they were when it was made, so don't quote them as today's.
 
+**Customers and revenue from AI**
+
+Which pages and assistants bring customers, sign-ups, orders and
+revenue. Read `get_tracking_setup` first and lead with what is missing.
+When a read says `measured: false`, say "Not measured" with its
+`next_step` and `where` (a link), never 0. Give each currency on its
+own, never added to another. Lists page by `limit` / `offset`, with
+`total`, `next_offset` and `note`.
+
+- **`get_tracking_setup`** — what the brand set up to measure
+  customers from AI visits, each item with its state and, when
+  missing, its step.
+- **`get_ai_conversions`** — conversions from AI visits by type,
+  revenue per currency, by assistant, by label and by landing page.
+- **`get_ai_converting_pages`** — Google Analytics' top converting
+  pages from AI, and which topics' answers bring buyers.
+- **`get_ai_pipeline`** — HubSpot contacts, deals and revenue from AI
+  visits (Growth and above; `plan_limit` otherwise).
+- **`list_ai_visits`** — the AI visit log, newest first; `assistant`
+  and `search` narrow it.
+- **`get_prompt_conversions`** — prompts whose answers cite pages that
+  converted: an association, always with its `label`. Never say a
+  prompt brought a sale.
+
 **Mentions & sentiment**
 
 These take the filters of Visibility's Mentions tab: `date_from` / `date_to` (the
