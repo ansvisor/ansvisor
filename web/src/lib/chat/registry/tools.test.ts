@@ -107,6 +107,13 @@ vi.mock('@/lib/mcp/ready-agents', async (importOriginal) =>
 vi.mock('@/lib/mcp/signal-page', async (importOriginal) =>
   tracked.all('mcp/signal-page', await importOriginal<Record<string, unknown>>()),
 );
+// Today, History, the Signals summary and Agents, from their pages' own reads (plan step 6b).
+vi.mock('@/lib/mcp/today-reads', async (importOriginal) =>
+  tracked.all('mcp/today-reads', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/agent-reads', async (importOriginal) =>
+  tracked.all('mcp/agent-reads', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/mcp/ads-reads', () => ({
   getAdsOpportunitiesFor: tracked.track('mcp/ads-reads.getAdsOpportunitiesFor'),
 }));

@@ -4238,6 +4238,10 @@
     "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" },
     "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" },
     "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agents" },
+    "today": { "name": "Read Today", "step": "Read Today" },
+    "myAgents": { "name": "Read your agents", "step": "Read your agents" },
+    "agentRuns": { "name": "Read an agent's runs", "step": "Read agent runs" },
+    "signalsSummary": { "name": "Read the signals summary", "step": "Read Signals summary" },
     "adsOpportunities": { "name": "Read Ads opportunities", "step": "Read Ads opportunities" },
     "adDrafts": { "name": "Save ad drafts", "step": "Saved ad drafts" }
   },
