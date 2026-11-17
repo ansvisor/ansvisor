@@ -11,6 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, web/src/lib/chat/range.ts, web/src/components/chat/agents-for-you.tsx, web/src/lib/chat/agents-for-you.ts, web/src/lib/actions/agents-for-you.ts, web/src/components/chat/run/run-answer.tsx]
 ---
+
 Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Prompts › Tracked Prompts**, whatever your plan, or on the Action Center's **Today** tab when Prompts is off your menu; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off.
 
 ## Chat Home
@@ -71,7 +72,7 @@ The panel isn't on Chat's own pages, where **Ctrl J** takes you to the message b
 
 ## Stop or steer
 
-While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the line with the steps says how long it worked, such as **Stopped after 41s · 5 steps**.
+While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the grey steps line says how long it worked, such as **Stopped after 41s · 5 steps**.
 
 You can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example "only blog pages".
 
@@ -307,25 +308,29 @@ If your message holds something that looks like an API key, Chat doesn't send it
 
 ## Watch the work
 
-While Chat works, one line says what it is doing now, such as "Reading Citations…". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.
+While Chat works, a grey line at the end of the answer says what it is doing now, such as "Thinking…", "Reading Citations…" or "Writing the answer…". A soft light moves across it, and from 2 seconds it counts how long Chat has been on it, such as **Thinking… · 6s**, so a pause never looks stuck. The line goes once the answer is done or Chat waits for your OK.
 
-Under the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
+The steps it finished show as one grey line above the answer, such as **✓ Read 3 sources**. Click it for the list of steps, and click a step for its detail, such as the period and platforms a read covered. A fact check of the answer's figures shows as **Checked facts**. Chat and the side panel show this the same way.
+
+## Data used and action links
+
+Once Chat is done, **Data used** under the answer names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
 Each Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both.
 
 ## Big requests in parts
 
-For a bigger request, such as comparing five competitors, Chat can split the work into 2 to 5 parts and work on them at the same time. The steps show **Working on 5 parts** and how many are done, with a dot for each part: working, done, failed, or paused at the AI limit. Click a part to see its own steps. Then Chat writes one answer from all the parts. A part that failed is named, and the others still count.
+For a bigger request, such as comparing five competitors, Chat can split the work into 2 to 5 parts and work on them at the same time. The grey line at the end says **Working on 5 parts…**, with how many are done and a dot for each part under it: working, done, failed, or paused at the AI limit. Click a part to see its own steps. Then Chat writes one answer from all the parts. A part that failed is named, and the others still count.
 
 Parts only read, on the same brand and with the same access as you. When a part finds something to change, Chat asks you in this chat with the usual approval card. **Stop** stops every part. An agent's limit for one run covers the run and its parts together: when they reach it, they all pause.
 
 ## When something goes wrong
 
-A step that fails shows a red mark and why, such as **Took too long this time**. Chat retries once with a narrower read, such as a shorter period. If a figure still isn't there, the answer says it isn't available right now and offers to retry. Something off for you, such as another plan's feature, is named with why and what you can do.
+The steps line counts a failed step, such as **1 step failed**; its list shows a red mark and why, such as **Took too long this time**. Chat retries once with a narrower read. If a figure still isn't there, the answer says it isn't available now and offers to retry. Something off for you, such as another plan's feature, is named with why and what to do.
 
 If the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.
 
-If your connection drops while Chat works, the line with the steps says **Reconnecting…**. Chat keeps working meanwhile and picks up where it was; reloading the page shows where it is too. When the monthly AI usage runs out mid-answer, the step it was on shows **Stopped at the AI limit**.
+If your connection drops while Chat works, the grey line at the end says **Reconnecting…**. Chat keeps working meanwhile and picks up where it was, as a reload shows. When the monthly AI usage runs out mid-answer, the step it was on shows **Stopped at the AI limit**.
 
 ## When your AI key fails
 

@@ -2,8 +2,8 @@ import type { ChatStep } from '@/lib/chat/events';
 
 /**
  * What a run's answer shows of its steps (CHAT-03 items 12b–12d, 13–14),
- * from the steps alone: the status line's words, the ✓ chips of the steps
- * done, and the "Data used" chips.
+ * from the steps alone: the live line's words, the grey steps line ("✓ Read
+ * 3 sources") and its list, and the "Data used" chips.
  */
 
 const READ = /^Read\s+/;
@@ -19,7 +19,7 @@ export const readSource = (label: string): string | null =>
 export const openedPage = (label: string) => label.replace(/^Opened\s+/, '');
 
 /**
- * The status line's message, as its i18n key and values (item 12c): the
+ * The live line's words, as their i18n key and values (item 12c): the
  * running step's own words in the present ("Reading Citations…"); without
  * one, "Writing the answer…" while text streams, else "Thinking…".
  */
@@ -41,13 +41,55 @@ export function statusLine(
 }
 
 /**
- * The ✓ chips above the answer (item 12d): each step done, thinking left
- * out, and questions too: an answered one has its own line (CHAT-07 §A item 10).
+ * The steps the steps line lists (item 12d), in order: thinking left out,
+ * and questions too: an answered one has its own line (CHAT-07 §A item 10).
  */
+export const listedSteps = (steps: readonly ChatStep[]) =>
+  [...steps].sort((a, b) => a.n - b.n).filter((s) => s.kind !== 'thinking' && s.kind !== 'ask');
+
+/** The steps done, of those the steps line lists. */
 export const doneSteps = (steps: readonly ChatStep[]) =>
-  [...steps]
-    .sort((a, b) => a.n - b.n)
-    .filter((s) => s.status === 'done' && s.kind !== 'thinking' && s.kind !== 'ask');
+  listedSteps(steps).filter((s) => s.status === 'done');
+
+/**
+ * What the steps line says of the steps done (item 12d), from their kinds:
+ * one step in its own words ("Read Citations"); reads of sources and pages
+ * counted ("Read 3 sources", "Read 2 sources and 1 page"), a fact check
+ * after them named ("· checked facts"); anything else, how many steps. A
+ * source read twice counts once, and a read's rows never show.
+ */
+export type StepsSummary =
+  | { kind: 'one'; step: ChatStep; checked: boolean }
+  | { kind: 'reads'; sources: number; pages: number; checked: boolean }
+  | { kind: 'steps'; count: number };
+
+export function stepsSummary(steps: readonly ChatStep[]): StepsSummary | null {
+  const done = doneSteps(steps);
+  if (done.length === 0) return null;
+  if (done.length === 1) return { kind: 'one', step: done[0], checked: false };
+  const rest = done.filter((s) => s.kind !== 'check');
+  const checked = rest.length < done.length;
+  if (rest.length === 1) return { kind: 'one', step: rest[0], checked };
+  const sources = new Set<string>();
+  const pages = new Set<string>();
+  for (const step of rest) {
+    if (step.kind === 'open_page') {
+      pages.add(openedPage(step.label));
+      continue;
+    }
+    const source =
+      step.kind !== 'read'
+        ? null
+        : step.scope?.unit === 'items' && step.scope.subject
+          ? step.scope.subject
+          : readSource(step.label);
+    if (source === null) return { kind: 'steps', count: done.length };
+    sources.add(source);
+  }
+  // The same source read twice: its own words.
+  if (sources.size + pages.size === 1) return { kind: 'one', step: rest[0], checked };
+  return { kind: 'reads', sources: sources.size, pages: pages.size, checked };
+}
 
 export interface DataUsedChip {
   /** "Citations", or a page's address. */
