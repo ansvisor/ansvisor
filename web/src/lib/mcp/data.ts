@@ -17,7 +17,11 @@ import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { readSnippet } from '@/lib/traffic-snippet';
 import { snippetState, type SnippetState } from '@/lib/traffic-sources';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
-import { competitorTypeLabel, matchesCompetitorType } from '@/lib/competitor-types';
+import {
+  competitorTypeLabel,
+  matchesCompetitorType,
+  missingCompetitorTypeColumn,
+} from '@/lib/competitor-types';
 import { aliasesByCompetitor, type MergedCompetitorRow } from '@/lib/competitor-merge';
 import { wholeDayWindow, type DayWindow } from '@/lib/insights-windows';
 import { API_BASE_URL } from '@/config/api';
@@ -2122,6 +2126,8 @@ export async function competitorTypesFor(
     .select('id, type, brands!inner(organization_id)')
     .eq('brand_id', brandId)
     .eq('brands.organization_id', auth.organizationId);
+  // A database without 00542 (the web deployed ahead of it): no types.
+  if (missingCompetitorTypeColumn(error)) return new Map();
   if (error) throw new Error(error.message);
   return new Map(
     (data ?? []).map((row) => [row.id as string, (row.type as string | null) ?? null]),
@@ -4630,13 +4636,27 @@ export async function listCompetitorsFor(
   if (brandError) throw new Error(brandError.message);
   if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
-  const [{ data, error }, merged] = await Promise.all([
-    supabaseAdmin
+  // The brand's competitors, with their types; a database without 00542 (the
+  // web deployed ahead of it): the list without types.
+  const organizationId = auth.organizationId;
+  const competitorRows = async () => {
+    const typed = await supabaseAdmin
       .from('competitors')
       .select('id, name, domain, type, brands!inner(organization_id)')
       .eq('brand_id', brandId)
-      .eq('brands.organization_id', auth.organizationId)
-      .order('created_at', { ascending: true }),
+      .eq('brands.organization_id', organizationId)
+      .order('created_at', { ascending: true });
+    return missingCompetitorTypeColumn(typed.error)
+      ? await supabaseAdmin
+          .from('competitors')
+          .select('id, name, domain, brands!inner(organization_id)')
+          .eq('brand_id', brandId)
+          .eq('brands.organization_id', organizationId)
+          .order('created_at', { ascending: true })
+      : typed;
+  };
+  const [{ data, error }, merged] = await Promise.all([
+    competitorRows(),
     supabaseAdmin
       .from('merged_competitors')
       .select('id, merged_into_id, name, domain, brands!inner(organization_id)')
@@ -4651,12 +4671,13 @@ export async function listCompetitorsFor(
   );
 
   return (data ?? [])
-    .filter((row) => matchesCompetitorType(row.type as string | null, opts.type))
+    .map((row) => ({ ...row, type: (row as { type?: string | null }).type ?? null }))
+    .filter((row) => matchesCompetitorType(row.type, opts.type))
     .map((row) => ({
       id: row.id as string,
       name: row.name as string,
       domain: (row.domain as string | null) ?? '',
-      type: competitorTypeLabel(row.type as string | null),
+      type: competitorTypeLabel(row.type),
       aliases: (aliases.get(row.id as string) ?? []).map((alias) => ({
         name: alias.name,
         domain: alias.domain,

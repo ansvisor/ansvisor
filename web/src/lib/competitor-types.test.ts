@@ -6,6 +6,7 @@ import {
   competitorTypeOptions,
   groupCompetitorsByType,
   matchesCompetitorType,
+  missingCompetitorTypeColumn,
   normalizeCompetitorType,
 } from './competitor-types';
 import messages from '../../messages/en.json';
@@ -128,5 +129,30 @@ describe("the tools' words", () => {
     for (const label of Object.values(messages.competitors.type.defaults)) {
       expect(COMPETITOR_TYPE_WORDS).toContain(`"${label}"`);
     }
+  });
+});
+
+describe('missingCompetitorTypeColumn', () => {
+  it('tells a database without 00542 from any other error', () => {
+    expect(
+      missingCompetitorTypeColumn({
+        code: '42703',
+        message: 'column competitors.type does not exist',
+      }),
+    ).toBe(true);
+    expect(
+      missingCompetitorTypeColumn({
+        code: 'PGRST204',
+        message: "Could not find the 'type' column of 'competitors' in the schema cache",
+      }),
+    ).toBe(true);
+    expect(
+      missingCompetitorTypeColumn({
+        code: '42703',
+        message: 'column brands.site_type does not exist',
+      }),
+    ).toBe(false);
+    expect(missingCompetitorTypeColumn({ code: '57014', message: 'type canceled' })).toBe(false);
+    expect(missingCompetitorTypeColumn(null)).toBe(false);
   });
 });
