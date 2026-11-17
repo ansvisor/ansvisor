@@ -119,16 +119,19 @@ describe('the order of the pages that send their context since step 9', () => {
   });
 
   it("maps History's Sort to get_action_history's sort, and its search to its search", () => {
-    const line = pageOrderLine(HISTORY, [], {
-      sort: { key: 'oldest', dir: 'asc' },
-      search: 'pricing',
-    })!;
+    // The app applies the page's search to it (the engine asks page-scope.ts).
+    const line = pageOrderLine(
+      HISTORY,
+      [],
+      { sort: { key: 'oldest', dir: 'asc' }, search: 'pricing' },
+      () => ['search'],
+    )!;
     expect(line).toContain(
       'The page lists its closed actions, oldest first, as the person sorted it.',
     );
     expect(line).toContain('read get_action_history with sort "oldest"');
     expect(line).toContain(
-      "the app applies that search to get_action_history's search unless you give your own",
+      "the app applies that search to get_action_history's search, within the list as the page filters it, unless you give your own",
     );
     expect(line).not.toContain('pricing');
     expect(pageOrderLine(HISTORY, [], { sort: { key: 'priority', dir: 'desc' } })).toContain(
@@ -143,8 +146,8 @@ describe('the order of the pages that send their context since step 9', () => {
   });
 
   it("says the app applies Agents' search to list_my_agents", () => {
-    expect(pageOrderLine(AGENTS, [], { search: 'winback' })).toContain(
-      "the app applies that search to list_my_agents's search unless you give your own",
+    expect(pageOrderLine(AGENTS, [], { search: 'winback' }, () => ['search'])).toContain(
+      "the app applies that search to list_my_agents's search, within the list as the page filters it, unless you give your own",
     );
   });
 
