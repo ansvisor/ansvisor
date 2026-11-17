@@ -23,6 +23,20 @@ const calls = vi.hoisted(() => [] as { from: string; args: unknown[] }[]);
 const pageSources = vi.hoisted((): Record<string, unknown> => {
   const counted = { rows: [], total: 0 };
   return {
+    // The MCP reads Chat wraps (mcp-wrapped-reads.ts): a page of each list.
+    'mcp/data.listTopicSuggestionsFor': [],
+    'mcp/task-reviews.listTaskReviewsFor': [],
+    'mcp/content-plan.getContentPlanFor': { counts: {}, hidden: 0, rows: [] },
+    'mcp/catalog.listCatalogProductsFor': { total: 0, products: [], next_offset: null },
+    'mcp/product-visibility.getShoppingShelfFor': { total: 0, shelves: [], next_offset: null },
+    'mcp/prompt-locations.getPromptLocationsFor': {
+      total: 0,
+      locations: [],
+      ignored_locations: [],
+      averages: {},
+      prompts: [],
+      next_offset: null,
+    },
     'mcp/data.listBrandsFor': [],
     'mcp/data.listTopicsFor': [],
     'mcp/data.listCompetitorsFor': [],
@@ -110,6 +124,25 @@ vi.mock('@/lib/mcp/why', async (importOriginal) =>
 );
 vi.mock('@/lib/mcp/brand-facts-reads', async (importOriginal) =>
   tracked.all('mcp/brand-facts-reads', await importOriginal<Record<string, unknown>>()),
+);
+// The MCP reads Chat wraps (mcp-wrapped-reads.ts), from their own modules.
+vi.mock('@/lib/mcp/learning', async (importOriginal) =>
+  tracked.all('mcp/learning', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/task-reviews', async (importOriginal) =>
+  tracked.all('mcp/task-reviews', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/content-plan', async (importOriginal) =>
+  tracked.all('mcp/content-plan', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/catalog', async (importOriginal) =>
+  tracked.all('mcp/catalog', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/product-visibility', async (importOriginal) =>
+  tracked.all('mcp/product-visibility', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/prompt-locations', async (importOriginal) =>
+  tracked.all('mcp/prompt-locations', await importOriginal<Record<string, unknown>>()),
 );
 vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
   tracked.all('mcp/whats-new', await importOriginal<Record<string, unknown>>()),
@@ -1165,8 +1198,13 @@ describe('approval policies', () => {
       // Ad drafts (Ads Phase 0 PR 15): Admins and Managers, as the Pay card's route.
       save_ad_drafts: ['admin', 'manager'],
     });
+    // Every read is every role's but tasks waiting for review: Admins' and Managers', as MCP's.
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
-      expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
+      expect(allowedRoles(tool), tool.name).toEqual(
+        tool.name === 'list_task_reviews'
+          ? ['admin', 'manager']
+          : ['admin', 'manager', 'analyst', 'agency_partner'],
+      );
     }
   });
 
@@ -1514,22 +1552,31 @@ describe("the model's tool list on the registry's rows", () => {
   const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });
-  // Starter's plan doesn't open Product Visibility. Ads' read has no plan gate:
-  // the server shows Starter its first rows, as on the Ads page.
-  const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');
+  // Starter's plan doesn't open Product Visibility (the catalog's own reads are every plan's,
+  // as MCP's). Ads' read has no plan gate: the server shows Starter its first rows, as on the Ads page.
+  const shopping = [
+    'get_shopping_visibility',
+    'get_shopping_shelf',
+    'get_shopping_readiness',
+    'get_product_ai_says',
+    'list_shopping_cards',
+  ];
+  const withoutShopping = reads.filter((name) => !shopping.includes(name));
+  // Tasks waiting for review are Admins' and Managers' (mcp-wrapped-reads.ts).
+  const memberReads = (names: string[]) => names.filter((name) => name !== 'list_task_reviews');
 
   it('gives every role the reads its plan opens, and Analysts and Agency partners daily work only', () => {
     // Memory (W3-11): everyone keeps their own Me.
     const memory = ['save_memory', 'forget_memory'];
     expect(list('analyst', starter)).toEqual([
-      ...withoutShopping,
+      ...memberReads(withoutShopping),
       'create_draft',
       'dismiss_prompt_suggestion',
       'request_access',
       ...memory,
     ]);
     expect(list('agency_partner', growth)).toEqual([
-      ...reads,
+      ...memberReads(reads),
       'create_draft',
       'request_access',
       ...memory,
@@ -1541,7 +1588,7 @@ describe("the model's tool list on the registry's rows", () => {
     ]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
     expect(list('analyst', facts(null, false))).toEqual([
-      ...reads,
+      ...memberReads(reads),
       'create_draft',
       'dismiss_prompt_suggestion',
       'request_access',
@@ -1562,7 +1609,7 @@ describe("the model's tool list on the registry's rows", () => {
   it("lists nothing for a brand outside the person's scope", () => {
     expect(list('agency_partner', growth, undefined, [])).toEqual([]);
     expect(list('agency_partner', growth, undefined, [FIXTURE_IDS.brand])).toEqual([
-      ...reads,
+      ...memberReads(reads),
       'create_draft',
       'request_access',
       'save_memory',

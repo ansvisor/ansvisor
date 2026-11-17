@@ -4150,6 +4150,32 @@
     },
     "optimizePage": { "name": "Optimize pages in chat", "step": "Optimized the page" },
     "reports": { "name": "Read reports", "step": "Read Reports" },
+    "report": { "name": "Read a saved report", "step": "Read report" },
+    "actionScorecard": { "name": "Read the Action History scorecard", "step": "Read Scorecard" },
+    "taskReviews": { "name": "Read tasks waiting for review", "step": "Read Review" },
+    "promptLocations": {
+      "name": "Read prompts across locations",
+      "step": "Read Prompts · Locations"
+    },
+    "promptUsage": { "name": "Read prompt usage", "step": "Read Prompt usage" },
+    "topicSuggestions": { "name": "Read topic suggestions", "step": "Read Topic suggestions" },
+    "shoppingShelf": {
+      "name": "Read the Product Visibility shelf",
+      "step": "Read Products · Shelf"
+    },
+    "shoppingReadiness": {
+      "name": "Read AI shopping readiness",
+      "step": "Read Products · Readiness"
+    },
+    "productAiSays": { "name": "Read what AI says about a product", "step": "Read product" },
+    "shoppingCards": { "name": "Read shopping cards", "step": "Read Products · Cards" },
+    "catalogProducts": { "name": "Read catalog products", "step": "Read Products" },
+    "catalogSources": { "name": "Read catalog sources", "step": "Read Catalog" },
+    "contentPlan": { "name": "Read the Content plan", "step": "Read Content plan" },
+    "contentOpportunity": { "name": "Read a content opportunity", "step": "Read opportunity" },
+    "contentImpact": { "name": "Read a live page's impact", "step": "Read Live page" },
+    "contentSources": { "name": "Read a draft's sources", "step": "Read Sources" },
+    "siteAuditQuota": { "name": "Read Site Audits left this month", "step": "Read Site Audit" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
     "fanoutGaps": { "name": "Read fan-out gaps", "step": "Read fan-out gaps" },

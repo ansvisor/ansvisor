@@ -390,6 +390,7 @@ const lookupTablesNameTheirBrand: {
   content_opportunities: true,
   prompt_results: true,
   prompt_suggestions: true,
+  reports: true,
   site_audits: true,
   topics: true,
 };

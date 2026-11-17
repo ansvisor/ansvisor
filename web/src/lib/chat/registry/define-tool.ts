@@ -52,6 +52,7 @@ export const BRAND_LOOKUP_TABLES = [
   'content_opportunities',
   'prompt_results',
   'prompt_suggestions',
+  'reports',
   'site_audits',
   'topics',
 ] as const;

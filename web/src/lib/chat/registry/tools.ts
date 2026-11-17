@@ -8,6 +8,7 @@ import { AUDIT_TOOLS } from './audit-tools';
 import { COMPETITOR_TOOLS } from './competitor-tools';
 import { CONTENT_TOOLS } from './content-tools';
 import { IMAGE_READS, IMAGE_WRITES } from './image-tools';
+import { MCP_WRAPPED_READS } from './mcp-wrapped-reads';
 import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
 import { MEMORY_TOOLS } from './memory-tools';
@@ -32,6 +33,7 @@ import { READY_AGENT_READS } from './ready-agents';
  */
 export const CHAT_TOOLS: readonly ChatTool[] = [
   ...READ_TOOLS,
+  ...MCP_WRAPPED_READS,
   ...AREA_READS,
   ...NAVIGATION_READS,
   ...WHATS_NEW_READS,
