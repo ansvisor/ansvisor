@@ -13,6 +13,7 @@ import {
   whyPeriodsOf,
 } from './page-periods';
 import { pageFilterInputs, type PageScope } from './page-scope';
+import { samePage } from './page-route';
 import { FALLBACK_RANGE, rangeDaysBack, rangeWindow, type ChatRange } from './range';
 import type { ChatTool } from './registry/define-tool';
 
@@ -517,7 +518,7 @@ export async function scopeRead(
     // A read of a named period (Ads' 7d, 30d, 90d) takes one the message named, or its own
     // page's; never the person's default nor another page's range: else its own default, as
     // its page opens on (the owner, 2026-11-16).
-    const ownPage = !!tool.route && facts.page?.route === tool.route;
+    const ownPage = samePage(tool.route, facts.page?.route);
     const named = facts.rangeFrom === 'message' || (facts.rangeFrom === 'page' && ownPage);
     if (named && accepts(tool, { ...input, period: facts.range })) {
       input.period = facts.range;

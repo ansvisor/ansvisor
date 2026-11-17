@@ -237,12 +237,12 @@ describe('the dots after a nightly run', () => {
 
   it('puts a folded group’s dot on its title', async () => {
     await render();
-    expect(dotIn(groupHeader('More'))).toBeNull();
-    await act(async () => groupHeader('More')!.click());
-    expect(dotIn(groupHeader('More'))).toBe('yellow');
-    expect(groupHeader('More')?.querySelector('[data-menu-dot]')?.getAttribute('aria-label')).toBe(
-      'Needs you',
-    );
+    expect(dotIn(groupHeader('Execution'))).toBeNull();
+    await act(async () => groupHeader('Execution')!.click());
+    expect(dotIn(groupHeader('Execution'))).toBe('yellow');
+    expect(
+      groupHeader('Execution')?.querySelector('[data-menu-dot]')?.getAttribute('aria-label'),
+    ).toBe('Needs you');
   });
 
   it('draws red with a "!" and grey pulsing, each saying why, on the entry and the icon', async () => {
@@ -368,10 +368,16 @@ describe('who sees which dot', () => {
   });
 
   it('shows no dot for a section off the person’s menu, on itself or its parent', async () => {
+    // The Action Center's new actions seen: Content's would be Execution's only dot.
+    const night = afterNight();
+    menu.state = {
+      ...night,
+      navSeen: { ...night.navSeen, 'action-center/actions': '2026-11-11T05:00:00.000Z' },
+    };
     await render({ hidden: ['mentions', 'content'] });
     expect(link('/dashboard/mentions')).toBeNull();
-    await act(async () => groupHeader('More')!.click());
-    expect(dotIn(groupHeader('More'))).toBeNull();
+    await act(async () => groupHeader('Execution')!.click());
+    expect(dotIn(groupHeader('Execution'))).toBeNull();
     expect(dotIn(link('/dashboard/citations'))).toBe('green');
   });
 });

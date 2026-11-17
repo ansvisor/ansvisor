@@ -7,6 +7,7 @@ import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import { isSubscriptionActive } from '@/config/plans';
 import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
 import { handleAddOnEvent } from '@/lib/billing/add-on-webhook';
+import { handleTrialWillEnd } from '@/lib/billing/trial-ending';
 import type Stripe from 'stripe';
 
 /**
@@ -240,6 +241,17 @@ export async function POST(req: NextRequest) {
             // longer covers. Issue #79.
             await alignPromptsSafe(orgBefore.id, 'starter', 'subscription.deleted');
           }
+        }
+        break;
+      }
+
+      case 'customer.subscription.trial_will_end': {
+        // 3 days before a free trial ends: the trial reminder e-mail, once
+        // per trial, cloud only (lib/billing/trial-ending.ts). Resend rate
+        // limited it (a 429): answer 500, so Stripe sends the event again.
+        const subscription = event.data.object as Stripe.Subscription;
+        if ((await handleTrialWillEnd(stripe, subscription.id)) === 'retry') {
+          return NextResponse.json({ error: 'Trial reminder not sent' }, { status: 500 });
         }
         break;
       }
