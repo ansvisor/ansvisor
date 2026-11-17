@@ -2,7 +2,7 @@
 
 import type { MouseEvent } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { BarChart3, CreditCard, Download, Loader2, MoreHorizontal, Settings2 } from 'lucide-react';
+import { BarChart3, CreditCard, Download, Loader2, MoreHorizontal } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,18 +34,18 @@ import type { LocationsWarning } from './_usage-cards';
  */
 
 /**
- * "…" beside Add prompt: Export CSV, Manage prompts, Plan & usage, and Show
- * usage (the usage cards that used to fold under the Tracked Prompts bar).
- * Each item does what its button did; one the tab doesn't offer is left out.
+ * "…" beside Add prompt: Export CSV, Plan & usage, and Show usage (the usage
+ * cards that used to fold under the Tracked Prompts bar). Each item does
+ * what its button did; one the tab doesn't offer is left out. Prompts are
+ * managed on this page itself, so the brand's Manage prompts page has no
+ * item here.
  */
 export function PromptsMoreMenu({
-  managePromptsHref,
   onExportCsv,
   exportDisabled = false,
   planHref,
   usage,
 }: {
-  managePromptsHref: string;
   /** Export CSV; left out on a tab without an export. */
   onExportCsv?: () => void;
   /** No prompts to export yet: the item says so and does nothing. */
@@ -59,6 +59,8 @@ export function PromptsMoreMenu({
   const tUsage = useTranslations('prompts.usage');
   const tCommon = useTranslations('common');
   const format = useFormatter();
+  // Nothing to offer on this tab: no menu.
+  if (!onExportCsv && !planHref && !usage) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -84,15 +86,7 @@ export function PromptsMoreMenu({
             </span>
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem
-          render={<Link href={managePromptsHref} />}
-          className="gap-2"
-          data-action="manage-prompts"
-        >
-          <Settings2 />
-          {t('managePrompts')}
-        </DropdownMenuItem>
-        {(planHref || usage) && <DropdownMenuSeparator />}
+        {onExportCsv && (planHref || usage) && <DropdownMenuSeparator />}
         {planHref && (
           <DropdownMenuItem
             render={<Link href={planHref} />}

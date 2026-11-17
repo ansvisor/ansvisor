@@ -8,6 +8,10 @@ import { BrandAvatar } from '@/components/brand-avatar';
 import { Badge } from '@/components/ui/badge';
 import { ChevronRight, Globe, MessageSquareText, Plus, Settings, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { sectionFor } from '@/lib/prompts-routes';
+
+/** Tracked Prompts, where Add prompt is. */
+const TRACKED_PROMPTS_HREF = sectionFor('all', 'tracked').href;
 
 interface BrandCardProps {
   brand: Brand;
@@ -81,11 +85,14 @@ export function BrandCard({ brand }: BrandCardProps) {
           addLabel={tCard('addTopic')}
           onSelect={select}
         />
+        {/* Prompts are managed on the Prompts page, for the brand picked
+            here (select). The page has no address that opens Add prompt, so
+            + opens it on Tracked Prompts, where Add prompt is. */}
         <NavRow
           icon={MessageSquareText}
           label={tCard('addPrompt')}
-          href={`/dashboard/brands/${brand.id}/prompts`}
-          addHref={`/dashboard/brands/${brand.id}/prompts#add-prompt`}
+          href={TRACKED_PROMPTS_HREF}
+          addHref={TRACKED_PROMPTS_HREF}
           addLabel={tCard('addPrompt')}
           onSelect={select}
         />

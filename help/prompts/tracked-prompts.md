@@ -1,7 +1,7 @@
 ---
 title: Tracked Prompts list, statuses and columns
 route: /dashboard/prompts/tracked
-keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume]
+keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume, track now, no answers yet]
 synonyms: [prompt list, my prompts, prompt table, tracked queries]
 plan: all
 updated: 2026-11-17
@@ -15,10 +15,9 @@ sources: [docs/guides/prompts.mdx]
 
 ## Where the page's actions are
 
-Beside the tabs, admins and managers have **Add prompt**. The rest is in the **…** menu (More actions) next to it:
+You manage the brand's prompts on this page. Beside the tabs, admins and managers have **Add prompt**. The rest is in the **…** menu (More actions) next to it:
 
 - **Export CSV** downloads the list.
-- **Manage prompts** opens the page for managing the brand's prompts.
 - **Plan & usage** opens your plan and billing.
 - **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, a line under the filters says so, with **Plan & usage**, and the menu says so under **Show usage**.
 
@@ -34,6 +33,12 @@ Each row has a status:
 - **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.
 
 While prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them.
+
+## Track new prompts now
+
+A prompt gets its first answers with the next tracking run. When some active prompts have no answers yet, a line under the filters says how many, with **Track now**: admins and managers click it to have the AI engines asked now. To track only some, tick their rows and click **Track now** in the bar that appears; it counts only the selected prompts with no answers yet.
+
+The line then says **Tracking N prompts now**, and **See answers** opens **Visibility**, which shows the run as it goes. Answers arrive over the next minutes. Your plan sets how many runs you can start a day, and how long to wait between them; the message says so when you've reached either.
 
 ## Rows without figures
 

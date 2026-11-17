@@ -129,6 +129,14 @@ const toast = vi.hoisted(() =>
 vi.mock('sonner', () => ({ toast }));
 const analytics = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => analytics);
+// Track now's API calls: no prompt without answers unless a test says so.
+const trackNowApi = vi.hoisted(() => ({
+  readPromptsWithoutAnswers: vi.fn(async (): Promise<string[] | null> => []),
+  trackPromptsNow: vi.fn(),
+}));
+vi.mock('@/lib/track-now', () => trackNowApi);
+const jobStore = vi.hoisted(() => ({ saveTrackingJob: vi.fn(), loadTrackingJob: () => null }));
+vi.mock('@/lib/tracking-job-store', () => jobStore);
 
 const { default: PromptsPage } = await import('./page');
 const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
@@ -203,6 +211,7 @@ beforeEach(() => {
     positions: {},
   });
   actions.setPromptsActive.mockResolvedValue({ updated: 1 });
+  trackNowApi.readPromptsWithoutAnswers.mockResolvedValue([]);
   topicActions.getTopics.mockResolvedValue([COFFEE_TOPIC]);
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -986,17 +995,13 @@ describe('the header', () => {
     expect(usagePanel()).toBeNull();
   });
 
-  it('holds Export CSV, Manage prompts, Plan & usage and Show usage in "…"', async () => {
+  it('holds Export CSV, Plan & usage and Show usage in "…", and no Manage prompts', async () => {
     usageReads();
     await render(false);
     const items = await openMore();
-    expect(items.map((el) => el.textContent)).toEqual([
-      'Export CSV',
-      'Manage prompts',
-      'Plan & usage',
-      'Show usage',
-    ]);
-    expect(item(items, 'Manage prompts').getAttribute('href')).toBe('/dashboard/brands/b1/prompts');
+    expect(items.map((el) => el.textContent)).toEqual(['Export CSV', 'Plan & usage', 'Show usage']);
+    expect(document.querySelector('[data-action="manage-prompts"]')).toBeNull();
+    expect(document.querySelector('a[href="/dashboard/brands/b1/prompts"]')).toBeNull();
     expect(item(items, 'Plan & usage').getAttribute('href')).toBe(
       '/dashboard/settings?tab=billing',
     );
@@ -1067,24 +1072,22 @@ describe('the header', () => {
     await render(false);
     expect(button('Add prompt')).toBeUndefined();
     // Plan & usage waits for the counts, which this test's read refuses.
-    expect((await openMore()).map((el) => el.textContent)).toEqual([
-      'Export CSV',
-      'Manage prompts',
-      'Show usage',
-    ]);
+    expect((await openMore()).map((el) => el.textContent)).toEqual(['Export CSV', 'Show usage']);
   });
 
-  it('keeps Manage prompts in "…" on Query Fan-out and Insights, and Topics its own buttons', async () => {
+  it('has no "…" on Query Fan-out and Insights, now Manage prompts is gone, and Topics its own buttons', async () => {
     nav.pathname = '/dashboard/prompts/fan-outs';
     await render(false);
     expect(button('Add prompt')).toBeUndefined();
-    expect((await openMore()).map((el) => el.textContent)).toEqual(['Manage prompts']);
+    expect(more()).toBeNull();
+    expect(document.querySelector('a[href="/dashboard/brands/b1/prompts"]')).toBeNull();
 
     act(() => root.unmount());
     root = createRoot(container);
     nav.pathname = '/dashboard/prompts/insights';
     await render(false);
-    expect((await openMore()).map((el) => el.textContent)).toEqual(['Manage prompts']);
+    expect(more()).toBeNull();
+    expect(document.querySelector('a[href="/dashboard/brands/b1/prompts"]')).toBeNull();
 
     act(() => root.unmount());
     root = createRoot(container);
@@ -1340,5 +1343,198 @@ describe('the prompt locations near the limit, in the status line', () => {
     await act(async () => show.click());
     expect(container.querySelector('section[aria-label="Prompt usage"]')).not.toBeNull();
     expect(line()).not.toBeNull();
+  });
+});
+
+/**
+ * Track now (moved from the brand's Manage prompts page, where it was
+ * Analyze Prompts): the active prompts with no answers yet, read as that page
+ * read them, in the table's status line and the bulk bar, for admins and
+ * managers; the same call starts tracking them, saved as the brand's
+ * tracking job, without leaving the page.
+ */
+describe('Track now', () => {
+  const answered: Prompt = { ...prompt, id: 'p2', text: 'Best espresso machine?' };
+  const fresh: Prompt = { ...prompt, id: 'p3', text: 'Best decaf beans?' };
+  const answers = {
+    avgVisibility: 40,
+    avgVisibilityVisible: 40,
+    totalMentions: 2,
+    totalCitations: 1,
+    runs: 4,
+    visibleRuns: 2,
+    visibilityRate: 50,
+    score: 40,
+    mentionAnswers: 2,
+    citationAnswers: 1,
+    positionFactor: 0.5,
+    lastRunAt: '2026-11-16T09:00:00.000Z',
+  };
+  const withPrompts = (visibility: Record<string, typeof answers> = { p2: answers }) =>
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [prompt, answered, fresh] }],
+      visibility,
+      positions: {},
+    });
+  const line = (state: 'waiting' | 'started') =>
+    container.querySelector<HTMLElement>(`[data-track-now="${state}"]`);
+  const trackNowButton = () => line('waiting')?.querySelector('button') ?? null;
+  const bulkButton = (text: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('[role="toolbar"] button')].find(
+      (b) => b.textContent === text,
+    );
+  const select = async (p: Prompt) => {
+    const box = container.querySelector<HTMLElement>(`[aria-label="Select ${p.text}"]`)!;
+    await act(async () => box.click());
+  };
+
+  beforeEach(() => {
+    withPrompts();
+    // The brand page's read: p1 and p3 have no answers yet; p9 is no prompt on the page.
+    trackNowApi.readPromptsWithoutAnswers.mockResolvedValue(['p1', 'p3', 'p9']);
+    trackNowApi.trackPromptsNow.mockResolvedValue({ ok: true, jobId: 'job-1', count: 2 });
+  });
+
+  it('says how many prompts have no answers yet, in the status line', async () => {
+    await render(false);
+    expect(trackNowApi.readPromptsWithoutAnswers).toHaveBeenCalledWith('b1');
+    expect(line('waiting')?.textContent).toBe('2 prompts have no answers yet·Track now');
+    expect(container.querySelector('[data-notices]')?.contains(line('waiting'))).toBe(true);
+    expect(trackNowButton()?.getAttribute('aria-label')).toBe('Track 2 prompts now');
+    // Not Analyze: that is the volume analysis.
+    expect(line('waiting')?.textContent).not.toContain('Analyze');
+  });
+
+  it('tracks them now with the brand page’s call, saves the job, and says so in place', async () => {
+    await render(false);
+    await act(async () => trackNowButton()!.click());
+    expect(trackNowApi.trackPromptsNow).toHaveBeenCalledExactlyOnceWith('b1', ['p1', 'p3']);
+    expect(jobStore.saveTrackingJob).toHaveBeenCalledExactlyOnceWith({
+      jobId: 'job-1',
+      brandId: 'b1',
+      startedAt: expect.any(Number),
+    });
+    expect(toast.success).toHaveBeenCalledWith('Tracking 2 prompts now', {
+      description: 'Answers arrive over the next minutes. Visibility shows the run as it goes.',
+    });
+    // The page stays; the line says the run started, with the way to its answers.
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(line('waiting')).toBeNull();
+    expect(line('started')?.textContent).toBe('Tracking 2 prompts now·See answers');
+    expect(line('started')?.querySelector('a')?.getAttribute('href')).toBe('/dashboard/insights');
+  });
+
+  it('reads nothing when every active prompt has answers in the table', async () => {
+    withPrompts({ p1: answers, p2: answers, p3: answers });
+    await render(false);
+    expect(trackNowApi.readPromptsWithoutAnswers).not.toHaveBeenCalled();
+    expect(line('waiting')).toBeNull();
+  });
+
+  it('leaves it out for members, who can’t track: no read, no line, no button', async () => {
+    role.canManage = false;
+    await render(false);
+    expect(trackNowApi.readPromptsWithoutAnswers).not.toHaveBeenCalled();
+    expect(line('waiting')).toBeNull();
+  });
+
+  it('opens the upgrade dialog on a read-only workspace, starting nothing', async () => {
+    await render(true);
+    await act(async () => trackNowButton()!.click());
+    expect(openUpgrade).toHaveBeenCalledWith('Tracking prompts needs a plan');
+    expect(trackNowApi.trackPromptsNow).not.toHaveBeenCalled();
+  });
+
+  it('offers Track now in the bulk bar for the selected prompts with no answers only', async () => {
+    await render(false);
+    await select(answered);
+    expect(bulkButton('Track now')).toBeUndefined();
+    await select(fresh);
+    expect(bulkButton('Track 1 now')).toBeDefined();
+    await act(async () => bulkButton('Track 1 now')!.click());
+    expect(trackNowApi.trackPromptsNow).toHaveBeenCalledExactlyOnceWith('b1', ['p3']);
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    trackNowApi.trackPromptsNow.mockClear();
+    await render(true);
+    await select(fresh);
+    await act(async () => bulkButton('Track now')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Tracking prompts needs a plan');
+    expect(trackNowApi.trackPromptsNow).not.toHaveBeenCalled();
+  });
+
+  it('says why a run was refused, and keeps the line', async () => {
+    trackNowApi.trackPromptsNow.mockResolvedValue({
+      ok: false,
+      status: 429,
+      message: 'Please wait 5 minutes before running another analysis.',
+      code: null,
+    });
+    await render(false);
+    await act(async () => trackNowButton()!.click());
+    expect(toast.error).toHaveBeenCalledWith("Couldn't start tracking", {
+      description: 'Please wait 5 minutes before running another analysis.',
+    });
+    expect(jobStore.saveTrackingJob).not.toHaveBeenCalled();
+    expect(line('waiting')).not.toBeNull();
+  });
+
+  it('opens the upgrade dialog when the API says the plan isn’t active', async () => {
+    trackNowApi.trackPromptsNow.mockResolvedValue({
+      ok: false,
+      status: 402,
+      message: null,
+      code: 'subscription_inactive',
+    });
+    await render(false);
+    await act(async () => trackNowButton()!.click());
+    expect(openUpgrade).toHaveBeenCalled();
+    expect(jobStore.saveTrackingJob).not.toHaveBeenCalled();
+  });
+
+  it('says so when they have answers by now, and drops the line', async () => {
+    trackNowApi.trackPromptsNow.mockResolvedValue({ ok: true, jobId: null, count: 0 });
+    await render(false);
+    await act(async () => trackNowButton()!.click());
+    expect(toast.info).toHaveBeenCalledWith('These prompts have answers already.');
+    expect(jobStore.saveTrackingJob).not.toHaveBeenCalled();
+    expect(line('waiting')).toBeNull();
+    expect(line('started')).toBeNull();
+  });
+});
+
+describe('Tracked Prompts with no prompts yet', () => {
+  beforeEach(() => {
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [] }],
+      visibility: {},
+      positions: {},
+    });
+  });
+
+  it('offers Add prompt, and no Manage prompts', async () => {
+    await render(false);
+    expect(container.textContent).toContain('No prompts yet');
+    const adds = [...container.querySelectorAll('button')].filter(
+      (b) => b.textContent?.trim() === 'Add prompt',
+    );
+    // The header's and the empty state's.
+    expect(adds).toHaveLength(2);
+    expect(container.textContent).not.toContain('Manage prompts');
+    expect(container.querySelector('a[href="/dashboard/brands/b1/prompts"]')).toBeNull();
+  });
+
+  it('tells a member whom to ask, with nothing to click', async () => {
+    role.canManage = false;
+    await render(false);
+    expect(container.textContent).toContain('No prompts yet');
+    expect(container.textContent).toContain('Ask an admin or a manager to add prompts.');
+    expect(container.textContent).not.toContain('Manage prompts');
+    expect(button('Add prompt')).toBeUndefined();
   });
 });
