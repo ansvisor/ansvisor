@@ -36,6 +36,7 @@ import {
 } from './_usage-cards';
 import {
   LocationFilter,
+  LocationsWarningLine,
   NotAnalyzedLine,
   PromptsListSwitch,
   PromptsMoreMenu,
@@ -1997,6 +1998,10 @@ export default function PromptsPage() {
     allPrompts.length > 0 || (!loading && !loadFailed)
       ? countByStatus(allPrompts, now.getTime()).tracked
       : undefined;
+  // The plan's prompt locations once nearly or fully used: said beside the
+  // menu's Show usage and in the table's status line. Plan & usage's link.
+  const usageWarning = locationsWarning(usageState);
+  const planHref = planUsageHref(usageState);
 
   const handleExportCsv = useCallback(async () => {
     if (!canExport) return;
@@ -2121,13 +2126,13 @@ export default function PromptsPage() {
                 managePromptsHref={`/dashboard/brands/${activeBrandId}/prompts`}
                 onExportCsv={tab === 'all' ? handleExportCsv : undefined}
                 exportDisabled={!canExport}
-                planHref={tab === 'all' ? planUsageHref(usageState) : undefined}
+                planHref={tab === 'all' ? planHref : undefined}
                 usage={
                   tab === 'all' && view === 'tracked'
                     ? {
                         open: usageOpen,
                         onToggle: () => setUsageOpen((o) => !o),
-                        warning: locationsWarning(usageState),
+                        warning: usageWarning,
                       }
                     : undefined
                 }
@@ -2236,18 +2241,25 @@ export default function PromptsPage() {
                     />
                   ) : null
                 }
-                // Active prompts with no volume yet: their Volume and Competition
-                // cells are blank, and Analyze fills them in.
-                notAnalyzed={
-                  !loading && unanalyzedCount > 0 ? (
-                    <NotAnalyzedLine
-                      count={unanalyzedCount}
-                      onAnalyze={canManage ? handleAnalyzeNew : undefined}
-                      analyzing={analyzing}
-                      progress={analysisProgress}
-                      limitReached={quotaExhausted}
-                    />
-                  ) : null
+                // The status line's quiet notes: the plan's prompt locations
+                // near the limit, kept in sight with the usage cards folded; and
+                // active prompts with no volume yet, whose Volume and
+                // Competition cells are blank until Analyze fills them in.
+                notices={
+                  <>
+                    {usageWarning && (
+                      <LocationsWarningLine warning={usageWarning} planHref={planHref} />
+                    )}
+                    {!loading && unanalyzedCount > 0 && (
+                      <NotAnalyzedLine
+                        count={unanalyzedCount}
+                        onAnalyze={canManage ? handleAnalyzeNew : undefined}
+                        analyzing={analyzing}
+                        progress={analysisProgress}
+                        limitReached={quotaExhausted}
+                      />
+                    )}
+                  </>
                 }
                 statusFilter={statusFilter}
                 onStatusFilterChange={setStatusFilter}
@@ -3002,7 +3014,7 @@ function AllPromptsTab({
   positionsPreset,
   regionFilter,
   locationFilter,
-  notAnalyzed,
+  notices,
   statusFilter,
   onStatusFilterChange,
   onSwap,
@@ -3031,8 +3043,11 @@ function AllPromptsTab({
   regionFilter: string;
   /** The page's Location filter, in the filter row; null when there is one location. */
   locationFilter?: React.ReactNode;
-  /** The prompts not analyzed yet, under the filter row at the right; null when none. */
-  notAnalyzed?: React.ReactNode;
+  /**
+   * Quiet notes under the filter row, at the right of the count: the prompt
+   * locations near the plan's limit, and the prompts not analyzed yet.
+   */
+  notices?: React.ReactNode;
   /** Which rows show, set by the usage cards above (PROMPT-012) or the Status filter. */
   statusFilter: PromptStatusFilter;
   onStatusFilterChange: (filter: PromptStatusFilter) => void;
@@ -4147,7 +4162,9 @@ function AllPromptsTab({
               </span>
             )}
           </div>
-          {notAnalyzed}
+          <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1" data-notices>
+            {notices}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">

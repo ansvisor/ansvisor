@@ -14403,6 +14403,7 @@
       "managePrompts": "Manage prompts",
       "showUsage": "Show usage",
       "hideUsage": "Hide usage",
+      "locationsUsed": "{used} / {limit} prompt locations used",
       "view": {
         "label": "Prompt list",
         "tracked": "Tracked",

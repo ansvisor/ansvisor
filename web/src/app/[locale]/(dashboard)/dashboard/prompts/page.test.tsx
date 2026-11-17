@@ -1182,7 +1182,9 @@ describe('the prompts not analyzed yet', () => {
     const filters = container.querySelector('[data-filter-row]')!;
     expect(filters.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The count line on its left.
-    expect(line.parentElement?.textContent).toContain('Tracked prompts (1)');
+    expect(line.closest('[data-notices]')?.parentElement?.textContent).toContain(
+      'Tracked prompts (1)',
+    );
     expect(analyzeButton()?.getAttribute('aria-label')).toBe('Analyze 1 prompt');
     // No banner any more.
     expect(container.textContent).not.toContain("haven't been analyzed");
@@ -1260,5 +1262,83 @@ describe('Location in the filter row', () => {
       expect.objectContaining({ region: 'GB' }),
     );
     expect(new URLSearchParams(window.location.search).get('region')).toBe('GB');
+  });
+});
+
+describe('the prompt locations near the limit, in the status line', () => {
+  // The usage cards' read (GET /api/prompts/usage): a Starter plan of 50 prompt locations.
+  const usageReads = (locationsUsed: number, plan: object = {}) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          plan: {
+            key: 'starter',
+            name: 'Starter plan',
+            locationLimit: 50,
+            cta: 'upgrade_growth',
+            ...plan,
+          },
+          brand: { active: 1, paused: 0, total: 1 },
+          account: { activePrompts: 1, brands: 1, locationsUsed },
+          updatedAt: '2026-11-17T09:00:00.000Z',
+        }),
+      })),
+    );
+  const line = () => container.querySelector<HTMLElement>('[data-locations-warning]');
+  const notices = () => container.querySelector<HTMLElement>('[data-notices]');
+
+  it('says nothing well under the limit, or with no limit', async () => {
+    usageReads(10);
+    await render(false);
+    expect(line()).toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    usageReads(400, {
+      key: 'self_hosted',
+      name: 'Self-Hosted plan',
+      locationLimit: null,
+      cta: null,
+    });
+    await render(false);
+    expect(line()).toBeNull();
+  });
+
+  it('says it in amber from 90% of the limit, with Plan & usage, beside the not-analyzed line', async () => {
+    usageReads(46);
+    await render(false);
+    expect(line()?.getAttribute('data-locations-warning')).toBe('warning');
+    expect(line()?.className).toContain('text-amber-700');
+    expect(line()?.textContent).toBe('46 / 50 prompt locations used·Plan & usage');
+    const plan = line()!.querySelector('a')!;
+    expect(plan.textContent).toBe('Plan & usage');
+    expect(plan.getAttribute('href')).toBe('/dashboard/settings?tab=billing');
+    // Both quiet lines, in the status line at the right of the count; the menu still says it.
+    expect(notices()?.contains(notAnalyzed())).toBe(true);
+    expect(notices()?.contains(line())).toBe(true);
+    expect(line()!.closest('[data-tour="positions"]')).not.toBeNull();
+  });
+
+  it('says it in red at or past the limit, and keeps it with the cards open', async () => {
+    usageReads(52);
+    await render(false);
+    expect(line()?.getAttribute('data-locations-warning')).toBe('full');
+    expect(line()?.className).toContain('text-red-600');
+    expect(line()?.textContent).toBe('52 / 50 prompt locations used·Plan & usage');
+
+    const trigger = container.querySelector<HTMLElement>('[aria-label="More actions"]')!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const show = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((el) =>
+      el.textContent?.startsWith('Show usage'),
+    )!;
+    expect(show.textContent).toBe('Show usage52 / 50 prompt locations');
+    await act(async () => show.click());
+    expect(container.querySelector('section[aria-label="Prompt usage"]')).not.toBeNull();
+    expect(line()).not.toBeNull();
   });
 });

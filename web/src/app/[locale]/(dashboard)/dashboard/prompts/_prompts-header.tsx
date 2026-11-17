@@ -28,8 +28,9 @@ import type { LocationsWarning } from './_usage-cards';
 /**
  * The Prompts page's header pieces (the owner's simpler header, 2026-11-17):
  * the "…" menu beside Add prompt, the Tracked | Suggestions switch, the
- * Location filter in the table's filter row, and the quiet line that says
- * how many prompts still need their volume analyzed.
+ * Location filter in the table's filter row, and the quiet lines in the
+ * table's status line: the prompt locations near the plan's limit, and how
+ * many prompts still need their volume analyzed.
  */
 
 /**
@@ -230,6 +231,57 @@ export function LocationFilter({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/**
+ * "● 46 / 50 prompt locations used · Plan & usage": the plan's prompt
+ * locations, once nearly (amber) or fully (red) used, in the table's status
+ * line, so the limit stays in sight with the usage cards folded. Plan &
+ * usage goes where the menu's does; without a plan page (self-hosted) the
+ * line has no link.
+ */
+export function LocationsWarningLine({
+  warning,
+  planHref,
+}: {
+  warning: LocationsWarning;
+  planHref?: string;
+}) {
+  const t = useTranslations('prompts.header');
+  const tUsage = useTranslations('prompts.usage');
+  const format = useFormatter();
+  const full = warning.tone === 'full';
+  return (
+    <p
+      data-locations-warning={warning.tone}
+      className={cn(
+        'flex flex-wrap items-center gap-x-1.5 text-xs',
+        full ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn('h-1.5 w-1.5 shrink-0 rounded-full', full ? 'bg-red-500' : 'bg-amber-500')}
+      />
+      <span className="tabular-nums">
+        {t('locationsUsed', {
+          used: format.number(warning.used),
+          limit: format.number(warning.limit),
+        })}
+      </span>
+      {planHref && (
+        <>
+          <span aria-hidden>·</span>
+          <Link
+            href={planHref}
+            className="rounded-sm font-medium underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            {tUsage('planAndUsage')}
+          </Link>
+        </>
+      )}
+    </p>
   );
 }
 

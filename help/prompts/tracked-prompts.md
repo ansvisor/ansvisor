@@ -20,7 +20,7 @@ Beside the tabs, admins and managers have **Add prompt**. The rest is in the **�
 - **Export CSV** downloads the list.
 - **Manage prompts** opens the page for managing the brand's prompts.
 - **Plan & usage** opens your plan and billing.
-- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, the menu says so under **Show usage**.
+- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, a line under the filters says so, with **Plan & usage**, and the menu says so under **Show usage**.
 
 The **Location** filter, for a brand tracked in more than one place, sits in the table's filter row, beside **Status** and **Work**.
 
@@ -74,4 +74,4 @@ The **Tags** filter beside the search box narrows the table to one or more tags.
 
 Click a prompt's text to open its own page, with its visibility, mentions, citations and per-platform results. For admins and managers, each row's **…** menu offers **Edit**, **Pause tracking** (or **Resume tracking**), **Improve position…**, **Suggest content** (or **Open content suggestion**), **Create content** (or **Open draft**) and **Delete**.
 
-**Export CSV**, in the **…** menu, downloads the list. Estimated volumes in it are marked as estimates, with their confidence and range, so a spreadsheet doesn't read them as counts.
+**Export CSV** downloads the list. Estimated volumes in it are marked as estimates, with their confidence and range, so a spreadsheet doesn't read them as counts.
