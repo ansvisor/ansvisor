@@ -13,14 +13,16 @@ import {
 } from './menu-access';
 
 /**
- * Menu access with the menu of 2026-11-11: the same sections by
- * the same names, so menus saved for roles, people and work areas keep
- * working with no data change; Agent Center's section, `agents`, is Action
- * Center › Agents there, and the Action Center (Today, Actions, Signals,
- * History) stays on every menu.
+ * Menu access with the menu of 2026-11-11, analytics before execution since
+ * 2026-11-17: the same sections by the same names, so menus saved for roles,
+ * people and work areas keep working with no data change; Agent Center's
+ * section, `agents`, is Action Center › Agents there, and the Action Center
+ * (Today, Actions, Signals, History) stays on every menu, first in Execution.
  */
 
-const actionCenter = dashboardNav[0].items[1];
+const actionCenter = dashboardNav
+  .flatMap((group) => group.items)
+  .find((item) => item.href === '/dashboard/action-center')!;
 const tabsShown = (hidden: Iterable<string>) =>
   visibleNavChildren(actionCenter, new Set(hidden), {
     brandPrefs: { ecommerce: false },
@@ -32,19 +34,19 @@ describe('the menu’s sections', () => {
   it('are the menu’s sections, none added or renamed, in its order', () => {
     expect(MENU_SECTIONS).toEqual([
       'agent',
-      'action-center',
-      'agents',
       'prompts',
       'insights',
       'mentions',
       'citations',
       'shopping',
+      'competitors',
       'traffic',
       'ads',
+      'action-center',
+      'agents',
       'content',
       'audit',
       'reports',
-      'competitors',
     ]);
   });
 
@@ -62,7 +64,9 @@ describe('the menu’s sections', () => {
     expect(CHAT_AGENTIC_SECTIONS).toEqual(['agents']);
     expect(menuSectionsFor(false, false)).not.toContain('agents');
     expect(menuSectionsFor(true, false)).toContain('agents');
-    expect(menuSectionsFor(true, false).indexOf('agents')).toBe(2);
+    expect(menuSectionsFor(true, false).indexOf('agents')).toBe(
+      menuSectionsFor(true, false).indexOf('action-center') + 1,
+    );
     // Ads only with Ads on, last of Analytics.
     expect(menuSectionsFor(true, false)).not.toContain('ads');
     expect(menuSectionsFor(true, true).indexOf('ads')).toBe(

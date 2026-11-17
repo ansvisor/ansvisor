@@ -1,11 +1,11 @@
 ---
 title: Add prompts to track
 route: /dashboard/prompts/tracked
-keywords: [add prompt, bulk import, track prompts, new prompt]
+keywords: [add prompt, bulk import, track prompts, new prompt, generate by topic, track now]
 synonyms: [add a question, add queries, track a search]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -27,11 +27,13 @@ In the same dialog, open the **Bulk import** tab and upload a one-column Excel o
 
 ## Add from suggestions
 
-Switch the list to **Prompt Suggestions**. Add one suggestion with its **+** button, or every listed one with **Add All**.
+Switch the list to **Suggestions**, beside the date range. Add one suggestion with its **+** button, or every listed one with **Add All**. Click the pencil beside a suggestion to edit its words first.
+
+To get prompts for chosen topics, click **By topic**, pick topics, and Ansvisor writes 5 prompts for each. Review and edit them at the top of the list, then click **Add selected**.
 
 ## When the first results come
 
-A prompt has no results until it is first asked. **Add prompt** and **Bulk import** start right away when they can. A prompt added from suggestions, or one whose analysis couldn't start, gets its first results with the next daily run. Until then, for its first two days, its row says **Within 24h**.
+A prompt has no results until it is first asked. **Add prompt**, **Bulk import** and **Add selected** start right away when they can. A prompt added from suggestions, or one whose analysis couldn't start, gets its first results with the next daily run. Until then, for its first two days, its row says **Within 24h**. To ask sooner, admins and managers click **Track now** on **Tracked Prompts**.
 
 ## What counts on your plan
 

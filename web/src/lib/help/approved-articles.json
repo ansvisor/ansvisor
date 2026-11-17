@@ -166,11 +166,11 @@
         "home page"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Everyone lands on its **Today** tab when they sign in, whatever the plan. Open it from **Action Center**, first in the main menu, under Chat; its tabs are listed under it too. Everything in it is per brand: switch brands to see another brand's work."
+          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan, or on **Today** when Prompts is off your menu. Everything in it is per brand: switch brands to see another brand's work."
         },
         {
           "heading": "The tabs",
@@ -655,11 +655,11 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-16",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Everyone lands here when they sign in, whatever the plan."
+          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan; Today is one click away. When Prompts is off your menu, Ansvisor opens here instead."
         },
         {
           "heading": "The tabs",
@@ -1563,7 +1563,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on the Action Center's **Today** tab, whatever your plan; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off."
+          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Prompts › Tracked Prompts**, whatever your plan, or on the Action Center's **Today** tab when Prompts is off your menu; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off."
         },
         {
           "heading": "Chat Home",
@@ -1652,6 +1652,10 @@
         {
           "heading": "A Site Audit in Chat",
           "text": "When Chat reads one of your Site Audits, a card under the answer shows it: the page, its score on the same gauge as the audit report, and the day it ran. Once the page has three audits, the score shows its range, such as **64 ± 2**, with a line giving the lowest and highest score of its last five audits. When the page was audited before, the card shows the change since then, such as **+3 since Oct 21**. A partial audit says the AI checks couldn't run, and shows no range or change. **Open report** opens the audit's full report. The card's numbers come from the audit itself, not from Chat's answer. One answer shows up to three audits."
+        },
+        {
+          "heading": "More of your data Chat reads",
+          "text": "Chat also reads, on any page: the **History** scorecard of what each kind of action did; tasks waiting for review (Admins and Managers); Product Visibility's products, shelves, readiness and what AI says about a product, and your catalog's sources; the **Content** plan, one opportunity in full, and a draft's live page results and sources; a saved report's content; prompts across locations and your prompt usage; topic suggestions; and how many Site Audits are left this month. Ask about them as the page shows them, such as \"Which kinds of actions worked?\" or \"What does the October report say?\""
         },
         {
           "heading": "Where a page opens",
@@ -2922,11 +2926,11 @@
         "find competitors"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, right under **Reports** in the sidebar, and each one then appears in **Tracked Competitors** for a head-to-head comparison."
+          "text": "Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, under **Analytics** in the sidebar, right after **Visibility**, and each one then appears in **Tracked Competitors** for a head-to-head comparison."
         },
         {
           "heading": "Open the Competitors page",
@@ -2983,11 +2987,11 @@
         "competitor score"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "The **Competitors** page, right under **Reports** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand."
+          "text": "The **Competitors** page, under **Analytics** in the sidebar, right after **Visibility**, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand."
         },
         {
           "heading": "Tracked Competitors",
@@ -3893,7 +3897,7 @@
         "send the snippet to my developer"
       ],
       "plan": "all",
-      "updated": "2026-11-16",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
@@ -3925,7 +3929,7 @@
         },
         {
           "heading": "Last, optional: Connect your site",
-          "text": "On the cloud, once **Start tracking with N competitors** has started your brand's first run, **Connect your site** shows your brand's AI Traffic snippet: one line for your site's head. Without it, AI Traffic shows no AI visits, conversions or revenue.\n\n1. Copy the snippet with the copy button.\n2. Paste it just before the head closes on every page of your site, then publish.\n3. Click **Check again** to see whether your home page has it.\n\nSomeone else edits your site? **Email this to my developer** opens your email app with the snippet and these steps; **Copy message** copies the same text.\n\n**Done, go to my dashboard** and **I'll do it later** both open the dashboard while the first run goes on. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab."
+          "text": "On the cloud, once **Start tracking with N competitors** has started your brand's first run, **Connect your site** shows your brand's AI Traffic snippet: one line for your site's head. Without it, AI Traffic shows no AI visits, conversions or revenue.\n\n1. Copy the snippet with the copy button.\n2. Paste it just before the head closes on every page of your site, then publish.\n3. Click **Check again** to see whether your home page has it.\n\nSomeone else edits your site? **Email this to my developer** opens your email app with the snippet and these steps; **Copy message** copies the same text.\n\n**Done, go to my dashboard** and **I'll do it later** both open **Prompts › Tracked Prompts** while the first run goes on, with its progress above the table. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab."
         },
         {
           "heading": "Set up your brand with a plan active",
@@ -4031,11 +4035,11 @@
         "how long until results"
       ],
       "plan": "all",
-      "updated": "2026-11-16",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens on the Action Center's **Today** tab, as it does each time you come back. On the cloud you start the free trial or buy a plan first, so the run starts as soon as setup ends. If your workspace set up its brand before choosing a plan, it starts after checkout instead. If you explore the sample brand, Today shows its sample data; once you pick a plan, you set up your own brand and its first run starts."
+          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens on **Prompts › Tracked Prompts**, as it does each time you come back. On the cloud you start the free trial or buy a plan first, so the run starts as soon as setup ends. If your workspace set up its brand before choosing a plan, it starts after checkout instead. If you explore the sample brand, it opens there too, with sample data; once you pick a plan, you set up your own brand and its first run starts."
         },
         {
           "heading": "How long the first run takes",
@@ -4340,7 +4344,9 @@
         "add prompt",
         "bulk import",
         "track prompts",
-        "new prompt"
+        "new prompt",
+        "generate by topic",
+        "track now"
       ],
       "synonyms": [
         "add a question",
@@ -4348,7 +4354,7 @@
         "track a search"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
@@ -4368,11 +4374,11 @@
         },
         {
           "heading": "Add from suggestions",
-          "text": "Switch the list to **Prompt Suggestions**. Add one suggestion with its **+** button, or every listed one with **Add All**."
+          "text": "Switch the list to **Suggestions**, beside the date range. Add one suggestion with its **+** button, or every listed one with **Add All**. Click the pencil beside a suggestion to edit its words first.\n\nTo get prompts for chosen topics, click **By topic**, pick topics, and Ansvisor writes 5 prompts for each. Review and edit them at the top of the list, then click **Add selected**."
         },
         {
           "heading": "When the first results come",
-          "text": "A prompt has no results until it is first asked. **Add prompt** and **Bulk import** start right away when they can. A prompt added from suggestions, or one whose analysis couldn't start, gets its first results with the next daily run. Until then, for its first two days, its row says **Within 24h**."
+          "text": "A prompt has no results until it is first asked. **Add prompt**, **Bulk import** and **Add selected** start right away when they can. A prompt added from suggestions, or one whose analysis couldn't start, gets its first results with the next daily run. Until then, for its first two days, its row says **Within 24h**. To ask sooner, admins and managers click **Track now** on **Tracked Prompts**."
         },
         {
           "heading": "What counts on your plan",
@@ -4555,7 +4561,7 @@
         "volume analysis"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
@@ -4563,7 +4569,7 @@
         },
         {
           "heading": "Run a volume analysis",
-          "text": "Volumes come from an analysis that admins and managers run:\n\n- **Analyze Volumes** the first time;\n- **Analyze New Prompts** for prompts added since, shown while some have no volume;\n- **Refresh Volumes** for newer Google data;\n- **Re-analyze Keywords** to analyze every prompt again, keywords included.\n\nOn plans with a monthly analysis limit, each analysis counts against it, and the toolbar shows how many are left. **Tracked Prompts** also warns when some prompts haven't been analyzed yet."
+          "text": "Volumes come from an analysis that admins and managers run:\n\n- **Analyze Volumes** the first time;\n- **Analyze New Prompts** for prompts added since, shown while some have no volume;\n- **Refresh Volumes** for newer Google data;\n- **Re-analyze Keywords** to analyze every prompt again, keywords included.\n\nOn plans with a monthly analysis limit, each analysis counts against it, and the toolbar shows how many are left. **Tracked Prompts** also says, in a line under its filters, how many prompts aren't analyzed yet, with **Analyze**."
         },
         {
           "heading": "What the tab shows",
@@ -4646,20 +4652,25 @@
         "suggested prompts",
         "source filter",
         "product prompts",
-        "catalog suggestions"
+        "catalog suggestions",
+        "generate by topic",
+        "edit suggestion",
+        "regenerate prompts"
       ],
       "synonyms": [
         "prompt ideas",
         "recommended prompts",
         "new prompt ideas",
-        "suggest queries"
+        "suggest queries",
+        "ai generate prompts",
+        "prompts for a topic"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Prompt Suggestions** gives you new prompts to track. Open it with the switch above the filters on the **Prompts** tab of the **Prompts** page. Each refresh writes up to 25 prompt ideas, each with a topic label and a one-line reason."
+          "text": "**Prompt Suggestions** gives you new prompts to track. Open it with the **Tracked** | **Suggestions** switch, at the left of the date range, on the **Prompts** tab of the **Prompts** page. Each refresh writes up to 25 prompt ideas, each with a topic label and a one-line reason."
         },
         {
           "heading": "Where suggestions come from",
@@ -4676,6 +4687,14 @@
         {
           "heading": "Add, dismiss or refresh suggestions",
           "text": "Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** to dismiss it and **New** to generate a fresh list. **Clear All** asks first, then dismisses every suggestion listed. Admins and managers can add and generate suggestions; analysts can also dismiss them. Those from Search Console or Analytics stay hidden for 30 days once dismissed.\n\nSuggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content.\n\nA prompt added from suggestions gets its first results with the next daily run."
+        },
+        {
+          "heading": "Edit a suggestion before adding it",
+          "text": "Admins and managers can change a suggestion's words before adding it. Click the pencil beside its text, edit it, and press Enter or the tick to keep it; Esc or the cross drops the change. The row then says **Edited**, and **+** and **Add All** add it as you wrote it, under the suggestion's topic."
+        },
+        {
+          "heading": "Generate prompts by topic",
+          "text": "**By topic** (or **Generate by topic** when the list is empty) lets admins and managers pick some of the brand's topics. Ansvisor writes 5 prompts for each one, and lists them at the top of the suggestions, grouped by topic. Untick the ones you don't want and edit any text, then click **Add selected**: each is added under its topic, with the platforms and models your plan allows and the brand's location. **Regenerate** writes them again; **Dismiss** drops them. Nothing is saved until you add them."
         },
         {
           "heading": "Add every suggestion at once",
@@ -4828,7 +4847,14 @@
         "free up a spot",
         "prompt tags",
         "tag filter",
-        "bulk tags"
+        "bulk tags",
+        "export csv",
+        "manage prompts",
+        "plan and usage",
+        "location filter",
+        "analyze volume",
+        "track now",
+        "no answers yet"
       ],
       "synonyms": [
         "prompt list",
@@ -4837,19 +4863,27 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Tracked Prompts** lists every prompt Ansvisor asks the AI engines for your brand, with its results over the date range you pick (24h, 7d, 30d, 90d or custom). It sits on the **Prompts** tab of the **Prompts** page: a switch above the filters picks **Tracked Prompts** or **Prompt Suggestions**. A range you pick carries over to Topics and Query Fan-out."
+          "text": "**Tracked Prompts** lists every prompt Ansvisor asks the AI engines for your brand, with its results over the date range you pick (24h, 7d, 30d, 90d or custom). It sits on the **Prompts** tab of the **Prompts** page: the **Tracked** | **Suggestions** switch, at the left of the date range, picks this list or **Prompt Suggestions**. A range you pick carries over to Topics and Query Fan-out."
+        },
+        {
+          "heading": "Where the page's actions are",
+          "text": "You manage the brand's prompts on this page. Beside the tabs, admins and managers have **Add prompt**. The rest is in the **…** menu (More actions) next to it:\n\n- **Export CSV** downloads the list.\n- **Plan & usage** opens your plan and billing.\n- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, a line under the filters says so, with **Plan & usage**, and the menu says so under **Show usage**.\n\nThe **Location** filter, for a brand tracked in more than one place, sits in the table's filter row, beside **Status** and **Work**."
         },
         {
           "heading": "Prompt statuses",
-          "text": "Each row has a status:\n\n- **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.\n- **Active**: tracked on its schedule.\n- **Paused**: kept, but not tracked.\n- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.\n\nWhile prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the cards under **Plan & usage** (click **Show**), show one status or all of them."
+          "text": "Each row has a status:\n\n- **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.\n- **Active**: tracked on its schedule.\n- **Paused**: kept, but not tracked.\n- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.\n\nWhile prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them."
+        },
+        {
+          "heading": "Track new prompts now",
+          "text": "A prompt gets its first answers with the next tracking run. When some active prompts have no answers yet, a line under the filters says how many, with **Track now**: admins and managers click it to have the AI engines asked now. To track only some, tick their rows and click **Track now** in the bar that appears; it counts only the selected prompts with no answers yet.\n\nThe line then says **Tracking N prompts now**, and **See answers** opens **Visibility**, which shows the run as it goes. Answers arrive over the next minutes. Your plan sets how many runs you can start a day, and how long to wait between them; the message says so when you've reached either."
         },
         {
           "heading": "Rows without figures",
-          "text": "A new prompt has no results until it's first asked. Until then, for its first two days, the row says **Within 24h** in its first figure column, such as Visibility. While a new brand's first tracking runs, it says **Arriving now** instead: that tracking is asking it. A paused prompt says **Paused** there when the Status column is hidden. An older prompt with no results in the range, such as days without a run, shows a dash, as does a range that ended before today."
+          "text": "When some active prompts have no volume yet, a line under the filters says how many are not analyzed yet; admins and managers click **Analyze** to fill in their **Volume** and **Competition**.\n\nA new prompt has no results until it's first asked. Until then, for its first two days, the row says **Within 24h** in its first figure column, such as Visibility. While a new brand's first tracking runs, it says **Arriving now** instead: that tracking is asking it. A paused prompt says **Paused** there when the Status column is hidden. An older prompt with no results in the range, such as days without a run, shows a dash, as does a range that ended before today."
         },
         {
           "heading": "Choose your columns",
@@ -4869,7 +4903,7 @@
         },
         {
           "heading": "Open a prompt or act on it",
-          "text": "Click a prompt's text to open its own page, with its visibility, mentions, citations and per-platform results. For admins and managers, each row's **…** menu offers **Edit**, **Pause tracking** (or **Resume tracking**), **Improve position…**, **Suggest content** (or **Open content suggestion**), **Create content** (or **Open draft**) and **Delete**.\n\n**Export CSV** downloads the list. Estimated volumes in it are marked as estimates, with their confidence and range, so a spreadsheet doesn't read them as counts."
+          "text": "Click a prompt's text to open its own page, with its visibility, mentions, citations and per-platform results. For admins and managers, each row's **…** menu offers **Edit**, **Pause tracking** (or **Resume tracking**), **Improve position…**, **Suggest content** (or **Open content suggestion**), **Create content** (or **Open draft**) and **Delete**.\n\nWhen an Improve action sent for a prompt is still being tracked, its **Work** cell shows a link with the action's code, such as **AC-12 · Improving**. It opens the prompt's positions panel on its **Improve** tab.\n\n**Export CSV** downloads the list. Estimated volumes in it are marked as estimates, with their confidence and range, so a spreadsheet doesn't read them as counts."
         }
       ]
     },
@@ -5495,7 +5529,9 @@
         "connected apps",
         "sign in",
         "action code",
-        "signal code"
+        "signal code",
+        "ai revenue",
+        "conversions"
       ],
       "synonyms": [
         "model context protocol",
@@ -5508,7 +5544,7 @@
         "disconnect app"
       ],
       "plan": "all",
-      "updated": "2026-11-16",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
@@ -5532,7 +5568,7 @@
         },
         {
           "heading": "What you can ask",
-          "text": "Ask in plain words, for example:\n\n- \"What's my visibility score on ChatGPT for the last 7 days?\"\n- \"Which topic has the most prompts?\"\n- \"Who are my top 5 competitors by mention count this month?\"\n- \"Why did our sentiment drop on Gemini?\"\n- \"What is action AC-12?\" Codes are per brand: a code the brand doesn't have gets a plain \"not found\", never a guess.\n- \"What is signal S-07?\" or \"Is example.com cited?\" The assistant reads what you name directly, not from a page of a list.\n\nThe assistant can read visibility, mentions, citations, prompts, AI traffic, saved reports, content, Site Audits, product visibility and the Action Center. Some requests change data, such as accepting a suggested prompt, writing a content draft or recording a task's progress. Assistants are told to make a change only when you ask for it."
+          "text": "Ask in plain words, for example:\n\n- \"What's my visibility score on ChatGPT for the last 7 days?\"\n- \"Which topic has the most prompts?\"\n- \"Who are my top 5 competitors by mention count this month?\"\n- \"Why did our sentiment drop on Gemini?\"\n- \"What is action AC-12?\" Codes are per brand: a code the brand doesn't have gets a plain \"not found\", never a guess.\n- \"What is signal S-07?\" or \"Is example.com cited?\" The assistant reads what you name directly, not from a page of a list.\n- \"Which pages and AI assistants bring us customers and revenue?\"\n\nThe assistant can read visibility, mentions, citations, prompts, AI traffic, saved reports, content, Site Audits, product visibility and the Action Center. Some requests change data, such as accepting a suggested prompt, writing a content draft or recording a task's progress. Assistants are told to make a change only when you ask for it."
         },
         {
           "heading": "What your plan includes",
@@ -5583,15 +5619,15 @@
         "simplify sidebar"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. To change what someone can do, change their role in **Settings › Team**."
+          "text": "**Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. Ansvisor opens on **Prompts › Tracked Prompts**, or on the Action Center's **Today** tab for someone whose menu leaves Prompts off. To change what someone can do, change their role in **Settings › Team**."
         },
         {
           "heading": "Fold a group on your menu",
-          "text": "Click a group's title on the left menu, **Analytics** or **More**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Action Center** sit above the groups, so they don't fold; the Action Center's own tabs fold under it."
+          "text": "Click a group's title on the left menu, **Analytics** or **Execution**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** sits above the groups, so it doesn't fold. **Action Center** is first in **Execution** and folds with it; its own tabs also fold under it."
         },
         {
           "heading": "Who can change menus",
@@ -5855,7 +5891,8 @@
         "start my plan now",
         "ai usage",
         "trial ends",
-        "buy now"
+        "buy now",
+        "trial reminder email"
       ],
       "synonyms": [
         "trial ai limit",
@@ -5865,7 +5902,7 @@
         "ai used up"
       ],
       "plan": "starter",
-      "updated": "2026-11-15",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
@@ -5890,6 +5927,10 @@
         {
           "heading": "Once the credit is used up",
           "text": "AI features stop until the plan starts, now or when the trial ends. Chat keeps working only where it runs on your workspace's own AI key: own keys come with the Enterprise plan, and a key saved before Chat was turned on for your workspace keeps running it for 30 days. Where Chat isn't turned on yet, Agent Chat on your own AI key keeps working."
+        },
+        {
+          "heading": "Before your trial ends",
+          "text": "We email you 3 days before your free trial ends, with what will be charged and a link to change or cancel your plan."
         }
       ]
     },
@@ -6174,11 +6215,11 @@
         "AI readiness check"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **More**, after **Content**. It is on every plan."
+          "text": "**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **Execution**, after **Content**. It is on every plan."
         },
         {
           "heading": "Start an audit",
@@ -6301,11 +6342,11 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next. On a paid plan, and from the second day of a free trial, Ansvisor opens on it each time you come back."
+          "text": "**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next. Each time you come back, Ansvisor opens on **Prompts › Tracked Prompts**; Visibility comes right after Prompts in the **Analytics** group of the menu."
         },
         {
           "heading": "The tabs and how to reach them",

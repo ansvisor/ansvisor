@@ -27,6 +27,9 @@ vi.mock('@/lib/actions/prompt-suggestions', () => actions);
 // The Business Hub dialog's quota line.
 const quota = vi.hoisted(() => ({ getLocationQuota: vi.fn() }));
 vi.mock('@/lib/actions/prompt', () => quota);
+// Generate by topic's picker reads the brand's topics; its own tests are in _topic-prompts.test.
+const topicActions = vi.hoisted(() => ({ getTopics: vi.fn(async () => []) }));
+vi.mock('@/lib/actions/topic', () => topicActions);
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -864,5 +867,121 @@ describe('SuggestionsCard — ChatGPT Business Hub topics (Business Hub plan, PR
     await act(async () => button('Suggest prompts')!.click());
     expect(dialogOpen()).toBe(false);
     expect(document.body.textContent).toContain('Add a topic first');
+  });
+});
+
+/**
+ * A suggestion's text can be edited before it is added (moved from the
+ * brand's Manage prompts page): the pencil opens an input, Enter keeps the
+ * change and Esc drops it; + and Add All then save the edited text. Generate
+ * by topic opens from the card, for admins and managers.
+ */
+describe('SuggestionsCard — editing before adding', () => {
+  const button = (name: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name || b.getAttribute('aria-label') === name,
+    );
+  const rowText = (n: number) => rows()[n].querySelector('p')!.textContent;
+  function type(input: HTMLInputElement, value: string) {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    setValue.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  async function edit(n: number, text: string, key: 'Enter' | 'Escape' = 'Enter') {
+    await act(async () => button(`Edit “Prompt ${n}” before adding`)!.click());
+    const input = container.querySelector<HTMLInputElement>('li input')!;
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe(`Prompt ${n}`);
+    await act(async () => type(input, text));
+    await act(async () => {
+      if (key === 'Enter') input.form!.requestSubmit();
+      else input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+  }
+
+  it('keeps an edited text, and + adds it as edited', async () => {
+    await render(2);
+    await edit(1, '  Prompt one,   better  ');
+    expect(container.querySelector('li input')).toBeNull();
+    expect(rowText(0)).toBe('Prompt one, betterEdited');
+    actions.acceptSuggestion.mockResolvedValue({ promptId: 'p1' });
+    await act(async () =>
+      rows()[0].querySelector<HTMLButtonElement>('[aria-label="Add to tracked prompts"]')!.click(),
+    );
+    expect(actions.acceptSuggestion).toHaveBeenCalledExactlyOnceWith('s1', {
+      text: 'Prompt one, better',
+    });
+  });
+
+  it('drops the change on Esc, and + adds the suggestion as written', async () => {
+    await render(1);
+    await edit(1, 'Something else', 'Escape');
+    expect(container.querySelector('li input')).toBeNull();
+    expect(rowText(0)).toBe('Prompt 1');
+    actions.acceptSuggestion.mockResolvedValue({ promptId: 'p1' });
+    await act(async () => button('Add to tracked prompts')!.click());
+    expect(actions.acceptSuggestion).toHaveBeenCalledExactlyOnceWith('s1');
+  });
+
+  it('won’t keep an empty text', async () => {
+    await render(1);
+    await act(async () => button('Edit “Prompt 1” before adding')!.click());
+    const input = container.querySelector<HTMLInputElement>('li input')!;
+    await act(async () => type(input, '   '));
+    expect(button('Keep this text')!.disabled).toBe(true);
+    await act(async () => input.form!.requestSubmit());
+    expect(container.querySelector('li input')).not.toBeNull();
+  });
+
+  it('Add All adds the edited ones as edited and the rest as written', async () => {
+    await render(3);
+    await edit(2, 'Prompt two, edited');
+    actions.trackSuggestions.mockResolvedValue({ trackedIds: ids(1, 3), skippedIds: [] });
+    await clickAddAll();
+    expect(actions.trackSuggestions).toHaveBeenCalledExactlyOnceWith(ids(1, 3), {
+      texts: { s2: 'Prompt two, edited' },
+    });
+  });
+
+  it('finds an edited suggestion by its new words', async () => {
+    await render(2);
+    await edit(1, 'decaf beans delivered');
+    const search = container.querySelector<HTMLInputElement>(
+      'input[placeholder="Search prompts…"]',
+    )!;
+    await act(async () => type(search, 'decaf'));
+    expect(rows()).toHaveLength(1);
+  });
+
+  it('gives no pencil to those who can’t add prompts', async () => {
+    viewer.role = 'analyst';
+    await render(2);
+    expect(button('Edit “Prompt 1” before adding')).toBeUndefined();
+    expect(button('By topic')).toBeUndefined();
+    viewer.role = 'member';
+    await render(2);
+    expect(button('Edit “Prompt 1” before adding')).toBeUndefined();
+  });
+
+  it('opens Generate by topic from the card and from an empty list', async () => {
+    await render(2);
+    await act(async () => button('By topic')!.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Generate prompts by topic',
+    );
+    expect(topicActions.getTopics).toHaveBeenCalledWith('b1');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(0);
+    expect(button('Generate by topic')).toBeDefined();
+  });
+
+  it('opens the upgrade dialog from By topic on a read-only workspace', async () => {
+    isLocked = true;
+    await render(2);
+    await act(async () => button('By topic')!.click());
+    expect(openUpgrade).toHaveBeenCalledWith('Generating prompts needs a plan');
+    expect(topicActions.getTopics).not.toHaveBeenCalled();
   });
 });

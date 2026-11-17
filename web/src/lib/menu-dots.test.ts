@@ -233,11 +233,16 @@ describe('where a dot shows', () => {
   });
 
   it('puts the strongest of a group on its title', () => {
-    const [, analytics, more] = nav;
+    const [, analytics, execution] = nav;
+    // Execution's dots without the Action Center's, as More's were.
+    const more = { items: execution.items.filter((i) => i.href !== '/dashboard/action-center') };
     const dots = menuDots(night(), manager, ALL);
     expect(groupDot(dots, analytics)?.colour).toBe('yellow');
     expect(groupDot(dots, more)).toEqual({ area: 'content', colour: 'yellow' });
     expect(groupDot(menuDots(night(), analyst, ALL), more)).toBeNull();
+    // Execution's title carries the Action Center's too, first in it.
+    expect(groupDot(dots, execution)).toEqual({ area: 'action-center/actions', colour: 'yellow' });
+    expect(groupDot(menuDots(night(), analyst, ALL), execution)).toBeNull();
     // A folded group with only work going on shows grey; anything else wins.
     const working = menuDots(night({ working: { audit: 'auditRunning' } }), analyst, ALL);
     expect(groupDot(working, more)).toEqual({ area: 'audit', colour: 'grey' });

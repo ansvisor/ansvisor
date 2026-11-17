@@ -1,10 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
-import { ChevronDown, RotateCw } from 'lucide-react';
+import { ChevronUp, RotateCw } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CONTACT_SALES_URL, PLANS, type PlanId } from '@/config/plans';
 import type { LocationQuota } from '@/lib/actions/prompt';
@@ -19,10 +18,10 @@ import { cn } from '@/lib/utils';
  * to Plan & usage. They load on their own (GET /api/prompts/usage), so the
  * table never waits for them.
  *
- * The cards fold under the title, as the sidebar's Prompts item does: closed
- * whenever the page opens, so the table sits right under the controls, and
- * open only when the reader asks. Closed, the title still says when the plan's
- * prompt locations are nearly or fully used.
+ * The cards stay folded away: closed whenever the page opens, so the table
+ * sits right under the controls, and opened from the header's "…" menu
+ * (Show usage). Folded, that menu item still says when the plan's prompt
+ * locations are nearly or fully used.
  */
 
 /** How long a tracked prompt reads as New after it is added. */
@@ -169,6 +168,37 @@ export function locationQuotaFromUsage(usage: PromptUsageSummary): LocationQuota
 
 type Tone = 'normal' | 'warning' | 'full';
 
+/** How full the plan's prompt locations are: amber from 90%, red at or past the limit. */
+function usageTone(usage: PromptUsageSummary): Tone {
+  const limit = usage.plan.locationLimit;
+  if (limit === null) return 'normal';
+  const meter = getPromptUsage(usage.account.locationsUsed, limit);
+  if (meter.state === 'warning') return 'warning';
+  if (meter.state === 'full' || meter.state === 'over') return 'full';
+  return 'normal';
+}
+
+/** Where Plan & usage goes: none on self-hosted, or before the counts are read. */
+export function planUsageHref(state: PromptUsageState): string | undefined {
+  return state.status === 'ready' && state.usage.plan.cta ? PLAN_PAGE : undefined;
+}
+
+/** The plan's prompt locations, once nearly or fully used. */
+export type LocationsWarning = { used: number; limit: number; tone: 'warning' | 'full' };
+
+/**
+ * What the folded cards still say, beside the menu's Show usage: the plan's
+ * prompt locations when nearly or fully used; null well under the limit, with
+ * no limit, or before the counts are read.
+ */
+export function locationsWarning(state: PromptUsageState): LocationsWarning | null {
+  if (state.status !== 'ready') return null;
+  const limit = state.usage.plan.locationLimit;
+  const tone = usageTone(state.usage);
+  if (limit === null || tone === 'normal') return null;
+  return { used: state.usage.account.locationsUsed, limit, tone };
+}
+
 const TONE_TEXT: Record<Tone, string> = {
   normal: '',
   warning: 'text-amber-600 dark:text-amber-500',
@@ -184,25 +214,23 @@ const TONE_BAR: Record<Tone, string> = {
 export function PromptUsageCards({
   state,
   brandName,
-  readOnly,
   prompts,
   filter,
   onFilter,
   onRetry,
+  onHide,
 }: {
   state: PromptUsageState;
   brandName: string | undefined;
-  /** Member role: the subtitle says the table is read-only. */
-  readOnly: boolean;
   /** The brand's prompts, for the New ones the Active card also counts. */
   prompts: StatusFields[];
   filter: PromptStatusFilter;
   onFilter: (filter: PromptStatusFilter) => void;
   onRetry: () => void;
+  /** Folds the cards away again, as the menu's Hide usage does. */
+  onHide: () => void;
 }) {
   const t = useTranslations('prompts.usage');
-  const [open, setOpen] = useState(false);
-  const bodyId = useId();
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
   const n = (value: number) => format.number(value);
@@ -223,12 +251,7 @@ export function PromptUsageCards({
   const limit = plan?.locationLimit ?? null;
   const used = usage?.account.locationsUsed ?? 0;
   const meter = usage && limit !== null ? getPromptUsage(used, limit) : null;
-  const tone: Tone =
-    meter?.state === 'warning'
-      ? 'warning'
-      : meter?.state === 'full' || meter?.state === 'over'
-        ? 'full'
-        : 'normal';
+  const tone: Tone = usage ? usageTone(usage) : 'normal';
 
   const value = (content: ReactNode, className?: string) =>
     usage ? (
@@ -279,72 +302,8 @@ export function PromptUsageCards({
       : t('updatedJustNow');
 
   return (
-    <section className="overflow-hidden rounded-xl border bg-card">
-      {/* The whole bar opens it, as the Content plan's "What AI cites": "Show"
-          and a chevron on the right say so. Plan & usage keeps its own page,
-          so while the pointer is on that link the bar doesn't look clickable. */}
-      <div
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          'group flex cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-3 transition-colors hover:bg-muted/50 has-[a:hover]:bg-transparent',
-          open && 'border-b',
-        )}
-      >
-        <h2 className="text-[15px] font-semibold">{t('title')}</h2>
-        <span className="text-xs text-muted-foreground">
-          {readOnly ? t('subtitleReadOnly') : t('subtitle')}
-        </span>
-        {!open && usage && limit !== null && tone !== 'normal' && (
-          <span
-            className={cn(
-              'rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums',
-              tone === 'full'
-                ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300'
-                : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300',
-            )}
-          >
-            {t('collapsedLocations', { used: n(used), limit: n(limit) })}
-          </span>
-        )}
-        {planHref && (
-          <Link
-            href={planHref}
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              buttonVariants({ variant: 'outline', size: 'sm' }),
-              'ml-auto h-7 text-xs',
-            )}
-          >
-            {t('planAndUsage')}
-          </Link>
-        )}
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={bodyId}
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen((o) => !o);
-          }}
-          className={cn(
-            'flex items-center gap-1 rounded text-xs font-medium text-foreground group-hover:underline group-has-[a:hover]:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-            !planHref && 'ml-auto',
-          )}
-        >
-          <span className="sr-only">{t('title')}: </span>
-          {open ? t('hide') : t('show')}
-          <ChevronDown
-            aria-hidden
-            className={cn('h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')}
-          />
-        </button>
-      </div>
-
-      {/* Kept mounted while closed, so opening shows the counts at once. */}
-      <div
-        id={bodyId}
-        className={cn('grid grid-cols-1 min-[900px]:grid-cols-[2fr_3fr]', !open && 'hidden')}
-      >
+    <section aria-label={t('panelLabel')} className="overflow-hidden rounded-xl border bg-card">
+      <div className="grid grid-cols-1 min-[900px]:grid-cols-[2fr_3fr]">
         <div className="min-w-0 border-b min-[900px]:border-r min-[900px]:border-b-0">
           <GroupHeader name={t('thisBrand')}>
             <span className="truncate text-xs text-muted-foreground">{brandName}</span>
@@ -483,12 +442,7 @@ export function PromptUsageCards({
         </div>
       </div>
 
-      <div
-        className={cn(
-          'flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2.5 text-xs text-muted-foreground',
-          !open && 'hidden',
-        )}
-      >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2.5 text-xs text-muted-foreground">
         <span>{t('footer')}</span>
         {state.status === 'error' ? (
           <button
@@ -502,6 +456,14 @@ export function PromptUsageCards({
         ) : usage ? (
           <span>{updatedLabel}</span>
         ) : null}
+        <button
+          type="button"
+          onClick={onHide}
+          className="ml-auto flex items-center gap-1 rounded font-medium text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          {t('hide')}
+          <ChevronUp aria-hidden className="h-4 w-4 shrink-0" />
+        </button>
       </div>
     </section>
   );
