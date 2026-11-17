@@ -29,6 +29,10 @@ import {
 } from '@/lib/prompt-location-matrix';
 import type { Plan, PlanId } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
+import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt-table-views';
+import { readBrandImprovingActions } from '@/lib/improving-actions';
+import type { ImprovingAction } from '@/lib/improve-outcome';
+import { readUnansweredPromptIds } from '@/lib/prompts-without-answers';
 import {
   analyzeNewPrompts,
   getPromptVisibilitySummaries,
@@ -1013,7 +1017,10 @@ export interface ImportPromptRow {
   idx: number;
   text: string;
   topic: string | null;
-  /** The topic by its id, when the caller has it (Chat): never matched or made by name. */
+  /**
+   * The topic by its id, when the caller has it (Chat, Generate by topic): never
+   * matched or made by name. Only one of this brand's topics; any other id counts as none.
+   */
   topicId?: string;
   platforms: string[];
   models: string[];
@@ -1097,6 +1104,10 @@ export async function importPrompts(
   const keyOf = textKey;
   const seen = new Set((existing ?? []).map((p) => keyOf(p.text as string)));
   const topicIds = new Map((topicRows ?? []).map((t) => [keyOf(t.name as string), t.id as string]));
+  // A topic by its id only when it is one of this brand's, under its name now
+  // (renamed since the caller read it). Any other id counts as none: the row
+  // goes by its name, as one without an id does.
+  const topicNames = new Map((topicRows ?? []).map((t) => [t.id as string, t.name as string]));
 
   const clean = rows.flatMap((r) => {
     const text = r.text.trim().replace(/\s+/g, ' ');
@@ -1112,7 +1123,9 @@ export async function importPrompts(
       ? Array.from(new Set([...filtered.platforms, 'chatgpt-shopping']))
       : stripShoppingWhenDisabled(filtered.platforms, false);
     if (platforms.length === 0 && filtered.models.length === 0) return [];
-    return [{ ...r, text, regions, platforms, models: filtered.models }];
+    const topicId = r.topicId && topicNames.has(r.topicId) ? r.topicId : undefined;
+    const topic = topicId ? topicNames.get(topicId)! : r.topic;
+    return [{ ...r, text, regions, platforms, models: filtered.models, topic, topicId }];
   });
 
   // New topics, once each, alongside the brand's existing ones.
@@ -1489,6 +1502,44 @@ export interface PromptsPageData {
   volumesDegraded: boolean;
   /** True when the visibility summaries failed/timed out — their columns read —. */
   visibilityDegraded: boolean;
+  /**
+   * The prompts with an Improve action still being tracked (PROMPT-008), by
+   * prompt id: the links under the Work chips, with the rows. Empty when
+   * unread: the rows look as they always did.
+   */
+  improving: Record<string, ImprovingAction>;
+  /**
+   * With `withoutAnswers`: the active prompts with no answers yet (Track
+   * now), null when unread; undefined when not asked for.
+   */
+  withoutAnswers?: string[] | null;
+  /**
+   * With `first`: the table's column views (PROMPT-015a), null when unread
+   * (today's columns). Undefined when not asked for.
+   */
+  tableViews?: PromptTableViews | null;
+}
+
+/** What the page asks of getPromptsPageData besides the rows. */
+export interface PromptsPageDataOptions {
+  days?: number;
+  from?: string;
+  to?: string;
+  region?: string;
+  /**
+   * The page's first read for the brand: the column views come with the
+   * rows, so the table opens with its own columns, and no read of them
+   * waits in Next's action queue before it.
+   */
+  first?: boolean;
+  /** The active prompts with no answers yet, for Track now (admins and managers). */
+  withoutAnswers?: boolean;
+  /**
+   * False: leave the volumes out (volumes: [], quota: null). Tracked
+   * Prompts reads them on its own, alongside, so the rows never wait for the
+   * volumes API, and a range change doesn't read them again.
+   */
+  volumes?: boolean;
 }
 
 /**
@@ -1503,10 +1554,18 @@ export interface PromptsPageData {
  * Volumes come from the aeo-server and are the least reliable dependency, so
  * their failure degrades to an empty list instead of blanking the prompt
  * table — the page's core content must never be hostage to the volumes API.
+ * The page says so (volumesDegraded) and reads them again on their own.
+ *
+ * The rest of the table's first view comes in the same Promise.all: the
+ * Improve links under the Work chips, and on request the prompts with no
+ * answers yet (Track now) and the column views. Each degrades to "unread"
+ * alone. The page sends this read through /api/prompts/read, so it isn't
+ * queued behind the menu's and the page's other server actions, and reads
+ * the volumes there too, beside it (`volumes: false`).
  */
 export async function getPromptsPageData(
   brandId: string,
-  opts?: { days?: number; from?: string; to?: string; region?: string },
+  opts?: PromptsPageDataOptions,
 ): Promise<PromptsPageData> {
   // Only the visibility summaries are window- and location-scoped. Prompt
   // sets are the roster itself, and volumes are keyword-level estimates with
@@ -1519,7 +1578,15 @@ export async function getPromptsPageData(
   };
   // The plan-limit numbers aren't here: the usage cards read them from
   // GET /api/prompts/usage, which reads counters instead of counting prompts.
-  const [promptSets, visibility, positionRows, volumesResult] = await Promise.all([
+  const [
+    promptSets,
+    visibility,
+    positionRows,
+    volumesResult,
+    improving,
+    withoutAnswers,
+    tableViews,
+  ] = await Promise.all([
     getPromptSets(brandId),
     // The visibility columns scan the window's answers too: a timeout shows —
     // in them, with a note, rather than blanking the table as if the brand
@@ -1543,13 +1610,38 @@ export async function getPromptsPageData(
       console.error('[prompts] position summaries fetch failed, rendering without them:', err);
       return noPositionRows();
     }),
-    getPromptVolumes(brandId).then(
-      (r) => ({ volumes: r.volumes, quota: r.quota ?? null, degraded: false }),
-      (err) => {
-        console.error('[prompts] volumes fetch failed, rendering without them:', err);
-        return { volumes: [] as PromptVolume[], quota: null, degraded: true };
-      },
-    ),
+    opts?.volumes === false
+      ? { volumes: [] as PromptVolume[], quota: null, degraded: false }
+      : getPromptVolumes(brandId).then(
+          (r) => ({ volumes: r.volumes, quota: r.quota ?? null, degraded: false }),
+          (err) => {
+            console.error('[prompts] volumes fetch failed, rendering without them:', err);
+            return { volumes: [] as PromptVolume[], quota: null, degraded: true };
+          },
+        ),
+    createClient()
+      .then((supabase) => readBrandImprovingActions(supabase, brandId))
+      .then(
+        (byPrompt) => Object.fromEntries(byPrompt) as Record<string, ImprovingAction>,
+        (err) => {
+          console.error('[prompts] Improve actions read failed, rendering without them:', err);
+          return {} as Record<string, ImprovingAction>;
+        },
+      ),
+    opts?.withoutAnswers
+      ? createClient()
+          .then((supabase) => readUnansweredPromptIds(supabase, brandId))
+          .catch((err: unknown) => {
+            console.error('[prompts] prompts without answers read failed:', err);
+            return null;
+          })
+      : undefined,
+    opts?.first
+      ? getPromptTableViews(brandId).catch((err: unknown) => {
+          console.error("[prompts] column views read failed, today's columns:", err);
+          return null;
+        })
+      : undefined,
   ]);
 
   const positions: Record<string, PromptPositionCell> = {};
@@ -1576,6 +1668,9 @@ export async function getPromptsPageData(
     quota: volumesResult.quota,
     volumesDegraded: volumesResult.degraded,
     visibilityDegraded: visibility.degraded,
+    improving,
+    ...(withoutAnswers !== undefined ? { withoutAnswers } : {}),
+    ...(tableViews !== undefined ? { tableViews } : {}),
   };
 }
 

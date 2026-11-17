@@ -153,6 +153,7 @@ const OPEN_ROUTES: Record<string, string> = {
   'stripe/webhook:POST': "Stripe's own calls",
   'traffic/read:POST': 'reads only',
   'visibility/read:POST': 'reads only',
+  'prompts/read:POST': 'reads only (Tracked Prompts: the table and its volumes)',
   // Settings › Connected apps (MCP over OAuth, #2141): Disconnect ends one of
   // the person's own connections.
   'oauth/connections/[id]:DELETE': 'disconnecting an app takes back access',

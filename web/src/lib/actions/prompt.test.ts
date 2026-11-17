@@ -51,6 +51,21 @@ const slowRead = async <T>(read: () => T | Promise<T>): Promise<T> => {
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ getPromptVolumes: vi.fn() }));
 vi.mock('@/lib/actions/tracking', () => ({ getPromptVisibilitySummaries: vi.fn() }));
+// What the table's first read brings besides the rows (getPromptsPageData).
+const extras = vi.hoisted(() => ({
+  readBrandImprovingActions: vi.fn(),
+  readUnansweredPromptIds: vi.fn(),
+  getPromptTableViews: vi.fn(),
+}));
+vi.mock('@/lib/improving-actions', () => ({
+  readBrandImprovingActions: extras.readBrandImprovingActions,
+}));
+vi.mock('@/lib/prompts-without-answers', () => ({
+  readUnansweredPromptIds: extras.readUnansweredPromptIds,
+}));
+vi.mock('@/lib/actions/prompt-table-views', () => ({
+  getPromptTableViews: extras.getPromptTableViews,
+}));
 
 vi.mock('@/lib/guards/plan-guard', () => ({
   getOrgPlan: vi.fn(async () => plan),
@@ -412,8 +427,60 @@ describe('getPromptsPageData', () => {
     positionCalls = [];
     vi.mocked(getPromptVolumes).mockResolvedValue({ volumes: [], quota: {} as VolumeQuota });
     vi.mocked(getPromptVisibilitySummaries).mockResolvedValue({});
+    extras.readBrandImprovingActions.mockReset().mockResolvedValue(new Map());
+    extras.readUnansweredPromptIds.mockReset().mockResolvedValue([]);
+    extras.getPromptTableViews.mockReset().mockResolvedValue({ mine: null, brand: null });
     // The location quota fails here (no brand row), which the page also absorbs.
     vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  const AC12 = { actionId: 'a12', actionNo: 1497, brandNo: 12, avgBefore: null, avgAfter: null };
+  const VIEW = { order: ['topic'], hidden: [] };
+
+  it('brings the Improve links with the rows, and the rest only when asked', async () => {
+    extras.readBrandImprovingActions.mockResolvedValue(new Map([['p1', AC12]]));
+    const page = await getPromptsPageData('b1');
+
+    expect(page.improving).toEqual({ p1: AC12 });
+    expect(extras.readBrandImprovingActions).toHaveBeenCalledWith(expect.anything(), 'b1');
+    expect(page).not.toHaveProperty('withoutAnswers');
+    expect(page).not.toHaveProperty('tableViews');
+    expect(extras.readUnansweredPromptIds).not.toHaveBeenCalled();
+    expect(extras.getPromptTableViews).not.toHaveBeenCalled();
+    // The volumes, as before, unless left out.
+    expect(getPromptVolumes).toHaveBeenCalledOnce();
+  });
+
+  it("reads the columns and Track now's prompts in the same round, on request", async () => {
+    extras.readUnansweredPromptIds.mockResolvedValue(['p1']);
+    extras.getPromptTableViews.mockResolvedValue({ mine: VIEW, brand: null });
+    const page = await getPromptsPageData('b1', { first: true, withoutAnswers: true });
+
+    expect(page.withoutAnswers).toEqual(['p1']);
+    expect(page.tableViews).toEqual({ mine: VIEW, brand: null });
+    expect(extras.getPromptTableViews).toHaveBeenCalledWith('b1');
+  });
+
+  it('leaves the volumes out with volumes: false, without calling the volumes API', async () => {
+    const page = await getPromptsPageData('b1', { volumes: false });
+
+    expect(getPromptVolumes).not.toHaveBeenCalled();
+    expect(page.volumes).toEqual([]);
+    expect(page.quota).toBeNull();
+    expect(page.volumesDegraded).toBe(false);
+    expect(page.promptSets[0].prompts.map((p) => p.id)).toEqual(['p1']);
+  });
+
+  it('keeps the rows when an extra fails, each said unread on its own', async () => {
+    extras.readBrandImprovingActions.mockRejectedValue(new Error('timeout'));
+    extras.readUnansweredPromptIds.mockRejectedValue(new Error('timeout'));
+    extras.getPromptTableViews.mockRejectedValue(new Error('timeout'));
+    const page = await getPromptsPageData('b1', { first: true, withoutAnswers: true });
+
+    expect(page.promptSets[0].prompts.map((p) => p.id)).toEqual(['p1']);
+    expect(page.improving).toEqual({});
+    expect(page.withoutAnswers).toBeNull();
+    expect(page.tableViews).toBeNull();
   });
 
   afterEach(() => {
