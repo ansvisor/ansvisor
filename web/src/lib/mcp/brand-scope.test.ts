@@ -68,6 +68,10 @@ const extra = await import('./visibility-extra-reads');
 const { explainChangeFor } = await import('./why');
 const { createMcpServer } = await import('./server');
 const { listActionsByCodeFor, listActionsPageFor } = await import('./action-center-reads');
+const { getActionScorecardFor } = await import('./learning');
+const { getCatalogSourcesFor, listCatalogProductsFor } = await import('./catalog');
+const productVisibility = await import('./product-visibility');
+const { getPromptLocationsFor } = await import('./prompt-locations');
 const aiConversions = await import('./ai-conversions');
 const { getTrackingSetupFor } = await import('./tracking-setup');
 
@@ -188,6 +192,23 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
       () => explainChangeFor(SELECTED, { brandId: 'b1', metric: 'mention_rate' }),
     ],
     ['listTaskReviewsFor', () => taskReviews.listTaskReviewsFor(SELECTED, { brandId: 'b1' })],
+    // The MCP reads Chat wraps too (chat/registry/mcp-wrapped-reads.ts).
+    ['getActionScorecardFor', () => getActionScorecardFor(SELECTED, { brandId: 'b1' })],
+    ['getCatalogSourcesFor', () => getCatalogSourcesFor(SELECTED, 'b1')],
+    ['listCatalogProductsFor', () => listCatalogProductsFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getShoppingShelfFor',
+      () => productVisibility.getShoppingShelfFor(SELECTED, { brandId: 'b1' }),
+    ],
+    [
+      'getShoppingReadinessFor',
+      () => productVisibility.getShoppingReadinessFor(SELECTED, { brandId: 'b1' }),
+    ],
+    [
+      'getProductAiSaysFor',
+      () => productVisibility.getProductAiSaysFor(SELECTED, { brandId: 'b1', productId: 'p1' }),
+    ],
+    ['getPromptLocationsFor', () => getPromptLocationsFor(SELECTED, { brandId: 'b1' })],
     // Chat's list reads, a page at a time.
     ['listSignalsPageFor', () => listSignalsPageFor(SELECTED, { brandId: 'b1', offset: 50 })],
     ['actionHistoryPageFor', () => data.actionHistoryPageFor(SELECTED, { brandId: 'b1' })],
@@ -339,6 +360,9 @@ describe("a Selected-brands key on a row of a brand that wasn't shared", () => {
     ['getReportFor', () => data.getReportFor(SELECTED, 'row-1'), null],
     ['exportActionFor', () => exportActionFor(SELECTED, 'row-1', 'markdown'), null],
     ['getContentDraftFor', () => content.getContentDraftFor(SELECTED, 'row-1'), null],
+    // A draft's live page and its sources (Chat's get_content_impact, get_content_sources).
+    ['getContentImpactFor', () => content.getContentImpactFor(SELECTED, 'row-1', 30), null],
+    ['getContentSourcesFor', () => content.getContentSourcesFor(SELECTED, 'row-1'), null],
     [
       'getContentDraftPackageFor',
       () => getContentDraftPackageFor(SELECTED, 'row-1'),
@@ -443,6 +467,30 @@ describe('the MCP server for a Selected-brands key', () => {
 
   it.each(lookups)(
     '%s answers a lookup on a brand it may not use as not found, reading none of its rows',
+    async (name, args) => {
+      const hidden = '11111111-1111-4111-8111-111111111111';
+      db.rows.brands = { id: hidden, name: 'Acme' };
+      const client = await connect(SELECTED);
+      const result = await client.callTool({ name, arguments: { brand_id: hidden, ...args } });
+      expect(result.isError).toBe(true);
+      expect(text(result)).toBe('Brand not found');
+      expect(new Set(db.reads)).toEqual(new Set(['brands']));
+      expect(db.rpcs).toEqual([]);
+    },
+  );
+
+  // Customers and revenue from AI visits (Chat's reads, over MCP): no figure, no plan read.
+  const aiRevenue: [string, Record<string, unknown>][] = [
+    ['get_tracking_setup', {}],
+    ['get_ai_conversions', { date_from: '2026-11-01', limit: 10 }],
+    ['get_ai_converting_pages', { date_from: '2026-11-01', offset: 50 }],
+    ['get_ai_pipeline', { date_from: '2026-11-01', date_to: '2026-11-15' }],
+    ['list_ai_visits', { assistant: 'chatgpt.com', search: 'pricing' }],
+    ['get_prompt_conversions', { date_to: '2026-11-15' }],
+  ];
+
+  it.each(aiRevenue)(
+    '%s answers a brand it may not use as not found, reading none of its rows',
     async (name, args) => {
       const hidden = '11111111-1111-4111-8111-111111111111';
       db.rows.brands = { id: hidden, name: 'Acme' };

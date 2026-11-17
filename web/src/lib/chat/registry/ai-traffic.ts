@@ -24,7 +24,8 @@ import { PAGED, pageInput } from './list-paging';
  * converted, an association. Each says "not measured", with the step that
  * sets it up, when its source isn't there. The page's own plan gate and
  * roles: every member reads them; the pipeline comes with the plan that has
- * CRM integrations.
+ * CRM integrations. The MCP Server's tools of the same names read them
+ * through the same functions.
  */
 
 const input = z.object({
@@ -122,7 +123,7 @@ export const AI_TRAFFIC_READS = [
     costClass: 'C1',
     labelKey: 'trackingSetup',
     route: '/dashboard/traffic',
-    mcpTool: null,
+    mcpTool: 'get_tracking_setup',
     specRow: '35',
     inputSchema: z.object({ brand_id: contentUuid.describe('Brand id, from list_brands.') }),
     run: (ctx, input) => getTrackingSetupFor(ctx, { brandId: input.brand_id }),
@@ -139,7 +140,7 @@ export const AI_TRAFFIC_READS = [
     costClass: 'C1',
     labelKey: 'aiConversions',
     route: '/dashboard/traffic',
-    mcpTool: null,
+    mcpTool: 'get_ai_conversions',
     specRow: '35',
     inputSchema: paged,
     run: (ctx, input) => getAiConversionsFor(ctx, args(input)),
@@ -156,7 +157,7 @@ export const AI_TRAFFIC_READS = [
     costClass: 'C1',
     labelKey: 'aiConvertingPages',
     route: '/dashboard/traffic',
-    mcpTool: null,
+    mcpTool: 'get_ai_converting_pages',
     specRow: '35',
     inputSchema: paged,
     run: (ctx, input) => getAiConvertingPagesFor(ctx, args(input)),
@@ -173,7 +174,7 @@ export const AI_TRAFFIC_READS = [
     costClass: 'C1',
     labelKey: 'aiPipeline',
     route: '/dashboard/traffic',
-    mcpTool: null,
+    mcpTool: 'get_ai_pipeline',
     specRow: '35',
     inputSchema: period,
     run: (ctx, input) => getAiPipelineFor(ctx, args(input)),
@@ -190,7 +191,7 @@ export const AI_TRAFFIC_READS = [
     costClass: 'C1',
     labelKey: 'aiVisits',
     route: '/dashboard/traffic',
-    mcpTool: null,
+    mcpTool: 'list_ai_visits',
     specRow: '35',
     inputSchema: paged.extend({
       assistant: z.string().max(64).optional().describe("An assistant's source: chatgpt.com."),
@@ -211,7 +212,7 @@ export const AI_TRAFFIC_READS = [
     costClass: 'C1',
     labelKey: 'promptConversions',
     route: '/dashboard/traffic',
-    mcpTool: null,
+    mcpTool: 'get_prompt_conversions',
     specRow: '35',
     inputSchema: paged,
     run: (ctx, input) => getPromptConversionsFor(ctx, args(input)),

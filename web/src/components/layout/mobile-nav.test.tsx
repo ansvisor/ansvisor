@@ -85,8 +85,9 @@ const { useBrandStore } = await import('@/stores/use-brand-store');
 const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
 
 /**
- * The mobile menu leaves the viewer's hidden sections off, the active brand's
- * Prompts link with the Prompts section.
+ * The mobile menu leaves the viewer's hidden sections off. The brand's
+ * prompts are managed on the Prompts page, which the menu's Prompts item
+ * opens: there is no second Prompts link to the brand's old page.
  */
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -135,14 +136,17 @@ async function open(hidden: string[], chatOn = false, isDemo = false, adsOn = fa
 const link = (href: string) => document.querySelector(`a[href="${href}"]`);
 
 describe('MobileNav', () => {
-  it('shows every section, and the brand’s prompts, when nothing is hidden', async () => {
+  it('shows every section when nothing is hidden, the brand’s prompts on the Prompts page', async () => {
     await open([]);
     expect(link('/dashboard/prompts')).not.toBeNull();
     expect(link('/dashboard/mentions')).not.toBeNull();
-    expect(link('/dashboard/brands/brand-1/prompts')).not.toBeNull();
+    expect(link('/dashboard/brands/brand-1/prompts')).toBeNull();
+    // One Prompts entry, the menu's own.
+    const prompts = [...document.querySelectorAll('a')].filter((a) => a.textContent === 'Prompts');
+    expect(prompts.map((a) => a.getAttribute('href'))).toEqual(['/dashboard/prompts']);
   });
 
-  it('leaves hidden sections off, the brand’s prompts with Prompts', async () => {
+  it('leaves hidden sections off', async () => {
     await open(['prompts', 'mentions']);
     expect(link('/dashboard/action-center')).not.toBeNull();
     expect(link('/dashboard/prompts')).toBeNull();

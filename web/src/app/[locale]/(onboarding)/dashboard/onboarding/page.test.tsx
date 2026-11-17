@@ -1264,7 +1264,7 @@ describe('setup after purchase', () => {
     await act(async () => button('Start tracking with 1 competitor')!.click());
     expect(finishSetup).toHaveBeenCalledTimes(1);
     expect(finishSetup).toHaveBeenCalledWith('b1');
-    expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+    expect(window.location.href).toBe('/dashboard?jobId=job1');
     expect(toast.success).toHaveBeenCalledWith('Setup complete! Your first tracking is starting.');
     expect(text()).not.toContain('Choose how to start');
     // The page writes nothing to the profile: the server marks onboarding completed.
@@ -1336,7 +1336,7 @@ describe('setup after purchase', () => {
     vi.stubGlobal('location', { href: '' });
     await act(async () => button('Start tracking with 1 competitor')!.click());
     expect(finishSetup).toHaveBeenCalledWith('b1');
-    expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+    expect(window.location.href).toBe('/dashboard?jobId=job1');
   });
 
   it('keeps a workspace renamed since, or named after a brand, as it is', async () => {
@@ -1373,7 +1373,22 @@ describe('setup after purchase', () => {
     vi.stubGlobal('location', { href: '' });
     await act(async () => button('Start tracking with 1 competitor')!.click());
     expect(finishSetup).toHaveBeenCalledWith('b1');
-    expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+    expect(window.location.href).toBe('/dashboard?jobId=job1');
+  });
+
+  it('lands the sample brand’s explorer, back from buying, on the dashboard with the run too', async () => {
+    // The sample brand explored, then a plan bought from it, and the own
+    // brand's setup stopped at its competitors.
+    db.hasDemo = true;
+    db.ownBrand = true;
+    db.orgBrandCount = 1;
+    db.promptSets = [{ id: 's1' }];
+    await render();
+    expect(text()).toContain('Add your competitors');
+    vi.stubGlobal('location', { href: '' });
+    await act(async () => button('Start tracking with 1 competitor')!.click());
+    expect(finishSetup).toHaveBeenCalledWith('b1');
+    expect(window.location.href).toBe('/dashboard?jobId=job1');
   });
 
   it('resumes it the same for an onboarding not finished (a new account back from Checkout)', async () => {
@@ -1479,7 +1494,7 @@ describe('setup after purchase', () => {
     await render();
     vi.stubGlobal('location', { href: '' });
     await act(async () => button('Start tracking with 1 competitor')!.click());
-    expect(window.location.href).toBe('/dashboard/action-center/today');
+    expect(window.location.href).toBe('/dashboard');
   });
 
   it('goes to the plan step, as before, when the plan is no longer active at the end', async () => {
@@ -1683,7 +1698,7 @@ describe('setup after purchase', () => {
         container.querySelector<HTMLButtonElement>('[aria-label="Copy tracking script"]')!.click(),
       );
       await act(async () => button('Done, go to my dashboard')!.click());
-      expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+      expect(window.location.href).toBe('/dashboard?jobId=job1');
       expect(track).toHaveBeenCalledWith('onboarding_connect_site_done', {
         copied: true,
         setup_after_purchase: true,
@@ -1696,7 +1711,7 @@ describe('setup after purchase', () => {
       await finish();
       expect(text()).toContain('Connect your site');
       await act(async () => button("I'll do it later")!.click());
-      expect(window.location.href).toBe('/dashboard/action-center/today');
+      expect(window.location.href).toBe('/dashboard');
       expect(track).toHaveBeenCalledWith('onboarding_connect_site_skipped', {
         copied: false,
         setup_after_purchase: true,
@@ -1710,7 +1725,7 @@ describe('setup after purchase', () => {
       expect(stepDots()).toHaveLength(5);
       vi.stubGlobal('location', { href: '' });
       await act(async () => button('Start tracking with 1 competitor')!.click());
-      expect(window.location.href).toBe('/dashboard/action-center/today?jobId=job1');
+      expect(window.location.href).toBe('/dashboard?jobId=job1');
       expect(toast.success).toHaveBeenCalledWith(
         'Setup complete! Your first tracking is starting.',
       );

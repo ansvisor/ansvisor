@@ -53,10 +53,10 @@ export function menuSectionEntries(items: readonly NavItem[]): MenuSectionEntry[
 }
 
 /**
- * Every section of the left menu, in its order: Chat, the Action Center and
- * Agents under it, then Analytics' and More's. Agents keeps Agent Center's
- * section name, so every menu saved for a role, a person or a work area
- * keeps working.
+ * Every section of the left menu, in its order: Chat, then Analytics', then
+ * Execution's, the Action Center and Agents under it first. Agents keeps
+ * Agent Center's section name, so every menu saved for a role, a person or a
+ * work area keeps working.
  */
 export const MENU_SECTIONS: string[] = menuSectionEntries(
   dashboardNav.flatMap((group) => group.items),
