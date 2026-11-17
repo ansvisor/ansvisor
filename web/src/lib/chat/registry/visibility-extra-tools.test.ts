@@ -231,12 +231,14 @@ describe("the server's scope on them", () => {
       kind: 'read',
       input: { date_from: '2026-10-18', date_to: '2026-11-16', model: 'chatgpt-web' },
     });
+    // The Topics tab and AI Referral Traffic cut a preset as their pages do: the last
+    // 7 × 24 hours to today (#2462's page periods).
     for (const name of ['get_topics_overview', 'get_ai_bots', 'get_gsc_pages']) {
       expect(
         await scopeRead(chatTool(name)!, { brand_id: BRAND }, facts({ range: '7d' })),
         name,
       ).toMatchObject({
-        input: { date_from: '2026-11-10', date_to: '2026-11-16' },
+        input: { date_from: '2026-11-09T12:00:00.000Z', date_to: '2026-11-16' },
       });
     }
     // The head-to-head reads every answer: no period is set on it.
