@@ -25,6 +25,7 @@ import type { UsageTone } from '@/lib/content-usage';
 import { formatMonthDay, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { isCloud } from '@/config/plans';
 
 /** Black under 80%, amber from 80%, red once used up (AI usage spec §4). */
 const METER_CLASS: Record<UsageTone, string> = {
@@ -71,28 +72,43 @@ const ALIGN_CLASS = { start: 'sm:items-start', end: 'sm:items-end' } as const;
  * page's own header buttons line up with them when they are one too and sit
  * where `align` puts them: at the top, on the title's line (most pages), or
  * at the bottom, beside controls with a label above them (a date range).
+ * `reserveMeter` keeps the meter's room on the row from a phone's width up
+ * whatever the read says, for a page whose tabs share the header: the row
+ * looks the same while the read runs, once it lands, and when there is
+ * nothing to meter, on every tab.
  */
 export function HeaderWithAiUsage({
   children,
   banner = true,
   askChat = true,
   align = 'start',
+  reserveMeter = false,
   className,
 }: {
   children: ReactNode;
   banner?: boolean;
   askChat?: boolean;
   align?: 'start' | 'end';
+  /** Keep the meter's room on the row even when it shows nothing (Ansvisor Cloud only). */
+  reserveMeter?: boolean;
   /** On the header row: room for a drawer's close button, for one. */
   className?: string;
 }) {
+  const meter = <AiUsageMeter className="self-end sm:self-auto" />;
   return (
     <>
       <div
         className={cn('flex flex-col gap-2 sm:flex-row sm:gap-3', ALIGN_CLASS[align], className)}
       >
         <div className="min-w-0 sm:flex-1">{children}</div>
-        <AiUsageMeter className="self-end sm:self-auto" />
+        {reserveMeter && isCloud() ? (
+          // On a phone the meter goes under the row as it always does.
+          <div data-ai-meter-slot className="contents sm:flex sm:min-w-[8.5rem] sm:justify-end">
+            {meter}
+          </div>
+        ) : (
+          meter
+        )}
         {askChat && <AskChatButton className="self-end sm:self-auto" />}
       </div>
       {banner && <AiUsageBanner />}

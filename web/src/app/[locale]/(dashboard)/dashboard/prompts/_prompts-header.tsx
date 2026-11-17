@@ -280,10 +280,13 @@ export function LocationsWarningLine({
 }
 
 /**
- * "● 2 prompts not analyzed yet · Analyze": active prompts without a volume,
- * whose Volume and Competition stay empty until analyzed. Analyze runs the
- * volume analysis for them, as the banner's button did; it is left out for
- * members, and says so when the month's analyses are used up.
+ * "● Volume and competition missing for 2 prompts · Analyze": active prompts
+ * without a volume, whose Volume and Competition stay empty until their
+ * volume is analyzed. The prompts themselves are tracked (visibility,
+ * mentions, citations, positions): only these two columns are missing.
+ * Analyze runs the volume analysis for them, as the banner's button did, and
+ * says so to a screen reader; it is left out for members, and says so when
+ * the month's analyses are used up.
  */
 export function NotAnalyzedLine({
   count,

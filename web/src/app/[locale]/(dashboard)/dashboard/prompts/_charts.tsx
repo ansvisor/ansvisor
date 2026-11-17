@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
 import { formatCompactNumber } from '@/lib/format';
+import { getPlatformColor } from '@/lib/platform-colors';
 import { formatEstimateRange, scaleEstimate } from '@/lib/volume-estimate';
 import { AI_PLATFORM_SHARES } from './_platform-shares';
 
@@ -64,7 +65,7 @@ export function PlatformVolumeChart({
     name: p.name,
     share: p.share,
     volume: Math.round(totalVolume * p.share),
-    color: p.color,
+    color: getPlatformColor(p.name),
   })).sort((a, b) => b.volume - a.volume);
 
   return (

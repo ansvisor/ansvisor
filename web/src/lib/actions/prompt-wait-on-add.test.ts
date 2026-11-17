@@ -268,6 +268,64 @@ describe('importPrompts (Add prompt dialog, Bulk import)', () => {
   });
 });
 
+describe('importPrompts: a topic by its id (Generate by topic)', () => {
+  const topics = () => fake.db.tables.topics as Row[];
+  /** The rows import_prompts was sent, as it files them. */
+  const sent = () => {
+    const rows: Row[] = [];
+    const run = fake.db.rpcs.import_prompts;
+    fake.db.rpcs.import_prompts = (args) => {
+      rows.push(...(args.p_rows as Row[]));
+      return run(args);
+    };
+    return rows;
+  };
+  const row = (text: string, topic: string, topicId?: string) => ({
+    idx: 0,
+    text,
+    topic,
+    ...(topicId ? { topicId } : {}),
+    platforms: ['chatgpt-web'],
+    models: [],
+    regions: ['US'],
+  });
+
+  it('files it under that topic, by the name it has now, when it was renamed since', async () => {
+    // Pricing was renamed Plans after the prompts were written, and another topic took its name.
+    topics()[0].name = 'Plans';
+    topics().push({ id: 'topic-3', brand_id: BRAND, name: 'Pricing', is_active: true });
+    const rows = sent();
+
+    await importPrompts(BRAND, [row('best crm plans', 'Pricing', TOPIC)]);
+
+    expect(rows).toEqual([
+      expect.objectContaining({ text: 'best crm plans', topic_id: TOPIC, category: 'Plans' }),
+    ]);
+    // No topic made from the old name.
+    expect(topics()).toHaveLength(3);
+  });
+
+  it('goes by the name when the id isn’t one of this brand’s topics', async () => {
+    const rows = sent();
+
+    // The organization's other brand's topic, of the same name: this brand's Pricing.
+    await importPrompts(BRAND, [row('best crm', 'Pricing', 'topic-2')]);
+    expect(rows[0]).toMatchObject({ topic_id: TOPIC, category: 'Pricing' });
+  });
+
+  it('goes by the name without an id: the brand’s topic of that name, else a new one', async () => {
+    const rows = sent();
+
+    await importPrompts(BRAND, [row('best crm', 'pricing ')]);
+    expect(rows[0]).toMatchObject({ topic_id: TOPIC });
+
+    await importPrompts(BRAND, [row('crm support', 'Support')]);
+    const made = topics().find((t) => t.name === 'Support');
+    expect(made).toMatchObject({ brand_id: BRAND });
+    expect(rows[1]).toMatchObject({ topic_id: made!.id, category: 'Support' });
+  });
+});
+
 describe('addTopicPrompts (Chat add_prompts)', () => {
   it('returns the added and the waiting ones apart', async () => {
     prompts().push(tracked('set-2'));

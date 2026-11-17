@@ -1,13 +1,14 @@
 /**
  * Track now (moved from the brand's Manage prompts page, where it was
- * Analyze Prompts): the brand's active prompts with no answers yet, and a
- * tracking run for some of them now, through the same API calls that page
- * made. The run is the API's "new prompts only" one: it leaves out any prompt
- * that has answers by then, and it is for admins and managers, on an active
- * plan, within the plan's on-demand runs.
+ * Analyze Prompts): a tracking run for some of the brand's active prompts
+ * with no answers yet, through the same API call that page made. The run is
+ * the API's "new prompts only" one: it leaves out any prompt that has
+ * answers by then, and it is for admins and managers, on an active plan,
+ * within the plan's on-demand runs. Which prompts have no answers comes with
+ * the Tracked Prompts table's read (getPromptsPageData, readUnansweredPromptIds).
  *
- * Plain async functions run in the browser, not server actions: they reach
- * the API through BROWSER_API_BASE_URL with the person's session.
+ * A plain async function run in the browser, not a server action: it
+ * reaches the API through BROWSER_API_BASE_URL with the person's session.
  */
 
 import { createClient } from '@/lib/supabase/client';
@@ -23,27 +24,6 @@ async function authHeaders(): Promise<Record<string, string> | null> {
     Authorization: `Bearer ${session.access_token}`,
     'ngrok-skip-browser-warning': '1',
   };
-}
-
-/**
- * The ids of the brand's active prompts that have no answers yet (GET
- * /api/tracking/unanalyzed), or null when they couldn't be read.
- */
-export async function readPromptsWithoutAnswers(brandId: string): Promise<string[] | null> {
-  try {
-    const headers = await authHeaders();
-    if (!headers) return null;
-    const res = await fetch(
-      `${BROWSER_API_BASE_URL}/api/tracking/unanalyzed/${encodeURIComponent(brandId)}`,
-      { headers },
-    );
-    if (!res.ok) return null;
-    const body = (await res.json().catch(() => null)) as { prompts?: { id?: unknown }[] } | null;
-    if (!Array.isArray(body?.prompts)) return null;
-    return body.prompts.map((p) => p?.id).filter((id): id is string => typeof id === 'string');
-  } catch {
-    return null;
-  }
 }
 
 export type TrackNowResult =

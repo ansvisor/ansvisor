@@ -14511,11 +14511,11 @@
         "all": "All Locations"
       },
       "notAnalyzed": {
-        "count": "{count, plural, one {# prompt not analyzed yet} other {# prompts not analyzed yet}}",
+        "count": "Volume and competition missing for {count, plural, one {# prompt} other {# prompts}}",
         "hint": "Run volume analysis to fill in their Volume & Competition.",
         "limitHint": "Their Volume & Competition stay empty until analyzed. Your monthly volume analysis limit is reached: upgrade your plan to analyze more.",
         "analyze": "Analyze",
-        "analyzeLabel": "{count, plural, one {Analyze # prompt} other {Analyze # prompts}}",
+        "analyzeLabel": "Analyze volume and competition",
         "analyzing": "Analyzing…",
         "analyzingProgress": "Analyzing {done}/{total}…",
         "limitReached": "Monthly limit reached"
