@@ -28,7 +28,7 @@ const windowOf = (days: number) => ({
  * (00470, lib/brand-integrations.ts) and the brand has its property picked.
  * The brand is the caller's (brandAllowed, before this).
  */
-async function sourcesOf(brandId: string) {
+export async function sourcesOf(brandId: string) {
   const [brand, integrations] = await Promise.all([
     supabaseAdmin
       .from('brands')
@@ -50,7 +50,10 @@ const daysBefore = (day: string, days: number) =>
   new Date(Date.parse(`${day}T00:00:00Z`) - days * DAY_MS).toISOString().slice(0, 10);
 
 /** The last day a Google source reported for the brand; null with none. */
-async function lastReportedDay(table: 'gsc_query_stats' | 'ga_ai_traffic_stats', brandId: string) {
+export async function lastReportedDay(
+  table: 'gsc_query_stats' | 'ga_ai_traffic_stats',
+  brandId: string,
+) {
   const { data, error } = await supabaseAdmin
     .from(table)
     .select('date')

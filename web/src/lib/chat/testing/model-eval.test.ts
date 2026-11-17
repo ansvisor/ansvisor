@@ -40,7 +40,7 @@ const failed = (id: string, over: Partial<EvalRun>) =>
 describe('the test set (W4-35)', () => {
   it("covers CHAT-05's rows that depend on the model, the safety rows and reading all a page shows, once each", () => {
     expect(EVAL_SCENARIOS.map((s) => s.row)).toEqual([
-      1, 3, 5, 6, 13, 18, 19, 24, 27, 31, 32, 33, 34, 35, 36, 37,
+      1, 3, 5, 6, 13, 18, 19, 24, 27, 31, 32, 33, 34, 35, 36, 37, 38,
     ]);
     expect(new Set(EVAL_SCENARIOS.map((s) => s.id)).size).toBe(EVAL_SCENARIOS.length);
   });

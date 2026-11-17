@@ -40,15 +40,20 @@ export interface GettingStartedStepDef {
 
 const INTEGRATIONS_HREF = '/dashboard/settings?tab=integrations';
 
-/** The set-up steps, in order. */
+/**
+ * The set-up steps, in order: Today's card lists the first two still open.
+ * The AI Traffic snippet comes first: AI visits, conversions and revenue
+ * stay empty without it, and setup's optional "Connect your site" leaves it
+ * open for whoever skipped it (lib/onboarding/connect-site.ts).
+ */
 export const GETTING_STARTED_STEPS: readonly GettingStartedStepDef[] = [
+  { key: 'snippet', stage: 'setup', href: '/dashboard/traffic' },
   { key: 'kpis', stage: 'setup', href: '/dashboard/action-center/kpis' },
   { key: 'competitors', stage: 'setup', href: '/dashboard/competitors' },
   { key: 'topics', stage: 'setup', href: '/dashboard/prompts/topics' },
   { key: 'prompts', stage: 'setup', href: '/dashboard/prompts/suggestions' },
   { key: 'gsc', stage: 'setup', href: INTEGRATIONS_HREF, optional: true },
   { key: 'ga', stage: 'setup', href: INTEGRATIONS_HREF, optional: true },
-  { key: 'snippet', stage: 'setup', href: '/dashboard/traffic' },
 ];
 
 export const MIN_COMPETITORS = 3;

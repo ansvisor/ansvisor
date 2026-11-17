@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import { revalidatePath } from 'next/cache';
 import type { Competitor } from '@/types';
 import { assertWritable } from '@/lib/subscription-guard';
@@ -246,7 +247,8 @@ export async function getCompetitorTimeline(
   if (!z.guid().safeParse(brandId).success || !z.guid().safeParse(competitorId).success) {
     throw new Error('invalid');
   }
-  const supabase = await createClient();
+  // dbClient: the person's own client; Chat's read runs it with the service role (asService).
+  const supabase = await dbClient();
   const now = new Date();
   const since = timelineSince(now);
   type DayRow = { day: string; mention_answers: number | null };

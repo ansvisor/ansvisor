@@ -100,7 +100,7 @@ describe('connectionRecords', () => {
     });
     expect(byKey(records, 'google_analytics')).toMatchObject({
       status: 'not_connected',
-      uses: ['/traffic'],
+      uses: ['/traffic', '/ai-revenue'],
       suggested: true,
     });
   });

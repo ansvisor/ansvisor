@@ -86,12 +86,15 @@ export function namesRows(toolName: string, input: Record<string, unknown>): boo
 
 /**
  * The days a `days` read covers when the model names none: Google's
- * reads keep their pages' 28 days; anything else DEFAULT_RANGE_DAYS.
+ * reads keep their pages' 28 days, the fan-out light read its tab's 7;
+ * anything else DEFAULT_RANGE_DAYS.
  */
 export const DAYS_DEFAULTS: Readonly<Record<string, number>> = {
   get_gsc_summary: 28,
   get_gsc_queries: 28,
   get_ga_summary: 28,
+  // The Query Fan-outs tab opens on its last 7 days.
+  get_query_fanouts: 7,
 };
 
 /** The most days back a `days` read reaches, the Query Fan-out tab's 90 (prompt-options.ts). */
