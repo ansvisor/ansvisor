@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatStep } from '@/lib/chat/events';
-import { dataUsed, doneSteps, statusLine } from './run-view';
+import { dataUsed, doneSteps, listedSteps, statusLine, stepsSummary } from './run-view';
 
-/** What an answer shows of its steps: the status line, ✓ chips and Data used (W1-14). */
+/** What an answer shows of its steps: the live line, the steps line and Data used (W1-14). */
 
 const step = (over: Partial<ChatStep> & Pick<ChatStep, 'n' | 'kind' | 'label'>): ChatStep => ({
   status: 'done',
@@ -71,8 +71,13 @@ describe('doneSteps and dataUsed', () => {
     step({ n: 8, kind: 'read', label: 'Read Action Center', status: 'running' }),
   ];
 
-  it('chips every step done but thinking, in order', () => {
+  it('takes every step done but thinking, in order', () => {
     expect(doneSteps(steps).map((s) => s.n)).toEqual([2, 3, 4, 5, 6]);
+  });
+
+  it('lists every step but thinking and questions, whatever its status', () => {
+    const ask = step({ n: 9, kind: 'ask', label: 'Asked which page', status: 'done' });
+    expect(listedSteps([ask, ...steps]).map((s) => s.n)).toEqual([2, 3, 4, 5, 6, 7, 8]);
   });
 
   it('takes a read without "Read …" words (going to a page of the app) as no source', () => {
@@ -110,5 +115,76 @@ describe('doneSteps and dataUsed', () => {
         step({ n: 2, kind: 'read', label: 'Read Action History', rowCount: 0 }),
       ]),
     ).toEqual([{ label: 'Action Center' }, { label: 'Action History' }]);
+  });
+});
+
+describe('stepsSummary', () => {
+  const read = (n: number, label: string, over: Partial<ChatStep> = {}) =>
+    step({ n, kind: 'read', label, rowCount: 50, ...over });
+  const check = step({ n: 9, kind: 'check', label: 'Checked facts' });
+
+  it('has nothing to say before a step is done', () => {
+    expect(stepsSummary([])).toBeNull();
+    expect(stepsSummary([step({ n: 1, kind: 'thinking', label: 'Thinking' })])).toBeNull();
+    expect(stepsSummary([read(1, 'Read Citations', { status: 'running' })])).toBeNull();
+  });
+
+  it('counts the sources and pages read, each once, and names a fact check after them', () => {
+    expect(
+      stepsSummary([
+        read(1, 'Read Citations'),
+        read(2, 'Read Mentions'),
+        read(3, 'Read Citations'),
+      ]),
+    ).toEqual({ kind: 'reads', sources: 2, pages: 0, checked: false });
+    expect(
+      stepsSummary([
+        read(1, 'Read Citations'),
+        step({ n: 2, kind: 'open_page', label: 'Opened ansvisor.com/pricing' }),
+        check,
+      ]),
+    ).toEqual({ kind: 'reads', sources: 1, pages: 1, checked: true });
+    // Memory is a source, by its subject.
+    expect(
+      stepsSummary([
+        read(1, 'Used memory', { rowCount: 3, scope: { subject: 'Memory', unit: 'items' } }),
+        read(2, 'Read Citations'),
+      ]),
+    ).toEqual({ kind: 'reads', sources: 2, pages: 0, checked: false });
+  });
+
+  it('counts no source and no page when every step done is a check, and names the check', () => {
+    expect(
+      stepsSummary([
+        step({ n: 1, kind: 'check', label: 'Read your choices in the editor' }),
+        check,
+      ]),
+    ).toEqual({ kind: 'reads', sources: 0, pages: 0, checked: true });
+  });
+
+  it('says one step, or one source read twice, in its own words', () => {
+    const one = read(1, 'Read Citations');
+    expect(stepsSummary([one])).toEqual({ kind: 'one', step: one, checked: false });
+    expect(stepsSummary([one, check])).toEqual({ kind: 'one', step: one, checked: true });
+    expect(stepsSummary([one, read(2, 'Read Citations')])).toEqual({
+      kind: 'one',
+      step: one,
+      checked: false,
+    });
+  });
+
+  it('counts the steps when they are not all reads, or a read named no source', () => {
+    expect(
+      stepsSummary([
+        read(1, 'Read Citations'),
+        read(2, 'Read Mentions'),
+        step({ n: 3, kind: 'skill', label: 'Used skill: FAQ + schema writer' }),
+        check,
+      ]),
+    ).toEqual({ kind: 'steps', count: 4 });
+    expect(stepsSummary([read(1, 'Read Citations'), read(2, 'Opened a page')])).toEqual({
+      kind: 'steps',
+      count: 2,
+    });
   });
 });

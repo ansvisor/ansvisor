@@ -1564,7 +1564,16 @@
         "rows on screen",
         "my sort",
         "my search",
-        "open tab"
+        "open tab",
+        "ask about today",
+        "today's focus",
+        "first focus card",
+        "my agents",
+        "agent runs",
+        "what did my agent do",
+        "action history",
+        "closed actions",
+        "signals summary"
       ],
       "synonyms": [
         "assistant",
@@ -1617,7 +1626,7 @@
         },
         {
           "heading": "Stop or steer",
-          "text": "While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the line with the steps says how long it worked, such as **Stopped after 41s · 5 steps**.\n\nYou can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example \"only blog pages\".\n\nThe line under the box says what Enter and Esc do now, such as **Answering · Esc to stop**, after the run mode and the model."
+          "text": "While Chat works, the arrow turns into Stop: click it or press Esc. Steps it already finished stay, and so does the answer so far. The step it was on shows **Stopped**, and the grey steps line says how long it worked, such as **Stopped after 41s · 5 steps**.\n\nYou can type while it works. Enter then stops the run and sends what you typed as the next message, so you can redirect it, for example \"only blog pages\".\n\nThe line under the box says what Enter and Esc do now, such as **Answering · Esc to stop**, after the run mode and the model."
         },
         {
           "heading": "When Chat asks you",
@@ -1654,6 +1663,10 @@
         {
           "heading": "Ask about your actions",
           "text": "Ask \"What are the most important actions?\" or \"What should I do first?\" and Chat reads the brand's open actions (New, In progress and On hold) in Priority Score order, up to 50 at a time, with how many there are in all. When there are more than it read, it reads the next ones too, or says how many it judged, such as \"the top 50 of 53\".\n\nChat names each action by its title, with its number after it as a link: **Recover lost citations on 3 prompts** (AC-12). Actions that are alike are grouped by what they share, each with its own number.\n\nAsk about an action by its code, such as \"What is AC-12?\", and Chat reads that action, whatever its status. A code the brand doesn't have gets a plain \"not found\" (codes are per brand), never a guess."
+        },
+        {
+          "heading": "Ask about Today, your agents and their runs, and History over any range",
+          "text": "Chat reads what these pages show you:\n\n- **Today**: your focus cards in their order, **Since yesterday**, **Waiting for you**, where you stand and, on Mondays, **Last week**. Asked on Today, \"What should I do first?\" means your first focus card. Chat reads your own Today, so it answers in your chats, not in an agent's run.\n- **Agents**: your agents by tab (**Mine**, **Workspace**, **Paused**, **Archived**), each with its schedule, mode and last run, and one agent's runs on this brand: when each ran, how it ended, and which wait for your OK. Only agents you can see.\n- **History**: the actions of any period, with the page's filters (status, type, priority, source, search) and its summary cards, newest first.\n- **Signals**: the summary cards over a period."
         },
         {
           "heading": "Work through your Action Center tasks",
@@ -1761,15 +1774,19 @@
         },
         {
           "heading": "Watch the work",
-          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, such as the period and platforms a read covered, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both."
+          "text": "While Chat works, a grey line at the end of the answer says what it is doing now, such as \"Thinking…\", \"Reading Citations…\" or \"Writing the answer…\". A soft light moves across it, and from 2 seconds it counts how long Chat has been on it, such as **Thinking… · 6s**, so a pause never looks stuck. The line goes once the answer is done or Chat waits for your OK.\n\nThe steps it finished show as one grey line above the answer, such as **✓ Read 3 sources**. Click it for the list of steps, and click a step for its detail, such as the period and platforms a read covered. A fact check of the answer's figures shows as **Checked facts**. Chat and the side panel show this the same way."
+        },
+        {
+          "heading": "Data used and action links",
+          "text": "Once Chat is done, **Data used** under the answer names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both."
         },
         {
           "heading": "Big requests in parts",
-          "text": "For a bigger request, such as comparing five competitors, Chat can split the work into 2 to 5 parts and work on them at the same time. The steps show **Working on 5 parts** and how many are done, with a dot for each part: working, done, failed, or paused at the AI limit. Click a part to see its own steps. Then Chat writes one answer from all the parts. A part that failed is named, and the others still count.\n\nParts only read, on the same brand and with the same access as you. When a part finds something to change, Chat asks you in this chat with the usual approval card. **Stop** stops every part. An agent's limit for one run covers the run and its parts together: when they reach it, they all pause."
+          "text": "For a bigger request, such as comparing five competitors, Chat can split the work into 2 to 5 parts and work on them at the same time. The grey line at the end says **Working on 5 parts…**, with how many are done and a dot for each part under it: working, done, failed, or paused at the AI limit. Click a part to see its own steps. Then Chat writes one answer from all the parts. A part that failed is named, and the others still count.\n\nParts only read, on the same brand and with the same access as you. When a part finds something to change, Chat asks you in this chat with the usual approval card. **Stop** stops every part. An agent's limit for one run covers the run and its parts together: when they reach it, they all pause."
         },
         {
           "heading": "When something goes wrong",
-          "text": "A step that fails shows a red mark and why, such as **Took too long this time**. Chat retries once with a narrower read, such as a shorter period. If a figure still isn't there, the answer says it isn't available right now and offers to retry. Something off for you, such as another plan's feature, is named with why and what you can do.\n\nIf the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.\n\nIf your connection drops while Chat works, the line with the steps says **Reconnecting…**. Chat keeps working meanwhile and picks up where it was; reloading the page shows where it is too. When the monthly AI usage runs out mid-answer, the step it was on shows **Stopped at the AI limit**."
+          "text": "The steps line counts a failed step, such as **1 step failed**; its list shows a red mark and why, such as **Took too long this time**. Chat retries once with a narrower read. If a figure still isn't there, the answer says it isn't available now and offers to retry. Something off for you, such as another plan's feature, is named with why and what to do.\n\nIf the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.\n\nIf your connection drops while Chat works, the grey line at the end says **Reconnecting…**. Chat keeps working meanwhile and picks up where it was, as a reload shows. When the monthly AI usage runs out mid-answer, the step it was on shows **Stopped at the AI limit**."
         },
         {
           "heading": "When your AI key fails",

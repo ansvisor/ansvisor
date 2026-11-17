@@ -1090,15 +1090,18 @@ describe('ChatThreadView', () => {
     await type('Why did citations drop?');
     await enter();
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
-    const header = () => container.querySelector('[data-action="answer.toggleSteps"]')!;
-    expect(header().textContent).toContain('Reconnecting…');
+    const live = () => container.querySelector('[data-slot="run-live"]');
+    expect(live()!.textContent).toContain('Reconnecting…');
     expect(container.textContent).toContain('Two pages');
 
     await act(async () => new Promise((resolve) => setTimeout(resolve, 1100)));
     expect(calls.map((c) => c.url)).toContain(`/api/chat/runs/${RUN}/events?after=2`);
     expect(container.textContent).not.toContain('Reconnecting…');
     expect(container.textContent).toContain('Two pages lost most of it.');
-    expect(header().textContent).toContain('Read Citations');
+    expect(live()).toBeNull();
+    expect(container.querySelector('[data-action="answer.toggleSteps"]')!.textContent).toContain(
+      'Read Citations',
+    );
   });
 
   it('after a reload, shows the kept steps and keeps streaming from the run’s events', async () => {
@@ -1141,7 +1144,9 @@ describe('ChatThreadView', () => {
     });
     await render({ thread, variant: 'dock' });
     // The kept step shows while the events come.
-    expect(container.textContent).toContain('Read Citations');
+    expect(container.querySelector('[data-slot="run-live"]')!.textContent).toContain(
+      'Reading Citations…',
+    );
     expect(calls.map((c) => c.url)).toContain(`/api/chat/runs/${RUN}/events?after=0`);
     const frame = (e: ChatEvent) =>
       new TextEncoder().encode(`id: ${e.seq}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
@@ -1160,6 +1165,55 @@ describe('ChatThreadView', () => {
     });
     expect(container.textContent).toContain('Two pages lost most of it.');
     expect(container.textContent).toContain('Generated Oct 30, 2026');
+  });
+
+  it('shows the same working state in the side panel: steps line on top, live line at the end', async () => {
+    const thread = {
+      conversationId: CHAT,
+      title: 'Citations',
+      brandId: null,
+      mine: true,
+      messages: [
+        { role: 'user', text: 'Find the drop', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: 'Two pages lost most',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: {
+            runId: RUN,
+            status: 'running',
+            steps: [
+              { n: 1, kind: 'read', label: 'Read Citations', status: 'done' },
+              { n: 2, kind: 'read', label: 'Read Mentions', status: 'running' },
+            ],
+            fileId: null,
+            deliverables: [],
+            summary: null,
+            errorReason: null,
+          },
+        },
+      ],
+    } as unknown as ChatThread;
+    fetchMock.mockImplementationOnce(
+      async () =>
+        new Response(new ReadableStream<Uint8Array>({ start: () => {} }), { status: 200 }),
+    );
+    await render({ thread, variant: 'panel' });
+    const answer = container.querySelector('[data-slot="run-answer"]')!;
+    const slots = [...answer.querySelectorAll('[data-slot^="run-"]')].map((el) =>
+      el.getAttribute('data-slot'),
+    );
+    expect(slots.indexOf('run-steps-line')).toBeLessThan(slots.indexOf('run-live'));
+    expect(slots.indexOf('run-live')).toBeGreaterThan(slots.indexOf('run-text'));
+    expect(answer.querySelector('[data-action="answer.toggleSteps"]')!.textContent).toBe(
+      'Read Citations',
+    );
+    expect(answer.querySelector('[data-slot="run-status"]')!.textContent).toBe('Reading Mentions…');
+    // No ✓ pills and no second list of the steps.
+    expect(answer.querySelector('[data-slot="run-steps"]')).toBeNull();
+    expect(answer.querySelector('button[class*="rounded-full"]')).toBeNull();
   });
 
   describe('a question card (CHAT-07)', () => {
