@@ -14416,12 +14416,43 @@
         "evidence": "From your catalog's “{category}” category: {inStock, plural, one {# product} other {# products}} in stock, and no topic covers it yet."
       }
     },
+    "header": {
+      "title": "Prompts",
+      "tabs": {
+        "prompts": "Prompts",
+        "fanout": "Query Fan-out",
+        "insights": "Insights"
+      },
+      "addPrompt": "Add prompt",
+      "moreActions": "More actions",
+      "exportHint": "No prompts yet: add prompts first.",
+      "managePrompts": "Manage prompts",
+      "showUsage": "Show usage",
+      "hideUsage": "Hide usage",
+      "locationsUsed": "{used} / {limit} prompt locations used",
+      "view": {
+        "label": "Prompt list",
+        "tracked": "Tracked",
+        "suggestions": "Suggestions"
+      },
+      "location": {
+        "label": "Location",
+        "all": "All Locations"
+      },
+      "notAnalyzed": {
+        "count": "{count, plural, one {# prompt not analyzed yet} other {# prompts not analyzed yet}}",
+        "hint": "Run volume analysis to fill in their Volume & Competition.",
+        "limitHint": "Their Volume & Competition stay empty until analyzed. Your monthly volume analysis limit is reached: upgrade your plan to analyze more.",
+        "analyze": "Analyze",
+        "analyzeLabel": "{count, plural, one {Analyze # prompt} other {Analyze # prompts}}",
+        "analyzing": "Analyzing…",
+        "analyzingProgress": "Analyzing {done}/{total}…",
+        "limitReached": "Monthly limit reached"
+      }
+    },
     "usage": {
-      "title": "Tracked Prompts",
-      "subtitle": "Every tracked prompt for this brand · edit or pause any row in place",
-      "subtitleReadOnly": "Read-only overview of every tracked prompt for this brand",
+      "panelLabel": "Prompt usage",
       "planAndUsage": "Plan & usage",
-      "show": "Show",
       "hide": "Hide",
       "planPill": "{plan} plan",
       "planPillEnded": "{plan} plan · ended",

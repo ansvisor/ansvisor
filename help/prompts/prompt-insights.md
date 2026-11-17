@@ -4,8 +4,8 @@ route: /dashboard/prompts/insights
 keywords: [prompt insights, analyze volumes, refresh volumes, intent, similar topics, high opportunity prompts]
 synonyms: [prompt volume, search demand, keyword volume, volume analysis]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -22,7 +22,7 @@ Volumes come from an analysis that admins and managers run:
 - **Refresh Volumes** for newer Google data;
 - **Re-analyze Keywords** to analyze every prompt again, keywords included.
 
-On plans with a monthly analysis limit, each analysis counts against it, and the toolbar shows how many are left. **Tracked Prompts** also warns when some prompts haven't been analyzed yet.
+On plans with a monthly analysis limit, each analysis counts against it, and the toolbar shows how many are left. **Tracked Prompts** also says, in a line under its filters, how many prompts aren't analyzed yet, with **Analyze**.
 
 ## What the tab shows
 

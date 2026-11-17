@@ -4,8 +4,8 @@ route: /dashboard/prompts/tracked
 keywords: [add prompt, bulk import, track prompts, new prompt]
 synonyms: [add a question, add queries, track a search]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -27,7 +27,7 @@ In the same dialog, open the **Bulk import** tab and upload a one-column Excel o
 
 ## Add from suggestions
 
-Switch the list to **Prompt Suggestions**. Add one suggestion with its **+** button, or every listed one with **Add All**.
+Switch the list to **Suggestions**, beside the date range. Add one suggestion with its **+** button, or every listed one with **Add All**.
 
 ## When the first results come
 

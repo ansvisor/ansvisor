@@ -4,14 +4,14 @@ route: /dashboard/prompts/suggestions
 keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter, product prompts, catalog suggestions]
 synonyms: [prompt ideas, recommended prompts, new prompt ideas, suggest queries]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/prompts.mdx]
 ---
-**Prompt Suggestions** gives you new prompts to track. Open it with the switch above the filters on the **Prompts** tab of the **Prompts** page. Each refresh writes up to 25 prompt ideas, each with a topic label and a one-line reason.
+**Prompt Suggestions** gives you new prompts to track. Open it with the **Tracked** | **Suggestions** switch, at the left of the date range, on the **Prompts** tab of the **Prompts** page. Each refresh writes up to 25 prompt ideas, each with a topic label and a one-line reason.
 
 ## Where suggestions come from
 
