@@ -863,8 +863,38 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
     ],
   },
   {
-    id: 'today-first-action',
+    id: 'competitor-losses',
     row: 38,
+    role: 'admin',
+    mode: 'auto',
+    // Asked on Competitors, as the owner's plan has it: the head-to-head's prompts, by name.
+    message: "Acme CRM'e karşı hangi promptlarda kaybediyoruz?",
+    context: {
+      route: '/dashboard/competitors',
+      chips: [{ key: 'page', label: 'Competitors' }],
+    },
+    readResult: (tool, input) =>
+      tool === 'get_competitor_head_to_head' ? headToHeadRead(input) : undefined,
+    checks: (run) => [
+      check('finished', true, run.status === 'done', run.status),
+      check(
+        'reads the head-to-head',
+        true,
+        run.reads.includes('get_competitor_head_to_head'),
+        run.reads.join(', ') || 'no read',
+      ),
+      check(
+        'names the prompts the competitor is ahead on',
+        true,
+        EVAL_LOSING_PROMPTS.every((p) => run.answer.toLowerCase().includes(p.prompt)),
+        quote(run.answer),
+      ),
+      check('answers in Turkish', false, looksTurkish(run.answer), quote(run.answer)),
+    ],
+  },
+  {
+    id: 'today-first-action',
+    row: 39,
     role: 'admin',
     mode: 'auto',
     // As the owner asks it, on Today: its first focus card, not the Actions list's first.
@@ -898,36 +928,6 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
         "doesn't put the Actions list's first in its place",
         false,
         !run.answer.includes(EVAL_ACTIONS[0].title),
-        quote(run.answer),
-      ),
-      check('answers in Turkish', false, looksTurkish(run.answer), quote(run.answer)),
-    ],
-  },
-  {
-    id: 'competitor-losses',
-    row: 39,
-    role: 'admin',
-    mode: 'auto',
-    // Asked on Competitors, as the owner's plan has it: the head-to-head's prompts, by name.
-    message: "Acme CRM'e karşı hangi promptlarda kaybediyoruz?",
-    context: {
-      route: '/dashboard/competitors',
-      chips: [{ key: 'page', label: 'Competitors' }],
-    },
-    readResult: (tool, input) =>
-      tool === 'get_competitor_head_to_head' ? headToHeadRead(input) : undefined,
-    checks: (run) => [
-      check('finished', true, run.status === 'done', run.status),
-      check(
-        'reads the head-to-head',
-        true,
-        run.reads.includes('get_competitor_head_to_head'),
-        run.reads.join(', ') || 'no read',
-      ),
-      check(
-        'names the prompts the competitor is ahead on',
-        true,
-        EVAL_LOSING_PROMPTS.every((p) => run.answer.toLowerCase().includes(p.prompt)),
         quote(run.answer),
       ),
       check('answers in Turkish', false, looksTurkish(run.answer), quote(run.answer)),
