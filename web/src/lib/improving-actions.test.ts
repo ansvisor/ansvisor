@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 import { IMPROVE_TRACKED_STATUSES, pickImprovingAction } from './improve-outcome';
-import { MAX_IMPROVING_PROMPTS, readImprovingActions } from './improving-actions';
+import {
+  MAX_IMPROVING_PROMPTS,
+  readBrandImprovingActions,
+  readImprovingActions,
+} from './improving-actions';
 
 /**
  * Which prompts have an Improve action still being tracked (PROMPT-008): one
@@ -150,5 +154,35 @@ describe('readImprovingActions', () => {
   it('throws when the read fails', async () => {
     const { supabase } = client([], { message: 'timeout' });
     await expect(readImprovingActions(supabase, BRAND, ['p1'])).rejects.toThrow('timeout');
+  });
+});
+
+describe("readBrandImprovingActions (the table's first read)", () => {
+  it('reads every prompt of the brand in one query, with no prompt list', async () => {
+    const { supabase, queries } = client([]);
+    await readBrandImprovingActions(supabase, BRAND);
+    expect(queries).toHaveLength(1);
+    const [{ table, calls }] = queries;
+    expect(table).toBe('actions');
+    expect(calls).toContainEqual(['eq', 'brand_id', BRAND]);
+    expect(calls).toContainEqual(['eq', 'kind', 'prompt_improve']);
+    expect(calls).toContainEqual(['in', 'status', [...IMPROVE_TRACKED_STATUSES]]);
+    expect(calls).toContainEqual(['is', 'deleted_at', null]);
+    expect(
+      calls.some(([method, column]) => method === 'in' && column === 'payload->>promptId'),
+    ).toBe(false);
+  });
+
+  it("picks each prompt's action by the same rule, never another brand's", async () => {
+    const rows = [
+      row({ id: 'p1-new', prompt_id: 'p1', status: 'new', brand_no: 14 }),
+      row({ id: 'p1-old', prompt_id: 'p1', status: 'in_progress', brand_no: 3 }),
+      row({ id: 'p2-dismissed', prompt_id: 'p2', status: 'dismissed' }),
+      row({ id: 'theirs', brand_id: OTHER_BRAND, prompt_id: 'p5' }),
+    ];
+    const { supabase } = client(rows);
+    const improving = await readBrandImprovingActions(supabase, BRAND);
+    expect([...improving.keys()]).toEqual(['p1']);
+    expect(improving.get('p1')?.actionId).toBe('p1-new');
   });
 });

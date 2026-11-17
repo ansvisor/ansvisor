@@ -33,6 +33,31 @@ const actions = vi.hoisted(() => ({
   bulkUpdatePromptLocations: vi.fn(),
 }));
 vi.mock('@/lib/actions/prompt', () => actions);
+// The table's reads go through /api/prompts/read (lib/prompts-reads.ts): the
+// rows as getPromptsPageData gives them, and the volumes beside them, here
+// what that mock's answer holds (`volumesDegraded`: the volumes read fails).
+type PageDataMock = {
+  volumes?: unknown[];
+  quota?: unknown;
+  volumesDegraded?: boolean;
+  volumeStatus?: unknown;
+};
+const pageReads = vi.hoisted(() => ({
+  readPromptsPageData: vi.fn(),
+  readPromptVolumes: vi.fn(),
+}));
+vi.mock('@/lib/prompts-reads', () => pageReads);
+const volumesFromPageData = async () => {
+  const page = (await actions.getPromptsPageData.getMockImplementation()?.('b1')) as
+    | PageDataMock
+    | undefined;
+  if (page?.volumesDegraded) throw new Error('Failed to load volumes');
+  return {
+    volumes: page?.volumes ?? [],
+    quota: page?.quota ?? null,
+    status: page?.volumeStatus ?? null,
+  };
+};
 vi.mock('@/lib/actions/tracking-countries', () => ({ getTrackingCountries: async () => [] }));
 const volumes = vi.hoisted(() => ({
   startPromptVolumeAnalysis: vi.fn(),
@@ -40,11 +65,13 @@ const volumes = vi.hoisted(() => ({
   refreshVolumes: vi.fn(),
 }));
 vi.mock('@/lib/actions/volumes', () => volumes);
-// The brand's locations, as the Location filter reads them: none unless a test says so.
+// The brand's locations, as the Location filter reads them (through
+// /api/visibility/read, as Visibility does): none unless a test says so.
 const filterOptions = vi.hoisted(() => ({ regions: [] as string[] }));
-vi.mock('@/lib/actions/tracking', () => ({
+const visibilityReads = vi.hoisted(() => ({
   getBrandFilterOptions: vi.fn(async () => ({ regions: filterOptions.regions })),
 }));
+vi.mock('@/lib/visibility-reads', () => visibilityReads);
 // The brand's topics, as the Add Prompt dialog reads them: one unless a test says none.
 const topicActions = vi.hoisted(() => ({ getTopics: vi.fn() }));
 vi.mock('@/lib/actions/topic', () => topicActions);
@@ -138,11 +165,8 @@ const toast = vi.hoisted(() =>
 vi.mock('sonner', () => ({ toast }));
 const analytics = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => analytics);
-// Track now's API calls: no prompt without answers unless a test says so.
-const trackNowApi = vi.hoisted(() => ({
-  readPromptsWithoutAnswers: vi.fn(async (): Promise<string[] | null> => []),
-  trackPromptsNow: vi.fn(),
-}));
+// Track now's API call. Which prompts have no answers comes with the table's read.
+const trackNowApi = vi.hoisted(() => ({ trackPromptsNow: vi.fn() }));
 vi.mock('@/lib/track-now', () => trackNowApi);
 const jobStore = vi.hoisted(() => ({ saveTrackingJob: vi.fn(), loadTrackingJob: () => null }));
 vi.mock('@/lib/tracking-job-store', () => jobStore);
@@ -222,7 +246,14 @@ beforeEach(() => {
     positions: {},
   });
   actions.setPromptsActive.mockResolvedValue({ updated: 1 });
-  trackNowApi.readPromptsWithoutAnswers.mockResolvedValue([]);
+  // Reset, not cleared: a test's one-off answers never reach the next one.
+  pageReads.readPromptsPageData
+    .mockReset()
+    .mockImplementation((...args: unknown[]) => actions.getPromptsPageData(...args));
+  pageReads.readPromptVolumes.mockReset().mockImplementation(volumesFromPageData);
+  visibilityReads.getBrandFilterOptions
+    .mockReset()
+    .mockImplementation(async () => ({ regions: filterOptions.regions }));
   topicActions.getTopics.mockResolvedValue([COFFEE_TOPIC]);
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -309,25 +340,25 @@ describe("the Work cell's Improve link (PROMPT-008)", () => {
       (b) => b.textContent === 'AC-12 · Improving',
     );
 
-  beforeEach(() => {
+  const withImproving = (improvingByPrompt: Record<string, typeof AC12>) =>
     actions.getPromptsPageData.mockResolvedValue({
       volumes: [],
       quota: null,
       promptSets: [{ prompts: [prompt, other] }],
       visibility: {},
       positions: {},
+      improving: improvingByPrompt,
     });
-    improving.getImprovingPrompts.mockResolvedValue({ p1: AC12 });
+
+  beforeEach(() => {
+    withImproving({ p1: AC12 });
   });
 
   it('shows it under the Work chip only on rows whose Improve action is still tracked', async () => {
     await render(false);
-    // Read for the whole page at once, never a row at a time.
-    expect(improving.getImprovingPrompts).toHaveBeenCalledTimes(1);
-    for (const [brandId, ids] of improving.getImprovingPrompts.mock.calls) {
-      expect(brandId).toBe('b1');
-      expect([...ids].sort()).toEqual(['p1', 'p2']);
-    }
+    // It comes with the table's read: no read of its own, a page or a row at a time.
+    expect(improving.getImprovingPrompts).not.toHaveBeenCalled();
+    expect(actions.getPromptsPageData).toHaveBeenCalledTimes(1);
     expect(links()).toHaveLength(1);
     const cell = links()[0].closest('td')!;
     expect(cell.closest('tr')!.textContent).toContain(prompt.text);
@@ -346,7 +377,7 @@ describe("the Work cell's Improve link (PROMPT-008)", () => {
   });
 
   it('leaves the Work cell as it was on rows without one', async () => {
-    improving.getImprovingPrompts.mockResolvedValue({});
+    withImproving({});
     await render(false);
     expect(links()).toHaveLength(0);
     expect(container.textContent).not.toContain('Improving');
@@ -1439,14 +1470,21 @@ describe('Track now', () => {
     positionFactor: 0.5,
     lastRunAt: '2026-11-16T09:00:00.000Z',
   };
-  const withPrompts = (visibility: Record<string, typeof answers> = { p2: answers }) =>
-    actions.getPromptsPageData.mockResolvedValue({
-      volumes: [],
-      quota: null,
-      promptSets: [{ prompts: [prompt, answered, fresh] }],
-      visibility,
-      positions: {},
-    });
+  // The table's read: p1 and p3 have no answers yet; p9 is no prompt on the page.
+  const withPrompts = (
+    visibility: Record<string, typeof answers> = { p2: answers },
+    withoutAnswers: string[] | null = ['p1', 'p3', 'p9'],
+  ) =>
+    actions.getPromptsPageData.mockImplementation(
+      async (_brandId: string, opts?: { withoutAnswers?: boolean }) => ({
+        volumes: [],
+        quota: null,
+        promptSets: [{ prompts: [prompt, answered, fresh] }],
+        visibility,
+        positions: {},
+        ...(opts?.withoutAnswers ? { withoutAnswers } : {}),
+      }),
+    );
   const line = (state: 'waiting' | 'started') =>
     container.querySelector<HTMLElement>(`[data-track-now="${state}"]`);
   const trackNowButton = () => line('waiting')?.querySelector('button') ?? null;
@@ -1461,14 +1499,14 @@ describe('Track now', () => {
 
   beforeEach(() => {
     withPrompts();
-    // The brand page's read: p1 and p3 have no answers yet; p9 is no prompt on the page.
-    trackNowApi.readPromptsWithoutAnswers.mockResolvedValue(['p1', 'p3', 'p9']);
     trackNowApi.trackPromptsNow.mockResolvedValue({ ok: true, jobId: 'job-1', count: 2 });
   });
 
   it('says how many prompts have no answers yet, in the status line', async () => {
     await render(false);
-    expect(trackNowApi.readPromptsWithoutAnswers).toHaveBeenCalledWith('b1');
+    // Asked of the table's own read, not read on their own once the rows are in.
+    expect(actions.getPromptsPageData).toHaveBeenCalledOnce();
+    expect(actions.getPromptsPageData.mock.calls[0][1]).toMatchObject({ withoutAnswers: true });
     expect(line('waiting')?.textContent).toBe('2 prompts have no answers yet·Track now');
     expect(container.querySelector('[data-notices]')?.contains(line('waiting'))).toBe(true);
     expect(trackNowButton()?.getAttribute('aria-label')).toBe('Track 2 prompts now');
@@ -1495,17 +1533,23 @@ describe('Track now', () => {
     expect(line('started')?.querySelector('a')?.getAttribute('href')).toBe('/dashboard/insights');
   });
 
-  it('reads nothing when every active prompt has answers in the table', async () => {
-    withPrompts({ p1: answers, p2: answers, p3: answers });
+  it('says nothing when every active prompt has answers, or when they couldn’t be read', async () => {
+    withPrompts({ p1: answers, p2: answers, p3: answers }, []);
     await render(false);
-    expect(trackNowApi.readPromptsWithoutAnswers).not.toHaveBeenCalled();
+    expect(line('waiting')).toBeNull();
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    withPrompts({ p2: answers }, null);
+    await render(false);
+    expect(container.textContent).toContain(fresh.text);
     expect(line('waiting')).toBeNull();
   });
 
-  it('leaves it out for members, who can’t track: no read, no line, no button', async () => {
+  it('leaves it out for members, who can’t track: not asked for, no line, no button', async () => {
     role.canManage = false;
     await render(false);
-    expect(trackNowApi.readPromptsWithoutAnswers).not.toHaveBeenCalled();
+    expect(actions.getPromptsPageData.mock.calls[0][1]).toMatchObject({ withoutAnswers: false });
     expect(line('waiting')).toBeNull();
   });
 
@@ -1605,5 +1649,339 @@ describe('Tracked Prompts with no prompts yet', () => {
     expect(container.textContent).toContain('Ask an admin or a manager to add prompts.');
     expect(container.textContent).not.toContain('Manage prompts');
     expect(button('Add prompt')).toBeUndefined();
+  });
+});
+
+/** A promise the test settles when it wants. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+const volumeOf = (p: Prompt, estAiVolume: number, competitionIndex: number | null = 42) => ({
+  id: `v-${p.id}`,
+  promptId: p.id,
+  promptText: p.text,
+  promptCategory: 'Coffee',
+  intent: 'commercial',
+  keywords: ['coffee subscription'],
+  googleVolumes: { 'coffee subscription': estAiVolume * 2.5 },
+  totalGoogleVolume: estAiVolume * 2.5,
+  aiVolumeMultiplier: 0.4,
+  estAiVolume,
+  competitionIndex,
+  competition: competitionIndex === null ? null : 'MEDIUM',
+  fetchedAt: '2026-10-20T00:00:00.000Z',
+});
+
+/** The table's row for a prompt, and its cell under a header. */
+const rowOf = (p: Prompt) =>
+  [...container.querySelectorAll<HTMLTableRowElement>('tbody tr')].find((tr) =>
+    tr.textContent?.includes(p.text),
+  )!;
+const cellOf = (p: Prompt, header: string) => {
+  const heads = [...container.querySelectorAll<HTMLTableCellElement>('thead th')];
+  const at = heads.findIndex((th) => th.textContent?.trim() === header);
+  return rowOf(p).querySelectorAll('td')[at] as HTMLTableCellElement;
+};
+
+describe("Tracked Prompts' first view: one read before the table, none a row (load speed)", () => {
+  const many: Prompt[] = Array.from({ length: 30 }, (_, i) => ({
+    ...prompt,
+    id: `p${i + 1}`,
+    text: `Prompt number ${i + 1}?`,
+  }));
+
+  // Every server action the page could send, from the mocked action modules.
+  // getPromptsPageData itself runs behind /api/prompts/read (readPromptsPageData).
+  const serverActions = () => [
+    ...Object.values(actions).filter((fn) => fn !== actions.getPromptsPageData),
+    ...Object.values(volumes),
+    ...Object.values(topicActions),
+    ...Object.values(improving),
+    ...Object.values(swap),
+    getOpenSuggestionForPrompt,
+  ];
+  const actionCalls = () => serverActions().reduce((n, fn) => n + fn.mock.calls.length, 0);
+
+  it('sends no server action before the table: its read is one fetch, which also brings its columns', async () => {
+    const rows = deferred<unknown>();
+    pageReads.readPromptsPageData.mockReturnValue(rows.promise);
+    await render(false);
+
+    // The table waits for its one read, which nothing queued holds up.
+    expect(pageReads.readPromptsPageData).toHaveBeenCalledOnce();
+    expect(pageReads.readPromptsPageData).toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({ first: true, withoutAnswers: true, volumes: false }),
+    );
+    expect(actionCalls()).toBe(0);
+    expect(container.querySelector('tbody tr')).toBeNull();
+
+    await act(async () =>
+      rows.resolve({
+        promptSets: [{ prompts: many }],
+        visibility: {},
+        positions: {},
+        improving: {},
+        withoutAnswers: [],
+        tableViews: { mine: { order: ['topic', 'volume'], hidden: [] }, brand: null },
+      }),
+    );
+    await act(async () => {});
+    expect(container.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
+    // Its own columns from the first frame: no read of them of its own.
+    expect(container.querySelector('thead')?.textContent).toMatch(/^PromptTopicVolume/);
+    expect(container.querySelector('thead')?.textContent).not.toContain('Visibility');
+    // Still no server action for what the rows show (Improve links, Track now, volumes' status).
+    expect(improving.getImprovingPrompts).not.toHaveBeenCalled();
+    expect(volumes.getVolumeAnalysisStatus).not.toHaveBeenCalled();
+  });
+
+  it('reads once for 30 rows: no read a row, nor a page of rows', async () => {
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: many.map((p, i) => volumeOf(p, 100 + i)),
+      quota: null,
+      promptSets: [{ prompts: many }],
+      visibility: {},
+      positions: {},
+      improving: {},
+      withoutAnswers: [],
+    });
+    await render(false);
+    expect(container.querySelectorAll('tbody tr').length).toBeGreaterThan(10);
+
+    expect(pageReads.readPromptsPageData).toHaveBeenCalledOnce();
+    expect(pageReads.readPromptVolumes).toHaveBeenCalledOnce();
+    expect(visibilityReads.getBrandFilterOptions).toHaveBeenCalledOnce();
+    // The only server action of the first view, once the rows are in: the
+    // content quota the row menu and the bulk bar use.
+    expect(getOpenSuggestionForPrompt).not.toHaveBeenCalled();
+    expect(improving.getImprovingPrompts).not.toHaveBeenCalled();
+    expect(volumes.getVolumeAnalysisStatus).not.toHaveBeenCalled();
+    expect(topicActions.getTopics).not.toHaveBeenCalled();
+    expect(actionCalls()).toBe(0);
+  });
+
+  it('keeps the Location filter in its place until the brand’s locations are read', async () => {
+    const twoPlaces = { ...prompt, regions: ['US', 'GB'] };
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [twoPlaces] }],
+      visibility: {},
+      positions: {},
+    });
+    const regions = deferred<{ regions: string[] }>();
+    visibilityReads.getBrandFilterOptions.mockReturnValueOnce(regions.promise);
+    await render(false);
+    const row = container.querySelector('[data-filter-row]')!;
+    expect(row.querySelector('[data-location-filter-pending]')).not.toBeNull();
+
+    await act(async () => regions.resolve({ regions: ['GB', 'US'] }));
+    expect(row.querySelector('[data-location-filter-pending]')).toBeNull();
+    expect(row.querySelector('[aria-label="Location"]')).not.toBeNull();
+  });
+});
+
+describe('Volume and Competition on the first view', () => {
+  const second: Prompt = { ...prompt, id: 'p2', text: 'Best espresso beans?' };
+  const third: Prompt = { ...prompt, id: 'p3', text: 'Coffee grinder for beginners?' };
+  const rowsRead = (list: Prompt[]) => ({
+    promptSets: [{ prompts: list }],
+    visibility: {},
+    positions: {},
+    improving: {},
+  });
+  const volumesRead = (list: ReturnType<typeof volumeOf>[]) => ({
+    volumes: list,
+    quota: { used: 1, limit: 10, remaining: 9 },
+    status: null,
+  });
+
+  it('fills them, and counts the prompts without a volume, from the first render on', async () => {
+    actions.getPromptsPageData.mockResolvedValue({
+      ...rowsRead([prompt, second, third]),
+      volumes: [volumeOf(prompt, 400, 42), volumeOf(second, 900, 77)],
+      quota: { used: 2, limit: 10, remaining: 8 },
+    });
+    await render(false);
+
+    for (const p of [prompt, second]) {
+      expect(cellOf(p, 'Volume').textContent).not.toBe('—');
+      expect(cellOf(p, 'Volume').textContent).toMatch(/\d/);
+    }
+    expect(
+      cellOf(prompt, 'Competition').querySelector('[aria-label="Competition 42 of 100"]'),
+    ).not.toBeNull();
+    expect(
+      cellOf(second, 'Competition').querySelector('[aria-label="Competition 77 of 100"]'),
+    ).not.toBeNull();
+    expect(cellOf(third, 'Volume').textContent).toBe('—');
+    // One prompt without, not all three: no range change needed.
+    expect(notAnalyzed()?.textContent).toMatch(/\b1 prompt\b/);
+    expect(pageReads.readPromptVolumes).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing about prompts without a volume while the volumes are on their way', async () => {
+    actions.getPromptsPageData.mockResolvedValue(rowsRead([prompt, second, third]));
+    const read = deferred<ReturnType<typeof volumesRead>>();
+    pageReads.readPromptVolumes.mockReturnValueOnce(read.promise);
+    await render(false);
+
+    // The rows are in; their Volume and Competition wait in place.
+    expect(rowOf(third)).toBeDefined();
+    expect(notAnalyzed()).toBeNull();
+    expect(cellOf(prompt, 'Volume').querySelector('[data-volume-pending]')).not.toBeNull();
+    expect(cellOf(prompt, 'Competition').querySelector('[data-volume-pending]')).not.toBeNull();
+
+    await act(async () =>
+      read.resolve(volumesRead([volumeOf(prompt, 400), volumeOf(second, 900)])),
+    );
+    expect(container.querySelector('[data-volume-pending]')).toBeNull();
+    expect(notAnalyzed()?.textContent).toMatch(/\b1 prompt\b/);
+  });
+
+  it('tries a failed volumes read again before saying anything, and shows what it brings', async () => {
+    actions.getPromptsPageData.mockResolvedValue(rowsRead([prompt, second]));
+    pageReads.readPromptVolumes
+      .mockRejectedValueOnce(new Error('Server error: 429'))
+      .mockResolvedValueOnce(volumesRead([volumeOf(prompt, 400), volumeOf(second, 900)]));
+    await render(false);
+    expect(pageReads.readPromptVolumes).toHaveBeenCalledTimes(2);
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(notAnalyzed()).toBeNull();
+    expect(cellOf(second, 'Volume').textContent).toMatch(/\d/);
+  });
+
+  it('says the volumes are unavailable when the second try fails too, never "not analyzed"', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    actions.getPromptsPageData.mockResolvedValue(rowsRead([prompt, second]));
+    pageReads.readPromptVolumes.mockRejectedValue(new Error('timeout'));
+    await render(false);
+    expect(toast.warning).toHaveBeenCalledWith(
+      'Volume data is temporarily unavailable — showing prompts without it.',
+    );
+    expect(notAnalyzed()).toBeNull();
+    error.mockRestore();
+  });
+
+  it('keeps the newer read when an older one lands after it', async () => {
+    const older = deferred<unknown>();
+    const newer = deferred<unknown>();
+    pageReads.readPromptsPageData
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+    await render(false);
+
+    // Another range before the first read is back: a second read, sent beside it.
+    const range = container.querySelector('[role="group"][aria-label="Date Range"]')!;
+    const sevenDays = [...range.querySelectorAll<HTMLButtonElement>('button')][1];
+    await act(async () => sevenDays.click());
+    expect(pageReads.readPromptsPageData).toHaveBeenCalledTimes(2);
+
+    await act(async () => newer.resolve(rowsRead([second])));
+    expect(rowOf(second)).toBeDefined();
+    await act(async () => older.resolve(rowsRead([third])));
+    await act(async () => {});
+    expect(rowOf(second)).toBeDefined();
+    expect(container.textContent).not.toContain(third.text);
+    // The volumes have no date: the range change didn't read them again.
+    expect(pageReads.readPromptVolumes).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the newer volumes when an older volumes read lands after them', async () => {
+    actions.getPromptsPageData.mockResolvedValue(rowsRead([prompt, second]));
+    const older = deferred<ReturnType<typeof volumesRead>>();
+    pageReads.readPromptVolumes
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce(volumesRead([volumeOf(prompt, 400), volumeOf(second, 900)]));
+    await render(false);
+    expect(notAnalyzed()).toBeNull();
+
+    // A change to the prompts (a bulk Pause) reads the table and its volumes again.
+    const box = container.querySelector<HTMLElement>(`[aria-label="Select ${second.text}"]`)!;
+    await act(async () => box.click());
+    await act(async () => button('Pause')!.click());
+    await act(async () => {});
+    expect(pageReads.readPromptVolumes).toHaveBeenCalledTimes(2);
+    expect(notAnalyzed()).toBeNull();
+    expect(cellOf(prompt, 'Volume').textContent).toMatch(/\d/);
+
+    // The first read, answered late with no volumes, changes nothing.
+    await act(async () => older.resolve(volumesRead([])));
+    expect(cellOf(prompt, 'Volume').textContent).toMatch(/\d/);
+    expect(notAnalyzed()).toBeNull();
+  });
+});
+
+describe('Insights while its volumes load', () => {
+  beforeEach(() => {
+    nav.pathname = '/dashboard/prompts/insights';
+    // The Prompt Volumes chart sizes itself to its box.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
+  const rows = {
+    promptSets: [{ prompts: [prompt] }],
+    visibility: {},
+    positions: {},
+    improving: {},
+  };
+
+  it('shows the cards and chart once the volumes are in, on the first render', async () => {
+    actions.getPromptsPageData.mockResolvedValue({
+      ...rows,
+      volumes: [volumeOf(prompt, 400)],
+      quota: { used: 1, limit: 10, remaining: 9 },
+    });
+    await render(false);
+    expect(container.textContent).toContain('Prompts Analyzed');
+    expect(container.textContent).not.toContain('No volume data yet');
+    expect(container.querySelector('[data-insights-loading]')).toBeNull();
+  });
+
+  it('shows a skeleton, never "No volume data yet", while the read is pending', async () => {
+    actions.getPromptsPageData.mockResolvedValue(rows);
+    pageReads.readPromptVolumes.mockReturnValueOnce(new Promise(() => {}));
+    await render(false);
+    expect(container.querySelector('[data-insights-loading]')).not.toBeNull();
+    expect(container.textContent).not.toContain('No volume data yet');
+  });
+
+  it('says "No volume data yet" once a finished read brought none', async () => {
+    actions.getPromptsPageData.mockResolvedValue({ ...rows, volumes: [] });
+    await render(false);
+    expect(container.querySelector('[data-insights-loading]')).toBeNull();
+    expect(container.textContent).toContain('No volume data yet');
+  });
+
+  it('says the read failed, with Retry, rather than "No volume data yet"', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    actions.getPromptsPageData.mockResolvedValue(rows);
+    pageReads.readPromptVolumes.mockRejectedValue(new Error('timeout'));
+    await render(false);
+    expect(container.querySelector('[data-volumes-failed]')).not.toBeNull();
+    expect(container.textContent).not.toContain('No volume data yet');
+
+    pageReads.readPromptVolumes.mockResolvedValue({
+      volumes: [volumeOf(prompt, 400)],
+      quota: null,
+      status: null,
+    });
+    await act(async () => button('Retry')!.click());
+    expect(container.textContent).toContain('Prompts Analyzed');
+    error.mockRestore();
   });
 });

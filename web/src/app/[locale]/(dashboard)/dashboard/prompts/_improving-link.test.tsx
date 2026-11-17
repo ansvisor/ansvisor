@@ -6,9 +6,9 @@ import messages from '../../../../../../messages/en.json';
 import type { ImprovingAction } from '@/lib/improve-outcome';
 
 /**
- * The Work cell's Improve link (PROMPT-008): one read for the rows on
- * screen, read again when the panel closes; "AC-12 · Improving" opens the
- * Improve tab.
+ * The Work cell's Improve link (PROMPT-008): the table's own read brings the
+ * brand's (no read of its own when the rows show), the rows on screen are
+ * read again when the panel closes; "AC-12 · Improving" opens the Improve tab.
  */
 
 const getImprovingPrompts = vi.hoisted(() => vi.fn());
@@ -30,14 +30,27 @@ const AC12: ImprovingAction = {
 let container: HTMLDivElement;
 let root: Root;
 
+type ProbeProps = {
+  brandId: string;
+  ids: string[];
+  panelOpen: boolean;
+  seed?: Record<string, ImprovingAction>;
+};
+const NO_SEED: Record<string, ImprovingAction> = {};
+
 /** Shows what the hook gives, for `seen()` to read. */
-function Probe(props: { brandId: string; ids: string[]; panelOpen: boolean }) {
-  const byPrompt = useImprovingPrompts(props.brandId, props.ids, props.panelOpen);
+function Probe(props: ProbeProps) {
+  const byPrompt = useImprovingPrompts(
+    props.brandId,
+    props.ids,
+    props.panelOpen,
+    props.seed ?? NO_SEED,
+  );
   return <output>{JSON.stringify(byPrompt)}</output>;
 }
 const seen = () => JSON.parse(container.querySelector('output')!.textContent!);
 
-async function renderProbe(props: { brandId: string; ids: string[]; panelOpen: boolean }) {
+async function renderProbe(props: ProbeProps) {
   await act(async () => root.render(<Probe {...props} />));
   await act(async () => {});
 }
@@ -55,41 +68,42 @@ afterEach(() => {
 });
 
 describe('useImprovingPrompts', () => {
-  it('reads the rows on screen in one call, and again when the panel closes', async () => {
-    getImprovingPrompts.mockResolvedValue({ p2: AC12 });
-    await renderProbe({ brandId: 'b1', ids: ['p1', 'p2', 'p3'], panelOpen: false });
-    expect(getImprovingPrompts).toHaveBeenCalledTimes(1);
-    expect(getImprovingPrompts).toHaveBeenCalledWith('b1', ['p1', 'p2', 'p3']);
+  const AC9: ImprovingAction = { ...AC12, actionId: 'a9', brandNo: 9 };
+
+  it("shows the table read's actions, with no read of its own, whatever the rows", async () => {
+    const seed = { p2: AC12 };
+    await renderProbe({ brandId: 'b1', ids: ['p1', 'p2', 'p3'], panelOpen: false, seed });
     expect(seen()).toEqual({ p2: AC12 });
-
-    // The same rows in another order: no new read.
-    await renderProbe({ brandId: 'b1', ids: ['p3', 'p2', 'p1'], panelOpen: false });
-    expect(getImprovingPrompts).toHaveBeenCalledTimes(1);
-
-    await renderProbe({ brandId: 'b1', ids: ['p3', 'p2', 'p1'], panelOpen: true });
-    expect(getImprovingPrompts).toHaveBeenCalledTimes(1);
-    await renderProbe({ brandId: 'b1', ids: ['p3', 'p2', 'p1'], panelOpen: false });
-    expect(getImprovingPrompts).toHaveBeenCalledTimes(2);
-  });
-
-  it("reads nothing for no rows, and never shows another brand's answer", async () => {
-    await renderProbe({ brandId: 'b1', ids: [], panelOpen: false });
+    // Another page of rows: still none.
+    await renderProbe({ brandId: 'b1', ids: ['p4', 'p5'], panelOpen: false, seed });
     expect(getImprovingPrompts).not.toHaveBeenCalled();
-    expect(seen()).toEqual({});
-
-    getImprovingPrompts.mockResolvedValueOnce({ p1: AC12 });
-    await renderProbe({ brandId: 'b1', ids: ['p1'], panelOpen: false });
-    expect(seen()).toEqual({ p1: AC12 });
-    getImprovingPrompts.mockReturnValueOnce(new Promise(() => {}));
-    await renderProbe({ brandId: 'b2', ids: ['p1'], panelOpen: false });
-    expect(seen()).toEqual({});
   });
 
-  it('shows nothing when the read fails', async () => {
+  it('reads the rows on screen once the panel closes, and shows what it says for them', async () => {
+    const seed = { p2: AC12, p9: AC9 };
+    getImprovingPrompts.mockResolvedValue({ p1: AC9 });
+    await renderProbe({ brandId: 'b1', ids: ['p1', 'p2'], panelOpen: false, seed });
+    await renderProbe({ brandId: 'b1', ids: ['p1', 'p2'], panelOpen: true, seed });
+    expect(getImprovingPrompts).not.toHaveBeenCalled();
+    await renderProbe({ brandId: 'b1', ids: ['p1', 'p2'], panelOpen: false, seed });
+    expect(getImprovingPrompts).toHaveBeenCalledExactlyOnceWith('b1', ['p1', 'p2']);
+    // p2's action is no longer tracked, p1 has one now; p9, off screen, keeps the seed's.
+    expect(seen()).toEqual({ p1: AC9, p9: AC9 });
+
+    // A newer table read wins over the re-read.
+    const newer = { p2: AC12 };
+    await renderProbe({ brandId: 'b1', ids: ['p1', 'p2'], panelOpen: false, seed: newer });
+    expect(seen()).toEqual({ p2: AC12 });
+  });
+
+  it('keeps the seed when the re-read fails', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     getImprovingPrompts.mockRejectedValue(new Error('timeout'));
-    await renderProbe({ brandId: 'b1', ids: ['p1'], panelOpen: false });
-    expect(seen()).toEqual({});
+    const seed = { p1: AC12 };
+    await renderProbe({ brandId: 'b1', ids: ['p1'], panelOpen: true, seed });
+    await renderProbe({ brandId: 'b1', ids: ['p1'], panelOpen: false, seed });
+    expect(getImprovingPrompts).toHaveBeenCalledOnce();
+    expect(seen()).toEqual({ p1: AC12 });
     error.mockRestore();
   });
 });
