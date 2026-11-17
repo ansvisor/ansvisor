@@ -71,6 +71,8 @@ const { getActionScorecardFor } = await import('./learning');
 const { getCatalogSourcesFor, listCatalogProductsFor } = await import('./catalog');
 const productVisibility = await import('./product-visibility');
 const { getPromptLocationsFor } = await import('./prompt-locations');
+const today = await import('./today-reads');
+const { listAgentRunsFor } = await import('./agent-reads');
 
 const ALL: McpAuthContext = {
   userId: 'user-1',
@@ -195,6 +197,18 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     // Chat's list reads, a page at a time.
     ['listSignalsPageFor', () => listSignalsPageFor(SELECTED, { brandId: 'b1', offset: 50 })],
     ['actionHistoryPageFor', () => data.actionHistoryPageFor(SELECTED, { brandId: 'b1' })],
+    // Today, History, the Signals summary and an agent's runs, from their pages' reads (plan 6b).
+    ['getTodayFor', () => today.getTodayFor(SELECTED, { brandId: 'b1' })],
+    ['historyPageFor', () => today.historyPageFor(SELECTED, { brandId: 'b1', offset: 50 })],
+    ['getSignalsSummaryFor', () => today.getSignalsSummaryFor(SELECTED, { brandId: 'b1' })],
+    [
+      'listAgentRunsFor',
+      () =>
+        listAgentRunsFor(SELECTED, {
+          brandId: 'b1',
+          agentId: 'a6000000-0000-4000-8000-000000000001',
+        }),
+    ],
     [
       'contentOpportunitiesPageFor',
       () => data.contentOpportunitiesPageFor(SELECTED, { brandId: 'b1', offset: 50 }),

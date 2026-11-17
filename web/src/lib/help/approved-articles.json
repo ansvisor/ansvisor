@@ -1556,7 +1556,16 @@
         "rows on screen",
         "my sort",
         "my search",
-        "open tab"
+        "open tab",
+        "ask about today",
+        "today's focus",
+        "first focus card",
+        "my agents",
+        "agent runs",
+        "what did my agent do",
+        "action history",
+        "closed actions",
+        "signals summary"
       ],
       "synonyms": [
         "assistant",
@@ -1642,6 +1651,10 @@
         {
           "heading": "Ask about your actions",
           "text": "Ask \"What are the most important actions?\" or \"What should I do first?\" and Chat reads the brand's open actions (New, In progress and On hold) in Priority Score order, up to 50 at a time, with how many there are in all. When there are more than it read, it reads the next ones too, or says how many it judged, such as \"the top 50 of 53\".\n\nChat names each action by its title, with its number after it as a link: **Recover lost citations on 3 prompts** (AC-12). Actions that are alike are grouped by what they share, each with its own number.\n\nAsk about an action by its code, such as \"What is AC-12?\", and Chat reads that action, whatever its status. A code the brand doesn't have gets a plain \"not found\" (codes are per brand), never a guess."
+        },
+        {
+          "heading": "Ask about Today, your agents and their runs, and History over any range",
+          "text": "Chat reads what these pages show you:\n\n- **Today**: your focus cards in their order, **Since yesterday**, **Waiting for you**, where you stand and, on Mondays, **Last week**. Asked on Today, \"What should I do first?\" means your first focus card. Chat reads your own Today, so it answers in your chats, not in an agent's run.\n- **Agents**: your agents by tab (**Mine**, **Workspace**, **Paused**, **Archived**), each with its schedule, mode and last run, and one agent's runs on this brand: when each ran, how it ended, and which wait for your OK. Only agents you can see.\n- **History**: the actions of any period, with the page's filters (status, type, priority, source, search) and its summary cards, newest first.\n- **Signals**: the summary cards over a period."
         },
         {
           "heading": "Work through your Action Center tasks",

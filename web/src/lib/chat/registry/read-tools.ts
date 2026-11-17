@@ -13,7 +13,6 @@ import { getBrandFactsFor } from '@/lib/mcp/brand-facts-reads';
 import { contentDraftsPageFor, getContentDraftFor, lookUpDraftsFor } from '@/lib/mcp/content';
 import { contentUuid, listDraftsShape } from '@/lib/mcp/content-schemas';
 import {
-  actionHistoryPageFor,
   contentOpportunitiesPageFor,
   getActionFor,
   getAiTrafficFor,
@@ -49,6 +48,10 @@ import { openPageFor } from '@/lib/mcp/pages';
 import { pageMeta, pageWindow } from '@/lib/mcp/list-page';
 import { LOOKUP_MAX, SEARCH_MAX_CHARS } from '@/lib/mcp/lookup';
 import { listSignalsPageFor, lookUpSignalsFor } from '@/lib/mcp/signal-page';
+import { historyPageFor } from '@/lib/mcp/today-reads';
+import { HISTORY_SORTS } from '@/lib/action-center/history';
+import { PRIORITY_LEVELS } from '@/lib/action-center/priority';
+import { SIGNAL_SOURCES } from '@/lib/signals/registry';
 import { CHECK_RULES_TOOL, checkDraftRules } from '../page-check';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 import { PAGED, countedPage, listPage, pageInput } from './list-paging';
@@ -938,7 +941,7 @@ export const READ_TOOLS = [
     name: 'get_action_history',
     class: 'read',
     area: 'action_center',
-    description: `Closed actions with their measured outcome, latest first. An outcome before day 30 is a reading so far, and a change is never claimed as caused by the action.${PAGED}`,
+    description: `Action Center › History as the page lists it: the actions raised in the period (In progress, On hold, Completed, Dismissed; up to 500, as the page reads them), newest first (by when each closed, else was raised), with the page's filters and its summary cards over the rows that match. Each: ref (as ${actionRef(12)}), title, category, status, outcome (final, or a reading so far until day 30), priority level, sources, when raised and closed, the results it measured (before and after) and net of its control. A change is never claimed as caused by the action. Filters as the page's: status, category (its Type), priority level, source and search (words of the title, or a code).${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -947,14 +950,37 @@ export const READ_TOOLS = [
     route: '/dashboard/action-center/history',
     mcpTool: 'list_action_history',
     specRow: '42',
-    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
-    run: async (ctx, input) =>
-      countedPage(
-        await actionHistoryPageFor(ctx, { brandId: input.brand_id, ...pageWindow(input) }),
-        'actions',
-        input,
-        { what: 'closed actions', order: 'latest first' },
-      ),
+    inputSchema: z.object({
+      brand_id: brandId,
+      date_from: dateFrom,
+      date_to: dateTo,
+      status: z.enum(['in_progress', 'on_hold', 'completed', 'dismissed']).optional(),
+      category: z.enum(['growth', 'protect', 'recover', 'fix', 'compete']).optional(),
+      priority: z.enum(PRIORITY_LEVELS).optional().describe('A priority level.'),
+      source: z.enum(SIGNAL_SOURCES).optional().describe('Where its signals came from.'),
+      search: z
+        .string()
+        .trim()
+        .max(SEARCH_MAX_CHARS)
+        .optional()
+        .describe(`Words of its title, or its code (${actionRef(12)}).`),
+      sort: z.enum(HISTORY_SORTS).optional().describe('newest (default), oldest or priority.'),
+      ...pageInput,
+    }),
+    run: (ctx, input) =>
+      historyPageFor(ctx, {
+        brandId: input.brand_id,
+        dateFrom: input.date_from,
+        dateTo: input.date_to,
+        status: input.status,
+        category: input.category,
+        priority: input.priority,
+        source: input.source,
+        search: input.search,
+        sort: input.sort,
+        limit: input.limit,
+        offset: input.offset,
+      }),
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({

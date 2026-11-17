@@ -48,6 +48,8 @@ export const TRUSTED_READS: ReadonlySet<string> = new Set([
   // The brand's approved facts: words from its own site, each approved by a
   // person in the workspace (Brand settings › Brand facts) before it is read.
   'get_brand_facts',
+  // The Signals page's summary cards: counts by category and source, no text.
+  'get_signals_summary',
 ]);
 
 /** Whether a read's result may carry text written outside the workspace. */
@@ -73,6 +75,9 @@ export const WORKSPACE_READS: ReadonlySet<string> = new Set([
   'list_drafts',
   'get_draft',
   'get_reports',
+  // The workspace's agents and their runs: names its members gave them, statuses and outcomes.
+  'list_my_agents',
+  'list_agent_runs',
 ]);
 
 /** Whether reading a tool's result taints the run (§16a): outside text, not the workspace's own. */
