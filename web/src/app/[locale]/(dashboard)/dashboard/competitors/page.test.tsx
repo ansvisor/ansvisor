@@ -29,21 +29,6 @@ vi.mock('@/lib/ai-brand-setup', () => ({ suggestCompetitors }));
 vi.mock('@/hooks/use-feature-gate', () => ({
   useFeatureGate: () => ({ canUse: () => true, isCloud: true }),
 }));
-const brand = {
-  id: 'b1',
-  name: 'Acme',
-  slug: 'acme',
-  domains: [{ domain: 'acme.com', isPrimary: true }],
-};
-vi.mock('@/stores/use-brand-store', () => ({
-  useBrandStore: (select: (state: unknown) => unknown) => select({ getActiveBrand: () => brand }),
-}));
-vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
-  HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-vi.mock('@/components/filters/date-range-filter', () => ({ DateRangeFilter: () => null }));
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 // The type pickers and the type filter as native selects over their items.
 vi.mock('@/components/ui/select', () => ({
   Select: ({
@@ -68,6 +53,21 @@ vi.mock('@/components/ui/select', () => ({
   SelectContent: () => null,
   SelectItem: () => null,
 }));
+const brand = {
+  id: 'b1',
+  name: 'Acme',
+  slug: 'acme',
+  domains: [{ domain: 'acme.com', isPrimary: true }],
+};
+vi.mock('@/stores/use-brand-store', () => ({
+  useBrandStore: (select: (state: unknown) => unknown) => select({ getActiveBrand: () => brand }),
+}));
+vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
+  HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
+vi.mock('@/components/filters/date-range-filter', () => ({ DateRangeFilter: () => null }));
+vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const { default: CompetitorsPage } = await import('./page');
 
@@ -146,19 +146,6 @@ describe('Competitors on a read-only workspace', () => {
     expect(dialog()).not.toBeNull();
     expect(suggestCompetitors).toHaveBeenCalledTimes(1);
   });
-});
-
-describe('Competitors for a member who is not an admin or a manager', () => {
-  it.each(['analyst', 'agency_partner'] as const)(
-    'shows an %s the competitors without Add, Suggest or Delete',
-    async (role) => {
-      await render(false, role);
-      expect(container.textContent).toContain('Rival');
-      expect(headerButton('Add Competitor')).toBeUndefined();
-      expect(headerButton('Suggest competitors')).toBeUndefined();
-      expect(container.querySelector('button[aria-label="Delete"]')).toBeNull();
-    },
-  );
 });
 
 // Competitor types (00542): a label on each card, a filter and groups once
@@ -297,4 +284,17 @@ describe('Competitor types', () => {
     expect(container.textContent).toContain('Airline');
     expect(container.querySelector('button[aria-label^="Set type for"]')).toBeNull();
   });
+});
+
+describe('Competitors for a member who is not an admin or a manager', () => {
+  it.each(['analyst', 'agency_partner'] as const)(
+    'shows an %s the competitors without Add, Suggest or Delete',
+    async (role) => {
+      await render(false, role);
+      expect(container.textContent).toContain('Rival');
+      expect(headerButton('Add Competitor')).toBeUndefined();
+      expect(headerButton('Suggest competitors')).toBeUndefined();
+      expect(container.querySelector('button[aria-label="Delete"]')).toBeNull();
+    },
+  );
 });
