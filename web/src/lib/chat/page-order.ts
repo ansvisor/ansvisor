@@ -112,6 +112,38 @@ function mentionSort(sort: ChatPageSort): PageSortRead | null {
   return words ? { input: { sort: sort.key }, words } : null;
 }
 
+/** History's Sort (action-center/history.ts HISTORY_SORTS), which get_action_history takes. */
+const HISTORY_SORT_WORDS: Readonly<Record<string, string>> = {
+  newest: 'newest first (by when each closed, else was raised)',
+  oldest: 'oldest first',
+  priority: 'highest priority first',
+};
+
+function historySort(sort: ChatPageSort): PageSortRead | null {
+  const words = Object.hasOwn(HISTORY_SORT_WORDS, sort.key) ? HISTORY_SORT_WORDS[sort.key] : null;
+  return words ? { input: { sort: sort.key }, words } : null;
+}
+
+/**
+ * The Topics table's columns (prompts/_topics-tab.tsx): get_topics_overview
+ * lists by AI Visibility Score, highest first, and takes no other order.
+ */
+const TOPIC_COLUMNS: Readonly<Record<string, string>> = {
+  visibility: 'by AI Visibility Score',
+  prompts: 'by prompts',
+  sov: 'by share of voice',
+  mentions: 'by mentions',
+  citations: 'by citations',
+  lastRun: 'by last run',
+};
+
+function topicSort(sort: ChatPageSort): PageSortRead | null {
+  const column = Object.hasOwn(TOPIC_COLUMNS, sort.key) ? TOPIC_COLUMNS[sort.key] : null;
+  if (!column) return null;
+  const words = `${column}, ${way(sort, 'highest first', 'lowest first')}`;
+  return sort.key === 'visibility' && sort.dir === 'desc' ? { input: {}, words } : { words };
+}
+
 const PROMPTS: PageOrder = {
   tool: 'get_prompt_performance',
   noun: 'its prompts',
@@ -154,6 +186,40 @@ export const PAGE_ORDERS: Readonly<Record<string, PageOrder>> = {
     words: 'newest first',
     sort: mentionSort,
     search: { tool: 'list_mentions', field: 'search' },
+    quiet: true,
+  },
+  // The pages that send their context since step 9. Each read already lists as its page
+  // does by default, so each says its order only once the person sorts or searches it.
+  '/dashboard/action-center/signals': {
+    tool: 'list_signals',
+    noun: 'its signals',
+    input: {},
+    words: 'newest first',
+    quiet: true,
+  },
+  '/dashboard/action-center/history': {
+    tool: 'get_action_history',
+    noun: 'its closed actions',
+    input: {},
+    words: HISTORY_SORT_WORDS.newest,
+    sort: historySort,
+    search: { tool: 'get_action_history', field: 'search' },
+    quiet: true,
+  },
+  '/dashboard/agents': {
+    tool: 'list_my_agents',
+    noun: 'its agents',
+    input: {},
+    words: 'most recently changed first',
+    search: { tool: 'list_my_agents', field: 'search' },
+    quiet: true,
+  },
+  '/dashboard/prompts/topics': {
+    tool: 'get_topics_overview',
+    noun: 'its topics',
+    input: {},
+    words: 'by AI Visibility Score, highest first',
+    sort: topicSort,
     quiet: true,
   },
 };

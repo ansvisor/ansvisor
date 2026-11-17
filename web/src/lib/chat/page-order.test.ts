@@ -79,3 +79,67 @@ describe("the page's search", () => {
     );
   });
 });
+
+describe('the order of the pages that send their context since step 9', () => {
+  const HISTORY = '/dashboard/action-center/history';
+  const SIGNALS = '/dashboard/action-center/signals';
+  const AGENTS = '/dashboard/agents';
+  const TOPICS = '/dashboard/prompts/topics';
+
+  it('says nothing while each lists as its read does (newest, latest changed, highest first)', () => {
+    for (const route of [HISTORY, SIGNALS, AGENTS, TOPICS]) {
+      expect(pageOrderLine(route, []), route).toBeNull();
+    }
+    // A page whose read lists as it shows has no line at all.
+    for (const route of [
+      '/dashboard/action-center/today',
+      '/dashboard/action-center/review',
+      '/dashboard/content/library',
+      '/dashboard/content/plan',
+      '/dashboard/reports',
+    ]) {
+      expect(pageOrderLine(route, [], { sort: { key: 'newest', dir: 'desc' } }), route).toBeNull();
+    }
+  });
+
+  it("maps History's Sort to get_action_history's sort, and its search to its search", () => {
+    const line = pageOrderLine(HISTORY, [], {
+      sort: { key: 'oldest', dir: 'asc' },
+      search: 'pricing',
+    })!;
+    expect(line).toContain(
+      'The page lists its closed actions, oldest first, as the person sorted it.',
+    );
+    expect(line).toContain('read get_action_history with sort "oldest"');
+    expect(line).toContain(
+      "the app applies that search to get_action_history's search unless you give your own",
+    );
+    expect(line).not.toContain('pricing');
+    expect(pageOrderLine(HISTORY, [], { sort: { key: 'priority', dir: 'desc' } })).toContain(
+      'read get_action_history with sort "priority"',
+    );
+  });
+
+  it("says Signals' search is the page's own: its rows are the ones on screen", () => {
+    expect(pageOrderLine(SIGNALS, [], { search: 'espresso' })).toContain(
+      "The page is searched (page_view's search), which list_signals doesn't take: its rows are the ones page_view lists.",
+    );
+  });
+
+  it("says the app applies Agents' search to list_my_agents", () => {
+    expect(pageOrderLine(AGENTS, [], { search: 'winback' })).toContain(
+      "the app applies that search to list_my_agents's search unless you give your own",
+    );
+  });
+
+  it("maps the Topics table's Visibility to get_topics_overview, and its other columns to words", () => {
+    expect(pageOrderLine(TOPICS, [], { sort: { key: 'visibility', dir: 'desc' } })).toContain(
+      'read get_topics_overview, so they are the rows on screen',
+    );
+    const mentions = pageOrderLine(TOPICS, [], { sort: { key: 'mentions', dir: 'asc' } })!;
+    expect(mentions).toContain(
+      "The page lists its topics, by mentions, lowest first, as the person sorted it, an order get_topics_overview doesn't take.",
+    );
+    expect(mentions).toContain('read the rows page_view lists by their refs');
+  });
+});

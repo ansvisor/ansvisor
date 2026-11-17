@@ -5505,6 +5505,9 @@
       "custom": "{from} – {to}",
       "customOpen": "Custom range",
       "all": "All time"
+    },
+    "pageNames": {
+      "citedPage": "Cited page"
     }
   },
   "chatRange": {

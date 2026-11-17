@@ -25,10 +25,27 @@ import { asService, newestOf } from './chat-facts';
  * a brand outside the organization.
  */
 
-export async function getActionCenterKpisFor(auth: McpAuthContext, params: { brandId: string }) {
+/** A date the app or the model gave as its UTC day; null when it isn't one. */
+const kpiDay = (value: string | undefined) => {
+  const day = value?.slice(0, 10);
+  return day && /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day)) ? day : null;
+};
+
+/**
+ * The brand's KPIs, as the KPIs page reads them: over the period's whole
+ * UTC days when both ends are given (the page's date range), else each
+ * KPI over its own timeframe.
+ */
+export async function getActionCenterKpisFor(
+  auth: McpAuthContext,
+  params: { brandId: string; dateFrom?: string; dateTo?: string },
+) {
   if (!(await brandAllowed(auth, params.brandId))) return null;
+  const dayFrom = kpiDay(params.dateFrom);
+  const dayTo = kpiDay(params.dateTo);
+  const period = dayFrom && dayTo && dayFrom <= dayTo ? { dayFrom, dayTo } : undefined;
   const [snapshots, window] = await asService(() =>
-    Promise.all([getKpiSnapshots(params.brandId), getTrackingWindow(params.brandId)]),
+    Promise.all([getKpiSnapshots(params.brandId, period), getTrackingWindow(params.brandId)]),
   );
   return {
     configured: snapshots.configured,
@@ -47,6 +64,7 @@ export async function getActionCenterKpisFor(auth: McpAuthContext, params: { bra
     })),
     // The KPIs read the brand's tracked answers: as of its last completed run.
     data_as_of: window.lastRunAt ?? null,
+    ...(period ? { period: { from: period.dayFrom, to: period.dayTo } } : {}),
   };
 }
 

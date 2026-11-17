@@ -17,7 +17,10 @@ import {
   EVAL_PAGE_SEARCH,
   EVAL_PAGE_SEARCH_PROMPTS,
   EVAL_PAGE_TOP_PROMPTS,
+  EVAL_HEAD_TO_HEAD_LOSSES,
+  EVAL_OPEN_COMPETITOR,
   EVAL_PAGE_VIEW_ACTIONS,
+  EVAL_PAGE_VIEW_SIGNALS,
   EVAL_SIGNAL_BACKLOG,
   evalActions,
   type EvalWorkspace,
@@ -148,6 +151,15 @@ export interface AgentEvalScenario {
   pageSearch?: { tool: string; search: string };
   /** The rows on screen the question means ("these"): the answer names each (item 8). */
   pageRows?: readonly string[];
+  /**
+   * The item the page holds open ("this one", step 9): the read that reads
+   * it, with these inputs, and what the answer must name from it.
+   */
+  pageOpen?: {
+    tool: string;
+    input: Readonly<Record<string, unknown>>;
+    names: readonly string[];
+  };
   /**
    * The page's top rows, in its order (the owner's plan of 2026-11-16, item
    * 7: "the top ones" are the rows on screen): the answer names each, in
@@ -422,6 +434,60 @@ export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
       },
     },
     askedActions: EVAL_PAGE_VIEW_ACTIONS,
+  },
+  // Step 9: the pages that send their context. On Signals filtered to one category, three
+  // rows on screen, none of the newest: "these" are read by their S- codes, each named.
+  {
+    id: 'signals-page-view',
+    group: 'skills',
+    name: 'The signals on screen',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'bunlar ne?',
+    promises: [],
+    workspace: 'long_lists',
+    page: {
+      route: '/dashboard/action-center/signals',
+      chips: [
+        { key: 'page', label: 'Signals' },
+        { key: 'brand', label: EVAL_BRAND.name, value: EVAL_BRAND.id },
+        { key: 'filter:category', label: 'Visibility', value: 'visibility' },
+      ],
+      view: {
+        rows: EVAL_PAGE_VIEW_SIGNALS.map((s) => ({ ref: s.code, label: s.title })),
+        total: EVAL_PAGE_VIEW_SIGNALS.length,
+        query: { category: 'visibility' },
+      },
+    },
+    askedSignals: EVAL_PAGE_VIEW_SIGNALS,
+  },
+  // On Competitors with one competitor open for its head-to-head: "this competitor" is that one.
+  {
+    id: 'competitor-open-losses',
+    group: 'skills',
+    name: 'Where the open competitor wins',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'bu rakibe karşı nerede kaybediyoruz?',
+    promises: [],
+    page: {
+      route: '/dashboard/competitors',
+      chips: [
+        { key: 'page', label: 'Competitors' },
+        { key: 'brand', label: EVAL_BRAND.name, value: EVAL_BRAND.id },
+      ],
+      view: {
+        open: { ref: EVAL_OPEN_COMPETITOR.id, label: EVAL_OPEN_COMPETITOR.name },
+        query: { competitor: EVAL_OPEN_COMPETITOR.id },
+      },
+    },
+    pageOpen: {
+      tool: 'get_competitor_head_to_head',
+      input: { competitor_id: EVAL_OPEN_COMPETITOR.id },
+      names: EVAL_HEAD_TO_HEAD_LOSSES.map((row) => row.prompt),
+    },
   },
   // On Prompts searched for a few words: "these" are the search's prompts, read with it.
   {
@@ -919,6 +985,18 @@ export function pageSearchMissed(
 export function unnamedPageRows(answer: string, names: readonly string[]): string[] {
   const text = answer.toLowerCase();
   return names.filter((name) => !text.includes(name.toLowerCase()));
+}
+
+/** Whether a run read the item the page holds open: its read, with each of these inputs. */
+export function readOpenItem(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  open: { tool: string; input: Readonly<Record<string, unknown>> },
+): boolean {
+  return run.reads.some(
+    (tool, i) =>
+      tool === open.tool &&
+      Object.entries(open.input).every(([key, value]) => run.readInputs[i]?.[key] === value),
+  );
 }
 
 // ─── Actions asked for by their codes ───────────────────────────────────────
@@ -1446,6 +1524,26 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
     checks.push(
       check(
         'names the rows on screen',
+        true,
+        unnamed.length === 0,
+        `missing ${unnamed.map((name) => `"${name}"`).join(', ')}`,
+      ),
+    );
+  }
+  if (scenario.pageOpen) {
+    const open = scenario.pageOpen;
+    checks.push(
+      check(
+        'reads the item the page holds open',
+        true,
+        readOpenItem(run, open),
+        `${open.tool} not read with ${JSON.stringify(open.input)}`,
+      ),
+    );
+    const unnamed = unnamedPageRows(run.answer, open.names);
+    checks.push(
+      check(
+        'names what that read found',
         true,
         unnamed.length === 0,
         `missing ${unnamed.map((name) => `"${name}"`).join(', ')}`,

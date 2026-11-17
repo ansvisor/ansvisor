@@ -17,6 +17,7 @@ const BRAND = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
 const TOPIC = '33333333-3333-4333-8333-333333333333';
 const PROMPT = '44444444-4444-4444-8444-444444444444';
+const ID = '55555555-5555-4555-8555-555555555555';
 const CHATGPT = 'chatgpt-web,gpt-5-chat-latest';
 
 const tool = (name: string) => {
@@ -394,5 +395,166 @@ describe("the page's search", () => {
       view: { search: 'x' },
     });
     expect(added('list_prompts', noBrand).applied).toEqual([]);
+  });
+});
+
+describe("the filters of the pages that send their context since step 9: each on its own list's read", () => {
+  const SIGNALS = '/dashboard/action-center/signals';
+  const HISTORY = '/dashboard/action-center/history';
+  const viewOf = (route: string, filters: [string, string, string][], view: object) =>
+    pageScopeOf({
+      route,
+      chips: [
+        { key: 'brand', label: 'Northwind', value: BRAND },
+        ...filters.map(([key, label, value]) => ({ key: `filter:${key}`, label, value })),
+      ],
+      view,
+    });
+
+  it("maps History's status, type, priority, source and search to get_action_history", () => {
+    const history = viewOf(
+      HISTORY,
+      [
+        ['status', 'Completed', 'completed'],
+        ['category', 'Recover', 'recover'],
+        ['priority', 'High', 'high'],
+        ['source', 'Google Search Console', 'gsc'],
+      ],
+      { search: 'pricing page' },
+    );
+    expect(added('get_action_history', history)).toEqual({
+      input: {
+        status: 'completed',
+        category: 'recover',
+        priority: 'high',
+        source: 'gsc',
+        search: 'pricing page',
+      },
+      applied: ['status', 'category', 'priority', 'source', 'search'],
+    });
+    // Only on its own list: Signals' read takes a status and a source, but not History's.
+    expect(added('list_signals', history)).toEqual({ input: {}, applied: [] });
+    // The model's own input wins; "all statuses" drops the page's.
+    expect(added('get_action_history', history, { status: 'dismissed' }).input.status).toBe(
+      'dismissed',
+    );
+    expect(added('get_action_history', history, {}, 'Show all statuses').applied).not.toContain(
+      'status',
+    );
+    expect(added('get_action_history', history, {}, 'Tüm öncelikler').applied).not.toContain(
+      'priority',
+    );
+  });
+
+  it("maps Signals' category, impact, status and source to list_signals; its platform stays words", () => {
+    const signals = viewOf(
+      SIGNALS,
+      [
+        ['category', 'Citation', 'citation'],
+        ['impact', 'High', 'high'],
+        ['status', 'New', 'new'],
+        ['source', 'Google Search Console', 'gsc'],
+        ['platform', 'ChatGPT', 'openai'],
+      ],
+      { search: 'espresso' },
+    );
+    expect(added('list_signals', signals)).toEqual({
+      input: { category: 'citation', impact: 'high', status: 'new', source: 'gsc' },
+      applied: ['category', 'impact', 'status', 'source'],
+    });
+    // Its codes named: the lookup, no filter.
+    expect(added('list_signals', signals, { codes: ['S-07'] })).toEqual({
+      input: { codes: ['S-07'] },
+      applied: [],
+    });
+    expect(added('list_signals', signals, {}, 'all sources and every category').applied).toEqual([
+      'impact',
+      'status',
+    ]);
+    // Not on another page's list, nor its platform on a read that takes one.
+    expect(added('get_action_history', signals)).toEqual({ input: {}, applied: [] });
+    expect(added('list_mentions', signals).applied).toEqual([]);
+  });
+
+  it("maps Library's tab, as a draft status, to list_drafts", () => {
+    const library = viewOf(
+      '/dashboard/content/library',
+      [
+        ['status', 'In review', 'in_review'],
+        ['created', 'Created: Last 30 days', '30d'],
+      ],
+      { tab: 'in_review' },
+    );
+    expect(added('list_drafts', library)).toEqual({
+      input: { status: 'in_review' },
+      applied: ['status'],
+    });
+    expect(added('list_content_opportunities', library)).toEqual({ input: {}, applied: [] });
+  });
+
+  it("maps Agents' tab and search to list_my_agents, unless asked for all agents", () => {
+    const agents = viewOf('/dashboard/agents', [['region', 'United States', 'US']], {
+      tab: 'paused',
+      search: 'winback',
+    });
+    // list_my_agents reads the person's agents, of no brand: its own page's tab and search.
+    const read = (raw = {}, question = 'Which of these failed?') =>
+      pageFilterInputs(tool('list_my_agents'), raw, agents, question);
+    expect(read()).toEqual({
+      input: { view: 'paused', search: 'winback' },
+      applied: ['tab', 'search'],
+    });
+    expect(read({ view: 'archived' }).input.view).toBe('archived');
+    expect(read({}, 'Show all my agents').applied).toEqual([]);
+    // An agent's runs are of a brand and of another page's list: neither.
+    expect(added('list_agent_runs', agents, { agent_id: ID }).applied).toEqual([]);
+    // A tab not one of the read's: none.
+    const odd = viewOf('/dashboard/agents', [], { tab: 'ready' });
+    expect(pageFilterInputs(tool('list_my_agents'), {}, odd, 'Hi').applied).toEqual([]);
+    // Without the brand chip, nothing of the page applies.
+    const noBrand = pageScopeOf({ route: '/dashboard/agents', chips: [], view: { tab: 'paused' } });
+    expect(pageFilterInputs(tool('list_my_agents'), {}, noBrand, 'Hi').applied).toEqual([]);
+  });
+
+  it("maps Products' platform to its own list's reads, and Plan's card to get_content_plan", () => {
+    const shopping = viewOf(
+      '/dashboard/shopping',
+      [
+        ['platform', 'ChatGPT Shopping', 'chatgpt-shopping'],
+        ['region', 'United States', 'US'],
+      ],
+      { tab: 'products' },
+    );
+    expect(added('get_shopping_shelf', shopping)).toEqual({
+      input: { platform: 'chatgpt-shopping' },
+      applied: ['platform'],
+    });
+    expect(added('list_shopping_cards', shopping)).toEqual({
+      input: { platform: 'chatgpt-shopping', region: 'US' },
+      applied: ['platform', 'region'],
+    });
+    // A shopping channel is no Mentions platform.
+    expect(added('list_mentions', shopping).input).not.toHaveProperty('platform');
+    const plan = viewOf('/dashboard/content/plan', [['card', 'Protect', 'protect']], {});
+    expect(added('get_content_plan', plan)).toEqual({
+      input: { card: 'protect' },
+      applied: ['card'],
+    });
+    expect(added('get_content_plan', plan, {}, 'Show all cards').applied).toEqual([]);
+  });
+
+  it("maps a cited page's platform to list_citations' model, as Citations does", () => {
+    const cited = viewOf(
+      '/dashboard/citations/url',
+      [
+        ['platform', 'ChatGPT', CHATGPT],
+        ['region', 'United States', 'US'],
+      ],
+      {},
+    );
+    expect(added('list_citations', cited)).toEqual({
+      input: { model: CHATGPT, region: 'US' },
+      applied: ['platform', 'region'],
+    });
   });
 });

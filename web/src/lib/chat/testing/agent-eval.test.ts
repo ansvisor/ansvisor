@@ -15,6 +15,7 @@ import {
   pageTopMissed,
   readByCodes,
   readCitationsByDomain,
+  readOpenItem,
   readSignalsByCodes,
   skillReads,
   substituteActions,
@@ -32,7 +33,11 @@ import {
   EVAL_PAGE_SEARCH,
   EVAL_PAGE_SEARCH_PROMPTS,
   EVAL_PAGE_TOP_PROMPTS,
+  EVAL_HEAD_TO_HEAD_LOSSES,
+  EVAL_OPEN_COMPETITOR,
   EVAL_PAGE_VIEW_ACTIONS,
+  EVAL_PAGE_VIEW_SIGNALS,
+  EVAL_SIGNAL_BACKLOG,
   evalReadResult,
 } from './agent-eval-data';
 import { safetyChecks, safetyFindings } from './safety-checks';
@@ -534,5 +539,59 @@ describe("the page's view", () => {
     expect(pageSearchMissed(run(), page)).toBe('search null');
     expect(pageSearchMissed({ reads: [], readInputs: [] }, page)).toBe('list_prompts not read');
     expect(unnamedPageRows('A and b.', ['a', 'B', 'c'])).toEqual(['c']);
+  });
+});
+
+// Step 9 of the owner's plan: the pages that send their context.
+describe('the pages that send their context since step 9', () => {
+  it('asks "bunlar ne?" on Signals, three rows on screen none of the newest, by their S- codes', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'signals-page-view')!;
+    expect(scenario.message).toBe('bunlar ne?');
+    expect(scenario.page!.route).toBe('/dashboard/action-center/signals');
+    expect(scenario.page!.view!.rows!.map((row) => row.ref)).toEqual(['S-41', 'S-23', 'S-07']);
+    expect(scenario.askedSignals).toEqual(EVAL_PAGE_VIEW_SIGNALS);
+    // Each title its own: naming one never reads as naming another.
+    for (const asked of EVAL_PAGE_VIEW_SIGNALS) {
+      expect(EVAL_SIGNAL_BACKLOG.filter((s) => s.title === asked.title)).toHaveLength(1);
+    }
+    const newest = (
+      evalReadResult('list_signals', {}, 'long_lists') as { signals: { code: string }[] }
+    ).signals
+      .slice(0, 3)
+      .map((s) => s.code);
+    expect(newest).not.toEqual(expect.arrayContaining(['S-41']));
+  });
+
+  it('asks "bu rakibe karşı nerede kaybediyoruz?" on Competitors with one open', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'competitor-open-losses')!;
+    expect(scenario.page!.view).toEqual({
+      open: { ref: EVAL_OPEN_COMPETITOR.id, label: EVAL_OPEN_COMPETITOR.name },
+      query: { competitor: EVAL_OPEN_COMPETITOR.id },
+    });
+    expect(scenario.pageOpen).toEqual({
+      tool: 'get_competitor_head_to_head',
+      input: { competitor_id: EVAL_OPEN_COMPETITOR.id },
+      names: EVAL_HEAD_TO_HEAD_LOSSES.map((row) => row.prompt),
+    });
+    // The read finds the open competitor's losses; another's has none, an unknown one is not found.
+    const losses = evalReadResult('get_competitor_head_to_head', {
+      competitor_id: EVAL_OPEN_COMPETITOR.id,
+      side: 'losing',
+    }) as { prompts: { prompt: string }[] };
+    expect(losses.prompts.map((row) => row.prompt)).toEqual(scenario.pageOpen!.names);
+    expect(evalReadResult('get_competitor_head_to_head', { competitor: 'Nobody' })).toEqual({
+      not_found: ['Nobody'],
+    });
+  });
+
+  it('checks the read of the item the page holds open, by its read and inputs', () => {
+    const open = { tool: 'get_competitor_head_to_head', input: { competitor_id: 'c3' } };
+    const run = (tool: string, input: Record<string, unknown>) => ({
+      reads: [tool],
+      readInputs: [input],
+    });
+    expect(readOpenItem(run(open.tool, { competitor_id: 'c3', side: 'losing' }), open)).toBe(true);
+    expect(readOpenItem(run(open.tool, { competitor_id: 'c1' }), open)).toBe(false);
+    expect(readOpenItem(run('list_competitors', { competitor_id: 'c3' }), open)).toBe(false);
   });
 });

@@ -407,6 +407,22 @@ describe('Overview, KPIs and Getting started', () => {
       data_as_of: '2026-10-29T04:00:00Z',
     });
     expect(kpis?.kpis[0]).not.toHaveProperty('trend');
+    // Each KPI over its own timeframe without a period; over the page's days with one (step 9).
+    expect(mocks.getKpiSnapshots).toHaveBeenLastCalledWith(BRAND, undefined);
+    expect(kpis).not.toHaveProperty('period');
+    const ranged = await getActionCenterKpisFor(auth(), {
+      brandId: BRAND,
+      dateFrom: '2026-10-18',
+      dateTo: '2026-11-16T23:59:59.999Z',
+    });
+    expect(mocks.getKpiSnapshots).toHaveBeenLastCalledWith(BRAND, {
+      dayFrom: '2026-10-18',
+      dayTo: '2026-11-16',
+    });
+    expect(ranged).toMatchObject({ period: { from: '2026-10-18', to: '2026-11-16' } });
+    // A day that isn't one, or only one end: no period.
+    await getActionCenterKpisFor(auth(), { brandId: BRAND, dateFrom: '2026-10-18,x' });
+    expect(mocks.getKpiSnapshots).toHaveBeenLastCalledWith(BRAND, undefined);
 
     mocks.getGettingStarted.mockResolvedValue({
       active: true,

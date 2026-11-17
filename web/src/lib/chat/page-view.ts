@@ -16,10 +16,23 @@ export interface ChatPageSort {
   dir: 'asc' | 'desc';
 }
 
-/** A row on screen: the code the page shows (AC-12, S-07), else its id, domain or address. */
+/**
+ * A row on screen: the code the page shows (AC-12, S-07), else its id,
+ * domain or address, or on a page whose rows are named by a key (a KPI's,
+ * a kind of action's) that key.
+ */
 export interface ChatPageViewRow {
   ref: string;
   /** What the row shows of it: its title, text or domain. */
+  label: string;
+}
+
+/**
+ * An item the page holds open that its URL doesn't name (a drawer, the
+ * agent a page is about): its ref where it has one, and what it shows of it.
+ */
+export interface ChatPageOpenItem {
+  ref?: string;
   label: string;
 }
 
@@ -33,6 +46,8 @@ export interface ChatPageView {
   rows?: ChatPageViewRow[];
   /** How many rows the list has, where the page knows it. */
   total?: number;
+  /** An item the page holds open outside its URL (the URL's own: `query`). */
+  open?: ChatPageOpenItem;
   /** The page's URL state: only the keys it keeps (PAGE_QUERY_KEYS), added by the side panel. */
   query?: Record<string, string>;
 }
@@ -147,16 +162,64 @@ export const PAGE_QUERY_KEYS: Readonly<Record<string, readonly string[]>> = {
   // One cited page: its address (`u`) and the filters it opened with.
   '/dashboard/citations/url': ['u', ...CITATION_FILTERS],
   '/dashboard/insights': ['range', 'from', 'to', 'region', 'model', 'topic'],
+  // The pages that send their context since step 9 (the owner's plan of 2026-11-16).
+  '/dashboard/action-center/signals': [
+    'range',
+    'category',
+    'impact',
+    'status',
+    'source',
+    'platform',
+    'q',
+    // The open drawer.
+    'signal',
+  ],
+  '/dashboard/action-center/history': [
+    'view',
+    'range',
+    'status',
+    'type',
+    'priority',
+    'source',
+    'sort',
+    'by',
+    'q',
+  ],
+  // The open competitor (?competitor=) and the period.
+  '/dashboard/competitors': ['preset', 'from', 'to', 'competitor'],
+  '/dashboard/shopping': ['tab'],
+  '/dashboard/audit': ['tab'],
+  '/dashboard/content/library': ['tab', 'created', 'madeIn', 'sent', 'shopping', 'action'],
+  '/dashboard/content/plan': ['days'],
 };
 
 /** A path as the panel sends it, without a trailing slash. */
 export const viewRoute = (route: string | null | undefined) =>
   route?.trim().replace(/\/+$/, '') || null;
 
+/** Pages whose path holds an id: the page they are, by its pattern. */
+const ID_PAGES: readonly [RegExp, string][] = [
+  [
+    /^\/dashboard\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    '/dashboard/agents/[id]',
+  ],
+];
+
+/**
+ * The page a path is, for the tables keyed by page: the path itself, or for
+ * a page whose path holds an id ("/dashboard/agents/1b2…") its pattern
+ * ("/dashboard/agents/[id]"); null for none.
+ */
+export function viewPage(route: string | null | undefined): string | null {
+  const path = viewRoute(route);
+  if (!path) return null;
+  return ID_PAGES.find(([pattern]) => pattern.test(path))?.[1] ?? path;
+}
+
 /** The URL keys a page keeps, by its path; null for a page with none listed. */
 export function pageQueryKeysOf(route: string | null | undefined): readonly string[] | null {
-  const path = viewRoute(route);
-  return (path && PAGE_QUERY_KEYS[path]) || null;
+  const path = viewPage(route);
+  return (path && Object.hasOwn(PAGE_QUERY_KEYS, path) && PAGE_QUERY_KEYS[path]) || null;
 }
 
 /**

@@ -30,6 +30,9 @@ import { slugify } from '@/lib/slug';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { DateRangeFilter, type DateRangePreset } from '@/components/filters/date-range-filter';
 import { getDateRange } from '@/lib/date-range';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
+import { viewRows } from '@/lib/chat/page-view';
 import { MODEL_LABELS } from '@/config/platform-labels';
 import type { Competitor } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1418,6 +1421,40 @@ export default function CompetitorsPage() {
       );
     },
     [brand, selectedCompetitorId],
+  );
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its period, the
+  // competitors listed by id with their domains, and the one open for the head-to-head (its id
+  // is in the URL, ?competitor=; its name comes with it).
+  const tChatRange = useTranslations('chatPanel.range');
+  const openCompetitor = competitors.find((c) => c.id === selectedCompetitorId) ?? null;
+  useChatPageContext(
+    brand
+      ? {
+          pageName: t('title'),
+          dateRange: {
+            from: datePreset === 'custom' ? dateFrom : datePreset,
+            to: datePreset === 'custom' ? dateTo : null,
+            label: rangeChipLabel(datePreset, { from: dateFrom, to: dateTo }, (key, values) =>
+              tChatRange(key, values),
+            ),
+          },
+          view: {
+            ...(loading
+              ? {}
+              : {
+                  rows: viewRows(competitors, (c) => ({
+                    ref: c.id,
+                    label: c.domain ? `${c.name} (${c.domain})` : c.name,
+                  })),
+                  total: competitors.length,
+                }),
+            ...(openCompetitor
+              ? { open: { ref: openCompetitor.id, label: openCompetitor.name } }
+              : {}),
+          },
+        }
+      : null,
   );
 
   if (isCloud && !canUse('competitor_tracking')) {

@@ -51,7 +51,13 @@ import { listSignalsPageFor, lookUpSignalsFor } from '@/lib/mcp/signal-page';
 import { historyPageFor } from '@/lib/mcp/today-reads';
 import { HISTORY_SORTS } from '@/lib/action-center/history';
 import { PRIORITY_LEVELS } from '@/lib/action-center/priority';
-import { SIGNAL_SOURCES } from '@/lib/signals/registry';
+import {
+  SIGNAL_CATEGORIES,
+  SIGNAL_IMPACTS,
+  SIGNAL_SOURCES,
+  type SignalCategory,
+  type SignalImpact,
+} from '@/lib/signals/registry';
 import { CHECK_RULES_TOOL, checkDraftRules } from '../page-check';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 import { PAGED, countedPage, listPage, pageInput } from './list-paging';
@@ -897,7 +903,7 @@ export const READ_TOOLS = [
     name: 'list_signals',
     class: 'read',
     area: 'action_center',
-    description: `The changes the Action Center detected for the brand over a period, as the Signals page shows them: detected by its end and still open or resolved after its start, newest first. Each: code (as S-07), title and description in the page's words, kind, category, impact, status, detected day, where, and the actions built on it.${PAGED} When the person names a signal by its code (S-07, "S 7", "s7", "#7", or a number they clearly mean as one) or its id, read that first: codes or ids, every one of the message in one read. It reads every status and every date, in this brand only (the period, status, kind and page don't apply); each row says whether it matched by its code or its id (matched). A code in not_found: say this brand has no signal with that code (codes are per brand), and never offer other signals as the closest. Never say a signal doesn't exist because a page of the list didn't show it. Name each signal by its title, with its code.`,
+    description: `The changes the Action Center detected for the brand over a period, as the Signals page shows them: detected by its end and still open or resolved after its start, newest first. Each: code (as S-07), title and description in the page's words, kind, category, impact, status, detected day, where, and the actions built on it. Filters as the page's: status, category, impact and source.${PAGED} When the person names a signal by its code (S-07, "S 7", "s7", "#7", or a number they clearly mean as one) or its id, read that first: codes or ids, every one of the message in one read. It reads every status and every date, in this brand only (the period, filters and page don't apply); each row says whether it matched by its code or its id (matched). A code in not_found: say this brand has no signal with that code (codes are per brand), and never offer other signals as the closest. Never say a signal doesn't exist because a page of the list didn't show it. Name each signal by its title, with its code.`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -910,6 +916,15 @@ export const READ_TOOLS = [
       brand_id: brandId,
       status: z.enum(['new', 'acknowledged', 'resolved', 'dismissed']).optional(),
       kind: z.string().optional().describe('A signal kind, as returned in earlier rows.'),
+      category: z
+        .enum(SIGNAL_CATEGORIES as [SignalCategory, ...SignalCategory[]])
+        .optional()
+        .describe("A category, as the Signals page's filter."),
+      impact: z.enum(SIGNAL_IMPACTS as [SignalImpact, ...SignalImpact[]]).optional(),
+      source: z
+        .enum(SIGNAL_SOURCES)
+        .optional()
+        .describe("Where its signals came from, as the Signals page's Source filter."),
       date_from: dateFrom,
       date_to: dateTo,
       ...pageInput,
@@ -930,6 +945,9 @@ export const READ_TOOLS = [
             brandId: input.brand_id,
             status: input.status,
             kind: input.kind,
+            category: input.category,
+            impact: input.impact,
+            source: input.source,
             dateFrom: input.date_from,
             dateTo: input.date_to,
             limit: input.limit,

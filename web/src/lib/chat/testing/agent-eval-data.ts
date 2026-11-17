@@ -880,9 +880,20 @@ export const EVAL_CODE_SIGNAL = backlogSignal(7, {
   resolved: '2026-09-02',
 });
 
+/**
+ * Two more of the brand's signals with titles of their own, for the Signals
+ * page scenario (step 9): the others repeat a title every 8 codes.
+ */
+const OWN_TITLE_SIGNALS: Readonly<Record<number, ReturnType<typeof backlogSignal>>> = {
+  7: EVAL_CODE_SIGNAL,
+  23: backlogSignal(23, { title: 'Your espresso guide dropped out of Gemini answers' }),
+  41: backlogSignal(41, { title: 'Perplexity started citing your brewing ratio chart' }),
+};
+
 /** The brand's 60 signals, newest first. */
-const SIGNAL_BACKLOG = Array.from({ length: 60 }, (_, i) =>
-  60 - i === 7 ? EVAL_CODE_SIGNAL : backlogSignal(60 - i),
+const SIGNAL_BACKLOG = Array.from(
+  { length: 60 },
+  (_, i) => OWN_TITLE_SIGNALS[60 - i] ?? backlogSignal(60 - i),
 );
 export const EVAL_SIGNAL_BACKLOG = SIGNAL_BACKLOG;
 
@@ -1197,6 +1208,67 @@ export const EVAL_PAGE_VIEW_ACTIONS: readonly { ref: string; title: string }[] =
   .sort((a, b) => b.priority_score - a.priority_score)
   .map((action) => ({ ref: action.number, title: action.title }));
 
+/**
+ * Action Center › Signals, filtered to one category (the owner's plan of
+ * 2026-11-16, step 9): the three rows on screen, by their S- codes, none of
+ * them the newest three, so "these" read from the list's first page are others.
+ */
+export const EVAL_PAGE_VIEW_SIGNALS: readonly { code: string; title: string }[] = [41, 23, 7].map(
+  (n) => ({ code: OWN_TITLE_SIGNALS[n].code, title: OWN_TITLE_SIGNALS[n].title }),
+);
+
+/**
+ * Competitors with Morning Ritual Co. open for its head-to-head (step 9):
+ * the prompts where it is ahead, biggest gap first, then one where the brand is.
+ */
+export const EVAL_OPEN_COMPETITOR = COMPETITORS[2];
+export const EVAL_HEAD_TO_HEAD_LOSSES = [
+  { prompt: PROMPTS[4].text, brand_visibility: 29, competitor_visibility: 71 },
+  { prompt: PROMPTS[1].text, brand_visibility: 40, competitor_visibility: 55 },
+];
+const HEAD_TO_HEAD_WINS = [
+  { prompt: PROMPTS[0].text, brand_visibility: 62, competitor_visibility: 20 },
+];
+
+/** The head-to-head as getCompetitorHeadToHeadFor answers it: only for a competitor of the brand. */
+function evalHeadToHead(input: Record<string, unknown>): unknown {
+  const named = typeof input.competitor === 'string' ? input.competitor.toLowerCase() : null;
+  const competitor = COMPETITORS.find(
+    (c) =>
+      c.id === input.competitor_id ||
+      (named && (c.name.toLowerCase() === named || c.domain === named)),
+  );
+  if (!competitor) {
+    return { not_found: [String(input.competitor_id ?? input.competitor ?? '')] };
+  }
+  if (competitor.id !== EVAL_OPEN_COMPETITOR.id) {
+    return { competitor: { name: competitor.name, domain: competitor.domain }, prompts: [] };
+  }
+  const rows =
+    input.side === 'winning'
+      ? HEAD_TO_HEAD_WINS
+      : input.side === 'losing'
+        ? EVAL_HEAD_TO_HEAD_LOSSES
+        : [...EVAL_HEAD_TO_HEAD_LOSSES, ...HEAD_TO_HEAD_WINS];
+  return {
+    competitor: { name: competitor.name, domain: competitor.domain },
+    period: 'every tracked answer',
+    summary: {
+      brand_visibility: 44,
+      competitor_visibility: 49,
+      competitor_ahead: 2,
+      brand_ahead: 1,
+    },
+    side: input.side ?? 'all',
+    prompts: rows.map((row) => ({
+      ...row,
+      platform: 'ChatGPT',
+      runs: 6,
+      difference: row.brand_visibility - row.competitor_visibility,
+    })),
+  };
+}
+
 /** The Prompts page's search, and the prompts it shows, by Visibility. */
 export const EVAL_PAGE_SEARCH = 'coffee subscription';
 export const EVAL_PAGE_SEARCH_PROMPTS: readonly { id: string; text: string }[] =
@@ -1336,6 +1408,8 @@ export function evalReadResult(
       return evalCitationsRead(input, workspace, ctx);
     case 'list_competitors':
       return { competitors: COMPETITORS };
+    case 'get_competitor_head_to_head':
+      return evalHeadToHead(input);
     case 'get_competitor_comparison':
       return {
         ...window,

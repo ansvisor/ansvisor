@@ -23,7 +23,9 @@ import type { ChatTool } from './registry/define-tool';
  * The page's search (its view, the owner's plan of 2026-11-16, item 8) is
  * one more list filter: it fills `search` on the reads of the page's own
  * list that take one (Prompts' list_prompts, Content's
- * list_content_opportunities, Mentions' reads), as the lookups' own words
+ * list_content_opportunities, Mentions' reads; since step 9 History's
+ * get_action_history, Agents' list_my_agents and Products'
+ * list_catalog_products), as the lookups' own words
  * (#2460: at most 8 words of the first 200 characters, escaped by the read),
  * unless the model gave its own search or named rows, or the question asks
  * for all of them. Plain module: scope.ts applies it to every read.
@@ -45,6 +47,8 @@ export interface PageScope {
   filters: PageFilter[];
   /** The page's search box, from its view; absent when it has none. */
   search?: string;
+  /** The page's open tab, from its view; absent when it has none. */
+  tab?: string;
 }
 
 interface ScopeChip {
@@ -56,7 +60,11 @@ interface ScopeChip {
 /** The page's scope from a message's context; null when it came from no page. */
 export function pageScopeOf(
   context:
-    | { route?: string; chips: readonly ScopeChip[]; view?: { search?: string } }
+    | {
+        route?: string;
+        chips: readonly ScopeChip[];
+        view?: { search?: string; tab?: string };
+      }
     | null
     | undefined,
 ): PageScope | null {
@@ -69,19 +77,33 @@ export function pageScopeOf(
       : [],
   );
   const search = context.view?.search?.trim();
-  return { route, brandId, filters, ...(search ? { search } : {}) };
+  const tab = context.view?.tab?.trim();
+  return { route, brandId, filters, ...(search ? { search } : {}), ...(tab ? { tab } : {}) };
 }
 
 /**
- * Which input a page's platform chip fills: Visibility's and Citations' hold
- * the AI models answers are stored under (a family's slugs joined, the
- * reads' `model`), Mentions' a platform id (`platform`). AI Traffic's is the
- * site a visit came from, which no read takes: text only.
+ * Which input a page's platform chip fills: Visibility's and Citations' (and
+ * a cited page's) hold the AI models answers are stored under (a family's
+ * slugs joined, the reads' `model`), Mentions' a platform id (`platform`).
+ * Products' is an AI shopping channel ("chatgpt-shopping"), which only its
+ * own list's reads take. AI Traffic's is the site a visit came from and
+ * Signals' an engine its signals are about, which no read takes: text only.
  */
-const PLATFORM_FIELDS: Readonly<Record<string, 'model' | 'platform'>> = {
-  '/dashboard/insights': 'model',
-  '/dashboard/citations': 'model',
-  '/dashboard/mentions': 'platform',
+const PLATFORM_FIELDS: Readonly<Record<string, { field: 'model' | 'platform'; ownList?: true }>> = {
+  '/dashboard/insights': { field: 'model' },
+  '/dashboard/citations': { field: 'model' },
+  '/dashboard/citations/url': { field: 'model' },
+  '/dashboard/mentions': { field: 'platform' },
+  '/dashboard/shopping': { field: 'platform', ownList: true },
+};
+
+/**
+ * The input a page's open tab fills on its own list's reads, where the tab
+ * is the list's filter: Agents' Mine, Workspace, Paused and Archived are
+ * list_my_agents' `view`.
+ */
+const TAB_FIELDS: Readonly<Record<string, string>> = {
+  '/dashboard/agents': 'view',
 };
 
 /** Citations' Sources (the table's scope) as list_citations names them. */
@@ -101,12 +123,20 @@ interface FilterRule {
   value?: (value: string) => string | null;
 }
 
-/** How a page's filter becomes an input; null for one Chat reads only as text (priority). */
+/**
+ * How a page's filter becomes an input; null for one Chat reads only as
+ * text. A list filter fills only a read of the page's own list that takes
+ * it (History's priority and source, Signals' source, Plan's card), so
+ * Actions' priority stays text: its read has no such input.
+ */
 function ruleOf(key: string, route: string | null): FilterRule | null {
   switch (key) {
     case 'platform': {
-      const field = route ? PLATFORM_FIELDS[route] : undefined;
-      return field ? { field } : null;
+      const platform =
+        route && Object.hasOwn(PLATFORM_FIELDS, route) ? PLATFORM_FIELDS[route] : null;
+      return platform
+        ? { field: platform.field, ...(platform.ownList ? { ownList: true } : {}) }
+        : null;
     }
     case 'region':
       return { field: 'region' };
@@ -120,6 +150,9 @@ function ruleOf(key: string, route: string | null): FilterRule | null {
     case 'category':
     case 'impact':
     case 'type':
+    case 'priority':
+    case 'source':
+    case 'card':
       return { field: key, ownList: true };
     default:
       return null;
@@ -155,12 +188,17 @@ const ASKS_ALL: Readonly<Record<string, RegExp>> = {
   category: allOf('categor(?:y|ies)', 'kategori'),
   impact: allOf('impacts?|impact levels?', 'etki'),
   type: allOf('types?', 'tür|tip'),
+  priority: allOf('priorit(?:y|ies)|priority levels?', 'öncelik'),
+  source: allOf('sources?', 'kaynak'),
+  card: allOf('cards?|plan rows?|rows?', 'kart|satır'),
+  // The page's tab as its list's filter (Agents' Paused): "all agents", "tüm agentlar".
+  tab: allOf('agents?|tabs?', 'agent|ajan|sekme'),
   // The page's search: "all prompts", "every opportunity", "tüm promptlar", "without the search".
   search: new RegExp(
     `${
       allOf(
-        'prompts?|queries|questions|opportunit(?:y|ies)|drafts?|reports?|mentions?|answers?|items?|rows?|results?',
-        'prompt|soru|sorgu|fırsat|taslak|rapor|bahsetme|yanıt|cevap|öğe|satır|sonuç',
+        'prompts?|queries|questions|opportunit(?:y|ies)|drafts?|reports?|mentions?|answers?|items?|rows?|results?|actions?|agents?|products?',
+        'prompt|soru|sorgu|fırsat|taslak|rapor|bahsetme|yanıt|cevap|öğe|satır|sonuç|aksiyon|agent|ajan|ürün',
       ).source
     }|\\b(?:without|ignoring|ignore)\\s+(?:the\\s+|my\\s+|this\\s+)?search\\b|aramasız|arama(?:yı)?\\s+(?:olmadan|yok\\s+say)`,
     'iu',
@@ -190,16 +228,19 @@ export function pageFilterInputs(
 ): { input: Record<string, unknown>; applied: string[] } {
   const input: Record<string, unknown> = { ...raw };
   const applied: string[] = [];
+  const ownList = !!page?.route && tool.route === page.route;
+  // A read of no brand (Agents' list_my_agents: the person's agents) takes its own page's
+  // list filters only, never a brand's data cut (platform, region, topic).
+  const brandless = !fieldOf(tool, 'brand_id');
   if (
     page &&
     page.brandId &&
-    input.brand_id === page.brandId &&
+    (input.brand_id === page.brandId || (brandless && ownList)) &&
     !LOOKUP_FIELDS.some((field) => Array.isArray(raw[field]) && raw[field].length > 0)
   ) {
-    const ownList = !!page.route && tool.route === page.route;
     for (const filter of page.filters) {
       const rule = ruleOf(filter.key, page.route);
-      if (!rule || (rule.ownList && !ownList)) continue;
+      if (!rule || (rule.ownList && !ownList) || (brandless && !rule.ownList)) continue;
       const schema = fieldOf(tool, rule.field);
       // The model's own input, or an earlier chip's, stays.
       if (!schema || rule.field in input || asksAllOf(filter.key, question)) continue;
@@ -207,6 +248,23 @@ export function pageFilterInputs(
       if (!value || !schema.safeParse(value).success) continue;
       input[rule.field] = value;
       applied.push(filter.key);
+    }
+    // The page's tab, where it is its own list's filter (TAB_FIELDS), as the read names it.
+    const tabField =
+      page.tab && page.route && Object.hasOwn(TAB_FIELDS, page.route)
+        ? TAB_FIELDS[page.route]
+        : null;
+    const tabSchema = tabField ? fieldOf(tool, tabField) : undefined;
+    if (
+      tabField &&
+      tabSchema &&
+      ownList &&
+      !(tabField in raw) &&
+      !asksAllOf('tab', question) &&
+      tabSchema.safeParse(page.tab).success
+    ) {
+      input[tabField] = page.tab;
+      applied.push('tab');
     }
     // The page's search, on its own list's reads that take one, in the lookups' words.
     const search = searchWords(page.search).join(' ');

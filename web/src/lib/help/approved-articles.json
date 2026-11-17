@@ -1557,6 +1557,9 @@
         "my sort",
         "my search",
         "open tab",
+        "this one",
+        "open competitor",
+        "every page",
         "ask about today",
         "today's focus",
         "first focus card",
@@ -1610,7 +1613,7 @@
         },
         {
           "heading": "Numbers that match the page",
-          "text": "Chat ranks and counts as the page does. \"My top 5 prompts\" on Prompts are the table's top 5 by Visibility, and \"the first ones\" on Actions or Content are the rows you see, in the page's order. On Overview and Citations, **Last 24 hours** is the latest tracking run, as on those pages.\n\nChat also sees the open tab, the sort and search you picked, and the items on screen, and reads those items before it answers: \"these\" are the rows you see. On Prompts, Content and Mentions, Chat's lists follow the page's search, and the answer says so."
+          "text": "Chat ranks and counts as the page does. \"My top 5 prompts\" on Prompts are the table's top 5 by Visibility, and \"the first ones\" on Actions or Content are the rows you see, in the page's order. On Overview and Citations, **Last 24 hours** is the latest tracking run, as on those pages.\n\nChat also sees the open tab, the sort and search you picked, and the items on screen, and reads those items before it answers: \"these\" are the rows you see. On Prompts, Content, Mentions, History and Agents, Chat's lists follow the page's search, and the answer says so. This works on every page, from Today and Signals to Products, Site Audit, the Library, Reports and a cited page: Chat knows the page, its dates, its filters and its rows, and \"this one\" is what you have open, such as a competitor or an agent."
         },
         {
           "heading": "Chats in the panel",

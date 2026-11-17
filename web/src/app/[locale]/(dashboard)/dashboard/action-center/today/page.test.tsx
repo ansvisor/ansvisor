@@ -67,7 +67,11 @@ vi.mock('@/components/providers/chat-agentic-provider', () => ({
   useChatAgentic: () => chatOn,
 }));
 const panel = { available: true, open: false, fill: vi.fn(), toggle: vi.fn() };
-vi.mock('@/components/chat/panel/chat-panel-context', () => ({ useChatPanel: () => panel }));
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', () => ({
+  useChatPanel: () => panel,
+  useChatPageContext: chatPage,
+}));
 const { track } = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => ({ track }));
 const { toast } = vi.hoisted(() => ({
@@ -1421,6 +1425,46 @@ describe('Action Center › Today', () => {
       await act(async () => button('Try again')?.click());
       expect(reads.writeTopicPrompts).toHaveBeenCalledTimes(2);
       expect(button('Track 1 prompt')).toBeDefined();
+    });
+  });
+  describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+    const view = () => chatPage.mock.lastCall![0].view;
+
+    it("sends each part's rows once it has read, by the code each shows, with its part", async () => {
+      reads.getTodayFocus.mockResolvedValue([
+        card('a1', { action: action('a1', { brandNo: 4 }) }),
+        card('a2', { action: action('a2', { brandNo: 12 }) }),
+      ]);
+      reads.getTodayChanges.mockResolvedValue({
+        ...changes,
+        items: [signal('s1', { brandNo: 7 }), signal('s2')],
+      });
+      await draw();
+      const page = chatPage.mock.lastCall![0];
+      expect(page.pageName).toBe('Today');
+      // Focus by AC code, Since yesterday by S- code (else its id), Waiting's draft by id and its
+      // due action by code; an agent's run, reviews and ideas carry no ref a read takes.
+      expect(view().rows.map((row: { ref: string }) => row.ref)).toEqual([
+        'AC-04',
+        'AC-12',
+        'S-07',
+        's2',
+        'd1',
+        'AC-1',
+      ]);
+      expect(view().rows[0].label).toMatch(/^Today's focus: /);
+      expect(view().rows[2].label).toMatch(/^Since yesterday: /);
+      expect(view().rows[4]).toEqual({ ref: 'd1', label: 'Waiting for you: Low-acid guide' });
+      // A page of parts, not one list: no count.
+      expect(view()).not.toHaveProperty('total');
+    });
+
+    it('sends no rows while its parts read, and none of another brand', async () => {
+      reads.getTodayFocus.mockReturnValue(new Promise(() => {}));
+      reads.getTodayChanges.mockReturnValue(new Promise(() => {}));
+      reads.getTodayWaiting.mockReturnValue(new Promise(() => {}));
+      await draw();
+      expect(view()).toEqual({});
     });
   });
 });

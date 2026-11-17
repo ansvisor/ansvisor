@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ShoppingBag } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -28,6 +28,7 @@ import {
   type ProductView,
 } from '@/lib/shopping/products';
 import { priceText } from '@/lib/shopping/price';
+import { viewRows as chatViewRows, type ChatPageView } from '@/lib/chat/page-view';
 
 /** Rows shown before "Show more". */
 const ROWS_SHOWN = 50;
@@ -132,13 +133,34 @@ function ProductCell({ row }: { row: ProductRow }) {
 export function ProductsTable({
   products,
   loading,
+  onChatView,
 }: {
   products: ShoppingProducts | null;
   loading: boolean;
+  /**
+   * What Chat's side panel sees of the table (the owner's plan of 2026-11-16, step 9): once
+   * read, the products on screen by their catalog id, with how many the view has.
+   */
+  onChatView?: (view: ChatPageView | null) => void;
 }) {
   const t = useTranslations('shopping.products');
   const [view, setView] = useState<ProductView>('all');
   const [shown, setShown] = useState(ROWS_SHOWN);
+
+  const chatView =
+    loading || !products
+      ? null
+      : JSON.stringify({
+          rows: chatViewRows(viewRows(products.rows, view).slice(0, shown), (row) => ({
+            ref: row.product.id,
+            label: row.product.title,
+          })),
+          total: viewCounts(products.rows, products.total)[view],
+        } satisfies ChatPageView);
+  useEffect(() => {
+    onChatView?.(chatView ? (JSON.parse(chatView) as ChatPageView) : null);
+  }, [onChatView, chatView]);
+  useEffect(() => () => onChatView?.(null), [onChatView]);
 
   if (loading || !products) {
     return <Skeleton className="h-[320px] w-full" />;

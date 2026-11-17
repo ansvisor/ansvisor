@@ -1463,6 +1463,8 @@ export default function PromptsPage() {
   const [view, setView] = useState<PromptsView>(initialView);
   // What Chat's side panel sees of the Tracked table, which keeps its own sort and search.
   const [tableView, setTableView] = useState<ChatPageView | null>(null);
+  // And the Topics table's (step 9).
+  const [topicsView, setTopicsView] = useState<ChatPageView | null>(null);
 
   const initialRange: PromptRangePreset = (() => {
     const raw = searchParams.get('range');
@@ -2069,10 +2071,12 @@ export default function PromptsPage() {
             tChat('actions'),
           ],
           // And what else it shows (the owner's plan, item 8): the open tab, and on Tracked
-          // the table's sort, search, the prompts on screen and how many match.
+          // the table's sort, search, the prompts on screen and how many match; on Topics
+          // (step 9) its sort, its topics in the table's order and how many.
           view: {
             tab: tab === 'all' ? view : tab,
             ...(tracked && tableView ? tableView : {}),
+            ...(tab === 'topics' && topicsView ? topicsView : {}),
           },
         }
       : null,
@@ -2363,6 +2367,7 @@ export default function PromptsPage() {
               onLoaded={() => setPromptDataWanted(true)}
               openAddTopic={addTopicPending}
               onAddTopicOpened={() => setAddTopicPending(false)}
+              onChatView={setTopicsView}
             />
           )}
         </TabsContent>

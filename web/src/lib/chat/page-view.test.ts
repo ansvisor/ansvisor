@@ -8,6 +8,7 @@ import {
   panelPageView,
   pageQueryOf,
   viewLabel,
+  viewPage,
   viewRows,
 } from './page-view';
 
@@ -93,5 +94,87 @@ describe("a page's view, as the browser builds it", () => {
       query: { range: '7d' },
     });
     expect(panelPageView(undefined, '/dashboard/today', '?x=1')).toBeUndefined();
+  });
+});
+
+describe('the URL state of the pages that send their context since step 9', () => {
+  const ID = '11111111-1111-4111-8111-111111111111';
+  const SECRETS = 'token=t&code=c&next=%2Fx&utm_source=mail';
+
+  it.each([
+    [
+      '/dashboard/action-center/signals',
+      `range=7d&category=citation&impact=high&status=new&source=gsc&platform=openai&q=S-07&signal=${ID}`,
+      {
+        range: '7d',
+        category: 'citation',
+        impact: 'high',
+        status: 'new',
+        source: 'gsc',
+        platform: 'openai',
+        q: 'S-07',
+        signal: ID,
+      },
+    ],
+    [
+      '/dashboard/action-center/history',
+      'view=scorecard&range=90d&status=completed&type=recover&priority=high&source=gsc&sort=oldest&by=play&q=AC-12',
+      {
+        view: 'scorecard',
+        range: '90d',
+        status: 'completed',
+        type: 'recover',
+        priority: 'high',
+        source: 'gsc',
+        sort: 'oldest',
+        by: 'play',
+        q: 'AC-12',
+      },
+    ],
+    [
+      '/dashboard/competitors',
+      `preset=custom&from=2026-10-01&to=2026-10-31&competitor=${ID}`,
+      { preset: 'custom', from: '2026-10-01', to: '2026-10-31', competitor: ID },
+    ],
+    ['/dashboard/shopping', 'tab=products', { tab: 'products' }],
+    ['/dashboard/audit', 'tab=opportunities', { tab: 'opportunities' }],
+    [
+      '/dashboard/content/library',
+      `tab=in_review&created=30d&madeIn=agent&sent=failed&shopping=attention&action=${ID}`,
+      {
+        tab: 'in_review',
+        created: '30d',
+        madeIn: 'agent',
+        sent: 'failed',
+        shopping: 'attention',
+        action: ID,
+      },
+    ],
+    ['/dashboard/content/plan', 'days=7&start=create', { days: '7' }],
+  ])('keeps only the keys %s keeps', (route, query, kept) => {
+    expect(pageQueryOf(route, `${query}&${SECRETS}`)).toEqual(kept);
+  });
+
+  it('keeps none on a page that keeps its state elsewhere (Today, KPIs, Review, Agents, Reports)', () => {
+    for (const route of [
+      '/dashboard/action-center/today',
+      '/dashboard/action-center/kpis',
+      '/dashboard/action-center/review',
+      '/dashboard/agents',
+      '/dashboard/reports',
+    ]) {
+      expect(PAGE_QUERY_KEYS[route], route).toBeUndefined();
+      expect(pageQueryOf(route, 'tab=paused&q=x'), route).toBeUndefined();
+    }
+  });
+
+  it("tells a page whose path holds an id by its pattern, and only an agent's", () => {
+    expect(viewPage(`/dashboard/agents/${ID}`)).toBe('/dashboard/agents/[id]');
+    expect(viewPage(`/dashboard/agents/${ID}/`)).toBe('/dashboard/agents/[id]');
+    expect(viewPage('/dashboard/agents/new')).toBe('/dashboard/agents/new');
+    expect(viewPage('/dashboard/agents')).toBe('/dashboard/agents');
+    expect(viewPage(null)).toBeNull();
+    // A key that only an object's prototype has is no page's.
+    expect(pageQueryOf('constructor', 'tab=x')).toBeUndefined();
   });
 });

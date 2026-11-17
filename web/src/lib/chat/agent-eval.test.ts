@@ -1705,6 +1705,108 @@ describe('the agents’ test set harness, on a scripted model', () => {
     expect(result.passed).toBe(false);
   });
 
+  // Step 9 of the owner's plan: the pages that send their context.
+  it('reads the signals on screen by their S- codes on Signals, and names each', async () => {
+    const { EVAL_PAGE_VIEW_SIGNALS } = await import('./testing/agent-eval-data');
+    const codes = EVAL_PAGE_VIEW_SIGNALS.map((s) => s.code);
+    const model = scripted([
+      calls(toolCall('r1', 'list_signals', { brand_id: BRAND, codes })),
+      text(
+        `Ekrandaki üç sinyal:\n${EVAL_PAGE_VIEW_SIGNALS.map((s) => `- **${s.title}** (${s.code})`).join('\n')}`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('signals-page-view'));
+    expect(result.run.reads).toEqual(['list_signals']);
+    // The reader saw the rows on screen as untrusted data, with this page's own lookups.
+    const seen = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(seen).toContain('<untrusted_data source=\\"page_view\\">');
+    expect(seen).toContain(`${codes[0]} — ${EVAL_PAGE_VIEW_SIGNALS[0].title.slice(0, 30)}`);
+    expect(seen).toContain('S- codes with list_signals codes; ids with list_signals ids.');
+    for (const name of [
+      'reads the signals by their codes',
+      'names each signal asked by its title and code',
+      'names no other signal in their place',
+    ]) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails "these" on Signals answered from the newest page of the list', async () => {
+    const { EVAL_SIGNAL_BACKLOG } = await import('./testing/agent-eval-data');
+    const newest = EVAL_SIGNAL_BACKLOG[0];
+    scripted([
+      calls(toolCall('r1', 'list_signals', { brand_id: BRAND })),
+      text(`Bunlar en yeni sinyaller: **${newest.title}** (${newest.code}).`),
+    ]);
+    const result = await runScenario(skillOf('signals-page-view'));
+    const failed = result.checks.filter((check) => check.must && !check.ok).map((c) => c.name);
+    expect(failed).toEqual(
+      expect.arrayContaining([
+        'reads the signals by their codes',
+        'names each signal asked by its title and code',
+        'names no other signal in their place',
+      ]),
+    );
+    expect(result.passed).toBe(false);
+  });
+
+  it('reads the head-to-head of the competitor Competitors holds open, and names the prompts', async () => {
+    const { EVAL_HEAD_TO_HEAD_LOSSES, EVAL_OPEN_COMPETITOR } =
+      await import('./testing/agent-eval-data');
+    const model = scripted([
+      calls(
+        toolCall('r1', 'get_competitor_head_to_head', {
+          brand_id: BRAND,
+          competitor_id: EVAL_OPEN_COMPETITOR.id,
+          side: 'losing',
+        }),
+      ),
+      text(
+        `${EVAL_OPEN_COMPETITOR.name} şu promptlarda önde:\n${EVAL_HEAD_TO_HEAD_LOSSES.map((row) => `- ${row.prompt}`).join('\n')}`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('competitor-open-losses'));
+    expect(result.run.reads).toEqual(['get_competitor_head_to_head']);
+    // The reader was told which competitor "this one" is, and the read that reads it.
+    const seen = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(seen).toContain(
+      `open: competitor ${EVAL_OPEN_COMPETITOR.id} — ${EVAL_OPEN_COMPETITOR.name}`,
+    );
+    expect(seen).toContain('read it with get_competitor_head_to_head with competitor_id first');
+    for (const name of ['reads the item the page holds open', 'names what that read found']) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails "this competitor" answered for another competitor', async () => {
+    const { EVAL_COMPETITORS } = await import('./testing/agent-eval-data');
+    scripted([
+      calls(
+        toolCall('r1', 'get_competitor_head_to_head', {
+          brand_id: BRAND,
+          competitor_id: EVAL_COMPETITORS[0].id,
+        }),
+      ),
+      text(`${EVAL_COMPETITORS[0].name} karşısında kaybettiğimiz bir prompt yok.`),
+    ]);
+    const result = await runScenario(skillOf('competitor-open-losses'));
+    const failed = Object.fromEntries(
+      result.checks.filter((check) => check.must && !check.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(Object.keys(failed)).toEqual(
+      expect.arrayContaining(['reads the item the page holds open', 'names what that read found']),
+    );
+    expect(result.passed).toBe(false);
+  });
+
   it('refuses every network call but the model’s', async () => {
     await expect(fetch('https://example.com/')).rejects.toThrow('no network call');
   });
