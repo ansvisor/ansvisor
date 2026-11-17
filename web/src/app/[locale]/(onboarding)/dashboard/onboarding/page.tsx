@@ -12,6 +12,17 @@ import { getPromptCapacity, getTrackedPromptCount, savePromptSet } from '@/lib/a
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
+import { finishSetupAfterPurchase } from '@/lib/actions/setup-after-purchase';
+import {
+  canManagePlan,
+  needsSetupAfterPurchase,
+  planLapsed,
+  readSetupProgress,
+  SETUP_BILLING_HREF,
+  setupDeferredCookie,
+  setupFlowProps,
+  setupLanding,
+} from '@/lib/onboarding/setup-after-purchase';
 import { getFaviconUrl } from '@/lib/favicon';
 import { insertOrganization } from '@/lib/organization-insert';
 import { addCompetitorChoice, mergeCompetitorSuggestions } from '@/lib/competitor-list';
@@ -28,6 +39,7 @@ import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import {
   firstMonthOfferOn,
   isCloud,
+  isSubscriptionActive,
   SUBSCRIBABLE_PLANS,
   getPlan,
   toPlanId,
@@ -250,6 +262,46 @@ export default function OnboardingPage() {
   const [competitorLoadingMsg, setCompetitorLoadingMsg] = useState('');
   const competitorMsgIdx = useRef(0);
 
+  // Setup after purchase (cloud): the organization's plan is active or
+  // trialing already, so setup has no plan step. Finish aligns the prompts to
+  // the plan and starts the brand's first run (lib/onboarding/setup-after-purchase.ts).
+  const [afterPurchase, setAfterPurchase] = useState(false);
+  // The admin, who manages the plan: in setup after purchase, "Manage your
+  // plan" puts setup off for a while and opens Billing.
+  const [managesPlan, setManagesPlan] = useState(false);
+
+  // Setup after purchase whose plan lapsed meanwhile (a trial canceled, a
+  // payment failed): setup's writes would refuse it, so nothing is written.
+  // Billing opens for its admin, the read-only dashboard for anyone else
+  // (planLapsed: neither layout sends them back). Read before each step's
+  // writes; a plan that can't be read leaves it to the write.
+  const leaveIfPlanLapsed = async (orgId: string | null | undefined): Promise<boolean> => {
+    if (!afterPurchase || !orgId) return false;
+    try {
+      const { data: org, error } = await createClient()
+        .from('organizations')
+        .select('subscription_status, stripe_subscription_id')
+        .eq('id', orgId)
+        .single();
+      if (
+        error ||
+        !org ||
+        !planLapsed({
+          cloud: isCloud(),
+          subscriptionStatus: org.subscription_status,
+          everSubscribed: Boolean(org.stripe_subscription_id),
+        })
+      ) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+    toast.error(tSetup('planLapsed'));
+    window.location.href = managesPlan ? SETUP_BILLING_HREF : '/dashboard';
+    return true;
+  };
+
   // Plan step (cloud only)
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   // Trial length when the plan step is reached; null once the organization has
@@ -385,8 +437,8 @@ export default function OnboardingPage() {
     };
   }, [step, planBrandId]);
 
-  // Self-host has no plan step.
-  const totalSteps = isCloud() ? PLAN_STEP : 5;
+  // Self-host has no plan step, nor setup after purchase.
+  const totalSteps = isCloud() && !afterPurchase ? PLAN_STEP : 5;
 
   // Determine which scrapers/models are available based on the plan
   const currentPlan = getPlan(currentPlanId);
@@ -461,6 +513,11 @@ export default function OnboardingPage() {
   // Resume logic: check existing state on mount
   useEffect(() => {
     async function checkResume() {
+      // The organization's plan is active or trialing already: setup after
+      // purchase. Set with the step the resume opens, so its first
+      // onboarding_step_viewed carries it.
+      let planActive = false;
+      let role: string | null = null;
       try {
         const supabase = createClient();
         const {
@@ -470,12 +527,18 @@ export default function OnboardingPage() {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('organization_id, onboarding_completed')
+          .select('organization_id, onboarding_completed, role')
           .eq('id', user.id)
           .single();
+        role = profile?.role ?? null;
 
-        if (profile?.onboarding_completed) {
-          if (isCloud() && profile.organization_id) {
+        // Onboarded, in an organization. Onboarded with none (it couldn't be
+        // made, or was left) goes on below, where setup makes one: the
+        // dashboard would only send them back here.
+        if (profile?.onboarding_completed && profile.organization_id) {
+          // Setup after purchase, due or left unfinished, goes on below too.
+          let setupOpens = false;
+          if (isCloud()) {
             // Check subscription status — if not active/trialing, show plan selection
             const { data: org } = await supabase
               .from('organizations')
@@ -491,14 +554,54 @@ export default function OnboardingPage() {
               setInitialLoading(false);
               return;
             }
+            // Setup after purchase: the plan is active, the organization has
+            // no brand of its own, or its one brand was left part-way (read
+            // from its data, as the dashboard's layout reads it, so setup
+            // opens where it stands and never bounces back), for someone who
+            // can set one up.
+            const gate = { cloud: true, subscriptionStatus: subStatus, role: profile.role };
+            setupOpens = needsSetupAfterPurchase({
+              ...gate,
+              progress: await readSetupProgress(supabase, profile.organization_id),
+            });
           }
-          router.push('/dashboard');
-          router.refresh();
-          return;
+          if (!setupOpens) {
+            router.push('/dashboard');
+            router.refresh();
+            return;
+          }
         }
 
         if (profile?.organization_id) {
           setOrganizationId(profile.organization_id);
+          // On the cloud, a plan bought before setup (setup after purchase,
+          // resumed): Finish then starts tracking, with no plan step, and the
+          // prompts are made for the plan's engines. A plan that lapsed after
+          // a subscription opens the dashboard read-only instead, Billing
+          // included (planLapsed): setup's writes would refuse it.
+          if (isCloud()) {
+            const { data: org } = await supabase
+              .from('organizations')
+              .select('subscription_status, plan, stripe_subscription_id')
+              .eq('id', profile.organization_id)
+              .single();
+            if (
+              org &&
+              planLapsed({
+                cloud: true,
+                subscriptionStatus: org.subscription_status,
+                everSubscribed: Boolean(org.stripe_subscription_id),
+              })
+            ) {
+              router.push('/dashboard');
+              router.refresh();
+              return;
+            }
+            if (isSubscriptionActive(org?.subscription_status)) {
+              planActive = true;
+              if (org?.plan) setCurrentPlanId(toPlanId(org.plan));
+            }
+          }
           // The person's own brand: the demo brand may be built already (demo ahead).
           const { data: brands } = await supabase
             .from('brands')
@@ -575,6 +678,10 @@ export default function OnboardingPage() {
       } catch (err) {
         console.error('Resume check failed:', err);
       } finally {
+        if (planActive) {
+          setAfterPurchase(true);
+          setManagesPlan(canManagePlan(role));
+        }
         setInitialLoading(false);
       }
     }
@@ -584,12 +691,17 @@ export default function OnboardingPage() {
   // Fire `onboarding_step_viewed` whenever the wizard advances (or resumes).
   // This is the funnel surface — PostHog will compute drop-off between any
   // two adjacent step_viewed events without us needing per-step columns.
+  // In setup after purchase, the same events with setup_after_purchase.
   useEffect(() => {
     const stepName = ONBOARDING_STEP_NAMES[step];
     if (stepName) {
-      track('onboarding_step_viewed', { step, step_name: stepName });
+      track('onboarding_step_viewed', {
+        step,
+        step_name: stepName,
+        ...setupFlowProps(afterPurchase),
+      });
     }
-  }, [step]);
+  }, [step, afterPurchase]);
 
   const domain = website
     .replace(/^https?:\/\//, '')
@@ -632,6 +744,10 @@ export default function OnboardingPage() {
 
       // Create brand if not already created
       if (!createdBrand) {
+        // Setup after purchase: never with a plan that lapsed meanwhile.
+        // Onboarding stays as it is: a setup left half-way resumes from the
+        // brand's own data (readSetupProgress).
+        if (await leaveIfPlanLapsed(orgId)) return;
         // logo_url starts null — BrandAvatar derives the favicon at render time.
         const result = await createBrand({
           organizationId: orgId,
@@ -652,12 +768,16 @@ export default function OnboardingPage() {
         addBrand(brand);
         setActiveBrand(brand.id);
         void detectBrandType(brand.id);
-        track('onboarding_brand_created', { region: brand.region });
+        track('onboarding_brand_created', {
+          region: brand.region,
+          ...setupFlowProps(afterPurchase),
+        });
         track('onboarding_step_completed', {
           step: 2,
           step_name: 'brand_details',
           region: brand.region,
           language: brand.language,
+          ...setupFlowProps(afterPurchase),
         });
         setPersonProperties({
           region: brand.region,
@@ -732,6 +852,7 @@ export default function OnboardingPage() {
 
   const handleGeneratePrompts = async () => {
     if (!createdBrand) return;
+    if (await leaveIfPlanLapsed(createdBrand.organizationId)) return;
     setLoadingPrompts(true);
     setTopicSaveError(false);
     setPromptGenError(null);
@@ -773,6 +894,7 @@ export default function OnboardingPage() {
         step: 3,
         step_name: 'topics',
         topic_count: selectedTopics.size,
+        ...setupFlowProps(afterPurchase),
       });
       setStep(4);
     } catch (err) {
@@ -793,6 +915,7 @@ export default function OnboardingPage() {
 
   const handleSavePromptsAndContinue = async () => {
     if (!createdBrand) return;
+    if (await leaveIfPlanLapsed(createdBrand.organizationId)) return;
     setIsLoading(true);
     setSaveError(null);
     try {
@@ -827,12 +950,16 @@ export default function OnboardingPage() {
         );
         return;
       }
-      track('onboarding_prompts_saved', { count: allPrompts.length });
+      track('onboarding_prompts_saved', {
+        count: allPrompts.length,
+        ...setupFlowProps(afterPurchase),
+      });
       track('onboarding_step_completed', {
         step: 4,
         step_name: 'prompts',
         prompt_count: allPrompts.length,
         topic_count: topicPrompts.length,
+        ...setupFlowProps(afterPurchase),
       });
 
       setStep(5);
@@ -961,10 +1088,38 @@ export default function OnboardingPage() {
       // Shopping mode first, if it is still going on: the first run should
       // track ChatGPT Shopping on every prompt, not some of them.
       await ecommerceSetup.current;
+      if (await leaveIfPlanLapsed(createdBrand.organizationId)) return;
       // Save selected competitors
       await Promise.all(
         selected.map((c) => addCompetitor(createdBrand.id, { name: c.name, domain: c.domain })),
       );
+
+      // Setup after purchase: the plan is active already, so the server ends
+      // setup (the prompts aligned to the plan, the brand's first run
+      // started, onboarding marked completed) and the dashboard shows the
+      // run, as after a purchase. A plan found not active any more: lapsed
+      // after a subscription, the read-only dashboard (Billing for its
+      // admin); else the plan step below, as setup without a plan does.
+      if (afterPurchase) {
+        const finished = await finishSetupAfterPurchase(createdBrand.id).catch(() => null);
+        if (finished?.ok) {
+          track('onboarding_step_completed', {
+            step: 5,
+            step_name: 'competitors',
+            competitor_count: selected.length,
+            ...setupFlowProps(true),
+          });
+          track('onboarding_finished', { paid: true, ...setupFlowProps(true) });
+          setPersonProperties({ onboarding_completed: true, ...setupFlowProps(true) });
+          toast.success(tSetup('setup.setupComplete'));
+          // A full page navigation, as below: the layout reads the fresh flag.
+          window.location.href = setupLanding(finished.jobId);
+          return;
+        }
+        if (finished?.reason !== 'no_plan') throw new Error(tSetup('finishFailed'));
+        if (await leaveIfPlanLapsed(createdBrand.organizationId)) return;
+        setAfterPurchase(false);
+      }
 
       // Mark onboarding as complete
       const supabase = createClient();
@@ -1025,6 +1180,15 @@ export default function OnboardingPage() {
       toast.error(err instanceof Error ? err.message : 'Failed to save competitors');
       setSavingCompetitors(false);
     }
+  };
+
+  // Setup after purchase, put off for half an hour: Billing opens (a full
+  // page navigation, so the dashboard's layout reads the cookie), where the
+  // admin can change or cancel the plan before setting up a brand.
+  const openBillingFirst = () => {
+    document.cookie = setupDeferredCookie({ secure: window.location.protocol === 'https:' });
+    track('onboarding_manage_plan_opened', { step, ...setupFlowProps(true) });
+    window.location.href = SETUP_BILLING_HREF;
   };
 
   // ── Plan step: Stripe checkout ──
@@ -1190,6 +1354,7 @@ export default function OnboardingPage() {
                     brand_name: brandName.trim(),
                     brand_domain: domain,
                     has_description: description.trim().length > 0,
+                    ...setupFlowProps(afterPurchase),
                   });
                   setPersonProperties({
                     company_url: domain,
@@ -1740,10 +1905,14 @@ export default function OnboardingPage() {
                     </>
                   ) : hasSelectedCompetitors ? (
                     // On the cloud, tracking starts with the plan step's
-                    // Checkout (the trial or a plan bought), not here.
-                    tSetup(isCloud() ? 'competitors.continue' : 'competitors.startTracking', {
-                      count: selectedCompetitorCount,
-                    })
+                    // Checkout (the trial or a plan bought), not here; with
+                    // a plan active already, it starts here.
+                    tSetup(
+                      isCloud() && !afterPurchase
+                        ? 'competitors.continue'
+                        : 'competitors.startTracking',
+                      { count: selectedCompetitorCount },
+                    )
                   ) : (
                     'Add a competitor to continue'
                   )}
@@ -1753,7 +1922,9 @@ export default function OnboardingPage() {
                     data-slot="tracking-starts"
                     className="text-center text-xs text-muted-foreground"
                   >
-                    {tSetup('trackingStarts', { trial: trialDays != null ? 'yes' : 'no' })}
+                    {afterPurchase
+                      ? tSetup('trackingStartsNow')
+                      : tSetup('trackingStarts', { trial: trialDays != null ? 'yes' : 'no' })}
                   </p>
                 )}
               </div>
@@ -1921,6 +2092,21 @@ export default function OnboardingPage() {
       }
     >
       {renderStep()}
+      {!initialLoading && afterPurchase && managesPlan && step !== PLAN_STEP && (
+        <div className="flex justify-center px-6 pb-6">
+          <a
+            href={SETUP_BILLING_HREF}
+            data-slot="manage-plan"
+            onClick={(e) => {
+              e.preventDefault();
+              openBillingFirst();
+            }}
+            className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            {tSetup('managePlan')}
+          </a>
+        </div>
+      )}
     </OnboardingFrame>
   );
 }
