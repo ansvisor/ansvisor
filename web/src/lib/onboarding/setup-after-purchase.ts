@@ -1,5 +1,5 @@
 import { isSubscriptionActive } from '@/config/plans';
-import { DASHBOARD_HOME } from '@/config/home';
+import { withJobId } from '@/config/home';
 import { countPlanBrands } from '@/lib/plan-brand-count';
 
 /**
@@ -255,11 +255,12 @@ export function setupFlowProps(afterPurchase: boolean): { setup_after_purchase?:
 }
 
 /**
- * Where setup after purchase lands: the dashboard's home, Prompts › Tracked
- * Prompts (config/home.ts), with the first run's job, as the Stripe return
- * page lands (TrackingJobHandoff keeps it for the progress bar; the page's
- * "Your first answers are arriving" reads the run).
+ * Where setup after purchase lands: /dashboard, with the first run's job,
+ * which opens the person's home with it (config/home.ts: Prompts › Tracked
+ * Prompts, or Action Center › Today when Prompts is off their menu), as the
+ * Stripe return page lands. TrackingJobHandoff keeps the job for the
+ * progress bar, and the page's first-run line reads the run.
  */
 export function setupLanding(jobId: string | null): string {
-  return jobId ? `${DASHBOARD_HOME}?jobId=${encodeURIComponent(jobId)}` : DASHBOARD_HOME;
+  return withJobId('/dashboard', jobId);
 }

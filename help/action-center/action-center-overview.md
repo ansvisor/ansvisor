@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan. Everything in it is per brand: switch brands to see another brand's work.
+The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan, or on **Today** when Prompts is off your menu. Everything in it is per brand: switch brands to see another brand's work.
 
 ## The tabs
 

@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan; Today is one click away.
+**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan; Today is one click away. When Prompts is off your menu, Ansvisor opens here instead.
 
 ## The tabs
 

@@ -17,7 +17,15 @@ import messages from '../../../../../../messages/en.json';
  */
 
 interface Workspace {
-  profile: { organization_id: string | null; onboarding_completed: boolean; role: string } | null;
+  profile: {
+    organization_id: string | null;
+    onboarding_completed: boolean;
+    role: string;
+    /** Menu access (00374): the person's own exceptions and work areas. */
+    menu_hidden?: string[];
+    work_areas?: string[];
+    work_areas_asked_at?: string;
+  } | null;
   org: {
     subscription_status: string | null;
     stripe_subscription_id: string | null;
@@ -30,6 +38,8 @@ interface Workspace {
   demo: boolean;
   /** The setup-deferred cookie ("Manage your plan"). */
   deferred: boolean;
+  /** The sections the person's role leaves off its menu (organization_menu_roles). */
+  roleHidden?: string[];
 }
 const ws = vi.hoisted(() => ({ current: null as unknown as Workspace }));
 
@@ -89,6 +99,8 @@ function client() {
             };
           case 'tracking_runs':
             return { data: Array.from({ length: brand?.runs ?? 0 }, () => ({})), error: null };
+          case 'organization_menu_roles':
+            return { data: { hidden_sections: w.roleHidden ?? [] }, error: null };
           default:
             return { data: null, error: null };
         }
@@ -507,8 +519,9 @@ describe('no redirect loop, and Billing always opens', () => {
 });
 
 /** The pages that only send on: the dashboard's index and the Action Center's. */
-const SENDS_ON: Record<string, () => unknown> = {
-  '/dashboard': () => DashboardIndexPage(),
+const SENDS_ON: Record<string, (query: URLSearchParams) => unknown> = {
+  '/dashboard': (query) =>
+    DashboardIndexPage({ searchParams: Promise.resolve(Object.fromEntries(query)) }),
   '/dashboard/action-center': () => ActionCenterPage(),
 };
 
@@ -519,8 +532,9 @@ async function land(path: string): Promise<Settled> {
   for (let i = 0; i < 6; i += 1) {
     const settled = await visit(at);
     hops.push(...settled.hops);
-    const page = settled.at === 'dashboard' ? SENDS_ON[settled.hops.at(-1)!] : undefined;
-    const to = page ? await redirectOf(async () => page()) : null;
+    const url = new URL(settled.hops.at(-1)!, 'http://localhost');
+    const page = settled.at === 'dashboard' ? SENDS_ON[url.pathname] : undefined;
+    const to = page ? await redirectOf(async () => page(url.searchParams)) : null;
     if (!to) return { at: settled.at, hops };
     at = to;
   }
@@ -553,8 +567,11 @@ describe('the home, Prompts › Tracked Prompts', () => {
   ])('%s, setup finished: Tracked Prompts with the run, and it stays there', async (_, demo) => {
     workspace({ status: 'trialing', brands: [...JUST_SET_UP], demo });
     const landing = setupLanding('job1');
-    expect(landing).toBe(`${HOME}?jobId=job1`);
-    expect(await land(landing)).toEqual({ at: 'dashboard', hops: [landing] });
+    expect(landing).toBe('/dashboard?jobId=job1');
+    expect(await land(landing)).toEqual({
+      at: 'dashboard',
+      hops: [landing, `${HOME}?jobId=job1`],
+    });
     expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
     // Onboarding opened again sends them home, once.
     expect(await land('/dashboard/onboarding')).toEqual({
@@ -593,5 +610,69 @@ describe('the home, Prompts › Tracked Prompts', () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     workspace({ status: null, brands: [...JUST_SET_UP] });
     expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+  });
+
+  // Menu access: nobody lands on a page their menu doesn't show.
+  describe('with Prompts off the person’s menu', () => {
+    const TODAY = '/dashboard/action-center/today';
+    const analyst = { organization_id: 'org1', onboarding_completed: true, role: 'analyst' };
+
+    it('a role whose menu hides Prompts: Action Center › Today, and it stays there', async () => {
+      workspace({ status: 'active', brands: [...SETUPS.finished], profile: analyst });
+      ws.current.roleHidden = ['prompts', 'content'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', TODAY] });
+      expect((await land('/dashboard/onboarding')).hops.at(-1)).toBe(TODAY);
+    });
+
+    it('a role whose menu keeps Prompts, or hides something else: Tracked Prompts', async () => {
+      workspace({ status: 'active', brands: [...SETUPS.finished], profile: analyst });
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+      ws.current.roleHidden = ['content', 'audit'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+    });
+
+    it('a person’s own exception, or an admin’s own work areas, without Prompts: Today', async () => {
+      workspace({
+        status: 'active',
+        brands: [...SETUPS.finished],
+        profile: { ...analyst, menu_hidden: ['prompts'] },
+      });
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', TODAY] });
+      // Nobody takes Prompts off an admin's menu, but their own work areas can.
+      workspace({
+        status: 'active',
+        brands: [...SETUPS.finished],
+        profile: {
+          organization_id: 'org1',
+          onboarding_completed: true,
+          role: 'admin',
+          work_areas: ['leaders'],
+          work_areas_asked_at: '2026-11-12T09:00:00Z',
+        },
+      });
+      ws.current.roleHidden = ['prompts'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', TODAY] });
+      ws.current.profile!.work_areas = ['growth'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+    });
+
+    it('a manager whose role hides Prompts, setup finished: Today with the run', async () => {
+      workspace({
+        status: 'trialing',
+        brands: [...JUST_SET_UP],
+        profile: { organization_id: 'org1', onboarding_completed: true, role: 'manager' },
+      });
+      ws.current.roleHidden = ['prompts'];
+      expect(await land(setupLanding('job1'))).toEqual({
+        at: 'dashboard',
+        hops: ['/dashboard?jobId=job1', `${TODAY}?jobId=job1`],
+      });
+    });
+
+    it('a plan lapsed: the read-only Today, no loop', async () => {
+      workspace({ status: 'canceled', brands: [...SETUPS.finished], profile: analyst });
+      ws.current.roleHidden = ['prompts'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', TODAY] });
+    });
   });
 });

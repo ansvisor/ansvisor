@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/menu-access.mdx]
 ---
-**Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. To change what someone can do, change their role in **Settings › Team**.
+**Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. Ansvisor opens on **Prompts › Tracked Prompts**, or on the Action Center's **Today** tab for someone whose menu leaves Prompts off. To change what someone can do, change their role in **Settings › Team**.
 
 ## Fold a group on your menu
 

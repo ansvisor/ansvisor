@@ -65,6 +65,11 @@ vi.mock('@/lib/supabase/admin', () => ({
 const align = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/plan-engines', () => ({ alignPromptsToPlanForOrg: align }));
 
+// The buyer's home by their menu (readMyHome): Tracked Prompts unless a test
+// takes Prompts off it.
+const myHome = vi.hoisted(() => ({ href: '/dashboard/prompts/tracked' }));
+vi.mock('@/lib/my-home', () => ({ readMyHome: async () => myHome.href }));
+
 const { GET } = await import('./route');
 
 const back = () =>
@@ -292,6 +297,18 @@ describe('GET /api/stripe/success, the start page', () => {
     stripeApi.retrieveSession.mockResolvedValue(checkout('trialing', 'enterprise'));
     res = await back();
     expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/prompts/tracked');
+  });
+
+  it('opens Action Center › Today, with the run, for a buyer whose menu leaves Prompts off', async () => {
+    myHome.href = '/dashboard/action-center/today';
+    try {
+      stripeApi.retrieveSession.mockResolvedValue(checkout('trialing'));
+      const location = new URL((await back()).headers.get('location')!);
+      expect(location.pathname).toBe('/dashboard/action-center/today');
+      expect(location.searchParams.get('jobId')).toBe('job-s');
+    } finally {
+      myHome.href = '/dashboard/prompts/tracked';
+    }
   });
 
   it('opens Tracked Prompts while the new Chat is off, too', async () => {
