@@ -4,8 +4,8 @@ route: /dashboard/prompts/tracked
 keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags]
 synonyms: [prompt list, my prompts, prompt table, tracked queries]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -60,5 +60,7 @@ The **Tags** filter beside the search box narrows the table to one or more tags.
 ## Open a prompt or act on it
 
 Click a prompt's text to open its own page, with its visibility, mentions, citations and per-platform results. For admins and managers, each row's **…** menu offers **Edit**, **Pause tracking** (or **Resume tracking**), **Improve position…**, **Suggest content** (or **Open content suggestion**), **Create content** (or **Open draft**) and **Delete**.
+
+When an Improve action sent for a prompt is still being tracked, its **Work** cell shows a link with the action's code, such as **AC-12 · Improving**. It opens the prompt's positions panel on its **Improve** tab.
 
 **Export CSV** downloads the list. Estimated volumes in it are marked as estimates, with their confidence and range, so a spreadsheet doesn't read them as counts.

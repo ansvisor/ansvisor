@@ -211,6 +211,7 @@ import { TagFilter } from './_tag-filter';
 import { ColumnsPanel } from './_columns-panel';
 import { PlanLimitButtons } from './_plan-limit-buttons';
 import { PromptLimitDialog } from './_prompt-limit-dialog';
+import { ImprovingLink, useImprovingPrompts } from './_improving-link';
 import { WaitingBanner, oldestWaiting } from './_waiting-banner';
 import {
   LocationMatrix,
@@ -3893,6 +3894,16 @@ function AllPromptsTab({
     });
   }, []);
 
+  // Improve actions still tracked for the rows on screen (PROMPT-008), one
+  // read a page: a link under the Work chip opens the Improve tab.
+  const improving = useImprovingPrompts(
+    activeBrandId,
+    !loading && layout === 'table' && columns.includes('work')
+      ? filtered.slice(promptsPager.start, promptsPager.end).map((p) => p.id)
+      : [],
+    positionsId !== null,
+  );
+
   const state = promptsTableState({ loading, failed, rows: prompts.length });
   if (state === 'loading') {
     return (
@@ -4431,6 +4442,12 @@ function AllPromptsTab({
                           >
                             {p.citedUrlCount}/{p.targetUrlCount} cited
                           </span>
+                        )}
+                        {improving[p.id] && (
+                          <ImprovingLink
+                            action={improving[p.id]}
+                            onOpen={() => openPositionsPanel(p.id, 'improve')}
+                          />
                         )}
                       </div>
                     </TableCell>
