@@ -152,7 +152,6 @@ import {
 } from '@/lib/actions/prompt';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
-import { usePlanContext } from '@/components/providers/plan-provider';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { isNoPlan } from '@/lib/billing/no-plan';
@@ -170,9 +169,10 @@ import {
 } from '@/config/prompt-options';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getBrandFilterOptions } from '@/lib/actions/tracking';
-import { formatRegionDisplay, isValidLocation, locationCode, regionLabel } from '@/lib/region';
+import { formatRegionDisplay, regionLabel } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
-import { PLANS } from '@/config/plans';
+import { brandLocation, useAllowedEngines } from './_prompt-defaults';
+import { TrackNowLine, useTrackNow } from './_track-now';
 import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import { getTopics } from '@/lib/actions/topic';
 import type { PromptVisibilitySummary } from '@/lib/actions/tracking';
@@ -460,35 +460,6 @@ function visibilityBarClass(score: number): string {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 /**
- * Plan- and brand-scoped engine lists shared by the Add / Edit prompt dialogs.
- * Shopping tracking is opt-in per brand (#155): the engine is hidden entirely
- * when the pref is off. The write actions strip it server-side too.
- */
-function useAllowedEngines(shoppingEnabled: boolean) {
-  const { planId, allowedModelIds: planAllowedModelIds } = usePlanContext();
-
-  const allowedScraperIds = useMemo(() => {
-    const allowed = PLANS[planId].limits.allowedScrapers;
-    const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
-    return shoppingEnabled ? ids : ids.filter((id) => id !== 'chatgpt-shopping');
-  }, [planId, shoppingEnabled]);
-  const allowedModelIds = useMemo(
-    () => planAllowedModelIds ?? ALL_MODELS.map((m) => m.id),
-    [planAllowedModelIds],
-  );
-  const visibleScrapers = useMemo(
-    () => ALL_SCRAPERS.filter((s) => allowedScraperIds.includes(s.id)),
-    [allowedScraperIds],
-  );
-  const visibleModels = useMemo(
-    () => ALL_MODELS.filter((m) => allowedModelIds.includes(m.id)),
-    [allowedModelIds],
-  );
-
-  return { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels };
-}
-
-/**
  * Shared form body of the Add / Edit prompt dialogs (#460, #484): text input,
  * topic select and the grouped Platform & Models picker with badge chips.
  * Both dialogs must present the same fields — keep them here so the two
@@ -662,13 +633,6 @@ function PromptFormFields({
       </div>
     </>
   );
-}
-
-/** The brand's tracking location, as new prompts get it (addPromptToSet). */
-function brandLocation(region: string | undefined, state: string | undefined): string {
-  const country = region ?? 'US';
-  const candidate = locationCode(country, state ?? null);
-  return isValidLocation(candidate) ? candidate : country;
 }
 
 // ─── Tracked prompt limit (PROMPT-009) ────────────────────────────────────────
@@ -1991,6 +1955,28 @@ export default function PromptsPage() {
     [allPrompts, volumeByPromptId],
   );
 
+  // Track now (moved from the brand's Manage prompts page): the active
+  // prompts with no answers yet, read as that page read them, for admins and
+  // managers, who can track them now. Read only when the table has an
+  // active prompt with no answers in its window, and again after a change.
+  const activePromptIds = useMemo(
+    () => new Set(allPrompts.filter((p) => p.isActive).map((p) => p.id)),
+    [allPrompts],
+  );
+  const mayLackAnswers = useMemo(
+    () => allPrompts.some((p) => p.isActive && !visibility[p.id]),
+    [allPrompts, visibility],
+  );
+  const trackNow = useTrackNow({
+    brandId: activeBrandId,
+    wanted: canManage && promptDataWanted && mayLackAnswers,
+    version: usageVersion,
+    activeIds: activePromptIds,
+  });
+  const startTrackNow = guard((ids: string[]) => void trackNow.start(ids), {
+    action: tActions('trackPrompts'),
+  });
+
   const canExport = !loading && allPrompts.length > 0;
 
   // Tracked's count in the switch: the table's own (Active + New), once the
@@ -2120,16 +2106,16 @@ export default function PromptsPage() {
                 {tHeader('addPrompt')}
               </Button>
             )}
-            {/* The rest in "…": Export CSV, Manage prompts, Plan & usage and
-                the usage cards. Topics has its own buttons in its place. */}
-            {tab !== 'topics' && (
+            {/* The rest in "…": Export CSV, Plan & usage and the usage cards,
+                all the Prompts tab's. Topics has its own buttons in its place;
+                Query Fan-out and Insights have none here. */}
+            {tab === 'all' && (
               <PromptsMoreMenu
-                managePromptsHref={`/dashboard/brands/${activeBrandId}/prompts`}
-                onExportCsv={tab === 'all' ? handleExportCsv : undefined}
+                onExportCsv={handleExportCsv}
                 exportDisabled={!canExport}
-                planHref={tab === 'all' ? planHref : undefined}
+                planHref={planHref}
                 usage={
-                  tab === 'all' && view === 'tracked'
+                  view === 'tracked'
                     ? {
                         open: usageOpen,
                         onToggle: () => setUsageOpen((o) => !o),
@@ -2243,9 +2229,10 @@ export default function PromptsPage() {
                   ) : null
                 }
                 // The status line's quiet notes: the plan's prompt locations
-                // near the limit, kept in sight with the usage cards folded; and
+                // near the limit, kept in sight with the usage cards folded;
                 // active prompts with no volume yet, whose Volume and
-                // Competition cells are blank until Analyze fills them in.
+                // Competition cells are blank until Analyze fills them in; and
+                // active prompts with no answers yet, which Track now runs.
                 notices={
                   <>
                     {usageWarning && (
@@ -2260,7 +2247,24 @@ export default function PromptsPage() {
                         limitReached={quotaExhausted}
                       />
                     )}
+                    {!loading && canManage && (
+                      <TrackNowLine
+                        count={trackNow.noAnswers.size}
+                        starting={trackNow.starting}
+                        startedCount={trackNow.startedCount}
+                        onTrack={() => startTrackNow([...trackNow.noAnswers])}
+                      />
+                    )}
                   </>
+                }
+                trackNow={
+                  canManage
+                    ? {
+                        noAnswers: trackNow.noAnswers,
+                        busy: trackNow.starting,
+                        onTrack: (prompts: Prompt[]) => startTrackNow(prompts.map((p) => p.id)),
+                      }
+                    : undefined
                 }
                 statusFilter={statusFilter}
                 onStatusFilterChange={setStatusFilter}
@@ -3016,6 +3020,7 @@ function AllPromptsTab({
   regionFilter,
   locationFilter,
   notices,
+  trackNow,
   statusFilter,
   onStatusFilterChange,
   onSwap,
@@ -3049,6 +3054,17 @@ function AllPromptsTab({
    * locations near the plan's limit, and the prompts not analyzed yet.
    */
   notices?: React.ReactNode;
+  /**
+   * Track now in the bulk bar, for the selected prompts with no answers yet;
+   * undefined for those who can't track.
+   */
+  trackNow?: {
+    /** The active prompts with no answers yet. */
+    noAnswers: ReadonlySet<string>;
+    /** A run is starting: the button waits for it. */
+    busy: boolean;
+    onTrack: (prompts: Prompt[]) => void;
+  };
   /** Which rows show, set by the usage cards above (PROMPT-012) or the Status filter. */
   statusFilter: PromptStatusFilter;
   onStatusFilterChange: (filter: PromptStatusFilter) => void;
@@ -3066,6 +3082,7 @@ function AllPromptsTab({
   onChanged: () => void;
 }) {
   const tCommon = useTranslations('common');
+  const tManagers = useTranslations('managersOnly');
   const failureToast = useFailureToast();
   const tPrompts = useTranslations('prompts');
   // One tooltip for every prompt and topic the table cuts short.
@@ -3886,20 +3903,14 @@ function AllPromptsTab({
               Add prompts to your brand to start tracking their AI visibility.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {onAddPrompt && (
-              <Button size="sm" className="gap-2" onClick={onAddPrompt}>
-                <Plus className="h-4 w-4" />
-                Add prompt
-              </Button>
-            )}
-            <Link href={`/dashboard/brands/${activeBrandId}/prompts`}>
-              <Button size="sm" variant={onAddPrompt ? 'outline' : 'default'} className="gap-2">
-                <Pencil className="h-4 w-4" />
-                Manage prompts
-              </Button>
-            </Link>
-          </div>
+          {onAddPrompt ? (
+            <Button size="sm" className="gap-2" onClick={onAddPrompt}>
+              <Plus className="h-4 w-4" />
+              Add prompt
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">{tManagers('addPrompts')}</p>
+          )}
         </CardContent>
       </Card>
     );
@@ -3908,6 +3919,8 @@ function AllPromptsTab({
   const pageRows = filtered.slice(promptsPager.start, promptsPager.end);
   const pageIds = pageRows.map((p) => p.id);
   const selectedPrompts = pageRows.filter((p) => selectedIds.has(p.id));
+  // The selected prompts Track now can start: active, with no answers yet.
+  const trackable = trackNow ? selectedPrompts.filter((p) => trackNow.noAnswers.has(p.id)) : [];
   // A delete that fits in one call is over before the bar could say so.
   const showDeleteProgress = deleteProgress !== null && deleteProgress.total > PROMPT_DELETE_BATCH;
 
@@ -4195,6 +4208,9 @@ function AllPromptsTab({
                   }))
             }
             deleting={showDeleteProgress ? deleteProgress : null}
+            trackNowCount={trackable.length}
+            trackNowBusy={trackNow?.busy ?? false}
+            onTrackNow={trackNow ? () => trackNow.onTrack(trackable) : undefined}
             onPause={guard(() => void setActiveFor(selectedPrompts, false), {
               action: tActions('pausePrompts'),
             })}

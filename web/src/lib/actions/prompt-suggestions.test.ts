@@ -227,6 +227,54 @@ describe('trackSuggestions', () => {
 });
 
 /**
+ * Prompt Suggestions lets a suggestion's text be edited before it is added
+ * (moved from the brand's Manage prompts page): + and Add All save the edited
+ * text, under the suggestion's topic, and mark the suggestion added; the
+ * others keep their own text. An empty or overlong text is refused, nothing added.
+ */
+describe('adding a suggestion edited first', () => {
+  it('one + saves the edited text, tidied, and marks the suggestion added', async () => {
+    expect(await acceptSuggestion('s1', { text: '  best   decaf beans  ' })).toEqual({
+      promptId: 'p-1',
+    });
+    expect(added).toEqual(['best decaf beans']);
+    expect(categories).toEqual(['GEO tools']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://server/api/prompts/suggestions/s1/accept',
+      expect.objectContaining({ body: JSON.stringify({ promptId: 'p-1' }) }),
+    );
+  });
+
+  it('one + without a text saves the suggestion as written', async () => {
+    await acceptSuggestion('s1');
+    expect(added).toEqual(['prompt s1']);
+  });
+
+  it('Add All saves the edited ones as edited and the rest as written', async () => {
+    expect(
+      await trackSuggestions(['s1', 's2', 's3'], { texts: { s2: 'decaf beans delivered weekly' } }),
+    ).toEqual({ trackedIds: ['s1', 's2', 's3'], skippedIds: [] });
+    expect(added).toEqual(['prompt s1', 'decaf beans delivered weekly', 'prompt s3']);
+  });
+
+  it('ignores an edited text for a suggestion not being added', async () => {
+    await trackSuggestions(['s1'], { texts: { s9: 'something else' } });
+    expect(added).toEqual(['prompt s1']);
+  });
+
+  it('refuses an empty or overlong text, adding nothing', async () => {
+    expect(await acceptSuggestion('s1', { text: '   ' })).toEqual({
+      error: 'Write the prompt in 1 to 500 characters.',
+    });
+    expect((await trackSuggestions(['s1', 's2'], { texts: { s2: 'x'.repeat(501) } })).error).toBe(
+      'Write the prompt in 1 to 500 characters.',
+    );
+    expect(added).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * Tracking a ChatGPT Business Hub suggestion (Business Hub plan, PR 6): its
  * discovery topic, when none of the brand's fit, is made only now, so the
  * prompt is filed under it rather than under no topic.

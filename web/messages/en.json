@@ -14407,6 +14407,46 @@
           "topicNew": "{count, plural, =0 {nothing new} one {# prompt, new topic} other {# prompts, new topic}}",
           "done": "Done"
         }
+      },
+      "edit": {
+        "label": "Prompt text",
+        "save": "Keep this text",
+        "cancel": "Cancel editing",
+        "open": "Edit “{text}” before adding",
+        "openTitle": "Edit the text before adding",
+        "edited": "Edited"
+      },
+      "byTopic": {
+        "button": "By topic",
+        "buttonTitle": "Pick topics and get 5 prompts for each",
+        "emptyButton": "Generate by topic",
+        "title": "Generate prompts by topic",
+        "description": "Pick topics, and Ansvisor writes {count} prompts for each. You review and edit them before anything is added.",
+        "loading": "Reading your topics",
+        "topics": "Topics",
+        "pickAll": "Select all",
+        "pickNone": "Clear all",
+        "pickedCount": "{topics, plural, one {# topic picked} other {# topics picked}} · {prompts, plural, one {# prompt} other {# prompts}}",
+        "cancel": "Cancel",
+        "generate": "Generate",
+        "generating": "Generating…",
+        "generated": "{count, plural, one {# prompt written} other {# prompts written}}: review them at the top of the suggestions.",
+        "failed": "Couldn't generate prompts. Try again.",
+        "dailyLimit": "You've used today's prompt ideas. Try again tomorrow, or add prompts yourself.",
+        "topicsFailed": "Couldn't read your topics. Try again.",
+        "reviewTitle": "Generated for {topics}",
+        "reviewDescription": "{count} prompts for each topic you picked. Untick the ones you don't want and edit any text, then add them.",
+        "include": "Include “{text}”",
+        "addSelected": "Add selected ({count})",
+        "adding": "Adding…",
+        "regenerate": "Regenerate",
+        "dismiss": "Dismiss",
+        "added": "{count, plural, one {# prompt added to your tracked list} other {# prompts added to your tracked list}}",
+        "addedSkipped": "{count, plural, one {# prompt added} other {# prompts added}} · {skipped} not added: already tracked",
+        "noneAdded": "Nothing was added: these prompts are already tracked.",
+        "addFailed": "Couldn't add the prompts. Try again.",
+        "trackingNow": "Tracking them now.",
+        "trackingNext": "They get their first answers with the next tracking run."
       }
     },
     "topicSuggestions": {
@@ -14426,7 +14466,6 @@
       "addPrompt": "Add prompt",
       "moreActions": "More actions",
       "exportHint": "No prompts yet: add prompts first.",
-      "managePrompts": "Manage prompts",
       "showUsage": "Show usage",
       "hideUsage": "Hide usage",
       "locationsUsed": "{used} / {limit} prompt locations used",
@@ -14449,6 +14488,21 @@
         "analyzingProgress": "Analyzing {done}/{total}…",
         "limitReached": "Monthly limit reached"
       }
+    },
+    "trackNow": {
+      "count": "{count, plural, one {# prompt has no answers yet} other {# prompts have no answers yet}}",
+      "hint": "These get their first answers with the next tracking run. Track now asks the AI engines now.",
+      "track": "Track now",
+      "trackLabel": "{count, plural, one {Track # prompt now} other {Track # prompts now}}",
+      "starting": "Starting tracking…",
+      "started": "{count, plural, one {Tracking # prompt now} other {Tracking # prompts now}}",
+      "seeAnswers": "See answers",
+      "startedToast": "{count, plural, one {Tracking # prompt now} other {Tracking # prompts now}}",
+      "startedBody": "Answers arrive over the next minutes. Visibility shows the run as it goes.",
+      "failed": "Couldn't start tracking",
+      "alreadyAnswered": "These prompts have answers already.",
+      "bulkSome": "Track {count} now",
+      "bulkTitle": "{count, plural, one {Start tracking the selected prompt with no answers yet} other {Start tracking the # selected prompts with no answers yet}}"
     },
     "usage": {
       "panelLabel": "Prompt usage",

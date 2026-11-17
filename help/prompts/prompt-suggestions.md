@@ -1,8 +1,8 @@
 ---
 title: Prompt Suggestions and Add All
 route: /dashboard/prompts/suggestions
-keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter, product prompts, catalog suggestions]
-synonyms: [prompt ideas, recommended prompts, new prompt ideas, suggest queries]
+keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter, product prompts, catalog suggestions, generate by topic, edit suggestion, regenerate prompts]
+synonyms: [prompt ideas, recommended prompts, new prompt ideas, suggest queries, ai generate prompts, prompts for a topic]
 plan: all
 updated: 2026-11-17
 last_checked: 2026-11-17
@@ -44,6 +44,14 @@ Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** 
 Suggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content.
 
 A prompt added from suggestions gets its first results with the next daily run.
+
+## Edit a suggestion before adding it
+
+Admins and managers can change a suggestion's words before adding it. Click the pencil beside its text, edit it, and press Enter or the tick to keep it; Esc or the cross drops the change. The row then says **Edited**, and **+** and **Add All** add it as you wrote it, under the suggestion's topic.
+
+## Generate prompts by topic
+
+**By topic** (or **Generate by topic** when the list is empty) lets admins and managers pick some of the brand's topics. Ansvisor writes 5 prompts for each one, and lists them at the top of the suggestions, grouped by topic. Untick the ones you don't want and edit any text, then click **Add selected**: each is added under its topic, with the platforms and models your plan allows and the brand's location. **Regenerate** writes them again; **Dismiss** drops them. Nothing is saved until you add them.
 
 ## Add every suggestion at once
 
