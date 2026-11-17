@@ -11,9 +11,15 @@ description: 'Step-by-step walkthrough of brand onboarding.'
 
 ## Onboarding flow
 
-The onboarding wizard has **5 steps for self-hosted** instances and **6 steps for the cloud** (the extra step is plan checkout). From step 2 on, your progress is saved as you go, so if you drop off you resume where you left off.
+On the cloud, onboarding starts with a choice: the **14-day free trial** (card first, in Stripe Checkout), a plan bought now, or the [demo brand](/guides/demo-brand). After checkout come the **5 setup steps**, then an optional last screen, **Connect your site**. Self-hosted instances have the 5 setup steps only. From step 2 on, your progress is saved as you go, so if you drop off you resume where you left off.
 
 <Steps>
+  <Step title="Choose how to start (cloud only)">
+    The first screen, **How do you want to start?**, opens on the **14-day trial**; **Monthly**, **Yearly** and **Demo · no card** are the other choices. With the trial, the plan's button reads **Start 14-day free trial**: you enter card details in Stripe Checkout, nothing is charged until the trial ends, and you can cancel any time. Otherwise it reads **Buy now**, and the plan starts the same day. The trial comes with an organization's first subscription only.
+
+    **Demo** opens the [demo brand](/guides/demo-brand) instead, with no card and no setup. Picking a plan from it leads to the setup steps below.
+
+  </Step>
   <Step title="1. Brand basics">
     **Set up your brand** asks for three fields:
 
@@ -69,29 +75,33 @@ The onboarding wizard has **5 steps for self-hosted** instances and **6 steps fo
     - Uncheck or remove ones that aren't really comparable
     - Add your own with a company name and domain (use the name as it appears in AI responses, e.g. *Acme*, not *acme.com*)
 
-    Select at least one competitor to continue; **Start tracking with N competitors** finishes the brand. Competitor tracking is on every plan.
+    Select at least one competitor to continue; **Start tracking with N competitors** finishes the brand and starts its first run at once. On the cloud, it also fits the prompts to your plan. Competitor tracking is on every plan.
 
     If your site looks like an online store, Ansvisor turns on Product Visibility for the brand and says so on this step. You can turn it off in brand settings.
 
   </Step>
-  <Step title="6. Plan & checkout (cloud only)">
-    On the cloud, the final step picks your plan, **Starter** or **Growth**, and runs Stripe Checkout. While a free trial is on offer, **Choose how to start** offers a **14-day trial**, **Monthly** or **Yearly**. Last in that switch, **Demo · no card** offers the [demo brand](/guides/demo-brand) instead, with no card. With the trial, the plan's button reads **Start 14-day free trial**: you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. Otherwise it reads **Buy now**. The trial comes with an organization's first subscription only; without it, the plan starts the same day. Self-hosted instances skip this step entirely.
+  <Step title="6. Connect your site (cloud, optional)">
+    Once tracking has started, **Connect your site** shows the brand's AI Traffic snippet with a copy button: one line for your site's `<head>`. Without it, AI Traffic shows no AI visits, conversions or revenue. **Check again** reads your home page for it once you've published it.
+
+    **Done, go to my dashboard** and **I'll do it later** both open the dashboard, with the first run's progress. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab.
   </Step>
 </Steps>
+
+A workspace that set up its brand before choosing a plan gets **Choose how to start** after the competitors instead: **Continue with N competitors** saves the brand, and tracking starts after checkout.
 
 To add another brand later, pick **Add Brand** in the brand switcher. It walks through the same first five steps; your plan sets how many brands you can have.
 
 ## What happens after you finish
 
-The first round of AI engine queries starts automatically: right away on self-hosted instances, after checkout on the cloud, and the dashboard opens. The first run can take anywhere from a few minutes to 1–2 hours at busy times. While you wait:
+The first round of AI engine queries starts automatically as soon as you finish the competitors step (on the cloud, your plan is active by then), and the dashboard opens: right away on self-hosted instances, after **Connect your site** on the cloud. The first run can take anywhere from a few minutes to 1–2 hours at busy times. While you wait:
 
 - **Visibility** — shows that the first tracking is in progress, and fills in with your results. You can leave the page; the run keeps going in the background.
 - **Citations** — fills in with the source URLs AI answers cite
 - **Prompts → Prompt Suggestions** — prompt ideas to add to tracking
 
-## Adding the tracking pixel (optional, post-onboarding)
+## Adding the tracking snippet later
 
-The onboarding flow doesn't include the tracking pixel — it's an opt-in step you do separately for **AI Traffic Analytics** (real visits arriving from AI answer engines). To set it up:
+The snippet is optional: it feeds **AI Traffic Analytics** (real visits arriving from AI answer engines). On the cloud, **Connect your site** offers it at the end of setup. If you skipped it, or run self-hosted, set it up here:
 
 <Steps>
   <Step title="Open the AI Referral Traffic page">

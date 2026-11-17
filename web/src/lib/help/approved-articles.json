@@ -465,7 +465,7 @@
         "onboarding"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -473,7 +473,7 @@
         },
         {
           "heading": "The 7 steps",
-          "text": "- Set your KPIs.\n- Add at least 3 competitors.\n- Add at least 3 topics.\n- Add 3 prompts per topic.\n- Connect Google Search Console.\n- Connect Google Analytics.\n- Add the AI Traffic snippet.\n\nEach step opens its page. Steps are checked from your data, such as three competitors saved or a first AI visit detected, so what you did before counts: an existing brand shows its real count on the first day."
+          "text": "- Add the AI Traffic snippet.\n- Set your KPIs.\n- Add at least 3 competitors.\n- Add at least 3 topics.\n- Add 3 prompts per topic.\n- Connect Google Search Console.\n- Connect Google Analytics.\n\nThe snippet comes first, because AI Traffic shows no AI visits, conversions or revenue without it. It's done when its first visit arrives.\n\nEach step opens its page. Steps are checked from your data, such as three competitors saved or a first AI visit detected, so what you did before counts: an existing brand shows its real count on the first day."
         },
         {
           "heading": "Search Console and Analytics",
@@ -655,7 +655,7 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -679,7 +679,7 @@
         },
         {
           "heading": "Finish setting up",
-          "text": "Under **Today's focus**, **Finish setting up** lists the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise."
+          "text": "Under **Today's focus**, **Finish setting up** lists the next of the 7 set-up steps (the AI traffic snippet, KPIs, competitors, topics, prompts, Search Console, Analytics), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise."
         },
         {
           "heading": "Prompts waiting for a spot",
@@ -919,7 +919,10 @@
         "ai visit conversions",
         "signups from ai",
         "consent",
-        "shopify pixel"
+        "shopify pixel",
+        "ask chat",
+        "revenue from ai",
+        "which pages bring customers"
       ],
       "synonyms": [
         "track leads from chatgpt",
@@ -928,7 +931,7 @@
         "first touch"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -955,6 +958,10 @@
           "text": "The Content Editor shows what came of it: the **Live page** tab for each page, and the **From AI visits** line on the Content **Plan** for the whole site."
         },
         {
+          "heading": "Ask Chat",
+          "text": "Chat answers which pages and AI assistants bring sign-ups, forms, orders, bookings and revenue, and how many of each. It reads the conversions above, by assistant, landing page and type, with each currency's revenue on its own. With Google Analytics connected, it adds **Top converting pages from AI**; with HubSpot, the AI-sourced pipeline.\n\nChat first checks what is set up. Where something isn't, it says **Not measured** and gives the step and the page where an admin or manager sets it up: the tracking snippet, conversions, the conversion call or Shopify pixel for orders, Google Analytics or HubSpot.\n\nAsked which prompts bring customers, Chat lists the prompts whose answers cite pages that converted. It labels this an association, not a measurement: AI assistants don't pass on the question."
+        },
+        {
           "heading": "What it can't see",
           "text": "- Visitors who refuse cookies, or who agree only after leaving the page the AI assistant sent them to.\n- AI visits that arrive without a referrer: they count as Direct.\n- Google's AI Overviews and AI Mode.\n- Journeys from one subdomain to another.\n- Forms inside an embedded widget, forms sent from a script, and posts without a form. These need a conversion call from your site's code.\n- Conversions after the browser has cleared the visitor's id, as Safari can after about a week without a visit to your site."
         }
@@ -978,10 +985,11 @@
         "add tracking code",
         "link analytics",
         "ga4",
-        "gsc"
+        "gsc",
+        "send the snippet to my developer"
       ],
       "plan": "all",
-      "updated": "2026-11-08",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -993,7 +1001,7 @@
         },
         {
           "heading": "Add the tracking snippet",
-          "text": "Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page."
+          "text": "Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.\n\nAdd it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page. **Email this to my developer** opens your email app with the snippet and steps; **Copy message** copies the same text.\n\nOn the cloud, the same snippet is offered at the end of brand setup, on **Connect your site**. Until its first visit, it's also the first step of **Finish setting up** on the Action Center's **Today** tab."
         },
         {
           "heading": "Check that the snippet works",
@@ -1612,6 +1620,10 @@
         {
           "heading": "Long lists",
           "text": "Chat reads any list the same way, such as signals, prompts, mentions, citations, opportunities or drafts: 50 at a time, with how many there are in all. Signals are read over your date range the way the Signals page reads its window: those found by its end that were still open, or resolved, after it began. When your question needs more, Chat reads the next 50 before it answers. When an answer covers part of a list, it says which part, such as \"the newest 50 of 451 signals\", and offers the rest as a next move.\n\nAsk about one item by what you see: a signal's code (S-07), a prompt's words, a cited domain or address, or an opportunity, draft or report title. Chat looks it up directly, in any status, and says plainly if the brand has none."
+        },
+        {
+          "heading": "Topics, fan-outs and head to head",
+          "text": "Ask about topics, fan-outs, a competitor head to head, AI bots and Search Console pages: Chat reads the same tables those pages show, such as the prompts where a competitor is ahead of you."
         },
         {
           "heading": "Change what you track",
@@ -2578,7 +2590,11 @@
         "ai traffic and sign-ups",
         "/traffic",
         "ai visitors",
-        "sign-ups from ai"
+        "sign-ups from ai",
+        "customers and revenue from ai",
+        "/ai-revenue",
+        "which pages bring customers",
+        "revenue from ai"
       ],
       "synonyms": [
         "slash commands",
@@ -2589,11 +2605,11 @@
         "skills directory"
       ],
       "plan": "all",
-      "updated": "2026-11-15",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-eight Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan**, **Weekly content plan** and **Setup guide**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-nine Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan**, **Weekly content plan** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -2637,7 +2653,7 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio, 30-day plan, Weekly content plan, Seasonal prompts and AI traffic and sign-ups.\n\n**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio, 30-day plan, Weekly content plan, Seasonal prompts, AI traffic and sign-ups and Customers and revenue from AI.\n\n**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
         },
         {
           "heading": "Fan-out gaps",
@@ -2661,7 +2677,11 @@
         },
         {
           "heading": "AI traffic and sign-ups",
-          "text": "**AI traffic and sign-ups** (**/traffic**) reports the visits AI assistants send to your site, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, from AI sessions. It says plainly what isn't measured: sign-ups by assistant or page, and the prompt behind a visit."
+          "text": "**AI traffic and sign-ups** (**/traffic**) reports the visits AI assistants send to your site, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, from AI sessions. It says plainly what isn't measured: sign-ups by assistant or page, and the prompt behind a visit. For sign-ups, orders and revenue by page and assistant, use **Customers and revenue from AI**."
+        },
+        {
+          "heading": "Customers and revenue from AI",
+          "text": "**Customers and revenue from AI** (**/ai-revenue**) answers which pages and AI assistants bring sign-ups, forms, orders and revenue, from your conversions from AI visits, and from Google Analytics and HubSpot when they are connected. It starts with what isn't set up yet, with the step and the page to set it up, and says **Not measured** where nothing measures it. Each currency's revenue is shown on its own. Prompts come only as an association: AI assistants don't pass on the question. It ends with one to three next steps."
         }
       ]
     },
@@ -3854,21 +3874,34 @@
         "first brand",
         "brand setup",
         "target market",
-        "free trial"
+        "free trial",
+        "plan already active",
+        "how do you want to start",
+        "sample brand",
+        "connect your site"
       ],
       "synonyms": [
         "get started",
         "create a brand",
         "set up my account",
         "onboard",
-        "add another brand"
+        "add another brand",
+        "set up a brand after buying",
+        "start the free trial",
+        "explore the demo",
+        "add the tracking snippet during setup",
+        "send the snippet to my developer"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
-          "text": "When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and six on the cloud: the extra one picks your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped."
+          "text": "When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. On the cloud, you first choose how to start: the free trial, a plan, or the sample brand. The setup itself has five steps, then on the cloud an optional last screen, **Connect your site**. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped."
+        },
+        {
+          "heading": "On the cloud: choose how to start",
+          "text": "The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.\n\n- **Start 14-day free trial** opens checkout. You enter card details, nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.\n- **Buy now**, or a plan without a trial, starts the plan the same day.\n\nAfter checkout, the five setup steps open, and your brand's first run starts when you finish them.\n\nNot ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The sample brand is made up, with sample data: you can open every page, but nothing runs or changes. When you pick a plan there, you set up your own brand.\n\nA self-hosted install has no such screen."
         },
         {
           "heading": "Step 1: Brand basics",
@@ -3888,11 +3921,19 @@
         },
         {
           "heading": "Step 5: Competitors",
-          "text": "On **Add your competitors**, Ansvisor suggests competitors for your brand. Check the real rivals, and uncheck or remove the ones that aren't comparable. Add your own with a company name and domain, using the name as it appears in AI answers rather than the website address.\n\nSelect at least one competitor to continue. On the cloud, **Continue with N competitors** saves the brand and opens the plan step: tracking starts there, when you start the free trial or buy a plan. On a self-hosted install, **Start tracking with N competitors** finishes the brand and starts its first run. Competitor tracking is on every plan.\n\nIf your site looks like an online store, Ansvisor turns on Product Visibility for the brand and says so on this step. You can turn it off in the brand settings."
+          "text": "On **Add your competitors**, Ansvisor suggests competitors for your brand. Check the real rivals, and uncheck or remove the ones that aren't comparable. Add your own with a company name and domain, using the name as it appears in AI answers rather than the website address.\n\nSelect at least one competitor to continue. **Start tracking with N competitors** finishes the brand and starts its first run. Competitor tracking is on every plan.\n\nIf your site looks like an online store, Ansvisor turns on Product Visibility for the brand and says so on this step. You can turn it off in the brand settings."
         },
         {
-          "heading": "Step 6 on the cloud: Plan and checkout",
-          "text": "The final step picks your plan, **Starter** or **Growth**, and starts checkout.\n\nWhile a free trial is on offer, **Choose how to start** opens on the trial, and lets you pick **Monthly** or **Yearly** instead. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.\n\nNot ready to add a card? Pick **Demo**, after **Yearly**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The demo is a made-up brand with sample data: you can open every page, but nothing runs or changes. Your brand stays saved, and its tracking starts when you pick a plan.\n\nA self-hosted install skips this step."
+          "heading": "Last, optional: Connect your site",
+          "text": "On the cloud, once **Start tracking with N competitors** has started your brand's first run, **Connect your site** shows your brand's AI Traffic snippet: one line for your site's head. Without it, AI Traffic shows no AI visits, conversions or revenue.\n\n1. Copy the snippet with the copy button.\n2. Paste it just before the head closes on every page of your site, then publish.\n3. Click **Check again** to see whether your home page has it.\n\nSomeone else edits your site? **Email this to my developer** opens your email app with the snippet and these steps; **Copy message** copies the same text.\n\n**Done, go to my dashboard** and **I'll do it later** both open the dashboard while the first run goes on. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab."
+        },
+        {
+          "heading": "Set up your brand with a plan active",
+          "text": "Whenever your workspace has an active plan or free trial but no brand of its own, admins and managers go straight to the setup wizard when they open Ansvisor: after checkout on the first screen, after buying from the sample brand, or once the only brand was deleted. On the last step, **Start tracking with N competitors** finishes the brand, fits its prompts to your plan and starts its first run at once; **Connect your site** follows. If you leave part-way, you pick up where you stopped. Admins who want to change or cancel the plan first can use **Manage your plan** under the steps: it opens Billing, and setup waits for half an hour. If the trial is canceled, the plan ends or a payment fails before you finish, Ansvisor opens read-only instead, so you can choose a plan in Billing."
+        },
+        {
+          "heading": "A brand set up before choosing a plan",
+          "text": "If your workspace set up its brand before choosing a plan, the plan step comes after the competitors. **Continue with N competitors** saves the brand and opens **Choose how to start**, with the same choices; tracking starts when you start the free trial or buy a plan. There, **Demo** keeps your brand saved until you pick a plan."
         },
         {
           "heading": "Add another brand later",
@@ -3990,11 +4031,11 @@
         "how long until results"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
-          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. Either way, Ansvisor then opens on the Action Center's **Today** tab, as it does each time you come back. If you explore the demo brand instead, Today shows the demo's sample data, and your brand's first run starts when you pick a plan."
+          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens on the Action Center's **Today** tab, as it does each time you come back. On the cloud you start the free trial or buy a plan first, so the run starts as soon as setup ends. If your workspace set up its brand before choosing a plan, it starts after checkout instead. If you explore the sample brand, Today shows its sample data; once you pick a plan, you set up your own brand and its first run starts."
         },
         {
           "heading": "How long the first run takes",
@@ -4010,7 +4051,7 @@
         },
         {
           "heading": "Add the tracking snippet",
-          "text": "Setup doesn't include the tracking snippet. It's an optional step you do separately for **AI Referral Traffic**: real visits that arrive on your site from AI answer engines.\n\n1. Pick **AI Referral Traffic** in the sidebar. Until the snippet sends its first visit, the code is shown at the top of the page. After that, **Code** beside **Tracking snippet** in the **Data sources** strip shows it again.\n2. Copy the snippet.\n3. Paste it into the head section of your site's pages, just before the head closes. On WordPress, use a header injection plugin; on a static site, edit your template.\n\nOnce the snippet sends a visit, **Tracking snippet** in the **Data sources** strip shows it as active, with the time of the last visit."
+          "text": "The optional tracking snippet fills **AI Referral Traffic**: real visits that arrive on your site from AI answer engines. On the cloud, setup ends with **Connect your site**, which offers it. Skipped it? It's the first step of **Finish setting up** on **Today**. You can also add it yourself:\n\n1. Pick **AI Referral Traffic** in the sidebar. Until the snippet sends its first visit, the code is shown at the top of the page. After that, **Code** beside **Tracking snippet** in the **Data sources** strip shows it again.\n2. Copy the snippet.\n3. Paste it into the head section of your site's pages, just before the head closes. On WordPress, use a header injection plugin; on a static site, edit your template.\n\nOnce the snippet sends a visit, **Tracking snippet** in the **Data sources** strip shows it as active, with the time of the last visit."
         },
         {
           "heading": "While the first tracking runs",
@@ -4918,7 +4959,7 @@
         "report card in german"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "sections": [
         {
           "heading": null,
@@ -4950,7 +4991,7 @@
         },
         {
           "heading": "Measure your own questions every day",
-          "text": "The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next."
+          "text": "The card asks its questions once. To measure them every day, and questions of your own, start the free trial and set up your brand in the wizard that follows, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next."
         },
         {
           "heading": "The value table and the revenue scenario",

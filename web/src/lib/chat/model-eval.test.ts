@@ -584,6 +584,43 @@ describe('the test set’s harness (W4-35), on a scripted model', () => {
     expect(read).toContain('Read the next page with offset');
   });
 
+  it('reads the head-to-head on Competitors and passes naming the prompts it loses on', async () => {
+    scripted([
+      calls(
+        toolCall('r1', 'get_competitor_head_to_head', {
+          brand_id: BRAND,
+          competitor: 'Acme CRM',
+          side: 'losing',
+        }),
+      ),
+      text(
+        'Acme CRM şu promptlarda önde: "best crm for small teams" (görünürlüğümüz 20, onlarınki 60) ve "crm pricing comparison" (25 ile 30).',
+      ),
+    ]);
+    const result = await runScenario(scenarioOf('competitor-losses'));
+    expect(result.run.readCalls).toEqual([
+      {
+        tool: 'get_competitor_head_to_head',
+        input: expect.objectContaining({ competitor: 'Acme CRM', side: 'losing' }),
+      },
+    ]);
+    expect(result.checks.filter((c) => !c.ok)).toEqual([]);
+    const message = db.tables.chat_messages.find((m) => m.role === 'user');
+    expect(JSON.stringify(message)).toContain('Competitors');
+  });
+
+  it('fails an answer on Competitors that reads no head-to-head, or gives up on it', async () => {
+    for (const answer of [
+      'Bu sayfadan hangi promptlarda kaybettiğimizi okuyamadım.',
+      'Acme CRM genel olarak biraz önde; ayrıntı için Rakipler sayfasına bakın.',
+    ]) {
+      scripted([calls(toolCall('r1', 'list_competitors', { brand_id: BRAND })), text(answer)]);
+      const result = await runScenario(scenarioOf('competitor-losses'));
+      expect(result.passed, answer).toBe(false);
+      expect(result.checks.find((c) => c.name === 'reads the head-to-head')?.ok).toBe(false);
+    }
+  });
+
   it('finds a tool name, an id or an id field in what the person was sent', () => {
     // On the events themselves: the engine takes names out of the answer (answer-guards.ts).
     const delta = (text: string) => ({ type: 'text.delta', seq: 1, data: { text } }) as ChatEvent;

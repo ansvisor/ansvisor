@@ -44,6 +44,8 @@ export const TRUSTED_READS: ReadonlySet<string> = new Set([
   'list_brands',
   'list_topics',
   'get_ai_traffic_summary',
+  // What the brand set up to measure customers from AI: its settings, dates and Ansvisor's steps.
+  'get_tracking_setup',
   'get_site_audit_summary',
   // The brand's approved facts: words from its own site, each approved by a
   // person in the workspace (Brand settings › Brand facts) before it is read.

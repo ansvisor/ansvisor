@@ -125,6 +125,16 @@ export interface AgentEvalScenario {
    * place.
    */
   askedDomains?: readonly { domain: string; citations: number }[];
+  /** What this scenario checks on its run besides every run's checks. */
+  checks?: readonly ScenarioCheck[];
+}
+
+/** A check one scenario adds, with its name in the Turkish report: a `must` failing fails it. */
+export interface ScenarioCheck {
+  name: string;
+  tr: string;
+  must: boolean;
+  ok(run: Pick<AgentEvalRun, 'answer' | 'reads'>): boolean;
 }
 
 const presetT = (id: string) =>
@@ -295,14 +305,64 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
     message: 'How much traffic did AI send us this week, and did those visitors sign up?',
     must: ['report'],
   },
+  'ai-revenue': {
+    message: 'Which pages and AI assistants bring us customers, and how much revenue?',
+    must: ['list'],
+  },
 };
 
+// ─── Questions a person types ───────────────────────────────────────────────
+
+/** Brand settings › Tracking, linked or named, in English or Turkish. */
+const SETUP_LINK = /settings\?tab=tracking|Brand settings\s*›\s*Tracking|Marka ayarlar/i;
+const NOT_MEASURED = /not measured|ölçülm(?:üyor|edi|ez)|ölçüm yok/i;
+/** An amount of money: a currency sign or code beside a figure. */
+const MONEY = /[$€£]\s?\d|\b(?:EUR|USD|GBP|TRY)\s?\d|\d[\d.,]*\s?(?:EUR|USD|GBP|TRY|TL)\b|\d\s?€/i;
+/** The week's euros and dollars added up, in all or for one page: what must never be said. */
+const CURRENCIES_ADDED = /1[.,]?900[.,]5|1[.,]?111[.,]5/;
+const ASSOCIATION =
+  /association|attribution|ilişki|atıf|ilişkilendir|korelasyon|soruyu (?:iletm|aktarm|paylaşm|göndermi)/i;
+/** A prompt said to have brought customers, sales or revenue. */
+const CAUSE =
+  /\b(?:brought|drove|caused|generated)\b[^.\n]{0,40}\b(?:customers?|buyers?|sales|revenue|orders?)\b|müşteri(?:ler)?(?:i)?\s+(?:getirdi|kazandırdı|sağladı)|(?:satış|gelir|sipariş|kazanç)\w*\s+(?:getirdi|sağladı|kazandırdı)/i;
+const NEGATION =
+  /\bnot\b|n['’]t\b|\bno one\b|\bnever\b|değil|göremez|bilinmez|bilemeyiz|ölçülemez|ölçülmez|iletmez|aktarmaz|söyleyemeyiz|gelmez/i;
+
+/** The answer's lines that say a prompt brought customers, outside a line that denies it. */
+export function promptCauseClaims(answer: string): string[] {
+  return answer
+    .split('\n')
+    .filter(
+      (line) =>
+        /prompt|soru/i.test(line) &&
+        CAUSE.test(line) &&
+        !NEGATION.test(line) &&
+        !ASSOCIATION.test(line),
+    );
+}
+
+const reads = (tool: string, tr: string): ScenarioCheck => ({
+  name: `reads ${tool}`,
+  tr: `${tr} okudu`,
+  must: true,
+  ok: (run) => run.reads.includes(tool),
+});
+
+const PAGES_QUESTION = 'Hangi sayfalar müşteri getiriyor, ne kadar kazandırdı?';
+
 /**
- * Questions a person types with no skill, in their own chat, in Auto: kept
+ * Questions a person types with no /name, in their own chat, in Auto: kept
  * with the skills, as each is a person's chat. "AC 481 ve AC-63 nedir" (the
  * owner's report of 2026-11-16, in Turkish as it was asked) on a brand with
  * 55 open actions, AC-481 past the list's first page of 50: it was answered
- * "there is no AC-481" with the closest others.
+ * "there is no AC-481" with the closest others. A signal by its code and a
+ * cited domain by its address, each past its list's first page.
+ *
+ * Then the owner's questions about customers and revenue from AI
+ * (2026-11-16), where Chat has to pick the skill. With conversions off it
+ * guides to set them up and gives no number; with a week of them it names
+ * pages, assistants and each currency's value; asked about prompts, it shows
+ * the association with its label, never a cause.
  */
 export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
   {
@@ -345,6 +405,88 @@ export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
     promises: [],
     workspace: 'long_lists',
     askedDomains: [{ domain: EVAL_CITED_DOMAIN.domain, citations: EVAL_CITED_DOMAIN.citations }],
+  },
+  {
+    id: 'ai-revenue-setup',
+    group: 'skills',
+    skill: 'ai-revenue',
+    name: `${PAGES_QUESTION} (dönüşümler kapalı)`,
+    skills: ['ai-revenue'],
+    mode: 'auto',
+    trigger: 'manual',
+    message: PAGES_QUESTION,
+    promises: [],
+    workspace: 'conversions_off',
+    checks: [
+      reads('get_tracking_setup', 'kurulum durumunu'),
+      {
+        name: 'leads with the setup step and its page',
+        tr: 'kurulum adımını ve sayfasını verdi',
+        must: true,
+        ok: (run) => SETUP_LINK.test(run.answer),
+      },
+      {
+        name: 'says Not measured, with no amount',
+        tr: '"ölçülmüyor" dedi, tutar vermedi',
+        must: true,
+        ok: (run) => NOT_MEASURED.test(run.answer) && !MONEY.test(run.answer),
+      },
+    ],
+  },
+  {
+    id: 'ai-revenue-data',
+    group: 'skills',
+    skill: 'ai-revenue',
+    name: PAGES_QUESTION,
+    skills: ['ai-revenue'],
+    mode: 'auto',
+    trigger: 'manual',
+    message: PAGES_QUESTION,
+    promises: ['list'],
+    checks: [
+      reads('get_ai_conversions', 'AI ziyaretlerinden dönüşümleri'),
+      {
+        name: 'names pages and assistants',
+        tr: 'sayfaları ve asistanları adlandırdı',
+        must: true,
+        ok: (run) => run.answer.includes('/subscriptions') && /ChatGPT/.test(run.answer),
+      },
+      {
+        name: 'gives each currency on its own',
+        tr: 'her para birimini ayrı verdi',
+        must: true,
+        ok: (run) =>
+          /EUR|€/.test(run.answer) &&
+          /USD|\$/.test(run.answer) &&
+          !CURRENCIES_ADDED.test(run.answer),
+      },
+    ],
+  },
+  {
+    id: 'ai-revenue-prompts',
+    group: 'skills',
+    skill: 'ai-revenue',
+    name: 'Hangi promptlar müşteri getiriyor?',
+    skills: ['ai-revenue'],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'Hangi promptlar müşteri getiriyor?',
+    promises: ['list'],
+    checks: [
+      reads('get_prompt_conversions', 'prompt ilişkisini'),
+      {
+        name: 'labels it an association',
+        tr: 'ilişki olduğunu, ölçüm olmadığını söyledi',
+        must: true,
+        ok: (run) => ASSOCIATION.test(run.answer),
+      },
+      {
+        name: 'never says a prompt brought customers',
+        tr: 'bir promptun müşteri getirdiğini söylemedi',
+        must: true,
+        ok: (run) => promptCauseClaims(run.answer).length === 0,
+      },
+    ],
   },
 ];
 
@@ -1070,6 +1212,7 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
       gaveUp.length === 0,
       `${gaveUp.join(', ')}: ${quote(run.answer)}`,
     ),
+    ...(scenario.checks ?? []).map((c) => check(c.name, c.must, c.ok(run), quote(run.answer))),
     // Review: for product review, not a failure.
     ...(scenario.reviewPromises ?? []).map((promise) => {
       const met = promiseMet(run, promise);
@@ -1355,8 +1498,13 @@ export function checkLabel(name: string): string {
   }
   const missing = /^says (.+) isn’t connected$/.exec(name);
   if (missing) return `${missing[1]} bağlı değil dedi`;
-  return CHECK_TR[name] ?? name;
+  return CHECK_TR[name] ?? SCENARIO_CHECK_TR.get(name) ?? name;
 }
+
+/** The scenarios' own checks, in Turkish. */
+const SCENARIO_CHECK_TR = new Map(
+  QUESTION_SCENARIOS.flatMap((s) => (s.checks ?? []).map((c) => [c.name, c.tr] as const)),
+);
 
 const STATUS_TR: Readonly<Record<string, string>> = {
   done: 'bitti',

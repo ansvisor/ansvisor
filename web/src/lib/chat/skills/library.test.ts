@@ -83,8 +83,9 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
  * create_action, once the person says yes. Then the packs' three (AGENTS
  * plan §8.1, §8.3): /content-plan, the Content Plan Builder's, /seasonal,
  * the Seasonal Prompt Planner's, and /traffic, AI Traffic → Signups'; each
- * line says what the agent's card does. Then Ads' two (Ads Phase 0 PR
- * 15), offered only with ADS_ENABLED (flagged.ts ADS_SKILLS).
+ * line says what the agent's card does. Then /ai-revenue: customers and
+ * revenue from AI visits, and what to set up to measure them. Then Ads' two
+ * (Ads Phase 0 PR 15), offered only with ADS_ENABLED (flagged.ts ADS_SKILLS).
  */
 const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
   winback: {
@@ -214,6 +215,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'Weekly AI referral visits by assistant and landing page, the sign-ups Google Analytics counts from AI visits, and the change from last week.',
   },
+  'ai-revenue': {
+    title: 'Customers and revenue from AI',
+    description:
+      'Which pages and AI assistants bring you customers, sign-ups, forms, orders and revenue, and what to set up where nothing is measured yet.',
+  },
   'earn-or-pay': {
     title: 'Earn or pay',
     description:
@@ -265,7 +271,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's thirty-one, with the mockup's titles and descriptions", () => {
+  it("are Ansvisor's thirty-two, with the mockup's titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {

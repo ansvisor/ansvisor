@@ -74,6 +74,9 @@ export function googleSourceStatus(source: {
 /** Where a Google source's connection and property are managed. */
 export const INTEGRATIONS_SETTINGS_PATH = '/dashboard/settings?tab=integrations';
 
+/** Where the HubSpot card is: the AI-sourced pipeline's section, and Chat's setup steps. */
+export const HUBSPOT_SETTINGS_PATH = '/dashboard/settings/integrations#hubspot';
+
 /**
  * A Search Console property as the strip names it: the plain domain, never
  * "sc-domain:", and a URL-prefix property by its host.
