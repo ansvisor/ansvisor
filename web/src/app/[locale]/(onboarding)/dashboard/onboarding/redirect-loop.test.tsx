@@ -17,7 +17,15 @@ import messages from '../../../../../../messages/en.json';
  */
 
 interface Workspace {
-  profile: { organization_id: string | null; onboarding_completed: boolean; role: string } | null;
+  profile: {
+    organization_id: string | null;
+    onboarding_completed: boolean;
+    role: string;
+    /** Menu access (00374): the person's own exceptions and work areas. */
+    menu_hidden?: string[];
+    work_areas?: string[];
+    work_areas_asked_at?: string;
+  } | null;
   org: {
     subscription_status: string | null;
     stripe_subscription_id: string | null;
@@ -30,6 +38,8 @@ interface Workspace {
   demo: boolean;
   /** The setup-deferred cookie ("Manage your plan"). */
   deferred: boolean;
+  /** The sections the person's role leaves off its menu (organization_menu_roles). */
+  roleHidden?: string[];
 }
 const ws = vi.hoisted(() => ({ current: null as unknown as Workspace }));
 
@@ -89,6 +99,8 @@ function client() {
             };
           case 'tracking_runs':
             return { data: Array.from({ length: brand?.runs ?? 0 }, () => ({})), error: null };
+          case 'organization_menu_roles':
+            return { data: { hidden_sections: w.roleHidden ?? [] }, error: null };
           default:
             return { data: null, error: null };
         }
@@ -211,6 +223,10 @@ const { default: DashboardLayout } = await import('../../../(dashboard)/layout')
 const { default: OnboardingLayout } = await import('../../layout');
 const { default: OnboardingWizardLayout } = await import('./layout');
 const { default: OnboardingPage } = await import('./page');
+const { default: DashboardIndexPage } = await import('../../../(dashboard)/dashboard/page');
+const { default: ActionCenterPage } =
+  await import('../../../(dashboard)/dashboard/action-center/page');
+const { setupLanding } = await import('@/lib/onboarding/setup-after-purchase');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -499,5 +515,164 @@ describe('no redirect loop, and Billing always opens', () => {
     expect((await visit('/dashboard')).at).toBe('onboarding');
     ws.current.profile = { organization_id: 'org1', onboarding_completed: true, role: 'admin' };
     expect((await visit('/dashboard')).at).toBe('dashboard');
+  });
+});
+
+/** The pages that only send on: the dashboard's index and the Action Center's. */
+const SENDS_ON: Record<string, (query: URLSearchParams) => unknown> = {
+  '/dashboard': (query) =>
+    DashboardIndexPage({ searchParams: Promise.resolve(Object.fromEntries(query)) }),
+  '/dashboard/action-center': () => ActionCenterPage(),
+};
+
+/** As `visit`, then the page that opens: the index and the Action Center send on. */
+async function land(path: string): Promise<Settled> {
+  const hops: string[] = [];
+  let at = path;
+  for (let i = 0; i < 6; i += 1) {
+    const settled = await visit(at);
+    hops.push(...settled.hops);
+    const url = new URL(settled.hops.at(-1)!, 'http://localhost');
+    const page = settled.at === 'dashboard' ? SENDS_ON[url.pathname] : undefined;
+    const to = page ? await redirectOf(async () => page(url.searchParams)) : null;
+    if (!to) return { at: settled.at, hops };
+    at = to;
+  }
+  throw new Error(`Redirect loop: ${hops.join(' → ')}`);
+}
+
+/**
+ * Everyone lands on Prompts › Tracked Prompts (the owner's decision of
+ * 2026-11-17), and it stays put: no layout sends anyone who just finished
+ * setup back to onboarding from it. The Action Center keeps its own address.
+ */
+describe('the home, Prompts › Tracked Prompts', () => {
+  const HOME = '/dashboard/prompts/tracked';
+  // Setup just finished: competitors saved, onboarding marked completed, the
+  // first run started but not in the ledger yet.
+  const JUST_SET_UP = [{ id: 'b1', isActive: true, competitors: 1, runs: 0, prompts: true }];
+
+  it('opens /dashboard on Tracked Prompts, and the Action Center on its Today tab', async () => {
+    workspace({ status: 'active', brands: [...SETUPS.finished] });
+    expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+    expect(await land('/dashboard/action-center')).toEqual({
+      at: 'dashboard',
+      hops: ['/dashboard/action-center', '/dashboard/action-center/today'],
+    });
+  });
+
+  it.each([
+    ['the trial from the choice', false],
+    ['the sample brand, then a purchase', true],
+  ])('%s, setup finished: Tracked Prompts with the run, and it stays there', async (_, demo) => {
+    workspace({ status: 'trialing', brands: [...JUST_SET_UP], demo });
+    const landing = setupLanding('job1');
+    expect(landing).toBe('/dashboard?jobId=job1');
+    expect(await land(landing)).toEqual({
+      at: 'dashboard',
+      hops: [landing, `${HOME}?jobId=job1`],
+    });
+    expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+    // Onboarding opened again sends them home, once.
+    expect(await land('/dashboard/onboarding')).toEqual({
+      at: 'dashboard',
+      hops: ['/dashboard/onboarding', '/dashboard', HOME],
+    });
+  });
+
+  it('a brand set up before the plan, back from Checkout: Tracked Prompts with the run', async () => {
+    workspace({ status: 'trialing', brands: [...JUST_SET_UP] });
+    expect(await land(`${HOME}?jobId=job-s`)).toEqual({
+      at: 'dashboard',
+      hops: [`${HOME}?jobId=job-s`],
+    });
+  });
+
+  it('the sample brand explored, never subscribed: its Tracked Prompts, read-only', async () => {
+    workspace({ status: 'incomplete', subscribed: false, demo: true });
+    expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+  });
+
+  it('a plan lapsed after a subscription: the read-only Tracked Prompts', async () => {
+    workspace({ status: 'canceled', brands: [...SETUPS.finished] });
+    expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+  });
+
+  it('a plan on with setup due: setup first, never Tracked Prompts', async () => {
+    workspace({ status: 'trialing' });
+    expect(await land('/dashboard')).toEqual({
+      at: 'onboarding',
+      hops: ['/dashboard', '/dashboard/onboarding'],
+    });
+  });
+
+  it('self-hosted, onboarding finished: Tracked Prompts', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    workspace({ status: null, brands: [...JUST_SET_UP] });
+    expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+  });
+
+  // Menu access: nobody lands on a page their menu doesn't show.
+  describe('with Prompts off the person’s menu', () => {
+    const TODAY = '/dashboard/action-center/today';
+    const analyst = { organization_id: 'org1', onboarding_completed: true, role: 'analyst' };
+
+    it('a role whose menu hides Prompts: Action Center › Today, and it stays there', async () => {
+      workspace({ status: 'active', brands: [...SETUPS.finished], profile: analyst });
+      ws.current.roleHidden = ['prompts', 'content'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', TODAY] });
+      expect((await land('/dashboard/onboarding')).hops.at(-1)).toBe(TODAY);
+    });
+
+    it('a role whose menu keeps Prompts, or hides something else: Tracked Prompts', async () => {
+      workspace({ status: 'active', brands: [...SETUPS.finished], profile: analyst });
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+      ws.current.roleHidden = ['content', 'audit'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+    });
+
+    it('a person’s own exception, or an admin’s own work areas, without Prompts: Today', async () => {
+      workspace({
+        status: 'active',
+        brands: [...SETUPS.finished],
+        profile: { ...analyst, menu_hidden: ['prompts'] },
+      });
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', TODAY] });
+      // Nobody takes Prompts off an admin's menu, but their own work areas can.
+      workspace({
+        status: 'active',
+        brands: [...SETUPS.finished],
+        profile: {
+          organization_id: 'org1',
+          onboarding_completed: true,
+          role: 'admin',
+          work_areas: ['leaders'],
+          work_areas_asked_at: '2026-11-12T09:00:00Z',
+        },
+      });
+      ws.current.roleHidden = ['prompts'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', TODAY] });
+      ws.current.profile!.work_areas = ['growth'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', HOME] });
+    });
+
+    it('a manager whose role hides Prompts, setup finished: Today with the run', async () => {
+      workspace({
+        status: 'trialing',
+        brands: [...JUST_SET_UP],
+        profile: { organization_id: 'org1', onboarding_completed: true, role: 'manager' },
+      });
+      ws.current.roleHidden = ['prompts'];
+      expect(await land(setupLanding('job1'))).toEqual({
+        at: 'dashboard',
+        hops: ['/dashboard?jobId=job1', `${TODAY}?jobId=job1`],
+      });
+    });
+
+    it('a plan lapsed: the read-only Today, no loop', async () => {
+      workspace({ status: 'canceled', brands: [...SETUPS.finished], profile: analyst });
+      ws.current.roleHidden = ['prompts'];
+      expect(await land('/dashboard')).toEqual({ at: 'dashboard', hops: ['/dashboard', TODAY] });
+    });
   });
 });

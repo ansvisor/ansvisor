@@ -84,7 +84,7 @@ describe('MenuAccessSection', () => {
     expect(box('Analyst sees Competitors')?.getAttribute('aria-checked')).toBe('true');
     expect(box('Manager sees Content')?.getAttribute('aria-checked')).toBe('true');
     expect(container.textContent).toContain('Product Visibility');
-    expect(container.textContent).toContain('More');
+    expect(container.textContent).toContain('Execution');
     expect(container.textContent).toContain('Analytics');
   });
 
@@ -231,26 +231,26 @@ describe('MenuAccessSection and the menu’s groups', () => {
       (row) => row.querySelector('td')?.textContent ?? '',
     );
 
-  it('lists Agents under the Action Center’s row, and More for Execution', async () => {
+  it('lists Analytics, then Execution with Agents under the Action Center’s row', async () => {
     await render();
     expect(rows()).toEqual([
       'Chat',
-      'Action Center',
-      'Agents · in Action Center',
       'Analytics',
       'Prompts',
       'Visibility',
       'Mentions',
       'Citations',
       'Product Visibility',
+      'Competitors',
       'AI Referral Traffic',
-      'More',
+      'Execution',
+      'Action Center',
+      'Agents · in Action Center',
       'Content',
       'Audit',
       'Reports',
-      'Competitors',
     ]);
-    expect(container.textContent).not.toContain('Execution');
+    expect(rows()).not.toContain('More');
     expect(container.textContent).not.toContain('Agent Center');
   });
 
@@ -280,6 +280,6 @@ describe('MenuAccessSection and the menu’s groups', () => {
     expect(rows()).not.toContain('Agents · in Action Center');
     const all = rows();
     expect(all.indexOf('Ads')).toBe(all.indexOf('AI Referral Traffic') + 1);
-    expect(all.indexOf('More')).toBe(all.indexOf('Ads') + 1);
+    expect(all.indexOf('Execution')).toBe(all.indexOf('Ads') + 1);
   });
 });

@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod';
 import { searchWords } from '@/lib/mcp/lookup';
+import { pageRoute, samePage } from './page-route';
 import { viewPage, viewPathId } from './page-view';
 import type { ChatTool } from './registry/define-tool';
 
@@ -29,7 +30,13 @@ import type { ChatTool } from './registry/define-tool';
  * list_catalog_products), as the lookups' own words
  * (#2460: at most 8 words of the first 200 characters, escaped by the read),
  * unless the model gave its own search or named rows, or the question asks
- * for all of them.
+ * for all of them. Where a read's search is a lookup in every status
+ * (list_prompts, list_content_opportunities: it has AS_LISTED), the page's
+ * search also sets AS_LISTED, so it reads the list as the page lists it:
+ * with the page's filters, archived set aside, in the read's sort (the
+ * maintainer's review of 2026-11-17). The model's own search on such a read
+ * is a lookup by name, in every status: like named rows, it takes none of
+ * the page's filters, so none is said to be applied.
  *
  * An item's own page whose id is one of these filters (since step 9's
  * detail pages, PATH_FILTERS): a topic's page is its brand's data for that
@@ -46,7 +53,10 @@ export interface PageFilter {
 
 /** What the page a question came from shows: its path, its brand and its filters. */
 export interface PageScope {
-  /** The page's path ("/dashboard/citations"); null when the panel didn't send one. */
+  /**
+   * The page's path as Chat matches it ("/dashboard/citations"; page-route.ts:
+   * "/dashboard/prompts" is "/dashboard/prompts/tracked"); null when the panel didn't send one.
+   */
   route: string | null;
   /** The brand chip's brand (the run's own, messageScopeOf); null when it was left out. */
   brandId: string | null;
@@ -90,7 +100,8 @@ export function pageScopeOf(
     | undefined,
 ): PageScope | null {
   if (!context) return null;
-  const route = context.route?.trim().replace(/\/+$/, '') || null;
+  // As Chat matches pages: /dashboard/prompts is Tracked Prompts (page-route.ts).
+  const route = pageRoute(context.route);
   const brandId = context.chips.find((chip) => chip.key === 'brand')?.value || null;
   const filters = context.chips.flatMap((chip) =>
     chip.key.startsWith('filter:') && chip.value
@@ -190,7 +201,10 @@ function ruleOf(key: string, route: string | null): FilterRule | null {
 /** Every input a page's filter may fill: a model's "" in one asks for all. */
 const PAGE_FIELDS = ['model', 'platform', 'region'] as const;
 
-/** Inputs that name a read's rows: each named row comes back, whatever the page shows. */
+/**
+ * Inputs that name a read's rows: each named row comes back, whatever the
+ * page shows. A lookup read's own search names them too (searchLooksUp).
+ */
 const LOOKUP_FIELDS = ['codes', 'ids', 'domains', 'urls'] as const;
 
 const EDGE = String.raw`(?<![\p{L}\d])`;
@@ -243,6 +257,19 @@ const fieldOf = (tool: Pick<ChatTool, 'inputSchema'>, field: string): ZodType | 
   (tool.inputSchema.shape as Record<string, ZodType | undefined>)[field];
 
 /**
+ * The input of a read whose `search` is a lookup in every status that
+ * searches its list as the page lists it instead: its filters and sort apply.
+ */
+export const AS_LISTED = 'as_listed';
+
+/** The model's own search on a read whose search is a lookup by name, in every status. */
+const searchLooksUp = (tool: Pick<ChatTool, 'inputSchema'>, raw: Record<string, unknown>) =>
+  !!fieldOf(tool, AS_LISTED) &&
+  typeof raw.search === 'string' &&
+  raw.search.trim() !== '' &&
+  raw[AS_LISTED] !== true;
+
+/**
  * A read's input with the page's filters where they apply, and the keys of
  * those that did ("platform", "sources"), in the page's order. The model's
  * own inputs stay; a "" it gave for a platform, model or region is taken out
@@ -256,7 +283,8 @@ export function pageFilterInputs(
 ): { input: Record<string, unknown>; applied: string[] } {
   const input: Record<string, unknown> = { ...raw };
   const applied: string[] = [];
-  const ownList = !!page?.route && tool.route === page.route;
+  // The read's route is the page's, an alias as its page (page-route.ts).
+  const ownList = !!page && samePage(tool.route, page.route);
   // A read of no brand (Agents' list_my_agents: the person's agents) takes its own page's
   // list filters only, never a brand's data cut (platform, region, topic).
   const brandless = !fieldOf(tool, 'brand_id');
@@ -264,7 +292,8 @@ export function pageFilterInputs(
     page &&
     page.brandId &&
     (input.brand_id === page.brandId || (brandless && ownList)) &&
-    !LOOKUP_FIELDS.some((field) => Array.isArray(raw[field]) && raw[field].length > 0)
+    !LOOKUP_FIELDS.some((field) => Array.isArray(raw[field]) && raw[field].length > 0) &&
+    !searchLooksUp(tool, raw)
   ) {
     for (const filter of page.filters) {
       const rule = ruleOf(filter.key, page.route);
@@ -306,6 +335,8 @@ export function pageFilterInputs(
       schema.safeParse(search).success
     ) {
       input.search = search;
+      // Within the list as the page lists it, its filters and sort with it: not a lookup.
+      if (fieldOf(tool, AS_LISTED)) input[AS_LISTED] = true;
       applied.push('search');
     }
   }

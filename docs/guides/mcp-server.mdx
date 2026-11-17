@@ -296,7 +296,7 @@ purpose; API keys work either way
 
 ## Available tools
 
-The MCP server exposes **65 tools**. Descriptions below match
+The MCP server exposes **71 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries. A write that needs a particular role
@@ -334,12 +334,25 @@ The same reads are available over REST with the same `ans_` key: `GET /api/mcp/w
 
 | Tool | What it does | Writes |
 | --- | --- | --- |
-| `get_visibility_summary` | Aggregate visibility metrics for a brand over an optional date range and filters — headline `aiVisibilityScore`, mentions, citations, competitors. | |
+| `get_visibility_summary` | Aggregate visibility metrics for a brand over an optional date range and filters — headline `aiVisibilityScore`, mentions, citations, competitors. A range that starts or ends inside a day and is longer than a day is read over the whole UTC days it touches (`roundedToDays` and a `note` say so). | |
 | `get_visibility_trend` | Visibility over time (day or week buckets) with mentions, citations, and competitor scores for trend questions. | |
 | `get_competitor_comparison` | Competitor benchmark and share of voice for a window, comparable visibility rates and per-model/platform splits. | |
 | `list_citations` | URLs and domains AI engines cite alongside a brand, by source type, with top domains/URLs and usage stats. With `domains` (such as `example.com` or `https://www.example.com/`, each with its subdomains and most cited pages) or `urls` (up to 10 each) it reads those instead, in every source type, with the prompts whose answers cite each, and lists those not cited in the window in `not_found`. | |
 | `get_ai_traffic` | AI-referral traffic (visits by engine, landing pages, countries) for an optional date range. `tracking` says whether the tracking snippet is installed: `not_detected` (not seen on the brand's site, so 0 visits means nothing is measured yet), `installed_quiet` (installed, no AI visit in the last 7 days) or `active`. | |
 | `get_prompt_performance` | Per-prompt performance (visibility, mentions, citations, appearances) over a date range for ranking prompts. With `prompt_ids` (up to 10) it reads those prompts only, whatever their topic and never cut by `limit`; a tracked prompt with no answers in the window is in `no_results`, an id the brand doesn't have in `not_found`. | |
+
+### Customers and revenue from AI
+
+Which pages and AI assistants bring customers, sign-ups, orders and revenue, as **AI Traffic** and **Brand settings › Tracking** show it, through the same reads as Ansvisor's Chat. Read `get_tracking_setup` first. When a source isn't set up, a read says `measured: false` with `next_step` and `where` (a link to the app page it is done on), and gives no figure for it. Revenue is per currency, never added across currencies. The periods are `date_from` / `date_to`; the lists come a page at a time (`limit`, default and at most 50, and `offset`), with `total`, `next_offset` and a `note`.
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `get_tracking_setup` | What the brand has set up to measure customers from AI visits: the tracking snippet, conversions from AI visits and their consent mode, whether conversions arrive (forms, conversion calls, the Shopify pixel), orders with a value, Google Analytics and HubSpot, each with its state and, when missing, `next_step` and `where`. | |
+| `get_ai_conversions` | Conversions from AI visits the tracking snippet counted: by type (sign-up, demo, order, booking, newsletter, custom), revenue per currency, by the assistant that first sent the visitor, by the site's labels and by landing page (first touch, within 30 days). Paged by landing page. | |
+| `get_ai_converting_pages` | **Where AI visitors convert**, from Google Analytics: the top converting pages from AI with their AI visits, key events, revenue (in the property's own currency), rate (from 30 AI visits) and best assistant, and on the first page which topics' answers bring buyers. A period with under 30 AI visits reads the last 30 days, as the page does. | |
+| `get_ai_pipeline` | The **AI-sourced pipeline** from HubSpot: contacts, deals, won revenue and open pipeline from AI visits against the period before, by assistant and by landing page, in the HubSpot account's currency; HubSpot's own AI Referrals apart. Needs CRM integrations (Growth and above), as on the page: on another plan it answers `plan_limit`. | |
+| `list_ai_visits` | The AI visit log, newest first: when, landing page, assistant, country, language, pageviews and referrer; `assistant` (such as `chatgpt.com`) and `search` (text in the page's address) narrow it. | |
+| `get_prompt_conversions` | Tracked prompts whose answers cite the brand's pages that converted, with those pages' conversions and revenue per currency. Always with its `label`: an association, not measured attribution, since AI assistants don't pass the question. Never read it as a prompt bringing a sale. | |
 
 ### Saved reports
 

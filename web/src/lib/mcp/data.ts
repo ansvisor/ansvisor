@@ -17,7 +17,12 @@ import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { readSnippet } from '@/lib/traffic-snippet';
 import { snippetState, type SnippetState } from '@/lib/traffic-sources';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
-import { wholeDayWindow, type DayWindow } from '@/lib/insights-windows';
+import {
+  answeredSpanMs,
+  coveringDayWindow,
+  wholeDayWindow,
+  type DayWindow,
+} from '@/lib/insights-windows';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { PLANS, type Feature, getMinimumPlanForFeature, hasFeature, isCloud } from '@/config/plans';
@@ -198,6 +203,14 @@ export interface VisibilitySummary {
     /** AI Visibility Score over the brand's answers (shared denominator). */
     score: number | null;
   }>;
+  /**
+   * The whole UTC days read in place of the period asked, when it started or
+   * ended inside a day and ran longer than a day (`note` says so): every day
+   * it touches, from the daily rollups. An absent bound stays open.
+   */
+  roundedToDays?: DayWindow;
+  /** Why the summary covers other times than the period asked, when it does. */
+  note?: string;
 }
 
 /** ai_visibility_aggregates(_daily)'s payload: the score's components, brand and competitors. */
@@ -281,6 +294,22 @@ export async function getVisibilitySummaryFor(
     });
   }
 
+  // Inside a day and longer than about a day (an MCP call's timestamps): the whole UTC days
+  // it touches, from the rollups, saying so. The raw aggregates' cost follows the answers in
+  // the window: on the busiest brand 13 s for 7 days, past 120 s for 90 (the maintainer's
+  // review of 2026-11-17).
+  const span = answeredSpanMs(params.dateFrom, params.dateTo);
+  if (span === null || span > SUB_DAY_RAW_MAX_MS) {
+    const covering = coveringDayWindow(params.dateFrom, params.dateTo);
+    if (!covering) throw new Error(UNREADABLE_PERIOD);
+    const summary = await visibilitySummaryFromRollups(brand, {
+      models: p_models_arg,
+      region: params.region ?? null,
+      days: covering,
+    });
+    return { ...summary, roundedToDays: covering, note: roundedToDaysNote(covering) };
+  }
+
   const rpcBaseArgs = {
     p_brand_id: params.brandId,
     p_platform: null as string | null,
@@ -295,9 +324,10 @@ export async function getVisibilitySummaryFor(
   // excludes chatgpt-shopping for the same reason: its model isn't
   // comparable to a normal ChatGPT answer and would skew brand visibility.
   //
-  // A window that starts or ends inside a day is answered by the raw
-  // aggregates the Visibility page reads for it (the maintainer's review of
-  // 2026-11-16: no answer rows leave the database), all four together:
+  // A window of at most about a day that starts or ends inside a day is
+  // answered to the minute by the raw aggregates the Visibility page reads
+  // for it (the maintainer's review of 2026-11-16: no answer rows leave the
+  // database), all four together:
   //   • competitor_aggregates → the answers, mentions, citations and legacy
   //     average, and each live competitor's mentions and legacy average, as
   //     the Competitors comparison reads them (security invoker: the
@@ -324,6 +354,26 @@ export async function getVisibilitySummaryFor(
     visiblePrompts: Number(visRpcRow.visible_prompts ?? 0),
     promptCount: Number(promptCountRes.data ?? 0),
   });
+}
+
+/**
+ * The longest window starting or ending inside a day that the visibility
+ * summary reads to the minute, from the raw aggregates: a day of answers,
+ * with an hour to spare for a rolling "Last 24 hours" read a moment after it
+ * was cut (Chat's before a brand's first run). A longer one is read over the
+ * whole UTC days it touches, from the daily rollups (the maintainer's
+ * review of 2026-11-17).
+ */
+const SUB_DAY_RAW_MAX_MS = 25 * 60 * 60 * 1000;
+
+const UNREADABLE_PERIOD =
+  'date_from and date_to take a day (2026-11-01) or an ISO time (2026-11-01T09:00:00Z).';
+
+/** What a summary rounded to whole days says of its period. */
+function roundedToDaysNote(days: DayWindow): string {
+  const from = days.dayFrom ?? 'the first day tracked';
+  const to = days.dayTo ?? 'today';
+  return `The period asked starts or ends inside a day and is longer than a day, so it was rounded to whole UTC days: ${from} to ${to}, every day it touches, from the daily totals the Visibility page reads. A period of a day or less is read to the minute.`;
 }
 
 const roundTenth = (value: number) => Math.round(value * 10) / 10;
@@ -966,8 +1016,15 @@ export interface ListPromptsParams {
   /**
    * Chat's lookup: the prompts whose text holds every word of this, in any
    * order and case (lookup.ts searchWords), whatever their topic or state.
+   * With asListed, the list's own search instead.
    */
   search?: string;
+  /**
+   * With search: the list as filtered (topic, active state), the prompts
+   * whose text holds every word, newest first: the page's search (Chat's
+   * as_listed, the maintainer's review of 2026-11-17), not a lookup.
+   */
+  asListed?: boolean;
 }
 
 const PROMPT_LIST_DEFAULT_LIMIT = 100;
@@ -1001,10 +1058,11 @@ export async function promptsPageFor(
   );
 
   const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
-  // A lookup (Chat's ids or search) reads every topic and state, its organization joined on the rows.
-  const lookup = params.ids !== undefined || params.search !== undefined;
+  // A lookup (Chat's ids or search) reads every topic and state, its organization joined on the
+  // rows; a search as listed (asListed) reads the list as filtered, with its words.
+  const lookup = params.ids !== undefined || (params.search !== undefined && !params.asListed);
   const words = searchWords(params.search);
-  if (lookup && (params.ids?.length === 0 || (params.search !== undefined && !words.length))) {
+  if (params.ids?.length === 0 || (params.search !== undefined && !words.length)) {
     return { rows: [], total: 0 };
   }
   const organizationId = auth.organizationId;
@@ -1029,6 +1087,8 @@ export async function promptsPageFor(
     if (typeof params.isActive === 'boolean') {
       query = query.eq('is_active', params.isActive);
     }
+    // The list's search (asListed): each word, escaped, as the lookup matches it.
+    for (const word of words) query = query.ilike('text', containsPattern(word));
     return query;
   };
   const { rows: data, total } = await pageRows(
@@ -1173,8 +1233,18 @@ export interface ListContentOpportunitiesParams {
   offset?: number;
   /** Chat's lookup: these opportunities only, by id (checked ids), in any status, archived too. */
   ids?: readonly string[];
-  /** Chat's lookup: the opportunities whose title holds every word of this, in any status, archived too. */
+  /**
+   * Chat's lookup: the opportunities whose title holds every word of this,
+   * in any status, archived too. With asListed, the list's own search instead.
+   */
   search?: string;
+  /**
+   * With search: the list as filtered (status, impact, type; archived set
+   * aside unless asked by status) and sorted, the opportunities whose title
+   * holds every word: the page's search (Chat's as_listed, the maintainer's
+   * review of 2026-11-17), not a lookup.
+   */
+  asListed?: boolean;
   /**
    * The Content page's Sort (lib/content/opportunity-list.ts), in its order:
    * newest or oldest by when each was suggested, score by its score, then
@@ -1211,13 +1281,14 @@ export async function contentOpportunitiesPageFor(
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
-  // A lookup (Chat's ids or search) reads every status, archived too, its organization joined.
-  const lookup = params.ids !== undefined || params.search !== undefined;
+  // A lookup (Chat's ids or search) reads every status, archived too, its organization joined;
+  // a search as listed (asListed) reads the list as filtered and sorted, with its words.
+  const lookup = params.ids !== undefined || (params.search !== undefined && !params.asListed);
   const searched = searchWords(params.search);
   const words = searched.some((w) => !YEAR.test(w))
     ? searched.filter((w) => !YEAR.test(w))
     : searched;
-  if (lookup && (params.ids?.length === 0 || (params.search !== undefined && !words.length))) {
+  if (params.ids?.length === 0 || (params.search !== undefined && !words.length)) {
     return { rows: [], total: 0 };
   }
   const organizationId = auth.organizationId;
@@ -1243,6 +1314,8 @@ export async function contentOpportunitiesPageFor(
     query = params.status ? query.eq('status', params.status) : query.neq('status', 'archived');
     if (params.impact) query = query.eq('impact', params.impact);
     if (params.type) query = query.eq('type', params.type);
+    // The list's search (asListed): each word, escaped, as the lookup matches it.
+    for (const word of words) query = query.ilike('title', containsPattern(word));
     return query;
   };
   // The Content page's sorts as its list orders them (server/src/routes/content.js), else the score's.

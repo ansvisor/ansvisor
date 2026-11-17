@@ -4,18 +4,18 @@ route: /dashboard/settings/menu-access
 keywords: [menu access, hide menu sections, role menu, customize menu, sidebar sections, fold menu group]
 synonyms: [hide pages from users, left menu per role, restrict menu, simplify sidebar]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/menu-access.mdx]
 ---
-**Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. To change what someone can do, change their role in **Settings › Team**.
+**Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. Ansvisor opens on **Prompts › Tracked Prompts**, or on the Action Center's **Today** tab for someone whose menu leaves Prompts off. To change what someone can do, change their role in **Settings › Team**.
 
 ## Fold a group on your menu
 
-Click a group's title on the left menu, **Analytics** or **More**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Action Center** sit above the groups, so they don't fold; the Action Center's own tabs fold under it.
+Click a group's title on the left menu, **Analytics** or **Execution**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** sits above the groups, so it doesn't fold. **Action Center** is first in **Execution** and folds with it; its own tabs also fold under it.
 
 ## Who can change menus
 

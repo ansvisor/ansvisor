@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, web/src/lib/chat/range.ts, web/src/lib/chat/page-scope.ts, web/src/lib/chat/page-order.ts, web/src/lib/chat/page-view.ts, web/src/lib/chat/page-periods.ts, web/src/components/chat/agents-for-you.tsx, web/src/lib/chat/agents-for-you.ts, web/src/lib/actions/agents-for-you.ts, web/src/components/chat/run/run-answer.tsx]
 ---
-Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on the Action Center's **Today** tab, whatever your plan; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off.
+Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Prompts › Tracked Prompts**, whatever your plan, or on the Action Center's **Today** tab when Prompts is off your menu; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off.
 
 ## Chat Home
 
@@ -65,7 +65,7 @@ The speech bubble icon next to a table's or chart's title, on a tracked prompt a
 
 Chat ranks and counts as the page does. "My top 5 prompts" on Prompts are the table's top 5 by Visibility, and "the first ones" on Actions or Content are the rows you see, in the page's order. On Overview and Citations, **Last 24 hours** is the latest tracking run, as on those pages.
 
-Chat also sees the open tab, the sort and search you picked, and the items on screen, and reads those items before it answers: "these" are the rows you see. On Prompts, Content, Mentions, History and Agents, Chat's lists follow the page's search, and the answer says so. This works on every page, from Today and Signals to the page of one product, topic, prompt, report or Site Audit: Chat knows the page, its dates, its filters and its rows, and "this one" is what you have open, such as a competitor or that topic.
+Chat also sees the open tab, the sort and search you picked, and the items on screen, and reads those items before it answers: "these" are the rows you see. On Prompts, Content, Mentions, History and Agents, Chat's lists follow the page's search within the page's own filters, as the page lists them, and the answer says so. When you name one item, Chat looks it up wherever it is, archived or paused too. This works on every page, from Today and Signals to the page of one product, topic, prompt, report or Site Audit: Chat knows the page, its dates, its filters and its rows, and "this one" is what you have open, such as a competitor or that topic.
 
 ## Chats in the panel
 

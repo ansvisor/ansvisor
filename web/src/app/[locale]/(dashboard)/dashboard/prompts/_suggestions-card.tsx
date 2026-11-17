@@ -27,6 +27,7 @@ import {
   ShoppingBag,
   Package,
   Building2,
+  Tags,
 } from 'lucide-react';
 import { Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -80,6 +81,8 @@ import type { PromptAddFailureCode } from '@/lib/actions/prompt';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { SuggestionsLoadError } from './_suggestions-load-error';
 import { BusinessHubTopicsDialog } from './_business-hub-topics-dialog';
+import { GenerateByTopic } from './_topic-prompts';
+import { SuggestionText } from './_suggestion-text';
 import {
   trackSavedWaiting,
   useWaitingForSpotToast,
@@ -401,6 +404,11 @@ export function SuggestionsCard({
   // ChatGPT Business Hub's topics (BUSINESS_HUB_ENABLED, read with the list).
   const [businessHub, setBusinessHub] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
+  // Generate by topic's picker (moved from the brand's Manage prompts page).
+  const [byTopicOpen, setByTopicOpen] = useState(false);
+  // Suggestions edited before they are added, by id: + and Add All save these texts.
+  const [editedTexts, setEditedTexts] = useState<Record<string, string>>({});
+  const textOf = (s: PromptSuggestion) => editedTexts[s.id] ?? s.suggestedText;
   // A link can ask for its dialog (?source=business_hub&hub=1), once the list says it's on.
   const hubAsked = useRef(false);
   // A link can open the list on a source (?source=data).
@@ -444,6 +452,7 @@ export function SuggestionsCard({
     setSuggestions([]);
     setError(null);
     setLimitNote(null);
+    setEditedTexts({});
   }, [brandId]);
 
   // Fetching on mount is safe here because this component only mounts when
@@ -509,11 +518,12 @@ export function SuggestionsCard({
       if (!q) return true;
       return (
         s.suggestedText.toLowerCase().includes(q) ||
+        (editedTexts[s.id] ?? '').toLowerCase().includes(q) ||
         (s.topicName ?? '').toLowerCase().includes(q) ||
         (s.reason ?? '').toLowerCase().includes(q)
       );
     });
-  }, [suggestions, sourceFilter, search]);
+  }, [suggestions, sourceFilter, search, editedTexts]);
 
   // Shopping is offered once the catalog gave a suggestion (ECOM-003, P-8),
   // and ChatGPT Business Hub once its topics gave one, or a link asked for either.
@@ -574,6 +584,10 @@ export function SuggestionsCard({
   const handleAddAll = async () => {
     const ids = visible.map((s) => s.id);
     if (ids.length === 0) return;
+    // The texts edited before adding; the rest keep the suggestion's own.
+    const edited = new Map(
+      ids.filter((id) => editedTexts[id] !== undefined).map((id) => [id, editedTexts[id]]),
+    );
     setAdding(true);
     setLimitNote(null);
     const added: string[] = [];
@@ -582,7 +596,14 @@ export function SuggestionsCard({
     let failure: { error: string; code?: PromptAddFailureCode } | null = null;
     try {
       for (let i = 0; i < ids.length && !failure; i += TRACK_BATCH) {
-        const result = await trackSuggestions(ids.slice(i, i + TRACK_BATCH));
+        const batch = ids.slice(i, i + TRACK_BATCH);
+        const texts = Object.fromEntries(
+          batch.filter((id) => edited.has(id)).map((id) => [id, edited.get(id)!]),
+        );
+        const result =
+          Object.keys(texts).length > 0
+            ? await trackSuggestions(batch, { texts })
+            : await trackSuggestions(batch);
         added.push(...result.trackedIds);
         waiting += result.waitingIds?.length ?? 0;
         // Accepted or dismissed elsewhere: they leave the list too.
@@ -617,7 +638,11 @@ export function SuggestionsCard({
     setPendingId(s.id);
     startTransition(async () => {
       try {
-        const result = await acceptSuggestion(s.id);
+        const edited = editedTexts[s.id];
+        const result =
+          edited === undefined
+            ? await acceptSuggestion(s.id)
+            : await acceptSuggestion(s.id, { text: edited });
         if ('error' in result) {
           if (isNoTopics(result)) topicFirst.show();
           else toast.error(result.error);
@@ -716,6 +741,21 @@ export function SuggestionsCard({
 
               {canManage && (
                 <Button
+                  onClick={guard(() => setByTopicOpen(true), {
+                    action: tActions('generatePrompts'),
+                  })}
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                  title={t('byTopic.buttonTitle')}
+                >
+                  <Tags className="h-3.5 w-3.5" />
+                  {t('byTopic.button')}
+                </Button>
+              )}
+
+              {canManage && (
+                <Button
                   onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
                   disabled={refreshing}
                   size="sm"
@@ -794,6 +834,14 @@ export function SuggestionsCard({
         </DialogContent>
       </Dialog>
       <CardContent>
+        <GenerateByTopic
+          brandId={brandId}
+          open={byTopicOpen}
+          onOpenChange={setByTopicOpen}
+          onAdded={onAccepted}
+          onAddTopic={onAddTopic}
+          onNoTopics={topicFirst.show}
+        />
         {limitNote && (
           <div
             role="alert"
@@ -896,6 +944,18 @@ export function SuggestionsCard({
                   )}
                   Generate Suggestions
                 </Button>
+                <Button
+                  onClick={guard(() => setByTopicOpen(true), {
+                    action: tActions('generatePrompts'),
+                  })}
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 gap-2"
+                  title={t('byTopic.buttonTitle')}
+                >
+                  <Tags className="h-3.5 w-3.5" />
+                  {t('byTopic.emptyButton')}
+                </Button>
                 {canUseHub && (
                   <Button
                     onClick={guard(() => setHubOpen(true), {
@@ -949,7 +1009,22 @@ export function SuggestionsCard({
                       </span>
 
                       <div className="min-w-0 space-y-1.5">
-                        <p className="text-sm font-medium leading-snug">{s.suggestedText}</p>
+                        <SuggestionText
+                          text={textOf(s)}
+                          edited={editedTexts[s.id] !== undefined}
+                          onChange={
+                            canManage
+                              ? (text) =>
+                                  setEditedTexts((prev) => {
+                                    const next = { ...prev };
+                                    // Back to the suggestion's own words: nothing edited.
+                                    if (text === s.suggestedText) delete next[s.id];
+                                    else next[s.id] = text;
+                                    return next;
+                                  })
+                              : undefined
+                          }
+                        />
                         <div className="flex flex-wrap items-center gap-1.5">
                           {s.topicName && (
                             <Badge variant="outline" className="gap-1 text-xs font-normal">

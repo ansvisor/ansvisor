@@ -492,4 +492,28 @@ describe('the MCP server for a Selected-brands key', () => {
       expect(db.rpcs).toEqual([]);
     },
   );
+
+  // Customers and revenue from AI visits (Chat's reads, over MCP): no figure, no plan read.
+  const aiRevenue: [string, Record<string, unknown>][] = [
+    ['get_tracking_setup', {}],
+    ['get_ai_conversions', { date_from: '2026-11-01', limit: 10 }],
+    ['get_ai_converting_pages', { date_from: '2026-11-01', offset: 50 }],
+    ['get_ai_pipeline', { date_from: '2026-11-01', date_to: '2026-11-15' }],
+    ['list_ai_visits', { assistant: 'chatgpt.com', search: 'pricing' }],
+    ['get_prompt_conversions', { date_to: '2026-11-15' }],
+  ];
+
+  it.each(aiRevenue)(
+    '%s answers a brand it may not use as not found, reading none of its rows',
+    async (name, args) => {
+      const hidden = '11111111-1111-4111-8111-111111111111';
+      db.rows.brands = { id: hidden, name: 'Acme' };
+      const client = await connect(SELECTED);
+      const result = await client.callTool({ name, arguments: { brand_id: hidden, ...args } });
+      expect(result.isError).toBe(true);
+      expect(text(result)).toBe('Brand not found');
+      expect(new Set(db.reads)).toEqual(new Set(['brands']));
+      expect(db.rpcs).toEqual([]);
+    },
+  );
 });

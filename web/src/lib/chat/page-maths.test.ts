@@ -286,7 +286,7 @@ describe('citations past 1,000 answers in the window', () => {
     expect(readsOf('prompt_results')).toHaveLength(1);
   });
 
-  it('adds up the visibility summary of a window inside a day over every answer too', async () => {
+  it('adds up the visibility summary of a day starting inside a day over every answer too', async () => {
     db.tables.prompt_results = busyWindow().map((row, i) => ({
       ...row,
       visibility_score: 50,
@@ -310,24 +310,26 @@ describe('citations past 1,000 answers in the window', () => {
     fns.visible_prompt_stats = () => ({ visible_prompts: 4, visible_results: 1_200 });
     fns.tracked_prompt_count = () => 4;
     fns.ai_visibility_aggregates = () => ({ answers: 2_400, mention_answers: 1_200 });
+    // 24 hours and a half, from inside one day to inside the next: read to the minute.
     const summary = (await run('get_visibility_summary', {
       brand_id: BRAND,
-      date_from: '2026-11-10T06:00:00Z',
-      date_to: '2026-11-12T23:30:00Z',
+      date_from: '2026-11-11T23:00:00.000Z',
+      date_to: '2026-11-12T23:30:00.000Z',
     })) as {
       totals: { resultCount: number; totalMentions: number; totalCitations: number };
       answers_cut?: unknown;
     };
-    // The KPI card's aggregate counts the same 2,400 answers.
+    // The KPI card's aggregate counts the same answers: one a minute from 23:00 to 23:00.
     expect(summary.totals).toMatchObject({
-      resultCount: 2_400,
-      totalMentions: 1_200,
-      totalCitations: 2_400,
+      resultCount: 1_441,
+      totalMentions: 720,
+      totalCitations: 1_441,
       avgVisibility: 50,
       visiblePrompts: 4,
       promptCount: 4,
     });
     expect(summary).not.toHaveProperty('answers_cut');
+    expect(summary).not.toHaveProperty('note');
     // From the page's aggregates: no answer row leaves the database.
     expect(readsOf('prompt_results')).toHaveLength(0);
     expect(calls.map((c) => c.fn).sort()).toEqual([
@@ -336,6 +338,47 @@ describe('citations past 1,000 answers in the window', () => {
       'tracked_prompt_count',
       'visible_prompt_stats',
     ]);
+  });
+
+  it('reads a longer window inside a day over the whole days it touches, from the rollups', async () => {
+    db.tables.prompt_results = busyWindow().map((row, i) => ({
+      ...row,
+      visibility_score: 50,
+      mention_count: i % 2,
+    }));
+    // The Visibility page's daily rollups, as their SQL adds a day's answers up.
+    fns.competitor_aggregates_daily = (args) => {
+      const rows = answers().filter((r) => inDays(r, args));
+      return {
+        brand_row_count: rows.length,
+        brand_sum_visibility: rows.reduce((s, r) => s + Number(r.visibility_score), 0),
+        brand_total_mentions: rows.reduce((s, r) => s + Number(r.mention_count), 0),
+        brand_total_citations: rows.reduce((s, r) => s + Number(r.citation_count), 0),
+        brand_prompt_count: 4,
+        brand_visible_prompts: 4,
+        by_competitor: [],
+      };
+    };
+    fns.ai_visibility_aggregates_daily = () => ({ answers: 2_400, mention_answers: 1_200 });
+    // 65 hours and a half from inside one day: an MCP call's timestamps (the review of 2026-11-17).
+    const summary = (await run('get_visibility_summary', {
+      brand_id: BRAND,
+      date_from: '2026-11-10T06:00:00Z',
+      date_to: '2026-11-12T23:30:00Z',
+    })) as {
+      totals: { resultCount: number; totalMentions: number };
+      roundedToDays?: unknown;
+      note?: string;
+    };
+    expect(summary.totals).toMatchObject({ resultCount: 2_400, totalMentions: 1_200 });
+    expect(summary.roundedToDays).toEqual({ dayFrom: '2026-11-10', dayTo: '2026-11-12' });
+    expect(summary.note).toContain('rounded to whole UTC days: 2026-11-10 to 2026-11-12');
+    // Never the raw aggregates, whose cost follows the answers in the window.
+    expect(calls.map((c) => c.fn).sort()).toEqual([
+      'ai_visibility_aggregates_daily',
+      'competitor_aggregates_daily',
+    ]);
+    expect(readsOf('prompt_results')).toHaveLength(0);
   });
 });
 

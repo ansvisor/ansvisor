@@ -254,7 +254,7 @@ import {
   type RangeT,
 } from './range';
 import { readSavedRange, saveRange, type SavedRange } from './range-store';
-import { pageScopeOf } from './page-scope';
+import { pageFilterInputs, pageScopeOf } from './page-scope';
 import {
   PAGE_LABEL_CHARS,
   pageText,
@@ -2578,7 +2578,16 @@ function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
     const filters = (scope.context?.chips ?? []).flatMap((chip) =>
       chip.key.startsWith('filter:') && chip.value ? [chip.key.slice('filter:'.length)] : [],
     );
-    const order = pageOrderLine(route, filters, view);
+    // What the app applies of them to a read, as scopeRead will (page-scope.ts): the line says
+    // the page's search or filters are applied only where they are.
+    const page = pageScopeOf(scope.context);
+    const takes = (name: string) => {
+      const tool = chatTool(name);
+      return tool && page?.brandId
+        ? pageFilterInputs(tool, { brand_id: page.brandId }, page, question).applied
+        : [];
+    };
+    const order = pageOrderLine(route, filters, view, takes);
     if (order) parts.push({ type: 'text', text: order });
   }
   // What the person accepted and rejected in the editor beside the chat since its last message.
