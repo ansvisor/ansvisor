@@ -28,7 +28,7 @@ const windowOf = (days: number) => ({
  * (00470, lib/brand-integrations.ts) and the brand has its property picked.
  * The brand is the caller's (brandAllowed, before this).
  */
-async function sourcesOf(brandId: string) {
+export async function sourcesOf(brandId: string) {
   const [brand, integrations] = await Promise.all([
     supabaseAdmin
       .from('brands')

@@ -64,6 +64,7 @@ const { listSignalsPageFor, lookUpSignalsFor } = await import('./signal-page');
 const { exportActionFor } = await import('./action-export');
 const { getContentDraftPackageFor } = await import('./content-package');
 const { getContentPlanFor } = await import('./content-plan');
+const extra = await import('./visibility-extra-reads');
 const { explainChangeFor } = await import('./why');
 const { createMcpServer } = await import('./server');
 const { listActionsByCodeFor, listActionsPageFor } = await import('./action-center-reads');
@@ -164,6 +165,20 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     ['listCompetitorsFor', () => data.listCompetitorsFor(SELECTED, 'b1')],
     ['listReportsFor', () => data.listReportsFor(SELECTED, 'b1')],
     ['getMentionsSummaryFor', () => mentions.getMentionsSummaryFor(SELECTED, { brandId: 'b1' })],
+    // What Visibility, Prompts, Competitors and AI Traffic show (visibility-extra-reads.ts).
+    ['getTopicsOverviewFor', () => extra.getTopicsOverviewFor(SELECTED, { brandId: 'b1' })],
+    ['getQueryFanoutsFor', () => extra.getQueryFanoutsFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getCompetitorHeadToHeadFor',
+      () => extra.getCompetitorHeadToHeadFor(SELECTED, { brandId: 'b1', competitor: 'Acme' }),
+    ],
+    ['getTopicCompetitorMapFor', () => extra.getTopicCompetitorMapFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getVisibilityOpportunitiesFor',
+      () => extra.getVisibilityOpportunitiesFor(SELECTED, { brandId: 'b1' }),
+    ],
+    ['getAiBotsFor', () => extra.getAiBotsFor(SELECTED, { brandId: 'b1' })],
+    ['getGscPagesFor', () => extra.getGscPagesFor(SELECTED, { brandId: 'b1' })],
     ['listContentDraftsFor', () => content.listContentDraftsFor(SELECTED, 'b1')],
     ['getContentPlanFor', () => getContentPlanFor(SELECTED, { brandId: 'b1', days: 30 })],
     [

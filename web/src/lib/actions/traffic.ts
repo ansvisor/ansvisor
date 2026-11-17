@@ -1283,7 +1283,7 @@ export async function getTrafficGooglePages(
   window: TrafficDateWindow | undefined,
   { limit = 10 }: { limit?: number } = {},
 ): Promise<TrafficGooglePages> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { from, to } = resolveTrafficWindow(window);
   const { since, until } = googlePagesWindow(from, to);
 
@@ -1448,7 +1448,7 @@ export async function getTrafficBots(
   window: TrafficDateWindow | undefined,
   { limit = 10 }: { limit?: number } = {},
 ): Promise<TrafficBots> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { from, to } = resolveTrafficWindow(window);
   const { data, error } = await supabase.rpc('ai_bot_report', {
     p_brand_id: brandId,
