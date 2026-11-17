@@ -21,6 +21,7 @@ import {
   type ReadFailure,
 } from '@/lib/api-failure';
 import { NO_TOPICS, NO_TOPICS_MESSAGE } from '@/lib/topics-required';
+import { PROMPT_TEXT_MAX, cleanPromptText } from '@/lib/prompt-text';
 import { businessHubEnabled } from '@/lib/business-hub/flag';
 
 const AEO_SERVER_URL = API_BASE_URL;
@@ -429,12 +430,22 @@ async function ackAccepted(accessToken: string, suggestionId: string, promptId: 
   }
 }
 
+/** Refused when an edited text is empty or too long. */
+const EDITED_TEXT_ERROR = `Write the prompt in 1 to ${PROMPT_TEXT_MAX} characters.`;
+
+/**
+ * Add a suggestion to the tracked prompts. `text` is the suggestion as the
+ * person edited it on Prompt Suggestions before adding it; without it, the
+ * suggestion's own text is saved.
+ */
 export async function acceptSuggestion(
   suggestionId: string,
-  options?: { platforms?: string[]; models?: string[] },
+  options?: { platforms?: string[]; models?: string[]; text?: string },
 ): Promise<AcceptSuggestionResult> {
   // First: a Business Hub suggestion's topic may be made here, before the add checks too.
   await assertWritable();
+  const edited = options?.text === undefined ? undefined : cleanPromptText(options.text);
+  if (edited === null) return { error: EDITED_TEXT_ERROR };
   const session = await getSession();
   const supabase = await createClient();
 
@@ -456,7 +467,7 @@ export async function acceptSuggestion(
   const { category, madeTopicId } = await topicForRow(supabase, row.brand_id, row, topics);
   const result = await addPromptToSet({
     ...target,
-    text: row.suggested_text,
+    text: edited ?? row.suggested_text,
     category,
     sourceData: sourceOfRow(row),
   });
@@ -496,16 +507,20 @@ export interface TrackSuggestionsResult {
 const MAX_TRACK_AT_ONCE = 25;
 
 /**
- * Track suggestions together: an Opportunities topic's "Track N" (VIS-011).
- * The suggestions and where they go are read once; then each prompt is added
- * on its own through addPromptToSet, so each passes the same plan check as a
- * single Track, and the run stops at the first one that fails: the plan's
- * prompt locations are full, or the rest can't be added either. Suggestions
- * already accepted or dismissed elsewhere are skipped, not a failure. A full
- * plan isn't a failure: the rest are saved waiting for a
- * spot (waitingIds).
+ * Track suggestions together: an Opportunities topic's "Track N" (VIS-011),
+ * and Prompt Suggestions' Add All. The suggestions and where they go are
+ * read once; then each prompt is added on its own through addPromptToSet, so
+ * each passes the same plan check as a single Track, and the run stops at
+ * the first one that fails: the plan's prompt locations are full, or the
+ * rest can't be added either. Suggestions already accepted or dismissed
+ * elsewhere are skipped, not a failure. A full plan isn't a failure: the
+ * rest are saved waiting for a spot (waitingIds). `texts`: the suggestions
+ * edited before adding, by id; the others keep their own text.
  */
-export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSuggestionsResult> {
+export async function trackSuggestions(
+  suggestionIds: string[],
+  options?: { texts?: Record<string, string> },
+): Promise<TrackSuggestionsResult> {
   const ids = Array.isArray(suggestionIds)
     ? [...new Set(suggestionIds.filter((id) => typeof id === 'string'))]
     : [];
@@ -515,6 +530,13 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
 
   // First: a Business Hub suggestion's topic may be made here, before each add checks too.
   await assertWritable();
+  const edits = new Map<string, string>();
+  for (const [id, value] of Object.entries(options?.texts ?? {})) {
+    if (!ids.includes(id)) continue;
+    const text = cleanPromptText(value);
+    if (text === null) return { trackedIds: [], skippedIds: [], error: EDITED_TEXT_ERROR };
+    edits.set(id, text);
+  }
   const session = await getSession();
   const supabase = await createClient();
   const { data: rows, error: rowsErr } = await supabase
@@ -548,7 +570,7 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
     const { category, madeTopicId } = await topicForRow(supabase, brandId, row, topics);
     const result = await addPromptToSet({
       ...target,
-      text: row.suggested_text as string,
+      text: edits.get(id) ?? (row.suggested_text as string),
       category,
       sourceData: sourceOfRow(row),
     });

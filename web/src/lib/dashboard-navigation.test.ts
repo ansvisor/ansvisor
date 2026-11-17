@@ -123,21 +123,22 @@ describe('shouldShowDashboardNavItem', () => {
 });
 
 // Ads (ADS-01 §9 item 1, owner A1): under Analytics, after AI Referral
-// Traffic and before Reports, with an outlined "New" pill; only with
+// Traffic and before Execution, with an outlined "New" pill; only with
 // ADS_ENABLED on. Nothing else on the menu moves.
 describe('the Ads item', () => {
   const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
 
-  it('closes Analytics, right after AI Referral Traffic, before More', () => {
+  it('closes Analytics, right after AI Referral Traffic, before Execution', () => {
     expect(analytics.map((item) => item.title)).toEqual([
       'Prompts',
       'Visibility',
+      'Competitors',
       'AI Referral Traffic',
       'Ads',
     ]);
     const hrefs = dashboardNav.flatMap((group) => group.items.map((item) => item.href));
     expect(hrefs.indexOf('/dashboard/ads')).toBe(hrefs.indexOf('/dashboard/traffic') + 1);
-    expect(hrefs.indexOf('/dashboard/ads')).toBeLessThan(hrefs.indexOf('/dashboard/reports'));
+    expect(hrefs.indexOf('/dashboard/ads')).toBeLessThan(hrefs.indexOf('/dashboard/action-center'));
   });
 
   it('is new, behind Ads’ flag, and locked by no plan on the menu (its page shows the lock)', () => {
@@ -269,17 +270,17 @@ describe('the Visibility group', () => {
 });
 
 // Off the menu since #506 (only Brand Visibility's Leaderboard and Getting
-// started opened it), back on it under Brand Visibility, then moved right
-// under Reports so Prompts follows Brand Visibility and Analytics stays short.
+// started opened it), back on it under Brand Visibility, then under Reports;
+// back in Analytics, right after Visibility (the owner's mockup, 2026-11-17).
 describe('the Competitors item', () => {
   const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
-  const reports = dashboardNav[dashboardNav.length - 1].items;
+  const execution = dashboardNav.find((group) => group.title === 'Execution')!.items;
   const index = (title: string) => analytics.findIndex((item) => item.title === title);
 
-  it('sits right under Reports in More, gated by competitor tracking, with no badge', () => {
-    expect(index('Competitors')).toBe(-1);
-    expect(reports.map((item) => item.title).slice(-2)).toEqual(['Reports', 'Competitors']);
-    const item = reports.at(-1)!;
+  it('sits right after Visibility in Analytics, gated by competitor tracking, with no badge', () => {
+    expect(index('Competitors')).toBe(index('Visibility') + 1);
+    expect(execution.map((item) => item.title)).not.toContain('Competitors');
+    const item = analytics[index('Competitors')];
     expect(item).toMatchObject({
       href: '/dashboard/competitors',
       requiredFeature: 'competitor_tracking',
@@ -428,22 +429,34 @@ describe('navItemHref', () => {
 
 /**
  * The simplified menu (SIMPLE_NAV), while it is built: the owner's menu of
- * 2026-11-11, every item but the Action Center reused from dashboardNav.
+ * 2026-11-11, every item but the Action Center reused from dashboardNav,
+ * analytics before execution since 2026-11-17.
  */
 describe('the simplified menu', () => {
-  const tabs = dashboardNav[0].items[1].children ?? [];
+  // The Action Center: first in Execution (the owner's mockup, 2026-11-17).
+  const actionCenter = dashboardNav[2].items[0];
+  const tabs = actionCenter.children ?? [];
 
-  it('runs Chat and the Action Center, ANALYTICS, then MORE', () => {
-    expect(dashboardNav.map((group) => group.title ?? null)).toEqual([null, 'Analytics', 'More']);
+  it('runs Chat, ANALYTICS, then EXECUTION with the Action Center first', () => {
+    expect(dashboardNav.map((group) => group.title ?? null)).toEqual([
+      null,
+      'Analytics',
+      'Execution',
+    ]);
     expect(dashboardNav.map((group) => group.items.map((item) => item.href))).toEqual([
-      ['/dashboard/agent', '/dashboard/action-center'],
-      ['/dashboard/prompts', '/dashboard/insights', '/dashboard/traffic', '/dashboard/ads'],
-      ['/dashboard/content', '/dashboard/audit', '/dashboard/reports', '/dashboard/competitors'],
+      ['/dashboard/agent'],
+      [
+        '/dashboard/prompts',
+        '/dashboard/insights',
+        '/dashboard/competitors',
+        '/dashboard/traffic',
+        '/dashboard/ads',
+      ],
+      ['/dashboard/action-center', '/dashboard/content', '/dashboard/audit', '/dashboard/reports'],
     ]);
   });
 
   it('opens the Action Center on Today, Actions, Signals, Agents and History', () => {
-    const actionCenter = dashboardNav[0].items[1];
     expect(actionCenter).toMatchObject({ title: 'Action Center', icon: Target });
     expect(actionCenter.requiredFeature).toBeUndefined();
     expect(tabs.map((tab) => [tab.title, tab.href])).toEqual([
@@ -477,7 +490,6 @@ describe('the simplified menu', () => {
   });
 
   it('shows Agents only with the new Chat on, a plan with agents and its section on the menu', () => {
-    const actionCenter = dashboardNav[0].items[1];
     const shown = (gates: { chatAgentic?: boolean; agents?: boolean }, hidden: string[] = []) =>
       visibleNavChildren(actionCenter, new Set(hidden), {
         brandPrefs: { ecommerce: false },
@@ -509,7 +521,6 @@ describe('the simplified menu', () => {
   });
 
   it('keeps the Action Center on every menu: its tabs are its own section', () => {
-    const actionCenter = dashboardNav[0].items[1];
     expect(
       shouldShowDashboardNavItem(
         actionCenter,
@@ -522,7 +533,6 @@ describe('the simplified menu', () => {
   });
 
   it('is current on the Action Center’s pages and on Agents’', () => {
-    const actionCenter = dashboardNav[0].items[1];
     expect(isNavItemActive(actionCenter, '/dashboard/action-center/today')).toBe(true);
     expect(isNavItemActive(actionCenter, '/dashboard/agents/abc')).toBe(true);
     expect(activeChildHref(tabs, '/dashboard/agents/abc/edit')).toBe('/dashboard/agents');
@@ -535,12 +545,17 @@ describe('the simplified menu', () => {
     expect(isNavItemActive(actionCenter, '/dashboard/agent')).toBe(false);
   });
 
-  it('names its tabs and MORE from the nav namespace', () => {
+  it('names its tabs, ANALYTICS and EXECUTION from the nav namespace', () => {
     for (const title of ['Today', 'Actions', 'Signals', 'Agents', 'History']) {
       const key = dashboardNavLabelKeys[title];
       expect(messages.nav[key as keyof typeof messages.nav]).toBe(title);
     }
-    expect(getDashboardNavGroupLabel('More', translateNav)).toBe('nav.more');
-    expect(messages.nav.more).toBe('More');
+    expect(getDashboardNavGroupLabel('Analytics', translateNav)).toBe('nav.analytics');
+    expect(messages.nav.analytics).toBe('Analytics');
+    expect(getDashboardNavGroupLabel('Execution', translateNav)).toBe('nav.execution');
+    expect(messages.nav.execution).toBe('Execution');
+    // "More" is no group any more.
+    expect(getDashboardNavGroupLabel('More', translateNav)).toBe('More');
+    expect('more' in messages.nav).toBe(false);
   });
 });

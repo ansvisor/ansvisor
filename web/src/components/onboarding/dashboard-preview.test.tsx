@@ -58,24 +58,24 @@ async function render(chatAgentic: boolean, ads = false) {
 const menu = () => [...container.querySelectorAll('aside span.truncate')].map((s) => s.textContent);
 
 describe('DashboardPreview', () => {
-  it('shows the menu the wizard leads to: Chat, Action Center, ANALYTICS, MORE', async () => {
+  it('shows the menu the wizard leads to: Chat, ANALYTICS, EXECUTION', async () => {
     await render(true, true);
     expect(menu()).toEqual([
       'Ansvisor',
       'Acme Coffee',
       'Chat',
-      'Action Center',
       'Prompts',
       'Visibility',
+      'Competitors',
       'AI Referral Traffic',
       'Ads',
+      'Action Center',
       'Content',
       'Audit',
       'Reports',
-      'Competitors',
     ]);
     const titles = [...container.querySelectorAll('aside p')].map((p) => p.textContent);
-    expect(titles).toEqual(['Analytics', 'More']);
+    expect(titles).toEqual(['Analytics', 'Execution']);
     expect(menu()).not.toContain('Agent Center');
   });
 
@@ -93,11 +93,11 @@ describe('DashboardPreview', () => {
     expect(items.indexOf('Ads')).toBe(items.indexOf('AI Referral Traffic') + 1);
   });
 
-  it('marks the Action Center, where Today is, as the page the wizard leads to', async () => {
+  it('marks Prompts, where Tracked Prompts is, as the page the wizard leads to', async () => {
     await render(true);
     const marked = [...container.querySelectorAll('aside div.bg-accent')].map(
       (item) => item.textContent,
     );
-    expect(marked).toEqual(['Action Center']);
+    expect(marked).toEqual(['Prompts']);
   });
 });

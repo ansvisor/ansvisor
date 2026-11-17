@@ -19,8 +19,11 @@ export interface PromptsSection {
 
 export const PROMPTS_BASE = '/dashboard/prompts';
 
+/** Prompts › Tracked Prompts, where everyone lands (config/home.ts). */
+export const PROMPTS_TRACKED = `${PROMPTS_BASE}/tracked`;
+
 export const PROMPTS_SECTIONS: readonly PromptsSection[] = [
-  { slug: 'tracked', href: `${PROMPTS_BASE}/tracked`, tab: 'all', view: 'tracked' },
+  { slug: 'tracked', href: PROMPTS_TRACKED, tab: 'all', view: 'tracked' },
   { slug: 'suggestions', href: `${PROMPTS_BASE}/suggestions`, tab: 'all', view: 'suggestions' },
   { slug: 'topics', href: `${PROMPTS_BASE}/topics`, tab: 'topics', view: 'tracked' },
   { slug: 'fan-outs', href: `${PROMPTS_BASE}/fan-outs`, tab: 'fanout', view: 'tracked' },

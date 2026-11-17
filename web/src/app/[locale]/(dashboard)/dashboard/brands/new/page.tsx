@@ -643,7 +643,7 @@ export default function NewBrandPage() {
 
       BRAND_ADD.completed();
       toast.success(t('toasts.setupComplete'));
-      // The person's start page: Insights on a paid plan, Chat Home in the free trial.
+      // The person's start page, Prompts › Tracked Prompts (config/home.ts).
       router.push('/dashboard');
     } catch (err) {
       BRAND_ADD.failed();

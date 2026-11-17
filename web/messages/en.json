@@ -531,7 +531,7 @@
       },
       "usual": "This takes a few seconds the first time.",
       "slow": "This is taking longer than usual.",
-      "ready": "Ready. Opening the Action Center…",
+      "ready": "Ready. Opening Prompts…",
       "failed": "Couldn't prepare the demo. Check your connection and try again.",
       "retry": "Try again",
       "close": "Close"
@@ -628,7 +628,7 @@
     "reports": "Reports",
     "settings": "Settings",
     "analytics": "Analytics",
-    "more": "More",
+    "execution": "Execution",
     "today": "Today",
     "actions": "Actions",
     "signals": "Signals",
@@ -4171,6 +4171,32 @@
     },
     "optimizePage": { "name": "Optimize pages in chat", "step": "Optimized the page" },
     "reports": { "name": "Read reports", "step": "Read Reports" },
+    "report": { "name": "Read a saved report", "step": "Read report" },
+    "actionScorecard": { "name": "Read the Action History scorecard", "step": "Read Scorecard" },
+    "taskReviews": { "name": "Read tasks waiting for review", "step": "Read Review" },
+    "promptLocations": {
+      "name": "Read prompts across locations",
+      "step": "Read Prompts · Locations"
+    },
+    "promptUsage": { "name": "Read prompt usage", "step": "Read Prompt usage" },
+    "topicSuggestions": { "name": "Read topic suggestions", "step": "Read Topic suggestions" },
+    "shoppingShelf": {
+      "name": "Read the Product Visibility shelf",
+      "step": "Read Products · Shelf"
+    },
+    "shoppingReadiness": {
+      "name": "Read AI shopping readiness",
+      "step": "Read Products · Readiness"
+    },
+    "productAiSays": { "name": "Read what AI says about a product", "step": "Read product" },
+    "shoppingCards": { "name": "Read shopping cards", "step": "Read Products · Cards" },
+    "catalogProducts": { "name": "Read catalog products", "step": "Read Products" },
+    "catalogSources": { "name": "Read catalog sources", "step": "Read Catalog" },
+    "contentPlan": { "name": "Read the Content plan", "step": "Read Content plan" },
+    "contentOpportunity": { "name": "Read a content opportunity", "step": "Read opportunity" },
+    "contentImpact": { "name": "Read a live page's impact", "step": "Read Live page" },
+    "contentSources": { "name": "Read a draft's sources", "step": "Read Sources" },
+    "siteAuditQuota": { "name": "Read Site Audits left this month", "step": "Read Site Audit" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
     "fanoutGaps": { "name": "Read fan-out gaps", "step": "Read fan-out gaps" },
@@ -14385,6 +14411,46 @@
           "topicNew": "{count, plural, =0 {nothing new} one {# prompt, new topic} other {# prompts, new topic}}",
           "done": "Done"
         }
+      },
+      "edit": {
+        "label": "Prompt text",
+        "save": "Keep this text",
+        "cancel": "Cancel editing",
+        "open": "Edit “{text}” before adding",
+        "openTitle": "Edit the text before adding",
+        "edited": "Edited"
+      },
+      "byTopic": {
+        "button": "By topic",
+        "buttonTitle": "Pick topics and get 5 prompts for each",
+        "emptyButton": "Generate by topic",
+        "title": "Generate prompts by topic",
+        "description": "Pick topics, and Ansvisor writes {count} prompts for each. You review and edit them before anything is added.",
+        "loading": "Reading your topics",
+        "topics": "Topics",
+        "pickAll": "Select all",
+        "pickNone": "Clear all",
+        "pickedCount": "{topics, plural, one {# topic picked} other {# topics picked}} · {prompts, plural, one {# prompt} other {# prompts}}",
+        "cancel": "Cancel",
+        "generate": "Generate",
+        "generating": "Generating…",
+        "generated": "{count, plural, one {# prompt written} other {# prompts written}}: review them at the top of the suggestions.",
+        "failed": "Couldn't generate prompts. Try again.",
+        "dailyLimit": "You've used today's prompt ideas. Try again tomorrow, or add prompts yourself.",
+        "topicsFailed": "Couldn't read your topics. Try again.",
+        "reviewTitle": "Generated for {topics}",
+        "reviewDescription": "{count} prompts for each topic you picked. Untick the ones you don't want and edit any text, then add them.",
+        "include": "Include “{text}”",
+        "addSelected": "Add selected ({count})",
+        "adding": "Adding…",
+        "regenerate": "Regenerate",
+        "dismiss": "Dismiss",
+        "added": "{count, plural, one {# prompt added to your tracked list} other {# prompts added to your tracked list}}",
+        "addedSkipped": "{count, plural, one {# prompt added} other {# prompts added}} · {skipped} not added: already tracked",
+        "noneAdded": "Nothing was added: these prompts are already tracked.",
+        "addFailed": "Couldn't add the prompts. Try again.",
+        "trackingNow": "Tracking them now.",
+        "trackingNext": "They get their first answers with the next tracking run."
       }
     },
     "topicSuggestions": {
@@ -14394,12 +14460,57 @@
         "evidence": "From your catalog's “{category}” category: {inStock, plural, one {# product} other {# products}} in stock, and no topic covers it yet."
       }
     },
+    "header": {
+      "title": "Prompts",
+      "tabs": {
+        "prompts": "Prompts",
+        "fanout": "Query Fan-out",
+        "insights": "Insights"
+      },
+      "addPrompt": "Add prompt",
+      "moreActions": "More actions",
+      "exportHint": "No prompts yet: add prompts first.",
+      "showUsage": "Show usage",
+      "hideUsage": "Hide usage",
+      "locationsUsed": "{used} / {limit} prompt locations used",
+      "view": {
+        "label": "Prompt list",
+        "tracked": "Tracked",
+        "suggestions": "Suggestions"
+      },
+      "location": {
+        "label": "Location",
+        "all": "All Locations"
+      },
+      "notAnalyzed": {
+        "count": "{count, plural, one {# prompt not analyzed yet} other {# prompts not analyzed yet}}",
+        "hint": "Run volume analysis to fill in their Volume & Competition.",
+        "limitHint": "Their Volume & Competition stay empty until analyzed. Your monthly volume analysis limit is reached: upgrade your plan to analyze more.",
+        "analyze": "Analyze",
+        "analyzeLabel": "{count, plural, one {Analyze # prompt} other {Analyze # prompts}}",
+        "analyzing": "Analyzing…",
+        "analyzingProgress": "Analyzing {done}/{total}…",
+        "limitReached": "Monthly limit reached"
+      }
+    },
+    "trackNow": {
+      "count": "{count, plural, one {# prompt has no answers yet} other {# prompts have no answers yet}}",
+      "hint": "These get their first answers with the next tracking run. Track now asks the AI engines now.",
+      "track": "Track now",
+      "trackLabel": "{count, plural, one {Track # prompt now} other {Track # prompts now}}",
+      "starting": "Starting tracking…",
+      "started": "{count, plural, one {Tracking # prompt now} other {Tracking # prompts now}}",
+      "seeAnswers": "See answers",
+      "startedToast": "{count, plural, one {Tracking # prompt now} other {Tracking # prompts now}}",
+      "startedBody": "Answers arrive over the next minutes. Visibility shows the run as it goes.",
+      "failed": "Couldn't start tracking",
+      "alreadyAnswered": "These prompts have answers already.",
+      "bulkSome": "Track {count} now",
+      "bulkTitle": "{count, plural, one {Start tracking the selected prompt with no answers yet} other {Start tracking the # selected prompts with no answers yet}}"
+    },
     "usage": {
-      "title": "Tracked Prompts",
-      "subtitle": "Every tracked prompt for this brand · edit or pause any row in place",
-      "subtitleReadOnly": "Read-only overview of every tracked prompt for this brand",
+      "panelLabel": "Prompt usage",
       "planAndUsage": "Plan & usage",
-      "show": "Show",
       "hide": "Hide",
       "planPill": "{plan} plan",
       "planPillEnded": "{plan} plan · ended",
@@ -14563,6 +14674,11 @@
         "runs": "AI answers collected over the {range}. One run is one AI platform answering this prompt once.",
         "added": "When this prompt was added.",
         "lastRun": "When this prompt was last checked."
+      },
+      "improving": {
+        "label": "{code} · Improving",
+        "title": "Open the Improve tab · {code} is still being tracked",
+        "aria": "{code} · Improving: open the Improve tab"
       }
     },
     "locations": {
@@ -17639,6 +17755,7 @@
     "noBrands": "No brands yet",
     "noBrandsDescription": "Add your first brand to start tracking AI visibility.",
     "switchBrand": "Switch brand",
+    "opensPromptsPage": "Opens the Prompts page",
     "selectBrand": "Select a brand",
     "brand": "Brand",
     "domains": "Domains",

@@ -5,13 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 
 /**
- * The simplified menu (SIMPLE_NAV), on the real menus: Chat; the Action
- * Center with Today, Actions, Signals, Agents and History under it;
- * ANALYTICS (Prompts, Visibility, AI Referral Traffic, Ads last); MORE
- * (Content, Audit, Reports, Competitors). With the flag off, the menu as it
- * was. Every behaviour of the menu stays: collapsing to icons, opening on
- * hover, pinning, folding groups and submenus, the arrow keys, plan locks,
- * menu access and the Tracked Prompts count.
+ * The simplified menu (SIMPLE_NAV), on the real menus, analytics before
+ * execution (the owner's mockup, 2026-11-17): Chat; ANALYTICS (Prompts,
+ * Visibility, Competitors, AI Referral Traffic, Ads last); EXECUTION (the
+ * Action Center with Today, Actions, Signals, Agents and History under it,
+ * then Content, Audit, Reports). With the flag off, the menu as it was.
+ * Every behaviour of the menu stays: collapsing to icons, opening on hover,
+ * pinning, folding groups and submenus, the arrow keys, plan locks, menu
+ * access and the Tracked Prompts count.
  */
 
 vi.mock('next/image', () => ({
@@ -137,16 +138,10 @@ const groupHeader = (title: string) =>
   container.querySelector<HTMLButtonElement>(`button[data-nav-group="${title}"]`);
 
 describe('the menu', () => {
-  it('is Chat, the Action Center with its tabs, ANALYTICS with Prompts first, and MORE', async () => {
+  it('is Chat, ANALYTICS with Prompts first, and EXECUTION with the Action Center and its tabs first', async () => {
     await render();
     expect(rows()).toEqual([
       'Chat',
-      'Action Center',
-      '  Today',
-      '  Actions',
-      '  Signals',
-      '  Agents',
-      '  History',
       '# Analytics',
       'Prompts',
       '  Tracked Prompts',
@@ -158,8 +153,15 @@ describe('the menu', () => {
       '  Overview',
       '  Mentions',
       '  Citations',
+      'Competitors',
       'AI Referral Traffic',
-      '# More',
+      '# Execution',
+      'Action Center',
+      '  Today',
+      '  Actions',
+      '  Signals',
+      '  Agents',
+      '  History',
       'Content',
       '  Opportunities',
       '  Plan',
@@ -167,8 +169,8 @@ describe('the menu', () => {
       '  Library',
       'Audit',
       'Reports',
-      'Competitors',
     ]);
+    expect(container.textContent).not.toContain('More');
     const tabs = [...container.querySelectorAll('#submenu--dashboard-action-center a')].map((a) =>
       a.getAttribute('href'),
     );
@@ -188,7 +190,7 @@ describe('the menu', () => {
     await render({ ads: true });
     const all = rows();
     expect(all.indexOf('Ads')).toBe(all.indexOf('AI Referral Traffic') + 1);
-    expect(all.indexOf('# More')).toBe(all.indexOf('Ads') + 1);
+    expect(all.indexOf('# Execution')).toBe(all.indexOf('Ads') + 1);
     expect(link('/dashboard/ads')?.querySelector('[data-slot="new-pill"]')?.textContent).toBe(
       'New',
     );
@@ -199,13 +201,16 @@ describe('the menu', () => {
   it('leaves Agents out without the new Chat; the Action Center stays', async () => {
     await render({ chatAgentic: false });
     expect(link('/dashboard/agents')).toBeNull();
-    expect(rows().slice(0, 6)).toEqual([
-      'Chat',
+    const all = rows();
+    const at = all.indexOf('Action Center');
+    expect(all.slice(at - 1, at + 6)).toEqual([
+      '# Execution',
       'Action Center',
       '  Today',
       '  Actions',
       '  Signals',
       '  History',
+      'Content',
     ]);
   });
 
@@ -217,10 +222,26 @@ describe('the menu', () => {
   });
 
   it('never takes the Action Center off a menu, and drops a group all off it', async () => {
-    await render({ hidden: ['content', 'audit', 'reports', 'competitors'] });
-    expect(groupHeader('More')).toBeNull();
+    await render({
+      hidden: [
+        'agents',
+        'content',
+        'audit',
+        'reports',
+        'prompts',
+        'insights',
+        'mentions',
+        'citations',
+        'shopping',
+        'competitors',
+        'traffic',
+      ],
+    });
+    // Execution keeps the Action Center, so its title stays; Analytics goes.
+    expect(groupHeader('Analytics')).toBeNull();
+    expect(groupHeader('Execution')).not.toBeNull();
     expect(parent('/dashboard/action-center')).not.toBeNull();
-    expect(container.textContent).toContain('4 sections off your menu.');
+    expect(link('/dashboard/content')).toBeNull();
   });
 
   it('hides Agents on a plan without agents, and locks Chat with its crown as before', async () => {
@@ -280,13 +301,14 @@ describe('the menu', () => {
     expect(parent('/dashboard/action-center')?.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('folds MORE under its title, open by default and remembered', async () => {
+  it('folds EXECUTION under its title, the Action Center with it, open by default and remembered', async () => {
     await render();
-    expect(groupHeader('More')?.getAttribute('aria-expanded')).toBe('true');
-    await act(async () => groupHeader('More')!.click());
-    expect(groupHeader('More')?.getAttribute('aria-expanded')).toBe('false');
+    expect(groupHeader('Execution')?.getAttribute('aria-expanded')).toBe('true');
+    await act(async () => groupHeader('Execution')!.click());
+    expect(groupHeader('Execution')?.getAttribute('aria-expanded')).toBe('false');
     expect(link('/dashboard/audit')).toBeNull();
-    expect(stored.get('ansvisor.sidebar.group.moreOpen')).toBe('0');
+    expect(parent('/dashboard/action-center')).toBeNull();
+    expect(stored.get('ansvisor.sidebar.group.executionOpen')).toBe('0');
     // Analytics keeps its own.
     expect(groupHeader('Analytics')?.getAttribute('aria-expanded')).toBe('true');
   });
@@ -341,6 +363,26 @@ describe('the menu', () => {
     expect(link('/dashboard/action-center/today')).not.toBeNull();
   });
 
+  it('lists the icons alone in the same order, Analytics before Execution', async () => {
+    useSidebarStore.setState({ isCollapsed: true });
+    await render();
+    expect(groupHeader('Analytics')).toBeNull();
+    const icons = [...container.querySelectorAll<HTMLAnchorElement>('a[data-nav-item="link"]')].map(
+      (a) => a.getAttribute('href'),
+    );
+    expect(icons).toEqual([
+      '/dashboard/chat',
+      '/dashboard/prompts',
+      '/dashboard/insights',
+      '/dashboard/competitors',
+      '/dashboard/traffic',
+      '/dashboard/action-center',
+      '/dashboard/content',
+      '/dashboard/audit',
+      '/dashboard/reports',
+    ]);
+  });
+
   it('is pinned open or closed with the button at its foot, as before', async () => {
     await render();
     const pin = container.querySelector<HTMLButtonElement>(
@@ -353,16 +395,30 @@ describe('the menu', () => {
 });
 
 describe('the mobile menu', () => {
-  it('lists the same menu, the Action Center’s tabs under it', async () => {
-    await render({ mobile: true });
+  it('lists the same menu in the same order, the Action Center’s tabs under it', async () => {
+    await render({ mobile: true, ads: true });
     const trigger = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Toggle navigation menu"]',
     )!;
     await act(async () => trigger.click());
     const hrefs = [...document.querySelectorAll('a')].map((a) => a.getAttribute('href'));
     const at = (href: string) => hrefs.indexOf(href);
-    expect(at('/dashboard/chat')).toBeGreaterThan(-1);
-    expect(at('/dashboard/action-center')).toBe(at('/dashboard/chat') + 1);
+    // The menu's items, top to bottom, as the sidebar lists them.
+    const items = [
+      '/dashboard/chat',
+      '/dashboard/prompts',
+      '/dashboard/insights',
+      '/dashboard/competitors',
+      '/dashboard/traffic',
+      '/dashboard/ads',
+      '/dashboard/action-center',
+      '/dashboard/content',
+      '/dashboard/audit',
+      '/dashboard/reports',
+    ];
+    const positions = items.map(at);
+    expect(positions.every((p) => p > -1)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     expect(
       hrefs.slice(at('/dashboard/action-center') + 1, at('/dashboard/action-center') + 6),
     ).toEqual([
@@ -372,9 +428,6 @@ describe('the mobile menu', () => {
       '/dashboard/agents',
       '/dashboard/action-center/history',
     ]);
-    expect(at('/dashboard/prompts')).toBeLessThan(at('/dashboard/insights'));
-    expect(at('/dashboard/traffic')).toBeLessThan(at('/dashboard/content'));
-    expect(at('/dashboard/reports')).toBeLessThan(at('/dashboard/competitors'));
     expect(document.body.textContent).not.toContain('Agent Center');
   });
 });

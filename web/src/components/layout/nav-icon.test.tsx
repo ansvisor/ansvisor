@@ -66,15 +66,15 @@ const css = readFileSync(join(__dirname, '../../app/globals.css'), 'utf8');
 /** The menu's main items, in order, and their icons' motions. */
 const MAIN_ITEMS = [
   ['Chat', 'twinkle'],
-  ['Action Center', 'pulse'],
   ['Prompts', 'turn'],
   ['Visibility', 'bars'],
+  ['Competitors', 'nudge'],
   ['AI Referral Traffic', 'draw'],
   ['Ads', 'call'],
+  ['Action Center', 'pulse'],
   ['Content', 'write'],
   ['Site Audit', 'swing'],
   ['Reports', 'lift'],
-  ['Competitors', 'nudge'],
 ];
 
 let container: HTMLDivElement;
