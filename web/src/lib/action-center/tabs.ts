@@ -1,4 +1,4 @@
-/** Action Center › Today: the Action Center's first tab, where everyone lands. */
+/** Action Center › Today: the Action Center's first tab, where it opens. */
 export const ACTION_CENTER_TODAY = '/dashboard/action-center/today';
 
 /** KPIs' page: one of History's views, not a tab of its own. */

@@ -13,7 +13,7 @@ import type { Brand } from '@/types';
 
 /**
  * Where the demo opens: the page the product starts on, which /dashboard
- * picks (Chat Home for a workspace that never had a plan).
+ * picks: Prompts › Tracked Prompts, as for everyone (config/home.ts).
  */
 export const DEMO_START_HREF = '/dashboard';
 
@@ -23,10 +23,10 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * "Explore the demo" (onboarding's plan step) and "See the demo" (the
  * read-only band): the organization's demo brand, made or brought up to
  * date (POST /api/demo), shown again if it was hidden, selected, and opened
- * on the person's start page (Chat Home for a workspace that never had a
- * plan, else the Action Center). When the API can't be asked (a member's call
- * refused), a demo brand already in the list still opens. The setup started
- * ahead (usePreloadDemo) is the one waited for.
+ * on the person's start page (Prompts › Tracked Prompts, as for everyone).
+ * When the API can't be asked (a member's call refused), a demo brand
+ * already in the list still opens. The setup started ahead (usePreloadDemo)
+ * is the one waited for.
  *
  * Ready already, it opens at once. Still being prepared, the setup screen
  * (DemoSetupDialog, rendered by the caller with `setupDialog`) shows it from

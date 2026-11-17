@@ -531,7 +531,7 @@
       },
       "usual": "This takes a few seconds the first time.",
       "slow": "This is taking longer than usual.",
-      "ready": "Ready. Opening the Action Center…",
+      "ready": "Ready. Opening Prompts…",
       "failed": "Couldn't prepare the demo. Check your connection and try again.",
       "retry": "Try again",
       "close": "Close"
@@ -628,7 +628,7 @@
     "reports": "Reports",
     "settings": "Settings",
     "analytics": "Analytics",
-    "more": "More",
+    "execution": "Execution",
     "today": "Today",
     "actions": "Actions",
     "signals": "Signals",

@@ -77,7 +77,7 @@ function startFailed(): TodayStart {
 const SUMMARY_ROW = 'grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))]';
 
 /**
- * Action Center › Today, the page everyone lands on (mockup Main): the date, brand and when AI answers
+ * Action Center › Today, the Action Center's first tab (mockup Main): the date, brand and when AI answers
  * last came in, with how many changes and things wait; the loop strip; a
  * summary row with Waiting for you and Where you stand side by side; then
  * Since yesterday and Today's focus across the page, with New area to

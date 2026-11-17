@@ -166,11 +166,11 @@
         "home page"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Everyone lands on its **Today** tab when they sign in, whatever the plan. Open it from **Action Center**, first in the main menu, under Chat; its tabs are listed under it too. Everything in it is per brand: switch brands to see another brand's work."
+          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan, or on **Today** when Prompts is off your menu. Everything in it is per brand: switch brands to see another brand's work."
         },
         {
           "heading": "The tabs",
@@ -655,11 +655,11 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-16",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Everyone lands here when they sign in, whatever the plan."
+          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan; Today is one click away. When Prompts is off your menu, Ansvisor opens here instead."
         },
         {
           "heading": "The tabs",
@@ -1563,7 +1563,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on the Action Center's **Today** tab, whatever your plan; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off."
+          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Prompts › Tracked Prompts**, whatever your plan, or on the Action Center's **Today** tab when Prompts is off your menu; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off."
         },
         {
           "heading": "Chat Home",
@@ -2922,11 +2922,11 @@
         "find competitors"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, right under **Reports** in the sidebar, and each one then appears in **Tracked Competitors** for a head-to-head comparison."
+          "text": "Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add and remove them on the **Competitors** page, under **Analytics** in the sidebar, right after **Visibility**, and each one then appears in **Tracked Competitors** for a head-to-head comparison."
         },
         {
           "heading": "Open the Competitors page",
@@ -2983,11 +2983,11 @@
         "competitor score"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "The **Competitors** page, right under **Reports** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand."
+          "text": "The **Competitors** page, under **Analytics** in the sidebar, right after **Visibility**, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand."
         },
         {
           "heading": "Tracked Competitors",
@@ -3893,7 +3893,7 @@
         "send the snippet to my developer"
       ],
       "plan": "all",
-      "updated": "2026-11-16",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
@@ -3925,7 +3925,7 @@
         },
         {
           "heading": "Last, optional: Connect your site",
-          "text": "On the cloud, once **Start tracking with N competitors** has started your brand's first run, **Connect your site** shows your brand's AI Traffic snippet: one line for your site's head. Without it, AI Traffic shows no AI visits, conversions or revenue.\n\n1. Copy the snippet with the copy button.\n2. Paste it just before the head closes on every page of your site, then publish.\n3. Click **Check again** to see whether your home page has it.\n\nSomeone else edits your site? **Email this to my developer** opens your email app with the snippet and these steps; **Copy message** copies the same text.\n\n**Done, go to my dashboard** and **I'll do it later** both open the dashboard while the first run goes on. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab."
+          "text": "On the cloud, once **Start tracking with N competitors** has started your brand's first run, **Connect your site** shows your brand's AI Traffic snippet: one line for your site's head. Without it, AI Traffic shows no AI visits, conversions or revenue.\n\n1. Copy the snippet with the copy button.\n2. Paste it just before the head closes on every page of your site, then publish.\n3. Click **Check again** to see whether your home page has it.\n\nSomeone else edits your site? **Email this to my developer** opens your email app with the snippet and these steps; **Copy message** copies the same text.\n\n**Done, go to my dashboard** and **I'll do it later** both open **Prompts › Tracked Prompts** while the first run goes on, with its progress above the table. If you skip it, the snippet stays first in **Finish setting up** on the Action Center's **Today** tab."
         },
         {
           "heading": "Set up your brand with a plan active",
@@ -4031,11 +4031,11 @@
         "how long until results"
       ],
       "plan": "all",
-      "updated": "2026-11-16",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens on the Action Center's **Today** tab, as it does each time you come back. On the cloud you start the free trial or buy a plan first, so the run starts as soon as setup ends. If your workspace set up its brand before choosing a plan, it starts after checkout instead. If you explore the sample brand, Today shows its sample data; once you pick a plan, you set up your own brand and its first run starts."
+          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens on **Prompts › Tracked Prompts**, as it does each time you come back. On the cloud you start the free trial or buy a plan first, so the run starts as soon as setup ends. If your workspace set up its brand before choosing a plan, it starts after checkout instead. If you explore the sample brand, it opens there too, with sample data; once you pick a plan, you set up your own brand and its first run starts."
         },
         {
           "heading": "How long the first run takes",
@@ -5585,15 +5585,15 @@
         "simplify sidebar"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. To change what someone can do, change their role in **Settings › Team**."
+          "text": "**Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. Ansvisor opens on **Prompts › Tracked Prompts**, or on the Action Center's **Today** tab for someone whose menu leaves Prompts off. To change what someone can do, change their role in **Settings › Team**."
         },
         {
           "heading": "Fold a group on your menu",
-          "text": "Click a group's title on the left menu, **Analytics** or **More**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Action Center** sit above the groups, so they don't fold; the Action Center's own tabs fold under it."
+          "text": "Click a group's title on the left menu, **Analytics** or **Execution**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** sits above the groups, so it doesn't fold. **Action Center** is first in **Execution** and folds with it; its own tabs also fold under it."
         },
         {
           "heading": "Who can change menus",
@@ -6181,11 +6181,11 @@
         "AI readiness check"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **More**, after **Content**. It is on every plan."
+          "text": "**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **Execution**, after **Content**. It is on every plan."
         },
         {
           "heading": "Start an audit",
@@ -6308,11 +6308,11 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
-          "text": "**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next. On a paid plan, and from the second day of a free trial, Ansvisor opens on it each time you come back."
+          "text": "**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next. Each time you come back, Ansvisor opens on **Prompts › Tracked Prompts**; Visibility comes right after Prompts in the **Analytics** group of the menu."
         },
         {
           "heading": "The tabs and how to reach them",
