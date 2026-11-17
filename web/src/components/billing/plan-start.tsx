@@ -152,7 +152,9 @@ const CHECKOUT_TIMEOUT_MS = 30_000;
  * `onCodeRefused`, so the page can say so by its field; a trial found used
  * goes to `onTrialUsed`. Any failure, or no answer in time, ends the wait:
  * `failed` says why, by the plan's button. `checkout` is the plan whose
- * Checkout is opening, and how it starts.
+ * Checkout is opening, and how it starts. `start` may be handed the
+ * organization when it was made just now (onboarding's choice), before the
+ * page has it.
  */
 export function useStartCheckout({
   organizationId,
@@ -172,8 +174,13 @@ export function useStartCheckout({
   const [checkout, setCheckout] = useState<{ planId: PlanId; mode: CheckoutMode } | null>(null);
   const [failed, setFailed] = useState<{ planId: PlanId; message: string } | null>(null);
 
-  async function start(planId: PlanId, mode: CheckoutMode, promotionCode?: string) {
-    if (!organizationId || checkout) return;
+  async function start(
+    planId: PlanId,
+    mode: CheckoutMode,
+    promotionCode?: string,
+    forOrganization: string | null = organizationId,
+  ) {
+    if (!forOrganization || checkout) return;
     setCheckout({ planId, mode });
     setFailed(null);
     // Why it didn't open, in words for the person buying: a refusal the
@@ -186,7 +193,7 @@ export function useStartCheckout({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           planId,
-          organizationId,
+          organizationId: forOrganization,
           interval: period,
           ...(returnTo ? { returnTo } : {}),
           mode,

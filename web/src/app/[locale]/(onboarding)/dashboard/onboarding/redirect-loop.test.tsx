@@ -439,7 +439,7 @@ describe('no redirect loop, and Billing always opens', () => {
   });
 
   it.each([true, false])(
-    'no organization (onboarded %s): onboarding, never back to the dashboard',
+    'no organization (onboarded %s): the choice, never back to the dashboard',
     async (onboarded) => {
       workspace({
         org: null,
@@ -449,6 +449,36 @@ describe('no redirect loop, and Billing always opens', () => {
         at: 'onboarding',
         hops: ['/dashboard', '/dashboard/onboarding'],
       });
+      expect(text()).toContain('How do you want to start?');
+    },
+  );
+
+  it('the choice made, Checkout canceled (never subscribed, no brand): the choice again', async () => {
+    workspace({
+      status: 'incomplete',
+      subscribed: false,
+      profile: { organization_id: 'org1', onboarding_completed: false, role: 'admin' },
+    });
+    expect((await visit(BILLING)).at).toBe('onboarding');
+    expect(text()).toContain('How do you want to start?');
+  });
+
+  it('the sample brand explored from the choice: its read-only dashboard; the choice by hand', async () => {
+    workspace({ status: 'incomplete', subscribed: false, demo: true });
+    expect((await visit('/dashboard')).at).toBe('dashboard');
+    expect((await visit('/dashboard/onboarding')).at).toBe('onboarding');
+    expect(text()).toContain('How do you want to start?');
+  });
+
+  it.each(['canceled', 'past_due'])(
+    'the trial from the choice %s before Finish, with no brand: read-only dashboard, Billing included',
+    async (status) => {
+      workspace({
+        status,
+        profile: { organization_id: 'org1', onboarding_completed: false, role: 'admin' },
+      });
+      expect(await visit(BILLING)).toEqual({ at: 'dashboard', hops: [BILLING] });
+      expect((await visit('/dashboard/onboarding')).at).toBe('dashboard');
     },
   );
 

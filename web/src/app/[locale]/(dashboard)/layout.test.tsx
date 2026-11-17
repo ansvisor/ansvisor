@@ -641,6 +641,56 @@ describe('the dashboard layout and the demo brand', () => {
   });
 });
 
+describe('the dashboard layout and the choice first (onboarding, card first)', () => {
+  it('sends an admin back from Checkout on the choice screen, with no brand, to setup', async () => {
+    // The trial started from the choice: onboarding still open, no brand yet.
+    profile = { ...profile, onboarding_completed: false };
+    org = { ...org, subscription_status: 'trialing' };
+    orgBrands = [];
+    orgBrandCount = { data: 0, error: null };
+    expect(await open()).toBe('/dashboard/onboarding');
+  });
+
+  it('sends one onboarded already (from the sample brand), back from Checkout, to setup too', async () => {
+    org = { ...org, subscription_status: 'trialing' };
+    orgBrands = [{ id: 'demo', isDemo: true, demoHiddenAt: '2026-11-16T09:00:00Z' }];
+    orgBrandCount = { data: 0, error: null };
+    expect(await open()).toBe('/dashboard/onboarding');
+  });
+
+  it('lets an admin who chose the sample brand first into it, read-only, with no brand of their own', async () => {
+    org = { ...org, subscription_status: null, stripe_subscription_id: null };
+    orgBrands = [{ id: 'demo', isDemo: true, demoHiddenAt: null }];
+    orgBrandCount = { data: 0, error: null };
+    expect(await open()).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Page content');
+    expect(rpcs).toEqual([]);
+  });
+
+  it('keeps the plan step for a brand set up under the old order: Checkout starts its run, no setup', async () => {
+    org = { ...org, subscription_status: 'trialing' };
+    expect(await open()).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+    expect(rpcs).toEqual([]);
+  });
+
+  it.each(['canceled', 'past_due', 'unpaid', 'incomplete_expired'])(
+    'opens read-only, Billing included, for a new admin whose trial is %s before setup is finished',
+    async (status) => {
+      // Onboarding open from sign-up until Finish; the trial started from the choice.
+      profile = { ...profile, onboarding_completed: false };
+      org = { ...org, subscription_status: status, stripe_subscription_id: 'sub_1' };
+      orgBrands = [];
+      orgBrandCount = { data: 0, error: null };
+      expect(await open(<p>Billing</p>)).toBeNull();
+      expect(redirect).not.toHaveBeenCalled();
+      expect(container.textContent).toContain('Billing');
+      expect(band()).not.toBeNull();
+    },
+  );
+});
+
 describe('the dashboard layout and a plan that lapsed before setup was finished', () => {
   // Stripe's statuses for a plan that ended or a payment that failed, after
   // the workspace had a subscription.
