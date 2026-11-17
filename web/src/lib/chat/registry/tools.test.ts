@@ -160,6 +160,10 @@ vi.mock('@/lib/mcp/today-reads', async (importOriginal) =>
 vi.mock('@/lib/mcp/agent-reads', async (importOriginal) =>
   tracked.all('mcp/agent-reads', await importOriginal<Record<string, unknown>>()),
 );
+// What Visibility, Prompts, Competitors and AI Traffic show: each pages itself.
+vi.mock('@/lib/mcp/visibility-extra-reads', async (importOriginal) =>
+  tracked.all('mcp/visibility-extra-reads', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/mcp/ads-reads', () => ({
   getAdsOpportunitiesFor: tracked.track('mcp/ads-reads.getAdsOpportunitiesFor'),
 }));

@@ -486,6 +486,48 @@ export const EVAL_TODAY = {
   note: `The first action on Today is the first card of its focus: ${EVAL_TODAY_FIRST.title} (${EVAL_TODAY_FIRST.ref}). Name each card by its title, with its ref.`,
 };
 
+/**
+ * The head-to-head with Acme CRM on the Competitors page (get_competitor_head_to_head):
+ * the prompts where Acme is ahead, biggest gap first, then the one where the brand is.
+ */
+export const EVAL_LOSING_PROMPTS = [
+  { prompt: 'best crm for small teams', brand_visibility: 20, competitor_visibility: 60 },
+  { prompt: 'crm pricing comparison', brand_visibility: 25, competitor_visibility: 30 },
+];
+const EVAL_WINNING_PROMPTS = [
+  { prompt: 'crm with email automation', brand_visibility: 70, competitor_visibility: 30 },
+];
+
+function headToHeadRead(input: Record<string, unknown>) {
+  const row = (p: (typeof EVAL_LOSING_PROMPTS)[number]) => ({
+    prompt: p.prompt,
+    platform: 'ChatGPT',
+    runs: 6,
+    brand_visibility: p.brand_visibility,
+    competitor_visibility: p.competitor_visibility,
+    difference: p.brand_visibility - p.competitor_visibility,
+  });
+  const all =
+    input.side === 'losing'
+      ? EVAL_LOSING_PROMPTS
+      : input.side === 'winning'
+        ? EVAL_WINNING_PROMPTS
+        : [...EVAL_LOSING_PROMPTS, ...EVAL_WINNING_PROMPTS];
+  return {
+    competitor: { name: 'Acme CRM', domain: 'acme.example' },
+    period: 'every tracked answer',
+    summary: {
+      brand_visibility: 38,
+      competitor_visibility: 40,
+      prompts_compared: 3,
+      competitor_ahead: 2,
+      brand_ahead: 1,
+    },
+    side: input.side ?? 'all',
+    ...evalPage(all.map(row), input, 'prompts', 'prompts compared'),
+  };
+}
+
 /** Whether a run read `tool` past its first page, or looked its items up by code. */
 const readOn = (run: EvalRun, tool: string, from = 1) =>
   (run.readCalls ?? []).some(
@@ -856,6 +898,36 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
         "doesn't put the Actions list's first in its place",
         false,
         !run.answer.includes(EVAL_ACTIONS[0].title),
+        quote(run.answer),
+      ),
+      check('answers in Turkish', false, looksTurkish(run.answer), quote(run.answer)),
+    ],
+  },
+  {
+    id: 'competitor-losses',
+    row: 39,
+    role: 'admin',
+    mode: 'auto',
+    // Asked on Competitors, as the owner's plan has it: the head-to-head's prompts, by name.
+    message: "Acme CRM'e karşı hangi promptlarda kaybediyoruz?",
+    context: {
+      route: '/dashboard/competitors',
+      chips: [{ key: 'page', label: 'Competitors' }],
+    },
+    readResult: (tool, input) =>
+      tool === 'get_competitor_head_to_head' ? headToHeadRead(input) : undefined,
+    checks: (run) => [
+      check('finished', true, run.status === 'done', run.status),
+      check(
+        'reads the head-to-head',
+        true,
+        run.reads.includes('get_competitor_head_to_head'),
+        run.reads.join(', ') || 'no read',
+      ),
+      check(
+        'names the prompts the competitor is ahead on',
+        true,
+        EVAL_LOSING_PROMPTS.every((p) => run.answer.toLowerCase().includes(p.prompt)),
         quote(run.answer),
       ),
       check('answers in Turkish', false, looksTurkish(run.answer), quote(run.answer)),

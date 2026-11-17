@@ -20,6 +20,6 @@ export function withSkillRefusal(
   }
   return {
     code: 'not_available',
-    message: `${tool.name} runs only within a loaded skill that uses it, such as /fanout. Answer without it.`,
+    message: `${tool.name} runs only within a loaded skill that uses it, such as /fanout. For a plain question, read get_query_fanouts.`,
   };
 }
