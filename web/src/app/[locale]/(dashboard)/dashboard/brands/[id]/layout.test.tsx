@@ -11,8 +11,22 @@ const nav = vi.hoisted(() => ({ pathname: '/dashboard/brands/b1/settings' }));
 vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push }),
   usePathname: () => nav.pathname,
-  Link: ({ href, children }: { href: string; children?: React.ReactNode }) => (
-    <a href={href}>{children}</a>
+  Link: ({
+    href,
+    children,
+    onClick,
+    ...rest
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        onClick?.(e);
+      }}
+      {...rest}
+    >
+      {children}
+    </a>
   ),
 }));
 const brand = (id: string, name: string) => ({
@@ -115,5 +129,73 @@ describe('the brand header', () => {
     await act(async () => items[0].click());
     expect(push).not.toHaveBeenCalled();
     expect(store.setActiveBrand).not.toHaveBeenCalled();
+  });
+});
+
+describe('the brand tabs', () => {
+  const tab = (label: string) =>
+    [...container.querySelectorAll<HTMLAnchorElement>('nav a')].find(
+      (a) => a.textContent === label,
+    )!;
+
+  it('opens Tracked Prompts with this brand picked from the Prompts tab', async () => {
+    await render();
+    const prompts = tab('Prompts');
+    expect(prompts.getAttribute('href')).toBe('/dashboard/prompts/tracked');
+    await act(async () => prompts.click());
+    expect(store.setActiveBrand).toHaveBeenCalledWith('b1');
+    // Topics and Settings stay the brand's own pages.
+    expect(tab('Topics').getAttribute('href')).toBe('/dashboard/brands/b1/topics');
+    expect(tab('Settings').getAttribute('href')).toBe('/dashboard/brands/b1/settings');
+  });
+
+  it("links nowhere to the brand's old prompts page", async () => {
+    for (const path of ['settings', 'topics', 'prompts']) {
+      nav.pathname = `/dashboard/brands/b1/${path}`;
+      await render();
+      const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+      expect(hrefs.length).toBeGreaterThan(0);
+      expect(hrefs.filter((h) => /\/brands\/[^/]+\/prompts/.test(h ?? ''))).toEqual([]);
+    }
+  });
+
+  it('says the Prompts tab leaves for the Prompts page', async () => {
+    await render();
+    const prompts = tab('Prompts');
+    const hint = document.getElementById(prompts.getAttribute('aria-describedby')!);
+    expect(hint?.textContent).toBe('Opens the Prompts page');
+    expect(prompts.title).toBe('Opens the Prompts page');
+    expect(prompts.querySelector('svg.lucide-arrow-up-right')).not.toBeNull();
+    // The other tabs stay here: no hint.
+    expect(tab('Settings').hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('picks the brand on a middle click too, for the new tab, not on a right click', async () => {
+    await render();
+    const prompts = tab('Prompts');
+    await act(async () => {
+      prompts.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 2 }));
+    });
+    expect(store.setActiveBrand).not.toHaveBeenCalled();
+    await act(async () => {
+      prompts.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    });
+    expect(store.setActiveBrand).toHaveBeenCalledWith('b1');
+  });
+
+  it('marks the Prompts tab only on the old prompts page itself', async () => {
+    const marked = () =>
+      [...container.querySelectorAll('nav a')]
+        .filter((a) => a.querySelector('.border-primary'))
+        .map((a) => a.textContent);
+    nav.pathname = '/dashboard/brands/b1/settings';
+    await render();
+    expect(marked()).toEqual(['Settings']);
+    nav.pathname = '/dashboard/brands/b1/topics';
+    await render();
+    expect(marked()).toEqual(['Topics']);
+    nav.pathname = '/dashboard/brands/b1/prompts';
+    await render();
+    expect(marked()).toEqual(['Prompts']);
   });
 });

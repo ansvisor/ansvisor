@@ -184,7 +184,9 @@ describe('WorkAreasCard with the simplified menu (SIMPLE_NAV)', () => {
     const listed = [...container.querySelectorAll('[data-section]')].map((li) =>
       li.getAttribute('data-section'),
     );
-    expect(listed.slice(0, 4)).toEqual(['agent', 'action-center', 'agents', 'prompts']);
+    expect(listed.slice(0, 2)).toEqual(['agent', 'prompts']);
+    const at = listed.indexOf('action-center');
+    expect(listed.slice(at, at + 2)).toEqual(['action-center', 'agents']);
     expect(section('agents').textContent).toBe('Agents · in Action Center');
     expect(container.textContent).toContain('13 of 13 sections');
     await act(async () => chip('AEO/GEO & Audit').click());
