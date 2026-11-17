@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { getPlatformName, type PlatformSurface } from '@/lib/traffic-platforms';
+import { getPlatformColor } from '@/lib/platform-colors';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
@@ -56,39 +57,13 @@ function ChartContainer({
 
 // ─── Platform colors ─────────────────────────────────────────────────────────
 //
-// Keys are the AI source list's (`server/src/lib/ai-sources.json`), which the
-// tracking snippet and the Analytics sync both store: every key there needs a
-// color here and a name in `@/lib/traffic-platforms`, otherwise it renders as
-// a grey raw hostname (traffic-platforms.test.ts checks). The other ChatGPT
-// hosts are kept for rows from before the list (AT-004), and `unknown` for
-// rows that predate #288 (null source_platform).
-//
-// In the brand's colors rather than shades of one violet: the most common
-// engine in ink (the theme's primary, black on light and near-white on dark),
-// the others in warm, earthy tones that read on both themes and apart from
-// one another.
-
-const PLATFORM_COLORS: Record<string, string> = {
-  'chatgpt.com': 'var(--primary)',
-  'chat.openai.com': 'var(--primary)',
-  'search.chatgpt.com': 'var(--primary)',
-  'perplexity.ai': '#3f6f68',
-  'claude.ai': '#c2603f',
-  'gemini.google.com': '#c9973b',
-  'copilot.microsoft.com': '#5f7f9a',
-  'you.com': '#7a8450',
-  'phind.com': '#c9b79c',
-  'meta.ai': '#8c5e73',
-  'poe.com': '#9a4a2e',
-  'labs.google': '#d4b26a',
-  'bing.com': '#6b8a99',
-  'grok.com': '#a08c74',
-  'deepseek.com': '#4f6f8f',
-  unknown: '#a8a29a',
-};
+// The product's platform palette (`@/lib/platform-colors`), shared with the
+// Prompts › Insights chart so a platform has one color on both pages. Every
+// key on the AI source list needs a color there (traffic-platforms.test.ts
+// checks).
 
 export function getColor(platform: string): string {
-  return PLATFORM_COLORS[platform] ?? '#a8a29a';
+  return getPlatformColor(platform);
 }
 
 /**
