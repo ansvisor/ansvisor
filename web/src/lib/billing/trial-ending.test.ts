@@ -242,21 +242,68 @@ describe('handleTrialWillEnd', () => {
     expect(logged()).toContain('[trial-ending] skip: claimed_elsewhere sub=sub_1');
   });
 
-  it('refused (a 4xx): released, and Stripe told to retry, whose try sends it', async () => {
-    sendEvent.mockResolvedValueOnce(refused(422));
+  it('rate limited (a 429): released, and Stripe told to retry, whose try sends it', async () => {
+    sendEvent.mockResolvedValueOnce(refused(429));
     expect(await deliver()).toBe('retry');
     expect(meta()).not.toHaveProperty('trial_reminder_sent_at');
+    expect(meta()).not.toHaveProperty('trial_reminder_trial_end');
     expect(meta()).not.toHaveProperty('trial_reminder_claim');
     expect(capture).toHaveBeenCalledWith(
       'trial_ending_notified',
       'u1',
       expect.objectContaining({ outcome: 'refused' }),
     );
-    expect(logged()).toContain('[trial-ending] resend_refused:422 sub=sub_1');
+    expect(logged()).toContain(
+      '[trial-ending] resend_refused:429 sub=sub_1 (released: Stripe sends the event again)',
+    );
 
     expect(await deliver()).toBe('done');
     expect(sendEvent).toHaveBeenCalledTimes(2);
     expect(meta()).toHaveProperty('trial_reminder_sent_at');
+    expect(meta()).not.toHaveProperty('trial_reminder_outcome');
+  });
+
+  it('refused for good (another 4xx): kept, marked refused, Stripe not asked to retry', async () => {
+    for (const status of [400, 401, 422]) {
+      sub.metadata = { organization_id: 'org1', plan_id: 'growth' };
+      sendEvent.mockReset().mockResolvedValue(refused(status));
+      capture.mockClear();
+      vi.mocked(console.error).mockClear();
+
+      expect(await deliver()).toBe('done');
+      expect(meta()).toMatchObject({
+        trial_reminder_sent_at: expect.any(String),
+        trial_reminder_trial_end: `${TRIAL_END}`,
+        trial_reminder_outcome: 'refused',
+      });
+      expect(capture).toHaveBeenCalledWith(
+        'trial_ending_notified',
+        'u1',
+        expect.objectContaining({ outcome: 'refused' }),
+      );
+      // One line, with the status.
+      expect(vi.mocked(console.error).mock.calls.map((c) => c.join(' '))).toEqual([
+        `[trial-ending] resend_refused:${status} sub=sub_1 (claim kept, not retried: clear the trial_reminder_* metadata to resend)`,
+      ]);
+
+      // Delivered again: no second send.
+      expect(await deliver()).toBe('done');
+      expect(sendEvent).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('a claim cleared by hand sends again, and drops the old refused mark', async () => {
+    sendEvent.mockResolvedValueOnce(refused(422));
+    await deliver();
+    // Staff clear the claim's keys in Stripe, then resend the event.
+    sub.metadata = {
+      organization_id: 'org1',
+      plan_id: 'growth',
+      trial_reminder_outcome: 'refused',
+    };
+    expect(await deliver()).toBe('done');
+    expect(sendEvent).toHaveBeenCalledTimes(2);
+    expect(meta()).not.toHaveProperty('trial_reminder_outcome');
   });
 
   it('unknown (a 5xx or a timeout): marked sent, never sent again', async () => {
@@ -294,6 +341,23 @@ describe('handleTrialWillEnd', () => {
       'trial_ending_notified',
       'u1',
       expect.objectContaining({ recipient: 'admins', recipient_count: 2 }),
+    );
+  });
+
+  it('admins: refused for one but accepted for another is sent, and kept', async () => {
+    stripe.customers.retrieve.mockResolvedValue({ id: 'cus_1', email: null, metadata: {} });
+    memberEmails.mockResolvedValue(
+      new Map([
+        ['u1', 'ada@example.com'],
+        ['u2', 'grace@example.com'],
+      ]),
+    );
+    sendEvent.mockResolvedValueOnce(refused(429)).mockResolvedValueOnce(ACCEPTED);
+    expect(await deliver()).toBe('done');
+    expect(meta()).toHaveProperty('trial_reminder_sent_at');
+    expect(meta()).not.toHaveProperty('trial_reminder_outcome');
+    expect(logged()).toContain(
+      '[trial-ending] sent: accepted sub=sub_1 (refused for 1: refused:429)',
     );
   });
 

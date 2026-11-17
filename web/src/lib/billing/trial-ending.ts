@@ -27,9 +27,15 @@ import type { SendOutcome } from '@/lib/send-outcome';
  * deliveries of the event at once only one sends. After the send
  * (lib/send-outcome.ts): accepted, the claim stays; unknown (a 5xx, a
  * timeout), it stays too, as Resend may have the event and a second e-mail is
- * worse than a missed one; refused (a 4xx), it is released and the webhook
- * answers 500, so Stripe sends the event again and that try can send it. A
- * trial whose end moves later (staff extended it) is a new trial end and
+ * worse than a missed one. Refused (a 4xx) by kind:
+ * - rate limited (429): the claim is released and the webhook answers 500,
+ *   so Stripe sends the event again and that try can send it;
+ * - any other 4xx (a bad address, a bad request, a bad key): it won't go
+ *   through on a retry, so the claim stays, marked
+ *   `trial_reminder_outcome: refused`, and the webhook answers 200 (Stripe
+ *   would otherwise retry for 3 days). Clearing the `trial_reminder_*`
+ *   metadata and resending the event from Stripe sends it again.
+ * A trial whose end moves later (staff extended it) is a new trial end and
  * gets its own reminder.
  *
  * Writing the metadata makes Stripe send `customer.subscription.updated`,
@@ -54,6 +60,11 @@ const SENT_AT_KEY = 'trial_reminder_sent_at';
 const TRIAL_END_KEY = 'trial_reminder_trial_end';
 /** A new id with every claim: the one read back is the one that stayed. */
 const CLAIM_ID_KEY = 'trial_reminder_claim';
+/** `refused` when Resend refused it for good (a 4xx other than 429); else absent. */
+const OUTCOME_KEY = 'trial_reminder_outcome';
+
+/** Resend's answer when it is rate limited: the one 4xx a retry can get past. */
+const RATE_LIMITED = 'refused:429';
 
 /**
  * How long a written claim is left before it is read back: two deliveries
@@ -224,7 +235,7 @@ function overall(outcomes: SendOutcome[]): SendOutcome {
  * Handle one `customer.subscription.trial_will_end`: send the trial reminder
  * once, if the subscription is owed it. Throws when Stripe or the database
  * can't be read before anything is sent (the webhook answers 500 and Stripe
- * tries again); says `retry` when Resend refused the event (a 4xx).
+ * tries again); says `retry` when Resend rate limited the event (a 429).
  */
 export async function handleTrialWillEnd(
   client: StripeClient,
@@ -301,6 +312,8 @@ export async function handleTrialWillEnd(
     [SENT_AT_KEY]: new Date().toISOString(),
     [TRIAL_END_KEY]: `${trialEnd}`,
     [CLAIM_ID_KEY]: claimId,
+    // A refused mark left from a claim cleared by hand.
+    [OUTCOME_KEY]: '',
   };
   await writeClaim(client, subscriptionId, claim);
   await settle();
@@ -327,9 +340,7 @@ export async function handleTrialWillEnd(
     ),
   );
   const outcome = overall(outcomes);
-  for (const o of outcomes) {
-    if (o.result === 'refused') log(`resend_${o.reason} ${sub$}`, 'error');
-  }
+  const refusals = outcomes.filter((o) => o.result === 'refused').map((o) => o.reason);
 
   // PostHog: as the person who started the subscription, else the first admin.
   const distinctId = starter?.id ?? admins[0]?.id ?? members[0]?.id ?? '';
@@ -345,25 +356,41 @@ export async function handleTrialWillEnd(
     log(`posthog_${posthog.reason} ${sub$}`, 'warn');
   }
 
+  // Some admins' sends refused while others went: said with the outcome.
+  const also = refusals.length ? ` (refused for ${refusals.length}: ${refusals.join(',')})` : '';
   if (outcome.result === 'accepted') {
-    log(`sent: accepted ${sub$}`);
+    log(`sent: accepted ${sub$}${also}`);
     return 'done';
   }
   if (outcome.result === 'unknown') {
-    log(`sent: ${outcome.reason} ${sub$} (marked sent, not retried)`, 'warn');
+    log(`sent: ${outcome.reason} ${sub$} (marked sent, not retried)${also}`, 'warn');
     return 'done';
   }
-  // Refused by Resend: release the claim, so Stripe's next try sends it.
+
+  // Refused for everyone. Rate limited: release the claim, so Stripe's next try sends it.
+  if (refusals.includes(RATE_LIMITED)) {
+    try {
+      await writeClaim(client, subscriptionId, {
+        [SENT_AT_KEY]: '',
+        [TRIAL_END_KEY]: '',
+        [CLAIM_ID_KEY]: '',
+      });
+    } catch {
+      log(`resend_${RATE_LIMITED} ${sub$} (release failed, claim kept)`, 'error');
+      return 'done';
+    }
+    log(`resend_${RATE_LIMITED} ${sub$} (released: Stripe sends the event again)`, 'warn');
+    return 'retry';
+  }
+  // Refused for good: kept, marked refused, and Stripe not asked to retry.
   try {
-    await writeClaim(client, subscriptionId, {
-      [SENT_AT_KEY]: '',
-      [TRIAL_END_KEY]: '',
-      [CLAIM_ID_KEY]: '',
-    });
+    await writeClaim(client, subscriptionId, { [OUTCOME_KEY]: 'refused' });
   } catch {
-    log(`release_failed ${sub$} (claim kept)`, 'error');
-    return 'done';
+    // The claim stays either way: only the mark is missing.
   }
-  log(`released ${sub$} (Stripe sends the event again)`, 'warn');
-  return 'retry';
+  log(
+    `resend_${refusals.join(',')} ${sub$} (claim kept, not retried: clear the trial_reminder_* metadata to resend)`,
+    'error',
+  );
+  return 'done';
 }

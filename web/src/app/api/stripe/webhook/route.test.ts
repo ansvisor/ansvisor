@@ -415,7 +415,7 @@ describe('customer.subscription.trial_will_end', () => {
     expect(api).not.toHaveBeenCalled();
   });
 
-  it('answers 500 when Resend refused it, so Stripe sends the event again', async () => {
+  it('answers 500 when Resend rate limited it, so Stripe sends the event again', async () => {
     trialEnding.mockResolvedValue('retry');
     const res = await deliver('customer.subscription.trial_will_end', subscription('trialing'));
     expect(res.status).toBe(500);

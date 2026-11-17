@@ -247,8 +247,8 @@ export async function POST(req: NextRequest) {
 
       case 'customer.subscription.trial_will_end': {
         // 3 days before a free trial ends: the trial reminder e-mail, once
-        // per trial, cloud only (lib/billing/trial-ending.ts). Resend refused
-        // it (a 4xx): answer 500, so Stripe sends the event again.
+        // per trial, cloud only (lib/billing/trial-ending.ts). Resend rate
+        // limited it (a 429): answer 500, so Stripe sends the event again.
         const subscription = event.data.object as Stripe.Subscription;
         if ((await handleTrialWillEnd(stripe, subscription.id)) === 'retry') {
           return NextResponse.json({ error: 'Trial reminder not sent' }, { status: 500 });
