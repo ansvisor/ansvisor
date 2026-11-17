@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { useFailureToast } from '@/hooks/use-failure-toast';
-import { readPromptsWithoutAnswers, trackPromptsNow } from '@/lib/track-now';
+import { trackPromptsNow } from '@/lib/track-now';
 import { saveTrackingJob } from '@/lib/tracking-job-store';
 
 /**
@@ -20,58 +20,43 @@ import { saveTrackingJob } from '@/lib/tracking-job-store';
 /** Where a run's progress and its answers show: Visibility, which follows the saved job. */
 export const TRACK_NOW_ANSWERS_HREF = '/dashboard/insights';
 
-interface Read {
+interface Asked {
   brandId: string;
   ids: Set<string>;
 }
 
 /**
- * The prompts with no answers yet, read as the brand's page read them, and
- * Track now for some of them.
+ * The prompts with no answers yet, and Track now for some of them.
  *
- * `wanted`: whether to read at all: for admins and managers, when the table
- * has an active prompt with no answers in its window (a prompt with answers
- * there has some). `version` reads again after the prompts change.
- * `activeIds`: the brand's active prompts on the page; a prompt read as
- * without answers counts only while it is one of them.
+ * `ids`: the brand's active prompts with no answers yet, as the table's own
+ * read gives them (getPromptsPageData, for admins and managers), read again
+ * with it after the prompts change; null when unread, or for those who
+ * can't track. `activeIds`: the brand's active prompts on the page; a
+ * prompt without answers counts only while it is one of them.
  */
 export function useTrackNow({
   brandId,
-  wanted,
-  version,
+  ids: withoutAnswers,
   activeIds,
 }: {
   brandId: string | null;
-  wanted: boolean;
-  version: number;
+  ids: readonly string[] | null;
   activeIds: ReadonlySet<string>;
 }) {
   const t = useTranslations('prompts.trackNow');
   const failureToast = useFailureToast();
-  const [read, setRead] = useState<Read | null>(null);
   // Asked for in this visit: left out of the count, as the brand's page did.
-  const [asked, setAsked] = useState<Read | null>(null);
+  const [asked, setAsked] = useState<Asked | null>(null);
   const [starting, setStarting] = useState(false);
   // The run started from here, for the status line.
   const [started, setStarted] = useState<{ brandId: string; count: number } | null>(null);
 
-  useEffect(() => {
-    if (!brandId || !wanted) return undefined;
-    let cancelled = false;
-    void readPromptsWithoutAnswers(brandId).then((ids) => {
-      // Unread, the line stays as it was: a failed read says nothing.
-      if (!cancelled && ids) setRead({ brandId, ids: new Set(ids) });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, wanted, version]);
-
   const ids = useMemo(() => {
-    if (!brandId || !wanted || read?.brandId !== brandId) return [];
+    // Unread, the line says nothing: a failed read isn't "no answers".
+    if (!brandId || !withoutAnswers) return [];
     const done = asked?.brandId === brandId ? asked.ids : null;
-    return [...read.ids].filter((id) => activeIds.has(id) && !done?.has(id));
-  }, [brandId, wanted, read, asked, activeIds]);
+    return withoutAnswers.filter((id) => activeIds.has(id) && !done?.has(id));
+  }, [brandId, withoutAnswers, asked, activeIds]);
   const noAnswers = useMemo(() => new Set(ids), [ids]);
 
   const start = useCallback(

@@ -45,15 +45,37 @@ export async function readImprovingActions(
   const wanted = new Set(promptIds);
   if (wanted.size === 0) return new Map();
   if (wanted.size > MAX_IMPROVING_PROMPTS) throw new Error('Too many prompts');
+  return readTracked(supabase, brandId, wanted);
+}
 
-  const { data, error } = await supabase
+/**
+ * Every prompt of the brand with an Improve action still being tracked, by
+ * prompt id: the Tracked Prompts table's first read (getPromptsPageData), so
+ * the links under the Work chips come with the rows rather than one read a
+ * page after them. The same query without the prompt filter, scoped to the
+ * brand the same way.
+ */
+export async function readBrandImprovingActions(
+  supabase: SupabaseClient<Database>,
+  brandId: string,
+): Promise<Map<string, ImprovingAction>> {
+  return readTracked(supabase, brandId, null);
+}
+
+async function readTracked(
+  supabase: SupabaseClient<Database>,
+  brandId: string,
+  wanted: ReadonlySet<string> | null,
+): Promise<Map<string, ImprovingAction>> {
+  let query = supabase
     .from('actions')
     .select(
       'id, brand_id, action_no, brand_no, status, position_outcome, prompt_id:payload->>promptId',
     )
     .eq('brand_id', brandId)
-    .eq('kind', PROMPT_IMPROVE)
-    .in('payload->>promptId', [...wanted])
+    .eq('kind', PROMPT_IMPROVE);
+  if (wanted) query = query.in('payload->>promptId', [...wanted]);
+  const { data, error } = await query
     .in('status', [...IMPROVE_TRACKED_STATUSES])
     .or(
       'position_outcome.is.null,position_outcome->>final.is.null,position_outcome->>final.neq.true',
@@ -67,7 +89,8 @@ export async function readImprovingActions(
   const rowsByPrompt = new Map<string, Parameters<typeof pickImprovingAction>[0]>();
   for (const row of (data ?? []) as Record<string, unknown>[]) {
     const promptId = row.prompt_id;
-    if (row.brand_id !== brandId || typeof promptId !== 'string' || !wanted.has(promptId)) continue;
+    if (row.brand_id !== brandId || typeof promptId !== 'string') continue;
+    if (wanted && !wanted.has(promptId)) continue;
     const rows = rowsByPrompt.get(promptId) ?? [];
     rows.push({
       id: row.id as string,
