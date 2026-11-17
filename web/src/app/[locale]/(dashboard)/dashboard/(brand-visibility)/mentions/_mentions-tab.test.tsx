@@ -83,7 +83,7 @@ const list = (over: Partial<MentionsList> = {}): MentionsList => ({
 });
 
 const competitors: Competitor[] = [
-  { id: 'c1', brandId: 'b1', name: 'Crema Club', domain: 'cremaclub.com' },
+  { id: 'c1', brandId: 'b1', name: 'Crema Club', domain: 'cremaclub.com', type: null },
 ];
 
 let container: HTMLDivElement;

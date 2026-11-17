@@ -4461,6 +4461,7 @@ export type Database = {
           domain: string
           id: string
           name: string
+          type: string | null
         }
         Insert: {
           brand_id: string
@@ -4468,6 +4469,7 @@ export type Database = {
           domain?: string
           id?: string
           name: string
+          type?: string | null
         }
         Update: {
           brand_id?: string
@@ -4475,6 +4477,7 @@ export type Database = {
           domain?: string
           id?: string
           name?: string
+          type?: string | null
         }
         Relationships: [
           {

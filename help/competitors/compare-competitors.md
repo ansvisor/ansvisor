@@ -1,11 +1,11 @@
 ---
 title: Compare your AI visibility with competitors
 route: /dashboard/competitors
-keywords: [competitors, head-to-head, competitor comparison, gaps, strengths, platform breakdown, prompt-by-prompt]
-synonyms: [benchmark competitors, how do we compare, competitor visibility, us versus them, competitor score]
+keywords: [competitors, head-to-head, competitor comparison, gaps, strengths, platform breakdown, prompt-by-prompt, competitor types]
+synonyms: [benchmark competitors, how do we compare, competitor visibility, us versus them, competitor score, filter competitors, group competitors]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -23,6 +23,15 @@ The **Tracked Competitors** card lists every competitor with its domain and:
 **No data** means no answer in the window was measured for that competitor yet, for example one you've just added.
 
 The **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores. **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
+
+## Filter and group by type
+
+Once one of your competitors has a type, each card shows it under the domain, and two controls sit above the list:
+
+- the type menu, **All types** at first, shows only the competitors of one type, or those with **No type**;
+- **Group by type** lists them under a heading per type, with how many each has, the ones without a type last.
+
+They only change which cards show and in what order: scores, the date range and the head-to-head stay as they are. **Export CSV** has a type column. Setting a type is in **Add competitors to track**.
 
 ## Open a head-to-head comparison
 

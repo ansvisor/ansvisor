@@ -78,8 +78,29 @@ import {
   ChevronDown,
   Eye,
   Download,
+  Tag,
 } from 'lucide-react';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import {
+  CompetitorTypeBadge,
+  CompetitorTypePicker,
+  SetCompetitorTypeDialog,
+  competitorTypeIsValid,
+} from '@/components/competitors/competitor-type';
+import {
+  NO_COMPETITOR_TYPE,
+  competitorTypeLabel,
+  competitorTypeOptions,
+  groupCompetitorsByType,
+  matchesCompetitorType,
+} from '@/lib/competitor-types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ─── Shared Visual Components (mirroring Insights) ───────────────────────────
 
@@ -212,27 +233,34 @@ function AddCompetitorDialog({
   open,
   onOpenChange,
   onAdd,
+  typeOptions,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd: (name: string, domain: string) => Promise<void>;
+  onAdd: (name: string, domain: string, type: string | null) => Promise<void>;
+  /** The types the brand's picker offers (competitorTypeOptions). */
+  typeOptions: readonly string[];
 }) {
   const t = useTranslations('competitors');
   const [name, setName] = useState('');
   const [domain, setDomain] = useState('');
+  const [type, setType] = useState<string | null>(null);
+  const [pickerKey, setPickerKey] = useState(0);
   const [saving, setSaving] = useState(false);
 
   function reset() {
     setName('');
     setDomain('');
+    setType(null);
+    setPickerKey((k) => k + 1);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !competitorTypeIsValid(type)) return;
     setSaving(true);
     try {
-      await onAdd(name.trim(), domain.trim());
+      await onAdd(name.trim(), domain.trim(), type?.trim() || null);
       reset();
       onOpenChange(false);
     } catch {
@@ -270,12 +298,23 @@ function AddCompetitorDialog({
                 onChange={(e) => setDomain(e.target.value)}
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="comp-type">{t('type.label')}</Label>
+              <CompetitorTypePicker
+                key={pickerKey}
+                id="comp-type"
+                value={type}
+                options={typeOptions}
+                onChange={setType}
+                disabled={saving}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t('cancel')}
             </Button>
-            <Button type="submit" disabled={saving || !name.trim()}>
+            <Button type="submit" disabled={saving || !name.trim() || !competitorTypeIsValid(type)}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t('add')}
             </Button>
@@ -318,6 +357,7 @@ function CompetitorCard({
   stats,
   isSelected,
   onSelect,
+  onSetType,
   onDelete,
   deleting,
 }: {
@@ -334,6 +374,8 @@ function CompetitorCard({
   } | null;
   isSelected: boolean;
   onSelect: () => void;
+  /** Absent for a member who isn't an admin or a manager: no Set type button. */
+  onSetType?: () => void;
   /** Absent for a member who isn't an admin or a manager: no delete button. */
   onDelete?: () => void;
   deleting: boolean;
@@ -376,9 +418,10 @@ function CompetitorCard({
             </Badge>
           )}
         </div>
-        <span className="text-xs text-muted-foreground truncate block">
-          {competitor.domain || '—'}
-        </span>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="text-xs text-muted-foreground truncate">{competitor.domain || '—'}</span>
+          <CompetitorTypeBadge type={competitor.type} className="shrink-0" />
+        </div>
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
@@ -400,6 +443,22 @@ function CompetitorCard({
           <div className="text-right">
             <span className="text-xs text-muted-foreground">{t('noData')}</span>
           </div>
+        )}
+
+        {onSetType && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('type.setFor', { name: competitor.name })}
+            title={t('type.setFor', { name: competitor.name })}
+            className="h-7 w-7 text-muted-foreground transition-opacity sm:opacity-0 sm:group-hover:opacity-70 hover:opacity-100 focus-visible:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSetType();
+            }}
+          >
+            <Tag className="h-3.5 w-3.5" />
+          </Button>
         )}
 
         {onDelete && (
@@ -1183,6 +1242,9 @@ function HeadToHeadSection({
 
 type CompetitorDatePreset = Exclude<DateRangePreset, '24h'>;
 
+/** The type filter's All types: no stored type starts with a space (00542). */
+const ALL_TYPES = ' all';
+
 const COMPETITOR_DATE_PRESETS: readonly CompetitorDatePreset[] = [
   '7d',
   '30d',
@@ -1206,6 +1268,7 @@ function competitorComparisonWindow(
 const BENCHMARK_EXPORT_HEADERS = [
   'name',
   'is_own_brand',
+  'type',
   'visibility_score',
   'visible_prompts',
   'prompt_count',
@@ -1257,6 +1320,11 @@ export default function CompetitorsPage() {
   const [suggestDialogOpen, setSuggestDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Competitor | null>(null);
+  // Competitor types (00542): the one whose type is being set, the list's
+  // filter and whether it is grouped by type.
+  const [typeFor, setTypeFor] = useState<Competitor | null>(null);
+  const [typeFilter, setTypeFilter] = useState(ALL_TYPES);
+  const [groupByType, setGroupByType] = useState(false);
   // A read-only workspace (plan not active): Add, Suggest (it asks the AI as
   // it opens) and Delete open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
@@ -1459,9 +1527,9 @@ export default function CompetitorsPage() {
     }
   }
 
-  async function handleAdd(name: string, domain: string) {
+  async function handleAdd(name: string, domain: string, type: string | null) {
     if (!brand) return;
-    await addCompetitor(brand.id, { name, domain });
+    await addCompetitor(brand.id, { name, domain, type });
     toast.success(t('addSuccess'));
     void loadCompetitors();
     void loadComparison();
@@ -1526,11 +1594,35 @@ export default function CompetitorsPage() {
   const selectedCompetitor = competitors.find((c) => c.id === selectedCompetitorId);
   const today = new Date().toISOString().slice(0, 10);
 
+  // Types: offered in the pickers, and the list's filter and groups once any
+  // competitor has one. A brand that never sets one sees the list as before.
+  const typeOptions = competitorTypeOptions(competitors);
+  const anyTyped = competitors.some((c) => c.type);
+  // The filter offers the types the brand's competitors have, and No type
+  // while some have none; a type no competitor has any more falls back to all.
+  const typeFilterItems = [
+    { value: ALL_TYPES, label: t('type.filterAll') },
+    ...typeOptions
+      .filter((type) => competitors.some((c) => c.type === type))
+      .map((type) => ({ value: type, label: competitorTypeLabel(type) ?? type })),
+    ...(competitors.some((c) => !c.type)
+      ? [{ value: NO_COMPETITOR_TYPE, label: t('type.none') }]
+      : []),
+  ];
+  const activeTypeFilter =
+    anyTyped && typeFilterItems.some((item) => item.value === typeFilter) ? typeFilter : ALL_TYPES;
+  const listedCompetitors = competitors.filter((c) =>
+    matchesCompetitorType(c.type, activeTypeFilter === ALL_TYPES ? '' : activeTypeFilter),
+  );
+  const typeOf = (competitorId: string | undefined) =>
+    competitors.find((c) => c.id === competitorId)?.type ?? null;
+
   async function exportBenchmark() {
     if (!brand || !comparisonData?.brands.length) return;
     const rows = comparisonData.brands.map((e) => ({
       name: e.name,
       is_own_brand: e.isOwnBrand,
+      type: e.isOwnBrand ? '' : (competitorTypeLabel(typeOf(e.competitorId)) ?? ''),
       visibility_score: e.score ?? '',
       visible_prompts: e.visiblePrompts,
       prompt_count: e.promptCount,
@@ -1662,29 +1754,102 @@ export default function CompetitorsPage() {
                     ? t('windowAllTime')
                     : t('windowSelectedRange')}
               </p>
+              {anyTyped && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <Select
+                    items={typeFilterItems}
+                    value={activeTypeFilter}
+                    onValueChange={(next: string | null) => setTypeFilter(next ?? ALL_TYPES)}
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className="w-full text-xs sm:w-56"
+                      aria-label={t('type.filterLabel')}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {typeFilterItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant={groupByType ? 'secondary' : 'outline'}
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs"
+                    aria-pressed={groupByType}
+                    onClick={() => setGroupByType((on) => !on)}
+                  >
+                    <Tag className="h-3.5 w-3.5" />
+                    {t('type.groupByType')}
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {competitors.map((comp) => (
-                  <CompetitorCard
-                    key={comp.id}
-                    competitor={comp}
-                    stats={scoreMap.get(comp.name) ?? null}
-                    isSelected={selectedCompetitorId === comp.id}
-                    onSelect={() =>
-                      selectCompetitor(selectedCompetitorId === comp.id ? null : comp.id)
-                    }
-                    onDelete={
-                      canManage
-                        ? guard(() => setConfirmDelete(comp), {
-                            action: tActions('deleteCompetitors'),
-                          })
-                        : undefined
-                    }
-                    deleting={deleting === comp.id}
-                  />
-                ))}
-              </div>
+              {listedCompetitors.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  {t('type.noneOfType')}
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {(groupByType && anyTyped
+                    ? groupCompetitorsByType(listedCompetitors)
+                    : [{ type: undefined, items: listedCompetitors }]
+                  ).map((group) => (
+                    <section
+                      key={group.type === undefined ? ' all' : (group.type ?? ' none')}
+                      className="space-y-2"
+                      aria-label={
+                        group.type === undefined
+                          ? undefined
+                          : (competitorTypeLabel(group.type) ?? t('type.none'))
+                      }
+                    >
+                      {group.type !== undefined && (
+                        <h3 className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                          {competitorTypeLabel(group.type) ?? t('type.none')}
+                          <span className="tabular-nums">
+                            {t('type.groupCount', { count: group.items.length })}
+                          </span>
+                        </h3>
+                      )}
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {group.items.map((comp) => (
+                          <CompetitorCard
+                            key={comp.id}
+                            competitor={comp}
+                            stats={scoreMap.get(comp.name) ?? null}
+                            isSelected={selectedCompetitorId === comp.id}
+                            onSelect={() =>
+                              selectCompetitor(selectedCompetitorId === comp.id ? null : comp.id)
+                            }
+                            onSetType={
+                              canManage
+                                ? guard(() => setTypeFor(comp), {
+                                    action: tActions('setCompetitorTypes'),
+                                  })
+                                : undefined
+                            }
+                            onDelete={
+                              canManage
+                                ? guard(() => setConfirmDelete(comp), {
+                                    action: tActions('deleteCompetitors'),
+                                  })
+                                : undefined
+                            }
+                            deleting={deleting === comp.id}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1699,6 +1864,7 @@ export default function CompetitorsPage() {
                     competitor: selectedCompetitor?.name ?? '',
                   })}
                 </h2>
+                <CompetitorTypeBadge type={selectedCompetitor?.type} />
                 <Button
                   variant="outline"
                   size="sm"
@@ -1744,7 +1910,24 @@ export default function CompetitorsPage() {
         </>
       )}
 
-      <AddCompetitorDialog open={dialogOpen} onOpenChange={setDialogOpen} onAdd={handleAdd} />
+      <AddCompetitorDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onAdd={handleAdd}
+        typeOptions={typeOptions}
+      />
+
+      <SetCompetitorTypeDialog
+        brandId={brand.id}
+        competitor={typeFor}
+        options={typeOptions}
+        onOpenChange={(open) => {
+          if (!open) setTypeFor(null);
+        }}
+        onSaved={(changed) =>
+          setCompetitors((prev) => prev.map((c) => changed.find((next) => next.id === c.id) ?? c))
+        }
+      />
 
       <SuggestCompetitorsDialog
         open={suggestDialogOpen}

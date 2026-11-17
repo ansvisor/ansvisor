@@ -1,11 +1,11 @@
 ---
 title: Add competitors to track
 route: /dashboard/competitors
-keywords: [add competitor, track competitors, suggest competitors, remove competitor, competitor domain, competitors page]
-synonyms: [new competitor, follow a rival, competitor list, delete a competitor, where is the competitors page, find competitors]
+keywords: [add competitor, track competitors, suggest competitors, remove competitor, competitor domain, competitors page, competitor type]
+synonyms: [new competitor, follow a rival, competitor list, delete a competitor, where is the competitors page, find competitors, kind of competitor, competitor category, set type]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -31,8 +31,17 @@ Click **Add Competitor** and fill in:
 
 - **Name**: as AI answers write it, not the web address. Ansvisor looks for the name in every answer.
 - **Domain** (optional): Ansvisor also looks for the domain in answers, counts citations of the competitor's pages, and marks those pages **Competitor** on Visibility's **Citations** tab. The card that follows the competitor's pages over time needs it too.
+- **Type** (optional): what kind of competitor it is. See **Competitor types** below.
 
 Click **Add**.
+
+## Competitor types
+
+A type says what kind of competitor each one is, so you can filter and group your list by it. Pick **Direct competitor**, **Marketplace / aggregator**, **Publisher / review site** or **Other**, or choose **New type…** and name your own, such as a kind of company in your industry. A type you name is offered for your other competitors too.
+
+To set or change one, click the tag icon (**Set type for** the competitor) on its card in **Tracked Competitors**, or beside it on the **Competitors** tab of the brand's settings. Pick the type and click **Save**; **No type** clears it.
+
+A type is only a label: it doesn't change how Ansvisor finds the competitor in answers or scores it. Only admins and managers set types.
 
 ## Suggest competitors
 

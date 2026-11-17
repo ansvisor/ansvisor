@@ -17,6 +17,7 @@ import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { readSnippet } from '@/lib/traffic-snippet';
 import { snippetState, type SnippetState } from '@/lib/traffic-sources';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
+import { competitorTypeLabel, matchesCompetitorType } from '@/lib/competitor-types';
 import { wholeDayWindow, type DayWindow } from '@/lib/insights-windows';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
@@ -1996,6 +1997,11 @@ export interface CompetitorComparisonParams {
   dateFrom?: string;
   dateTo?: string;
   topicId?: string;
+  /**
+   * Only competitors of this type (00542): a type's name or key in any case,
+   * or "none" for the ones without a type (matchesCompetitorType).
+   */
+  type?: string;
 }
 
 export interface CompetitorComparisonOutput {
@@ -2040,6 +2046,8 @@ export interface CompetitorComparisonOutput {
     prompt_count: number;
     /** AI Visibility Score over the brand's answers (shared denominator). */
     ai_visibility_score: number | null;
+    /** Its type as the Competitors page names it (00542); null for none. */
+    type: string | null;
   }>;
   share_of_voice: {
     overall_sov_pct: number;
@@ -2052,6 +2060,17 @@ export interface CompetitorComparisonOutput {
       competitor_mentions: number;
       sov_pct: number;
     }>;
+    /**
+     * With a type filter: the brand's mentions against only the listed
+     * competitors' (their total_mentions). The figures above count every
+     * competitor.
+     */
+    of_type?: {
+      type: string;
+      overall_sov_pct: number;
+      total_brand_mentions: number;
+      total_competitor_mentions: number;
+    };
   };
 }
 
@@ -2085,6 +2104,27 @@ interface SoVAggRpc {
     brand_mentions: number;
     competitor_mentions: number;
   }>;
+}
+
+/**
+ * The stored type (00542) of each of a brand's competitors, by id, for a read
+ * that has already checked the brand: the rows are the brand's, inner-joined
+ * on the key's organization.
+ */
+export async function competitorTypesFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<Map<string, string | null>> {
+  if (!auth.organizationId) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('competitors')
+    .select('id, type, brands!inner(organization_id)')
+    .eq('brand_id', brandId)
+    .eq('brands.organization_id', auth.organizationId);
+  if (error) throw new Error(error.message);
+  return new Map(
+    (data ?? []).map((row) => [row.id as string, (row.type as string | null) ?? null]),
+  );
 }
 
 /**
@@ -2132,11 +2172,13 @@ export async function getCompetitorComparisonFor(
   };
 
   // Both RPCs are SECURITY DEFINER per the existing pattern — they trust the
-  // caller's brand_id, which we've just verified above.
-  const [compRes, sovRes, aiVisRes] = await Promise.all([
+  // caller's brand_id, which we've just verified above. The competitors'
+  // types (00542) come from the brand's own rows, scoped to the organization.
+  const [compRes, sovRes, aiVisRes, typeById] = await Promise.all([
     supabaseAdmin.rpc('competitor_aggregates', rpcArgs),
     supabaseAdmin.rpc('share_of_voice_aggregates', rpcArgs),
     supabaseAdmin.rpc('ai_visibility_aggregates', rpcArgs),
+    competitorTypesFor(auth, params.brandId),
   ]);
   if (compRes.error) throw new Error(compRes.error.message);
   if (sovRes.error) throw new Error(sovRes.error.message);
@@ -2188,7 +2230,7 @@ export async function getCompetitorComparisonFor(
   const rateOf = (visible: number, total: number): number =>
     total > 0 ? Math.round((Number(visible) / total) * 1000) / 10 : 0;
 
-  const competitors = comp.by_competitor.map((c) => ({
+  const allCompetitors = comp.by_competitor.map((c) => ({
     competitor_id: c.competitor_id,
     name: c.name && c.name.trim() !== '' ? c.name : c.competitor_id,
     // Same denominator as the brand's average (every filtered row, absence
@@ -2205,7 +2247,11 @@ export async function getCompetitorComparisonFor(
     visibility_rate_pct: rateOf(c.visible_prompts ?? 0, brandPromptCount),
     prompt_count: brandPromptCount,
     ai_visibility_score: compScoreById.get(c.competitor_id) ?? null,
+    type: competitorTypeLabel(typeById.get(c.competitor_id)),
   }));
+  const competitors = allCompetitors.filter((c) =>
+    matchesCompetitorType(typeById.get(c.competitor_id), params.type),
+  );
 
   const totalBrandMentions = Number(sov.total_brand_mentions);
   const totalCompMentions = Number(sov.total_competitor_mentions);
@@ -2224,6 +2270,22 @@ export async function getCompetitorComparisonFor(
       sov_pct: total > 0 ? Math.round((brandM / total) * 1000) / 10 : 0,
     };
   });
+
+  // With a type: the brand against only those competitors, from the same
+  // totals the entries show.
+  const typeMentions = competitors.reduce((sum, c) => sum + c.total_mentions, 0);
+  const brandTypeMentions = Number(comp.brand_total_mentions);
+  const ofType = params.type?.trim()
+    ? {
+        type: params.type.trim(),
+        overall_sov_pct:
+          brandTypeMentions + typeMentions > 0
+            ? Math.round((brandTypeMentions / (brandTypeMentions + typeMentions)) * 1000) / 10
+            : 0,
+        total_brand_mentions: brandTypeMentions,
+        total_competitor_mentions: typeMentions,
+      }
+    : undefined;
 
   return {
     brand: {
@@ -2244,6 +2306,7 @@ export async function getCompetitorComparisonFor(
       total_brand_mentions: totalBrandMentions,
       total_competitor_mentions: totalCompMentions,
       by_platform: byPlatform,
+      ...(ofType ? { of_type: ofType } : {}),
     },
   };
 }
@@ -4528,16 +4591,25 @@ export interface McpCompetitorRow {
   id: string;
   name: string;
   domain: string;
+  /**
+   * Its type as the Competitors page names it (00542): a generic type
+   * ("Direct competitor", "Marketplace / aggregator", "Publisher / review
+   * site", "Other") or the brand's own label ("Tour operator"); null for none.
+   */
+  type: string | null;
 }
 
 /**
  * List a brand's competitors only after confirming the brand belongs to the
  * authenticated organization. The joined ownership predicate on the data
- * query prevents a brand reassignment between the check and the read.
+ * query prevents a brand reassignment between the check and the read. With
+ * `type`, only the competitors of that type (matchesCompetitorType: a type's
+ * name or key in any case, "none" for the ones without a type).
  */
 export async function listCompetitorsFor(
   auth: McpAuthContext,
   brandId: string,
+  opts: { type?: string } = {},
 ): Promise<McpCompetitorRow[] | null> {
   if (!auth.organizationId) return null;
 
@@ -4552,17 +4624,20 @@ export async function listCompetitorsFor(
 
   const { data, error } = await supabaseAdmin
     .from('competitors')
-    .select('id, name, domain, brands!inner(organization_id)')
+    .select('id, name, domain, type, brands!inner(organization_id)')
     .eq('brand_id', brandId)
     .eq('brands.organization_id', auth.organizationId)
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    name: row.name as string,
-    domain: (row.domain as string | null) ?? '',
-  }));
+  return (data ?? [])
+    .filter((row) => matchesCompetitorType(row.type as string | null, opts.type))
+    .map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      domain: (row.domain as string | null) ?? '',
+      type: competitorTypeLabel(row.type as string | null),
+    }));
 }
 
 export interface McpReportListItem {
