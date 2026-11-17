@@ -22,6 +22,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
 import { getPlatformName } from '@/lib/traffic-platforms';
+import { HUBSPOT_SETTINGS_PATH } from '@/lib/traffic-sources';
 import { getTrafficAiPipeline } from '@/lib/traffic-reads';
 import type { TrafficAiPipeline, TrafficDateWindow } from '@/lib/actions/traffic';
 import { cn } from '@/lib/utils';
@@ -39,9 +40,6 @@ import { useRangeReady } from './_range-ready';
  * (owner, 2026-11-10). A deal counts once, in full, credited to its earliest
  * AI contact; won revenue by close date, open pipeline now, unweighted.
  */
-
-/** Where the HubSpot card is, for a section that needs it. */
-export const HUBSPOT_SETTINGS_PATH = '/dashboard/settings/integrations#hubspot';
 
 /** An amount in the HubSpot account's currency, whole; without one, as a number. */
 export const money = formatMoney;

@@ -43,15 +43,15 @@ const step = (f: GettingStartedFacts, key: GettingStartedStepKey) =>
   buildGettingStarted(f).steps.find((s) => s.key === key)!;
 
 describe('the step list', () => {
-  it('has the 7 set-up steps in order, with no Ready step', () => {
+  it('has the 7 set-up steps in order, the AI Traffic snippet first, with no Ready step', () => {
     expect(GETTING_STARTED_STEPS.map((s) => `${s.stage}:${s.key}`)).toEqual([
+      'setup:snippet',
       'setup:kpis',
       'setup:competitors',
       'setup:topics',
       'setup:prompts',
       'setup:gsc',
       'setup:ga',
-      'setup:snippet',
     ]);
     expect(GETTING_STARTED_STEPS.filter((s) => s.optional).map((s) => s.key)).toEqual([
       'gsc',
@@ -121,7 +121,24 @@ describe('buildGettingStarted', () => {
   });
 
   it('marks the snippet done on the first AI visit', () => {
+    expect(step(facts(), 'snippet').state).toBe('new');
     expect(step(facts({ firstVisit: true }), 'snippet').state).toBe('done');
+  });
+
+  it("puts the snippet among a new brand's first two open steps, and the next one once it's done", () => {
+    // Today's card lists the first two steps still open (setup-section.tsx).
+    const nextTwo = (f: GettingStartedFacts) =>
+      buildGettingStarted(f)
+        .steps.filter((s) => s.state === 'new')
+        .slice(0, 2)
+        .map((s) => s.key);
+    expect(nextTwo(facts())).toEqual(['snippet', 'kpis']);
+    // Onboarding's competitors, topics and prompts saved: still first.
+    expect(nextTwo(facts({ competitors: 3, topicPrompts: [3, 3, 3] }))).toEqual([
+      'snippet',
+      'kpis',
+    ]);
+    expect(nextTwo(facts({ firstVisit: true }))).toEqual(['kpis', 'competitors']);
   });
 
   it('dates the steps a person acted on, and only those', () => {
@@ -185,13 +202,13 @@ describe('the 7 set-up steps', () => {
       }),
     );
     expect(status.steps.map((s) => [s.key, s.state])).toEqual([
+      ['snippet', 'done'],
       ['kpis', 'done'],
       ['competitors', 'done'],
       ['topics', 'done'],
       ['prompts', 'done'],
       ['gsc', 'done'],
       ['ga', 'skipped'],
-      ['snippet', 'done'],
     ]);
     expect(status).toMatchObject({ done: 7, total: 7 });
   });
@@ -200,11 +217,11 @@ describe('the 7 set-up steps', () => {
     const status = setup(facts({ competitors: 3, records: { gsc: 'skipped' } }));
     expect(status.done).toBe(2);
     expect(status.steps.filter((s) => s.state === 'new').map((s) => s.key)).toEqual([
+      'snippet',
       'kpis',
       'topics',
       'prompts',
       'ga',
-      'snippet',
     ]);
   });
 });

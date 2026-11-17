@@ -440,7 +440,27 @@
       "startTracking": "Start tracking with {count, plural, one {# competitor} other {# competitors}}"
     },
     "trackingStarts": "Next, choose how to start. Tracking starts {trial, select, yes {when you start the free trial or buy a plan} other {when you choose a plan}}.",
-    "saved": "Setup saved. Tracking starts {trial, select, yes {when you start the free trial or buy a plan} other {when you choose a plan}}."
+    "saved": "Setup saved. Tracking starts {trial, select, yes {when you start the free trial or buy a plan} other {when you choose a plan}}.",
+    "trackingStartsNow": "Your plan is active. Tracking starts as soon as you finish.",
+    "finishFailed": "We couldn't finish setup. Please try again.",
+    "planLapsed": "Your plan isn't active any more, so setup is paused. Choose a plan in Billing, then set up your brand.",
+    "managePlan": "Manage your plan",
+    "start": {
+      "title": "How do you want to start?",
+      "intro": "{trial, select, yes {With the {days}-day free trial, you add a card and nothing is charged until it ends.} other {Pick a plan and add a card.}} Cancel any time. Then set up your brand, and its tracking starts.",
+      "workspaceName": "My workspace",
+      "workspaceFailed": "We couldn't set up your workspace. Please try again."
+    },
+    "connectSite": {
+      "trackingStarted": "Your first tracking run has started.",
+      "title": "Connect your site",
+      "intro": "One line in your site's head counts visits from ChatGPT, Gemini, Perplexity and other AI assistants, and the pages they land on. Without it, AI Traffic stays empty. It's optional: you can add it later.",
+      "found": "Found on {domain}. AI visits show in AI Traffic as they arrive.",
+      "tagManager": "Using a tag manager? Add it there: AI Traffic shows it after the first AI visit.",
+      "done": "Done, go to my dashboard",
+      "later": "I'll do it later",
+      "laterNote": "It stays first in Finish setting up, on the Action Center's Today tab."
+    }
   },
   "planOffer": {
     "buyNow": "Buy now",
@@ -489,6 +509,7 @@
       "title": "Look around a sample brand",
       "badge": "{demoBrand} · sample data",
       "body": "You'll explore <b>{demoBrand}</b>, a made-up brand with sample data, not <b>{brand}</b>. You can open every page, but nothing runs or changes there. {named, select, yes {{brand}} other {Your brand}} stays saved, and tracking starts when you pick a plan. No card needed.",
+      "bodyNoBrand": "You'll explore <b>{demoBrand}</b>, a made-up brand with sample data. You can open every page, but nothing runs or changes there. When you pick a plan, you set up your own brand and its tracking starts. No card needed.",
       "yourBrand": "your brand",
       "cta": "Explore the sample brand",
       "notReady": "Not ready for a card? <link>Explore a sample brand first →</link>"
@@ -4153,6 +4174,25 @@
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
     "fanoutGaps": { "name": "Read fan-out gaps", "step": "Read fan-out gaps" },
+    "queryFanouts": { "name": "Read Query Fan-outs", "step": "Read Prompts · Query Fan-outs" },
+    "topicsOverview": { "name": "Read the Topics table", "step": "Read Prompts · Topics" },
+    "competitorHeadToHead": {
+      "name": "Read a competitor head to head",
+      "step": "Read Competitors · Head to head"
+    },
+    "topicCompetitorMap": {
+      "name": "Read Topics vs competitors",
+      "step": "Read Visibility · Topics vs competitors"
+    },
+    "visibilityOpportunities": {
+      "name": "Read Visibility opportunities",
+      "step": "Read Visibility · Opportunities"
+    },
+    "aiBots": { "name": "Read AI bots", "step": "Read AI Traffic · AI bots" },
+    "gscPages": {
+      "name": "Read Search Console pages",
+      "step": "Read AI Traffic · Search Console pages"
+    },
     "aiAnswers": { "name": "Read a prompt's AI answers", "step": "Read AI answers" },
     "promptInsights": { "name": "Read prompt insights", "step": "Read Prompts · Insights" },
     "overviewSummary": { "name": "Read the brand overview", "step": "Read Visibility" },
@@ -4167,6 +4207,27 @@
       "step": "Read Search Console queries"
     },
     "gaSummary": { "name": "Read Google Analytics", "step": "Read Google Analytics" },
+    "trackingSetup": {
+      "name": "Check what measures customers from AI",
+      "step": "Checked tracking setup"
+    },
+    "aiConversions": {
+      "name": "Read conversions from AI visits",
+      "step": "Read conversions from AI visits"
+    },
+    "aiConvertingPages": {
+      "name": "Read where AI visitors convert",
+      "step": "Read AI Traffic · Where AI visitors convert"
+    },
+    "aiPipeline": {
+      "name": "Read the AI-sourced pipeline",
+      "step": "Read AI Traffic · AI-sourced pipeline"
+    },
+    "aiVisits": { "name": "Read AI visits", "step": "Read AI Traffic · Visits" },
+    "promptConversions": {
+      "name": "Read prompts cited on pages that convert",
+      "step": "Read prompts and conversions"
+    },
     "members": { "name": "Read team members", "step": "Read Team" },
     "connections": { "name": "Read connected tools", "step": "Read Integrations" },
     "chatPolicy": { "name": "Read Chat's rules", "step": "Read Settings › Chat" },
@@ -7236,6 +7297,7 @@
       "content-plan": "Weekly content plan",
       "seasonal": "Seasonal prompts",
       "traffic": "AI traffic and sign-ups",
+      "ai-revenue": "Customers and revenue from AI",
       "earn-or-pay": "Earn or pay",
       "ad-drafts": "Ad drafts"
     },
@@ -13066,6 +13128,14 @@
       "failed": "The check didn't run. Try again."
     },
     "copySnippet": "Copy tracking script",
+    "snippetMessage": {
+      "email": "Email this to my developer",
+      "copy": "Copy message",
+      "copied": "Message copied",
+      "subject": "Please add the Ansvisor tracking code to {domain}",
+      "ourSite": "our website",
+      "body": "Hi,\n\nCould you add the Ansvisor tracking code to {domain}? It counts visits from AI assistants like ChatGPT, Gemini and Perplexity, and the pages they land on.\n\nHere's the code:\n\n{snippet}\n\nPaste it just before the closing {tag} tag on every page, the 404 page included, then publish the change.\n\nUsing a tag manager? Add it there instead, as a Custom HTML tag on all pages.\n\nIt loads with defer and doesn't change how the page looks.\n\nThanks!"
+    },
     "export": {
       "button": "Export",
       "exporting": "Exporting…",

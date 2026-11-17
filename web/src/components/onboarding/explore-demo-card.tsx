@@ -10,8 +10,10 @@ import { cn } from '@/lib/utils';
 
 /**
  * Onboarding's plan step, the other way in: the demo brand, a made-up brand
- * with sample data and no card. The person's own brand stays as set up, and
- * its tracking starts once a plan is picked. The page holds the one explore
+ * with sample data and no card. As the first screen (the choice), there is
+ * no brand of the person's own yet: it is set up once a plan is bought.
+ * After a brand's setup (the old order), that brand stays as set up, and its
+ * tracking starts once a plan is picked. The page holds the one explore
  * action (useExploreDemo) both of these run, and its setup screen.
  */
 
@@ -22,10 +24,16 @@ import { cn } from '@/lib/utils';
  */
 export function ExploreDemoChoice({
   brandName,
+  hasOwnBrand = true,
   opening,
   onExplore,
 }: {
   brandName: string | null;
+  /**
+   * The person set up a brand of their own already (the old order). Without
+   * one (the first screen), the card says it is set up after buying.
+   */
+  hasOwnBrand?: boolean;
   /** The demo is being opened: the button waits. */
   opening: boolean;
   onExplore: () => void;
@@ -56,12 +64,17 @@ export function ExploreDemoChoice({
         </div>
       </div>
       <p className="text-sm leading-relaxed text-muted-foreground">
-        {t.rich('body', {
-          demoBrand: DEMO_BRAND_NAME,
-          brand: brandName || t('yourBrand'),
-          named: brandName ? 'yes' : 'no',
-          b: (chunks) => <strong className="font-semibold text-foreground">{chunks}</strong>,
-        })}
+        {hasOwnBrand
+          ? t.rich('body', {
+              demoBrand: DEMO_BRAND_NAME,
+              brand: brandName || t('yourBrand'),
+              named: brandName ? 'yes' : 'no',
+              b: (chunks) => <strong className="font-semibold text-foreground">{chunks}</strong>,
+            })
+          : t.rich('bodyNoBrand', {
+              demoBrand: DEMO_BRAND_NAME,
+              b: (chunks) => <strong className="font-semibold text-foreground">{chunks}</strong>,
+            })}
       </p>
       <Button
         className="h-11 w-full text-[15px] font-semibold"

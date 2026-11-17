@@ -117,6 +117,10 @@ Chat reads any list the same way, such as signals, prompts, mentions, citations,
 
 Ask about one item by what you see: a signal's code (S-07), a prompt's words, a cited domain or address, or an opportunity, draft or report title. Chat looks it up directly, in any status, and says plainly if the brand has none.
 
+## Topics, fan-outs and head to head
+
+Ask about topics, fan-outs, a competitor head to head, AI bots and Search Console pages: Chat reads the same tables those pages show, such as the prompts where a competitor is ahead of you.
+
 ## Change what you track
 
 Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.

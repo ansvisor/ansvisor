@@ -4,8 +4,8 @@ route: /dashboard/insights
 keywords: [report card, free report card, ai visibility report, report card pdf, value table, revenue scenario, report language]
 synonyms: [free audit from the website, the pdf you e-mailed me, visibility report card, free ai report, report card in french, report card in german]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -46,7 +46,7 @@ The card asks each question once, on one day. In Ansvisor, your tracked prompts 
 
 ## Measure your own questions every day
 
-The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next.
+The card asks its questions once. To measure them every day, and questions of your own, start the free trial and set up your brand in the wizard that follows, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next.
 
 ## The value table and the revenue scenario
 
