@@ -345,7 +345,10 @@ describe('getVisibilitySummaryFor over a long window inside a day', () => {
     async (_, dateFrom, dateTo, dayFrom, dayTo) => {
       const summary = await getVisibilitySummaryFor(AUTH, { brandId: 'b1', dateFrom, dateTo });
       // Never the raw aggregates: their cost follows the answers in the window.
-      expect(fns().sort()).toEqual(['ai_visibility_aggregates_daily', 'competitor_aggregates_daily']);
+      expect(fns().sort()).toEqual([
+        'ai_visibility_aggregates_daily',
+        'competitor_aggregates_daily',
+      ]);
       for (const fn of RAW) expect(fns()).not.toContain(fn);
       expect(db.tables).not.toContain('prompt_results');
       for (const call of db.rpcs) {
@@ -374,7 +377,11 @@ describe('getVisibilitySummaryFor over a long window inside a day', () => {
     });
     expect(fns().sort()).toEqual(['ai_visibility_aggregates_daily', 'competitor_aggregates_daily']);
     for (const call of db.rpcs) {
-      expect(call.args).toMatchObject({ p_models: ['gpt-5-mini'], p_day_from: null, p_day_to: '2026-11-11' });
+      expect(call.args).toMatchObject({
+        p_models: ['gpt-5-mini'],
+        p_day_from: null,
+        p_day_to: '2026-11-11',
+      });
     }
     expect(summary!.roundedToDays).toEqual({ dayTo: '2026-11-11' });
     expect(summary!.note).toContain('the first day tracked to 2026-11-11');
