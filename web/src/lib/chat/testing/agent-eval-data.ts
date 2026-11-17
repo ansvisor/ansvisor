@@ -2,6 +2,7 @@ import { askedCodes, lookUpCodes } from '@/lib/action-center/action-codes';
 import { priorityLevelOf } from '@/lib/action-center/priority';
 import { pageMeta, pageWindow } from '@/lib/mcp/list-page';
 import { askedSignals, lookUpCited, periodWords, signalLookup } from '@/lib/mcp/lookup';
+import { PROMPT_ASSOCIATION_LABEL } from '@/lib/traffic-conversions';
 
 /**
  * The workspace the agents' and skills' test set runs in (agent-eval.ts):
@@ -670,11 +671,14 @@ export const EVAL_ACTIONS = ACTIONS;
  * The workspace a scenario runs on: as above, or with the brand's long
  * list of open actions (`action_backlog`), 55 in all as the owner's brand
  * had (2026-11-16), so the list's first page of 50 doesn't hold them all;
- * or with long lists of signals and cited domains (`long_lists`, the
+ * with long lists of signals and cited domains (`long_lists`, the
  * owner's plan of 2026-11-16, item 2), 60 and 70, so a signal or domain
- * asked about is past the first page of 50.
+ * asked about is past the first page of 50; or with conversions from AI
+ * visits never turned on (`conversions_off`), where the others have them
+ * on, with a week of them (agent-eval.ts's questions about customers from
+ * AI).
  */
-export type EvalWorkspace = 'default' | 'action_backlog' | 'long_lists';
+export type EvalWorkspace = 'default' | 'action_backlog' | 'long_lists' | 'conversions_off';
 
 const BACKLOG_SUBJECTS = [
   'whole bean storage',
@@ -1117,9 +1121,312 @@ export const EVAL_PAGES: Readonly<Record<string, { title: string; text: string }
   },
 };
 
+// Customers from AI: conversions from AI visits are on, with a week of them, but on the
+// `conversions_off` workspace (EvalWorkspace), where they were never turned on.
+
+const TRACKING = `/dashboard/brands/${EVAL_IDS.brand}/settings?tab=tracking`;
+const GA_STEP = {
+  next_step:
+    "Connect Google Analytics and pick the brand's property in Settings › Integrations. Its key events and revenue from AI sessions then show on AI Traffic.",
+  where: '/dashboard/settings?tab=integrations',
+};
+const CONVERSIONS_STEP = {
+  next_step:
+    'Turn on Track conversions from AI visits in Brand settings › Tracking and choose Consent, then put the tag shown under Use this tag on every page in place of the old one. Forms with an email field then count as sign-ups by themselves.',
+  where: TRACKING,
+};
+const HUBSPOT_STEP = {
+  next_step:
+    'Connect HubSpot on its card in Settings › Integrations to see the contacts, deals and revenue AI answers bring.',
+  where: '/dashboard/settings/integrations#hubspot',
+};
+const PERIOD = { from: EVAL_WEEK.from, to: `${EVAL_WEEK.to}T23:59:59.999Z` };
+const money = (eur: number, usd?: number) => [
+  { currency: 'EUR', value: eur },
+  ...(usd === undefined ? [] : [{ currency: 'USD', value: usd }]),
+];
+/** The week's conversions from AI visits, by the page the first AI visit landed on. */
+const LANDING = [
+  {
+    page: '/subscriptions',
+    conversions: 26,
+    by_type: { order: 18, signup: 8 },
+    revenue: money(864, 247.5),
+    top_assistant: 'ChatGPT',
+  },
+  {
+    page: '/blog/best-coffee-subscriptions-2026',
+    conversions: 21,
+    by_type: { signup: 12, order: 5, newsletter: 4 },
+    revenue: money(240),
+    top_assistant: 'Perplexity',
+  },
+  {
+    page: '/gift-boxes',
+    conversions: 11,
+    by_type: { order: 8, custom: 2, signup: 1 },
+    revenue: money(384, 165),
+    top_assistant: 'ChatGPT',
+  },
+  {
+    page: '/guides/how-long-coffee-beans-stay-fresh',
+    conversions: 6,
+    by_type: { newsletter: 5, signup: 1 },
+    revenue: [],
+    top_assistant: 'Gemini',
+  },
+];
+
+/** Customers and revenue from AI (get_tracking_setup and the five reads after it), on a workspace. */
+function aiRevenueRead(tool: string, workspace: EvalWorkspace): unknown {
+  const off = workspace === 'conversions_off';
+  switch (tool) {
+    case 'get_tracking_setup':
+      return {
+        brand: EVAL_BRAND.name,
+        site_type: 'ecommerce',
+        missing: off ? 1 : 0,
+        items: [
+          {
+            item: 'snippet',
+            state: 'active',
+            ok: true,
+            detail: 'Active: last AI visit on 2026-11-02.',
+          },
+          off
+            ? {
+                item: 'conversions',
+                state: 'off',
+                ok: false,
+                detail: 'Off: no conversion is linked to an AI visit.',
+                ...CONVERSIONS_STEP,
+              }
+            : {
+                item: 'conversions',
+                state: 'on',
+                ok: true,
+                detail:
+                  "On, waiting for the visitor's consent: the cookie banner tells the snippet.",
+              },
+          ...(off
+            ? []
+            : [
+                {
+                  item: 'conversion_events',
+                  state: 'arriving',
+                  ok: true,
+                  detail:
+                    'Last conversion on 2026-11-02: from a form 2026-11-01, a conversion call never, the Shopify pixel 2026-11-02.',
+                },
+                {
+                  item: 'orders',
+                  state: 'arriving',
+                  ok: true,
+                  detail: 'Last order or booking with a value on 2026-11-02.',
+                },
+                {
+                  item: 'shopify_pixel',
+                  state: 'seen',
+                  ok: true,
+                  optional: true,
+                  detail: 'Seen: last order on 2026-11-02.',
+                },
+              ]),
+          {
+            item: 'google_analytics',
+            state: 'not_connected',
+            ok: false,
+            optional: true,
+            detail: 'Not connected for this brand.',
+            ...GA_STEP,
+          },
+          {
+            item: 'hubspot',
+            state: 'not_connected',
+            ok: false,
+            optional: true,
+            detail: 'Not set up.',
+            ...HUBSPOT_STEP,
+          },
+        ],
+        who_can_change:
+          'Admins and managers change these settings and connections: the person asking is one. Anyone can copy the tag.',
+      };
+    case 'get_ai_conversions':
+      if (off) {
+        return {
+          measured: false,
+          enabled: false,
+          period: PERIOD,
+          not_measured:
+            'Not measured: conversions from AI visits are off for this brand, so no sign-up, form or order is linked to an AI visit.',
+          ...CONVERSIONS_STEP,
+        };
+      }
+      return {
+        measured: true,
+        enabled: true,
+        consent: 'wait',
+        period: PERIOD,
+        attribution:
+          'From the tracking snippet with conversions on: each conversion is credited to the AI assistant that first sent the visitor and to the page that visit landed on (first touch, within 30 days).',
+        conversions: 64,
+        by_type: [
+          { type: 'order', conversions: 31, units: 44, value: money(1488, 412.5) },
+          { type: 'signup', conversions: 22 },
+          { type: 'newsletter', conversions: 9 },
+          { type: 'custom', conversions: 2 },
+        ],
+        revenue: money(1488, 412.5),
+        orders_without_value: 0,
+        by_assistant: [
+          {
+            assistant: 'ChatGPT',
+            conversions: 38,
+            by_type: { order: 19, signup: 13, newsletter: 6 },
+            revenue: money(912, 260),
+          },
+          {
+            assistant: 'Perplexity',
+            conversions: 17,
+            by_type: { order: 9, signup: 6, newsletter: 2 },
+            revenue: money(456, 152.5),
+          },
+          {
+            assistant: 'Gemini',
+            conversions: 6,
+            by_type: { order: 3, signup: 2, custom: 1 },
+            revenue: money(120),
+          },
+          {
+            assistant: 'Other',
+            conversions: 3,
+            by_type: { signup: 1, newsletter: 1, custom: 1 },
+            revenue: [],
+          },
+        ],
+        labels: [
+          { type: 'order', label: 'subscription', conversions: 18 },
+          { type: 'custom', label: 'gift-card', conversions: 2 },
+        ],
+        last_conversion_at: '2026-11-02T05:40:00.000Z',
+        total: LANDING.length,
+        offset: 0,
+        next_offset: null,
+        note: `All ${LANDING.length} landing pages with a conversion, most conversions first.`,
+        landing_pages: LANDING,
+      };
+    case 'get_ai_converting_pages':
+      return {
+        measured: false,
+        connected: false,
+        not_measured:
+          "Not measured: Google Analytics isn't connected for this brand, so key events and revenue from AI sessions aren't read.",
+        ...GA_STEP,
+      };
+    case 'get_ai_pipeline':
+      return {
+        measured: false,
+        connected: false,
+        state: 'not_connected',
+        not_measured: "Not measured: HubSpot's AI-sourced pipeline isn't set up for this brand.",
+        ...HUBSPOT_STEP,
+      };
+    case 'list_ai_visits':
+      return {
+        total: 612,
+        offset: 0,
+        next_offset: 3,
+        note: 'Showing 1–3 of 612 AI visits, newest first. Read the next page with offset 3, or say how many you judged.',
+        pageviews: 1041,
+        visits: [
+          {
+            at: '2026-11-02T05:31:00.000Z',
+            page: '/subscriptions',
+            assistant: 'ChatGPT',
+            source: 'chatgpt.com',
+            country: 'US',
+            pageviews: 3,
+          },
+          {
+            at: '2026-11-02T04:12:00.000Z',
+            page: '/gift-boxes',
+            assistant: 'Perplexity',
+            source: 'perplexity.ai',
+            country: 'US',
+            pageviews: 1,
+          },
+          {
+            at: '2026-11-01T22:48:00.000Z',
+            page: '/blog/best-coffee-subscriptions-2026',
+            assistant: 'ChatGPT',
+            source: 'chatgpt.com',
+            country: 'CA',
+            pageviews: 2,
+          },
+        ],
+      };
+    case 'get_prompt_conversions':
+      if (off) {
+        return {
+          label: PROMPT_ASSOCIATION_LABEL,
+          measured: false,
+          not_measured:
+            'Not measured: neither conversions from AI visits nor Google Analytics is set up, so no page is known to convert.',
+          next_steps: [CONVERSIONS_STEP, GA_STEP],
+        };
+      }
+      return {
+        label: PROMPT_ASSOCIATION_LABEL,
+        measured: true,
+        counted_as: 'conversions from AI visits (the tracking snippet)',
+        period: PERIOD,
+        how_to_read:
+          "A page's conversions show under every prompt whose answers cite it: never add them up across prompts, and never say a prompt brought them.",
+        total: 3,
+        offset: 0,
+        next_offset: null,
+        note: 'All 3 prompts whose answers cite a page that converted, most conversions on their cited pages first.',
+        prompts: [
+          {
+            prompt: PROMPTS[0].text,
+            answers_citing: 14,
+            assistants: ['ChatGPT', 'Perplexity'],
+            conversions_on_cited_pages: 47,
+            revenue_on_cited_pages: money(1104, 247.5),
+            cited_pages: [LANDING[0], LANDING[1]].map(({ page, conversions, revenue }) => ({
+              page,
+              conversions,
+              revenue,
+            })),
+          },
+          {
+            prompt: 'Best coffee gift box for a coffee lover',
+            answers_citing: 6,
+            assistants: ['ChatGPT'],
+            conversions_on_cited_pages: 11,
+            revenue_on_cited_pages: money(384, 165),
+            cited_pages: [{ page: LANDING[2].page, conversions: 11, revenue: LANDING[2].revenue }],
+          },
+          {
+            prompt: 'How long do whole coffee beans stay fresh?',
+            answers_citing: 9,
+            assistants: ['Gemini', 'Perplexity'],
+            conversions_on_cited_pages: 6,
+            revenue_on_cited_pages: [],
+            cited_pages: [{ page: LANDING[3].page, conversions: 6, revenue: [] }],
+          },
+        ],
+      };
+    default:
+      return undefined;
+  }
+}
+
 /**
- * What each read answers, by tool name. A read of the other brand answers
- * as that brand: a run that wanders shows it.
+ * What each read answers, by tool name, on a workspace (the default unless
+ * a scenario names one). A read of the other brand answers as that brand: a
+ * run that wanders shows it.
  */
 export function evalReadResult(
   tool: string,
@@ -1132,6 +1439,8 @@ export function evalReadResult(
       ? { brand: EVAL_OTHER_BRAND.name, visibility_pct: 23, citations: 61, data_as_of: EVAL_AS_OF }
       : { error: 'not_found' };
   }
+  const revenue = aiRevenueRead(tool, workspace);
+  if (revenue !== undefined) return revenue;
   switch (tool) {
     case 'list_brands':
       return {

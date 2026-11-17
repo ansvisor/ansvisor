@@ -198,6 +198,18 @@ describe('DemoBanner', () => {
     expect(band()).toBeNull();
   });
 
+  it('offers no switch while the workspace has no brand of its own yet (the sample brand chosen first)', async () => {
+    await render({ ownBrand: false });
+    expect(band()?.textContent).not.toContain('Switch');
+    expect([...band()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'See plans',
+    ]);
+    // With a plan on and setup put off: still no brand to switch to.
+    await render({ active: true, status: 'trialing', everSubscribed: true, ownBrand: false });
+    expect(band()?.textContent).toContain('Nothing here runs or uses AI.');
+    expect(bandButton()).toBeNull();
+  });
+
   it("shows nothing on the workspace's own brand, where the read-only band is", async () => {
     await render({ selected: 'own', status: 'canceled', everSubscribed: true });
     expect(band()).toBeNull();

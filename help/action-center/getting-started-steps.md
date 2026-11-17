@@ -4,8 +4,8 @@ route: /dashboard/action-center/today
 keywords: [getting started, finish setting up, setup steps, onboarding checklist, new brand, hide setup]
 synonyms: [first steps, setup list, where do I start, onboarding]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,13 +15,15 @@ sources: [docs/guides/action-center.mdx]
 
 ## The 7 steps
 
+- Add the AI Traffic snippet.
 - Set your KPIs.
 - Add at least 3 competitors.
 - Add at least 3 topics.
 - Add 3 prompts per topic.
 - Connect Google Search Console.
 - Connect Google Analytics.
-- Add the AI Traffic snippet.
+
+The snippet comes first, because AI Traffic shows no AI visits, conversions or revenue without it. It's done when its first visit arrives.
 
 Each step opens its page. Steps are checked from your data, such as three competitors saved or a first AI visit detected, so what you did before counts: an existing brand shows its real count on the first day.
 

@@ -438,9 +438,9 @@ describe('AgentForm: new agent', () => {
     await render();
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
     // The fourteen and /chatgpt-profile after /facts (ChatGPT Business Hub plan, PR 7), then the
-    // seven, /plan, the packs' three (/content-plan, /seasonal, /traffic) and Ads' two (Ads
-    // Phase 0 PR 15), each offered here while its flag is on.
-    expect(skills).toHaveLength(31);
+    // seven, /plan, the packs' three (/content-plan, /seasonal, /traffic), /ai-revenue and Ads'
+    // two (Ads Phase 0 PR 15), each offered here while its flag is on.
+    expect(skills).toHaveLength(32);
     expect(skills.slice(15, 22)).toEqual([
       'questions',
       'features',
@@ -469,7 +469,7 @@ describe('AgentForm: new agent', () => {
   it('leaves out a skill this install does not offer now, as a pick and as a follow-on', async () => {
     await render({ ...SETUP, offSkills: ['chatgpt-profile', 'earn-or-pay', 'ad-drafts'] });
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
-    expect(skills).toHaveLength(28);
+    expect(skills).toHaveLength(29);
     expect(skills).not.toContain('chatgpt-profile');
     expect(skills).not.toContain('ad-drafts');
     await click(one('[data-skill="wrongclaim"]')!);

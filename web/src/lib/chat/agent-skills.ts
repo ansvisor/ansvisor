@@ -45,6 +45,11 @@
  * key events Google Analytics counts when it is connected: Optional too, and
  * without it sign-ups are "Not measured".
  *
+ * Then /ai-revenue: which pages and assistants bring customers and revenue,
+ * from Ansvisor's conversions from AI visits, and from Google Analytics when
+ * it is connected: Optional, as for /traffic. What isn't set up is "Not
+ * measured", with the step that sets it up.
+ *
  * A workspace's own skills (CHAT-13, W3-06) are instructions only: an
  * agent may name one by its /command, and it needs no connection (skillOf
  * gives none). Whether it may run now is the workspace's to say
@@ -124,6 +129,7 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'content-plan', uses: [] },
   { id: 'seasonal', uses: [optional('google_search_console')] },
   { id: 'traffic', uses: [optional('google_analytics')] },
+  { id: 'ai-revenue', uses: [optional('google_analytics')] },
   // Ads Phase 0 PR 15, only with Ads on: Ansvisor's own Ads reads, and drafts saved in it.
   { id: 'earn-or-pay', uses: [] },
   { id: 'ad-drafts', uses: [] },

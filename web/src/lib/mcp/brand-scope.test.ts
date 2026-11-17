@@ -64,11 +64,14 @@ const { listSignalsPageFor, lookUpSignalsFor } = await import('./signal-page');
 const { exportActionFor } = await import('./action-export');
 const { getContentDraftPackageFor } = await import('./content-package');
 const { getContentPlanFor } = await import('./content-plan');
+const extra = await import('./visibility-extra-reads');
 const { explainChangeFor } = await import('./why');
 const { createMcpServer } = await import('./server');
 const { listActionsByCodeFor, listActionsPageFor } = await import('./action-center-reads');
 const today = await import('./today-reads');
 const { listAgentRunsFor } = await import('./agent-reads');
+const aiConversions = await import('./ai-conversions');
+const { getTrackingSetupFor } = await import('./tracking-setup');
 
 const ALL: McpAuthContext = {
   userId: 'user-1',
@@ -166,6 +169,20 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     ['listCompetitorsFor', () => data.listCompetitorsFor(SELECTED, 'b1')],
     ['listReportsFor', () => data.listReportsFor(SELECTED, 'b1')],
     ['getMentionsSummaryFor', () => mentions.getMentionsSummaryFor(SELECTED, { brandId: 'b1' })],
+    // What Visibility, Prompts, Competitors and AI Traffic show (visibility-extra-reads.ts).
+    ['getTopicsOverviewFor', () => extra.getTopicsOverviewFor(SELECTED, { brandId: 'b1' })],
+    ['getQueryFanoutsFor', () => extra.getQueryFanoutsFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getCompetitorHeadToHeadFor',
+      () => extra.getCompetitorHeadToHeadFor(SELECTED, { brandId: 'b1', competitor: 'Acme' }),
+    ],
+    ['getTopicCompetitorMapFor', () => extra.getTopicCompetitorMapFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getVisibilityOpportunitiesFor',
+      () => extra.getVisibilityOpportunitiesFor(SELECTED, { brandId: 'b1' }),
+    ],
+    ['getAiBotsFor', () => extra.getAiBotsFor(SELECTED, { brandId: 'b1' })],
+    ['getGscPagesFor', () => extra.getGscPagesFor(SELECTED, { brandId: 'b1' })],
     ['listContentDraftsFor', () => content.listContentDraftsFor(SELECTED, 'b1')],
     ['getContentPlanFor', () => getContentPlanFor(SELECTED, { brandId: 'b1', days: 30 })],
     [
@@ -200,6 +217,19 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     [
       'listMentionsFor (a page by offset)',
       () => mentions.listMentionsFor(SELECTED, { brandId: 'b1', offset: 50, limit: 50 }),
+    ],
+    // Customers and revenue from AI visits.
+    ['getTrackingSetupFor', () => getTrackingSetupFor(SELECTED, { brandId: 'b1' })],
+    ['getAiConversionsFor', () => aiConversions.getAiConversionsFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getAiConvertingPagesFor',
+      () => aiConversions.getAiConvertingPagesFor(SELECTED, { brandId: 'b1' }),
+    ],
+    ['getAiPipelineFor', () => aiConversions.getAiPipelineFor(SELECTED, { brandId: 'b1' })],
+    ['listAiVisitsFor', () => aiConversions.listAiVisitsFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getPromptConversionsFor',
+      () => aiConversions.getPromptConversionsFor(SELECTED, { brandId: 'b1' }),
     ],
     // Chat's lookups by code, id, words, domain or address (the owner's plan, 2026-11-16).
     [
