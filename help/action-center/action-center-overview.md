@@ -4,14 +4,14 @@ route: /dashboard/action-center
 keywords: [action center, actions, signals, kpis, history, prioritized work]
 synonyms: [to-do list, work list, what to do next, recommendations, home page]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-17
+last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Everyone lands on its **Today** tab when they sign in, whatever the plan. Open it from **Action Center**, first in the main menu, under Chat; its tabs are listed under it too. Everything in it is per brand: switch brands to see another brand's work.
+The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan. Everything in it is per brand: switch brands to see another brand's work.
 
 ## The tabs
 
