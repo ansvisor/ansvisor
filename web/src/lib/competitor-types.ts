@@ -42,6 +42,19 @@ export const COMPETITOR_TYPE_FILTER_WORDS =
   'Only competitors of this type: its name as the reads give it (any case), or "none" for ' +
   'the ones without a type.';
 
+/**
+ * A database without competitors.type yet (a web deployed ahead of 00542):
+ * Postgres' 42703 on a read. The reads then go on without types, so every
+ * competitor reads as untyped, as before.
+ */
+export function missingCompetitorTypeColumn(
+  error: { code?: string; message?: string } | null | undefined,
+): boolean {
+  return (
+    (error?.code === '42703' || error?.code === 'PGRST204') && /\btype\b/.test(error.message ?? '')
+  );
+}
+
 function isDefaultType(value: string): value is DefaultCompetitorType {
   return (DEFAULT_COMPETITOR_TYPES as readonly string[]).includes(value);
 }

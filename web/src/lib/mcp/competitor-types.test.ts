@@ -11,20 +11,31 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  * inner-joined on the key's organization.
  */
 
-type Result = { data: unknown; error: { message: string } | null };
+type Result = { data: unknown; error: { code?: string; message: string } | null };
 
 const db = vi.hoisted(() => ({
   tables: {} as Record<string, Result>,
   rpcs: {} as Record<string, Result>,
   filters: [] as unknown[][],
+  selects: [] as string[],
+  /** A database without 00542: a read of competitors.type fails as Postgres does. */
+  before00542: false,
 }));
 
 vi.mock('@/lib/supabase/admin', () => {
   const from = (table: string) => {
     const chain: Record<string, unknown> = {};
-    for (const name of ['select', 'order', 'limit', 'in']) chain[name] = () => chain;
+    let columns = '';
+    for (const name of ['order', 'limit', 'in']) chain[name] = () => chain;
+    chain.select = (c = '*') => ((columns = c), db.selects.push(`${table}: ${c}`), chain);
     chain.eq = (...args: unknown[]) => (db.filters.push([table, ...args]), chain);
-    const answer = () => db.tables[table] ?? { data: [], error: null };
+    const answer = () =>
+      db.before00542 && table === 'competitors' && /\btype\b/.test(columns)
+        ? {
+            data: null,
+            error: { code: '42703', message: 'column competitors.type does not exist' },
+          }
+        : (db.tables[table] ?? { data: [], error: null });
     chain.maybeSingle = async () => answer();
     chain.single = async () => answer();
     chain.then = (resolve: (r: Result) => void) => resolve(answer());
@@ -59,6 +70,8 @@ beforeEach(() => {
   };
   db.rpcs = {};
   db.filters = [];
+  db.selects = [];
+  db.before00542 = false;
 });
 
 describe('listCompetitorsFor', () => {
@@ -86,6 +99,39 @@ describe('listCompetitorsFor', () => {
   it("reads nothing of a brand that isn't the organization's", async () => {
     db.tables.brands = { data: null, error: null };
     expect(await listCompetitorsFor(auth, 'b9', { type: 'airline' })).toBeNull();
+  });
+
+  it('lists every competitor untyped on a database without 00542, still scoped', async () => {
+    db.before00542 = true;
+    db.tables.competitors = {
+      data: COMPETITORS.map(({ id, name, domain }) => ({ id, name, domain })),
+      error: null,
+    };
+    expect(await listCompetitorsFor(auth, 'b1')).toEqual([
+      { id: 'c1', name: 'Sky Air', domain: 'sky.example', type: null },
+      { id: 'c2', name: 'Trips', domain: 'trips.example', type: null },
+      { id: 'c3', name: 'Blue Ferry', domain: 'ferry.example', type: null },
+    ]);
+    expect(db.selects).toContain('competitors: id, name, domain, brands!inner(organization_id)');
+    expect(
+      db.filters.filter(([table, column]) => table === 'competitors' && column === 'brand_id'),
+    ).toEqual([
+      ['competitors', 'brand_id', 'b1'],
+      ['competitors', 'brand_id', 'b1'],
+    ]);
+    expect(
+      db.filters.filter(
+        ([table, column]) => table === 'competitors' && column === 'brands.organization_id',
+      ),
+    ).toHaveLength(2);
+    // No type yet, so a type filter finds none and "none" finds all.
+    expect(await listCompetitorsFor(auth, 'b1', { type: 'airline' })).toEqual([]);
+    expect((await listCompetitorsFor(auth, 'b1', { type: 'none' }))?.length).toBe(3);
+  });
+
+  it('still throws on any other database error', async () => {
+    db.tables.competitors = { data: null, error: { code: '57014', message: 'canceled' } };
+    await expect(listCompetitorsFor(auth, 'b1')).rejects.toThrow('canceled');
   });
 });
 
@@ -152,6 +198,17 @@ describe('getCompetitorComparisonFor', () => {
 
     const untyped = await getCompetitorComparisonFor(auth, { brandId: 'b1', type: 'none' });
     expect(untyped?.competitors.map((c) => c.competitor_id)).toEqual(['c3']);
+  });
+
+  it('reads every competitor untyped on a database without 00542', async () => {
+    db.before00542 = true;
+    const result = await getCompetitorComparisonFor(auth, { brandId: 'b1' });
+    expect(result?.competitors.map((c) => [c.competitor_id, c.type])).toEqual([
+      ['c1', null],
+      ['c2', null],
+      ['c3', null],
+    ]);
+    expect(result?.share_of_voice.total_competitor_mentions).toBe(80);
   });
 });
 
