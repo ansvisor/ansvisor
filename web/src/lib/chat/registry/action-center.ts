@@ -13,7 +13,7 @@ export const ACTION_CENTER_READS = [
     class: 'read',
     area: 'action_center',
     description:
-      'The brand\'s KPIs in the Action Center, as its KPIs page shows them over the period: each one\'s key, value, change against the days before, target, progress and status (on track, at risk, off track). For "are we hitting our goals" questions.',
+      'The brand\'s KPIs in the Action Center, as its KPIs page shows them over the period: each one\'s key, value, change against the days before, target, progress and status (on track, at risk, off track). For "are we hitting our goals" questions. A period of at most 365 days: a longer one is read over its last 365, and the note says so.',
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },

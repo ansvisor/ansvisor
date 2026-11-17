@@ -4,6 +4,7 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 import { getKpiSnapshots } from '@/lib/actions/kpis';
 import { getGettingStarted } from '@/lib/actions/getting-started';
 import { getTrackingWindow } from '@/lib/actions/tracking';
+import { addDays } from '@/lib/insights-windows';
 import { actionCode } from '@/lib/action-center/action-ref';
 import { askedCodes, lookUpCodes, type ActionCodeLookup } from '@/lib/action-center/action-codes';
 import { actionTexts } from '@/lib/action-center/display';
@@ -32,9 +33,17 @@ const kpiDay = (value: string | undefined) => {
 };
 
 /**
+ * The longest period the KPIs read, in days (the maintainer's review of
+ * 2026-11-17): a year. A longer one keeps its last KPI_PERIOD_MAX_DAYS days,
+ * as the other reads keep the end of a period too long for them (the Why
+ * read's 92 days, Prompts' 90), and the result's note says so.
+ */
+export const KPI_PERIOD_MAX_DAYS = 365;
+
+/**
  * The brand's KPIs, as the KPIs page reads them: over the period's whole
- * UTC days when both ends are given (the page's date range), else each
- * KPI over its own timeframe.
+ * UTC days when both ends are given (the page's date range; at most
+ * KPI_PERIOD_MAX_DAYS, its last ones), else each KPI over its own timeframe.
  */
 export async function getActionCenterKpisFor(
   auth: McpAuthContext,
@@ -43,7 +52,11 @@ export async function getActionCenterKpisFor(
   if (!(await brandAllowed(auth, params.brandId))) return null;
   const dayFrom = kpiDay(params.dateFrom);
   const dayTo = kpiDay(params.dateTo);
-  const period = dayFrom && dayTo && dayFrom <= dayTo ? { dayFrom, dayTo } : undefined;
+  const asked = dayFrom && dayTo && dayFrom <= dayTo ? { dayFrom, dayTo } : undefined;
+  // A period over a year (2015 to today): its last KPI_PERIOD_MAX_DAYS days.
+  const earliest = asked ? addDays(asked.dayTo, -(KPI_PERIOD_MAX_DAYS - 1)) : null;
+  const capped = !!asked && !!earliest && asked.dayFrom < earliest;
+  const period = asked && capped ? { dayFrom: earliest!, dayTo: asked.dayTo } : asked;
   const [snapshots, window] = await asService(() =>
     Promise.all([getKpiSnapshots(params.brandId, period), getTrackingWindow(params.brandId)]),
   );
@@ -65,6 +78,11 @@ export async function getActionCenterKpisFor(
     // The KPIs read the brand's tracked answers: as of its last completed run.
     data_as_of: window.lastRunAt ?? null,
     ...(period ? { period: { from: period.dayFrom, to: period.dayTo } } : {}),
+    ...(capped && asked && period
+      ? {
+          note: `The period asked, ${asked.dayFrom} to ${asked.dayTo}, is longer than ${KPI_PERIOD_MAX_DAYS} days, the most the KPIs read: they are over its last ${KPI_PERIOD_MAX_DAYS} days, ${period.dayFrom} to ${period.dayTo}.`,
+        }
+      : {}),
   };
 }
 
