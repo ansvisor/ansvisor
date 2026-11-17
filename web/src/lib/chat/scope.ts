@@ -12,7 +12,7 @@ import {
   runDaysWindow,
   whyPeriodsOf,
 } from './page-periods';
-import { pageFilterInputs, type PageScope } from './page-scope';
+import { AS_LISTED, pageFilterInputs, type PageScope } from './page-scope';
 import { samePage } from './page-route';
 import { FALLBACK_RANGE, rangeDaysBack, rangeWindow, type ChatRange } from './range';
 import type { ChatTool } from './registry/define-tool';
@@ -93,9 +93,15 @@ export const NAMED_ROWS: Readonly<Record<string, readonly string[]>> = {
   get_reports: ['ids', 'search'],
 };
 
-/** Whether a read's input names its rows (NAMED_ROWS): a list or words in one of its fields. */
+/**
+ * Whether a read's input names its rows (NAMED_ROWS): a list or words in one
+ * of its fields. A search as listed (page-scope.ts AS_LISTED, the page's
+ * search) names none: it reads the list, its page and limit as the list's.
+ */
 export function namesRows(toolName: string, input: Record<string, unknown>): boolean {
+  const listed = input[AS_LISTED] === true;
   return (NAMED_ROWS[toolName] ?? []).some((field) => {
+    if (field === 'search' && listed) return false;
     const value = input[field];
     return Array.isArray(value)
       ? value.length > 0

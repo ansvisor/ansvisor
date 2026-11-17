@@ -520,6 +520,10 @@ describe('rows', () => {
 
   it('reads blank words or an empty list as no lookup', () => {
     expect(namesRows('list_prompts', { search: '  ' })).toBe(false);
+    // The page's search, as listed (page-scope.ts AS_LISTED): the list's page, not a lookup.
+    expect(namesRows('list_prompts', { search: 'decaf', as_listed: true })).toBe(false);
+    expect(namesRows('list_content_opportunities', { search: 'x', as_listed: true })).toBe(false);
+    expect(namesRows('list_prompts', { ids: [BRAND], search: 'x', as_listed: true })).toBe(true);
     expect(namesRows('list_signals', { codes: [] })).toBe(false);
     expect(namesRows('list_signals', { codes: ['S-07'] })).toBe(true);
     expect(namesRows('list_topics', { search: 'x' })).toBe(false);
