@@ -219,9 +219,7 @@ describe('answeredSpanMs', () => {
   it('runs from the lower bound to the upper one, a bare upper day to its end', () => {
     expect(answeredSpanMs('2026-11-11T09:00:00Z', '2026-11-11T15:00:00Z', NOW)).toBe(6 * HOUR);
     expect(answeredSpanMs('2026-11-10T12:00:00Z', '2026-11-10', NOW)).toBe(12 * HOUR - 1);
-    expect(answeredSpanMs('2026-11-04T15:30:00Z', '2026-11-11T15:30:00Z', NOW)).toBe(
-      7 * 24 * HOUR,
-    );
+    expect(answeredSpanMs('2026-11-04T15:30:00Z', '2026-11-11T15:30:00Z', NOW)).toBe(7 * 24 * HOUR);
   });
 
   it('stops at now: no answer is later', () => {

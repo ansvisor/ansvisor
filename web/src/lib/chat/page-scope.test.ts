@@ -130,7 +130,11 @@ describe("each page's filters", () => {
       inputSchema: z.object({ brand_id: z.string(), status: z.string().optional() }),
     };
     const status: [string, string, string][] = [['status', 'Paused', 'paused']];
-    for (const route of ['/dashboard/prompts', '/dashboard/prompts/', '/dashboard/prompts/tracked']) {
+    for (const route of [
+      '/dashboard/prompts',
+      '/dashboard/prompts/',
+      '/dashboard/prompts/tracked',
+    ]) {
       expect(
         pageFilterInputs(ownList, { brand_id: BRAND }, pageOf(route, status), 'Which ones?'),
         route,

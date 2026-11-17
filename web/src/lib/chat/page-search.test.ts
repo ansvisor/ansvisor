@@ -91,16 +91,80 @@ interface Opp {
 }
 
 const OPPS: Opp[] = [
-  { n: 1, title: 'Espresso grinder guide', status: 'new', impact: 'high', type: 'owned', daysAgo: 3, score: 90 },
-  { n: 2, title: 'The espresso grinder FAQ', status: 'new', impact: 'high', type: 'owned', daysAgo: 1, score: 40 },
-  { n: 3, title: 'Grinder for espresso at home', status: 'new', impact: 'high', type: 'owned', daysAgo: 2, score: 70 },
+  {
+    n: 1,
+    title: 'Espresso grinder guide',
+    status: 'new',
+    impact: 'high',
+    type: 'owned',
+    daysAgo: 3,
+    score: 90,
+  },
+  {
+    n: 2,
+    title: 'The espresso grinder FAQ',
+    status: 'new',
+    impact: 'high',
+    type: 'owned',
+    daysAgo: 1,
+    score: 40,
+  },
+  {
+    n: 3,
+    title: 'Grinder for espresso at home',
+    status: 'new',
+    impact: 'high',
+    type: 'owned',
+    daysAgo: 2,
+    score: 70,
+  },
   // Each misses one of the page's filters, or is archived: not on the page.
-  { n: 4, title: 'Espresso grinder reviews', status: 'reviewed', impact: 'high', type: 'owned', daysAgo: 0, score: 99 },
-  { n: 5, title: 'Espresso grinder deals', status: 'new', impact: 'low', type: 'owned', daysAgo: 0, score: 98 },
-  { n: 6, title: 'Espresso grinder outreach', status: 'new', impact: 'high', type: 'earned', daysAgo: 0, score: 97 },
-  { n: 7, title: 'Espresso grinder backlog', status: 'archived', impact: 'high', type: 'owned', daysAgo: 0, score: 96 },
+  {
+    n: 4,
+    title: 'Espresso grinder reviews',
+    status: 'reviewed',
+    impact: 'high',
+    type: 'owned',
+    daysAgo: 0,
+    score: 99,
+  },
+  {
+    n: 5,
+    title: 'Espresso grinder deals',
+    status: 'new',
+    impact: 'low',
+    type: 'owned',
+    daysAgo: 0,
+    score: 98,
+  },
+  {
+    n: 6,
+    title: 'Espresso grinder outreach',
+    status: 'new',
+    impact: 'high',
+    type: 'earned',
+    daysAgo: 0,
+    score: 97,
+  },
+  {
+    n: 7,
+    title: 'Espresso grinder backlog',
+    status: 'archived',
+    impact: 'high',
+    type: 'owned',
+    daysAgo: 0,
+    score: 96,
+  },
   // Not the search's words.
-  { n: 8, title: 'Pour-over kettles', status: 'new', impact: 'high', type: 'owned', daysAgo: 0, score: 95 },
+  {
+    n: 8,
+    title: 'Pour-over kettles',
+    status: 'new',
+    impact: 'high',
+    type: 'owned',
+    daysAgo: 0,
+    score: 95,
+  },
 ];
 
 const opportunityRows = () =>
@@ -313,7 +377,7 @@ describe("the order line's word on the page's search", () => {
     );
   });
 
-  it("leaves out a filter's \"all\" only where the app fills the filter", () => {
+  it('leaves out a filter\'s "all" only where the app fills the filter', () => {
     const page = pageOf('/dashboard/action-center/actions', [['status', 'completed']]);
     expect(
       pageOrderLine('/dashboard/action-center/actions', ['status'], null, takesOn(page, 'Hi')),
