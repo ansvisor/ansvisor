@@ -74,6 +74,8 @@ const productVisibility = await import('./product-visibility');
 const { getPromptLocationsFor } = await import('./prompt-locations');
 const today = await import('./today-reads');
 const { listAgentRunsFor } = await import('./agent-reads');
+const aiConversions = await import('./ai-conversions');
+const { getTrackingSetupFor } = await import('./tracking-setup');
 
 const ALL: McpAuthContext = {
   userId: 'user-1',
@@ -236,6 +238,19 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     [
       'listMentionsFor (a page by offset)',
       () => mentions.listMentionsFor(SELECTED, { brandId: 'b1', offset: 50, limit: 50 }),
+    ],
+    // Customers and revenue from AI visits.
+    ['getTrackingSetupFor', () => getTrackingSetupFor(SELECTED, { brandId: 'b1' })],
+    ['getAiConversionsFor', () => aiConversions.getAiConversionsFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getAiConvertingPagesFor',
+      () => aiConversions.getAiConvertingPagesFor(SELECTED, { brandId: 'b1' }),
+    ],
+    ['getAiPipelineFor', () => aiConversions.getAiPipelineFor(SELECTED, { brandId: 'b1' })],
+    ['listAiVisitsFor', () => aiConversions.listAiVisitsFor(SELECTED, { brandId: 'b1' })],
+    [
+      'getPromptConversionsFor',
+      () => aiConversions.getPromptConversionsFor(SELECTED, { brandId: 'b1' }),
     ],
     // Chat's lookups by code, id, words, domain or address (the owner's plan, 2026-11-16).
     [

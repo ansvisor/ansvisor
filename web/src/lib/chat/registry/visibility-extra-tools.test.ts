@@ -231,8 +231,8 @@ describe("the server's scope on them", () => {
       kind: 'read',
       input: { date_from: '2026-10-18', date_to: '2026-11-16', model: 'chatgpt-web' },
     });
-    // The Topics tab and AI Referral Traffic cut a preset as their pages do: the last
-    // 7 × 24 hours to today (#2462's page periods).
+    // Topics (on Prompts) and AI Traffic cut a preset as the last N × 24 hours, as their pages
+    // do (page-periods.ts).
     for (const name of ['get_topics_overview', 'get_ai_bots', 'get_gsc_pages']) {
       expect(
         await scopeRead(chatTool(name)!, { brand_id: BRAND }, facts({ range: '7d' })),

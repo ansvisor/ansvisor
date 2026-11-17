@@ -940,21 +940,24 @@ describe('Action Center › Today', () => {
     );
     expect(text('header')).toContain('Since yesterday: no big changes');
   });
-  it('lists the next 2 set-up steps with how long each takes, and all 7 on request', async () => {
+  it('lists the next 2 set-up steps, the snippet first, with how long each takes, and all 7 on request', async () => {
     await draw();
     const part = container.querySelector('[data-today-part="setup"]')!;
     expect(part.textContent).toContain('Finish setting up5 of 7');
     const steps = () => [...part.querySelectorAll('[data-setup-step]')].map((li) => li.textContent);
     expect(steps()).toEqual([
-      'Connect Google Search Console2 min',
       'Add the AI Traffic snippet5 min',
+      'Connect Google Search Console2 min',
     ]);
+    expect(part.querySelector('[data-setup-step="snippet"] a')?.getAttribute('href')).toBe(
+      '/dashboard/traffic',
+    );
     expect(part.querySelector('[data-setup-step="gsc"] a')?.getAttribute('href')).toBe(
       '/dashboard/settings?tab=integrations',
     );
     await act(async () => button('Show all steps')?.click());
     expect(steps()).toHaveLength(7);
-    expect(steps()[5]).toBe('Connect Google AnalyticsSkipped');
+    expect(steps()[6]).toBe('Connect Google AnalyticsSkipped');
   });
 
   it('hides the steps for the brand when an admin or manager hides them', async () => {

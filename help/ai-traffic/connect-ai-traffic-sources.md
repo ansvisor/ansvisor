@@ -2,10 +2,10 @@
 title: Connect AI traffic data sources
 route: /dashboard/traffic
 keywords: [tracking snippet, connect google analytics, connect search console, data sources, install snippet, check again, tracking code not detected]
-synonyms: [set up ai traffic, add tracking code, link analytics, ga4, gsc]
+synonyms: [set up ai traffic, add tracking code, link analytics, ga4, gsc, send the snippet to my developer]
 plan: all
-updated: 2026-11-08
-last_checked: 2026-11-08
+updated: 2026-11-16
+last_checked: 2026-11-16
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -24,7 +24,9 @@ The **Data sources** strip at the top of **AI Traffic Analytics** shows the four
 
 Until the snippet is seen on your site, the page opens with **Tracking code not detected on** your domain, the steps to add it and the snippet itself. **Install** in the Data sources strip opens it too; once the snippet is seen, the button reads **Code**. The page fills in your own address and tracking code, so copy it rather than typing it.
 
-Add it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page.
+Add it to the head of every page you want to track, your 404 page included, so **Broken AI links** can see visitors who land on a missing page. **Email this to my developer** opens your email app with the snippet and steps; **Copy message** copies the same text.
+
+On the cloud, the same snippet is offered at the end of brand setup, on **Connect your site**. Until its first visit, it's also the first step of **Finish setting up** on the Action Center's **Today** tab.
 
 ## Check that the snippet works
 
