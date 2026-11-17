@@ -345,6 +345,66 @@ describe('RunAnswer', () => {
     expect(container.querySelector('[data-slot="run-steps-line"]')).toBeNull();
   });
 
+  it('leaves out a count of 0: fact checks alone say "Checked facts"', async () => {
+    const check = (n: number, label: string): ChatStep => ({
+      n,
+      kind: 'check',
+      label,
+      status: 'done',
+    });
+    const checks = [check(1, 'Read your choices in the editor'), check(2, 'Checked facts')];
+    // Every step done a check: no sources, no pages.
+    await render({ run: run({ status: 'done', steps: checks }) });
+    expect(stepsLine()!.textContent).toBe('Checked facts');
+    await render({ run: run({ status: 'waiting', steps: checks }) });
+    expect(stepsLine()!.textContent).toBe('Waiting for your OK · Checked facts');
+    await render({
+      run: run({
+        steps: [
+          ...checks,
+          { n: 3, kind: 'read', label: 'Read Prompts', status: 'error', detail: 'Took too long' },
+        ],
+      }),
+    });
+    expect(stepsLine()!.textContent).toBe('Checked facts · 1 step failed');
+    // Pages but no sources, sources but no pages: only the count that isn't 0.
+    const opened = (n: number, page: string): ChatStep => ({
+      n,
+      kind: 'open_page',
+      label: `Opened ${page}`,
+      status: 'done',
+    });
+    await render({
+      run: run({
+        status: 'done',
+        steps: [
+          opened(1, 'ansvisor.com/a'),
+          opened(2, 'ansvisor.com/b'),
+          check(3, 'Checked facts'),
+        ],
+      }),
+    });
+    expect(stepsLine()!.textContent).toBe('Opened 2 pages · checked facts');
+    const read = (n: number, source: string): ChatStep => ({
+      n,
+      kind: 'read',
+      label: `Read ${source}`,
+      status: 'done',
+      rowCount: 0,
+    });
+    await render({
+      run: run({
+        status: 'done',
+        steps: [read(1, 'Citations'), read(2, 'Mentions'), check(3, 'Checked facts')],
+      }),
+    });
+    expect(stepsLine()!.textContent).toBe('Read 2 sources · checked facts');
+    await render({
+      run: run({ status: 'done', steps: [read(1, 'Citations'), read(2, 'Mentions')] }),
+    });
+    expect(stepsLine()!.textContent).toBe('Read 2 sources');
+  });
+
   it('shows each step once: no steps header or list beside the line', async () => {
     await render({ run: run({ steps, text: 'Two pages lost most of it.' }) });
     await openList();

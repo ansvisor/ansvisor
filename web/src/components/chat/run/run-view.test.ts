@@ -153,6 +153,15 @@ describe('stepsSummary', () => {
     ).toEqual({ kind: 'reads', sources: 2, pages: 0, checked: false });
   });
 
+  it('counts no source and no page when every step done is a check, and names the check', () => {
+    expect(
+      stepsSummary([
+        step({ n: 1, kind: 'check', label: 'Read your choices in the editor' }),
+        check,
+      ]),
+    ).toEqual({ kind: 'reads', sources: 0, pages: 0, checked: true });
+  });
+
   it('says one step, or one source read twice, in its own words', () => {
     const one = read(1, 'Read Citations');
     expect(stepsSummary([one])).toEqual({ kind: 'one', step: one, checked: false });

@@ -168,8 +168,9 @@ export function RunStepsLine({
 }
 
 /** The line's words for the steps done. */
-function summaryWords(summary: StepsSummary, t: T): string {
+function summaryWords(summary: StepsSummary, t: T): string | null {
   if (summary.kind === 'steps') return t('steps', { count: summary.count });
+  // A count of 0 is left out: fact checks alone say "Checked facts", never "Opened 0 pages".
   const words =
     summary.kind === 'one'
       ? stepWords(summary.step, t)
@@ -177,7 +178,10 @@ function summaryWords(summary: StepsSummary, t: T): string {
         ? t('sourcesAndPages', { sources: summary.sources, pages: summary.pages })
         : summary.sources > 0
           ? t('sources', { count: summary.sources })
-          : t('pages', { count: summary.pages });
+          : summary.pages > 0
+            ? t('pages', { count: summary.pages })
+            : null;
+  if (words === null) return summary.checked ? t('checkedFacts') : null;
   return summary.checked ? t('checked', { words }) : words;
 }
 
