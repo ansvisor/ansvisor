@@ -1559,7 +1559,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-16",
+      "updated": "2026-11-17",
       "sections": [
         {
           "heading": null,
@@ -1652,6 +1652,10 @@
         {
           "heading": "A Site Audit in Chat",
           "text": "When Chat reads one of your Site Audits, a card under the answer shows it: the page, its score on the same gauge as the audit report, and the day it ran. Once the page has three audits, the score shows its range, such as **64 ± 2**, with a line giving the lowest and highest score of its last five audits. When the page was audited before, the card shows the change since then, such as **+3 since Oct 21**. A partial audit says the AI checks couldn't run, and shows no range or change. **Open report** opens the audit's full report. The card's numbers come from the audit itself, not from Chat's answer. One answer shows up to three audits."
+        },
+        {
+          "heading": "More of your data Chat reads",
+          "text": "Chat also reads, on any page: the **History** scorecard of what each kind of action did; tasks waiting for review (Admins and Managers); Product Visibility's products, shelves, readiness and what AI says about a product, and your catalog's sources; the **Content** plan, one opportunity in full, and a draft's live page results and sources; a saved report's content; prompts across locations and your prompt usage; topic suggestions; and how many Site Audits are left this month. Ask about them as the page shows them, such as \"Which kinds of actions worked?\" or \"What does the October report say?\""
         },
         {
           "heading": "Where a page opens",
