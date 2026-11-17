@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import {
   classifyDomain,
@@ -465,7 +466,9 @@ export async function getCitationGaps(
   brandId: string,
   filters: CitationsFilters,
 ): Promise<CitationGaps> {
-  const supabase = await createClient();
+  // dbClient: the person's own client; Chat's read runs it with the service role
+  // (asService), which the gap functions let through since 00541.
+  const supabase = await dbClient();
 
   const [{ data: brandDomainRows }, { data: competitorRows }, window] = await Promise.all([
     supabase.from('brand_domains').select('domain').eq('brand_id', brandId),

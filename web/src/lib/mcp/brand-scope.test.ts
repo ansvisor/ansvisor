@@ -181,6 +181,16 @@ describe("a Selected-brands key on a brand that wasn't shared", () => {
     ],
     ['getAiBotsFor', () => extra.getAiBotsFor(SELECTED, { brandId: 'b1' })],
     ['getGscPagesFor', () => extra.getGscPagesFor(SELECTED, { brandId: 'b1' })],
+    // Citations › Gaps, on functions that let the service role through (00541).
+    [
+      'getCitationGapsFor',
+      () =>
+        extra.getCitationGapsFor(SELECTED, {
+          brandId: 'b1',
+          topicId: 't1',
+          competitorId: 'c1',
+        }),
+    ],
     ['listContentDraftsFor', () => content.listContentDraftsFor(SELECTED, 'b1')],
     ['getContentPlanFor', () => getContentPlanFor(SELECTED, { brandId: 'b1', days: 30 })],
     [
