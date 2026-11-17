@@ -111,4 +111,19 @@ describe('BrandCard', () => {
     await act(async () => link.click());
     expect(useBrandStore.getState().activeBrandId).toBe('brand-2');
   });
+
+  it('picks the card’s brand on a middle click too, for the new tab', async () => {
+    await render();
+    const link = container.querySelector<HTMLAnchorElement>(
+      'a[href="/dashboard/prompts/tracked"]',
+    )!;
+    await act(async () => {
+      link.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 2 }));
+    });
+    expect(useBrandStore.getState().activeBrandId).toBe('brand-1');
+    await act(async () => {
+      link.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    });
+    expect(useBrandStore.getState().activeBrandId).toBe('brand-2');
+  });
 });

@@ -8,10 +8,7 @@ import { BrandAvatar } from '@/components/brand-avatar';
 import { Badge } from '@/components/ui/badge';
 import { ChevronRight, Globe, MessageSquareText, Plus, Settings, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { sectionFor } from '@/lib/prompts-routes';
-
-/** Tracked Prompts, where Add prompt is. */
-const TRACKED_PROMPTS_HREF = sectionFor('all', 'tracked').href;
+import { pickOnOpen, TRACKED_PROMPTS_HREF } from '@/lib/brand-prompts-link';
 
 interface BrandCardProps {
   brand: Brand;
@@ -117,16 +114,18 @@ interface NavRowProps {
 }
 
 function NavRow({ icon: Icon, label, href, addHref, addLabel, onSelect }: NavRowProps) {
+  // The card's brand is picked as a row opens, in a new tab too.
+  const pick = pickOnOpen(onSelect);
   return (
     <div className="flex items-center border-t text-sm first:border-t-0 hover:bg-muted/50">
-      <Link href={href} onClick={onSelect} className="flex flex-1 items-center gap-3 px-4 py-2.5">
+      <Link href={href} {...pick} className="flex flex-1 items-center gap-3 px-4 py-2.5">
         <Icon className="h-4 w-4 text-muted-foreground" />
         <span className="font-medium">{label}</span>
       </Link>
       {addHref && addLabel ? (
         <Link
           href={addHref}
-          onClick={onSelect}
+          {...pick}
           aria-label={addLabel}
           title={addLabel}
           className="flex items-center px-4 py-2.5 text-muted-foreground hover:text-foreground"
