@@ -4051,8 +4051,9 @@ function AllPromptsTab({
   return (
     <Card data-tour="positions">
       {/* The filters first, then what they show: the count, the status
-          filter's note and, at the right, the prompts not analyzed yet. */}
-      <CardHeader className="gap-2 pb-3">
+          filter's note and, at the right, the prompts missing volume and
+          competition. The line sits apart from the filters, with the table. */}
+      <CardHeader className="gap-2 pb-2">
         <div className="flex flex-wrap items-center gap-2" data-filter-row>
           <div
             role="group"
@@ -4164,7 +4165,7 @@ function AllPromptsTab({
             />
           )}
         </div>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
             <CardTitle className="text-sm font-medium">
               {statusFilter === 'waiting'

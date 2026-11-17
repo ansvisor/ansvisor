@@ -16,7 +16,8 @@ import type { FirstRun } from '@/hooks/use-first-run';
  * side panel hears of a location only on the tab that reads one. The header
  * (the owner's simpler one, 2026-11-17): Add prompt and a "…" menu, the
  * Tracked | Suggestions switch beside the date range, Location in the
- * table's filter row and a quiet line for the prompts not analyzed yet.
+ * table's filter row and a quiet line for the prompts missing volume and
+ * competition, a little apart from the filters.
  */
 
 const actions = vi.hoisted(() => ({
@@ -193,7 +194,7 @@ const button = (name: string) =>
     (b) => b.textContent?.trim() === name,
   );
 const dialog = () => document.querySelector('[role="dialog"]');
-// The quiet line above the table for the prompts not analyzed yet, and its Analyze.
+// The quiet line above the table for the prompts missing volume and competition, and its Analyze.
 const notAnalyzed = () => container.querySelector<HTMLElement>('[data-not-analyzed]');
 const analyzeButton = () => notAnalyzed()?.querySelector<HTMLButtonElement>('button') ?? null;
 
@@ -897,7 +898,7 @@ describe('the volume quota without an active plan', () => {
   it('offers Analyze on Tracked, not "limit reached", and it opens the upgrade dialog', async () => {
     actions.getPromptsPageData.mockResolvedValue(pageData(noPlan));
     await render(true);
-    expect(notAnalyzed()?.textContent).toContain('1 prompt not analyzed yet');
+    expect(notAnalyzed()?.textContent).toContain('Volume and competition missing for 1 prompt');
     expect(notAnalyzed()?.getAttribute('title')).toContain('Run volume analysis to fill in');
     expect(container.textContent).not.toContain('limit reached');
     const analyze = analyzeButton()!;
@@ -1210,7 +1211,7 @@ describe('the Tracked | Suggestions switch', () => {
   });
 });
 
-describe('the prompts not analyzed yet', () => {
+describe('the prompts missing volume and competition', () => {
   const paused: Prompt = { ...prompt, id: 'p9', text: 'Paused one?', isActive: false };
   const second: Prompt = { ...prompt, id: 'p2', text: 'Best espresso beans?' };
   const analyzed = {
@@ -1242,7 +1243,7 @@ describe('the prompts not analyzed yet', () => {
     withPrompts([prompt, paused]);
     await render(false);
     const line = notAnalyzed()!;
-    expect(line.textContent).toBe('1 prompt not analyzed yet·Analyze');
+    expect(line.textContent).toBe('Volume and competition missing for 1 prompt·Analyze');
     expect(line.closest('[data-tour="positions"]')).not.toBeNull();
     const filters = container.querySelector('[data-filter-row]')!;
     expect(filters.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1250,7 +1251,9 @@ describe('the prompts not analyzed yet', () => {
     expect(line.closest('[data-notices]')?.parentElement?.textContent).toContain(
       'Tracked prompts (1)',
     );
-    expect(analyzeButton()?.getAttribute('aria-label')).toBe('Analyze 1 prompt');
+    expect(analyzeButton()?.getAttribute('aria-label')).toBe('Analyze volume and competition');
+    // Not the tracking: the prompts are analyzed, only their volume is missing.
+    expect(line.textContent).not.toContain('not analyzed');
     // No banner any more.
     expect(container.textContent).not.toContain("haven't been analyzed");
   });
@@ -1258,8 +1261,8 @@ describe('the prompts not analyzed yet', () => {
   it('counts in the plural', async () => {
     withPrompts([prompt, second]);
     await render(false);
-    expect(notAnalyzed()?.textContent).toBe('2 prompts not analyzed yet·Analyze');
-    expect(analyzeButton()?.getAttribute('aria-label')).toBe('Analyze 2 prompts');
+    expect(notAnalyzed()?.textContent).toBe('Volume and competition missing for 2 prompts·Analyze');
+    expect(analyzeButton()?.getAttribute('aria-label')).toBe('Analyze volume and competition');
   });
 
   it('is hidden once every active prompt has a volume', async () => {
@@ -1280,21 +1283,25 @@ describe('the prompts not analyzed yet', () => {
     volumes.startPromptVolumeAnalysis.mockReturnValue(new Promise(() => {}));
     await render(false);
     await act(async () => analyzeButton()!.click());
-    expect(notAnalyzed()?.textContent).toBe('1 prompt not analyzed yet·Analyzing…');
+    expect(notAnalyzed()?.textContent).toBe(
+      'Volume and competition missing for 1 prompt·Analyzing…',
+    );
     expect(analyzeButton()).toBeNull();
   });
 
   it('offers no Analyze to a member, or once the month’s analyses are used up', async () => {
     role.canManage = false;
     await render(false);
-    expect(notAnalyzed()?.textContent).toBe('1 prompt not analyzed yet');
+    expect(notAnalyzed()?.textContent).toBe('Volume and competition missing for 1 prompt');
 
     act(() => root.unmount());
     root = createRoot(container);
     role.canManage = true;
     withPrompts([prompt], { quota: { used: 10, limit: 10, remaining: 0 } });
     await render(false);
-    expect(notAnalyzed()?.textContent).toBe('1 prompt not analyzed yet·Monthly limit reached');
+    expect(notAnalyzed()?.textContent).toBe(
+      'Volume and competition missing for 1 prompt·Monthly limit reached',
+    );
     expect(notAnalyzed()?.getAttribute('title')).toContain('upgrade your plan');
     expect(analyzeButton()).toBeNull();
   });
