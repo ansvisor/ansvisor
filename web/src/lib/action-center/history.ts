@@ -262,6 +262,42 @@ export function compareHistory(sort: HistorySort) {
   };
 }
 
+/** History's filters, as its bar sets them: 'all' or left out lets every row through. */
+export interface HistoryFilters {
+  status?: ActionStatus | 'all';
+  /** The bar's Type: an action's category. */
+  type?: ActionCategory | 'all';
+  priority?: PriorityLevel | 'all';
+  source?: SignalSource | 'all';
+  search?: string;
+}
+
+/**
+ * The rows History lists for its filters, in its order for `sort`: the
+ * page's own narrowing, shared with Chat's read of it (get_action_history).
+ * `searchText` is what a row renders (its title, description and code),
+ * since titles are composed from i18n templates and never stored as text.
+ */
+export function filterHistory(
+  items: readonly ActionHistoryItem[],
+  filters: HistoryFilters,
+  sort: HistorySort,
+  searchText: (item: ActionHistoryItem) => string,
+): ActionHistoryItem[] {
+  const needle = (filters.search ?? '').trim().toLowerCase();
+  const on = <T extends string>(value: T | 'all' | undefined): value is T =>
+    value !== undefined && value !== 'all';
+  return items
+    .filter((item) => {
+      if (on(filters.status) && item.status !== filters.status) return false;
+      if (on(filters.type) && item.type !== filters.type) return false;
+      if (on(filters.priority) && item.priorityLevel !== filters.priority) return false;
+      if (on(filters.source) && !item.sources.includes(filters.source)) return false;
+      return !needle || searchText(item).toLowerCase().includes(needle);
+    })
+    .sort(compareHistory(sort));
+}
+
 const pct = (part: number, total: number) => (total === 0 ? 0 : Math.round((part / total) * 100));
 
 export function summarize(items: ActionHistoryItem[]): HistorySummary {

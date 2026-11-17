@@ -454,6 +454,39 @@ function citationsRead(input: Record<string, unknown>) {
 }
 
 /**
+ * Today's focus, as get_today gives it: its first card is not the Actions
+ * list's first (EVAL_ACTIONS, highest Priority Score first), so "what do I do
+ * first?" on Today is answered from Today, by that card's title and code.
+ */
+export const EVAL_TODAY_FIRST = {
+  ref: 'AC-41',
+  title: 'Win back citations on crm pricing comparison',
+};
+export const EVAL_TODAY = {
+  day: 'normal',
+  focus: {
+    title: "Today's focus",
+    cards: [
+      {
+        position: 1,
+        ...EVAL_TODAY_FIRST,
+        why: 'Perplexity stopped citing you on this prompt last week.',
+        first_step: 'Add a pricing comparison table to /pricing',
+        effort: '~2h',
+        who: 'me',
+        new: false,
+      },
+      { position: 2, ref: 'AC-17', title: 'Track 3 prompts about onboarding', who: 'team' },
+      { position: 3, ref: 'AC-29', title: 'Answer “is Northwind GDPR compliant” on /security' },
+    ],
+  },
+  waiting_for_you: {
+    rows: [{ type: 'review', count: 2, line: '2 tasks agents wrote are waiting for your review.' }],
+  },
+  note: `The first action on Today is the first card of its focus: ${EVAL_TODAY_FIRST.title} (${EVAL_TODAY_FIRST.ref}). Name each card by its title, with its ref.`,
+};
+
+/**
  * The head-to-head with Acme CRM on the Competitors page (get_competitor_head_to_head):
  * the prompts where Acme is ahead, biggest gap first, then the one where the brand is.
  */
@@ -854,6 +887,47 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
         'names the prompts the competitor is ahead on',
         true,
         EVAL_LOSING_PROMPTS.every((p) => run.answer.toLowerCase().includes(p.prompt)),
+        quote(run.answer),
+      ),
+      check('answers in Turkish', false, looksTurkish(run.answer), quote(run.answer)),
+    ],
+  },
+  {
+    id: 'today-first-action',
+    row: 39,
+    role: 'admin',
+    mode: 'auto',
+    // As the owner asks it, on Today: its first focus card, not the Actions list's first.
+    message: 'ilk yapmam gereken ne?',
+    context: {
+      route: '/dashboard/action-center/today',
+      chips: [{ key: 'page', label: 'Today' }],
+    },
+    readResult: (tool, input) =>
+      tool === 'get_today'
+        ? EVAL_TODAY
+        : tool === 'list_action_center_tasks'
+          ? actionsRead(input)
+          : undefined,
+    checks: (run) => [
+      check('finished', true, run.status === 'done', run.status),
+      check(
+        'reads Today',
+        true,
+        run.reads.includes('get_today'),
+        run.reads.join(', ') || 'no read',
+      ),
+      check(
+        'names the first focus card by its title',
+        true,
+        run.answer.includes(EVAL_TODAY_FIRST.title),
+        quote(run.answer),
+      ),
+      check('names its code', true, run.answer.includes(EVAL_TODAY_FIRST.ref), quote(run.answer)),
+      check(
+        "doesn't put the Actions list's first in its place",
+        false,
+        !run.answer.includes(EVAL_ACTIONS[0].title),
         quote(run.answer),
       ),
       check('answers in Turkish', false, looksTurkish(run.answer), quote(run.answer)),
