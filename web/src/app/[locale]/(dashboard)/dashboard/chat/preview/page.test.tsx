@@ -155,22 +155,25 @@ describe('the Chat pieces preview', () => {
     expect(new Set(muted.map((el) => el.dataset.state))).toEqual(states);
     expect(pieces('status-pill')).toHaveLength(9);
     expect(pieces('approval-pill')).toHaveLength(5);
-    // Each state, and the live answer's four steps (W1-14).
-    expect(pieces('step-marker')).toHaveLength(9);
+    // Each state; the live answer's steps are its grey steps line (W1-14).
+    expect(pieces('step-marker')).toHaveLength(5);
     expect(pieces('list-dot')).toHaveLength(6);
     expect(pieces('list-progress')).toHaveLength(1);
     expect(pieces('new-pill')).toHaveLength(1);
     expect(pieces('attention-dot')).toHaveLength(1);
     expect(pieces('attention-count')).toHaveLength(2);
-    // Three sizes, and the live answer's finished header (W1-14).
-    expect(pieces('done-tick')).toHaveLength(4);
+    // Three sizes.
+    expect(pieces('done-tick')).toHaveLength(3);
+    // The live answer, finished: its steps in one grey line, no live line.
+    expect(pieces('run-steps-line')).toHaveLength(1);
+    expect(pieces('run-live')).toHaveLength(0);
   });
 
   it('shows every run card in every state, and the runs tray', async () => {
     await render();
     expect(slots('plan-card')).toHaveLength(3);
-    // Running, waiting, done, one step, stopped, failed; one in the result card, and the live answer's.
-    expect(slots('run-steps')).toHaveLength(8);
+    // Running, waiting, done, one step, stopped, failed, and one in the result card.
+    expect(slots('run-steps')).toHaveLength(7);
     const approvals = ([...slots('agent-card')] as HTMLElement[]).filter((el) =>
       el.hasAttribute('data-kind'),
     );

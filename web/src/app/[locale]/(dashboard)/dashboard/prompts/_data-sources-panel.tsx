@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
+import { Skeleton } from '@/components/ui/skeleton';
+import { isCloud } from '@/config/plans';
 import {
   BarChart3,
   Check,
@@ -38,7 +40,11 @@ type SourceState =
   | 'not_connected'
   | 'connected_unmapped'
   | 'awaiting_data'
-  | 'feeding';
+  | 'feeding'
+  /** Not read yet: the card is in place, its status line waits. */
+  | 'loading'
+  /** The read failed: the card stays, with no status to show. */
+  | 'unknown';
 
 interface Source {
   key: string;
@@ -105,20 +111,31 @@ export function DataSourcesPanel({
   });
 
   const sources = useMemo<Source[] | null>(() => {
-    if (states === undefined) return null;
+    // Ansvisor Cloud has every source's credentials, so the panel is known to
+    // show all three before the read: it is in place from the first frame,
+    // each status waiting in its own line, and the suggestions below it never
+    // move when the read lands (it is queued behind theirs). Self-hosted, which
+    // sources show depends on the read, so the panel waits for it.
+    const cloud = isCloud();
+    if (states === undefined && !cloud) return null;
     // Best effort: a status failure must never delay or break the
-    // suggestions themselves, so the panel simply stays hidden.
-    if (states === null) return [];
-    const stateOf = (s: SourceStatus): SourceState =>
-      !s.configured
-        ? 'not_configured'
-        : !s.connected
-          ? 'not_connected'
-          : !s.mapped
-            ? 'connected_unmapped'
-            : s.firstDataAt
-              ? 'feeding'
-              : 'awaiting_data';
+    // suggestions themselves. Self-hosted the panel simply stays hidden; in
+    // the cloud it stays where it already is, without the statuses.
+    if (states === null && !cloud) return [];
+    const stateOf = (s: SourceStatus | undefined): SourceState =>
+      states === undefined
+        ? 'loading'
+        : !s
+          ? 'unknown'
+          : !s.configured
+            ? 'not_configured'
+            : !s.connected
+              ? 'not_connected'
+              : !s.mapped
+                ? 'connected_unmapped'
+                : s.firstDataAt
+                  ? 'feeding'
+                  : 'awaiting_data';
     return [
       {
         key: 'gsc',
@@ -127,7 +144,7 @@ export function DataSourcesPanel({
         logo: '/google-search-console.svg',
         icon: Search,
         iconClass: 'text-blue-500',
-        state: stateOf(states.gsc),
+        state: stateOf(states?.gsc),
         connectable: true,
       },
       {
@@ -137,7 +154,7 @@ export function DataSourcesPanel({
         logo: '/google-analytics.svg',
         icon: BarChart3,
         iconClass: 'text-amber-500',
-        state: stateOf(states.ga),
+        state: stateOf(states?.ga),
         connectable: true,
       },
       {
@@ -147,7 +164,14 @@ export function DataSourcesPanel({
         logo: '/dataforseo.svg',
         icon: Radar,
         iconClass: 'text-violet-500',
-        state: states.dataForSeo.configured ? 'feeding' : 'not_configured',
+        state:
+          states === undefined
+            ? 'loading'
+            : states === null
+              ? 'unknown'
+              : states.dataForSeo.configured
+                ? 'feeding'
+                : 'not_configured',
         connectable: false,
       },
     ];
@@ -214,25 +238,31 @@ export function DataSourcesPanel({
                 <span className="text-sm font-medium">{source.name}</span>
               </div>
               <p className="flex-1 text-xs text-muted-foreground leading-relaxed">{source.blurb}</p>
-              {source.state === 'feeding' ? (
-                <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
-                  <Check className="h-3.5 w-3.5" />
-                  {source.connectable ? 'Connected' : 'Enabled'}
-                </span>
-              ) : source.state === 'awaiting_data' ? (
-                <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
-                  Connected · first sync in progress
-                </span>
-              ) : !source.connectable ? null : (
-                <Link
-                  href={SETTINGS_HREF}
-                  className={`${buttonVariants({ variant: 'outline', size: 'sm' })} gap-1.5`}
-                >
-                  {source.state === 'connected_unmapped' ? 'Map property' : 'Connect'}
-                  <ExternalLink className="h-3 w-3" />
-                </Link>
-              )}
+              {/* As tall as Connect's button in every state, so a status
+                  landing, whichever it is, moves nothing. */}
+              <div className="flex min-h-8 items-center" data-source-status={source.state}>
+                {source.state === 'loading' ? (
+                  <Skeleton className="h-4 w-24" />
+                ) : source.state === 'unknown' ? null : source.state === 'feeding' ? (
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
+                    <Check className="h-3.5 w-3.5" />
+                    {source.connectable ? 'Connected' : 'Enabled'}
+                  </span>
+                ) : source.state === 'awaiting_data' ? (
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    Connected · first sync in progress
+                  </span>
+                ) : !source.connectable ? null : (
+                  <Link
+                    href={SETTINGS_HREF}
+                    className={`${buttonVariants({ variant: 'outline', size: 'sm' })} gap-1.5`}
+                  >
+                    {source.state === 'connected_unmapped' ? 'Map property' : 'Connect'}
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                )}
+              </div>
             </div>
           ))}
         </div>
