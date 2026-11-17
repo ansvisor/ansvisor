@@ -1013,7 +1013,10 @@ export interface ImportPromptRow {
   idx: number;
   text: string;
   topic: string | null;
-  /** The topic by its id, when the caller has it (Chat): never matched or made by name. */
+  /**
+   * The topic by its id, when the caller has it (Chat, Generate by topic): never
+   * matched or made by name. Only one of this brand's topics; any other id counts as none.
+   */
   topicId?: string;
   platforms: string[];
   models: string[];
@@ -1097,6 +1100,10 @@ export async function importPrompts(
   const keyOf = textKey;
   const seen = new Set((existing ?? []).map((p) => keyOf(p.text as string)));
   const topicIds = new Map((topicRows ?? []).map((t) => [keyOf(t.name as string), t.id as string]));
+  // A topic by its id only when it is one of this brand's, under its name now
+  // (renamed since the caller read it). Any other id counts as none: the row
+  // goes by its name, as one without an id does.
+  const topicNames = new Map((topicRows ?? []).map((t) => [t.id as string, t.name as string]));
 
   const clean = rows.flatMap((r) => {
     const text = r.text.trim().replace(/\s+/g, ' ');
@@ -1112,7 +1119,9 @@ export async function importPrompts(
       ? Array.from(new Set([...filtered.platforms, 'chatgpt-shopping']))
       : stripShoppingWhenDisabled(filtered.platforms, false);
     if (platforms.length === 0 && filtered.models.length === 0) return [];
-    return [{ ...r, text, regions, platforms, models: filtered.models }];
+    const topicId = r.topicId && topicNames.has(r.topicId) ? r.topicId : undefined;
+    const topic = topicId ? topicNames.get(topicId)! : r.topic;
+    return [{ ...r, text, regions, platforms, models: filtered.models, topic, topicId }];
   });
 
   // New topics, once each, alongside the brand's existing ones.
