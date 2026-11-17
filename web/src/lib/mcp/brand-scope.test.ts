@@ -68,12 +68,12 @@ const extra = await import('./visibility-extra-reads');
 const { explainChangeFor } = await import('./why');
 const { createMcpServer } = await import('./server');
 const { listActionsByCodeFor, listActionsPageFor } = await import('./action-center-reads');
+const today = await import('./today-reads');
+const { listAgentRunsFor } = await import('./agent-reads');
 const { getActionScorecardFor } = await import('./learning');
 const { getCatalogSourcesFor, listCatalogProductsFor } = await import('./catalog');
 const productVisibility = await import('./product-visibility');
 const { getPromptLocationsFor } = await import('./prompt-locations');
-const today = await import('./today-reads');
-const { listAgentRunsFor } = await import('./agent-reads');
 const aiConversions = await import('./ai-conversions');
 const { getTrackingSetupFor } = await import('./tracking-setup');
 
