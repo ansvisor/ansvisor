@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Track now's API calls are the brand's Manage prompts page's own: the
- * prompts with no answers yet (GET /api/tracking/unanalyzed/:brandId), and a
- * run for some of them (POST /api/tracking/analyze-new), with the person's
- * session. What they answer is told apart for the page: started, nothing to
- * start, or refused with the API's own words.
+ * Track now's API call is the brand's Manage prompts page's own: a run for
+ * some prompts (POST /api/tracking/analyze-new), with the person's session.
+ * What it answers is told apart for the page: started, nothing to start, or
+ * refused with the API's own words. The prompts with no answers yet come
+ * with the table's read (getPromptsPageData).
  */
 
 const session = vi.hoisted(() => ({
@@ -21,7 +21,7 @@ vi.mock('@/config/api', () => ({ BROWSER_API_BASE_URL: 'https://api.test' }));
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
-const { readPromptsWithoutAnswers, trackPromptsNow } = await import('./track-now');
+const { trackPromptsNow } = await import('./track-now');
 
 const answer = (status: number, body: unknown) => ({
   ok: status >= 200 && status < 300,
@@ -32,27 +32,6 @@ const answer = (status: number, body: unknown) => ({
 beforeEach(() => {
   fetchMock.mockReset();
   session.value = { access_token: 'tok' };
-});
-
-describe('readPromptsWithoutAnswers', () => {
-  it('reads the brand’s prompts with no answers yet, as the brand page did', async () => {
-    fetchMock.mockResolvedValue(
-      answer(200, { success: true, count: 2, prompts: [{ id: 'p1' }, { id: 'p3' }] }),
-    );
-    expect(await readPromptsWithoutAnswers('b 1')).toEqual(['p1', 'p3']);
-    expect(fetchMock).toHaveBeenCalledWith('https://api.test/api/tracking/unanalyzed/b%201', {
-      headers: { Authorization: 'Bearer tok', 'ngrok-skip-browser-warning': '1' },
-    });
-  });
-
-  it('says nothing (null) when it can’t read them', async () => {
-    fetchMock.mockResolvedValue(answer(500, { message: 'boom' }));
-    expect(await readPromptsWithoutAnswers('b1')).toBeNull();
-    fetchMock.mockRejectedValue(new Error('offline'));
-    expect(await readPromptsWithoutAnswers('b1')).toBeNull();
-    session.value = null;
-    expect(await readPromptsWithoutAnswers('b1')).toBeNull();
-  });
 });
 
 describe('trackPromptsNow', () => {

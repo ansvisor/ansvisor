@@ -1,6 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { getPlatformName } from '@/lib/traffic-platforms';
-import { formatTrafficBucketDate, getPlatformFilterItems } from './_charts';
+import { formatTrafficBucketDate, getColor, getPlatformFilterItems } from './_charts';
+
+describe('getColor', () => {
+  it('colors each platform as AI Traffic always has, now from the shared palette', () => {
+    // AI Traffic's map before it moved to @/lib/platform-colors: the page must not change.
+    const before: Record<string, string> = {
+      'chatgpt.com': 'var(--primary)',
+      'chat.openai.com': 'var(--primary)',
+      'search.chatgpt.com': 'var(--primary)',
+      'perplexity.ai': '#3f6f68',
+      'claude.ai': '#c2603f',
+      'gemini.google.com': '#c9973b',
+      'copilot.microsoft.com': '#5f7f9a',
+      'you.com': '#7a8450',
+      'phind.com': '#c9b79c',
+      'meta.ai': '#8c5e73',
+      'poe.com': '#9a4a2e',
+      'labs.google': '#d4b26a',
+      'bing.com': '#6b8a99',
+      'grok.com': '#a08c74',
+      'deepseek.com': '#4f6f8f',
+      unknown: '#a8a29a',
+    };
+    expect(Object.fromEntries(Object.keys(before).map((key) => [key, getColor(key)]))).toEqual(
+      before,
+    );
+    expect(getColor('not-an-engine.example')).toBe('#a8a29a');
+  });
+});
 
 describe('getPlatformFilterItems', () => {
   it('starts with the all-platforms option, whose value is empty', () => {

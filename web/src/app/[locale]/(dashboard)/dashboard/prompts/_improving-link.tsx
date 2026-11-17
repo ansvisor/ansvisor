@@ -1,53 +1,60 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { TrendingUp } from 'lucide-react';
 import { getImprovingPrompts } from '@/lib/actions/prompt-positions';
 import { actionCode } from '@/lib/action-center/action-ref';
 import type { ImprovingAction } from '@/lib/improve-outcome';
 
-const NONE: Record<string, ImprovingAction> = {};
-
 /**
- * The Improve actions still being tracked for the rows on screen (PROMPT-008),
- * by prompt id: one read for the whole page of rows, by the panel's rule.
- * Read again when the positions panel closes, so an Improve sent from it
- * shows on its row. Nothing until read, or when the read fails: the rows
- * look as they always did.
+ * The Improve actions still being tracked (PROMPT-008), by prompt id: what
+ * the table's own read brought (`seed`, every prompt of the brand, so the
+ * links come with the rows and no read waits for them), and after the
+ * positions panel closes, one read of the rows on screen, so an Improve sent
+ * from the panel shows on its row. A newer table read (a new `seed`) wins.
+ * A failed re-read leaves the seed as it was.
  */
 export function useImprovingPrompts(
   brandId: string,
   promptIds: readonly string[],
   panelOpen: boolean,
+  seed: Record<string, ImprovingAction>,
 ): Record<string, ImprovingAction> {
-  const [reads, setReads] = useState(0);
+  // The rows on screen, and the seed then, when the panel closed: read then, and only then.
+  const [asked, setAsked] = useState<{
+    ids: string[];
+    seed: Record<string, ImprovingAction>;
+  } | null>(null);
   const [wasOpen, setWasOpen] = useState(panelOpen);
   if (wasOpen !== panelOpen) {
     setWasOpen(panelOpen);
-    if (!panelOpen) setReads((n) => n + 1);
+    if (!panelOpen) setAsked({ ids: [...promptIds], seed });
   }
-  // The same rows in another order need no new read.
-  const ids = [...promptIds].sort().join(',');
-  const [loaded, setLoaded] = useState<{
-    key: string;
+  const [reread, setReread] = useState<{
+    brandId: string;
+    seed: Record<string, ImprovingAction>;
+    ids: string[];
     byPrompt: Record<string, ImprovingAction>;
   } | null>(null);
   useEffect(() => {
-    if (!brandId || !ids) return;
+    if (!asked || !brandId || asked.ids.length === 0) return;
     let cancelled = false;
-    const key = `${brandId}|${ids}`;
-    getImprovingPrompts(brandId, ids.split(','))
+    getImprovingPrompts(brandId, asked.ids)
       .then((byPrompt) => {
-        if (!cancelled) setLoaded({ key, byPrompt });
+        if (!cancelled) setReread({ brandId, seed: asked.seed, ids: asked.ids, byPrompt });
       })
       .catch((err) => console.error('Failed to read the Improve actions:', err));
     return () => {
       cancelled = true;
     };
-  }, [brandId, ids, reads]);
-  // Another brand's or page's answer never shows; a re-read keeps this one up meanwhile.
-  return loaded?.key === `${brandId}|${ids}` ? loaded.byPrompt : NONE;
+  }, [brandId, asked]);
+  return useMemo(() => {
+    if (!reread || reread.brandId !== brandId || reread.seed !== seed) return seed;
+    const merged = { ...seed };
+    for (const id of reread.ids) delete merged[id];
+    return { ...merged, ...reread.byPrompt };
+  }, [reread, seed, brandId]);
 }
 
 /**

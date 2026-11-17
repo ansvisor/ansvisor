@@ -545,6 +545,59 @@ describe('HeaderWithAiUsage', () => {
     expect(container.textContent).not.toContain('of this month');
   });
 
+  it('keeps the meter’s room with reserveMeter, while it reads, once it shows, and when it shows nothing', async () => {
+    const header = (
+      <HeaderWithAiUsage reserveMeter askChat={false}>
+        <h1>Prompts</h1>
+      </HeaderWithAiUsage>
+    );
+    const slot = () => container.querySelector<HTMLElement>('[data-ai-meter-slot]');
+    const fresh = async () => {
+      act(() => root.unmount());
+      root = createRoot(container);
+      await render('admin', header);
+    };
+
+    vi.mocked(readAiUsage).mockReturnValue(new Promise(() => {}));
+    await render('admin', header);
+    expect(slot()!.className).toContain('sm:min-w-[8.5rem]');
+    // A phone keeps the meter under the row, as without it.
+    expect(slot()!.className).toContain('contents');
+    expect(slot()!.querySelector('span[aria-hidden]')).not.toBeNull();
+
+    vi.mocked(readAiUsage).mockResolvedValue(usage());
+    await fresh();
+    expect(slot()!.contains(trigger())).toBe(true);
+
+    // Nothing to meter (no active plan): the room stays, empty.
+    vi.mocked(readAiUsage).mockResolvedValue(null);
+    await fresh();
+    expect(trigger()).toBeNull();
+    expect(slot()!.className).toContain('sm:min-w-[8.5rem]');
+  });
+
+  it('keeps no room without reserveMeter, or self-hosted', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(null);
+    await render(
+      'admin',
+      <HeaderWithAiUsage askChat={false}>
+        <h1>Mentions</h1>
+      </HeaderWithAiUsage>,
+    );
+    expect(container.querySelector('[data-ai-meter-slot]')).toBeNull();
+
+    env.cloud = false;
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(
+      'admin',
+      <HeaderWithAiUsage reserveMeter askChat={false}>
+        <h1>Mentions</h1>
+      </HeaderWithAiUsage>,
+    );
+    expect(container.querySelector('[data-ai-meter-slot]')).toBeNull();
+  });
+
   it('follows the row with the banner from 80%', async () => {
     vi.mocked(readAiUsage).mockResolvedValue(usage({ percentUsed: 84 }));
     await render(

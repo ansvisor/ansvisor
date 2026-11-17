@@ -284,6 +284,7 @@ describe('Generate by topic — reviewing what was written', () => {
       idx: 1,
       text: 'best decaf coffee beans',
       topic: 'Coffee',
+      topicId: 't1',
       platforms: ['chatgpt-web', 'gemini-web'],
       models: [],
       regions: ['GB'],
@@ -301,6 +302,37 @@ describe('Generate by topic — reviewing what was written', () => {
     expect(toast.success).toHaveBeenLastCalledWith('14 prompts added to your tracked list', {
       description: 'Tracking them now.',
     });
+  });
+
+  it('names each prompt’s topic by its id, so a topic renamed since generating keeps them', async () => {
+    await generate();
+    // Coffee is renamed Espresso, and Tea renamed Coffee, while the list waits.
+    topicActions.getTopics.mockResolvedValue([
+      topic('t1', 'Espresso'),
+      topic('t2', 'Coffee'),
+      topic('t3', 'Mugs'),
+    ]);
+    await act(async () => button('Add selected (15)')!.click());
+    const rows = promptActions.importPrompts.mock.calls[0][1];
+    // The server files them by id, under the topic's name now; the name it had goes along.
+    expect(rows.map((r: { topicId?: string }) => r.topicId)).toEqual([
+      ...Array(5).fill('t1'),
+      ...Array(5).fill('t2'),
+      ...Array(5).fill('t3'),
+    ]);
+    expect(rows[0]).toMatchObject({ topic: 'Coffee', topicId: 't1' });
+  });
+
+  it('names the topic by its name only when it has no id', async () => {
+    topicActions.getTopics.mockResolvedValue([topic('', 'Coffee')]);
+    setup.generatePromptsFromTopics.mockResolvedValue({
+      topicPrompts: [{ topic: 'Coffee', prompts: ['best coffee idea 1'] }],
+    });
+    await generate();
+    await act(async () => button('Add selected (1)')!.click());
+    const [row] = promptActions.importPrompts.mock.calls[0][1];
+    expect(row).toMatchObject({ text: 'best coffee idea 1', topic: 'Coffee' });
+    expect(row).not.toHaveProperty('topicId');
   });
 
   it('Esc drops an edit, keeping the text as written', async () => {
