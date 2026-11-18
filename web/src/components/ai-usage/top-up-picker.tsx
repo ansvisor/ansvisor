@@ -83,6 +83,7 @@ export function TopUpPicker({ onBought }: { onBought?: () => void }) {
       trackingUnits: view.current.trackingUnits,
       extraBrands: view.current.extraBrands,
       topUp: option.multiplier,
+      topUpOnly: true,
     });
     setBusy(false);
     setConfirming(false);
