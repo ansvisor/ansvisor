@@ -538,7 +538,17 @@ describe('what Billing shows', () => {
     expect(read.ok && read.addOns.tiers.map((t) => t.units)).toEqual([1000]);
   });
 
-  it('says why it can’t be bought, without asking Stripe', async () => {
+  it('shows a yearly plan’s prices in its trial too, and monthly when Stripe can’t say', async () => {
+    org().subscription_status = 'trialing';
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem('year')], { status: 'trialing' }));
+    let read = await readPlanAddOns();
+    expect(read.ok && [read.addOns.state, read.addOns.interval]).toEqual(['trial', 'year']);
+    stripeApi.retrieve.mockRejectedValue(new Error('down'));
+    read = await readPlanAddOns();
+    expect(read.ok && [read.addOns.state, read.addOns.interval]).toEqual(['trial', 'month']);
+  });
+
+  it('says why it can’t be bought', async () => {
     const stateOf = async () => {
       const read = await readPlanAddOns();
       return read.ok ? read.addOns.state : read.failure;

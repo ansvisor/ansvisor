@@ -170,6 +170,12 @@ describe('the add-ons card', () => {
     expect(byText('+1,000 prompt locations')?.getAttribute('aria-checked')).toBe('true');
   });
 
+  it('picks nothing from the link for one who can’t buy', async () => {
+    window.history.replaceState(null, '', '/dashboard/settings/billing?add=tracking');
+    await render({ state: 'not_admin', current: { trackingUnits: 100, extraBrands: 0 } });
+    expect(byText('+1,000 prompt locations')?.getAttribute('aria-checked')).not.toBe('true');
+  });
+
   it('says when it can’t be read', async () => {
     await render(null);
     expect(container.textContent).toContain('Couldn’t read your add-ons.'.replace('’', "'"));

@@ -88,7 +88,8 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
 
   const [units, setUnits] = useState(() => {
     const now = addOns.current.trackingUnits;
-    if (!askedForMoreTracking()) return now;
+    // A link asking for more tracking picks the next tier, only for one who can buy it.
+    if (!open || !askedForMoreTracking()) return now;
     return addOns.tiers.find((tier) => tier.units > now && !tier.contactSales)?.units ?? now;
   });
   const [brands, setBrands] = useState(addOns.current.extraBrands);
