@@ -412,3 +412,101 @@ describe('runCalledAgent', () => {
     ).toBeGreaterThan(NOW.getTime());
   });
 });
+
+describe('calleeCheck, shared with the AEO Operator’s plan', () => {
+  const base = {
+    organizationId: ORG,
+    actingUserId: PEOPLE.manager,
+    agentId: CALLEE,
+    brandId: BRAND,
+  };
+  const calleeVersion = () => db.tables.chat_agent_versions.find((v) => v.agent_id === CALLEE)!;
+
+  it('keeps run_agent as it was: the queue’s checks are a queued run’s alone', async () => {
+    callerRun();
+    // A Required connection the brand lacks, and a run of the agent waiting on the brand.
+    calleeVersion().connections = [{ key: 'cms', required: true }];
+    db.tables.chat_agent_runs.push({
+      id: 'eeeeeeee-0000-4000-8000-000000000200',
+      organization_id: ORG,
+      agent_id: CALLEE,
+      brand_id: BRAND,
+      trigger_kind: 'schedule',
+      called_by_run_id: null,
+      status: 'queued',
+      max_share: 0.2,
+      usage_share: 0,
+    });
+    expect(await calls.calleeCheck(base)).toMatchObject({
+      ok: true,
+      agent: { row: { id: CALLEE } },
+      brand: { id: BRAND, name: 'Brand A' },
+    });
+    expect(await calls.calleeCheck({ ...base, forQueue: true })).toEqual({
+      ok: false,
+      reason: 'missing_connection',
+    });
+    calleeVersion().connections = [];
+    expect(await calls.calleeCheck({ ...base, forQueue: true })).toEqual({
+      ok: false,
+      reason: 'busy',
+    });
+
+    // run_agent leaves both to openAgentRun and the held-run index, as before.
+    calleeVersion().connections = [{ key: 'cms', required: true }];
+    const d = deps();
+    expect(await calls.runCalledAgent(ctx, { agent: CALLEE, ask: 'x' }, d)).toMatchObject({
+      ok: true,
+      agent: 'FAQ writer',
+    });
+    expect(calleeRuns()).toHaveLength(1);
+  });
+
+  it('refuses an AEO Operator, which run_agent answers as an agent it may not run', async () => {
+    callerRun();
+    db.tables.chat_agents.find((a) => a.id === CALLEE)!.kind = 'operator';
+    expect(await calls.calleeCheck(base)).toEqual({ ok: false, reason: 'not_agent' });
+    const d = deps();
+    expect(await calls.runCalledAgent(ctx, { agent: CALLEE, ask: 'x' }, d)).toEqual({
+      ok: false,
+      reason: 'not_found',
+      message: 'That agent isn’t one this agent may run. The ones it may run: FAQ writer.',
+    });
+    expect(calleeRuns()).toEqual([]);
+    expect(d.drive).not.toHaveBeenCalled();
+  });
+
+  it('answers each of its refusals with run_agent’s words, as before', async () => {
+    callerRun();
+    const d = deps();
+    const answer = async () => {
+      const result = await calls.runCalledAgent(ctx, { agent: CALLEE, ask: 'x' }, d);
+      return result.ok ? 'ok' : [result.reason, result.message];
+    };
+    const notCallable = [
+      'not_found',
+      'That agent isn’t one this agent may run. The ones it may run: FAQ writer.',
+    ];
+    // Its brand isn't in the called agent's scope.
+    calleeVersion().scope = { brand_ids: ['22222222-2222-4222-8222-999999999999'] };
+    expect(await calls.calleeCheck(base)).toEqual({ ok: false, reason: 'no_brand' });
+    expect(await answer()).toEqual(['not_found', '“FAQ writer” doesn’t work on this run’s brand.']);
+    calleeVersion().scope = { brand_ids: [BRAND] };
+    // Someone else's private agent.
+    db.tables.chat_agents.find((a) => a.id === CALLEE)!.visibility = 'private';
+    expect(await calls.calleeCheck(base)).toEqual({ ok: false, reason: 'not_allowed' });
+    expect(await answer()).toEqual(notCallable);
+    db.tables.chat_agents.find((a) => a.id === CALLEE)!.visibility = 'workspace';
+    // Below Growth.
+    db.tables.organizations.find((o) => o.id === ORG)!.plan = 'starter';
+    expect(await calls.calleeCheck(base)).toEqual({ ok: false, reason: 'cannot_run' });
+    expect(await answer()).toEqual(['invalid', 'Only an agent’s run can run another agent.']);
+    db.tables.organizations.find((o) => o.id === ORG)!.plan = 'growth';
+    // A person who isn't in the workspace any more.
+    expect(
+      await calls.calleeCheck({ ...base, actingUserId: 'aaaaaaaa-0000-4000-8000-000000000999' }),
+    ).toEqual({ ok: false, reason: 'no_context' });
+    expect(calleeRuns()).toEqual([]);
+    expect(await answer()).toBe('ok');
+  });
+});

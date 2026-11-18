@@ -571,11 +571,11 @@ describe('the security definer functions a signed-in person can call', () => {
  * A wave of BRAND-ACCESS PR 4–6: each function's last definition asks
  * can_access_brand instead of the organization, keeps the rest of the one it
  * replaces and its grants, and says brand access in its comment. The service
- * role stays as it was: the citation functions never let it through, the
- * Insights, Mentions and Topics ones and the AI traffic, content and shopping
- * reads do (their callers check the brand). The writes (00435) keep their
- * organization and role check and ask brand access beside it, for the person
- * they act for.
+ * role stays as it was: the citation functions didn't let it through (00541
+ * does since, below), the Insights, Mentions and Topics ones and the AI
+ * traffic, content and shopping reads do (their callers check the brand).
+ * The writes (00435) keep their organization and role check and ask brand
+ * access beside it, for the person they act for.
  */
 function describeWave(
   title: string,
@@ -700,3 +700,121 @@ describeWave(
     writes: WRITES_IN_TRAFFIC_CONTENT_SHOPPING,
   },
 );
+
+/**
+ * 00541: the citation functions let the service role through, as 00434's and
+ * 00435's do: Chat's and MCP's reads call them with it after brandAllowed
+ * (Citations › Gaps first). Each replaces its 00426 definition with only the
+ * check changed, and a person still needs can_access_brand.
+ */
+const SERVICE_ROLE_CITATIONS = '00541_service_role_citation_functions.sql';
+const OPENED_TO_SERVICE_ROLE = CONVERTED_IN_CITATIONS.filter(
+  (name) => name !== 'report_citation_evidence',
+);
+
+/** A 00426 body with the service role let through, as 00541 writes it. */
+const letServiceRoleThrough = (body: string) =>
+  body
+    .replace(
+      /select 1 where public\.can_access_brand\(p_brand_id\)/g,
+      "select 1 where auth.role() = 'service_role' or public.can_access_brand(p_brand_id)",
+    )
+    .replace(
+      /\bif not public\.can_access_brand\(p_brand_id\) then/g,
+      "if auth.role() is distinct from 'service_role' and not public.can_access_brand(p_brand_id) then",
+    );
+
+/** The service role's check in either shape: the sql `allowed` CTE, or the plpgsql early return. */
+const SERVICE_ROLE_THROUGH =
+  /select 1 where auth\.role\(\) = 'service_role' or public\.can_access_brand\(p_brand_id\)|\bif auth\.role\(\) is distinct from 'service_role' and not public\.can_access_brand\(p_brand_id\) then/;
+
+/**
+ * Whether the last grant or revoke naming service_role on a function grants
+ * it; null when none does (Supabase's default privileges grant it).
+ */
+function serviceRoleGrant(fn: Fn): boolean | null {
+  const types = argumentTypes(fn.args);
+  let granted: boolean | null = null;
+  for (const { text } of all) {
+    const m = oneLine(uncommented(text)).match(
+      /^(grant|revoke) (?:grant option for )?[\w, ]+? on function (.+) (?:to|from) ([\w", ]+?)(?: cascade| restrict| with grant option)?$/i,
+    );
+    if (!m || !roles(m[3]).includes('service_role')) continue;
+    const named = functionRefs(m[2]).some(
+      (ref) => ref.name === fn.name && (ref.types === null || ref.types.join() === types.join()),
+    );
+    if (named) granted = m[1].toLowerCase() === 'grant';
+  }
+  return granted;
+}
+
+describe('the citation functions let the service role through (00541)', () => {
+  const opened = OPENED_TO_SERVICE_ROLE.flatMap(byName);
+  /** The 00541 definition and the one it replaced; later migrations may redefine them again. */
+  const pair = (fn: Fn) => {
+    const at = fn.definitions.findIndex((d) => d.migration === SERVICE_ROLE_CITATIONS);
+    return { before: fn.definitions[at - 1], after: fn.definitions[at], at };
+  };
+
+  it('replace their 00426 definition, the header word for word', () => {
+    expect(OPENED_TO_SERVICE_ROLE).toHaveLength(10);
+    for (const name of OPENED_TO_SERVICE_ROLE) expect(byName(name), name).toHaveLength(1);
+    for (const fn of opened) {
+      const { before, after, at } = pair(fn);
+      expect(at, fn.name).toBeGreaterThan(0);
+      expect(before.migration, fn.name).toBe(CITATIONS);
+      // Arguments, result, language, volatility, security definer and every setting.
+      expect(after.header, fn.name).toBe(before.header);
+      expect(after.header, fn.name).toMatch(/\bsecurity definer\b/);
+    }
+  });
+
+  it('change only the check: the service role, or a person who can access the brand', () => {
+    for (const fn of opened) {
+      const { before, after } = pair(fn);
+      // 00426's one check, which refused the service role.
+      expect(code(before.body).match(/public\.can_access_brand\(p_brand_id\)/g), fn.name).toEqual([
+        'public.can_access_brand(p_brand_id)',
+      ]);
+      expect(code(before.body), fn.name).not.toMatch(/service_role/);
+      expect(code(after.body), fn.name).toBe(code(letServiceRoleThrough(before.body)));
+      expect(code(after.body), fn.name).toMatch(SERVICE_ROLE_THROUGH);
+    }
+  });
+
+  it('let the service role through in their last definition, and ask a person can_access_brand', () => {
+    for (const fn of opened) {
+      expect(organizationOnly(fn), fn.name).toBe(false);
+      expect(code(last(fn).body), fn.name).toMatch(SERVICE_ROLE_THROUGH);
+    }
+    // The report's evidence isn't one: it stays as 00426 left it.
+    const [report] = byName('report_citation_evidence');
+    expect(last(report).migration).toBe(CITATIONS);
+    expect(code(last(report).body)).not.toMatch(/service_role/);
+  });
+
+  it('keep their grants: 00541 grants and revokes nothing, and the service role may run each', () => {
+    const own = all.filter((statement) => statement.migration === SERVICE_ROLE_CITATIONS);
+    expect(own.length).toBeGreaterThan(OPENED_TO_SERVICE_ROLE.length);
+    expect(own.filter((s) => /^(?:grant|revoke)\b/i.test(s.text))).toEqual([]);
+    for (const fn of opened) {
+      expect(fn.authenticated, fn.name).toBe(true);
+      expect(serviceRoleGrant(fn), fn.name).toBe(true);
+    }
+  });
+
+  it('say so in their comments', () => {
+    const comments = all
+      .filter((statement) => statement.migration === SERVICE_ROLE_CITATIONS)
+      .map((statement) => oneLine(statement.text))
+      .filter((text) => /^comment on function/i.test(text));
+    expect(comments).toHaveLength(OPENED_TO_SERVICE_ROLE.length);
+    for (const name of OPENED_TO_SERVICE_ROLE) {
+      const own = comments.filter((text) => text.startsWith(`comment on function public.${name}(`));
+      expect(own, name).toHaveLength(1);
+      expect(own[0], name).toMatch(/can_access_brand/);
+      expect(own[0], name).toMatch(/\bfor the service role\b/);
+      expect(own[0], name).not.toMatch(/\bthe service role included\b/);
+    }
+  });
+});

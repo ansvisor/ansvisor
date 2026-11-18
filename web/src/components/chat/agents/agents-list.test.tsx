@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import type { AgentListResult } from '@/lib/chat/agents';
+import type { OperatorTodayLine } from '@/lib/chat/operator/views';
 import { AGENT_ID, NOW, listItem, listResult } from '@/lib/chat/testing/agent-fixtures';
 
 /**
@@ -619,6 +620,60 @@ describe('Action Center › Agents', () => {
     expect(container.querySelector('[data-slot="agents-read-only"]')).not.toBeNull();
     expect(action('agents.askChat')).toHaveLength(0);
     expect(action('agents.new')).toHaveLength(0);
+  });
+});
+
+describe('an AEO Operator’s card (AEO Operator plan §4.3)', () => {
+  const operator = (today: OperatorTodayLine | null) =>
+    listItem({
+      id: 'aaaaaaaa-0000-4000-8000-0000000000a0',
+      name: 'AEO Operator',
+      skills: ['operator'],
+      maxRunShare: 0.05,
+      operator: { today },
+    });
+
+  it('shows the Operator badge, its daily budget and today’s plan in each state', async () => {
+    const lines: [OperatorTodayLine, string][] = [
+      [{ state: 'waiting', agents: 4, started: 0, done: 0 }, 'Today: 4 agents · waiting for you'],
+      [{ state: 'starting', agents: 4, started: 0, done: 0 }, 'Today: approved, starting 4 agents'],
+      [{ state: 'approved', agents: 4, started: 4, done: 2 }, 'Today: approved, 2 of 4 done'],
+      [
+        { state: 'approved', agents: 2, started: 0, done: 0 },
+        'Today: approved, no agent could start',
+      ],
+      [{ state: 'nothing', agents: 0, started: 0, done: 0 }, 'Today: nothing to do'],
+      [{ state: 'skipped', agents: 3, started: 0, done: 0 }, 'Today: skipped'],
+      [{ state: 'expired', agents: 3, started: 0, done: 0 }, 'Today: not answered'],
+    ];
+    page = listResult([
+      ...lines.map(([line], i) => ({ ...operator(line), id: `op-${i}` })),
+      listItem(),
+    ]);
+    await render();
+    const shown = cards();
+    expect(shown).toHaveLength(lines.length + 1);
+    lines.forEach(([line, text], i) => {
+      const card = shown[i];
+      expect(card.querySelector('[data-slot="agent-operator-badge"]')?.textContent).toBe(
+        'Operator',
+      );
+      expect(card.querySelector('[data-slot="agent-daily-budget"]')?.textContent).toBe(
+        'Daily budget 5%',
+      );
+      const today = card.querySelector('[data-slot="agent-operator-today"]')!;
+      expect(today.textContent, line.state).toBe(text);
+      expect(today.getAttribute('data-state')).toBe(line.state);
+    });
+    // Any other agent: no badge, no budget line.
+    expect(shown[lines.length].querySelector('[data-slot="agent-operator"]')).toBeNull();
+  });
+
+  it('shows no line for today before its plan', async () => {
+    page = listResult([operator(null)]);
+    await render();
+    expect(cards()[0].querySelector('[data-slot="agent-operator-badge"]')).not.toBeNull();
+    expect(cards()[0].querySelector('[data-slot="agent-operator-today"]')).toBeNull();
   });
 });
 

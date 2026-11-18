@@ -66,6 +66,18 @@ start a message with its `/name`.
 
 `chatgpt-profile` waits on `BUSINESS_HUB_ENABLED`, and `earn-or-pay` and `ad-drafts` on `ADS_ENABLED`: Chat offers each only on an install where its variable is `true`.
 
+### Agent-only skills
+
+An agent's own skill, marked `metadata.agent_only: "true"`: only its agent's
+runs load it. It is never in the `/` menu, the Skills page or the skills Chat
+lists for a person's message. `operator` is the AEO Operator's, the agent that
+picks which of your agents run each morning; Chat offers it only where
+`CHAT_OPERATOR` is `true`.
+
+| Skill | Title |
+| --- | --- |
+| [`operator`](./operator) | AEO Operator |
+
 ### Shortcut playbooks
 
 Chat's `/` menu shortcuts each have a playbook here too: a `SKILL.md` marked

@@ -152,3 +152,114 @@ export const ADMIN_CAN = {
 };
 
 export { NONE as NOTHING_CAN };
+
+/** An AEO Operator's handle and its brand, for the Operator's tests (AEO Operator plan §4.3). */
+export const OPERATOR_ID = 'aaaaaaaa-0000-4000-8000-0000000000a0';
+export const OPERATOR_BRAND = 'bbbbbbbb-0000-4000-8000-000000000001';
+
+/**
+ * An AEO Operator as the agents API answers it: its badge and today's line,
+ * a 5% daily budget, /operator on one brand weekdays at 07:00, its settings
+ * (all its owner's active agents, 5 a day) and its page's Today panel: two
+ * agents waiting for the person's OK, and its last plans.
+ */
+export function operatorDetail(extra: Partial<AgentDetail> = {}): AgentDetail {
+  const base = detail();
+  return {
+    ...base,
+    id: OPERATOR_ID,
+    name: 'AEO Operator · Ansvisor',
+    visibility: 'private',
+    skills: ['operator'],
+    triggers: [
+      {
+        kind: 'schedule',
+        config: {
+          type: 'recurring',
+          rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=7;BYMINUTE=0',
+          timezone: 'UTC',
+        },
+        enabled: true,
+        nextFireAt: '2026-11-02T07:00:00.000Z',
+        lastFiredAt: '2026-10-30T07:00:00.000Z',
+      },
+    ],
+    maxRunShare: 0.05,
+    operator: { today: { state: 'waiting', agents: 2, started: 0, done: 0 } },
+    settings: {
+      ...base.settings!,
+      skills: ['operator'],
+      connections: [],
+      scope: { brand_ids: [OPERATOR_BRAND] },
+      operator: { allowed: null, includeWorkspace: false, maxRuns: 5 },
+    },
+    recentRuns: [],
+    operatorDay: {
+      day: '2026-10-30',
+      today: {
+        day: '2026-10-30',
+        status: 'proposed',
+        state: 'waiting',
+        budgetShare: 0.05,
+        usedShare: 0.002,
+        passedCount: 3,
+        chatId: 'cccccccc-0000-4000-8000-0000000000a1',
+        items: [
+          {
+            agentId: 'aaaaaaaa-0000-4000-8000-0000000000b1',
+            agent: 'Citation Win-back',
+            reasons: [
+              { code: 'open_actions', category: 'recover', count: 3 },
+              { code: 'last_ran', days: 9 },
+            ],
+            share: 0.02,
+            cost: 0.012,
+            status: null,
+            skipped: null,
+            usageShare: 0,
+            chatId: null,
+          },
+          {
+            agentId: null,
+            agent: '',
+            hidden: true,
+            reasons: [{ code: 'never_ran' }],
+            share: 0.02,
+            cost: 0.01,
+            status: null,
+            skipped: null,
+            usageShare: 0,
+            chatId: null,
+          },
+        ],
+      },
+      history: [
+        {
+          day: '2026-10-30',
+          status: 'proposed',
+          state: 'waiting',
+          agents: 0,
+          usedShare: 0.002,
+          budgetShare: 0.05,
+        },
+        {
+          day: '2026-10-29',
+          status: 'summarized',
+          state: 'approved',
+          agents: 3,
+          usedShare: 0.031,
+          budgetShare: 0.05,
+        },
+        {
+          day: '2026-10-28',
+          status: 'declined',
+          state: 'skipped',
+          agents: 0,
+          usedShare: 0.001,
+          budgetShare: 0.04,
+        },
+      ],
+    },
+    ...extra,
+  };
+}

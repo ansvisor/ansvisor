@@ -517,3 +517,72 @@ describe('brand settings on a read-only workspace', () => {
     await act(async () => root.unmount());
   });
 });
+
+// Competitor types (00542): each row shows its type, and Set type opens its
+// dialog for admins and managers, the upgrade dialog on a read-only
+// workspace (next-intl is mocked: labels are their keys).
+describe('competitor types in brand settings', () => {
+  const openUpgrade = vi.fn();
+  beforeEach(() => {
+    openUpgrade.mockReset();
+    getCompetitors.mockResolvedValue([
+      { id: 'c1', brandId: brand.id, name: 'Sky Air', domain: 'sky.example', type: 'Airline' },
+      { id: 'c2', brandId: brand.id, name: 'Rival', domain: 'rival.com', type: 'direct' },
+    ]);
+  });
+
+  async function renderCompetitors(isLocked: boolean) {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <Suspense>
+            <BrandSettingsPage params={Promise.resolve({ id: brand.id })} />
+          </Suspense>
+        </UpgradeDialogContext.Provider>,
+      );
+    });
+    const tab = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+      (el) => el.textContent?.trim() === 'Competitors',
+    )!;
+    await act(async () => {
+      tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      tab.click();
+    });
+    const panel = container.querySelector<HTMLElement>('[role="tabpanel"]:not([hidden])')!;
+    const setType = () => panel.querySelectorAll<HTMLButtonElement>('button[aria-label="setFor"]');
+    return { root, panel, setType };
+  }
+
+  it('labels each competitor with its type and opens its Set type dialog', async () => {
+    const { root, panel, setType } = await renderCompetitors(false);
+    expect(panel.textContent).toContain('Airline');
+    expect(panel.textContent).toContain('Direct competitor');
+    expect(setType()).toHaveLength(2);
+    await act(async () => setType()[0].click());
+    expect(openUpgrade).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('setTitle');
+    await act(async () => root.unmount());
+  });
+
+  it('opens the upgrade dialog for Set type on a read-only workspace', async () => {
+    const { root, setType } = await renderCompetitors(true);
+    await act(async () => setType()[0].click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('setCompetitorTypes');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("leaves an analyst's Set type off, with the rest of the tab", async () => {
+    Object.assign(role, { canAdmin: false, canManage: false });
+    const { root, panel, setType } = await renderCompetitors(false);
+    expect(panel.textContent).toContain('Airline');
+    expect(panel.querySelector('fieldset')!.disabled).toBe(true);
+    expect(panel.querySelector('fieldset')!.contains(setType()[0])).toBe(true);
+    await act(async () => root.unmount());
+  });
+});

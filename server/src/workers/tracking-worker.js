@@ -13,6 +13,7 @@ import {
 import { chatgptFanoutDue, chatgptFanoutMode } from '../lib/chatgpt-fanout.js';
 import { parseResponse, countBrandMentions } from '../lib/response-parser.js';
 import supabaseAdmin from '../config/supabase.js';
+import { loadTrackedCompetitors } from '../lib/competitor-aliases.js';
 import { hasFeature, getPlan, isCloud } from '../config/plans.js';
 import { applyPlanOverrides } from '../lib/plan-guard.js';
 import { generateContentOpportunities } from '../lib/opportunity-generator.js';
@@ -323,17 +324,9 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     }
   }
 
-  // 3. Fetch competitors for this brand
-  const { data: competitorRows } = await supabaseAdmin
-    .from('competitors')
-    .select('id, name, domain')
-    .eq('brand_id', brandId);
-
-  const competitors = (competitorRows || []).map((c) => ({
-    id: c.id,
-    name: c.name,
-    domain: c.domain || '',
-  }));
+  // 3. Fetch competitors for this brand, with the names and domains merged
+  // into each (00543), which count as theirs.
+  const competitors = await loadTrackedCompetitors(brandId);
 
   // 3b. Cloud: API-model tracking is plan-gated (Growth has no Claude;
   // Enterprise is per-customer via organizations.plan_overrides.allowedModels).

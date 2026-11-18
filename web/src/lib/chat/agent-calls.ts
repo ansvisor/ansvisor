@@ -4,14 +4,23 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import type { ChatActor } from './engine';
 import { CHAT_MODES, type ChatMode } from './precedence';
-import { loadAgent, readAgentContext, runnableBrands } from './agents';
+import {
+  loadAgent,
+  readAgentContext,
+  runnableBrands,
+  type AgentContext,
+  type LoadedAgent,
+} from './agents';
 import {
   agentActDenial,
   canCallDenial,
   canSeeAgent,
   canWriteAgents,
   versionFromRow,
+  type AgentVersionData,
 } from './agent-rules';
+import { missingRequiredConnection } from './agent-connections';
+import { agentMonthCapReached } from './agent-triggers';
 import { dataBlock, guardData } from './untrusted';
 
 /**
@@ -171,6 +180,122 @@ export async function callableAgentsOf(
   return ids.flatMap((id) => (found.has(id) ? [{ id, name: found.get(id)! }] : []));
 }
 
+// ─── Whether an agent may be run for another agent's run ─────────────────────
+
+/** The agent run statuses that hold or wait for a place on a brand: one at a time per agent. */
+const OPEN_RUN_STATUSES = ['queued', 'running', 'needs_you', 'paused_cap'];
+
+/**
+ * Why an agent can't be run for another agent's run (calleeCheck), as a code:
+ *
+ *   - not_found: gone, not on (active), or the demo brand's sample agent;
+ *   - not_agent: an AEO Operator, which never runs inside another run;
+ *   - no_context: the person it would act as can't act in the workspace now;
+ *   - cannot_run: their role or the plan can't run agents for another agent
+ *     (Admins and Managers, Growth and up);
+ *   - not_allowed: they can't see it, or may not run it;
+ *   - no_brand: its scope doesn't cover the brand, or they can't use the brand;
+ *   - missing_connection: the brand lacks a connection it requires;
+ *   - month_cap: its monthly AI cap is used;
+ *   - busy: it already has a run waiting or under way on the brand.
+ *
+ * The last three only with `forQueue` (a run queued to start later).
+ */
+export type CalleeRefusal =
+  | 'not_found'
+  | 'not_agent'
+  | 'no_context'
+  | 'cannot_run'
+  | 'not_allowed'
+  | 'no_brand'
+  | 'missing_connection'
+  | 'month_cap'
+  | 'busy';
+
+export type CalleeCheck =
+  | {
+      ok: true;
+      agent: { row: LoadedAgent['row']; version: AgentVersionData };
+      /** The person it acts as, read now. */
+      context: AgentContext;
+      brand: { id: string; name: string };
+    }
+  | { ok: false; reason: CalleeRefusal };
+
+/**
+ * The checks on an agent another agent's run starts (run_agent here, the
+ * AEO Operator's plan in agent-children.ts), for the person it would act
+ * as, read now: it is on, an agent (never an Operator), not the demo
+ * brand's sample; that person is an Admin or a Manager on Growth and up,
+ * sees it and may run it; its scope covers the brand, which they may use.
+ *
+ * `context`: the person's context when the caller read it already (several
+ * agents checked for one person); left out, it is read here. `forQueue`: a
+ * run queued to start later (the Operator's), so also the checks a run
+ * started at once leaves to openAgentRun and the held-run index: the
+ * brand's Required connections, its monthly cap, and no run of it waiting
+ * or under way on the brand.
+ */
+export async function calleeCheck(input: {
+  organizationId: string;
+  actingUserId: string;
+  agentId: string;
+  brandId: string | null;
+  context?: AgentContext | null;
+  forQueue?: boolean;
+}): Promise<CalleeCheck> {
+  const org = input.organizationId;
+  const no = (reason: CalleeRefusal): CalleeCheck => ({ ok: false, reason });
+  const callee = await loadAgent(org, input.agentId);
+  if (!callee?.version || callee.row.status !== 'active' || callee.row.demo_brand_id) {
+    return no('not_found');
+  }
+  // No Operator inside another run (00545): an Operator runs agents, it isn't run by one.
+  if (callee.row.kind !== 'agent') return no('not_agent');
+  const version = callee.version;
+  const context =
+    input.context !== undefined
+      ? input.context
+      : await readAgentContext({ userId: input.actingUserId, email: null, organizationId: org });
+  if (!context) return no('no_context');
+  // Their role and the plan, read now: Admins and Managers, Growth and up (run_agent's row).
+  if (!canWriteAgents(context.viewer.role) || canCallDenial([callee.row.id], context.plan)) {
+    return no('cannot_run');
+  }
+  // Only an agent that person sees and may run: a private one of someone else's stays theirs.
+  const facts = {
+    ownerId: callee.row.owner_id,
+    visibility: callee.row.visibility,
+    scope: version.scope,
+  };
+  if (
+    !canSeeAgent(facts, context.viewer) ||
+    agentActDenial('run', context.viewer, facts, context.settings) !== null
+  ) {
+    return no('not_allowed');
+  }
+  const brands = await runnableBrands(org, version.scope, context.viewer.brandAccess);
+  const brand = brands.find((b) => b.id === input.brandId);
+  if (!brand) return no('no_brand');
+  if (input.forQueue) {
+    if (await missingRequiredConnection(version, brand.id)) return no('missing_connection');
+    if (await agentMonthCapReached(org, callee.row.id, callee.row.max_month_share)) {
+      return no('month_cap');
+    }
+    const { data: open, error } = await supabaseAdmin
+      .from('chat_agent_runs')
+      .select('id')
+      .eq('organization_id', org)
+      .eq('brand_id', brand.id)
+      .eq('agent_id', callee.row.id)
+      .in('status', OPEN_RUN_STATUSES)
+      .limit(1);
+    if (error) throw new Error(`Could not read the agent's runs: ${error.message}`);
+    if ((open ?? []).length > 0) return no('busy');
+  }
+  return { ok: true, agent: { row: callee.row, version }, context, brand };
+}
+
 /** What a call came to, for the model: a refusal it is told, or the called agent's answer. */
 export type CallResult =
   | {
@@ -327,40 +452,29 @@ export async function runCalledAgent(
     return refuse('quota_exceeded', t('tool.tooMany', { max: MAX_CALLS_PER_RUN }));
   }
 
-  const [callerAgent, calleeAgent] = await Promise.all([
-    loadAgent(org, caller.agent_id),
-    loadAgent(org, callee.id),
-  ]);
-  if (!calleeAgent?.version || calleeAgent.row.status !== 'active') {
-    return refuse('not_found', t('tool.notCallable', { agents: callee.name }));
-  }
   // The person the caller acts as, read now: their brands decide what the called agent may use.
   const actingUserId = caller.acting_user_id ?? ctx.userId;
-  const agentCtx = await readAgentContext({
-    userId: actingUserId,
-    email: null,
-    organizationId: org,
-  });
-  if (!agentCtx) return refuse('invalid', t('tool.notAgentRun'));
-  // Their role and the plan, read now: Admins and Managers, Growth and up (run_agent's row).
-  if (!canWriteAgents(agentCtx.viewer.role) || canCallDenial([callee.id], agentCtx.plan)) {
-    return refuse('invalid', t('tool.notAgentRun'));
+  const [callerAgent, checked] = await Promise.all([
+    loadAgent(org, caller.agent_id),
+    calleeCheck({
+      organizationId: org,
+      actingUserId,
+      agentId: callee.id,
+      brandId: caller.brand_id,
+    }),
+  ]);
+  if (!checked.ok) {
+    switch (checked.reason) {
+      case 'no_context':
+      case 'cannot_run':
+        return refuse('invalid', t('tool.notAgentRun'));
+      case 'no_brand':
+        return refuse('not_found', t('tool.noBrand', { agent: callee.name }));
+      default:
+        return refuse('not_found', t('tool.notCallable', { agents: callee.name }));
+    }
   }
-  // Only an agent that person sees and may run: a private one of someone else's stays theirs.
-  const calleeFacts = {
-    ownerId: calleeAgent.row.owner_id,
-    visibility: calleeAgent.row.visibility,
-    scope: calleeAgent.version.scope,
-  };
-  if (
-    !canSeeAgent(calleeFacts, agentCtx.viewer) ||
-    agentActDenial('run', agentCtx.viewer, calleeFacts, agentCtx.settings) !== null
-  ) {
-    return refuse('not_found', t('tool.notCallable', { agents: callee.name }));
-  }
-  const brands = await runnableBrands(org, calleeAgent.version.scope, agentCtx.viewer.brandAccess);
-  const brand = brands.find((b) => b.id === caller.brand_id);
-  if (!brand) return refuse('not_found', t('tool.noBrand', { agent: callee.name }));
+  const { agent: calleeAgent, brand } = checked;
 
   // Its cap: the smaller of its own and what is left of the caller's (CHAT-27 item 21), after
   // the caller's own use and what the agents it ran before used.

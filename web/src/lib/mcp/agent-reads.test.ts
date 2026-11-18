@@ -232,6 +232,80 @@ describe('list_agent_runs', () => {
     expect(paged?.runs).toHaveLength(1);
   });
 
+  it('links the agents a run started, and never names one the person can’t see', async () => {
+    const caller = await create(PEOPLE.manager, { name: 'AEO Operator', visibility: 'workspace' });
+    const shared = await create(PEOPLE.manager, { name: 'FAQ writer', visibility: 'workspace' });
+    const theirs = await create(PEOPLE.otherManager, { name: 'Their private' });
+    const hiddenCaller = await create(PEOPLE.otherManager, { name: 'Their Operator' });
+    const parent = run(caller.id, 1).id;
+    db.tables.chat_agent_runs.push(
+      run(caller.id, 1),
+      run(shared.id, 2, { trigger_kind: 'agent', called_by_run_id: parent }),
+      run(theirs.id, 3, { trigger_kind: 'agent', called_by_run_id: parent }),
+      // A run of the shared agent someone's private agent started.
+      run(hiddenCaller.id, 4, { acting_user_id: PEOPLE.otherManager }),
+      run(shared.id, 5, { trigger_kind: 'agent', called_by_run_id: run(hiddenCaller.id, 4).id }),
+    );
+    db.tables.chat_conversations.push(
+      {
+        id: 'cccccccc-0000-4000-8000-000000000002',
+        organization_id: ORG,
+        agent_run_id: run(shared.id, 2).id,
+        user_id: PEOPLE.manager,
+        shared_at: null,
+        deleted_at: null,
+      },
+      {
+        id: 'cccccccc-0000-4000-8000-000000000003',
+        organization_id: ORG,
+        agent_run_id: run(theirs.id, 3).id,
+        user_id: PEOPLE.manager,
+        shared_at: null,
+        deleted_at: null,
+      },
+    );
+
+    const read = await listAgentRunsFor(MANAGER, { brandId: BRAND, agentId: caller.id });
+    expect(read?.runs[0].ran_agents).toEqual([
+      {
+        agent: 'FAQ writer',
+        status: 'done',
+        open: '/dashboard/chat/cccccccc-0000-4000-8000-000000000002',
+        agent_page: `/dashboard/agents/${shared.id}`,
+      },
+      { agent: 'An agent you can’t see', status: 'done' },
+    ]);
+    const body = JSON.stringify(read);
+    expect(body).not.toContain('Their private');
+    expect(body).not.toContain(theirs.id);
+    expect(body).not.toContain('cccccccc-0000-4000-8000-000000000003');
+
+    // Called by: the agent's name when the person sees it, nothing otherwise.
+    const sharedRuns = await listAgentRunsFor(MANAGER, { brandId: BRAND, agentId: shared.id });
+    expect(sharedRuns?.runs.map((r) => [r.trigger, r.called_by])).toEqual([
+      ['agent', undefined],
+      ['agent', 'AEO Operator'],
+    ]);
+    expect(JSON.stringify(sharedRuns)).not.toContain('Their Operator');
+
+    // The private agent's owner sees it by name, its page too.
+    const owner = await listAgentRunsFor(OTHER, { brandId: BRAND, agentId: caller.id });
+    expect(owner?.runs[0].ran_agents).toEqual([
+      {
+        agent: 'FAQ writer',
+        status: 'done',
+        open: null,
+        agent_page: `/dashboard/agents/${shared.id}`,
+      },
+      {
+        agent: 'Their private',
+        status: 'done',
+        open: null,
+        agent_page: `/dashboard/agents/${theirs.id}`,
+      },
+    ]);
+  });
+
   it("is not found for another person's private agent, or a brand of another workspace", async () => {
     const { id } = await create(PEOPLE.otherManager, { name: 'Their private' });
     db.tables.chat_agent_runs.push(run(id, 1, { acting_user_id: PEOPLE.otherManager }));

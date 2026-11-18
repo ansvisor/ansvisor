@@ -80,6 +80,9 @@ export const WORKSPACE_READS: ReadonlySet<string> = new Set([
   // The workspace's agents and their runs: names its members gave them, statuses and outcomes.
   'list_my_agents',
   'list_agent_runs',
+  // An AEO Operator's plan (AEO Operator plan §4.5): ids, codes and shares the app's code
+  // wrote, and its agents' names, which members gave them.
+  'get_agent_plan',
 ]);
 
 /** Whether reading a tool's result taints the run (§16a): outside text, not the workspace's own. */

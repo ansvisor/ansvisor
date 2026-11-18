@@ -60,21 +60,42 @@ export async function readDraftSourcesWith(
   supabase: SupabaseClient<Database>,
   id: string,
 ): Promise<{ data: DraftSourcesData; choices: DraftSourceChoice[] } | null> {
-  const [sourcesRes, choicesRes, trustedRes] = await Promise.all([
+  const [sourcesRes, choicesRes, trustedRes, mergedRes] = await Promise.all([
     supabase.rpc('content_draft_sources', { p_draft_id: id, p_days: SOURCES_DAYS }),
     supabase.from('content_draft_sources').select('kind, ref, included, added').eq('draft_id', id),
     // The sites the draft's brand trusts (00449). A database before it, or a
     // read that fails, trusts none: Trust reads the page as before.
     supabase.from('content_drafts').select('brands(trusted_sources)').eq('id', id).maybeSingle(),
+    // The brand's merged competitors' sites (00543), the kept competitor's
+    // too: never a source, as the tracked ones' aren't. None before 00543.
+    supabase
+      .from('content_drafts')
+      .select('brands(merged_competitors(domain))')
+      .eq('id', id)
+      .maybeSingle(),
   ]);
   if (sourcesRes.error) throw new Error(sourcesRes.error.message);
   if (choicesRes.error) throw new Error(choicesRes.error.message);
   if (!sourcesRes.data) return null;
   const kinds: readonly string[] = DRAFT_SOURCE_KINDS;
   const trusted = trustedRes.error ? null : trustedRes.data?.brands?.trusted_sources;
+  const sources = sourcesRes.data as unknown as DraftSourcesData;
+  const mergedDomains = mergedRes.error
+    ? []
+    : (mergedRes.data?.brands?.merged_competitors ?? [])
+        .map((row) =>
+          (row.domain ?? '')
+            .trim()
+            .toLowerCase()
+            .replace(/^www\./, ''),
+        )
+        .filter((domain) => domain && !(sources.competitorDomains ?? []).includes(domain));
   return {
     data: {
-      ...(sourcesRes.data as unknown as DraftSourcesData),
+      ...sources,
+      ...(mergedDomains.length > 0
+        ? { competitorDomains: [...(sources.competitorDomains ?? []), ...mergedDomains] }
+        : {}),
       trustedDomains: Array.isArray(trusted) ? trusted : [],
     },
     choices: (choicesRes.data ?? [])

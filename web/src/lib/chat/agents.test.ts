@@ -1339,6 +1339,123 @@ describe('reading', () => {
     expect(JSON.stringify(calleeView)).not.toContain('dddddddd-0000');
   });
 
+  it('links the runs a run started, and never names one the person can’t see', async () => {
+    // A workspace agent's run that started two: a workspace agent and someone else's private one.
+    const caller = await create(PEOPLE.manager, { name: 'AEO Operator', visibility: 'workspace' });
+    const shared = await create(PEOPLE.manager, { name: 'FAQ writer', visibility: 'workspace' });
+    const theirs = await create(PEOPLE.otherManager, { name: 'Their private' });
+    const hiddenCaller = await create(PEOPLE.otherManager, { name: 'Their Operator' });
+    const run = (id: string, agentId: string, over: Record<string, unknown> = {}) =>
+      db.tables.chat_agent_runs.push({
+        id,
+        organization_id: ORG,
+        agent_id: agentId,
+        agent_version: 1,
+        brand_id: BRAND,
+        trigger_kind: 'agent',
+        acting_user_id: PEOPLE.manager,
+        status: 'running',
+        skipped_reason: null,
+        stop_reason: null,
+        max_share: 0.02,
+        usage_share: 0.01,
+        outcome: null,
+        outcome_confidence: null,
+        queued_at: '2026-10-28T09:01:00.000Z',
+        started_at: '2026-10-28T09:01:01.000Z',
+        finished_at: null,
+        called_by_run_id: 'dddddddd-0000-4000-8000-000000000001',
+        ...over,
+      });
+    run('dddddddd-0000-4000-8000-000000000001', caller.id, {
+      trigger_kind: 'schedule',
+      called_by_run_id: null,
+      queued_at: '2026-10-28T09:00:00.000Z',
+    });
+    run('dddddddd-0000-4000-8000-000000000002', shared.id);
+    run('dddddddd-0000-4000-8000-000000000003', theirs.id, {
+      queued_at: '2026-10-28T09:02:00.000Z',
+    });
+    // A run of the shared agent that someone's private agent started.
+    run('dddddddd-0000-4000-8000-000000000004', hiddenCaller.id, {
+      trigger_kind: 'schedule',
+      acting_user_id: PEOPLE.otherManager,
+      called_by_run_id: null,
+      status: 'done',
+    });
+    run('dddddddd-0000-4000-8000-000000000005', shared.id, {
+      called_by_run_id: 'dddddddd-0000-4000-8000-000000000004',
+      queued_at: '2026-10-28T09:05:00.000Z',
+    });
+    // Each child's chat, the person's own; and another workspace's run naming the same caller.
+    for (const [chat, runId] of [
+      ['cccccccc-0000-4000-8000-000000000002', 'dddddddd-0000-4000-8000-000000000002'],
+      ['cccccccc-0000-4000-8000-000000000003', 'dddddddd-0000-4000-8000-000000000003'],
+    ]) {
+      db.tables.chat_conversations.push({
+        id: chat,
+        organization_id: ORG,
+        agent_run_id: runId,
+        user_id: PEOPLE.manager,
+        shared_at: null,
+        deleted_at: null,
+      });
+    }
+    db.tables.chat_agent_runs.push({
+      id: 'dddddddd-0000-4000-8000-000000000099',
+      organization_id: OTHER_ORG,
+      agent_id: 'abababab-0000-4000-8000-000000000999',
+      brand_id: FOREIGN,
+      trigger_kind: 'agent',
+      status: 'done',
+      max_share: 0.5,
+      usage_share: 0.4,
+      queued_at: '2026-10-28T09:03:00.000Z',
+      called_by_run_id: 'dddddddd-0000-4000-8000-000000000001',
+    });
+
+    const manager = await ctxOf(PEOPLE.manager);
+    const callerView = await agents.readAgent(manager, caller.id, NOW);
+    expect(callerView?.recentRuns[0].calls).toEqual([
+      {
+        agent: 'FAQ writer',
+        agentId: shared.id,
+        chatId: 'cccccccc-0000-4000-8000-000000000002',
+        status: 'running',
+        usageShare: 0.01,
+        maxShare: 0.02,
+      },
+      // Someone else's private agent: "An agent you can't see", with no name, chat or page.
+      {
+        agent: '',
+        agentId: null,
+        chatId: null,
+        hidden: true,
+        status: 'running',
+        usageShare: 0.01,
+        maxShare: 0.02,
+      },
+    ]);
+    const body = JSON.stringify(callerView);
+    expect(body).not.toContain('Their private');
+    expect(body).not.toContain(theirs.id);
+    expect(body).not.toContain('cccccccc-0000-4000-8000-000000000003');
+    // A run a private agent of someone else's started: no "Called by" its name.
+    const sharedRuns = await agents.listAgentRuns(manager, shared.id, 10);
+    expect(sharedRuns?.map((r) => [r.triggerKind, r.calledBy])).toEqual([
+      ['agent', null],
+      ['agent', 'AEO Operator'],
+    ]);
+    expect(JSON.stringify(sharedRuns)).not.toContain('Their Operator');
+
+    // The private agent's owner sees and names both; chats that aren't theirs stay closed.
+    const owner = await agents.readAgent(await ctxOf(PEOPLE.otherManager), caller.id, NOW);
+    expect(owner?.recentRuns[0].calls?.map((c) => [c.agent, c.agentId, c.chatId])).toEqual([
+      ['FAQ writer', shared.id, null],
+      ['Their private', theirs.id, null],
+    ]);
+  });
+
   it('gives a run whose chat was deleted no chat to open', async () => {
     const { id } = await create(PEOPLE.manager);
     db.tables.chat_agent_runs.push({
@@ -1697,5 +1814,338 @@ describe('the demo brand’s sample agents (00475)', () => {
         NOW,
       ),
     ).toMatchObject({ ok: true });
+  });
+});
+
+// ─── The AEO Operator (AEO Operator plan §4.2, §4.5; PR 4) ──────────────────
+
+describe('the AEO Operator', () => {
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', '');
+  });
+  const operator = (over: Record<string, unknown> = {}) => ({
+    name: 'AEO Operator',
+    skills: ['operator'],
+    ...over,
+  });
+  const refusalOf = async (userId: string, over: Record<string, unknown>) => {
+    const result = await agents.createAgent(await ctxOf(userId), input(operator(over)), NOW);
+    return result.ok ? 'ok' : result.refusal.code;
+  };
+  const versionRow = (id: string) =>
+    rows('chat_agent_versions').find(
+      (v) => v.agent_id === id && v.version === agentRow(id).version,
+    )!;
+
+  it('makes an Operator of /operator alone: its kind, a 5% daily budget and its settings', async () => {
+    const made = await create(PEOPLE.manager, operator({ operator: { maxRuns: 3 } }));
+    expect(agentRow(made.id)).toMatchObject({
+      kind: 'operator',
+      visibility: 'private',
+      // Its daily budget: 5% by default, never the workspace's per-run default (10%).
+      max_run_share: 0.05,
+      status: 'draft',
+    });
+    expect(versionRow(made.id)).toMatchObject({
+      skill_ids: ['operator'],
+      operator_json: { allowed: null, include_workspace: false, max_runs: 3, ask_first: true },
+    });
+    // Settings left out: the defaults, 5 a day.
+    const plain = await create(
+      PEOPLE.manager,
+      operator({ name: 'Operator 2', scope: { brand_ids: [BRAND_2] } }),
+    );
+    expect(versionRow(plain.id).operator_json).toMatchObject({ max_runs: 5 });
+    // Its budget may be set within 1–10%.
+    const seven = await create(PEOPLE.manager, operator({ name: 'Operator 3', maxRunShare: 0.07 }));
+    expect(agentRow(seven.id).max_run_share).toBe(0.07);
+    // Any other agent stays an agent, with no Operator settings.
+    const agent = await create(PEOPLE.manager);
+    expect(agentRow(agent.id).kind ?? 'agent').toBe('agent');
+    expect(versionRow(agent.id).operator_json).toBeUndefined();
+  });
+
+  it('refuses an Operator that isn’t one brand, private, 1–10% and without Can call, or isn’t alone', async () => {
+    expect(await refusalOf(PEOPLE.manager, { scope: { brand_ids: [BRAND, BRAND_2] } })).toBe(
+      'operator_scope',
+    );
+    expect(await refusalOf(PEOPLE.manager, { scope: { all_brands: true } })).toBe('operator_scope');
+    expect(await refusalOf(PEOPLE.admin, { visibility: 'workspace' })).toBe('operator_visibility');
+    expect(await refusalOf(PEOPLE.manager, { maxRunShare: 0.2 })).toBe('operator_budget');
+    expect(await refusalOf(PEOPLE.manager, { skills: ['operator', 'faq'] })).toBe(
+      'operator_skills',
+    );
+    // An Operator's settings on another agent.
+    expect(await refusalOf(PEOPLE.manager, { skills: ['winback'], operator: {} })).toBe(
+      'operator_skills',
+    );
+    const callee = await create(PEOPLE.manager, { name: 'Callee' });
+    expect(await refusalOf(PEOPLE.manager, { canCall: [callee.id] })).toBe('operator_can_call');
+    expect(rows('chat_agents').map((a) => a.name)).toEqual(['Callee']);
+  });
+
+  it('is Growth and up (operatorDenial), and nothing while CHAT_OPERATOR is off for the workspace', async () => {
+    db.tables.organizations[0].plan = 'starter';
+    const starter = await agents.createAgent(await ctxOf(PEOPLE.admin), input(operator()), NOW);
+    expect(starter).toMatchObject({
+      ok: false,
+      refusal: {
+        kind: 'denied',
+        code: 'plan_locked',
+        asked: 'operator',
+        denial: { needsPlan: 'Growth' },
+      },
+    });
+    db.tables.organizations[0].plan = 'growth';
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect(await refusalOf(PEOPLE.manager, {})).toBe('operator_off');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', OTHER_ORG);
+    expect(await refusalOf(PEOPLE.manager, {})).toBe('operator_off');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', ORG);
+    expect(await refusalOf(PEOPLE.manager, {})).toBe('ok');
+  });
+
+  it('keeps its kind and its shape on a change; its settings make a new version', async () => {
+    const op = await create(PEOPLE.manager, operator());
+    const agent = await create(PEOPLE.manager, { name: 'Win back' });
+    const ctx = await ctxOf(PEOPLE.manager);
+    const change = async (id: string, patch: Record<string, unknown>) => {
+      const result = await agents.updateAgent(ctx, id, updateAgentInput.parse(patch), NOW);
+      return result.ok ? 'ok' : result.refusal.code;
+    };
+    // Never an agent made an Operator, or an Operator made an agent.
+    expect(await change(agent.id, { skills: ['operator'] })).toBe('operator_kind');
+    expect(await change(op.id, { skills: ['winback'] })).toBe('operator_kind');
+    expect(await change(op.id, { skills: ['operator', 'faq'] })).toBe('operator_skills');
+    expect(await change(agent.id, { operator: { maxRuns: 2 } })).toBe('operator_skills');
+    // An Operator's shape: one brand, private, 1–10%.
+    expect(await change(op.id, { scope: { brand_ids: [BRAND, BRAND_2] } })).toBe('operator_scope');
+    expect(await change(op.id, { maxRunShare: 0.12 })).toBe('operator_budget');
+    expect(await change(op.id, { visibility: 'workspace' })).toBe('operator_visibility');
+    expect(agentRow(op.id).version).toBe(1);
+    // Its settings: a new version; its budget: on the agent.
+    expect(await change(op.id, { operator: { maxRuns: 8, includeWorkspace: true } })).toBe('ok');
+    expect(agentRow(op.id).version).toBe(2);
+    expect(versionRow(op.id).operator_json).toMatchObject({ max_runs: 8, include_workspace: true });
+    expect(await change(op.id, { maxRunShare: 0.1 })).toBe('ok');
+    expect(agentRow(op.id)).toMatchObject({ max_run_share: 0.1, kind: 'operator' });
+  });
+
+  it('turns on one Operator a brand, and never names the one that is on', async () => {
+    const admin = await ctxOf(PEOPLE.admin);
+    const mine = await create(PEOPLE.manager, operator());
+    const theirs = await create(PEOPLE.admin, operator({ name: 'Admin Operator' }));
+    const other = await create(
+      PEOPLE.admin,
+      operator({ name: 'B', scope: { brand_ids: [BRAND_2] } }),
+    );
+    expect(await agents.changeAgentState(admin, theirs.id, 'activate', NOW)).toMatchObject({
+      ok: true,
+    });
+    const second = await agents.changeAgentState(
+      await ctxOf(PEOPLE.manager),
+      mine.id,
+      'activate',
+      NOW,
+    );
+    expect(second).toMatchObject({ ok: false, refusal: { code: 'operator_taken' } });
+    expect(JSON.stringify(second)).not.toContain('Admin Operator');
+    // Another brand's is fine; once the first is paused, the brand is free.
+    expect(await agents.changeAgentState(admin, other.id, 'activate', NOW)).toMatchObject({
+      ok: true,
+    });
+    await agents.changeAgentState(admin, theirs.id, 'pause', NOW);
+    expect(
+      await agents.changeAgentState(await ctxOf(PEOPLE.manager), mine.id, 'activate', NOW),
+    ).toMatchObject({ ok: true });
+    // Moving one that is on to a brand that has one: refused too.
+    const moved = await agents.updateAgent(
+      await ctxOf(PEOPLE.admin),
+      other.id,
+      updateAgentInput.parse({ scope: { brand_ids: [BRAND] } }),
+      NOW,
+    );
+    expect(moved).toMatchObject({ ok: false, refusal: { code: 'operator_taken' } });
+    // Resume, too.
+    expect(await agents.changeAgentState(admin, theirs.id, 'resume', NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'operator_taken' },
+    });
+  });
+
+  it('won’t run (runChecks) below Growth, nor with CHAT_OPERATOR off; never on one action', async () => {
+    const op = await create(PEOPLE.admin, operator());
+    const admin = await ctxOf(PEOPLE.admin);
+    expect(await agents.changeAgentState(admin, op.id, 'activate', NOW)).toMatchObject({
+      ok: true,
+    });
+    const loaded = (await agents.loadAgent(ORG, op.id))!;
+    expect(await agents.runChecks(admin, loaded, 'admin', [])).toBeNull();
+    db.tables.organizations[0].plan = 'starter';
+    // A plan gate: the driver pauses a triggered Operator for it (plan).
+    expect(await agents.runChecks(await ctxOf(PEOPLE.admin), loaded, 'admin', [])).toMatchObject({
+      ok: false,
+      refusal: { kind: 'denied', code: 'plan_locked', asked: 'operator' },
+    });
+    db.tables.organizations[0].plan = 'growth';
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect(await agents.runChecks(admin, loaded, 'admin', [])).toMatchObject({
+      ok: false,
+      refusal: { code: 'operator_off' },
+    });
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    db.tables.actions = [
+      {
+        id: 'acacacac-0000-4000-8000-000000000001',
+        brand_id: BRAND,
+        status: 'new',
+        deleted_at: null,
+      },
+    ];
+    expect(
+      await runs.runAgentOnAction(admin, op.id, 'acacacac-0000-4000-8000-000000000001', NOW, null),
+    ).toMatchObject({ ok: false, refusal: { code: 'operator_action' } });
+  });
+
+  it('is never named in another agent’s Can call', async () => {
+    const op = await create(PEOPLE.manager, operator());
+    const result = await agents.createAgent(
+      await ctxOf(PEOPLE.manager),
+      input({ name: 'Caller', canCall: [op.id] }),
+      NOW,
+    );
+    expect(result).toMatchObject({ ok: false, refusal: { code: 'agent_not_found' } });
+  });
+
+  it('reads today’s plan for its card and its page, never naming an agent the person can’t see', async () => {
+    const op = await create(PEOPLE.manager, operator());
+    const mine = await create(PEOPLE.manager, { name: 'Mine' });
+    const theirs = await create(PEOPLE.otherManager, { name: 'Their private' });
+    const plan = (id: string, day: string, status: string, over: Record<string, unknown> = {}) => ({
+      id,
+      organization_id: ORG,
+      agent_id: op.id,
+      run_id: `run-${id}`,
+      brand_id: BRAND,
+      plan_day: day,
+      status,
+      budget_share: 0.05,
+      planned_share: 0.04,
+      items: [],
+      passed: [],
+      created_at: `${day}T07:00:00.000Z`,
+      ...over,
+    });
+    const childRun = (id: string, agentId: string, status: string, usage: number) => ({
+      id,
+      organization_id: ORG,
+      agent_id: agentId,
+      brand_id: BRAND,
+      called_by_run_id: 'run-p1',
+      status,
+      usage_share: usage,
+    });
+    db.tables.chat_agent_plans = [
+      plan('p0', '2026-10-28', 'declined'),
+      plan('p1', '2026-10-29', 'dispatched', {
+        items: [
+          {
+            agent_id: mine.id,
+            share: 0.02,
+            cost: 0.012,
+            value: 5,
+            reasons: [
+              { code: 'open_actions', category: 'recover', count: 3 },
+              { code: 'never_ran' },
+            ],
+            child_run_id: 'c1',
+          },
+          {
+            agent_id: theirs.id,
+            share: 0.02,
+            cost: 0.01,
+            value: 3,
+            reasons: [],
+            child_run_id: 'c2',
+          },
+          {
+            agent_id: mine.id,
+            share: 0.01,
+            cost: 0.01,
+            value: 1,
+            reasons: [],
+            child_run_id: null,
+            skipped: 'busy',
+          },
+        ],
+      }),
+      // Another workspace's plan for the same agent id names nothing here.
+      {
+        ...plan('px', '2026-10-29', 'proposed'),
+        organization_id: OTHER_ORG,
+        created_at: '2026-10-29T09:00:00.000Z',
+      },
+    ];
+    db.tables.chat_agent_runs = [
+      ...rows('chat_agent_runs'),
+      {
+        id: 'run-p1',
+        organization_id: ORG,
+        agent_id: op.id,
+        brand_id: BRAND,
+        status: 'done',
+        usage_share: 0.002,
+      },
+      childRun('c1', mine.id, 'done', 0.011),
+      childRun('c2', theirs.id, 'running', 0.004),
+    ];
+    const manager = await ctxOf(PEOPLE.manager);
+    const list = await agents.listAgents(manager, { view: 'mine' }, NOW);
+    expect(list.agents.find((a) => a.id === op.id)?.operator).toEqual({
+      today: { state: 'approved', agents: 3, started: 2, done: 1 },
+    });
+    expect(list.agents.find((a) => a.id === mine.id)?.operator).toBeUndefined();
+
+    const page = (await agents.readAgent(manager, op.id, NOW))!;
+    expect(page.settings?.operator).toEqual({ allowed: null, includeWorkspace: false, maxRuns: 5 });
+    expect(page.operator).toEqual({ today: { state: 'approved', agents: 3, started: 2, done: 1 } });
+    const today = page.operatorDay!.today!;
+    expect(page.operatorDay!.day).toBe('2026-10-29');
+    expect(today).toMatchObject({ state: 'approved', budgetShare: 0.05 });
+    expect(today.usedShare).toBeCloseTo(0.017);
+    expect(today.items).toEqual([
+      {
+        agentId: mine.id,
+        agent: 'Mine',
+        reasons: [{ code: 'open_actions', category: 'recover', count: 3 }, { code: 'never_ran' }],
+        share: 0.02,
+        cost: 0.012,
+        status: 'done',
+        skipped: null,
+        usageShare: 0.011,
+        chatId: null,
+      },
+      // Another manager's private agent: never named.
+      expect.objectContaining({ agentId: null, agent: '', hidden: true, status: 'running' }),
+      expect.objectContaining({ agentId: mine.id, status: null, skipped: 'busy' }),
+    ]);
+    expect(page.operatorDay!.history.map((h) => [h.day, h.state, h.agents])).toEqual([
+      ['2026-10-29', 'approved', 2],
+      ['2026-10-28', 'skipped', 0],
+    ]);
+    // Any other agent has no Operator page.
+    expect((await agents.readAgent(manager, mine.id, NOW))!.operatorDay).toBeUndefined();
+  });
+
+  it('copies an Operator as an Operator draft, with its settings', async () => {
+    const op = await create(PEOPLE.admin, operator({ operator: { maxRuns: 4 } }));
+    const copy = await agents.duplicateAgent(await ctxOf(PEOPLE.admin), op.id, NOW);
+    if (!copy.ok) throw new Error(JSON.stringify(copy.refusal));
+    expect(agentRow(copy.value.id)).toMatchObject({ kind: 'operator', status: 'draft' });
+    expect(versionRow(copy.value.id).operator_json).toMatchObject({ max_runs: 4 });
   });
 });

@@ -25,6 +25,16 @@ export function chatAgenticEnabled(organizationId?: string | null): boolean {
   return !!organizationId && orgs.includes(organizationId.trim().toLowerCase());
 }
 
+/**
+ * The workspaces CHAT_AGENTIC is on for, for a read that serves only them
+ * (the sweep's): null when it is on for every one, none when it is off.
+ */
+export function chatAgenticOrgScope(): string[] | null {
+  if (process.env.CHAT_AGENTIC !== 'true') return [];
+  const orgs = chatAgenticOrgs();
+  return orgs.length === 0 ? null : orgs;
+}
+
 /** CHAT_AGENTIC_ORGS as a list: trimmed, lower-cased, blanks dropped. */
 function chatAgenticOrgs(): string[] {
   return (process.env.CHAT_AGENTIC_ORGS ?? '')
@@ -53,4 +63,50 @@ export function autoGoLiveEnabled(organizationId?: string | null): boolean {
     .filter(Boolean);
   if (orgs.length === 0) return true;
   return !!organizationId && orgs.includes(organizationId.trim().toLowerCase());
+}
+
+/**
+ * The AEO Operator (AEO Operator plan §4.5) behind CHAT_OPERATOR, on top of
+ * CHAT_AGENTIC: off unless "true", and CHAT_OPERATOR_ORGS narrows it as
+ * CHAT_AGENTIC_ORGS does. Off, the /operator skill is in no list
+ * (skills/flagged.ts), no Operator can be made, turned on or run, and an
+ * Operator's run already queued stops before it starts. Web only: the API
+ * server never reads it.
+ */
+export function chatOperatorEnabled(organizationId?: string | null): boolean {
+  if (!chatAgenticEnabled(organizationId)) return false;
+  return chatOperatorOn(organizationId);
+}
+
+/**
+ * CHAT_OPERATOR alone, for a list with no workspace to ask about (the
+ * install's skills, its ready-to-use agents); with one, its CHAT_OPERATOR_ORGS
+ * too. CHAT_AGENTIC is chatOperatorEnabled's to check.
+ */
+export function chatOperatorOn(organizationId?: string | null): boolean {
+  if (process.env.CHAT_OPERATOR !== 'true') return false;
+  if (organizationId === undefined) return true;
+  const orgs = chatOperatorOrgs();
+  if (orgs.length === 0) return true;
+  return !!organizationId && orgs.includes(organizationId.trim().toLowerCase());
+}
+
+/**
+ * The workspaces chatOperatorEnabled is on for, for a read that serves only
+ * them (the sweep's): null when it is on for every one, none when it is off.
+ */
+export function chatOperatorOrgScope(): string[] | null {
+  const agentic = chatAgenticOrgScope();
+  if (process.env.CHAT_OPERATOR !== 'true') return [];
+  const orgs = chatOperatorOrgs();
+  if (agentic === null) return orgs.length === 0 ? null : orgs;
+  return orgs.length === 0 ? agentic : agentic.filter((id) => orgs.includes(id));
+}
+
+/** CHAT_OPERATOR_ORGS as a list: trimmed, lower-cased, blanks dropped. */
+function chatOperatorOrgs(): string[] {
+  return (process.env.CHAT_OPERATOR_ORGS ?? '')
+    .split(',')
+    .map((id) => id.trim().toLowerCase())
+    .filter(Boolean);
 }

@@ -168,14 +168,21 @@ describe('agentFormSetupFor', () => {
   it('names the Ansvisor skills this install does not offer now: the ChatGPT profile check until Business Hub is on, and Ads’ until Ads is', async () => {
     vi.stubEnv('BUSINESS_HUB_ENABLED', '');
     vi.stubEnv('ADS_ENABLED', '');
+    vi.stubEnv('CHAT_OPERATOR', '');
     expect((await setupOf(PEOPLE.manager)).offSkills).toEqual([
       'chatgpt-profile',
       'earn-or-pay',
       'ad-drafts',
+      // The AEO Operator's skill until CHAT_OPERATOR is on for the workspace (PR 4).
+      'operator',
     ]);
     vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
     vi.stubEnv('ADS_ENABLED', 'true');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
     expect((await setupOf(PEOPLE.manager)).offSkills).toEqual([]);
+    // CHAT_OPERATOR_ORGS names another workspace: off for this one.
+    vi.stubEnv('CHAT_OPERATOR_ORGS', '99999999-9999-4999-8999-999999999999');
+    expect((await setupOf(PEOPLE.manager)).offSkills).toEqual(['operator']);
     vi.unstubAllEnvs();
   });
 
@@ -215,6 +222,55 @@ describe('agentFormSetupFor', () => {
       org.id === ORG ? { ...org, plan: 'starter' } : org,
     );
     expect((await setupOf(PEOPLE.manager)).canCallLocked).toBe(true);
+  });
+
+  it('offers an AEO Operator its owner’s agents and the workspace’s, on or paused; never an Operator, a sample or another’s private one', async () => {
+    db.tables.chat_agents = [
+      ...db.tables.chat_agents.map((a) => ({ ...a, status: 'active' })),
+      {
+        id: 'a4',
+        organization_id: ORG,
+        name: 'Paused mine',
+        visibility: 'private',
+        owner_id: PEOPLE.manager,
+        status: 'paused',
+      },
+      {
+        id: 'a5',
+        organization_id: ORG,
+        name: 'Draft mine',
+        visibility: 'private',
+        owner_id: PEOPLE.manager,
+        status: 'draft',
+      },
+      {
+        id: 'a6',
+        organization_id: ORG,
+        name: 'An Operator',
+        visibility: 'private',
+        owner_id: PEOPLE.manager,
+        status: 'active',
+        kind: 'operator',
+      },
+      {
+        id: 'a7',
+        organization_id: ORG,
+        name: 'Sample',
+        visibility: 'workspace',
+        owner_id: PEOPLE.admin,
+        status: 'active',
+        demo_brand_id: DEMO,
+      },
+    ];
+    expect((await setupOf(PEOPLE.manager)).operatorAgents).toEqual([
+      { id: 'a2', name: 'My own', mine: true, workspace: false },
+      { id: 'a4', name: 'Paused mine', mine: true, workspace: false },
+      { id: 'a1', name: 'Shared one', mine: false, workspace: true },
+    ]);
+    // An Admin sees the others' private agents, yet an Operator never runs them (decision 4).
+    expect((await setupOf(PEOPLE.admin)).operatorAgents).toEqual([
+      { id: 'a1', name: 'Shared one', mine: true, workspace: true },
+    ]);
   });
 
   it('locks Full auto below Growth, hides it where Settings › Chat turned it off, and follows Settings › Chat’s defaults', async () => {

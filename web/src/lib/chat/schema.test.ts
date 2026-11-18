@@ -1296,3 +1296,263 @@ describe("Chat's date range (00528)", () => {
     expect(sql).toMatch(/count\(\*\) filter \(where o -> 'recommended' = 'true'::jsonb\) = 1/);
   });
 });
+
+describe('agents that run agents: the AEO Operator (00545)', () => {
+  const sql = migration('00545');
+  /** Its statements, function bodies left out. */
+  const statements = sql.replace(/\$\$[\s\S]*?\$\$/g, "''");
+
+  /** Text on one line, its whitespace collapsed. */
+  const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+  /** The migrations before `number`, in order, without their comments. */
+  const earlier = (number: string) =>
+    files
+      .filter((file) => file < `${number}_`)
+      .map((file) => readFileSync(`${dir}/${file}`, 'utf8').replace(/--[^\n]*/g, ''));
+
+  /** The last migration before 00545 whose text has `marker`. */
+  function lastWith(marker: string): string {
+    const found = earlier('00545').filter((text) => text.includes(marker));
+    if (found.length === 0) throw new Error(`Nothing before 00545 has ${marker}`);
+    return found[found.length - 1];
+  }
+
+  /** A named check's condition, added valid or not valid. */
+  function checkOf(text: string, name: string): string {
+    const m = text.match(
+      new RegExp(`add constraint ${name}\\s+check \\(([\\s\\S]*?)\\)\\s*(?:not valid\\s*)?;`),
+    );
+    if (!m) throw new Error(`No constraint ${name}`);
+    return flat(m[1]);
+  }
+
+  /** `text` without `part`, which it must hold exactly once. */
+  function without(text: string, part: string): string {
+    const at = text.indexOf(part);
+    if (at < 0 || text.indexOf(part, at + 1) >= 0) throw new Error(`Not once: ${part}`);
+    return text.slice(0, at) + text.slice(at + part.length);
+  }
+
+  /** The kinds each chat_notices kind check allows, in the order the migrations write them. */
+  function noticeKinds(texts: string[]): string[][] {
+    const lists: string[][] = [];
+    for (const text of texts) {
+      const created = text.match(
+        /create table if not exists public\.chat_notices \(([\s\S]*?)\n\);/,
+      );
+      if (created) lists.push(allowed(created[1], 'kind'));
+      for (const m of text.matchAll(
+        /add constraint chat_notices_kind_check\s+check \(([\s\S]*?)\)\s*(?:not valid\s*)?;/g,
+      )) {
+        lists.push(allowed(m[1], 'kind'));
+      }
+    }
+    return lists;
+  }
+
+  it('is schema and functions only: no row written, no index on an existing table', () => {
+    expect(statements).not.toMatch(/\binsert\s+into\b|\bdelete\s+from\b|\btruncate\b|\bcopy\b/);
+    expect(statements).not.toMatch(/\bupdate\s+(?:public\.)?\w+\s+set\b/);
+    // The new table is the only one made, and the only one indexed.
+    expect(
+      [...statements.matchAll(/create table (?:if not exists )?public\.(\w+)/g)].map((m) => m[1]),
+    ).toEqual(['chat_agent_plans']);
+    const indexed = [
+      ...statements.matchAll(/create (?:unique )?index (?:if not exists )?\w+\s+on (\S+)/g),
+    ];
+    expect(indexed.map((m) => m[1])).toEqual(Array(4).fill('public.chat_agent_plans'));
+    expect(statements.match(/create (?:unique )?index/g)).toHaveLength(4);
+    // Two columns: a constant default is metadata only, and operator_json has none.
+    expect([...statements.matchAll(/add column [^;]*;/g)].map((m) => flat(m[0]))).toEqual([
+      "add column if not exists kind text not null default 'agent';",
+      'add column if not exists operator_json jsonb;',
+    ]);
+  });
+
+  it('gives up on a held lock after 5 s, from its first statement to its last', () => {
+    expect(statements.trim().startsWith("set lock_timeout = '5s';")).toBe(true);
+    const reset = statements.indexOf('reset lock_timeout;');
+    expect(reset).toBeGreaterThan(0);
+    expect(flat(statements.slice(reset + 'reset lock_timeout;'.length))).toBe(
+      "notify pgrst, 'reload schema';",
+    );
+  });
+
+  it('adds each check on an existing table not valid, then validates it', () => {
+    const checks = [
+      ['chat_agents', 'chat_agents_kind_check'],
+      ['chat_agent_versions', 'chat_agent_versions_operator_json_check'],
+      ['chat_notices', 'chat_notices_kind_check'],
+    ];
+    expect([...statements.matchAll(/add constraint (\w+)/g)].map((m) => m[1])).toEqual(
+      checks.map(([, name]) => name),
+    );
+    for (const [table, name] of checks) {
+      const flatSql = flat(statements);
+      const add = flatSql.indexOf(`alter table public.${table} add constraint ${name} check (`);
+      const validate = flatSql.indexOf(`alter table public.${table} validate constraint ${name};`);
+      expect(add, name).toBeGreaterThan(0);
+      expect(flatSql.slice(add, flatSql.indexOf(';', add) + 1), name).toMatch(/\) not valid;$/);
+      expect(validate, name).toBeGreaterThan(add);
+    }
+  });
+
+  it('is safe to run again', () => {
+    expect(statements).not.toMatch(/create table (?!if not exists)/);
+    expect(statements).not.toMatch(/create (?:unique )?index (?!if not exists)/);
+    expect(statements).not.toMatch(/add column (?!if not exists)/);
+    expect(statements).not.toMatch(/create function/);
+    const before = (drop: string, create: string) => {
+      const at = statements.indexOf(drop);
+      expect(at, drop).toBeGreaterThanOrEqual(0);
+      expect(at, drop).toBeLessThan(statements.indexOf(create));
+    };
+    for (const [create, name] of statements.matchAll(/create trigger (\w+)/g)) {
+      before(`drop trigger if exists ${name} on`, create);
+    }
+    for (const [create, name] of statements.matchAll(/add constraint (\w+)/g)) {
+      before(`drop constraint if exists ${name};`, create);
+    }
+    for (const [create, name] of statements.matchAll(/create policy "([^"]+)"/g)) {
+      before(`drop policy if exists "${name}"`, create);
+    }
+  });
+
+  it('makes an agent an agent or an Operator when it is made, and never changes it', () => {
+    expect(allowed(checkOf(sql, 'chat_agents_kind_check'), 'kind')).toEqual(['agent', 'operator']);
+    const fixed = body(sql, 'chat_agents_kind_fixed');
+    expect(fixed).toContain('if new.kind is distinct from old.kind then');
+    expect(fixed).toContain(
+      "raise exception 'an agent''s kind is set when it is made and never changed'",
+    );
+    expect(fixed).toMatch(/set search_path = ''/);
+    expect(flat(statements)).toContain(
+      'create trigger trg_chat_agents_kind_fixed before update of kind on public.chat_agents for each row execute function public.chat_agents_kind_fixed();',
+    );
+  });
+
+  it('keeps an Operator version’s settings as an object of at most 4 KB, null for other agents', () => {
+    expect(checkOf(sql, 'chat_agent_versions_operator_json_check')).toBe(
+      "operator_json is null or (jsonb_typeof(operator_json) = 'object' and octet_length(operator_json::text) <= 4096)",
+    );
+  });
+
+  it('keeps one plan in force per Operator, brand and day, its budget in shares', () => {
+    const plans = sql.match(
+      /create table if not exists public\.chat_agent_plans \(([\s\S]*?)\n\);/,
+    )![1];
+    expect(allowed(plans, 'status')).toEqual([
+      'empty',
+      'proposed',
+      'dispatching',
+      'dispatched',
+      'summarized',
+      'declined',
+      'expired',
+    ]);
+    expect(plans).toMatch(
+      /agent_id uuid not null references public\.chat_agents\(id\) on delete cascade/,
+    );
+    expect(plans).toMatch(
+      /run_id uuid not null unique references public\.chat_agent_runs\(id\) on delete cascade/,
+    );
+    expect(plans).toMatch(
+      /brand_id uuid not null references public\.brands\(id\) on delete cascade/,
+    );
+    expect(plans).toMatch(/plan_day date not null/);
+    expect(plans).toMatch(
+      /budget_share numeric\(3, 2\) check \(budget_share between 0 and 0\.10\)/,
+    );
+    expect(plans).toMatch(/check \(planned_share <= budget_share\)/);
+    expect(flat(plans)).toContain(
+      "jsonb_typeof(items) = 'array' and jsonb_array_length(items) <= 10 and octet_length(items::text) <= 32768",
+    );
+    expect(plans).toMatch(/decided_by uuid references auth\.users\(id\) on delete set null/);
+    // Shares of the monthly AI limit, never dollars (CHAT-27 item 30).
+    expect(plans).not.toMatch(/cost|usd|dollar/i);
+    expect(flat(sql)).toContain(
+      "create unique index if not exists chat_agent_plans_day_uidx on public.chat_agent_plans (agent_id, brand_id, plan_day) where status in ('proposed', 'dispatching', 'dispatched', 'summarized');",
+    );
+  });
+
+  it('lets members read a plan as they read its agent’s runs, on brands they reach; the server writes', () => {
+    expect(sql).toMatch(/alter table public\.chat_agent_plans enable row level security/);
+    expect(sql).toMatch(/revoke all on table public\.chat_agent_plans from anon, authenticated;/);
+    expect([...statements.matchAll(/\bgrant [^;]*;/g)].map((m) => flat(m[0]))).toEqual([
+      'grant select on table public.chat_agent_plans to authenticated;',
+      'grant all on table public.chat_agent_plans to service_role;',
+    ]);
+    // chat_agent_runs' policy as it stands (00424): the agent, and the brand.
+    const runs = policy(
+      'chat_agent_runs: agent select',
+      lastWith('create policy "chat_agent_runs: agent select"'),
+    );
+    const agent = 'agent_id in (select a.id from public.chat_agents a)';
+    const brand = 'brand_id in (select public.user_brand_ids())';
+    expect(runs).toContain(agent);
+    expect(runs).toContain(brand);
+    expect(statements.match(/create policy/g)).toHaveLength(1);
+    expect(policy('chat_agent_plans: agent select', sql)).toBe(
+      `create policy "chat_agent_plans: agent select" on public.chat_agent_plans for select to authenticated using ( ${agent} and ${brand} );`,
+    );
+  });
+
+  it('changes only the call rules’ lines it means to: no Operator called, 10 calls for an Operator’s run', () => {
+    const marker = 'create or replace function public.chat_agent_runs_call_rules(';
+    const before = flat(body(lastWith(marker), 'chat_agent_runs_call_rules'));
+    const now = flat(body(sql, 'chat_agent_runs_call_rules'));
+    // The lines it adds: the limit's variable, the callee's kind, the caller's limit.
+    const declared = '$$ declare v_max integer; begin';
+    const callee =
+      " if not exists ( select 1 from public.chat_agents callee where callee.id = new.agent_id and callee.kind = 'agent' ) then raise exception 'a run calls agents only, never an Operator' using errcode = '23514'; end if;";
+    const limit =
+      " select case when caller.kind = 'operator' then 10 else 3 end into v_max from public.chat_agent_runs c left join public.chat_agents caller on caller.id = c.agent_id where c.id = new.called_by_run_id;";
+    expect(now).toContain(declared);
+    const rest = without(
+      without(
+        now.replace(declared, () => '$$ begin'),
+        callee,
+      ),
+      limit,
+    );
+    // The lines it changes: the count's limit and its message.
+    expect(rest).toBe(
+      before
+        .replace(') >= 3 then', ') >= v_max then')
+        .replace(
+          "'a run calls other agents at most 3 times' using",
+          "'a run calls other agents at most % times', v_max using",
+        ),
+    );
+    // Still one level deep, of another agent of the workspace, counted under the lock.
+    expect(now).toContain('c.called_by_run_id is null');
+    expect(now).toContain('pg_advisory_xact_lock');
+  });
+
+  it('changes only Can call’s rule it means to: Can call names agents, never an Operator', () => {
+    const marker = 'create or replace function public.chat_agent_versions_can_call_rules(';
+    const before = flat(body(lastWith(marker), 'chat_agent_versions_can_call_rules'));
+    const now = flat(body(sql, 'chat_agent_versions_can_call_rules'));
+    expect(
+      without(
+        now,
+        " if exists ( select 1 from public.chat_agents callee where callee.id = any (new.can_call) and callee.kind <> 'agent' ) then raise exception 'an agent calls agents only, never an Operator' using errcode = '23514'; end if;",
+      ),
+    ).toBe(before);
+  });
+
+  it('keeps every notice kind allowed before, and adds the Operator’s summary', () => {
+    const before = noticeKinds(earlier('00545'));
+    // 00441's table, then 00446, 00461 and 00474.
+    expect(before.length).toBeGreaterThanOrEqual(4);
+    const kinds = allowed(checkOf(sql, 'chat_notices_kind_check'), 'kind');
+    expect(kinds).toEqual([...before[before.length - 1], 'agent_plan_summary']);
+    for (const kind of before.flat()) expect(kinds, kind).toContain(kind);
+    // A later rewrite of the check keeps it too.
+    const all = noticeKinds(
+      files.map((file) => readFileSync(`${dir}/${file}`, 'utf8').replace(/--[^\n]*/g, '')),
+    );
+    expect(all[all.length - 1]).toContain('agent_plan_summary');
+  });
+});
