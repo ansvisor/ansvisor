@@ -1,6 +1,12 @@
 import type Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { addMonthsUtc, loadStripe, purchaseIdOf, type AddOnProductKind } from './add-ons';
+import {
+  addMonthsUtc,
+  isAddOnPrice,
+  loadStripe,
+  purchaseIdOf,
+  type AddOnProductKind,
+} from './add-ons';
 
 /**
  * The Stripe webhook's part for add-on packs (CHAT-18 §E items 15–18): the
@@ -322,11 +328,13 @@ async function grantStorageFromInvoice(invoice: Stripe.Invoice, paidAt: number):
 }
 
 /**
- * An invoice of packs only: an AI pack's own (its metadata names the
- * purchase), or one whose every line is a pack's price (a storage pack's
- * prorated first invoice). The plan's handlers leave those alone: a pack's
- * payment, paid or declined, never changes the plan's status. A read that
- * fails counts as a plan's invoice.
+ * An invoice of add-ons only: an AI pack's own (its metadata names the
+ * purchase), or one whose every line is an add-on's price: a storage pack's
+ * prorated first invoice, or Growth's tracking, brands and top-ups being
+ * bought or changed (00546). The plan's handlers leave those alone: an
+ * add-on's payment, paid or declined, never changes the plan's status. A
+ * price the catalog doesn't hold yet is read from Stripe (its lookup key or
+ * `addon` metadata). A read that fails counts as a plan's invoice.
  */
 async function packsOnlyInvoice(invoice: Stripe.Invoice): Promise<boolean> {
   if (purchaseIdOf(invoice.metadata)) return true;
@@ -342,10 +350,20 @@ async function packsOnlyInvoice(invoice: Stripe.Invoice): Promise<boolean> {
     console.error('[add-ons] Pack prices read failed:', error.message);
     return false;
   }
-  const packPrices = new Set(
-    (data ?? []).map((p: { stripe_price_id: string }) => p.stripe_price_id),
-  );
-  return prices.every((p) => packPrices.has(p as string));
+  const known = new Set((data ?? []).map((p: { stripe_price_id: string }) => p.stripe_price_id));
+  const unknown = [...new Set(prices as string[])].filter((p) => !known.has(p));
+  if (!unknown.length) return true;
+  // A plan's invoice holds the plan's price: one read, and it's the plan's.
+  try {
+    const stripe = await stripeClient();
+    for (const id of unknown) {
+      if (!isAddOnPrice(await stripe.prices.retrieve(id))) return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[add-ons] Price read failed:', err instanceof Error ? err.message : err);
+    return false;
+  }
 }
 
 // ─── Refunds ────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import { isSubscriptionActive } from '@/config/plans';
 import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
 import { handleAddOnEvent } from '@/lib/billing/add-on-webhook';
+import { syncAddOns } from '@/lib/billing/add-on-sync';
 import { handleTrialWillEnd } from '@/lib/billing/trial-ending';
 import type Stripe from 'stripe';
 
@@ -114,6 +115,8 @@ export async function POST(req: NextRequest) {
                 purchaseStarted: session.created,
                 ctx: 'webhook:checkout',
               });
+              // Growth's add-ons on it (00546), once the row names it.
+              await syncAddOns(subscriptionId);
             }
           }
         } else {
@@ -204,6 +207,9 @@ export async function POST(req: NextRequest) {
               ctx: 'webhook:subscription.updated',
             });
           }
+          // Growth's add-ons (00546): an item added, changed or removed, or
+          // the status they count under. Read from Stripe afresh.
+          await syncAddOns(subscription.id);
         }
         break;
       }
@@ -241,6 +247,8 @@ export async function POST(req: NextRequest) {
             // longer covers. Issue #79.
             await alignPromptsSafe(orgBefore.id, 'starter', 'subscription.deleted');
           }
+          // Its add-ons ended with it (00546).
+          await syncAddOns(subscription.id);
         }
         break;
       }

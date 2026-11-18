@@ -146,14 +146,43 @@ export function addMonthsUtc(from: Date, months: number): Date {
   return shifted;
 }
 
-/** A subscription item as the plan's routes read it. */
-type SubscriptionItemLike = { metadata?: Record<string, string> | null };
+/** The lookup keys of Growth's add-on prices (00546): addon_tracking_…, addon_brand_…, addon_ai_topup_…. */
+export const ADD_ON_LOOKUP_PREFIX = 'addon_';
+
+/** The `addon` metadata Growth's add-on prices carry in Stripe. */
+const ADD_ON_METADATA = new Set(['tracking', 'brand', 'ai_topup']);
+
+/** A Stripe price as an item or a line carries it. */
+export type PriceLike = {
+  id?: string;
+  lookup_key?: string | null;
+  metadata?: Record<string, string> | null;
+};
 
 /**
- * The plan's item on a subscription that may also hold storage packs: the
- * first that isn't a pack's (a pack's item carries its purchase in its
- * metadata). A plan change or a price read must never take a pack's.
+ * Whether a Stripe price is one of Growth's add-ons: its lookup key or its
+ * `addon` metadata says so. Read from Stripe, so a price the catalog hasn't
+ * resolved yet counts too.
+ */
+export function isAddOnPrice(price: PriceLike | string | null | undefined): boolean {
+  if (!price || typeof price === 'string') return false;
+  if (price.lookup_key?.startsWith(ADD_ON_LOOKUP_PREFIX)) return true;
+  return ADD_ON_METADATA.has(price.metadata?.addon ?? '');
+}
+
+/** A subscription item as the plan's routes read it. */
+type SubscriptionItemLike = {
+  metadata?: Record<string, string> | null;
+  price?: PriceLike | string | null;
+};
+
+/**
+ * The plan's item on a subscription that may also hold add-ons: the first
+ * that is neither a CHAT-18 pack's (its item carries its purchase in its
+ * metadata) nor a Growth add-on's (its price says so). A plan change or a
+ * price read must never take one of theirs; with no plan's item there is
+ * none.
  */
 export function planItemOf<T extends SubscriptionItemLike>(items: readonly T[]): T | undefined {
-  return items.find((item) => !purchaseIdOf(item.metadata)) ?? items[0];
+  return items.find((item) => !purchaseIdOf(item.metadata) && !isAddOnPrice(item.price));
 }

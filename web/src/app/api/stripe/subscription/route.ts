@@ -15,6 +15,9 @@ type SubscriptionItem = {
   price: {
     unit_amount: number | null;
     recurring: { interval: string } | null;
+    // A Growth add-on's price says so here (00546, lib/billing/add-ons.ts).
+    lookup_key?: string | null;
+    metadata?: Record<string, string> | null;
   };
 };
 
