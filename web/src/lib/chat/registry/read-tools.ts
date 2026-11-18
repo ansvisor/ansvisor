@@ -596,6 +596,8 @@ export const READ_TOOLS = [
         region: input.region,
         topicId: input.topic_id,
         sourceFilter: input.source_filter,
+        // Sources from the page: the cards' totals over every source, from the same scan.
+        allSourcesTotals: ctx.allSourcesTotals === true,
         ...pageWindow(input),
       });
       if (!read) return null;

@@ -125,6 +125,17 @@ export interface AgentEvalScenario {
    * place.
    */
   askedDomains?: readonly { domain: string; citations: number }[];
+  /**
+   * The page the question is asked beside, in the side panel (its context's
+   * route and chips), and the read that must take its period and filters:
+   * that read, with these inputs, over a window that starts no more than
+   * `days` back (the owner's rule, 2026-11-16: Chat reads what the page shows).
+   */
+  page?: {
+    route: string;
+    chips: readonly { key: string; label: string; value?: string }[];
+    read: { tool: string; days: number; input: Readonly<Record<string, unknown>> };
+  };
   /** What this scenario checks on its run besides every run's checks. */
   checks?: readonly ScenarioCheck[];
 }
@@ -405,6 +416,32 @@ export const QUESTION_SCENARIOS: readonly AgentEvalScenario[] = [
     promises: [],
     workspace: 'long_lists',
     askedDomains: [{ domain: EVAL_CITED_DOMAIN.domain, citations: EVAL_CITED_DOMAIN.citations }],
+  },
+  {
+    // Citations opens on the last 24 hours; filtered to ChatGPT, its table on Brand sources.
+    id: 'citations-page-scope',
+    group: 'skills',
+    name: 'Top cited domains, as Citations shows them',
+    skills: [],
+    mode: 'auto',
+    trigger: 'manual',
+    message: 'What are my top cited domains?',
+    promises: [],
+    page: {
+      route: '/dashboard/citations',
+      chips: [
+        { key: 'page', label: 'Citations' },
+        { key: 'brand', label: EVAL_BRAND.name, value: EVAL_BRAND.id },
+        { key: 'dates', label: 'Last 24 hours', value: '24h/' },
+        { key: 'filter:platform', label: 'ChatGPT', value: 'chatgpt-web' },
+        { key: 'filter:sources', label: 'Brand', value: 'own' },
+      ],
+      read: {
+        tool: 'list_citations',
+        days: 1,
+        input: { model: 'chatgpt-web', source_filter: 'owned' },
+      },
+    },
   },
   {
     id: 'ai-revenue-setup',
@@ -847,6 +884,54 @@ export function unnamedActionRefs(markdown: string): string[] {
     }
   }
   return found;
+}
+
+// ─── The page's period and filters ──────────────────────────────────────────
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Why no read of the page's took its period and filters: null when one did
+ * (its inputs, and a window starting no more than `days` back, an hour's
+ * grace for the run's own time).
+ */
+export function pageScopeMissed(
+  run: Pick<AgentEvalRun, 'reads' | 'readInputs'>,
+  read: NonNullable<AgentEvalScenario['page']>['read'],
+  now: number = Date.now(),
+): string | null {
+  const reads = run.readInputs.filter((_, i) => run.reads[i] === read.tool);
+  if (reads.length === 0) return `${read.tool} not read`;
+  const misses = reads.map((input) => {
+    const off = Object.entries(read.input)
+      .filter(([key, value]) => input[key] !== value)
+      .map(([key]) => `${key} ${JSON.stringify(input[key] ?? null)}`);
+    const from = typeof input.date_from === 'string' ? Date.parse(input.date_from) : NaN;
+    if (Number.isNaN(from) || from < now - read.days * 24 * HOUR_MS - HOUR_MS) {
+      off.push(`date_from ${JSON.stringify(input.date_from ?? null)}`);
+    }
+    return off;
+  });
+  return misses.some((off) => off.length === 0) ? null : misses[0].join(', ');
+}
+
+/**
+ * What an answer from a page's scope leaves unsaid: that it covers what the
+ * page shows, and with the page's Sources, that its citation counts are
+ * every source's while its lists follow Sources. Null when it says both.
+ */
+export function pageScopeUnsaid(
+  answer: string,
+  chips: NonNullable<AgentEvalScenario['page']>['chips'],
+): string | null {
+  if (!/as (?:shown )?on the page|sayfa(?:daki|da) gibi/i.test(answer)) {
+    return 'no "as on the page"';
+  }
+  const sources = chips.some((chip) => chip.key === 'filter:sources' && chip.value !== 'all');
+  if (sources && !/all sources|every source|tüm kaynak/i.test(answer)) {
+    return 'no "all sources" for the counts';
+  }
+  return null;
 }
 
 // ─── Actions asked for by their codes ───────────────────────────────────────
@@ -1346,6 +1431,16 @@ export function gradeAgentRun(scenario: AgentEvalScenario, run: AgentEvalRun): E
       ),
     );
   }
+  if (scenario.page) {
+    const said = pageScopeUnsaid(run.answer, scenario.page.chips);
+    checks.push(
+      check('says what the answer covers, as on the page', true, said === null, said ?? ''),
+    );
+    const missed = pageScopeMissed(run, scenario.page.read);
+    checks.push(
+      check("reads with the page's period and filters", true, missed === null, missed ?? ''),
+    );
+  }
   if (scenario.group === 'skills' && scenario.skill) {
     const named = skillReads(scenario.skill);
     const read = named.filter((tool) => run.reads.includes(tool));
@@ -1453,6 +1548,8 @@ const CHECK_TR: Readonly<Record<string, string>> = {
   'reads the actions by their codes': 'aksiyonları koduyla okudu',
   'names each action asked by its title and code': 'sorulan her aksiyonu başlığı ve koduyla andı',
   'names no other action in their place': 'yerlerine başka aksiyon saymadı',
+  "reads with the page's period and filters": 'sayfanın dönemi ve filtreleriyle okudu',
+  'says what the answer covers, as on the page': 'yanıtın kapsamını sayfadaki gibi söyledi',
   'reads the signals by their codes': 'sinyalleri koduyla okudu',
   'names each signal asked by its title and code': 'sorulan her sinyali başlığı ve koduyla andı',
   'names no other signal in their place': 'yerlerine başka sinyal saymadı',

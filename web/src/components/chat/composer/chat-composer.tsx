@@ -830,7 +830,8 @@ export function ChatComposer({
         </div>
       )}
       {keyForm && <YourKeysDialog open={keysOpen} onClose={() => setKeysOpen(false)} />}
-      {/* Context chips above the box, then Chat's date range: empty, the row hides. */}
+      {/* Context chips above the box, then Chat's date range (not beside a page's dates, which
+          Chat reads instead): empty, the row hides. */}
       <div
         data-slot="composer-context"
         className="mb-1.5 flex flex-wrap items-center gap-1.5 empty:hidden"
@@ -863,7 +864,7 @@ export function ChatComposer({
             </span>
           );
         })}
-        <RangeChip running={running} />
+        {!chips.some((chip) => chip.key === 'dates') && <RangeChip running={running} />}
       </div>
       <div
         ref={shell}

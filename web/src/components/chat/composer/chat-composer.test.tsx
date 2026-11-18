@@ -35,6 +35,7 @@ vi.mock('@/components/providers/ai-usage-provider', () => ({
 }));
 
 const { ChatComposer } = await import('./chat-composer');
+const { useChatRangeStore } = await import('../range/use-chat-range');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -572,6 +573,27 @@ describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
       references: [],
       attachments: [],
     });
+  });
+
+  it("hides the person's own range beside a page's dates, which Chat reads instead", async () => {
+    const before = useChatRangeStore.getState().state;
+    useChatRangeStore.setState({ state: { range: '30d', available: true } });
+    try {
+      const range = () => container.querySelector('[data-slot="composer-range"]');
+      await render({ chips: [{ key: 'page', label: 'Citations' }] });
+      expect(range()?.textContent).toBe('Last 30 days×');
+      await render({
+        chips: [
+          { key: 'page', label: 'Citations' },
+          { key: 'dates', label: 'Last 24 hours' },
+        ],
+      });
+      expect(range()).toBeNull();
+      const row = container.querySelector('[data-slot="composer-context"]')!;
+      expect(row.textContent).toBe('CitationsLast 24 hours');
+    } finally {
+      useChatRangeStore.setState({ state: before });
+    }
   });
 
   it('takes a page’s hand-off once: a question in the box, unsent, or an object as an @ chip (W1-08)', async () => {
