@@ -115,9 +115,9 @@ describe('Agent Center pages', () => {
 
   it('offer the AEO Operator only while CHAT_OPERATOR is on for the workspace', async () => {
     const offered = async () =>
-      (
-        (await AgentsPage()) as { props: { presets: { id: string }[] } }
-      ).props.presets.map((p) => p.id);
+      ((await AgentsPage()) as { props: { presets: { id: string }[] } }).props.presets.map(
+        (p) => p.id,
+      );
     vi.stubEnv('CHAT_OPERATOR', '');
     expect(await offered()).not.toContain('aeo-operator');
     vi.stubEnv('CHAT_OPERATOR', 'true');
