@@ -627,7 +627,53 @@ describe('cited domains and pages by their address', () => {
     ];
   });
 
+  /**
+   * The Citations page's daily functions (00118) over these answers, as the
+   * rollups add them up: by domain (its host, "www." aside), the brand's
+   * answers of the days only, chatgpt-shopping aside, most cited first.
+   */
+  beforeEach(() => {
+    type Answer = ReturnType<typeof answer>;
+    const ofDays = (args: Record<string, unknown>) =>
+      ((db.tables.prompt_results ?? []) as Answer[]).filter((row) => {
+        const day = row.created_at.slice(0, 10);
+        return (
+          row.brand_id === args.p_brand_id &&
+          row.platform !== 'chatgpt-shopping' &&
+          (!args.p_day_from || day >= String(args.p_day_from)) &&
+          (!args.p_day_to || day <= String(args.p_day_to))
+        );
+      });
+    db.rpcs.citations_window_stats_daily = (args) => [
+      { results: ofDays(args).length, regions: [] },
+    ];
+    db.rpcs.citations_domains_daily = (args) => {
+      const by = new Map<string, { total: number; results: Set<string>; models: Set<string> }>();
+      for (const row of ofDays(args)) {
+        for (const cite of row.citations) {
+          const domain = new URL(cite.url).hostname.toLowerCase().replace(/^www\./, '');
+          const agg = by.get(domain) ?? { total: 0, results: new Set(), models: new Set() };
+          agg.total += 1;
+          agg.results.add(row.id);
+          agg.models.add(row.model_used);
+          by.set(domain, agg);
+        }
+      }
+      return [...by]
+        .map(([domain, agg]) => ({
+          domain,
+          total_citations: agg.total,
+          results_citing: agg.results.size,
+          models: [...agg.models],
+        }))
+        .sort((a, b) => b.total_citations - a.total_citations);
+    };
+  });
+
   const window = { brandId: BRAND, dateFrom: '2026-10-01', dateTo: '2026-10-31' };
+  /** The answers a citations read selected: one bounded request, whatever it found. */
+  const answerReads = () =>
+    db.log.filter(([table, kind]) => table === 'prompt_results' && kind === 'select').length;
 
   it('finds a domain however it is written, past the first page, with its subdomains, pages and prompts', async () => {
     const page = await data.listCitationsFor(ALL, { ...window, limit: 50 });
@@ -655,6 +701,14 @@ describe('cited domains and pages by their address', () => {
       prompts_total: 1,
     });
     expect(found!.not_found).toEqual([]);
+    // The domains from the page's rollups, the pages and prompts from one read of the answers.
+    expect(answerReads()).toBe(2);
+    expect(db.log.filter(([, kind]) => kind === 'rpc').map(([fn]) => fn)).toEqual([
+      'citations_domains_daily',
+      'citations_window_stats_daily',
+      'citations_domains_daily',
+      'citations_window_stats_daily',
+    ]);
     expect(found!.period).toEqual({ date_from: '2026-10-01', date_to: '2026-10-31' });
     expect(found!.note).toContain(
       "Looked in this brand's AI answers from 2026-10-01 to 2026-10-31, every source type",

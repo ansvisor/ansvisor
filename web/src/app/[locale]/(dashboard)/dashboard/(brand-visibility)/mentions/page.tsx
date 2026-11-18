@@ -6,6 +6,7 @@ import { TabHeaderActions, useBrandRead } from '@/components/brand-visibility/sh
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { rangeChipLabel } from '@/lib/chat/page-context';
+import type { ChatPageView } from '@/lib/chat/page-view';
 import {
   DEFAULT_MENTIONS_FILTERS,
   DEFAULT_MENTIONS_TAB,
@@ -56,6 +57,8 @@ export default function MentionsPage() {
   // Read after mount (window isn't available during the server render), as
   // Citations does; the URL is written only once it has been read.
   const [urlRead, setUrlRead] = useState(false);
+  // What Chat's side panel sees of the Mentions tab's table, which keeps its own sort.
+  const [tableView, setTableView] = useState<ChatPageView | null>(null);
   useEffect(() => {
     const state = readMentionsState(new URLSearchParams(window.location.search));
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
@@ -120,6 +123,13 @@ export default function MentionsPage() {
             { type: 'chart', id: 'mentions-trend', label: tTrend('title') },
             { type: 'table', id: 'mentions-by-platform', label: tPlatforms('title') },
           ],
+          // And what else it shows (the owner's plan, item 8): the open tab, the search, and on
+          // the Mentions tab its table's sort, the answers on screen and how many match.
+          view: {
+            tab,
+            ...(filters.q.trim() ? { search: filters.q.trim() } : {}),
+            ...(tab === 'mentions' && tableView ? tableView : {}),
+          },
         }
       : null,
   );
@@ -185,6 +195,7 @@ export default function MentionsPage() {
               brandDomains={brandDomains}
               showCountry={regions.length > 1}
               exporter={exporter}
+              onChatView={setTableView}
             />
           )}
         </TabsContent>

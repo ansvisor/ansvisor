@@ -39,6 +39,11 @@ vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: vi.fn(async () => ({ ok: true, id: 'request-1' })),
 }));
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 const { AgentDetail } = await import('./agent-detail');
 const { UpgradeDialogContext } = await import('@/components/providers/upgrade-gate');
 
@@ -878,5 +883,26 @@ describe('AgentDetail: an AEO Operator (AEO Operator plan §4.3)', () => {
       '/dashboard/chat/cccccccc-0000-4000-8000-0000000000c9',
     );
     expect(row.textContent).toContain('0.4% of 2%');
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  it('holds the agent open by id, so its runs are this agent’s, with the runs’ filter picked', async () => {
+    await render();
+    expect(chatPage.mock.lastCall![0]).toEqual({
+      pageName: agent.name,
+      view: { open: { ref: AGENT_ID, label: agent.name } },
+    });
+    await click(action('agent.filterRuns')[2]);
+    expect(chatPage.mock.lastCall![0].view).toEqual({
+      tab: 'pending',
+      open: { ref: AGENT_ID, label: agent.name },
+    });
+  });
+
+  it('says nothing while the agent reads', async () => {
+    answer = () => new Promise<Response>(() => {}) as unknown as Response;
+    await render();
+    expect(chatPage.mock.lastCall![0]).toBeNull();
   });
 });

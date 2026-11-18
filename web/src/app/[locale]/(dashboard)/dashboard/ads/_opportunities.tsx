@@ -38,6 +38,7 @@ import {
   type AdsOpportunity,
 } from '@/lib/ads/api';
 import type { AdsPeriod } from '@/lib/ads/tabs';
+import { viewRows, type ChatPageView } from '@/lib/chat/page-view';
 import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { useUpgradeWallShown } from '@/lib/friction-events';
 import { cn } from '@/lib/utils';
@@ -193,11 +194,14 @@ export function AdsOpportunities({
   period,
   writable,
   thresholds,
+  onChatView,
 }: {
   period: AdsPeriod;
   writable: boolean;
   /** The workspace's own plan changes the thresholds: not Starter, not the trial, on any brand. */
   thresholds: boolean;
+  /** What Chat's side panel sees of the list (the prompts on screen); null when gone. */
+  onChatView?: (view: ChatPageView | null) => void;
 }) {
   const t = useTranslations('ads.opportunities');
   const { canManage, canAdmin } = useUserRole();
@@ -220,6 +224,21 @@ export function AdsOpportunities({
       live = false;
     };
   }, [brandId, period, key]);
+
+  // What Chat's side panel sees of the list (the owner's plan, item 8): once read, the prompts
+  // on screen under the filter, by their ids, with how many there are.
+  const shown = read?.key === key && read.page ? read.page.rows : null;
+  const filtered = shown && (filter === 'all' ? shown : shown.filter((r) => r.decision === filter));
+  const chatView = filtered
+    ? JSON.stringify({
+        rows: viewRows(filtered, (r) => ({ ref: r.promptId, label: r.text })),
+        total: filtered.length,
+      } satisfies ChatPageView)
+    : null;
+  useEffect(() => {
+    onChatView?.(chatView ? (JSON.parse(chatView) as ChatPageView) : null);
+  }, [onChatView, chatView]);
+  useEffect(() => () => onChatView?.(null), [onChatView]);
 
   if (read?.key !== key) return <Skeleton className="h-64 w-full rounded-xl" />;
   const page = read.page;

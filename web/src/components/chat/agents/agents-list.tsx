@@ -21,6 +21,7 @@ import { track } from '@/lib/analytics';
 import type { AgentListView } from '@/lib/chat/agent-rules';
 import type { AgentListItem, AgentListResult } from '@/lib/chat/agents';
 import { AGENT_TABS, averageShare, barWidth, percentOf, writesAgents } from '@/lib/chat/agent-view';
+import { viewRows, type ChatPageView } from '@/lib/chat/page-view';
 import { cn } from '@/lib/utils';
 import { AgentDot, agentDotOf } from './agent-dot';
 import {
@@ -299,11 +300,17 @@ export function AgentsList({
   now: nowProp,
   timeZone,
   onSummary,
+  onChatView,
 }: {
   now?: Date;
   timeZone?: string;
   /** The agents on and the plan's most, for Agent Center's count beside its title. */
   onSummary?: (summary: { active: number; activeLimit: number | null }) => void;
+  /**
+   * What Chat's side panel sees of the list (the owner's plan of 2026-11-16, step 9): the
+   * tab, the search, and once read the agents listed by id, with how many the tab has.
+   */
+  onChatView?: (view: ChatPageView | null) => void;
 }) {
   const tList = useTranslations('chatAgents.list');
   const { role } = useContext(RoleContext);
@@ -355,6 +362,22 @@ export function AgentsList({
   useEffect(() => {
     if (data) onSummary?.({ active: data.active, activeLimit: data.activeLimit });
   }, [data, onSummary]);
+
+  // By value: the list is a new array with every read.
+  const chatView = JSON.stringify({
+    tab,
+    ...(q ? { search: q } : {}),
+    ...(list.status === 'ready' && data
+      ? {
+          rows: viewRows(data.agents, (agent) => ({ ref: agent.id, label: agent.name })),
+          total: data.counts[tab],
+        }
+      : {}),
+  } satisfies ChatPageView);
+  useEffect(() => {
+    onChatView?.(JSON.parse(chatView) as ChatPageView);
+  }, [onChatView, chatView]);
+  useEffect(() => () => onChatView?.(null), [onChatView]);
 
   return (
     <div>

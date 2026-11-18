@@ -25,6 +25,16 @@ export function chatAgenticEnabled(organizationId?: string | null): boolean {
   return !!organizationId && orgs.includes(organizationId.trim().toLowerCase());
 }
 
+/**
+ * The workspaces CHAT_AGENTIC is on for, for a read that serves only them
+ * (the sweep's): null when it is on for every one, none when it is off.
+ */
+export function chatAgenticOrgScope(): string[] | null {
+  if (process.env.CHAT_AGENTIC !== 'true') return [];
+  const orgs = chatAgenticOrgs();
+  return orgs.length === 0 ? null : orgs;
+}
+
 /** CHAT_AGENTIC_ORGS as a list: trimmed, lower-cased, blanks dropped. */
 function chatAgenticOrgs(): string[] {
   return (process.env.CHAT_AGENTIC_ORGS ?? '')
@@ -76,10 +86,27 @@ export function chatOperatorEnabled(organizationId?: string | null): boolean {
 export function chatOperatorOn(organizationId?: string | null): boolean {
   if (process.env.CHAT_OPERATOR !== 'true') return false;
   if (organizationId === undefined) return true;
-  const orgs = (process.env.CHAT_OPERATOR_ORGS ?? '')
+  const orgs = chatOperatorOrgs();
+  if (orgs.length === 0) return true;
+  return !!organizationId && orgs.includes(organizationId.trim().toLowerCase());
+}
+
+/**
+ * The workspaces chatOperatorEnabled is on for, for a read that serves only
+ * them (the sweep's): null when it is on for every one, none when it is off.
+ */
+export function chatOperatorOrgScope(): string[] | null {
+  const agentic = chatAgenticOrgScope();
+  if (process.env.CHAT_OPERATOR !== 'true') return [];
+  const orgs = chatOperatorOrgs();
+  if (agentic === null) return orgs.length === 0 ? null : orgs;
+  return orgs.length === 0 ? agentic : agentic.filter((id) => orgs.includes(id));
+}
+
+/** CHAT_OPERATOR_ORGS as a list: trimmed, lower-cased, blanks dropped. */
+function chatOperatorOrgs(): string[] {
+  return (process.env.CHAT_OPERATOR_ORGS ?? '')
     .split(',')
     .map((id) => id.trim().toLowerCase())
     .filter(Boolean);
-  if (orgs.length === 0) return true;
-  return !!organizationId && orgs.includes(organizationId.trim().toLowerCase());
 }

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { autoGoLiveEnabled, chatAgenticEnabled, chatOperatorEnabled, chatOperatorOn } from './flag';
+import {
+  autoGoLiveEnabled,
+  chatAgenticEnabled,
+  chatAgenticOrgScope,
+  chatOperatorEnabled,
+  chatOperatorOn,
+  chatOperatorOrgScope,
+} from './flag';
 import { skillFlagOn } from './skills/flagged';
 import { enabledSkills } from './skills/library';
 
@@ -114,6 +121,29 @@ describe('chatOperatorEnabled (the AEO Operator, AEO Operator plan §4.5)', () =
     expect(chatOperatorEnabled(null)).toBe(false);
     // With no workspace to ask about (an install's list): the switch alone.
     expect(chatOperatorOn()).toBe(true);
+  });
+
+  it('names the workspaces it is on for, for the sweep’s reads: none off, null for all', () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', '');
+    expect(chatAgenticOrgScope()).toEqual([]);
+    expect(chatOperatorOrgScope()).toEqual([]);
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    expect(chatAgenticOrgScope()).toBeNull();
+    expect(chatOperatorOrgScope()).toBeNull();
+    vi.stubEnv('CHAT_OPERATOR_ORGS', ` ${ORG_A.toUpperCase()} `);
+    expect(chatOperatorOrgScope()).toEqual([ORG_A]);
+    // Both narrowed: the workspaces on both lists.
+    vi.stubEnv('CHAT_AGENTIC_ORGS', `${ORG_A},${ORG_B}`);
+    vi.stubEnv('CHAT_OPERATOR_ORGS', '');
+    expect(chatAgenticOrgScope()).toEqual([ORG_A, ORG_B]);
+    expect(chatOperatorOrgScope()).toEqual([ORG_A, ORG_B]);
+    vi.stubEnv('CHAT_OPERATOR_ORGS', ORG_B);
+    expect(chatOperatorOrgScope()).toEqual([ORG_B]);
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect(chatOperatorOrgScope()).toEqual([]);
   });
 
   it('hides the /operator skill everywhere while off: every list reads it as off', () => {

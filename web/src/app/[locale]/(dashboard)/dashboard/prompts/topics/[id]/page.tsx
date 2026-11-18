@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, use } from 'react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -34,6 +35,9 @@ import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import dynamic from 'next/dynamic';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
+import { viewRows } from '@/lib/chat/page-view';
 const DynamicVisibilityTrendChart = dynamic(
   () => import('./topic_charts').then((m) => m.VisibilityTrendChartView),
   {
@@ -188,6 +192,57 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
     loadData();
   }, [loadData]);
 
+  // Top/weak prompts — aggregate by prompt_id
+  const promptRollup = new Map<string, { promptText: string; totalScore: number; count: number }>();
+  for (const r of results) {
+    const ex = promptRollup.get(r.promptId) ?? {
+      promptText: r.promptText,
+      totalScore: 0,
+      count: 0,
+    };
+    ex.totalScore += r.visibilityScore;
+    ex.count += 1;
+    promptRollup.set(r.promptId, ex);
+  }
+  const promptList = [...promptRollup.entries()].map(([id, v]) => ({
+    id,
+    text: v.promptText,
+    avg: Math.round(v.totalScore / v.count),
+    runs: v.count,
+  }));
+  const topPrompts = [...promptList].sort((a, b) => b.avg - a.avg).slice(0, 5);
+  const weakPrompts = [...promptList].sort((a, b) => a.avg - b.avg).slice(0, 5);
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9's detail pages): the
+  // topic it holds open by its id, over all time as the page reads it, and once read the prompts
+  // it ranks (its Top performers and Needs improvement, each once), best first, by id. The
+  // server fills topic_id on its brand's reads from the path.
+  const tChatRange = useTranslations('chatPanel.range');
+  const ranked = new Set([...topPrompts, ...weakPrompts].map((p) => p.id));
+  useChatPageContext(
+    activeBrandId && topic?.id === topicId
+      ? {
+          pageName: topic.name,
+          dateRange: {
+            from: 'all',
+            to: null,
+            label: rangeChipLabel('all', {}, (key, values) => tChatRange(key, values)),
+          },
+          view: {
+            open: { ref: topicId, label: topic.name },
+            ...(loading
+              ? {}
+              : {
+                  rows: viewRows(
+                    [...promptList].sort((a, b) => b.avg - a.avg).filter((p) => ranked.has(p.id)),
+                    (p) => ({ ref: p.id, label: p.text }),
+                  ),
+                }),
+          },
+        }
+      : null,
+  );
+
   if (!activeBrandId) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
@@ -220,27 +275,6 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
       </div>
     );
   }
-
-  // Top/weak prompts — aggregate by prompt_id
-  const promptRollup = new Map<string, { promptText: string; totalScore: number; count: number }>();
-  for (const r of results) {
-    const ex = promptRollup.get(r.promptId) ?? {
-      promptText: r.promptText,
-      totalScore: 0,
-      count: 0,
-    };
-    ex.totalScore += r.visibilityScore;
-    ex.count += 1;
-    promptRollup.set(r.promptId, ex);
-  }
-  const promptList = [...promptRollup.entries()].map(([id, v]) => ({
-    id,
-    text: v.promptText,
-    avg: Math.round(v.totalScore / v.count),
-    runs: v.count,
-  }));
-  const topPrompts = [...promptList].sort((a, b) => b.avg - a.avg).slice(0, 5);
-  const weakPrompts = [...promptList].sort((a, b) => a.avg - b.avg).slice(0, 5);
 
   // Headline metric (#493): the topic-scoped prompt-level visibility rate.
   // getCompetitorComparison already computes it under the topic filter with

@@ -12,7 +12,12 @@ import { readAgentShares } from './agent-shares';
 import { isTriggered, readArmedOrgs } from './agent-triggers';
 import { pauseAgentForSystem } from './agents';
 import { endHeldRun, sweepChatRuns } from './engine';
-import { chatAgenticEnabled, chatOperatorEnabled } from './flag';
+import {
+  chatAgenticEnabled,
+  chatAgenticOrgScope,
+  chatOperatorEnabled,
+  chatOperatorOrgScope,
+} from './flag';
 import { chatRunsOnOwnKey } from './key';
 import { ownKeyFailure, resumeOwnKeyAgents } from './key-health';
 import { notifyOwnKeyFailure } from './key-notice';
@@ -325,7 +330,8 @@ async function openRunsToSettle(): Promise<OpenRun[]> {
  */
 async function expireUnansweredPlans(now: Date): Promise<number> {
   let expired = 0;
-  for (const plan of await proposedPlansThrough(dayIn(now.getTime(), 'UTC'), SWEEP_ROWS)) {
+  const lastDay = dayIn(now.getTime(), 'UTC');
+  for (const plan of await proposedPlansThrough(lastDay, SWEEP_ROWS, chatAgenticOrgScope())) {
     if (!chatAgenticEnabled(plan.organizationId)) continue;
     try {
       if (await endUnansweredPlan(plan, now)) expired += 1;
@@ -404,7 +410,7 @@ async function partialRead(
  * summarized anyway, from its own row. Only where the AEO Operator is on.
  */
 async function summarizeDispatchedPlans(now: Date): Promise<number> {
-  const plans = (await dispatchedPlans(SWEEP_ROWS)).filter((plan) =>
+  const plans = (await dispatchedPlans(SWEEP_ROWS, chatOperatorOrgScope())).filter((plan) =>
     chatOperatorEnabled(plan.organizationId),
   );
   if (plans.length === 0) return 0;

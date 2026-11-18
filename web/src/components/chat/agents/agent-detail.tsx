@@ -37,6 +37,7 @@ import {
   type RunFilter,
 } from '@/lib/chat/agent-view';
 import { cn } from '@/lib/utils';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { AgentImpactCard } from './agent-impact-card';
 import {
   AgentDenial,
@@ -758,6 +759,21 @@ export function AgentDetail({
       router.push('/dashboard/agents?tab=yours');
     },
   });
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): the agent it holds
+  // open, by id, so "its runs" are this agent's (list_agent_runs), and the runs' filter picked.
+  const openAgent = state.status === 'ready' ? state.agent : null;
+  useChatPageContext(
+    openAgent
+      ? {
+          pageName: openAgent.name,
+          view: {
+            ...(filter !== 'all' ? { tab: filter } : {}),
+            open: { ref: openAgent.id, label: openAgent.name },
+          },
+        }
+      : null,
+  );
 
   if (state.status === 'loading') {
     return (

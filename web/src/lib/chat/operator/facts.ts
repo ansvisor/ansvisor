@@ -319,6 +319,8 @@ async function readAgents(orgId: string, ownerId: string): Promise<AgentRead[]> 
     .eq('organization_id', orgId)
     .in('status', ['active', 'paused'])
     .is('demo_brand_id', null)
+    // An Operator never runs another, by its kind as well as by its skill below.
+    .neq('kind', 'operator')
     .order('updated_at', { ascending: false })
     .limit(AGENTS_MAX);
   if (error) throw new Error(error.message);

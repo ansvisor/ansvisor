@@ -25,6 +25,10 @@ export interface SignalsPageParams {
   brandId: string;
   status?: string;
   kind?: string;
+  /** The Signals page's filters: a category, an impact, a source its signals came from. */
+  category?: string;
+  impact?: string;
+  source?: string;
   /** The window's first and last day (or timestamps); none: every signal. */
   dateFrom?: string;
   dateTo?: string;
@@ -65,6 +69,10 @@ export async function listSignalsPageFor(
     if (from) query = query.or(`resolved_at.is.null,resolved_at.gte.${from}`);
     if (params.status) query = query.eq('status', params.status);
     if (params.kind) query = query.eq('kind', params.kind);
+    if (params.category) query = query.eq('category', params.category);
+    if (params.impact) query = query.eq('impact', params.impact);
+    // As the page's Source filter: a signal any of whose sources it is.
+    if (params.source) query = query.contains('source', [params.source]);
     return query;
   };
   const { rows, total } = await pageRows(

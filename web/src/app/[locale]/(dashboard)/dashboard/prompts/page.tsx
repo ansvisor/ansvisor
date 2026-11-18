@@ -133,6 +133,7 @@ import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state
 import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
+import { viewRows, type ChatPageView } from '@/lib/chat/page-view';
 import {
   startPromptVolumeAnalysis,
   getVolumeAnalysisStatus,
@@ -150,7 +151,7 @@ import {
   updatePrompt,
   type LocationQuota,
 } from '@/lib/actions/prompt';
-import { readPromptsPageData, readPromptVolumes } from '@/lib/prompts-reads';
+import { readPromptsPageData, readPromptVolumes, VOLUME_READ_RETRIES } from '@/lib/prompts-reads';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
@@ -173,6 +174,7 @@ import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getBrandFilterOptions } from '@/lib/visibility-reads';
 import { formatRegionDisplay, regionLabel } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
+import { VolumesFailedCard } from './_volumes-failed';
 import { brandLocation, useAllowedEngines } from './_prompt-defaults';
 import { TrackNowLine, useTrackNow } from './_track-now';
 import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
@@ -1323,14 +1325,6 @@ const VOLUME_POLL_MS = 10_000;
 const VOLUME_WATCH_MS = 30 * 60_000;
 
 /**
- * How many times a failed volumes read is tried again, at once, before the
- * page says the volumes are unavailable: a first read that hits a blip
- * otherwise left every Volume cell empty and every prompt "not analyzed"
- * until the range was changed.
- */
-const VOLUME_READ_RETRIES = 1;
-
-/**
  * Wording for the closed set of failure codes. Server text never reaches a
  * customer: it names batch sizes, upstream APIs and Postgres columns, none of
  * which mean anything to the person reading the toast.
@@ -1448,6 +1442,10 @@ export default function PromptsPage() {
     return 'tracked';
   })();
   const [view, setView] = useState<PromptsView>(initialView);
+  // What Chat's side panel sees of the Tracked table, which keeps its own sort and search.
+  const [tableView, setTableView] = useState<ChatPageView | null>(null);
+  // And the Topics table's (step 9).
+  const [topicsView, setTopicsView] = useState<ChatPageView | null>(null);
 
   const initialRange: PromptRangePreset = (() => {
     const raw = searchParams.get('range');
@@ -2172,6 +2170,7 @@ export default function PromptsPage() {
   // Chat's side panel sees the page (W1-08): its range, its location where
   // the tab reads one, and a tracked prompt the brand doesn't show up for
   // (the one asked most).
+  const tracked = tab === 'all' && view === 'tracked';
   const unseen = allPrompts
     .filter((prompt) => (visibility[prompt.id]?.runs ?? 0) > 0)
     .filter((prompt) => visibility[prompt.id].visibleRuns === 0)
@@ -2195,6 +2194,14 @@ export default function PromptsPage() {
             tChat('promptsNext'),
             tChat('actions'),
           ],
+          // And what else it shows (the owner's plan, item 8): the open tab, and on Tracked
+          // the table's sort, search, the prompts on screen and how many match; on Topics
+          // (step 9) its sort, its topics in the table's order and how many.
+          view: {
+            tab: tab === 'all' ? view : tab,
+            ...(tracked && tableView ? tableView : {}),
+            ...(tab === 'topics' && topicsView ? topicsView : {}),
+          },
         }
       : null,
   );
@@ -2417,6 +2424,7 @@ export default function PromptsPage() {
                     : undefined
                 }
                 onChanged={reloadAfterChange}
+                onChatView={setTableView}
               />
             </>
           )}
@@ -2434,6 +2442,7 @@ export default function PromptsPage() {
               onLoaded={() => setPromptDataWanted(true)}
               openAddTopic={addTopicPending}
               onAddTopicOpened={() => setAddTopicPending(false)}
+              onChatView={setTopicsView}
             />
           )}
         </TabsContent>
@@ -2522,21 +2531,7 @@ export default function PromptsPage() {
           {loading || volumesState === 'loading' ? (
             <InsightsSkeleton />
           ) : volumesState === 'failed' ? (
-            <Card data-volumes-failed>
-              <CardContent className="py-14 text-center text-sm">
-                <AlertCircle className="mx-auto h-9 w-9 text-destructive/60" />
-                <p className="mt-2 font-medium">Volume data couldn&apos;t be loaded.</p>
-                <Button
-                  className="mt-4 gap-2"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void loadVolumes()}
-                >
-                  <RotateCw className="h-4 w-4" />
-                  Retry
-                </Button>
-              </CardContent>
-            </Card>
+            <VolumesFailedCard onRetry={() => void loadVolumes()} />
           ) : volumes.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
@@ -3200,6 +3195,7 @@ function AllPromptsTab({
   onAddPrompt,
   onEditPrompt,
   onChanged,
+  onChatView,
 }: {
   loading: boolean;
   /** The last read failed: say so and offer to read again, never "No prompts yet". */
@@ -3263,6 +3259,8 @@ function AllPromptsTab({
   onEditPrompt?: (prompt: Prompt) => void;
   /** Reloads the page data after a row is paused, resumed or deleted from its menu. */
   onChanged: () => void;
+  /** What Chat's side panel sees of the table (its sort, search and rows on screen); null when gone. */
+  onChatView?: (view: ChatPageView | null) => void;
 }) {
   const tCommon = useTranslations('common');
   const tManagers = useTranslations('managersOnly');
@@ -4004,6 +4002,28 @@ function AllPromptsTab({
   // usage cards until a delete actually lands after its Undo window.
   const statusCounts = useMemo(() => countByStatus(allRows, now), [allRows, now]);
   const promptsPager = usePagination(filtered.length, promptsResetKey);
+
+  // What Chat's side panel sees of the table (the owner's plan, item 8): the sort picked (none
+  // until a header is), the search, the page of prompts on screen and how many match.
+  const chatView = loading
+    ? null
+    : JSON.stringify({
+        ...(isAllPromptsSortKey(rawSort)
+          ? { sort: { key: activeSort, dir } }
+          : latenessOrder
+            ? { sort: { key: 'behind', dir: 'desc' } }
+            : {}),
+        ...(search.trim() ? { search: search.trim() } : {}),
+        rows: viewRows(filtered.slice(promptsPager.start, promptsPager.end), (p) => ({
+          ref: p.id,
+          label: p.text,
+        })),
+        total: filtered.length,
+      } satisfies ChatPageView);
+  useEffect(() => {
+    onChatView?.(chatView ? (JSON.parse(chatView) as ChatPageView) : null);
+  }, [onChatView, chatView]);
+  useEffect(() => () => onChatView?.(null), [onChatView]);
 
   // Rows ticked for the bulk action bar. Only rows on screen can be ticked,
   // so the selection starts over whenever the rows on screen change.

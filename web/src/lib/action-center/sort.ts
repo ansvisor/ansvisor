@@ -1,5 +1,6 @@
 import type { ActionItem } from '@/lib/actions/action-center';
 import { comparePriority } from '@/lib/action-center/priority';
+import type { ChatPageSort } from '@/lib/chat/page-view';
 
 /**
  * How the Actions list orders its rows.
@@ -34,6 +35,17 @@ export function parseActionSort(value: string | null | undefined): ActionSort {
   if (!value) return DEFAULT_ACTION_SORT;
   if ((ACTION_SORTS as readonly string[]).includes(value)) return value as ActionSort;
   return RENAMED[value] ?? DEFAULT_ACTION_SORT;
+}
+
+/**
+ * A sort as Chat's side panel sends it (chat/page-view.ts): its column, and
+ * which way (Due date: soonest first).
+ */
+export function actionViewSort(sort: ActionSort): ChatPageSort {
+  if (sort === 'due_date') return { key: 'due_date', dir: 'asc' };
+  return sort.endsWith('_asc')
+    ? { key: sort.slice(0, -'_asc'.length), dir: 'asc' }
+    : { key: sort, dir: 'desc' };
 }
 
 /** The table's headers that sort on a click. */

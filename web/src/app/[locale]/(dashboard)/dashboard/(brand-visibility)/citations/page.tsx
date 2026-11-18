@@ -27,6 +27,7 @@ import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { viewRows } from '@/lib/chat/page-view';
 import { rangeChipLabel } from '@/lib/chat/page-context';
 import { formatRegionDisplay } from '@/lib/region';
 import { Link } from '@/i18n/navigation';
@@ -1326,6 +1327,31 @@ export default function CitationsPage() {
   );
   const topicName = topics.find((topic) => topic.id === filters.topic)?.name;
   const promptText = prompts.find((prompt) => prompt.id === filters.prompt)?.text;
+  // And what else it shows (the owner's plan, item 8): the open tab, and once read, the page of
+  // domains or URLs on screen, by their domain or address, with how many the table has.
+  const tabRows =
+    sourceTab === 'domains' && data
+      ? {
+          rows: viewRows(filteredDomainRows.slice(domainPager.start, domainPager.end), (row) => ({
+            ref: row.domain,
+            label: row.domain,
+          })),
+          total: filteredDomainRows.length,
+        }
+      : sourceTab === 'urls' && data
+        ? {
+            rows: viewRows(filteredUrlRows.slice(urlPager.start, urlPager.end), (row) => ({
+              ref: row.url,
+              label: row.title || row.url,
+            })),
+            total: filteredUrlRows.length,
+          }
+        : sourceTab === 'gaps' && gaps
+          ? {
+              rows: viewRows(gaps.gapDomains, (row) => ({ ref: row.domain, label: row.domain })),
+              total: gaps.gapDomains.length,
+            }
+          : {};
   useChatPageContext(
     brand
       ? {
@@ -1373,6 +1399,7 @@ export default function CitationsPage() {
             tChat('actions'),
           ],
           referenceables: [{ type: 'table', id: 'citations-sources', label: t('sourcesTitle') }],
+          view: { tab: sourceTab, ...tabRows },
         }
       : null,
   );

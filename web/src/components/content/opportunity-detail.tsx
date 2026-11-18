@@ -180,6 +180,7 @@ export function OpportunityDetail({
   inDrawer = false,
   onChanged,
   onPrioritized,
+  onOpportunity,
 }: {
   id: string;
   /** In the list's drawer: no back link, and the layout follows the drawer's width. */
@@ -191,6 +192,8 @@ export function OpportunityDetail({
    * rows' marks (they aren't read again on a refresh), so its menu agrees.
    */
   onPrioritized?: (id: string) => void;
+  /** Its own page: the opportunity as read, for Chat's side panel (the page sends it). */
+  onOpportunity?: (opportunity: ContentOpportunity) => void;
 }) {
   const t = useTranslations('content');
   const failureToast = useFailureToast();
@@ -204,6 +207,9 @@ export function OpportunityDetail({
   const tManagers = useTranslations('managersOnly');
 
   const [opportunity, setOpportunity] = useState<ContentOpportunity | null>(null);
+  useEffect(() => {
+    if (opportunity) onOpportunity?.(opportunity);
+  }, [opportunity, onOpportunity]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [generatingBrief, setGeneratingBrief] = useState(false);

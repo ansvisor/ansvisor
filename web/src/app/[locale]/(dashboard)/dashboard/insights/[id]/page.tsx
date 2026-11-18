@@ -25,6 +25,7 @@ import { ResponseDetail } from '@/components/results/response-detail';
 import { formatRegionDisplay } from '@/lib/region';
 import { formatDateTime } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 
 function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'negative' }) {
   const t = useTranslations('insights');
@@ -84,6 +85,23 @@ export default function ResultDetailPage() {
       cancelled = true;
     };
   }, [resultId, attempt]);
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9's detail pages): the
+  // AI answer it holds open by its id, named by its prompt and platform.
+  const tChatPanel = useTranslations('chatPanel');
+  useChatPageContext(
+    result?.id === resultId
+      ? {
+          pageName: tChatPanel('pageNames.aiAnswer'),
+          view: {
+            open: {
+              ref: resultId,
+              label: `${result.promptText} (${PLATFORM_LABELS[result.platform] ?? result.platform})`,
+            },
+          },
+        }
+      : null,
+  );
 
   // Opened in its own tab ("Open full page" on a prompt) there is no history
   // to go back to, so Back leads to the result's prompt instead.

@@ -47,6 +47,7 @@ import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
 import type { SentFile } from '@/lib/chat/uploads';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { ChatReference } from '@/lib/chat/references';
+import type { ChatPageView } from '@/lib/chat/page-view';
 import {
   ChatComposer,
   type ComposerChip,
@@ -219,6 +220,7 @@ export function ChatThreadView({
   onRemoveChip: ownRemoveChip,
   pageReferences,
   pageRoute: ownRoute,
+  pageView,
   draft,
   onOwnKey = false,
   keyFailure = null,
@@ -248,6 +250,8 @@ export function ChatThreadView({
   pageReferences?: ChatReference[];
   /** The page the message is sent from, kept with it. */
   pageRoute?: string;
+  /** What the page on `route` shows as the message goes (its tab, sort, search, rows, URL state). */
+  pageView?: (route?: string) => ChatPageView | undefined;
   /** A question or an object the page hands the box. */
   draft?: ComposerDraft | null;
   /** Chat runs on the workspace's own key: a used-up allowance doesn't pause it. */
@@ -631,7 +635,9 @@ export function ChatThreadView({
           : {}),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(sent.attachments.length > 0 ? { attachmentIds: sent.attachments } : {}),
-        ...(sent.context.length > 0 ? { context: { route, chips: sent.context } } : {}),
+        ...(sent.context.length > 0
+          ? { context: { route, chips: sent.context, view: pageView?.(route) } }
+          : {}),
         ...(sent.references.length > 0 ? { references: sent.references } : {}),
         ...(fromRunId ? { fromRunId } : {}),
         ...(keySource ? { keySource } : {}),

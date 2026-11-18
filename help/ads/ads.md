@@ -44,7 +44,7 @@ On the demo brand, Ads shows every tab and row as Growth has them, with the rule
 
 ## Ask Chat about Ads
 
-With Chat open beside **Ads**, it knows the page and your period, and suggests questions such as "Which buying-intent prompts should we pay for?". Two skills cover Ads:
+With Chat open beside **Ads**, it knows the page and reads its period, and suggests questions such as "Which buying-intent prompts should we pay for?". Asked anywhere else, Chat reads Ads over 30 days, as the page opens, unless you name another period. Two skills cover Ads:
 
 - **Earn or pay** (**/earn-or-pay**) explains a prompt's decision: why, who AI picks, where you stand and its searches, with one next step. It never changes a decision.
 - **Ad drafts** (**/ad-drafts**) writes or rewrites a prompt's drafts from your approved brand facts. Admins and Managers save them on a card they approve.

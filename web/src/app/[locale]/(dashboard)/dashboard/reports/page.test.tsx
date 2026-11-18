@@ -45,6 +45,11 @@ vi.mock('@/hooks/use-feature-gate', () => ({
   }),
 }));
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 const { default: ReportsPage } = await import('./page');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -149,5 +154,24 @@ describe('Reports', () => {
     await act(async () => generate().click());
     expect(section().disabled).toBe(true);
     expect(section().textContent).toBe('AI-sourced pipelineGrowth');
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  it('sends the saved reports by id, each with the days it covers', async () => {
+    await render(false);
+    expect(chatPage.mock.lastCall![0]).toEqual({
+      pageName: 'Reports',
+      view: {
+        rows: [{ ref: 'r1', label: 'October review (2026-10-01 – 2026-10-27)' }],
+        total: 1,
+      },
+    });
+  });
+
+  it('sends no rows while it reads', async () => {
+    reports.getReports.mockReturnValue(new Promise(() => {}));
+    await render(false);
+    expect(chatPage.mock.lastCall![0].view).toEqual({});
   });
 });

@@ -55,6 +55,11 @@ vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 const schedules = vi.hoisted(() => ({ listChatSchedules: vi.fn(async () => ({ ok: false })) }));
 vi.mock('@/lib/actions/chat-schedules', () => schedules);
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 const { AgentCenter } = await import('./agent-center');
 const { track } = await import('@/lib/analytics');
 
@@ -669,5 +674,47 @@ describe('an AEO Operator’s card (AEO Operator plan §4.3)', () => {
     await render();
     expect(cards()[0].querySelector('[data-slot="agent-operator-badge"]')).not.toBeNull();
     expect(cards()[0].querySelector('[data-slot="agent-operator-today"]')).toBeNull();
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  const view = () => chatPage.mock.lastCall![0].view;
+
+  it('sends the tab, the search and once read the agents listed by id, with the tab’s count', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await render();
+      expect(chatPage.mock.lastCall![0].pageName).toBe('Agents');
+      expect(view()).toEqual({
+        tab: 'mine',
+        rows: [
+          { ref: AGENT_ID, label: 'Citation win-back' },
+          { ref: 'aaaaaaaa-0000-4000-8000-000000000002', label: 'Weekly report' },
+        ],
+        total: 2,
+      });
+      await click(action('agents.filter')[2]);
+      expect(view()).toMatchObject({ tab: 'paused', total: 1 });
+      // The search as the list reads it: once the typing stops, without a skill's slash.
+      const input = action('agents.search')[0] as HTMLInputElement;
+      await act(async () => {
+        const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+        set.call(input, '/winback');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+      await settle();
+      expect(view()).toMatchObject({ tab: 'paused', search: 'winback' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends no rows while the list reads', async () => {
+    answer = () => new Promise<Response>(() => {}) as unknown as Response;
+    await render();
+    expect(view()).toEqual({ tab: 'mine' });
   });
 });
