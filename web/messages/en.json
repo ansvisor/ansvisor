@@ -41,6 +41,19 @@
       "startPlan": "Start your plan"
     },
     "getMoreWindow": {
+      "topUp": {
+        "title": "AI usage top-up",
+        "label": "AI usage top-ups",
+        "buy": "Buy {option} · {price}",
+        "confirm": "Pay {price} now, from the card on file? It adds to this period until your plan renews.",
+        "pay": "Pay {price}",
+        "cancel": "Cancel",
+        "paying": "Paying…",
+        "done": "Top-up bought. It counts as soon as the payment is confirmed.",
+        "starter": "Growth comes with 5× the AI usage, and AI top-ups whenever you need more.",
+        "seeGrowth": "See Growth",
+        "oldCredits": "AI credit packs are no longer sold; credits you bought stay until they expire."
+      },
       "titleAi": "Get more AI credits",
       "titleStorage": "Get more storage",
       "description": "Your plan, where your limits stand, and the packs that add more.",
@@ -49,7 +62,7 @@
       "aiLine": "AI usage this month: {percent} · {plan} · resets {date}",
       "aiLineNoDate": "AI usage this month: {percent} · {plan}",
       "ownKey": "Use your own key",
-      "askAi": "Buy an AI credit pack",
+      "askAi": "Buy an AI usage top-up",
       "askStorage": "Buy a storage pack",
       "estimates": {
         "title": "What a pack can cover, roughly",
