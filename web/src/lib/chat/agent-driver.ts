@@ -49,6 +49,7 @@ import { chatAgenticEnabled } from './flag';
 import { resolveAgentNeedsYou, tellAgentNeedsYou } from './agent-needs-you';
 import { openHeadlessRun } from './headless-run';
 import { callScopeOf, callableAgentsOf, type CallScope } from './agent-calls';
+import { operatorReasonWords, operatorScopeOf, type OperatorScope } from './agent-children';
 import { openAgentFollowUps } from './schedule/followup';
 
 /**
@@ -83,6 +84,8 @@ import { openAgentFollowUps } from './schedule/followup';
  * (CHAT-27 item 22); a card left 7 days stops it, "No answer in 7 days"
  * (§H item 40), and a run held at a limit for 7 days stops at it. The
  * person it acts as finds them in their Inbox (the run's chat is theirs).
+ * So does a run an AEO Operator started (agent-children.ts): nobody watches
+ * it either, so at its own cap it stops, as a triggered run does.
  * An ended run counts toward the agent's failed runs in a row (3 pause it,
  * failures); one that shipped something gets a Pending outcome until the
  * impact ledger measures it (§I). Each run's use is kept by the server as
@@ -234,6 +237,14 @@ async function endBeforeStart(
 const skillsLine = (skills: readonly string[]) =>
   skills.map((skill) => runnerT('skill', { skill })).join(runnerT('then'));
 
+/** Why an AEO Operator started the run, in words the code writes from the plan's codes. */
+function operatorLine(scope: OperatorScope): string {
+  const reasons = scope.reasons.map(operatorReasonWords);
+  return reasons.length > 0
+    ? runnerT('operator', { reasons: reasons.join(', ') })
+    : runnerT('operatorNoReasons');
+}
+
 /**
  * The run's message: the agent and its brand, its skills in order, what
  * started it, each Optional connection the brand lacks (done without, and
@@ -254,6 +265,8 @@ export function agentRunMessage(input: {
   missing?: readonly string[];
   /** Another agent's run called it (CHAT-27 phase 2): that agent; what it asks is in the scope. */
   call?: CallScope | null;
+  /** An AEO Operator's plan started it (agent-children.ts): why, as the plan's codes. */
+  operator?: OperatorScope | null;
   /** The agents it may run with run_agent, by name (their ids are in the scope). */
   callable?: readonly { name: string }[];
 }): string {
@@ -264,7 +277,9 @@ export function agentRunMessage(input: {
       brand: input.brand,
       skills: skillsLine(input.skills),
     }),
-    runnerT('started', { trigger: input.triggerKind, count: signals }),
+    input.operator
+      ? operatorLine(input.operator)
+      : runnerT('started', { trigger: input.triggerKind, count: signals }),
   ];
   // Its number and category only: the action's title and tasks may come from
   // outside, so they go in the scope as data (runScope), never in the message.
@@ -287,8 +302,10 @@ export function agentRunMessage(input: {
   if (input.callable?.length) {
     lines.push(runnerT('canCall', { agents: input.callable.map((a) => a.name).join(', ') }));
   }
-  // Nobody watches a triggered run, nor one another agent called.
-  if (isTriggered(input.triggerKind) || input.call) lines.push(runnerT('background'));
+  // Nobody watches a triggered run, nor one another agent called or an Operator started.
+  if (isTriggered(input.triggerKind) || input.call || input.operator) {
+    lines.push(runnerT('background'));
+  }
   return lines.join('\n\n');
 }
 
@@ -307,6 +324,7 @@ function runScope(
     triggerKind: string;
     action?: ActionSnapshot | null;
     call?: CallScope | null;
+    operator?: OperatorScope | null;
     callable?: readonly { id: string; name: string }[];
   },
   evidence: AgentEvidence,
@@ -375,11 +393,22 @@ function runScope(
   // What the calling agent asks, as data (CHAT-27 phase 2), and the agents it may run, by id.
   const onCall =
     withIds && input.call ? { call: { agent: input.call.agent, ask: input.call.ask } } : {};
+  // An Operator's plan: its id and why, as codes the plan's code wrote (never text).
+  const onPlan =
+    withIds && input.operator
+      ? { operator: { plan_id: input.operator.planId, reasons: input.operator.reasons } }
+      : {};
   const canCall =
     withIds && input.callable?.length
       ? { can_call: input.callable.map((a) => ({ agent_id: a.id, name: a.name })) }
       : {};
-  return { context: { route: '/dashboard/agents', chips }, ...onAction, ...onCall, ...canCall };
+  return {
+    context: { route: '/dashboard/agents', chips },
+    ...onAction,
+    ...onCall,
+    ...onPlan,
+    ...canCall,
+  };
 }
 
 /**
@@ -472,14 +501,19 @@ export async function openAgentRun(
   const timezone = validTimezone(evidence.fires.find((f) => f.timezone)?.timezone);
   // Called by another agent's run (CHAT-27 phase 2): in the stricter mode, that run's ask as data.
   const call = run.trigger_kind === 'agent' ? callScopeOf(run.evidence_json) : null;
-  // The agents it may run (none for a called run: no chains).
-  const callable = call ? [] : await callableAgentsOf(run.id);
+  // Started by an AEO Operator's plan (agent-children.ts): in its own mode, untainted, with the
+  // plan's reasons in words the code writes. Nothing the Operator's model wrote reaches it.
+  const operator =
+    run.trigger_kind === 'agent' && !call ? operatorScopeOf(run.evidence_json) : null;
+  // The agents it may run (none for a run another run started: no chains).
+  const callable = call || operator ? [] : await callableAgentsOf(run.id);
   const words = {
     agent: agent.row.name,
     brand: brand.name,
     triggerKind: run.trigger_kind,
     action,
     call,
+    operator,
     callable,
   };
   const text = agentRunMessage({
@@ -772,9 +806,12 @@ export async function settleAgentRun(
   } else {
     let chat = await loadRun(chatRunId);
     if (chat?.status === 'paused_cap') {
-      const triggered = isTriggered(run.trigger_kind);
-      // A triggered run at its own cap ends "Stopped at its limit" (CHAT-27 item 22).
-      if (chat.progress.capHit === 'run' && triggered) {
+      // Nobody watches a triggered run, nor one an AEO Operator started (agent-children.ts).
+      const unattended =
+        isTriggered(run.trigger_kind) ||
+        (run.trigger_kind === 'agent' && operatorScopeOf(run.evidence_json) !== null);
+      // An unattended run at its own cap ends "Stopped at its limit" (CHAT-27 item 22).
+      if (chat.progress.capHit === 'run' && unattended) {
         await endHeldRun(chat.id, 'paused_cap', 'limit');
       } else if (await heldTooLong(chat.id, now)) {
         // Nobody continued it in 7 days: it stopped at its limit, not for want of an answer.
