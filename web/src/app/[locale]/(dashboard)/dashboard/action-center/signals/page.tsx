@@ -58,9 +58,12 @@ import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { exportFileName } from '@/lib/white-label/export-name';
 import type { KpiTrendPoint } from '@/lib/actions/kpis';
 import { signalChangeTone, signedPercent, type SignalMetric } from '@/lib/signals/metrics';
-import { matchesSignalCode } from '@/lib/signals/signal-code';
+import { matchesSignalCode, signalCode } from '@/lib/signals/signal-code';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel, type ChatPageFilter } from '@/lib/chat/page-context';
+import { viewRows } from '@/lib/chat/page-view';
 
 const SIGNAL_EXPORT_HEADERS = [
   'title',
@@ -310,6 +313,42 @@ function SignalsContent({ brand }: { brand: Brand }) {
   // The list shows copies of one finding as one row, and the counts follow.
   const groups = useMemo(() => groupSignals(visible), [visible]);
   const allGroups = useMemo(() => groupSignals(signals ?? []), [signals]);
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its window, its
+  // filters, and once read, the signals on screen by the code each row shows, with how many.
+  const tChatRange = useTranslations('chatPanel.range');
+  const chatFilters: ChatPageFilter[] = [
+    ...(category !== 'all'
+      ? [{ key: 'category', label: tCategories(category), value: category }]
+      : []),
+    ...(impact !== 'all' ? [{ key: 'impact', label: t(`impact.${impact}`), value: impact }] : []),
+    ...(status !== 'all' ? [{ key: 'status', label: t(`status.${status}`), value: status }] : []),
+    ...(source !== 'all' ? [{ key: 'source', label: t(`sources.${source}`), value: source }] : []),
+    ...(platform !== 'all'
+      ? [{ key: 'platform', label: getAIProviderDisplayName(platform), value: platform }]
+      : []),
+  ];
+  useChatPageContext({
+    pageName: t('title'),
+    dateRange: {
+      from: datePreset,
+      to: null,
+      label: rangeChipLabel(datePreset, {}, (key, values) => tChatRange(key, values)),
+    },
+    filters: chatFilters,
+    view: {
+      ...(search.trim() ? { search: search.trim() } : {}),
+      ...(signals && !isLoading
+        ? {
+            rows: viewRows(groups, ({ signals: [lead] }) => ({
+              ref: signalCode(lead) ?? lead.id,
+              label: signalTexts(lead, tTexts).title,
+            })),
+            total: groups.length,
+          }
+        : {}),
+    },
+  });
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<SignalCategory, number>();

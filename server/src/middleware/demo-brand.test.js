@@ -475,6 +475,8 @@ describe('coverage of the write routes', () => {
     expect(outside.sort()).toEqual([
       'bot-ingest.js',
       'cloro-callback.js',
+      // A person's Today ranking for the AEO Operator (CRON_SECRET, called by the web): a read.
+      'internal-action-center.js',
       // Chat's budget holds (CRON_SECRET, called by the web's engine): keyed by run, no brand.
       'internal-chat-budget.js',
       // An agent's go-live step (CRON_SECRET, called by the web's engine): refuses a demo brand itself.

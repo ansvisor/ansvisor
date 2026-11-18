@@ -334,7 +334,7 @@ The same reads are available over REST with the same `ans_` key: `GET /api/mcp/w
 
 | Tool | What it does | Writes |
 | --- | --- | --- |
-| `get_visibility_summary` | Aggregate visibility metrics for a brand over an optional date range and filters — headline `aiVisibilityScore`, mentions, citations, competitors. | |
+| `get_visibility_summary` | Aggregate visibility metrics for a brand over an optional date range and filters — headline `aiVisibilityScore`, mentions, citations, competitors. A range that starts or ends inside a day and is longer than a day is read over the whole UTC days it touches (`roundedToDays` and a `note` say so). | |
 | `get_visibility_trend` | Visibility over time (day or week buckets) with mentions, citations, and competitor scores for trend questions. | |
 | `get_competitor_comparison` | Competitor benchmark and share of voice for a window, comparable visibility rates and per-model/platform splits. | |
 | `list_citations` | URLs and domains AI engines cite alongside a brand, by source type, with top domains/URLs and usage stats. With `domains` (such as `example.com` or `https://www.example.com/`, each with its subdomains and most cited pages) or `urls` (up to 10 each) it reads those instead, in every source type, with the prompts whose answers cite each, and lists those not cited in the window in `not_found`. | |

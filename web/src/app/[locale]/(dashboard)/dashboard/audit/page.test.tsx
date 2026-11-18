@@ -108,6 +108,11 @@ const flows = () =>
 const STARTED = ['flow_started', { flow: 'site_audit_run' }];
 const COMPLETED = ['flow_completed', { flow: 'site_audit_run' }];
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 const { default: SiteAuditPage } = await import('./page');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -373,5 +378,94 @@ describe('SiteAuditPage Opportunities', () => {
     expect(container.textContent).toContain(
       'Only admins and managers can pin, exclude or restore pages.',
     );
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  const AUDIT = '11111111-1111-4111-8111-111111111111';
+  const LATER = '22222222-2222-4222-8222-222222222222';
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  const sent = () => chatPage.mock.lastCall![0];
+
+  it('sends its range, the list open and its rows by the Site Audit each opens', async () => {
+    audits.getAuditHub.mockResolvedValue({
+      pages: {
+        pages: [
+          {
+            key: 'k1',
+            host: 'acme.com',
+            path: '/pricing',
+            url: 'https://acme.com/pricing',
+            auditId: AUDIT,
+            score: 64,
+            previousScore: null,
+            firstScore: null,
+            firstAuditedAt: null,
+            status: 'completed',
+            lastAuditedAt: '2026-11-10T00:00:00Z',
+            trend: [],
+            issues: 3,
+            runs: [],
+          },
+        ],
+        total: 3,
+        primaryHost: 'acme.com',
+      },
+      quota: { used: 0, limit: 10, remaining: 10 },
+      trend: null,
+      overview: null,
+    });
+    await render(false);
+    await settle();
+    expect(sent()).toEqual({
+      pageName: 'Site Audit',
+      dateRange: { from: '30d', to: null, label: 'Last 30 days' },
+      view: {
+        tab: 'pages',
+        rows: [{ ref: AUDIT, label: 'https://acme.com/pricing' }],
+        total: 3,
+      },
+    });
+  });
+
+  it('sends the Opportunities by their last audit, leaving out a page not audited yet', async () => {
+    audits.getAuditHubExtras.mockResolvedValue({
+      opportunities: {
+        opportunities: [
+          {
+            key: 'o1',
+            url: 'https://acme.com/pricing',
+            path: '/pricing',
+            title: 'Pricing',
+            reasons: [],
+            pinned: false,
+            running: false,
+            aiVisits: null,
+            lastAudit: { at: '2026-11-01T00:00:00Z', score: 58, auditId: LATER },
+            priority: 70,
+          },
+          {
+            key: 'o2',
+            url: 'https://acme.com/new',
+            path: '/new',
+            title: 'New page',
+            reasons: [],
+            pinned: false,
+            running: false,
+            aiVisits: null,
+            lastAudit: null,
+            priority: 60,
+          },
+        ],
+        excluded: [],
+      },
+      latestRun: null,
+    });
+    await render(false);
+    await settle();
+    expect(sent().view).toEqual({
+      tab: 'opportunities',
+      rows: [{ ref: LATER, label: 'Pricing' }],
+    });
   });
 });

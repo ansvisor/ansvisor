@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 
@@ -8,8 +8,12 @@ import { computeAiVisibilityScore } from '@/lib/visibility-score';
  * the REST endpoint and the in-product agent): whole UTC days come from the
  * daily rollups the Visibility page reads, in two calls that run together,
  * never from the answers themselves. On a customer brand the raw path outran
- * Chat's 20 s read limit twice in one run (2026-11-11). A window that starts
- * or ends inside a day still reads the raw rows.
+ * Chat's 20 s read limit twice in one run (2026-11-11). A window of at most
+ * about a day that starts or ends inside a day reads the raw aggregates the
+ * page reads for it, never the answers (the maintainer's review of
+ * 2026-11-16); a longer one is read over the whole UTC days it touches, from
+ * the rollups, saying so: the raw aggregates took 13 s for 7 days on the
+ * busiest brand and ran past 120 s for 90 (the review of 2026-11-17).
  */
 
 type Rpc = { fn: string; args: Record<string, unknown> };
@@ -27,7 +31,9 @@ vi.mock('@/lib/supabase/admin', () => {
   const from = (table: string) => {
     db.tables.push(table);
     const chain: Record<string, unknown> = {};
-    for (const name of ['select', 'eq', 'neq', 'in', 'gte', 'lte']) chain[name] = () => chain;
+    for (const name of ['select', 'eq', 'neq', 'in', 'gte', 'lte', 'order', 'range']) {
+      chain[name] = () => chain;
+    }
     chain.maybeSingle = async () => ({
       data: table === 'brands' ? { id: 'b1', name: 'Acme' } : null,
       error: null,
@@ -124,6 +130,19 @@ describe('getVisibilitySummaryFor over whole days', () => {
       p_day_to: '2026-11-11',
     };
     for (const call of db.rpcs) expect(call.args).toEqual(args);
+  });
+
+  it('says nothing of rounding over whole days: they are the period asked', async () => {
+    for (const [dateFrom, dateTo] of [
+      ['2026-10-12', '2026-11-11'],
+      ['2026-10-12T00:00:00Z', '2026-11-11T23:59:59Z'],
+      ['2026-10-12T00:00:00.000Z', '2026-11-12T00:00:00.000Z'],
+    ]) {
+      const summary = await getVisibilitySummaryFor(AUTH, { brandId: 'b1', dateFrom, dateTo });
+      expect(summary).not.toHaveProperty('note');
+      expect(summary).not.toHaveProperty('roundedToDays');
+    }
+    expect(fns()).not.toContain('competitor_aggregates');
   });
 
   it('runs its two calls together', async () => {
@@ -260,22 +279,156 @@ describe('getVisibilitySummaryFor over whole days', () => {
 });
 
 describe('getVisibilitySummaryFor over a window inside a day', () => {
-  it('reads the raw rows', async () => {
-    db.payloads = { tracked_prompt_count: 0 };
-    await getVisibilitySummaryFor(AUTH, {
+  it("reads the page's raw aggregates, never the answers", async () => {
+    db.payloads = {
+      competitor_aggregates: AGGREGATES,
+      ai_visibility_aggregates: SCORE,
+      visible_prompt_stats: { visible_prompts: 120 },
+      tracked_prompt_count: 290,
+    };
+    const summary = await getVisibilitySummaryFor(AUTH, {
       brandId: 'b1',
       dateFrom: '2026-11-10T15:30:00Z',
       dateTo: '2026-11-11T15:30:00Z',
     });
-    expect(db.tables).toContain('prompt_results');
+    expect(db.tables).not.toContain('prompt_results');
     expect(fns().sort()).toEqual([
       'ai_visibility_aggregates',
+      'competitor_aggregates',
       'tracked_prompt_count',
       'visible_prompt_stats',
     ]);
-    expect(db.rpcs[0].args).toMatchObject({
-      p_date_from: '2026-11-10T15:30:00Z',
-      p_date_to: '2026-11-11T15:30:00Z',
+    for (const call of db.rpcs) {
+      expect(call.args, call.fn).toMatchObject({
+        p_brand_id: 'b1',
+        p_date_from: '2026-11-10T15:30:00Z',
+        p_date_to: '2026-11-11T15:30:00Z',
+      });
+    }
+    // The same shape as the rollups' summary: the aggregate's counts, the KPI card's prompt pair.
+    expect(summary!.totals).toMatchObject({
+      resultCount: 54_000,
+      avgVisibility: 15,
+      totalMentions: 21_500,
+      totalCitations: 6_200,
+      visiblePrompts: 120,
+      promptCount: 290,
     });
+    expect(summary!.topCompetitors.map((c) => c.name)).toEqual([
+      'Profound',
+      'Peec AI',
+      'Athena',
+      'Scrunch',
+      'Rankscale',
+    ]);
+    expect(summary).not.toHaveProperty('answers_cut');
+  });
+});
+
+describe('getVisibilitySummaryFor over a long window inside a day', () => {
+  const NOW = new Date('2026-11-17T18:00:00.000Z');
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const RAW = ['competitor_aggregates', 'ai_visibility_aggregates', 'visible_prompt_stats'];
+
+  it.each([
+    ['7 days', '2026-11-04T15:30:00Z', '2026-11-11T09:15:00Z', '2026-11-04', '2026-11-11'],
+    ['90 days', '2026-08-13T15:30:00+02:00', '2026-11-11T09:15:00Z', '2026-08-13', '2026-11-11'],
+  ])(
+    'reads %s with mid-day times over the whole UTC days they touch, from the rollups',
+    async (_, dateFrom, dateTo, dayFrom, dayTo) => {
+      const summary = await getVisibilitySummaryFor(AUTH, { brandId: 'b1', dateFrom, dateTo });
+      // Never the raw aggregates: their cost follows the answers in the window.
+      expect(fns().sort()).toEqual([
+        'ai_visibility_aggregates_daily',
+        'competitor_aggregates_daily',
+      ]);
+      for (const fn of RAW) expect(fns()).not.toContain(fn);
+      expect(db.tables).not.toContain('prompt_results');
+      for (const call of db.rpcs) {
+        expect(call.args).toEqual({
+          p_brand_id: 'b1',
+          p_models: null,
+          p_region: null,
+          p_day_from: dayFrom,
+          p_day_to: dayTo,
+        });
+      }
+      // And says so: the days read, and why.
+      expect(summary!.roundedToDays).toEqual({ dayFrom, dayTo });
+      expect(summary!.note).toContain(
+        `rounded to whole UTC days: ${dayFrom} to ${dayTo}, every day it touches`,
+      );
+      expect(summary!.totals.resultCount).toBe(54_000);
+    },
+  );
+
+  it('rounds a window with one open bound, and keeps it open', async () => {
+    const summary = await getVisibilitySummaryFor(AUTH, {
+      brandId: 'b1',
+      dateTo: '2026-11-11T09:15:00Z',
+      model: 'gpt-5-mini',
+    });
+    expect(fns().sort()).toEqual(['ai_visibility_aggregates_daily', 'competitor_aggregates_daily']);
+    for (const call of db.rpcs) {
+      expect(call.args).toMatchObject({
+        p_models: ['gpt-5-mini'],
+        p_day_from: null,
+        p_day_to: '2026-11-11',
+      });
+    }
+    expect(summary!.roundedToDays).toEqual({ dayTo: '2026-11-11' });
+    expect(summary!.note).toContain('the first day tracked to 2026-11-11');
+    // A lower bound two days back, open to now: longer than a day, rounded too.
+    db.rpcs = [];
+    const since = await getVisibilitySummaryFor(AUTH, {
+      brandId: 'b1',
+      dateFrom: '2026-11-15T12:00:00Z',
+    });
+    expect(fns()).not.toContain('competitor_aggregates');
+    expect(since!.roundedToDays).toEqual({ dayFrom: '2026-11-15' });
+    expect(since!.note).toContain('2026-11-15 to today');
+  });
+
+  it('reads a window of a day or less to the minute, from the raw aggregates', async () => {
+    db.payloads = {
+      competitor_aggregates: AGGREGATES,
+      ai_visibility_aggregates: SCORE,
+      visible_prompt_stats: { visible_prompts: 120 },
+      tracked_prompt_count: 290,
+    };
+    for (const window of [
+      // Six hours.
+      { dateFrom: '2026-11-11T09:00:00Z', dateTo: '2026-11-11T15:00:00Z' },
+      // A rolling 24 hours, open to now and read a moment after it was cut.
+      { dateFrom: '2026-11-16T17:59:58.000Z' },
+      // 24 hours to a day's end.
+      { dateFrom: '2026-11-10T00:00:01Z', dateTo: '2026-11-10' },
+    ]) {
+      db.rpcs = [];
+      const summary = await getVisibilitySummaryFor(AUTH, { brandId: 'b1', ...window });
+      expect(fns().sort(), JSON.stringify(window)).toEqual([
+        'ai_visibility_aggregates',
+        'competitor_aggregates',
+        'tracked_prompt_count',
+        'visible_prompt_stats',
+      ]);
+      expect(db.rpcs[0].args).toMatchObject({ p_date_from: window.dateFrom });
+      expect(summary).not.toHaveProperty('note');
+      expect(summary).not.toHaveProperty('roundedToDays');
+    }
+  });
+
+  it("refuses a bound that isn't a day or a time, before any read", async () => {
+    await expect(
+      getVisibilitySummaryFor(AUTH, { brandId: 'b1', dateFrom: 'last tuesday' }),
+    ).rejects.toThrow('date_from and date_to take a day (2026-11-01) or an ISO time');
+    expect(db.rpcs).toEqual([]);
   });
 });

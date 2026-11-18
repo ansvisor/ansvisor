@@ -19,6 +19,7 @@ const {
   PAGED_READS,
   ROW_CAP,
   ROW_LIMITS,
+  TREND_ROWS,
   asksAllTime,
   capRows,
   givesDates,
@@ -296,6 +297,151 @@ describe('platforms', () => {
   });
 });
 
+describe("the page's period and filters (the owner's rule, 2026-11-16)", () => {
+  const citations = {
+    ...readTool(
+      {
+        date_from: z.string().optional(),
+        date_to: z.string().optional(),
+        model: z.string().optional(),
+        source_filter: z.enum(['all', 'owned', 'competitor', 'external']).optional(),
+      },
+      { platforms: true },
+    ),
+    route: '/dashboard/citations',
+  };
+  const page = {
+    route: '/dashboard/citations',
+    brandId: BRAND,
+    filters: [
+      { key: 'platform', label: 'ChatGPT', value: 'chatgpt-web' },
+      { key: 'sources', label: 'Brand', value: 'own' },
+    ],
+  };
+
+  it("reads the page's range and filters, and says they were the page's", async () => {
+    const scoped = await scopeRead(
+      citations,
+      { brand_id: BRAND },
+      facts({ range: '7d', rangeFrom: 'page', page }),
+    );
+    expect(scoped).toMatchObject({
+      kind: 'read',
+      input: {
+        date_from: '2026-10-24',
+        date_to: '2026-10-30',
+        model: 'chatgpt-web',
+        source_filter: 'owned',
+      },
+      used: {
+        dates: 'default',
+        range: '7d',
+        platforms: ['chatgpt-web'],
+        page: ['period', 'platform', 'sources'],
+      },
+    });
+  });
+
+  it("names no period of the page's when the dates are the model's, the person's or all time asked", async () => {
+    const asked = await scopeRead(
+      citations,
+      { brand_id: BRAND, date_from: '2026-10-01', date_to: '2026-10-15' },
+      facts({ range: '7d', rangeFrom: 'page', page }),
+    );
+    expect(asked.kind === 'read' && asked.used.page).toEqual(['platform', 'sources']);
+    const saved = await scopeRead(citations, { brand_id: BRAND }, facts({ range: '30d' }));
+    expect(saved.kind === 'read' && saved.used.page).toBeUndefined();
+    const allTime = await scopeRead(
+      citations,
+      { brand_id: BRAND },
+      facts({ question: 'Citations of all time', range: '7d', rangeFrom: 'page' }),
+    );
+    expect(allTime).toMatchObject({ used: { dates: 'all_time' } });
+    expect(allTime.kind === 'read' && allTime.used.page).toBeUndefined();
+  });
+
+  it('reads all of it when the page shows All time', async () => {
+    const scoped = await scopeRead(
+      citations,
+      { brand_id: BRAND },
+      facts({ range: null, rangeFrom: 'page', allTime: true }),
+    );
+    expect(scoped).toMatchObject({
+      input: { brand_id: BRAND },
+      used: { dates: 'all_time', page: ['period'] },
+    });
+    expect(scoped.kind === 'read' && scoped.input).not.toHaveProperty('date_from');
+    const days = await scopeRead(
+      readTool({ days: z.number().int().min(1).max(90).optional() }),
+      { brand_id: BRAND },
+      facts({ rangeFrom: 'page', allTime: true }),
+    );
+    expect(days).toMatchObject({
+      input: { days: 90 },
+      used: { dates: 'all_time', page: ['period'] },
+    });
+  });
+
+  it("holds the page's platform to the plan, as one the person named", async () => {
+    const scoped = await scopeRead(
+      citations,
+      { brand_id: BRAND },
+      facts({
+        limits: PLANS.starter.limits,
+        planName: 'Starter',
+        page: {
+          ...page,
+          filters: [{ key: 'platform', label: 'Perplexity', value: 'perplexity-web' }],
+        },
+      }),
+    );
+    expect(scoped).toMatchObject({ kind: 'not_on_plan', result: { asked: ['Perplexity'] } });
+  });
+
+  it("gives Ads' read its own page's period, or one the message named; else its 30 days", async () => {
+    const ads = CHAT_TOOLS.find((t) => t.name === 'get_ads_opportunities')!;
+    const adsPage = { route: '/dashboard/ads', brandId: BRAND, filters: [] };
+    const citationsPage = { ...adsPage, route: '/dashboard/citations' };
+    const read = (over: Partial<Parameters<typeof scopeRead>[2]>, raw = {}) =>
+      scopeRead(ads, { brand_id: BRAND, ...raw }, facts(over));
+    // On Ads: the page's period.
+    for (const period of ['7d', '30d', '90d'] as const) {
+      expect(await read({ range: period, rangeFrom: 'page', page: adsPage })).toMatchObject({
+        input: { period },
+        used: { dates: 'default', range: period, page: ['period'] },
+      });
+    }
+    expect(await read({ range: '7d', rangeFrom: 'page', page: adsPage })).toMatchObject({
+      used: { dateFrom: '2026-10-24', dateTo: '2026-10-30' },
+    });
+    // A period the message named, on Ads or off it.
+    expect(await read({ range: '90d', rangeFrom: 'message', page: citationsPage })).toMatchObject({
+      input: { period: '90d' },
+    });
+    // Off Ads: the person's default and another page's range leave Ads' own 30 days.
+    for (const over of [
+      { range: '7d', rangeFrom: 'default' },
+      { range: '90d', rangeFrom: 'default' },
+      { range: '90d' },
+      { range: '7d', rangeFrom: 'page', page: citationsPage },
+      { range: '7d', rangeFrom: 'page', page: null },
+      // A range Ads doesn't offer, or all time.
+      { range: '24h', rangeFrom: 'page', page: adsPage },
+      { range: '7d', rangeFrom: 'page', page: adsPage, allTime: true },
+      {},
+    ] as const) {
+      const scoped = await read(over);
+      expect(scoped.kind === 'read' && scoped.input, JSON.stringify(over)).not.toHaveProperty(
+        'period',
+      );
+    }
+    // The model's own period wins.
+    expect(
+      await read({ range: '7d', rangeFrom: 'page', page: adsPage }, { period: '30d' }),
+    ).toMatchObject({ input: { period: '30d' }, used: { dates: 'none' } });
+  });
+});
+
 describe('rows', () => {
   const listed = readTool({ limit: z.number().int().min(1).max(100).optional() });
 
@@ -374,6 +520,10 @@ describe('rows', () => {
 
   it('reads blank words or an empty list as no lookup', () => {
     expect(namesRows('list_prompts', { search: '  ' })).toBe(false);
+    // The page's search, as listed (page-scope.ts AS_LISTED): the list's page, not a lookup.
+    expect(namesRows('list_prompts', { search: 'decaf', as_listed: true })).toBe(false);
+    expect(namesRows('list_content_opportunities', { search: 'x', as_listed: true })).toBe(false);
+    expect(namesRows('list_prompts', { ids: [BRAND], search: 'x', as_listed: true })).toBe(true);
     expect(namesRows('list_signals', { codes: [] })).toBe(false);
     expect(namesRows('list_signals', { codes: ['S-07'] })).toBe(true);
     expect(namesRows('list_topics', { search: 'x' })).toBe(false);
@@ -435,7 +585,9 @@ describe('rows', () => {
         const input = { ...tool.fixture.input, limit: (limits?.max ?? ROW_CAP) + probe };
         expect(tool.inputSchema.safeParse(input).success, tool.name).toBe(true);
       }
-      expect(limits ? limits.max <= ROW_CAP : true, tool.name).toBe(true);
+      // A trend reads every day of its period (TREND_ROWS); any other list ROW_CAP at most.
+      const most = tool.name === 'get_visibility_trend' ? TREND_ROWS : ROW_CAP;
+      expect(limits ? limits.max <= most : true, tool.name).toBe(true);
     }
     for (const name of Object.keys(ROW_LIMITS)) {
       expect(

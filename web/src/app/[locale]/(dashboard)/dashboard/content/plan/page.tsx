@@ -35,6 +35,9 @@ import {
 } from '@/lib/content/plan';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
+import { viewRows } from '@/lib/chat/page-view';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AssignDialog } from './_assign-dialog';
@@ -286,6 +289,40 @@ export default function ContentPlanPage() {
       toast.error(t('rowMenu.failed'));
     }
   };
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its period, the
+  // card and page type picked, and once read its rows by opportunity id (a row with none by its
+  // page's address), in the plan's order, with how many.
+  const tChatRange = useTranslations('chatPanel.range');
+  const tPageTypes = useTranslations('contentEditor.pageTypes');
+  const chatRows = plan && !loading ? rowsFor(plan.rows, card, typeFilter) : null;
+  useChatPageContext(
+    activeBrandId && days !== null
+      ? {
+          pageName: t('title'),
+          dateRange: {
+            from: `${days}d`,
+            to: null,
+            label: rangeChipLabel(`${days}d`, {}, (key, values) => tChatRange(key, values)),
+          },
+          filters: [
+            ...(card ? [{ key: 'card', label: t(`cards.${card}.title`), value: card }] : []),
+            ...(typeFilter
+              ? [{ key: 'pageType', label: tPageTypes(typeFilter), value: typeFilter }]
+              : []),
+          ],
+          view: chatRows
+            ? {
+                rows: viewRows(chatRows, (row) => ({
+                  ref: row.opportunityId ?? row.page,
+                  label: row.title,
+                })),
+                total: chatRows.length,
+              }
+            : {},
+        }
+      : null,
+  );
 
   if (!activeBrandId) {
     return (

@@ -111,6 +111,9 @@ import { OpenAiIndexCard } from './openai_index_card';
 import { ProductMatchScores } from './product_match_scores';
 import { ResellerPriceAlerts } from './reseller_price_alerts';
 import { useKeyedRead } from './use_keyed_read';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
+import type { ChatPageView } from '@/lib/chat/page-view';
 import { useMerchantDestinations } from './use_merchant_destinations';
 import { useOpenAiIndex } from './use_openai_index';
 
@@ -405,6 +408,37 @@ export default function ShoppingPage() {
     if (viewShown && hasBrand) shown();
   }, [viewShown, hasBrand, shown]);
 
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its period,
+  // platform and region, the view open, on Products the catalog's products on screen as the
+  // table hands them up, and the product whose drawer is open, by its title.
+  const tChatRange = useTranslations('chatPanel.range');
+  const [tableView, setTableView] = useState<ChatPageView | null>(null);
+  useChatPageContext(
+    activeBrandId
+      ? {
+          pageName: t('title'),
+          dateRange: {
+            from: datePreset,
+            to: null,
+            label: rangeChipLabel(datePreset, {}, (key, values) => tChatRange(key, values)),
+          },
+          filters: [
+            ...(platform !== 'all'
+              ? [{ key: 'platform', label: PLATFORM_LABELS[platform] ?? platform, value: platform }]
+              : []),
+            ...(region !== 'all'
+              ? [{ key: 'region', label: formatRegionDisplay(region), value: region }]
+              : []),
+          ],
+          view: {
+            ...(view ? { tab: view } : {}),
+            ...(view === 'products' && tableView ? tableView : {}),
+            ...(selectedProduct ? { open: { label: selectedProduct.product_title } } : {}),
+          },
+        }
+      : null,
+  );
+
   if (!activeBrandId) {
     return <EmptyState title={t('noBrandTitle')} description={t('noBrandDescription')} />;
   }
@@ -560,6 +594,7 @@ export default function ShoppingPage() {
                 <ProductsTable
                   products={catalogTable === 'failed' ? null : catalogTable}
                   loading={productsLoading}
+                  onChatView={setTableView}
                 />
               ) : hasFullAccess ? (
                 <>

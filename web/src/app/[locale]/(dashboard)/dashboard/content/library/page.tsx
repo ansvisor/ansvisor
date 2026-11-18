@@ -51,6 +51,7 @@ import { readFirstAiCrawls } from '@/lib/content/first-ai-crawl';
 import {
   AGENT_POLL_MS,
   CREATED_RANGES,
+  DRAFT_STATUSES,
   LIBRARY_ACTION_PARAM,
   LIBRARY_TABS,
   MADE_IN_FILTERS,
@@ -76,6 +77,8 @@ import {
 } from '@/lib/content/shopping-check';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { viewRows } from '@/lib/chat/page-view';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { BulkSendDialog } from './_bulk-send-dialog';
 import { readCmsSources } from '@/lib/content/cms-sources';
@@ -449,14 +452,6 @@ export default function ContentLibraryPage() {
     writeUrlParams({ shopping: next }, { shopping: 'all' });
   };
 
-  if (!activeBrandId) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <p className="text-muted-foreground">{t('selectBrand')}</p>
-      </div>
-    );
-  }
-
   // A read for another brand (just switched) counts as still loading.
   const current = read?.brandId === activeBrandId ? read : null;
   const drafts = current?.drafts ?? null;
@@ -478,6 +473,76 @@ export default function ContentLibraryPage() {
   // to export or pick.
   const sendsRead = sent === 'all' || !drafts || drafts.every((draft) => cmsReadFor.has(draft.id));
   const listed = sendsRead ? draftsLastSent(shopped, cms, sent) : [];
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): the tab (a draft
+  // status, which list_drafts takes), the other filters as words, and once read the drafts
+  // listed by id, with how many.
+  const unfiltered =
+    created === 'all' &&
+    madeIn === 'all' &&
+    sent === 'all' &&
+    shoppingFilter === 'all' &&
+    !actionFilter;
+  const isStatus = (DRAFT_STATUSES as readonly string[]).includes(tab);
+  useChatPageContext(
+    activeBrandId
+      ? {
+          pageName: t('title'),
+          filters: [
+            ...(isStatus ? [{ key: 'status', label: t(`tabs.${tab}`), value: tab }] : []),
+            ...(created !== 'all'
+              ? [
+                  {
+                    key: 'created',
+                    label: `${t('created.label')}: ${t(`created.${created}`)}`,
+                    value: created,
+                  },
+                ]
+              : []),
+            ...(madeIn !== 'all'
+              ? [{ key: 'madeIn', label: `${tMadeIn('label')}: ${tMadeIn(madeIn)}`, value: madeIn }]
+              : []),
+            ...(sent !== 'all'
+              ? [
+                  {
+                    key: 'sent',
+                    label: `${t('lastSend.label')}: ${t(`lastSend.${sent}`)}`,
+                    value: sent,
+                  },
+                ]
+              : []),
+            ...(shoppingFilter !== 'all'
+              ? [
+                  {
+                    key: 'shopping',
+                    label: `${t('shopping.label')}: ${t(`shopping.filters.${shoppingFilter}`)}`,
+                    value: shoppingFilter,
+                  },
+                ]
+              : []),
+          ],
+          view: {
+            tab,
+            ...(drafts && sendsRead
+              ? {
+                  rows: viewRows(listed, (draft) => ({ ref: draft.id, label: titleOf(draft) })),
+                  total:
+                    unfiltered && counts ? Math.max(counts[tab], listed.length) : listed.length,
+                }
+              : {}),
+          },
+        }
+      : null,
+  );
+
+  if (!activeBrandId) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-muted-foreground">{t('selectBrand')}</p>
+      </div>
+    );
+  }
+
   // Any of this brand's drafts sent: the sends of the last brand don't count.
   const anySent = !!drafts?.some((draft) => cms.has(draft.id));
   // Picked rows still listed (a read may have moved some), never archived ones.

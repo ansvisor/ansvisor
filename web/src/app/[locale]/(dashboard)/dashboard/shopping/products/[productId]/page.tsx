@@ -14,6 +14,8 @@ import {
 } from '@/lib/actions/shopping';
 import type { ProductAiSays } from '@/lib/shopping/ai-says';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
 import { ProductDetailView } from '../../../(brand-visibility)/shopping/_product-detail';
 
 /**
@@ -90,6 +92,25 @@ export default function ShoppingProductPage() {
     </Link>
   );
   const detail = read?.key === key ? read.detail : undefined;
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9's detail pages): the
+  // product it holds open by its id, with its title, over the 30 days the page reads. The shelf
+  // its "Why not you?" opened on is in the URL (?prompt=, ?platform=), which the panel adds.
+  const tChatRange = useTranslations('chatPanel.range');
+  const product = detail && detail !== 'failed' ? detail.product : null;
+  useChatPageContext(
+    product
+      ? {
+          pageName: product.title,
+          dateRange: {
+            from: '30d',
+            to: null,
+            label: rangeChipLabel('30d', {}, (key, values) => tChatRange(key, values)),
+          },
+          view: { open: { ref: productId, label: product.title } },
+        }
+      : null,
+  );
 
   if (!allowed || detail === null || detail === 'failed') {
     return (
