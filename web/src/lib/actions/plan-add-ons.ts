@@ -674,14 +674,21 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
                   ? 'not_admin'
                   : 'open';
 
-    // The plan's period, from its Stripe item; monthly when it can't be read.
+    // The plan's period, from its Stripe item, whatever the state (a trial
+    // on a yearly plan sees yearly prices); monthly when there's no
+    // subscription or it can't be read.
     let interval: 'month' | 'year' = 'month';
-    if (state === 'open' || state === 'not_admin') {
-      const stripe = await loadStripe();
-      if (stripe) {
-        const sub = await stripe.subscriptions.retrieve(org.stripe_subscription_id as string);
-        const found = planItemOf(sub.items.data)?.price?.recurring?.interval;
-        if (found === 'year') interval = 'year';
+    if (planId === 'growth' && org.stripe_subscription_id) {
+      try {
+        const stripe = await loadStripe();
+        if (stripe) {
+          const sub = await stripe.subscriptions.retrieve(org.stripe_subscription_id as string);
+          const found = planItemOf(sub.items.data)?.price?.recurring?.interval;
+          if (found === 'year') interval = 'year';
+        }
+      } catch (err) {
+        if (state === 'open' || state === 'not_admin') throw err;
+        console.error('[plan-add-ons] Plan period not read; monthly shown:', err);
       }
     }
 
