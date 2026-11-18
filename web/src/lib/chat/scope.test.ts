@@ -19,6 +19,7 @@ const {
   PAGED_READS,
   ROW_CAP,
   ROW_LIMITS,
+  TREND_ROWS,
   asksAllTime,
   capRows,
   givesDates,
@@ -519,6 +520,10 @@ describe('rows', () => {
 
   it('reads blank words or an empty list as no lookup', () => {
     expect(namesRows('list_prompts', { search: '  ' })).toBe(false);
+    // The page's search, as listed (page-scope.ts AS_LISTED): the list's page, not a lookup.
+    expect(namesRows('list_prompts', { search: 'decaf', as_listed: true })).toBe(false);
+    expect(namesRows('list_content_opportunities', { search: 'x', as_listed: true })).toBe(false);
+    expect(namesRows('list_prompts', { ids: [BRAND], search: 'x', as_listed: true })).toBe(true);
     expect(namesRows('list_signals', { codes: [] })).toBe(false);
     expect(namesRows('list_signals', { codes: ['S-07'] })).toBe(true);
     expect(namesRows('list_topics', { search: 'x' })).toBe(false);
@@ -580,7 +585,9 @@ describe('rows', () => {
         const input = { ...tool.fixture.input, limit: (limits?.max ?? ROW_CAP) + probe };
         expect(tool.inputSchema.safeParse(input).success, tool.name).toBe(true);
       }
-      expect(limits ? limits.max <= ROW_CAP : true, tool.name).toBe(true);
+      // A trend reads every day of its period (TREND_ROWS); any other list ROW_CAP at most.
+      const most = tool.name === 'get_visibility_trend' ? TREND_ROWS : ROW_CAP;
+      expect(limits ? limits.max <= most : true, tool.name).toBe(true);
     }
     for (const name of Object.keys(ROW_LIMITS)) {
       expect(

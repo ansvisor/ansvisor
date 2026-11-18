@@ -44,6 +44,11 @@ vi.mock('@/components/filters/date-range-filter', () => ({ DateRangeFilter: () =
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 const { default: CompetitorsPage } = await import('./page');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -134,4 +139,29 @@ describe('Competitors for a member who is not an admin or a manager', () => {
       expect(container.querySelector('button[aria-label="Delete"]')).toBeNull();
     },
   );
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('sends its period, the competitors by id with their domains, and the one open', async () => {
+    window.history.replaceState(null, '', '/?competitor=c1&preset=7d');
+    await render(false);
+    expect(chatPage.mock.lastCall![0]).toEqual({
+      pageName: 'Competitors',
+      dateRange: { from: '7d', to: null, label: 'Last 7 days' },
+      view: {
+        rows: [{ ref: 'c1', label: 'Rival (rival.com)' }],
+        total: 1,
+        // Its id is the URL's (?competitor=); its name comes with it.
+        open: { ref: 'c1', label: 'Rival' },
+      },
+    });
+  });
+
+  it('sends no rows while it reads, and nothing open until one is picked', async () => {
+    competitorActions.getCompetitors.mockReturnValue(new Promise(() => {}));
+    await render(false);
+    expect(chatPage.mock.lastCall![0].view).toEqual({});
+  });
 });

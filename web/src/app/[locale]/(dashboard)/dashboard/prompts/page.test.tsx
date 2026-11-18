@@ -639,6 +639,60 @@ describe("what Chat's side panel sees", () => {
   ])("leaves the location out on %s, which doesn't read it", async (_tab, pathname) => {
     expect(await filtersOn(pathname)).toEqual([]);
   });
+
+  // The owner's plan (2026-11-16, item 8): the open tab, the table's sort and search, its rows.
+  it("tells the open tab, and on Tracked the table's sort, search and the prompts on screen", async () => {
+    const decaf: Prompt = { ...prompt, id: 'p2', text: 'Best decaf coffee?' };
+    const tea: Prompt = { ...prompt, id: 'p3', text: 'Green tea brands?' };
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [prompt, decaf, tea] }],
+      visibility: {},
+      positions: {},
+    });
+    query.search = 'sort=added&dir=asc';
+    const setChatPage = vi.fn();
+    await render(false, setChatPage);
+    const input = container.querySelector<HTMLInputElement>(
+      'input[placeholder="Search prompts…"]',
+    )!;
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )!.set!;
+    await act(async () => {
+      setter.call(input, ' coffee ');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(setChatPage.mock.lastCall![0].view).toEqual({
+      tab: 'tracked',
+      sort: { key: 'added', dir: 'asc' },
+      search: 'coffee',
+      rows: [
+        { ref: 'p1', label: prompt.text },
+        { ref: 'p2', label: decaf.text },
+      ],
+      total: 2,
+    });
+    // Another tab: its name only.
+    nav.pathname = '/dashboard/prompts/topics';
+    query.search = '';
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(false, setChatPage);
+    expect(setChatPage.mock.lastCall![0].view).toEqual({ tab: 'topics' });
+  });
+
+  it('sends no sort until a header is picked: the default is the order line’s', async () => {
+    const setChatPage = vi.fn();
+    await render(false, setChatPage);
+    expect(setChatPage.mock.lastCall![0].view).toEqual({
+      tab: 'tracked',
+      rows: [{ ref: 'p1', label: prompt.text }],
+      total: 1,
+    });
+  });
 });
 
 describe('Add Prompt on a brand without topics', () => {

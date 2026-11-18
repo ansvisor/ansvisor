@@ -5903,6 +5903,74 @@ describe('starting', () => {
     }
   });
 
+  it("tells both models the page's list order beside its context (the owner's plan, item 7)", async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Your latest actions.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What are the first ones on the page?',
+      brandId: BRAND,
+      context: {
+        route: '/dashboard/action-center/actions',
+        chips: [{ key: 'page', label: 'Actions' }],
+      },
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    for (const prompt of [haiku.seen[0].prompt, sonnet.seen[0].prompt]) {
+      const seen = JSON.stringify(prompt);
+      expect(seen).toContain('The page lists its actions, most recently updated first');
+      expect(seen).toContain('status \\"all\\" and sort \\"updated\\"');
+    }
+    // The writer says which order a list is in.
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain(
+      'When you list items, say once in which order',
+    );
+  });
+
+  it("gives both models the page's view as untrusted data, with its chosen sort (the owner's plan, item 8)", async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Your three actions.')]);
+    const view = {
+      sort: { key: 'priority', dir: 'desc' },
+      rows: [
+        { ref: 'AC-41', label: 'Win back citations' },
+        { ref: 'AC-42', label: 'Close the gift box gap' },
+      ],
+      total: 2,
+      query: { status: 'new', token: 'tok-9f8e7d' },
+    };
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What are these?',
+      brandId: BRAND,
+      context: {
+        route: '/dashboard/action-center/actions',
+        chips: [{ key: 'page', label: 'Actions' }],
+        view,
+      },
+    });
+    if (!started.ok) throw new Error('not started');
+    const question = db.tables.chat_messages.find((m) => m.content_md === 'What are these?');
+    // Kept with the message, its URL keys the page's own.
+    expect(question?.context_json).toMatchObject({
+      context: { view: { ...view, query: { status: 'new' } } },
+    });
+    await engine.driveRun(ADMIN, started.runId);
+    for (const prompt of [haiku.seen[0].prompt, sonnet.seen[0].prompt]) {
+      const seen = JSON.stringify(prompt);
+      expect(seen).toContain('<page_view>\\n<untrusted_data source=\\"page_view\\">');
+      expect(seen).toContain('AC-41 — Win back citations\\nAC-42 — Close the gift box gap');
+      expect(seen).not.toContain('tok-9f8e7d');
+      // The context block itself no longer carries the view.
+      const context = seen.slice(seen.indexOf('<page_context>'), seen.indexOf('</page_context>'));
+      expect(context).not.toContain('AC-41');
+      // The person's sort over the page's default.
+      expect(seen).toContain('highest Priority Score first, as the person sorted it');
+      expect(seen).toContain('status \\"all\\" and sort \\"priority\\"');
+    }
+    expect(JSON.stringify(haiku.seen[0].prompt)).toContain('read those rows by their refs');
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain(
+      'Never say how many rows were read or sent',
+    );
+  });
+
   it('starts a server’s run tainted, its scope read as untrusted data (Run with Chat, W2-17)', async () => {
     const { haiku } = useModels([READY], [text('On it.')]);
     const started = await engine.startChatRun(
@@ -9916,7 +9984,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     expect(runRow(started.runId).status).toBe('done');
     // The writer is told the period is the page's, to say once what the answer covers.
     const written = promptOf(sonnet.seen[0]);
-    expect(written).toContain('\\"from_page\\":[\\"period\\"]');
+    expect(written).toContain('\\"from_page\\":{\\"took\\":[\\"period\\"]}');
     expect(written).toContain('as on the page');
     expect(written).toContain('with any filter of the page no read took');
     expect(written).toContain('never how many rows were read');
@@ -10094,7 +10162,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     expect(written).toContain(
       '\\"all_sources_totals\\":{\\"citations\\":6,\\"avg_citations_per_result\\":1.5}',
     );
-    expect(written).toContain('\\"from_page\\":[\\"period\\",\\"sources\\"]');
+    expect(written).toContain('\\"from_page\\":{\\"took\\":[\\"period\\",\\"sources\\"]}');
     expect(written).toContain('citation counts for all sources, lists for Brand sources');
     const message = db.tables.chat_runs.find((r) => r.id === started.runId)!.message_id;
     expect(db.tables.chat_messages.find((m) => m.id === message)!.content_md).toContain(
@@ -10158,7 +10226,7 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     const runId = await ask('How are we doing?');
     expect(readInput()).toMatchObject({ brand_id: BRAND, platform: 'chatgpt-web' });
     expect(stepsOf(runId)[0]).toMatchObject({ detail: 'Last 30 days · ChatGPT' });
-    expect(promptOf(sonnet.seen[0])).toContain('\\"from_page\\":[\\"platform\\"]');
+    expect(promptOf(sonnet.seen[0])).toContain('\\"from_page\\":{\\"took\\":[\\"platform\\"]}');
 
     // The model's own platform, or "" for all of them, wins.
     useModels(reads({ platform: 'gemini-web' }), [text('Up 12%.')]);

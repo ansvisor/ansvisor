@@ -79,6 +79,11 @@ vi.mock('sonner', () => ({
   },
 }));
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 import ActionCenterKpisPage from './page';
 
 beforeEach(() => {
@@ -289,5 +294,33 @@ describe('KPIs, one of History’s views', () => {
       ['view.kpis', null, 'page'],
     ]);
     await act(async () => root.unmount());
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  it('sends its range, its filters and once read the KPIs listed by key, with how many', async () => {
+    getKpiSnapshots.mockResolvedValue({
+      configured: true,
+      kpis: [snapshot('ai_visibility'), snapshot('citations')],
+    });
+    await renderPage();
+    expect(chatPage.mock.lastCall![0]).toEqual({
+      pageName: 'title',
+      dateRange: { from: '30d', to: null, label: 'days' },
+      filters: [],
+      view: {
+        rows: [
+          { ref: 'ai_visibility', label: 'ai_visibility.name' },
+          { ref: 'citations', label: 'citations.name' },
+        ],
+        total: 2,
+      },
+    });
+  });
+
+  it('sends no rows while it reads', async () => {
+    getKpiSnapshots.mockReturnValue(new Promise(() => {}));
+    await renderPage();
+    expect(chatPage.mock.lastCall![0].view).toEqual({});
   });
 });

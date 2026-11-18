@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { MAX_SUGGESTIONS, contextChips, menuTitleOf } from '@/lib/chat/page-context';
+import { panelPageView } from '@/lib/chat/page-view';
 import {
   PANEL_FROM_PARAM,
   PANEL_LAST_CHAT_KEY,
@@ -329,14 +330,21 @@ export function ChatSidePanel() {
   if (!panel || !started) return null;
   const { size, setup, page } = panel;
   const menuTitle = menuTitleOf(pathname);
+  const removedKeys = new Set(removed.route === pathname ? removed.keys : []);
   const chips = contextChips(
     page,
     {
       pageName: menuTitle ? getDashboardNavLabel(menuTitle, tNav) : null,
       brand: brand ? { id: brand.id, name: brand.name } : null,
     },
-    new Set(removed.route === pathname ? removed.keys : []),
+    removedKeys,
   );
+  // What else the page shows, with the state its URL keeps (page-view.ts), read as the
+  // message goes: only for a message from the page on screen, and none once its chip is off.
+  const pageView = (route?: string) =>
+    route === pathname && !removedKeys.has('page')
+      ? panelPageView(page?.view, pathname, window.location.search)
+      : undefined;
   const suggestions = (page?.suggestions ?? []).slice(0, MAX_SUGGESTIONS);
 
   return (
@@ -529,6 +537,7 @@ export function ChatSidePanel() {
                 }
                 pageReferences={page?.referenceables}
                 pageRoute={pathname}
+                pageView={pageView}
                 draft={draft && draft.nonce > draftFloor ? draft : null}
                 afterLast={
                   tourFocus

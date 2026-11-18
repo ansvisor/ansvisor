@@ -19,6 +19,7 @@ import {
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import type { ChatPageFilter } from '@/lib/chat/page-context';
+import { viewRows } from '@/lib/chat/page-view';
 import { useUserRole } from '@/hooks/use-user-role';
 import { markPageSeen } from '@/lib/actions/user-brand-state';
 import { actionSeenKey } from '@/lib/user-brand-state';
@@ -48,6 +49,7 @@ import {
   ACTION_SORTS,
   ACTION_SORT_CHOICES,
   DEFAULT_ACTION_SORT,
+  actionViewSort,
   compareActions,
   parseActionSort,
   type ActionSort,
@@ -566,6 +568,21 @@ function ActionsContent({ brand }: { brand: Brand }) {
       id: action.id,
       label: actionTexts(action, tTexts).title,
     })),
+    // And what else it shows (the owner's plan, item 8): the sort, the search, and once read,
+    // the actions in view by the code the list shows, with how many it has.
+    view: {
+      sort: actionViewSort(sort),
+      ...(search.trim() ? { search: search.trim() } : {}),
+      ...(actions
+        ? {
+            rows: viewRows(visible, (action) => ({
+              ref: actionCode(action),
+              label: actionTexts(action, tTexts).title,
+            })),
+            total: visible.length,
+          }
+        : {}),
+    },
   });
 
   if (isLoading) {
