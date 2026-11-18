@@ -93,3 +93,61 @@ export function itemChanges(current: CurrentAddOns, target: AddOnTarget): ItemCh
   }
   return changes;
 }
+
+/** A catalog row as a plan change reads it: which tier or brand price, on which interval. */
+export type PeriodRow = RecurringAddOnRow & {
+  id: string;
+  billing: 'monthly' | 'yearly' | 'one_time';
+  active: boolean;
+};
+
+/** What a plan change does to the subscription's Growth add-on items. */
+export interface PlanChangeAddOns {
+  /** Items that end with the plan (Growth → Starter): unused time is credited. */
+  removals: string[];
+  /** Items that move to the other interval's price (monthly ↔ yearly). */
+  swaps: { itemId: string; row: PeriodRow }[];
+  /** Items with no price on the new interval: the change can't go ahead. */
+  missing: string[];
+}
+
+/**
+ * The Growth add-ons through a plan change: kept on Growth (on the new
+ * interval's price, the same tier or the brand), ended on any other plan.
+ */
+export function addOnsThroughPlanChange(
+  items: readonly CartItem[],
+  catalog: readonly PeriodRow[],
+  target: { planId: string; interval: 'month' | 'year' },
+): PlanChangeAddOns {
+  const result: PlanChangeAddOns = { removals: [], swaps: [], missing: [] };
+  const intervalOf = (row: PeriodRow) =>
+    row.billing === 'monthly' ? 'month' : row.billing === 'yearly' ? 'year' : null;
+  for (const item of items) {
+    if (!isAddOnPrice(typeof item.price === 'string' ? null : item.price)) continue;
+    if (target.planId !== 'growth') {
+      result.removals.push(item.id);
+      continue;
+    }
+    const row = rowOf(item, catalog) as PeriodRow | undefined;
+    const price = item.price as { recurring?: { interval?: string } | null } | null | undefined;
+    // Already on the new interval (a staff price the catalog doesn't hold too).
+    if (
+      row ? intervalOf(row) === target.interval : price?.recurring?.interval === target.interval
+    ) {
+      continue;
+    }
+    const counterpart = row
+      ? catalog.find(
+          (r) =>
+            r.kind === row.kind &&
+            r.grant_prompts === row.grant_prompts &&
+            r.active &&
+            intervalOf(r) === target.interval,
+        )
+      : undefined;
+    if (counterpart) result.swaps.push({ itemId: item.id, row: counterpart });
+    else result.missing.push(item.id);
+  }
+  return result;
+}

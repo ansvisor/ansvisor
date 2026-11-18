@@ -44,6 +44,7 @@ async function render(
     cancelAtPeriodEnd = false,
     trialOffered = false,
     chatAgentic = false,
+    addOns,
   }: {
     status?: string;
     interval?: string;
@@ -52,6 +53,8 @@ async function render(
     trialOffered?: boolean;
     /** The new Chat on for the workspace (CHAT_AGENTIC). */
     chatAgentic?: boolean;
+    /** Growth's extra tracking and brands on the subscription (00546). */
+    addOns?: { prompts: number; brands: number };
   } = {},
 ) {
   await act(async () => {
@@ -67,6 +70,7 @@ async function render(
                 cancelAtPeriodEnd,
                 priceAmount: 49,
                 interval,
+                addOns,
               }}
               onUpdate={onUpdate}
               organizationId="org1"
@@ -734,5 +738,30 @@ describe('cancelling', () => {
       plan: 'growth',
       interval: 'year',
     });
+  });
+});
+
+describe('Growth add-ons through a plan change (00546)', () => {
+  it('says they move to the new period’s prices', async () => {
+    await render('growth', { addOns: { prompts: 1000, brands: 3 } });
+    await click('AnnualSave 20%');
+    await click('Switch to annual billing');
+    expect(document.body.textContent).toContain(
+      'Your extra tracking and extra brands move to yearly prices too, prorated on the same invoice.',
+    );
+  });
+
+  it('says they end with Growth on a move to Starter, credited', async () => {
+    await render('growth', { addOns: { prompts: 1000, brands: 3 } });
+    await click('Downgrade to Starter');
+    expect(document.body.textContent).toContain(
+      'Your add-ons end with Growth: extra tracking (+1,000 prompt locations) and 3 extra brands. Their unused time is credited to your next invoices.',
+    );
+  });
+
+  it('says nothing without add-ons', async () => {
+    await render('growth');
+    await click('Downgrade to Starter');
+    expect(document.body.textContent).not.toContain('Your add-ons end with Growth');
   });
 });
