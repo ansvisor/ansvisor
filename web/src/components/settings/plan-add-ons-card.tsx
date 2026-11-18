@@ -97,8 +97,10 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
   const [busy, setBusy] = useState<'preview' | 'apply' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Reached by a link to this card (?add=tracking, or #plan-add-ons): the
+  // card renders after its read, past the browser's own jump, so scroll here.
   useEffect(() => {
-    if (!askedForMoreTracking()) return;
+    if (!askedForMoreTracking() && window.location.hash !== '#plan-add-ons') return;
     document.getElementById('plan-add-ons')?.scrollIntoView?.({ block: 'start' });
   }, []);
 
