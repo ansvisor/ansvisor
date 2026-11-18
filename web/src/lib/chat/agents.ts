@@ -25,6 +25,7 @@ import {
   AGENT_VISIBILITIES,
   DEFAULT_AGENT_SETTINGS,
   agentActDenial,
+  agentScopeSchema,
   agentPlanLimits,
   agentTriggerSchema,
   canSeeAgent,
@@ -329,7 +330,7 @@ async function firstDenial(
 // ─── Rows ────────────────────────────────────────────────────────────────────
 
 const AGENT_COLUMNS =
-  'id, organization_id, name, status, paused_reason, owner_id, visibility, version, max_run_share, max_month_share, created_by, created_at, updated_at, activated_at, archived_at, demo_brand_id';
+  'id, organization_id, name, status, paused_reason, owner_id, visibility, version, max_run_share, max_month_share, created_by, created_at, updated_at, activated_at, archived_at, demo_brand_id, kind';
 const VERSION_COLUMNS =
   'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days, can_call, created_at';
 const TRIGGER_COLUMNS = 'id, agent_id, kind, config_json, enabled, last_fired_at, created_at';
@@ -361,7 +362,12 @@ export interface AgentRow {
   archived_at: string | null;
   /** The demo brand whose sample agent this is (00475); null for a person's agent. */
   demo_brand_id: string | null;
+  /** An agent, or an AEO Operator, which runs agents (00545): set when it is made, never changed. */
+  kind: AgentKind;
 }
+
+/** What an agent is (chat_agents.kind, 00545). */
+export type AgentKind = 'agent' | 'operator';
 
 interface VersionRow {
   agent_id: string;
@@ -420,6 +426,8 @@ function toAgentRow(row: Record<string, unknown>): AgentRow {
     max_run_share: Number(row.max_run_share),
     max_month_share: row.max_month_share === null ? null : Number(row.max_month_share),
     demo_brand_id: typeof row.demo_brand_id === 'string' ? row.demo_brand_id : null,
+    // The column's default: every agent made before 00545 is an agent.
+    kind: row.kind === 'operator' ? 'operator' : 'agent',
   };
 }
 
@@ -655,15 +663,28 @@ export interface AgentRunView {
   maxShare: number;
   /** Its chat's handle, once its run has one (§H item 36). */
   chatId: string | null;
-  /** A run another agent's run started (trigger agent): that agent's name ("Called by {agent}"). */
+  /**
+   * A run another agent's run started (trigger agent): that agent's name
+   * ("Called by {agent}"); null when the person can't see that agent.
+   */
   calledBy?: string | null;
   /** The agents this run ran (CHAT-27 items 18, 25), each with its own share, for its row to open. */
   calls?: AgentCallView[];
 }
 
-/** One agent a run ran with run_agent, as its row shows it. */
+/**
+ * One run a run started (run_agent, or an AEO Operator's plan), as its row
+ * shows it. One the person can't see (its agent, or its brand) is
+ * `hidden`: "An agent you can't see", with no name, chat or agent link.
+ */
 export interface AgentCallView {
+  /** Its agent's name; empty when hidden or deleted. */
   agent: string;
+  /** Its agent's handle, for its page; null when hidden or deleted. */
+  agentId: string | null;
+  /** Its chat's handle, when the person can open it (runChats). */
+  chatId: string | null;
+  hidden?: true;
   status: string;
   usageShare: number;
   maxShare: number;
@@ -854,30 +875,93 @@ interface CallsOf {
 }
 const EMPTY_CALLS: CallsOf = { callers: new Map(), made: new Map() };
 
-/** The agents' names, by id: deleted ones left out. */
-async function agentNamesById(ids: string[]): Promise<Map<string, string>> {
-  if (ids.length === 0) return new Map();
+/**
+ * The agents of the workspace by id, with whether the person sees each
+ * (canSeeAgent, its current version's scope): deleted ones left out.
+ */
+async function agentsSeen(
+  organizationId: string,
+  viewer: AgentViewer,
+  ids: string[],
+): Promise<Map<string, { name: string; seen: boolean }>> {
+  const wanted = [...new Set(ids)];
+  if (wanted.length === 0) return new Map();
   const { data, error } = await supabaseAdmin
     .from('chat_agents')
-    .select('id, name')
-    .in('id', [...new Set(ids)]);
+    .select('id, name, owner_id, visibility, version')
+    .eq('organization_id', organizationId)
+    .in('id', wanted);
   if (error) throw new Error(`Could not read the agents' names: ${error.message}`);
-  return new Map(((data ?? []) as { id: string; name: string }[]).map((a) => [a.id, a.name]));
+  const rows = (data ?? []) as {
+    id: string;
+    name: string;
+    owner_id: string | null;
+    visibility: string;
+    version: number;
+  }[];
+  const scopes = new Map<string, AgentScope>();
+  if (rows.length > 0) {
+    // Only the version numbers in use, then each agent's own (as listAgents reads them).
+    const read = await supabaseAdmin
+      .from('chat_agent_versions')
+      .select('agent_id, version, scope')
+      .in(
+        'agent_id',
+        rows.map((r) => r.id),
+      )
+      .in('version', [...new Set(rows.map((r) => r.version))]);
+    if (read.error) throw new Error(`Could not read the agents: ${read.error.message}`);
+    const current = new Map(rows.map((r) => [r.id, r.version]));
+    for (const v of (read.data ?? []) as { agent_id: string; version: number; scope: Json }[]) {
+      const scope = agentScopeSchema.safeParse(v.scope);
+      if (current.get(v.agent_id) === v.version && scope.success)
+        scopes.set(v.agent_id, scope.data);
+    }
+  }
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      {
+        name: row.name,
+        seen: canSeeAgent(
+          {
+            ownerId: row.owner_id,
+            visibility: AGENT_VISIBILITIES.find((v) => v === row.visibility) ?? 'private',
+            scope: scopes.get(row.id) ?? { brand_ids: [] },
+          },
+          viewer,
+        ),
+      },
+    ]),
+  );
 }
 
 /**
  * The calls around these runs: the agent that called each called run
- * ("Called by {agent}"), and the runs each run called, with their shares.
+ * ("Called by {agent}"), and the runs each run started (run_agent, or an
+ * AEO Operator's plan), with their shares, their chats and their agents.
+ * Only what the person may see: an agent they can't see (canSeeAgent), or
+ * a run on a brand they can't use, is never named: no "Called by", and a
+ * started run shows as "An agent you can't see" (hidden).
  */
-async function readCalls(runs: RunRow[]): Promise<CallsOf> {
+async function readCalls(
+  organizationId: string,
+  viewer: AgentViewer,
+  runs: RunRow[],
+): Promise<CallsOf> {
   const callerIds = runs.flatMap((r) => (r.called_by_run_id ? [r.called_by_run_id] : []));
   const [callerRuns, called] = await Promise.all([
     callerIds.length
-      ? supabaseAdmin.from('chat_agent_runs').select('id, agent_id').in('id', callerIds)
+      ? supabaseAdmin
+          .from('chat_agent_runs')
+          .select('id, agent_id')
+          .eq('organization_id', organizationId)
+          .in('id', callerIds)
       : Promise.resolve({ data: [], error: null }),
     supabaseAdmin
       .from('chat_agent_runs')
-      .select('agent_id, called_by_run_id, status, usage_share, max_share, queued_at')
+      .select('id, agent_id, brand_id, called_by_run_id, status, usage_share, max_share, queued_at')
+      .eq('organization_id', organizationId)
       .in(
         'called_by_run_id',
         runs.map((r) => r.id),
@@ -889,25 +973,44 @@ async function readCalls(runs: RunRow[]): Promise<CallsOf> {
   }
   const callerRows = (callerRuns.data ?? []) as { id: string; agent_id: string | null }[];
   const calledRows = (called.data ?? []) as {
+    id: string;
     agent_id: string | null;
+    brand_id: string | null;
     called_by_run_id: string;
     status: string;
     usage_share: number;
     max_share: number;
   }[];
-  const names = await agentNamesById(
-    [...callerRows, ...calledRows].flatMap((r) => (r.agent_id ? [r.agent_id] : [])),
-  );
-  const callers = new Map(
-    callerRows.flatMap((r) =>
-      r.agent_id && names.has(r.agent_id) ? [[r.id, names.get(r.agent_id)!] as const] : [],
+  const [agents, chats] = await Promise.all([
+    agentsSeen(
+      organizationId,
+      viewer,
+      [...callerRows, ...calledRows].flatMap((r) => (r.agent_id ? [r.agent_id] : [])),
     ),
+    runChats(
+      organizationId,
+      viewer.userId,
+      calledRows.map((r) => r.id),
+    ),
+  ]);
+  const callers = new Map(
+    callerRows.flatMap((r) => {
+      const agent = r.agent_id ? agents.get(r.agent_id) : undefined;
+      return agent?.seen ? [[r.id, agent.name] as const] : [];
+    }),
   );
   const made = new Map<string, AgentCallView[]>();
   for (const row of calledRows) {
     const list = made.get(row.called_by_run_id) ?? [];
+    const agent = row.agent_id ? agents.get(row.agent_id) : undefined;
+    // A run on a brand the person can't use, or of an agent they can't see, is hidden;
+    // a deleted agent's run has no name to show.
+    const hidden = !runVisible(row, viewer.brandAccess) || (!!agent && !agent.seen);
     list.push({
-      agent: (row.agent_id && names.get(row.agent_id)) || '',
+      agent: hidden ? '' : (agent?.name ?? ''),
+      agentId: hidden || !agent ? null : row.agent_id,
+      chatId: hidden ? null : (chats.get(row.id) ?? null),
+      ...(hidden ? { hidden: true as const } : {}),
       status: row.status,
       usageShare: Number(row.usage_share),
       maxShare: Number(row.max_share),
@@ -959,7 +1062,7 @@ async function runChats(
  */
 export async function runViews(
   organizationId: string,
-  viewer: Pick<AgentViewer, 'userId' | 'brandAccess'>,
+  viewer: AgentViewer,
   allRuns: RunRow[],
 ): Promise<AgentRunView[]> {
   const runs = allRuns.filter((run) => runVisible(run, viewer.brandAccess));
@@ -975,7 +1078,7 @@ export async function runViews(
       viewer.userId,
       runs.map((r) => r.id),
     ),
-    readCalls(runs),
+    readCalls(organizationId, viewer, runs),
   ]);
   const brandNames = new Map(brands.map((b) => [b.id, b.name]));
   return runs.map((run) => runView(run, brandNames, people, chatOf, calls));

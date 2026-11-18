@@ -293,7 +293,10 @@ function RunRow({
               ↳
             </span>
             <span role="cell" className="min-w-0 truncate font-medium">
-              {tCalls('step.ran', { agent: call.agent || '—' })}
+              {/* One the person can't see is never named (agents.ts readCalls). */}
+              {call.hidden
+                ? tCalls('canCall.hidden')
+                : tCalls('step.ran', { agent: call.agent || '—' })}
             </span>
             <span role="cell" className="flex min-w-0 items-start gap-1.5">
               <ListDot state={runDot(call.status)} decorative className="mt-px" />

@@ -515,8 +515,23 @@ describe('AgentDetail', () => {
     runs = [
       run({
         calls: [
-          { agent: 'FAQ writer', status: 'done', usageShare: 0.015, maxShare: 0.06 },
-          { agent: 'Rival brief', status: 'failed', usageShare: 0.002, maxShare: 0.05 },
+          {
+            agent: 'FAQ writer',
+            agentId: 'cccccccc-0000-4000-8000-000000000001',
+            chatId: null,
+            status: 'done',
+            usageShare: 0.015,
+            maxShare: 0.06,
+          },
+          {
+            agent: '',
+            agentId: null,
+            chatId: null,
+            hidden: true,
+            status: 'failed',
+            usageShare: 0.002,
+            maxShare: 0.05,
+          },
         ],
       }),
       run({ triggerKind: 'agent', calledBy: 'Weekly report', chatId: null }),
@@ -535,6 +550,9 @@ describe('AgentDetail', () => {
     expect(called[0].textContent).toContain('Ran FAQ writer');
     expect(called[0].textContent).toContain('Done');
     expect(called[0].textContent).toContain('1.5% of 6%');
+    // One the person can't see is never named.
+    expect(called[1].textContent).toContain('An agent you can’t see');
+    expect(called[1].textContent).not.toContain('Ran');
     expect(called[1].textContent).toContain('Failed');
     await click(action('agent.toggleRunCalls')[0]);
     expect(all('[data-slot="agent-run-call"]')).toHaveLength(0);

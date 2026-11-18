@@ -1339,6 +1339,123 @@ describe('reading', () => {
     expect(JSON.stringify(calleeView)).not.toContain('dddddddd-0000');
   });
 
+  it('links the runs a run started, and never names one the person can’t see', async () => {
+    // A workspace agent's run that started two: a workspace agent and someone else's private one.
+    const caller = await create(PEOPLE.manager, { name: 'AEO Operator', visibility: 'workspace' });
+    const shared = await create(PEOPLE.manager, { name: 'FAQ writer', visibility: 'workspace' });
+    const theirs = await create(PEOPLE.otherManager, { name: 'Their private' });
+    const hiddenCaller = await create(PEOPLE.otherManager, { name: 'Their Operator' });
+    const run = (id: string, agentId: string, over: Record<string, unknown> = {}) =>
+      db.tables.chat_agent_runs.push({
+        id,
+        organization_id: ORG,
+        agent_id: agentId,
+        agent_version: 1,
+        brand_id: BRAND,
+        trigger_kind: 'agent',
+        acting_user_id: PEOPLE.manager,
+        status: 'running',
+        skipped_reason: null,
+        stop_reason: null,
+        max_share: 0.02,
+        usage_share: 0.01,
+        outcome: null,
+        outcome_confidence: null,
+        queued_at: '2026-10-28T09:01:00.000Z',
+        started_at: '2026-10-28T09:01:01.000Z',
+        finished_at: null,
+        called_by_run_id: 'dddddddd-0000-4000-8000-000000000001',
+        ...over,
+      });
+    run('dddddddd-0000-4000-8000-000000000001', caller.id, {
+      trigger_kind: 'schedule',
+      called_by_run_id: null,
+      queued_at: '2026-10-28T09:00:00.000Z',
+    });
+    run('dddddddd-0000-4000-8000-000000000002', shared.id);
+    run('dddddddd-0000-4000-8000-000000000003', theirs.id, {
+      queued_at: '2026-10-28T09:02:00.000Z',
+    });
+    // A run of the shared agent that someone's private agent started.
+    run('dddddddd-0000-4000-8000-000000000004', hiddenCaller.id, {
+      trigger_kind: 'schedule',
+      acting_user_id: PEOPLE.otherManager,
+      called_by_run_id: null,
+      status: 'done',
+    });
+    run('dddddddd-0000-4000-8000-000000000005', shared.id, {
+      called_by_run_id: 'dddddddd-0000-4000-8000-000000000004',
+      queued_at: '2026-10-28T09:05:00.000Z',
+    });
+    // Each child's chat, the person's own; and another workspace's run naming the same caller.
+    for (const [chat, runId] of [
+      ['cccccccc-0000-4000-8000-000000000002', 'dddddddd-0000-4000-8000-000000000002'],
+      ['cccccccc-0000-4000-8000-000000000003', 'dddddddd-0000-4000-8000-000000000003'],
+    ]) {
+      db.tables.chat_conversations.push({
+        id: chat,
+        organization_id: ORG,
+        agent_run_id: runId,
+        user_id: PEOPLE.manager,
+        shared_at: null,
+        deleted_at: null,
+      });
+    }
+    db.tables.chat_agent_runs.push({
+      id: 'dddddddd-0000-4000-8000-000000000099',
+      organization_id: OTHER_ORG,
+      agent_id: 'abababab-0000-4000-8000-000000000999',
+      brand_id: FOREIGN,
+      trigger_kind: 'agent',
+      status: 'done',
+      max_share: 0.5,
+      usage_share: 0.4,
+      queued_at: '2026-10-28T09:03:00.000Z',
+      called_by_run_id: 'dddddddd-0000-4000-8000-000000000001',
+    });
+
+    const manager = await ctxOf(PEOPLE.manager);
+    const callerView = await agents.readAgent(manager, caller.id, NOW);
+    expect(callerView?.recentRuns[0].calls).toEqual([
+      {
+        agent: 'FAQ writer',
+        agentId: shared.id,
+        chatId: 'cccccccc-0000-4000-8000-000000000002',
+        status: 'running',
+        usageShare: 0.01,
+        maxShare: 0.02,
+      },
+      // Someone else's private agent: "An agent you can't see", with no name, chat or page.
+      {
+        agent: '',
+        agentId: null,
+        chatId: null,
+        hidden: true,
+        status: 'running',
+        usageShare: 0.01,
+        maxShare: 0.02,
+      },
+    ]);
+    const body = JSON.stringify(callerView);
+    expect(body).not.toContain('Their private');
+    expect(body).not.toContain(theirs.id);
+    expect(body).not.toContain('cccccccc-0000-4000-8000-000000000003');
+    // A run a private agent of someone else's started: no "Called by" its name.
+    const sharedRuns = await agents.listAgentRuns(manager, shared.id, 10);
+    expect(sharedRuns?.map((r) => [r.triggerKind, r.calledBy])).toEqual([
+      ['agent', null],
+      ['agent', 'AEO Operator'],
+    ]);
+    expect(JSON.stringify(sharedRuns)).not.toContain('Their Operator');
+
+    // The private agent's owner sees and names both; chats that aren't theirs stay closed.
+    const owner = await agents.readAgent(await ctxOf(PEOPLE.otherManager), caller.id, NOW);
+    expect(owner?.recentRuns[0].calls?.map((c) => [c.agent, c.agentId, c.chatId])).toEqual([
+      ['FAQ writer', shared.id, null],
+      ['Their private', theirs.id, null],
+    ]);
+  });
+
   it('gives a run whose chat was deleted no chat to open', async () => {
     const { id } = await create(PEOPLE.manager);
     db.tables.chat_agent_runs.push({
