@@ -35,8 +35,11 @@ const { scopeRead, pagedRead } = await import('../scope');
 const { DEFAULT_CHAT_SETTINGS, decideToolCall } = await import('../precedence');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 const { withSkillRefusal } = await import('../with-skill');
+const { isUntrustedRead, taintsRun } = await import('../untrusted');
 
 const BRAND = FIXTURE_IDS.brand;
+const TOPIC = 'a0000000-0000-4000-8000-000000000001';
+const COMPETITOR = 'c0000000-0000-4000-8000-000000000001';
 const ctx = {
   userId: 'user-1',
   email: null,
@@ -51,6 +54,7 @@ const NAMES = [
   'get_competitor_head_to_head',
   'get_topics_vs_competitors',
   'get_visibility_opportunities',
+  'get_citation_gaps',
   'get_ai_bots',
   'get_gsc_pages',
 ];
@@ -81,6 +85,7 @@ describe('the rows', () => {
       get_competitor_head_to_head: '/dashboard/competitors',
       get_topics_vs_competitors: '/dashboard/insights',
       get_visibility_opportunities: '/dashboard/insights',
+      get_citation_gaps: '/dashboard/citations',
       get_ai_bots: '/dashboard/traffic',
       get_gsc_pages: '/dashboard/traffic',
     });
@@ -93,6 +98,7 @@ describe('the rows', () => {
       get_competitor_head_to_head: "Competitors' head-to-head",
       get_topics_vs_competitors: 'Visibility › Overview',
       get_visibility_opportunities: 'Visibility › Overview',
+      get_citation_gaps: 'Citations › Gaps',
       get_ai_bots: 'AI Referral Traffic',
       get_gsc_pages: 'AI Referral Traffic',
     };
@@ -102,6 +108,7 @@ describe('the rows', () => {
       'date_to',
       'model',
       'region',
+      'topic_id',
       'days',
       'competitor_id',
       'competitor',
@@ -134,6 +141,15 @@ describe('the rows', () => {
       region: 'US',
     });
     await run('get_visibility_opportunities', { brand_id: BRAND, ...dates });
+    await run('get_citation_gaps', {
+      brand_id: BRAND,
+      ...dates,
+      model: 'chatgpt-web',
+      region: 'US',
+      topic_id: TOPIC,
+      competitor_id: COMPETITOR,
+      offset: 50,
+    });
     await run('get_ai_bots', { brand_id: BRAND, ...dates });
     await run('get_gsc_pages', { brand_id: BRAND, ...dates });
     const withDates = { brandId: BRAND, dateFrom: '2026-10-18', dateTo: '2026-11-16' };
@@ -177,18 +193,45 @@ describe('the rows', () => {
           },
         ],
       },
+      {
+        fn: 'getCitationGapsFor',
+        args: [
+          ctx,
+          {
+            ...withDates,
+            model: 'chatgpt-web',
+            region: 'US',
+            topicId: TOPIC,
+            competitorId: COMPETITOR,
+            limit: undefined,
+            offset: 50,
+          },
+        ],
+      },
       { fn: 'getAiBotsFor', args: [ctx, withDates] },
       { fn: 'getGscPagesFor', args: [ctx, withDates] },
     ]);
   });
 
-  it('refuses a fan-out read past 30 days, and a competitor id that is no id', () => {
+  it('refuses a fan-out read past 30 days, and a competitor or topic id that is no id', () => {
     const fanouts = chatTool('get_query_fanouts')!;
     expect(fanouts.inputSchema.safeParse({ brand_id: BRAND, days: 31 }).success).toBe(false);
     const h2h = chatTool('get_competitor_head_to_head')!;
     expect(h2h.inputSchema.safeParse({ brand_id: BRAND, competitor_id: 'Acme' }).success).toBe(
       false,
     );
+    const gaps = chatTool('get_citation_gaps')!;
+    for (const input of [{ competitor_id: 'Acme' }, { topic_id: 'Pricing' }]) {
+      expect(gaps.inputSchema.safeParse({ brand_id: BRAND, ...input }).success).toBe(false);
+    }
+  });
+
+  it("reads Citations › Gaps as untrusted: its domains are the answers' cited sources", () => {
+    expect(chatTool('get_citation_gaps')!.description).toContain(
+      'the domains that cite competitors but not the brand',
+    );
+    expect(isUntrustedRead('get_citation_gaps')).toBe(true);
+    expect(taintsRun('get_citation_gaps')).toBe(true);
   });
 });
 
@@ -231,6 +274,22 @@ describe("the server's scope on them", () => {
       kind: 'read',
       input: { date_from: '2026-10-18', date_to: '2026-11-16', model: 'chatgpt-web' },
     });
+    // Citations › Gaps, as the Citations page: the person's range, the plan's platforms.
+    expect(
+      await scopeRead(
+        chatTool('get_citation_gaps')!,
+        { brand_id: BRAND },
+        facts({
+          range: '30d',
+          limits: PLANS.starter.limits,
+          planName: 'Starter',
+          modelsOf: async () => ['chatgpt-web', 'perplexity-web'],
+        }),
+      ),
+    ).toMatchObject({
+      kind: 'read',
+      input: { date_from: '2026-10-18', date_to: '2026-11-16', model: 'chatgpt-web' },
+    });
     // Topics (on Prompts) and AI Traffic cut a preset as the last N × 24 hours, as their pages
     // do (page-periods.ts).
     for (const name of ['get_topics_overview', 'get_ai_bots', 'get_gsc_pages']) {
@@ -258,6 +317,7 @@ describe("the server's scope on them", () => {
       'get_competitor_head_to_head',
       'get_topics_vs_competitors',
       'get_visibility_opportunities',
+      'get_citation_gaps',
     ]);
   });
 });

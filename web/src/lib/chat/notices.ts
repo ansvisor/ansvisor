@@ -9,8 +9,9 @@ import type { CmsTarget } from '@/lib/content/cms-send-client';
  * agent sent a page out on its own, or an edit stopped it from doing so
  * (AUTONOMOUS-GO-LIVE §6.4, §7.2); a scheduled job's run failed after its
  * retry, or the job turned itself off (CHAT-12 items 16, 26–27; 00461); a
- * follow-up check's result (W3-05). Pure, for the server action that reads
- * them (lib/actions/chat-notices.ts).
+ * follow-up check's result (W3-05); an AEO Operator's summary once the
+ * agents of its plan are done (00545, AEO Operator plan §4.2 step 7). Pure,
+ * for the server action that reads them (lib/actions/chat-notices.ts).
  */
 
 interface NoticeBase {
@@ -56,7 +57,30 @@ export type ChatNotice =
       agent: string;
       agentId: string;
     })
+  | PlanSummaryNotice
   | ScheduleNotice;
+
+/**
+ * An AEO Operator's summary (operator/summary.ts): the Operator by its name,
+ * the plan's day, where its agents are, counted, and its run's chat, where
+ * the summary is. Counts only: no agent's name, no action's title.
+ */
+export interface PlanSummaryNotice extends NoticeBase {
+  kind: 'agent_plan_summary';
+  agent: string;
+  agentId: string;
+  /** The Operator's run chat, for Open summary; null when it couldn't be found. */
+  chatId: string | null;
+  /** The plan's day, YYYY-MM-DD. */
+  day: string;
+  total: number;
+  done: number;
+  waiting: number;
+  failed: number;
+  stopped: number;
+  working: number;
+  notStarted: number;
+}
 
 /**
  * A scheduled job's notice (CHAT-12 items 16, 26–27; 00461): a run failed
@@ -132,6 +156,33 @@ export function noticeOf(row: NoticeRow): ChatNotice | null {
     if (typeof agent !== 'string' || typeof agentId !== 'string') return null;
     return { ...base, kind: 'agent_go_live_off', agent, agentId };
   }
+  if (row.kind === 'agent_plan_summary') {
+    const { agent, agentId, chatId, day } = payload;
+    const uuid = (value: unknown) =>
+      typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+    if (typeof agent !== 'string' || !uuid(agentId)) return null;
+    if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+    // A count that doesn't read is none.
+    const count = (value: unknown) => {
+      const n = Number(value);
+      return Number.isInteger(n) && n >= 0 && n <= 100 ? n : 0;
+    };
+    return {
+      ...base,
+      kind: 'agent_plan_summary',
+      agent: agent.slice(0, 120),
+      agentId: agentId as string,
+      chatId: uuid(chatId),
+      day,
+      total: count(payload.total),
+      done: count(payload.done),
+      waiting: count(payload.waiting),
+      failed: count(payload.failed),
+      stopped: count(payload.stopped),
+      working: count(payload.working),
+      notStarted: count(payload.notStarted),
+    };
+  }
   if (
     row.kind === 'schedule_failed' ||
     row.kind === 'schedule_paused' ||
@@ -164,4 +215,5 @@ export function noticeOf(row: NoticeRow): ChatNotice | null {
 export const OPENED_CLOSES: readonly ChatNotice['kind'][] = [
   'agent_went_live',
   'agent_go_live_off',
+  'agent_plan_summary',
 ];

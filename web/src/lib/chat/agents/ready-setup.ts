@@ -11,6 +11,8 @@ import {
   FULL_AUTO_PLAN,
   presetGate,
   presetOffered,
+  presetsOnInstall,
+  type AgentPreset,
   type PresetLock,
 } from './catalog';
 
@@ -24,11 +26,13 @@ import {
  */
 
 export function presetLocksFor(
-  ctx: Pick<AgentContext, 'plan' | 'settings' | 'viewer'>,
+  ctx: Pick<AgentContext, 'plan' | 'settings' | 'viewer'> & {
+    actor?: Pick<AgentContext['actor'], 'organizationId'>;
+  },
 ): Record<string, PresetLock> {
   const locks: Record<string, PresetLock> = {};
   for (const preset of AGENT_PRESETS) {
-    if (preset.status !== 'ready' || !presetOffered(preset)) continue;
+    if (preset.status !== 'ready' || !presetOffered(preset, ctx.actor?.organizationId)) continue;
     const needs = planGateLock(ctx.plan, presetGate(preset));
     const denial = modeDenial(preset.mode, ctx.plan, ctx.settings, ctx.viewer.role);
     if (needs || denial?.denial.code === 'plan_locked') {
@@ -54,6 +58,25 @@ export async function readPresetLocks(): Promise<Record<string, PresetLock>> {
   } catch (err) {
     console.error('[chat/agents] could not read the ready-to-use agents’ plan locks:', err);
     return {};
+  }
+}
+
+/**
+ * The ready-to-use agents as this install offers them to the signed-in
+ * person's workspace (presetsOnInstall): the AEO Operator only where
+ * CHAT_OPERATOR is on for it. A workspace that can't be read gets the
+ * install's list without the agents a workspace flag narrows.
+ */
+export async function readOfferedPresets(): Promise<AgentPreset[]> {
+  try {
+    const actor = await chatActor();
+    return presetsOnInstall(
+      AGENT_PRESETS,
+      actor instanceof NextResponse ? null : actor.organizationId,
+    );
+  } catch (err) {
+    console.error('[chat/agents] could not read the workspace for its ready-to-use agents:', err);
+    return presetsOnInstall(AGENT_PRESETS, null);
   }
 }
 

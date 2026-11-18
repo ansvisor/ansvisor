@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { addCompetitors, removeBrandCompetitor } from '@/lib/actions/competitor';
+import { COMPETITOR_TYPE_MAX_LENGTH, DEFAULT_COMPETITOR_TYPE_NAMES } from '@/lib/competitor-types';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 import { competitorName, competitorWords, listWords } from './targets';
@@ -18,8 +19,7 @@ export const COMPETITOR_TOOLS = [
     name: 'add_competitors',
     class: 'write',
     area: 'competitors',
-    description:
-      'Add competitors to the brand, each with its name and website domain ("peec.ai"). One the brand already has (the same domain) is skipped. Only the ones the person asked for.',
+    description: `Add competitors to the brand, each with its name and website domain ("peec.ai"), and its type when the person said what kind it is: one of ${DEFAULT_COMPETITOR_TYPE_NAMES} or one of the brand's own (its competitors' types, from list_competitors), else none. One the brand already has (the same domain) is skipped, and so is one merged into another of its competitors (an alias in list_competitors): say that answers naming it already count for that one. Only the ones the person asked for.`,
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
     minRole: 'manager',
@@ -40,6 +40,7 @@ export const COMPETITOR_TOOLS = [
           z.object({
             name: z.string().trim().min(1).max(100),
             domain: z.string().trim().max(253).default(''),
+            type: z.string().trim().max(COMPETITOR_TYPE_MAX_LENGTH).optional(),
           }),
         )
         .min(1)

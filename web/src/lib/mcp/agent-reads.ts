@@ -1,7 +1,8 @@
+import messages from '../../../messages/en.json';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { AGENT_RUNS_MAX, type AgentListView } from '@/lib/chat/agent-rules';
 import { percentOf, writesAgents } from '@/lib/chat/agent-view';
-import type { AgentContext, AgentListItem, AgentRunView } from '@/lib/chat/agents';
+import type { AgentCallView, AgentContext, AgentListItem, AgentRunView } from '@/lib/chat/agents';
 import { brandAllowed } from './data';
 import { pageOfList } from './list-page';
 
@@ -14,7 +15,8 @@ import { pageOfList } from './list-page';
  * to the brand asked about. The agents API's own functions, with the
  * person's context read fresh (readAgentContext), so a role or a brand taken
  * away counts at once. Never an id of a run, a version or a person; never a
- * dollar. Server only.
+ * dollar; never the name of an agent the person can't see, which a run
+ * started or which started it. Server only.
  */
 
 /** Chat's agents, read when needed: they import what the registry's own rows import. */
@@ -40,6 +42,23 @@ const VIEW_WORDS: Record<AgentListView, string> = {
 
 const chatHref = (chatId: string | null) =>
   chatId ? (`/dashboard/chat/${encodeURIComponent(chatId)}` as const) : null;
+
+/** An agent the person can't see, as the Runs tab names it: never by its name. */
+const HIDDEN_AGENT = messages.chatAgents.calls.canCall.hidden;
+
+/**
+ * A run a run started, as its row opens it: its agent, status, chat and
+ * agent page; one the person can't see only as "An agent you can't see".
+ */
+function ranAgent(call: AgentCallView) {
+  if (call.hidden) return { agent: HIDDEN_AGENT, status: call.status };
+  return {
+    agent: call.agent,
+    status: call.status,
+    open: chatHref(call.chatId),
+    agent_page: call.agentId ? `/dashboard/agents/${encodeURIComponent(call.agentId)}` : null,
+  };
+}
 
 /** An agent as its card on Action Center › Agents shows it. */
 function agentRow(agent: AgentListItem) {
@@ -138,10 +157,9 @@ function runRow(run: AgentRunView) {
     outcome: run.outcome,
     ...(run.outcomeConfidence ? { confidence: run.outcomeConfidence } : {}),
     ai_use: `${percentOf(run.usageShare)} of its ${percentOf(run.maxShare)} cap`,
+    // The agent that started it, only when the person sees it (agents.ts readCalls).
     ...(run.calledBy ? { called_by: run.calledBy } : {}),
-    ...(run.calls?.length
-      ? { ran_agents: run.calls.map((call) => ({ agent: call.agent, status: call.status })) }
-      : {}),
+    ...(run.calls?.length ? { ran_agents: run.calls.map(ranAgent) } : {}),
     open: chatHref(run.chatId),
   };
 }

@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Link, useRouter } from '@/i18n/navigation';
 import type { AccessClass } from '@/lib/chat/access';
-import { MAX_CAN_CALL } from '@/lib/chat/agent-rules';
+import { MAX_CAN_CALL, isOperatorSkills } from '@/lib/chat/agent-rules';
 import {
   AGENT_FORM_STEPS,
   FAST_MODEL,
@@ -27,6 +27,7 @@ import {
   formFromAgent,
   formFromPreset,
   hasProblems,
+  isOperatorForm,
   modelKeyProvider,
   newForm,
   newTriggerDraft,
@@ -39,6 +40,7 @@ import {
   type AgentFormState,
   type AgentFormStep,
   type FormField,
+  type OperatorFormState,
   type TriggerDraft,
   type TriggerKind,
 } from '@/lib/chat/agent-form';
@@ -54,6 +56,14 @@ import type { AgentDetail } from '@/lib/chat/agents';
 import type { AgentPreset } from '@/lib/chat/agents/catalog';
 import type { ChatDenialCard } from '@/lib/chat/events';
 import { GO_LIVE_LIMIT_DEFAULT } from '@/lib/chat/go-live';
+import {
+  OPERATOR_DAILY_BUDGET_DEFAULT,
+  OPERATOR_DAILY_BUDGET_MAX,
+  OPERATOR_DAILY_BUDGET_MIN,
+  OPERATOR_MAX_RUNS_MAX,
+  OPERATOR_MAX_RUNS_MIN,
+  OPERATOR_SKILL,
+} from '@/lib/chat/operator/defaults';
 import { CHAT_MODES, type ChatMode } from '@/lib/chat/precedence';
 import { effectiveTimeZone, viewerTimeZone } from '@/lib/time-zone';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -99,6 +109,16 @@ import { useAgentWords } from './agent-words';
  * (AUTONOMOUS-GO-LIVE §7.2), saved after the agent as its own request. From a
  * ready-to-use agent (Agent Center › Ready to use), the steps open filled
  * with it and named after it; it is saved only as the person saves it.
+ *
+ * An AEO Operator's form (AEO Operator plan §4.3), from its ready-to-use
+ * agent, from /operator (`?skill=operator`) or editing one: the same four
+ * steps as Operator · Days & brand · Approvals · Budget & agents, with its
+ * daily budget (5%, 1–10%) in place of Max per run, the agents it may run
+ * (all the person's active ones, workspace agents opt-in), at most how many
+ * a day (5, up to 8), one brand and its schedule; no Can call, connections,
+ * engines, topics, tags, URLs, model or instructions. /operator is never in
+ * the skill picker: this is the only way to it, and only while
+ * CHAT_OPERATOR is on for the workspace.
  */
 
 /** Steps' problems shown once Next (or a save) was tried on them. */
@@ -228,6 +248,145 @@ function CanCallRow({
           })}
         </div>
       )}
+    </SettingRow>
+  );
+}
+
+/**
+ * An AEO Operator's "Agents it may run" (decision 4): all the person's
+ * active agents (the default, ones added later too), or only the ones they
+ * pick; and the workspace's shared agents too, opt-in. Never someone
+ * else's private agent: the setup lists none.
+ */
+function OperatorAgentsRow({
+  options,
+  value,
+  invalid,
+  error,
+  onChange,
+}: {
+  options: NonNullable<AgentFormSetup['operatorAgents']>;
+  value: OperatorFormState;
+  invalid: boolean;
+  error: ReactNode;
+  onChange: (next: Partial<OperatorFormState>) => void;
+}) {
+  const t = useTranslations('chatAgents.form.operator.agents');
+  // Workspace agents are offered only with the switch on; a pick of one is let go with it.
+  const shown = options.filter((agent) => agent.mine || value.includeWorkspace);
+  const picked = value.allowed ?? [];
+  const toggle = (id: string) =>
+    onChange({
+      allowed: picked.includes(id) ? picked.filter((v) => v !== id) : [...picked, id],
+    });
+  return (
+    <SettingRow label={t('label')} note={t('note')} noteId="agent-form-note-operator-agents">
+      <div
+        role="radiogroup"
+        aria-label={t('label')}
+        aria-describedby="agent-form-note-operator-agents"
+        onKeyDown={radioKeys}
+        className="grid grid-cols-2 gap-2 max-[520px]:grid-cols-1"
+      >
+        {(['all', 'picked'] as const).map((choice) => {
+          const on = choice === 'all' ? value.allowed === null : value.allowed !== null;
+          return (
+            <button
+              key={choice}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={radioTab(on, false, true)}
+              data-action="agentNew.operatorAgents"
+              data-choice={choice}
+              onClick={() =>
+                !on &&
+                onChange({
+                  allowed:
+                    choice === 'all'
+                      ? null
+                      : shown.filter((agent) => agent.mine).map((agent) => agent.id),
+                })
+              }
+              className={cn(OPT, on && OPT_ON)}
+            >
+              <b className="font-semibold">{t(choice)}</b>
+              <em className={EM}>
+                {choice === 'all' ? t('allNote') : t('pickedNote', { count: picked.length })}
+              </em>
+            </button>
+          );
+        })}
+      </div>
+      {value.allowed !== null &&
+        (shown.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">{t('empty')}</p>
+        ) : (
+          <div
+            role="group"
+            aria-label={t('picked')}
+            aria-invalid={invalid || undefined}
+            aria-describedby={invalid ? errorId('operatorAgents') : undefined}
+            data-slot="agent-form-operator-picks"
+            className="mt-2 flex flex-wrap gap-1.5"
+          >
+            {shown.map((agent) => {
+              const on = picked.includes(agent.id);
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  aria-pressed={on}
+                  data-action="agentNew.operatorPick"
+                  data-agent={agent.id}
+                  onClick={() => toggle(agent.id)}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none',
+                    on
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'bg-card text-foreground hover:bg-muted',
+                  )}
+                >
+                  {on && <Check className="size-3.5" aria-hidden />}
+                  {agent.name}
+                  {!agent.mine && (
+                    <span
+                      className={cn('text-[11px]', on ? 'opacity-80' : 'text-muted-foreground')}
+                    >
+                      · {t('workspaceTag')}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      {error}
+      <div className="mt-2.5 flex items-center gap-2.5 text-[12.5px]">
+        <FormSwitch
+          checked={value.includeWorkspace}
+          label={t('workspace')}
+          action="agentNew.operatorWorkspace"
+          describedBy="agent-form-note-operator-workspace"
+          onChange={(on) =>
+            onChange({
+              includeWorkspace: on,
+              // Off, a workspace agent picked before is let go.
+              ...(on || value.allowed === null
+                ? {}
+                : {
+                    allowed: picked.filter((id) => options.find((a) => a.id === id)?.mine),
+                  }),
+            })
+          }
+        />
+        <span>
+          <b className="font-medium">{t('workspace')}</b>
+          <em id="agent-form-note-operator-workspace" className={EM}>
+            {t('workspaceNote')}
+          </em>
+        </span>
+      </div>
     </SettingRow>
   );
 }
@@ -461,7 +620,12 @@ function AgentFormBody({
 
   const librarySkills = setup.librarySkills ?? [];
   // Ansvisor's skills this install offers now: one behind a flag that is off is left out.
-  const offered = ANSVISOR_SKILLS.filter((s) => !(setup.offSkills ?? []).includes(s.id));
+  // /operator is never picked here: its own form opens from its ready-to-use agent or ?skill=.
+  const offered = ANSVISOR_SKILLS.filter(
+    (s) => s.id !== OPERATOR_SKILL && !(setup.offSkills ?? []).includes(s.id),
+  );
+  // The AEO Operator is on for the workspace (CHAT_OPERATOR): its form may open.
+  const operatorOn = !(setup.offSkills ?? []).includes(OPERATOR_SKILL);
   // An Ansvisor skill's title, a Library skill's own (W4-19), else its /command.
   const skillTitle = (id: string) =>
     tSkills.has(id) ? tSkills(id) : (librarySkills.find((s) => s.name === id)?.title ?? id);
@@ -490,10 +654,14 @@ function AgentFormBody({
     if (agent) {
       return formFromAgent(agent, setup, { timeZone: zone, triggerKey: (i) => `k${i}` })!;
     }
-    if (preset) {
+    // The AEO Operator's preset only while it is on for the workspace (the page checks it too).
+    if (preset && (operatorOn || !isOperatorSkills(preset.skills))) {
       return named(formFromPreset(setup, preset, { timeZone: zone, brandId: activeBrandId }));
     }
-    const skill = initialSkill && offered.some((s) => s.id === initialSkill);
+    const skill =
+      initialSkill &&
+      (offered.some((s) => s.id === initialSkill) ||
+        (initialSkill === OPERATOR_SKILL && operatorOn));
     return named(
       newForm(setup, {
         timeZone: zone,
@@ -554,6 +722,13 @@ function AgentFormBody({
   const words = useAgentWords(now, zone);
   const ctx = { setup, agent: base, now };
   const problems = stepProblems(step, state, ctx);
+  // An AEO Operator's form: its own steps' contents (AEO Operator plan §4.3).
+  const operator = state.operator;
+  const operatorMode = isOperatorForm(state);
+  const stepName = (name: (typeof AGENT_FORM_STEPS)[number]) =>
+    operatorMode ? t(`operator.steps.${name}`) : t(`steps.${name}`);
+  const setOperator = (patch: Partial<OperatorFormState>) =>
+    operator && update({ operator: { ...operator, ...patch } });
   const isAdmin = setup.role === 'admin';
   // The go-live box shows while CHAT_AUTO_GO_LIVE is on (AUTONOMOUS-GO-LIVE §7.2).
   const goLiveBoxShown = !!setup.goLive && setup.goLive !== 'hidden';
@@ -878,44 +1053,131 @@ function AgentFormBody({
       <NeedsClick key="nyc">{t('summary.publishing')}</NeedsClick>
     );
 
-  const summaryRows: [string, ReactNode][] = [
-    ['name', state.name.trim() || t('summary.none')],
-    [
-      'skill',
-      state.skills.length > 0 ? (
-        <span className="flex flex-wrap gap-1">
-          {state.skills.map((id) => (
-            <code key={id} className="font-mono text-xs">
-              /{id}
-            </code>
-          ))}
+  const operatorBudget = /^\d{1,2}$/.test(state.maxRun.trim()) ? Number(state.maxRun) / 100 : null;
+  const operatorRows: [string, ReactNode][] = operator
+    ? [
+        ['name', state.name.trim() || t('summary.none')],
+        [
+          'skill',
+          <code key="skill" className="font-mono text-xs">
+            /{OPERATOR_SKILL}
+          </code>,
+        ],
+        ['trigger', triggerLine],
+        ['brand', brandsLine],
+        ['approvals', t('operator.summary.approvals')],
+        [
+          'agents',
+          [
+            operator.allowed === null
+              ? t('operator.agents.all')
+              : t('operator.summary.agentsPicked', { count: operator.allowed.length }),
+            ...(operator.includeWorkspace ? [t('operator.summary.workspaceToo')] : []),
+          ].join(' · '),
+        ],
+        [
+          'maxRuns',
+          /^\d$/.test(operator.maxRuns.trim())
+            ? t('operator.summary.maxRuns', { count: Number(operator.maxRuns) })
+            : t('summary.none'),
+        ],
+        ['shared', t('operator.visibility')],
+        [
+          'dailyBudget',
+          operatorBudget !== null
+            ? t('operator.summary.cost', { share: percentOf(operatorBudget) })
+            : t('summary.none'),
+        ],
+      ]
+    : [];
+  const summaryRows: [string, ReactNode][] = operator
+    ? operatorRows
+    : [
+        ['name', state.name.trim() || t('summary.none')],
+        [
+          'skill',
+          state.skills.length > 0 ? (
+            <span className="flex flex-wrap gap-1">
+              {state.skills.map((id) => (
+                <code key={id} className="font-mono text-xs">
+                  /{id}
+                </code>
+              ))}
+            </span>
+          ) : (
+            t('summary.none')
+          ),
+        ],
+        ['trigger', triggerLine],
+        [
+          'scope',
+          state.engines.length > 0
+            ? `${brandsLine} · ${state.engines.map(engineName).join(', ')}`
+            : brandsLine,
+        ],
+        ['mode', tAgents(`modes.${state.mode}`)],
+        [
+          'connections',
+          state.connections.length > 0
+            ? state.connections.map((c) => words.connection(c.key)).join(', ')
+            : tAgents('connections.none'),
+        ],
+        ['model', modelLabel(state.model)],
+        ['shared', t(`agent.visibilityOptions.${state.visibility}`)],
+        ['runsAs', t('summary.runsAs', { role: tRoles(setup.role) })],
+        ['approvals', t('summary.approvals')],
+        ['outcome', t('summary.outcome')],
+        ['publishing', publishing],
+        ['cost', t('summary.cost', { share: percentOf(runShare) })],
+      ];
+
+  // The monthly cap: an Admin's to set; others see one that is set.
+  const monthCapRow = isAdmin ? (
+    <SettingRow
+      label={t('agent.monthCap')}
+      note={t('agent.monthCapNote')}
+      noteId="agent-form-note-month-cap"
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <FormSwitch
+          checked={state.monthCapOn}
+          label={t('agent.monthCap')}
+          action="agentNew.monthCap"
+          onChange={(on) => update({ monthCapOn: on })}
+        />
+        {state.monthCapOn && (
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={100}
+              step={1}
+              aria-label={t('agent.monthCap')}
+              data-action="agentNew.maxMonth"
+              value={state.maxMonth}
+              aria-invalid={invalid('maxMonth') || undefined}
+              aria-describedby={described('maxMonth', 'agent-form-note-month-cap')}
+              onChange={(event) => update({ maxMonth: event.target.value })}
+              className="w-20 tabular-nums"
+            />
+            <span aria-hidden className="text-muted-foreground">
+              %
+            </span>
+          </div>
+        )}
+      </div>
+      {fieldError('maxMonth')}
+    </SettingRow>
+  ) : (
+    base?.maxMonthShare != null && (
+      <SettingRow label={t('agent.monthCap')}>
+        <span data-slot="agent-form-month-cap" className="text-muted-foreground">
+          {t('agent.monthCapSet', { cap: percentOf(base.maxMonthShare) })}
         </span>
-      ) : (
-        t('summary.none')
-      ),
-    ],
-    ['trigger', triggerLine],
-    [
-      'scope',
-      state.engines.length > 0
-        ? `${brandsLine} · ${state.engines.map(engineName).join(', ')}`
-        : brandsLine,
-    ],
-    ['mode', tAgents(`modes.${state.mode}`)],
-    [
-      'connections',
-      state.connections.length > 0
-        ? state.connections.map((c) => words.connection(c.key)).join(', ')
-        : tAgents('connections.none'),
-    ],
-    ['model', modelLabel(state.model)],
-    ['shared', t(`agent.visibilityOptions.${state.visibility}`)],
-    ['runsAs', t('summary.runsAs', { role: tRoles(setup.role) })],
-    ['approvals', t('summary.approvals')],
-    ['outcome', t('summary.outcome')],
-    ['publishing', publishing],
-    ['cost', t('summary.cost', { share: percentOf(runShare) })],
-  ];
+      </SettingRow>
+    )
+  );
 
   const spinner = (intent: 'draft' | 'on' | 'save') =>
     busy === intent ? (
@@ -952,7 +1214,7 @@ function AgentFormBody({
               >
                 {i < step ? <Check className="size-3" strokeWidth={3} /> : i + 1}
               </span>
-              <span className="truncate">{t(`steps.${name}`)}</span>
+              <span className="truncate">{stepName(name)}</span>
             </button>
           </li>
         ))}
@@ -969,11 +1231,25 @@ function AgentFormBody({
               data-slot="agent-form-step-title"
               className="sr-only"
             >
-              {t('stepTitle', { step: step + 1, name: t(`steps.${AGENT_FORM_STEPS[step]}`) })}
+              {t('stepTitle', { step: step + 1, name: stepName(AGENT_FORM_STEPS[step]) })}
             </h2>
             {alertLine}
 
-            {step === 0 && (
+            {step === 0 && operatorMode && (
+              <div data-slot="agent-form-operator-intro" className={cn(BOX, 'px-3.5 py-3')}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="font-mono text-xs text-muted-foreground">/{OPERATOR_SKILL}</code>
+                  <b className="text-[14px] font-semibold">{skillTitle(OPERATOR_SKILL)}</b>
+                </div>
+                <ul className="mt-2 grid list-disc gap-1.5 pl-4 text-[13px] text-foreground/90">
+                  {(['picks', 'card', 'approve', 'brand'] as const).map((line) => (
+                    <li key={line}>{t(`operator.intro.${line}`)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {step === 0 && !operatorMode && (
               <>
                 <div
                   role="group"
@@ -1182,10 +1458,47 @@ function AgentFormBody({
                 onAdd={onAdd}
                 onRemove={onRemove}
                 onTrigger={setTrigger}
+                operator={operatorMode}
               />
             )}
 
-            {step === 2 && (
+            {step === 2 && operatorMode && (
+              <>
+                <div role="table" aria-label={t('operator.approvals.title')} className={BOX}>
+                  <div
+                    role="row"
+                    className="grid grid-cols-[minmax(0,1fr)_minmax(0,220px)] gap-3 bg-muted/50 px-3.5 py-2 text-[11px] tracking-[.3px] text-muted-foreground uppercase"
+                  >
+                    <span role="columnheader">{t('operator.approvals.title')}</span>
+                    <span role="columnheader">{t('mode.approval')}</span>
+                  </div>
+                  {(['plan', 'start', 'agents', 'skip'] as const).map((row) => (
+                    <div
+                      key={row}
+                      role="row"
+                      data-approval={row}
+                      className="grid grid-cols-[minmax(0,1fr)_minmax(0,220px)] items-center gap-3 border-t px-3.5 py-2.5 text-[13px]"
+                    >
+                      <b role="cell" className="min-w-0 font-medium">
+                        {t(`operator.approvals.rows.${row}`)}
+                      </b>
+                      <span role="cell" className="text-[11.5px] text-muted-foreground">
+                        {row === 'plan' ? (
+                          <NeedsClick>{t('mode.outcome.click')}</NeedsClick>
+                        ) : (
+                          t(`operator.approvals.outcomes.${row}`)
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11.5px] text-muted-foreground">
+                  {t('operator.approvals.note')}
+                </p>
+              </>
+            )}
+
+            {step === 2 && !operatorMode && (
               <>
                 <div
                   role="radiogroup"
@@ -1325,7 +1638,127 @@ function AgentFormBody({
               </>
             )}
 
-            {step === 3 && (
+            {step === 3 && operator && (
+              <>
+                <SectionTitle first title={t('agent.title')} />
+                <div className={cn(BOX, 'divide-y')}>
+                  <SettingRow
+                    label={t('agent.name')}
+                    note={t('agent.nameNote')}
+                    noteId="agent-form-note-name"
+                    htmlFor="agent-name"
+                  >
+                    <Input
+                      id="agent-name"
+                      data-action="agentNew.name"
+                      value={state.name}
+                      aria-invalid={invalid('name') || undefined}
+                      aria-describedby={described('name', 'agent-form-note-name')}
+                      onChange={(event) => update({ name: event.target.value, nameEdited: true })}
+                      className="max-w-[360px]"
+                    />
+                    {fieldError('name')}
+                  </SettingRow>
+
+                  <SettingRow label={t('agent.visibility')}>
+                    <span data-slot="agent-form-operator-private" className="text-muted-foreground">
+                      {t('operator.visibility')}
+                    </span>
+                    {fieldError('visibility')}
+                  </SettingRow>
+
+                  <SettingRow
+                    label={t('operator.budget.label')}
+                    note={t('operator.budget.note', {
+                      min: Math.round(OPERATOR_DAILY_BUDGET_MIN * 100),
+                      max: Math.round(OPERATOR_DAILY_BUDGET_MAX * 100),
+                    })}
+                    noteId="agent-form-note-max-run"
+                    htmlFor="agent-max-run"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        id="agent-max-run"
+                        type="number"
+                        inputMode="numeric"
+                        min={Math.round(OPERATOR_DAILY_BUDGET_MIN * 100)}
+                        max={Math.round(OPERATOR_DAILY_BUDGET_MAX * 100)}
+                        step={1}
+                        data-action="agentNew.dailyBudget"
+                        value={state.maxRun}
+                        aria-invalid={invalid('maxRun') || undefined}
+                        aria-describedby={described(
+                          'maxRun',
+                          'agent-form-note-max-run',
+                          'agent-form-operator-budget-hint',
+                        )}
+                        onChange={(event) => update({ maxRun: event.target.value })}
+                        className="w-20 tabular-nums"
+                      />
+                      <span aria-hidden className="text-muted-foreground">
+                        %
+                      </span>
+                    </div>
+                    {/* What the budget means in the AI limit's terms (AEO Operator plan §4.2 pacing). */}
+                    <p
+                      id="agent-form-operator-budget-hint"
+                      data-slot="agent-form-operator-budget-hint"
+                      className="mt-1.5 text-xs text-muted-foreground"
+                    >
+                      {keyProvider
+                        ? t('operator.budget.hintOwnKey')
+                        : t('operator.budget.hint', {
+                            budget: percentOf(operatorBudget ?? OPERATOR_DAILY_BUDGET_DEFAULT),
+                          })}
+                    </p>
+                    {fieldError('maxRun')}
+                  </SettingRow>
+
+                  <OperatorAgentsRow
+                    options={setup.operatorAgents ?? []}
+                    value={operator}
+                    invalid={invalid('operatorAgents')}
+                    error={fieldError('operatorAgents')}
+                    onChange={setOperator}
+                  />
+
+                  <SettingRow
+                    label={t('operator.maxRuns.label')}
+                    note={t('operator.maxRuns.note', {
+                      min: OPERATOR_MAX_RUNS_MIN,
+                      max: OPERATOR_MAX_RUNS_MAX,
+                    })}
+                    noteId="agent-form-note-max-runs"
+                    htmlFor="agent-max-runs"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        id="agent-max-runs"
+                        type="number"
+                        inputMode="numeric"
+                        min={OPERATOR_MAX_RUNS_MIN}
+                        max={OPERATOR_MAX_RUNS_MAX}
+                        step={1}
+                        data-action="agentNew.maxRuns"
+                        value={operator.maxRuns}
+                        aria-invalid={invalid('maxRuns') || undefined}
+                        aria-describedby={described('maxRuns', 'agent-form-note-max-runs')}
+                        onChange={(event) => setOperator({ maxRuns: event.target.value })}
+                        className="w-20 tabular-nums"
+                      />
+                      <span aria-hidden className="text-muted-foreground">
+                        {t('operator.maxRuns.unit')}
+                      </span>
+                    </div>
+                    {fieldError('maxRuns')}
+                  </SettingRow>
+
+                  {monthCapRow}
+                </div>
+              </>
+            )}
+
+            {step === 3 && !operator && (
               <>
                 <SectionTitle first title={t('connections.title')} />
                 <div data-slot="agent-form-connections" className={BOX}>
@@ -1529,52 +1962,7 @@ function AgentFormBody({
                     onChange={(canCall) => update({ canCall })}
                   />
 
-                  {isAdmin ? (
-                    <SettingRow
-                      label={t('agent.monthCap')}
-                      note={t('agent.monthCapNote')}
-                      noteId="agent-form-note-month-cap"
-                    >
-                      <div className="flex flex-wrap items-center gap-3">
-                        <FormSwitch
-                          checked={state.monthCapOn}
-                          label={t('agent.monthCap')}
-                          action="agentNew.monthCap"
-                          onChange={(on) => update({ monthCapOn: on })}
-                        />
-                        {state.monthCapOn && (
-                          <div className="flex items-center gap-1.5">
-                            <Input
-                              type="number"
-                              inputMode="numeric"
-                              min={1}
-                              max={100}
-                              step={1}
-                              aria-label={t('agent.monthCap')}
-                              data-action="agentNew.maxMonth"
-                              value={state.maxMonth}
-                              aria-invalid={invalid('maxMonth') || undefined}
-                              aria-describedby={described('maxMonth', 'agent-form-note-month-cap')}
-                              onChange={(event) => update({ maxMonth: event.target.value })}
-                              className="w-20 tabular-nums"
-                            />
-                            <span aria-hidden className="text-muted-foreground">
-                              %
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      {fieldError('maxMonth')}
-                    </SettingRow>
-                  ) : (
-                    base?.maxMonthShare != null && (
-                      <SettingRow label={t('agent.monthCap')}>
-                        <span data-slot="agent-form-month-cap" className="text-muted-foreground">
-                          {t('agent.monthCapSet', { cap: percentOf(base.maxMonthShare) })}
-                        </span>
-                      </SettingRow>
-                    )
-                  )}
+                  {monthCapRow}
                 </div>
               </>
             )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Send, X } from 'lucide-react';
+import { Send, Workflow, X } from 'lucide-react';
 import { DenialCard } from '@/components/agentic/denial-card';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import type { AgentListItem } from '@/lib/chat/agents';
@@ -14,8 +14,9 @@ import type { AgentWords } from './agent-words';
 /**
  * Pieces the Agents list and an agent's detail share (governance mockup
  * `#g-agents`, `#g-agent`): the status dot and line, the formula chips
- * (skill · mode · connections · model), the "Publishes on its own" badge
- * and the out-of-permission answer a refused button brings back.
+ * (skill · mode · connections · model), the "Publishes on its own" and
+ * "Operator" badges and the out-of-permission answer a refused button
+ * brings back.
  */
 
 /**
@@ -34,6 +35,23 @@ export function GoLiveBadge({ limit, className }: { limit: number; className?: s
     >
       <Send aria-hidden className="size-3 shrink-0" />
       <span className="truncate">{t('badge', { limit })}</span>
+    </span>
+  );
+}
+
+/** An AEO Operator (AEO Operator plan §4.3): an agent that runs agents. Its card's and its page's badge. */
+export function OperatorBadge({ className }: { className?: string }) {
+  const t = useTranslations('chatAgents.operatorUi');
+  return (
+    <span
+      data-slot="agent-operator-badge"
+      className={cn(
+        'inline-flex max-w-full shrink-0 items-center gap-1 rounded-[7px] border border-foreground/20 bg-foreground/[.06] px-[7px] py-0.5 text-[11.5px] leading-[1.35] font-medium text-foreground',
+        className,
+      )}
+    >
+      <Workflow aria-hidden className="size-3 shrink-0" />
+      <span className="truncate">{t('badge')}</span>
     </span>
   );
 }

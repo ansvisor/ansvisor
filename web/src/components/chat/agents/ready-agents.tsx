@@ -16,6 +16,7 @@ import { Link } from '@/i18n/navigation';
 import { presetTriggerDraft, triggerInputOf } from '@/lib/chat/agent-form';
 import {
   filterPresets,
+  isOperatorPreset,
   presetAnchor,
   presetFilterOptions,
   presetFit,
@@ -192,7 +193,12 @@ function PresetCard({
       {ready && lock && (
         <span
           data-slot="preset-lock"
-          title={t('fallbackTip')}
+          // The AEO Operator is Growth's whatever its mode: no other mode to fall back on.
+          title={
+            isOperatorPreset(preset) && lock.kind === 'plan'
+              ? t('operatorLockTip', { plan: lock.plan })
+              : t('fallbackTip')
+          }
           className="inline-flex w-fit max-w-full items-center gap-1 rounded-full bg-muted px-2 py-px text-[11px] text-foreground/70"
         >
           <Lock className="size-3 shrink-0" aria-hidden />
