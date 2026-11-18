@@ -248,16 +248,23 @@ export async function expirePlan(organizationId: string, planId: string): Promis
 /**
  * The proposed plans whose day may have ended somewhere (on or before
  * `lastDay`, the latest day the zones ahead of UTC have closed), oldest
- * first: the sweep checks each against its own zone.
+ * first: the sweep checks each against its own zone. `orgIds` holds the
+ * read to those workspaces (null: every one), so plans of workspaces the
+ * flag is off for can't fill the page and starve the rest.
  */
-export async function proposedPlansThrough(lastDay: string, limit: number): Promise<PlanView[]> {
-  const { data, error } = await supabaseAdmin
+export async function proposedPlansThrough(
+  lastDay: string,
+  limit: number,
+  orgIds: readonly string[] | null = null,
+): Promise<PlanView[]> {
+  if (orgIds?.length === 0) return [];
+  let query = supabaseAdmin
     .from('chat_agent_plans')
     .select(PLAN_COLUMNS)
     .eq('status', 'proposed')
-    .lte('plan_day', lastDay)
-    .order('plan_day', { ascending: true })
-    .limit(limit);
+    .lte('plan_day', lastDay);
+  if (orgIds) query = query.in('organization_id', [...orgIds]);
+  const { data, error } = await query.order('plan_day', { ascending: true }).limit(limit);
   if (error) throw new Error(`Could not read the Operators' plans: ${error.message}`);
   return ((data ?? []) as Record<string, unknown>[]).map(viewOf);
 }
@@ -266,15 +273,19 @@ export async function proposedPlansThrough(lastDay: string, limit: number): Prom
  * The plans whose agents were started and whose summary hasn't been sent
  * (dispatched), the longest started first: the sweep sends each one's
  * summary once its agents are done or wait for their person, or at its
- * deadline (operator/summary.ts).
+ * deadline (operator/summary.ts). `orgIds` as proposedPlansThrough has it.
  */
-export async function dispatchedPlans(limit: number): Promise<PlanView[]> {
-  const { data, error } = await supabaseAdmin
+export async function dispatchedPlans(
+  limit: number,
+  orgIds: readonly string[] | null = null,
+): Promise<PlanView[]> {
+  if (orgIds?.length === 0) return [];
+  let query = supabaseAdmin
     .from('chat_agent_plans')
     .select(PLAN_COLUMNS)
-    .eq('status', 'dispatched')
-    .order('dispatched_at', { ascending: true })
-    .limit(limit);
+    .eq('status', 'dispatched');
+  if (orgIds) query = query.in('organization_id', [...orgIds]);
+  const { data, error } = await query.order('dispatched_at', { ascending: true }).limit(limit);
   if (error) throw new Error(`Could not read the Operators' plans: ${error.message}`);
   return ((data ?? []) as Record<string, unknown>[]).map(viewOf);
 }

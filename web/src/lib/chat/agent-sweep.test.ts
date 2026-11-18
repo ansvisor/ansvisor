@@ -485,6 +485,23 @@ describe('an AEO Operator’s unanswered plan', () => {
     expect(db.tables.chat_agent_plans[0].status).toBe('expired');
     expect(fakes.endHeld).not.toHaveBeenCalled();
   });
+  it('isn’t held back by a page of plans from workspaces Chat is off for', async () => {
+    run('run-op', { status: 'failed', evidence_json: zoned('UTC') });
+    const own = db.tables.chat_agent_plans[0];
+    // A whole page of older plans, from a workspace off the list.
+    db.tables.chat_agent_plans = [
+      ...Array.from({ length: 500 }, (_, i) => ({
+        ...own,
+        id: `f0f0f0f0-0000-4000-8000-1${String(i).padStart(11, '0')}`,
+        organization_id: 'ffffffff-0000-4000-8000-000000000000',
+        plan_day: '2026-10-01',
+      })),
+      own,
+    ];
+    vi.stubEnv('CHAT_AGENTIC_ORGS', ORG);
+    expect((await sweepAgents(new Date('2026-11-03T01:00:00.000Z'), driver)).plansExpired).toBe(1);
+    expect(db.tables.chat_agent_plans.find((p) => p.id === own.id)?.status).toBe('expired');
+  });
 });
 
 // ─── An AEO Operator's summary once its agents are done (AEO Operator plan §4.2 step 7) ─
@@ -673,6 +690,25 @@ describe('an AEO Operator’s summary', () => {
     expect((await sweepAgents(at(49), driver)).plansSummarized).toBe(0);
     expect(db.tables.chat_messages).toEqual([]);
     expect(serverCalls()).toEqual([]);
+  });
+
+  it('isn’t held back by a page of plans from workspaces the AEO Operator is off for', async () => {
+    child('c-1', 'done');
+    child('c-2', 'done', OTHER_AGENT);
+    const own = plan();
+    // A whole page of plans started earlier, in a workspace off the list.
+    db.tables.chat_agent_plans = [
+      ...Array.from({ length: 500 }, (_, i) => ({
+        ...own,
+        id: `f0f0f0f0-0000-4000-8000-2${String(i).padStart(11, '0')}`,
+        organization_id: 'ffffffff-0000-4000-8000-000000000000',
+        dispatched_at: '2026-10-01T08:00:00.000Z',
+      })),
+      own,
+    ];
+    vi.stubEnv('CHAT_OPERATOR_ORGS', ORG);
+    expect((await sweepAgents(at(1), driver)).plansSummarized).toBe(1);
+    expect(db.tables.chat_agent_plans.find((p) => p.id === own.id)?.status).toBe('summarized');
   });
 
   it('reads only its own runs: another brand’s run named by its run doesn’t hold it', async () => {
