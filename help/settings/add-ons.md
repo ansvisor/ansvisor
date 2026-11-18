@@ -1,17 +1,31 @@
 ---
-title: Buy AI credits and storage packs
+title: Add-ons: extra tracking, brands, AI top-ups and packs
 route: /dashboard/settings/billing
-keywords: [add-ons, AI credits, buy credits, storage pack, extra storage, AI limit used up, get more, storage full]
-synonyms: [get more AI usage, top up credits, more storage, buy more AI, credit pack]
+keywords: [add-ons, extra tracking, extra brands, AI top-up, more prompts, AI credits, buy credits, storage pack, extra storage, AI limit used up, get more, storage full]
+synonyms: [add more prompts, track more prompts, add a brand, more brands, get more AI usage, top up credits, more storage, buy more AI, credit pack]
 plan: starter
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-18
+last_checked: 2026-11-18
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/src/components/settings/add-ons-card.tsx, web/src/components/ai-usage/get-more.tsx, web/src/lib/actions/add-ons.ts]
+sources: [web/src/components/settings/plan-add-ons-card.tsx, web/src/lib/actions/plan-add-ons.ts, web/src/components/settings/add-ons-card.tsx, web/src/components/ai-usage/get-more.tsx, web/src/lib/actions/add-ons.ts]
 ---
-**Add-ons** in **Settings › Billing** sell extra AI credits and storage for when your plan's monthly limits run out. Packs are paid with Stripe and added to your plan only after the payment goes through, and each one shows on your invoice.
+**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds extra tracking, extra brands and AI usage top-ups, picked together and paid once. **Add-ons** sells AI credit and storage packs. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice.
+
+## Add more to your plan (Growth)
+
+- **Extra tracking:** more prompt locations, tracked on your plan's engines every day. Pick one tier, or **None** to remove it. The largest tiers say **Contact sales**.
+- **Extra brands:** each with its own topics, competitors and white-label reports, at a monthly price per brand.
+- **AI usage top-up:** one payment that adds AI usage, briefs and opportunities until your plan renews. It doesn't renew, and you can buy another any time.
+
+On a yearly plan, tracking and brands show yearly prices, with 2 months free.
+
+## Review and pay
+
+Pick what you want, then click **Review and pay**. The window shows your new limits, what is **Due today** (the rest of this period for tracking and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. A lower tier or fewer brands leaves a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.
+
+Only admins of an active Growth plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first.
 
 ## AI credit packs
 

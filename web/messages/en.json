@@ -16572,6 +16572,81 @@
         }
       }
     },
+    "planAddOns": {
+      "title": "Add more to your plan",
+      "description": "Extra tracking, extra brands and AI usage top-ups for your Growth plan. Everything you pick is charged once, to the card on file.",
+      "tracking": {
+        "title": "Extra tracking",
+        "description": "More prompt locations, tracked on your plan's engines every day. One tier at a time; change or remove it any time.",
+        "label": "Extra tracking tiers",
+        "none": "None",
+        "tier": "+{units} prompt locations",
+        "price": "{price}/{interval, select, year {yr} other {mo}}",
+        "contactSales": "Contact sales",
+        "yearly": "Yearly prices: 2 months free."
+      },
+      "brands": {
+        "title": "Extra brands",
+        "description": "Each brand gets its own topics, competitors and white-label reports. {price} a {interval, select, year {year} other {month}} per brand.",
+        "count": "{count} extra",
+        "fewer": "One brand fewer",
+        "more": "One brand more",
+        "note": "You can't go below the brands you have: remove one in Brands first."
+      },
+      "topUp": {
+        "title": "AI usage top-up",
+        "description": "One payment. Adds AI usage, briefs and opportunities until your plan renews on {date}; it doesn't renew.",
+        "descriptionNoDate": "One payment. Adds AI usage, briefs and opportunities until your plan renews; it doesn't renew.",
+        "label": "AI usage top-ups",
+        "none": "None",
+        "option": "+{multiplier}x",
+        "adds": "{multiplier}× this month’s AI usage · +{briefs} briefs · +{opportunities} opportunities"
+      },
+      "summary": "{prompts} prompt locations · {brands} brands",
+      "nothing": "Pick what to change above.",
+      "review": "Review and pay",
+      "reviewing": "Checking the price…",
+      "dialog": {
+        "title": "Review your add-ons",
+        "newLimits": "New limits",
+        "tracking": "Extra tracking",
+        "trackingNone": "No extra tracking",
+        "brands": "{count, plural, =0 {No extra brands} one {# extra brand} other {# extra brands}}",
+        "topUp": "AI usage top-up +{multiplier}x, one payment",
+        "dueToday": "Due today",
+        "dueTodayNote": "The rest of this period for extra tracking and brands, and a top-up in full.",
+        "total": "From the next renewal",
+        "totalValue": "{price} a {interval, select, year {year} other {month}}",
+        "credit": "A lower tier or fewer brands leaves a credit for your next invoices.",
+        "pay": "Pay {price}",
+        "confirm": "Confirm",
+        "cancel": "Cancel",
+        "processing": "Processing…"
+      },
+      "done": "Your add-ons are updated. A top-up counts as soon as the payment is confirmed.",
+      "states": {
+        "not_admin": "Only admins change add-ons. Ask an admin of your workspace.",
+        "starter": "Add-ons come with the Growth plan. Upgrade to Growth to add tracking, brands and AI usage.",
+        "enterprise": "Your contract sets your limits. Contact your account manager for more.",
+        "trial": "Add-ons can be bought once your plan has started.",
+        "no_plan": "Add-ons can be bought while your plan is active.",
+        "ending": "Your plan is set to end. Keep your plan to change its add-ons."
+      },
+      "errors": {
+        "not_cloud": "Add-ons aren't available here.",
+        "admin_only": "Only admins change add-ons.",
+        "not_growth": "Add-ons come with the Growth plan.",
+        "trial": "Add-ons can be bought once your plan has started.",
+        "no_plan": "Add-ons can be bought while your plan is active.",
+        "ending": "Your plan is set to end. Keep your plan to change its add-ons.",
+        "contact_sales": "This tier is sold by our sales team.",
+        "unavailable": "This add-on can't be bought right now.",
+        "below_usage": "You use {prompts} prompt locations and {brands} brands; the new limits are {limitPrompts} and {limitBrands}. Pause prompts or remove brands first.",
+        "payment_failed": "The payment didn't go through.",
+        "failed": "Couldn't change your add-ons. Try again."
+      },
+      "readFailed": "Couldn't read your add-ons. Try again later."
+    },
     "cancelsOn": "Subscription ends on {date}",
     "changePlan": "Change Plan",
     "upgradeTo": "Upgrade to {plan}",
