@@ -59,6 +59,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { IN_FILTER_CHUNK, selectInChunks } from '../lib/chunked-in.js';
 import { addDays, dayChunks, resultDayBound } from '../lib/citations-rollups.js';
 import { recountRow } from '../lib/mention-recount.js';
+import { readMergedCompetitors, withMergedNames } from '../lib/competitor-aliases.js';
 
 const BATCH_SIZE = 250;
 const BATCH_PAUSE_MS = 250;
@@ -140,12 +141,13 @@ async function brandContext(brand) {
       brandName: brand.name,
       domains: (domainsRes.data ?? []).map((d) => d.domain),
     },
-    competitors: competitorsRes.data ?? [],
+    // With the names merged into each (00543), counted from their merge on.
+    competitors: withMergedNames(competitorsRes.data ?? [], await readMergedCompetitors(brand.id)),
   };
 }
 
 const ROW_COLUMNS =
-  'id, response, citations, sentiment, mention_count, visibility_score, mention_position, mentioned_entity_count, competitor_mentions';
+  'id, created_at, response, citations, sentiment, mention_count, visibility_score, mention_position, mentioned_entity_count, competitor_mentions';
 
 /** Rows a dry run prints per brand, before → after. */
 const DRY_RUN_SAMPLES = 3;

@@ -3,6 +3,7 @@ import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { OPPORTUNITY_SORTS, type OpportunitySort } from '@/lib/content/opportunity-list';
 import { actionRef } from '@/lib/action-center/action-ref';
 import { ACTION_CODES_MAX } from '@/lib/action-center/action-codes';
+import { COMPETITOR_TYPE_FILTER_WORDS, COMPETITOR_TYPE_WORDS } from '@/lib/competitor-types';
 import { getAiUsageFor, getMeFor } from '@/lib/mcp/account';
 import {
   ACTIONS_PAGE_MAX,
@@ -75,6 +76,7 @@ const dateTo = z.string().optional().describe('ISO timestamp (inclusive) upper b
 const model = z.string().optional().describe('A model slug, or comma-separated slugs.');
 const region = z.string().optional().describe('A region code, e.g. "US" or "TR".');
 const topicId = contentUuid.optional().describe('Topic id, from list_topics.');
+const competitorType = z.string().trim().max(60).optional().describe(COMPETITOR_TYPE_FILTER_WORDS);
 const rowCap = (max: number) => z.number().int().min(1).max(max).optional();
 
 /**
@@ -597,7 +599,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'mentions',
     description:
-      "How often AI answers name each competitor in the brand's tracked answers (count, share, change against the period before) and how often alongside the brand.",
+      "How often AI answers name each competitor in the brand's tracked answers (count, share, change against the period before) and how often alongside the brand. Each competitor has its type (null for none); with type, only competitors of that type.",
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -606,8 +608,8 @@ export const READ_TOOLS = [
     route: '/dashboard/mentions',
     mcpTool: 'get_mention_competitors',
     specRow: '27',
-    inputSchema: z.object(mentionFilters),
-    run: (ctx, input) => getMentionCompetitorsFor(ctx, mentionParams(input)),
+    inputSchema: z.object({ ...mentionFilters, type: competitorType }),
+    run: (ctx, input) => getMentionCompetitorsFor(ctx, mentionParams(input), { type: input.type }),
     fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
@@ -708,7 +710,7 @@ export const READ_TOOLS = [
     name: 'list_competitors',
     class: 'read',
     area: 'competitors',
-    description: `The competitors set up for the brand: id, name and domain. Not a ranking.${PAGED}`,
+    description: `The competitors set up for the brand: id, name, domain and type, the kind of competitor it is: ${COMPETITOR_TYPE_WORDS} With type, only those of that type. Also aliases: the names and domains of competitors merged into it, which count as its own from the merge on; a merged one is never listed on its own. Not a ranking.${PAGED}`,
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -717,9 +719,9 @@ export const READ_TOOLS = [
     route: '/dashboard/competitors',
     mcpTool: 'list_competitors',
     specRow: '29',
-    inputSchema: z.object({ brand_id: brandId, ...pageInput }),
+    inputSchema: z.object({ brand_id: brandId, type: competitorType, ...pageInput }),
     run: async (ctx, input) => {
-      const competitors = await listCompetitorsFor(ctx, input.brand_id);
+      const competitors = await listCompetitorsFor(ctx, input.brand_id, { type: input.type });
       return competitors && listPage(competitors, 'competitors', input, { what: 'competitors' });
     },
     fixture: { input: { brand_id: BRAND } },
@@ -729,7 +731,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'competitors',
     description:
-      'The brand against each competitor over a period: visibility, mentions, citations and share of voice, also per platform.',
+      'The brand against each competitor over a period: visibility, mentions, citations and share of voice, also per platform. Each competitor has its type (null for none); with type, only competitors of that type, and share_of_voice.of_type sets the brand against just them.',
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
@@ -745,6 +747,7 @@ export const READ_TOOLS = [
       model,
       region,
       topic_id: topicId,
+      type: competitorType,
     }),
     run: (ctx, input) =>
       getCompetitorComparisonFor(ctx, {
@@ -754,6 +757,7 @@ export const READ_TOOLS = [
         model: input.model,
         region: input.region,
         topicId: input.topic_id,
+        type: input.type,
       }),
     fixture: { input: { brand_id: BRAND } },
   }),

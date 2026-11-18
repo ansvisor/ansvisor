@@ -43,9 +43,17 @@ import {
   Plus,
   Save,
   ShoppingBag,
+  Tag,
   Trash2,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  CompetitorTypeBadge,
+  CompetitorTypePicker,
+  SetCompetitorTypeDialog,
+  competitorTypeIsValid,
+} from '@/components/competitors/competitor-type';
+import { competitorTypeOptions } from '@/lib/competitor-types';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -783,6 +791,12 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [newDomain, setNewDomain] = useState('');
+  // Competitor types (00542): the new one's, and the one whose type is being set.
+  const tType = useTranslations('competitors.type');
+  const [newType, setNewType] = useState<string | null>(null);
+  const [newTypeKey, setNewTypeKey] = useState(0);
+  const [typeFor, setTypeFor] = useState<Competitor | null>(null);
+  const typeOptions = competitorTypeOptions(competitors);
 
   const load = useCallback(
     async (isCancelled?: () => boolean) => {
@@ -810,16 +824,19 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
   }, [load]);
 
   const handleAdd = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !competitorTypeIsValid(newType)) return;
     setIsAdding(true);
     try {
       const added = await addCompetitor(brandId, {
         name: newName.trim(),
         domain: newDomain.trim(),
+        type: newType?.trim() || null,
       });
       setCompetitors((prev) => [...prev, added]);
       setNewName('');
       setNewDomain('');
+      setNewType(null);
+      setNewTypeKey((k) => k + 1);
       toast.success(`${added.name} added`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add competitor');
@@ -879,8 +896,25 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
                       )}
                       <div className="flex-1 overflow-hidden">
                         <p className="truncate text-sm font-medium">{c.name}</p>
-                        {c.domain && <p className="text-xs text-muted-foreground">{c.domain}</p>}
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          {c.domain && (
+                            <p className="truncate text-xs text-muted-foreground">{c.domain}</p>
+                          )}
+                          <CompetitorTypeBadge type={c.type} className="shrink-0" />
+                        </div>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground"
+                        onClick={guard(() => setTypeFor(c), {
+                          action: tActions('setCompetitorTypes'),
+                        })}
+                        aria-label={tType('setFor', { name: c.name })}
+                        title={tType('setFor', { name: c.name })}
+                      >
+                        <Tag className="h-3.5 w-3.5" />
+                      </Button>
                       <Dialog
                         open={deletingId === c.id}
                         onOpenChange={(open) => !open && setDeletingId(null)}
@@ -931,25 +965,38 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Add Competitor</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                   <Input
                     placeholder="Competitor name"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && newName.trim() && submitAdd()}
-                    className="flex-1"
+                    className="sm:flex-1"
                   />
                   <Input
                     placeholder="domain.com"
                     value={newDomain}
                     onChange={(e) => setNewDomain(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && newName.trim() && submitAdd()}
-                    className="w-40"
+                    className="sm:w-40"
                   />
+                  <div className="sm:w-48">
+                    <Label htmlFor="new-competitor-type" className="sr-only">
+                      {tType('label')}
+                    </Label>
+                    <CompetitorTypePicker
+                      key={newTypeKey}
+                      id="new-competitor-type"
+                      value={newType}
+                      options={typeOptions}
+                      onChange={setNewType}
+                      disabled={isAdding}
+                    />
+                  </div>
                   <Button
                     variant="outline"
                     onClick={submitAdd}
-                    disabled={isAdding || !newName.trim()}
+                    disabled={isAdding || !newName.trim() || !competitorTypeIsValid(newType)}
                     className="gap-1.5 shrink-0"
                   >
                     {isAdding ? (
@@ -967,6 +1014,17 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
         {!canManage && (
           <p className="text-xs text-muted-foreground">{t('settings.managersOnlyEdit')}</p>
         )}
+        <SetCompetitorTypeDialog
+          brandId={brandId}
+          competitor={typeFor}
+          options={typeOptions}
+          onOpenChange={(open) => {
+            if (!open) setTypeFor(null);
+          }}
+          onSaved={(changed) =>
+            setCompetitors((prev) => prev.map((c) => changed.find((n) => n.id === c.id) ?? c))
+          }
+        />
       </CardContent>
     </Card>
   );

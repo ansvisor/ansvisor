@@ -1,10 +1,17 @@
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { PLANS } from '@/config/plans';
 import { PROMPT_RANGE_MAX_DAYS } from '@/config/prompt-options';
+import {
+  getCitationGaps,
+  type CitationGapDomain,
+  type CitationsFilters,
+  type CompetitorSourceDomain,
+} from '@/lib/actions/citations';
 import { getCompetitorTimeline } from '@/lib/actions/competitor';
 import { getTopicsOverview, type TopicOverviewRow } from '@/lib/actions/topic';
 import { getHeadToHeadComparison } from '@/lib/actions/tracking';
 import { getTrafficBots, getTrafficGooglePages } from '@/lib/actions/traffic';
+import { rollupDayWindow } from '@/lib/citations/rollup-window';
 import { expandDateToEndOfDay, utcDay } from '@/lib/dates';
 import type { HeadToHeadGroup } from '@/lib/head-to-head';
 import {
@@ -27,12 +34,13 @@ import { LOOKUP_MAX, citedDomainKey, hasWords, searchWords } from './lookup';
  * that no other read gives (the owner's rule of 2026-11-16: Chat reads all a
  * page shows): the Topics tab's table, the Query Fan-outs tab outside a
  * skill, a competitor's head-to-head and timeline, the Overview's "Topics vs
- * competitors" map, its trend markers and its Opportunities card, AI bots and
- * the Search Console pages. Each reads what its page reads, from the page's
- * own function or database function, with the service role once the brand is
- * the caller's (brandAllowed), and from daily rollups or one aggregate in
- * the database: none pages tracked answers or reads them raw. Null for a
- * brand outside the caller's organization or access. Server only.
+ * competitors" map, its trend markers and its Opportunities card, Citations ›
+ * Gaps, AI bots and the Search Console pages. Each reads what its page reads,
+ * from the page's own function or database function, with the service role
+ * once the brand is the caller's (brandAllowed), and from daily rollups or
+ * one aggregate in the database: none pages tracked answers or reads them
+ * raw. Null for a brand outside the caller's organization or access. Server
+ * only.
  */
 
 const DAY_MS = 86_400_000;
@@ -797,6 +805,148 @@ export async function getVisibilityOpportunitiesFor(
       params,
       { what: 'opportunities', order: 'best first, as the card ranks them' },
     ),
+  };
+}
+
+// ─── Citations › Gaps ───────────────────────────────────────────────────────
+
+/** A Gap list row as the tab shows it. */
+function gapDomainRow(row: CitationGapDomain) {
+  return {
+    domain: row.domain,
+    source_type: row.category,
+    competitor_answers: row.competitorAnswers,
+    competitors: row.competitors,
+    strength: row.strength,
+  };
+}
+
+/** A By competitor row as the tab shows it. */
+function competitorSourceRow(row: CompetitorSourceDomain) {
+  return {
+    domain: row.domain,
+    source_type: row.category,
+    answers_feeding: row.answersFeeding,
+    also_cites_brand: row.alsoCitesUs,
+    strength: row.strength,
+  };
+}
+
+/** What the Gap list holds, in words the model can repeat (help/citations/competitor-gaps.md). */
+const GAP_RULE =
+  'Third-party domains cited in at least 2 answers that name a competitor while the brand is absent, and in no answer where the brand appears. Strength weighs each answer by how many sources it had. The tab lists the strongest 100.';
+
+/**
+ * Citations › Gaps (Competitor Gaps), as the tab reads it (getCitationGaps:
+ * citation_gap_domains_daily and citation_competitor_sources_daily over the
+ * daily rollups, 00203, which let the service role through since 00541):
+ * the Gap list, third-party domains that cite competitors but not the
+ * brand, strongest first (the tab's 100 at most), a page at a time; with a
+ * competitor, the By competitor view, the third-party domains cited in the
+ * answers naming it, strongest first. Over the period's whole UTC days, as
+ * the tab reads a range it is given; all time with none (Chat sends none
+ * only for an all-time question). Platforms, region and topic filter as the
+ * tab's do; a topic or competitor that isn't the brand's is not found.
+ */
+export async function getCitationGapsFor(
+  auth: McpAuthContext,
+  params: {
+    brandId: string;
+    dateFrom?: string;
+    dateTo?: string;
+    model?: string;
+    region?: string;
+    topicId?: string;
+    competitorId?: string;
+  } & PageParams,
+) {
+  if (!(await brandAllowed(auth, params.brandId))) return null;
+  if (params.topicId) {
+    const { data, error } = await supabaseAdmin
+      .from('topics')
+      .select('id, brands!inner(organization_id)')
+      .eq('id', params.topicId)
+      .eq('brand_id', params.brandId)
+      .eq('brands.organization_id', auth.organizationId!)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) {
+      return {
+        not_found: [params.topicId],
+        note: 'No topic of this brand has this id. Say so plainly; list_topics has its topics.',
+      };
+    }
+  }
+  let competitor: { id: string; name: string } | null = null;
+  if (params.competitorId) {
+    const asked = params.competitorId.toLowerCase();
+    const own = (await listCompetitorsFor(auth, params.brandId)) ?? [];
+    competitor = own.find((c) => c.id.toLowerCase() === asked) ?? null;
+    if (!competitor) {
+      return {
+        not_found: [params.competitorId],
+        note: "No competitor of this brand has this id. Say so plainly; never offer another competitor as the closest. list_competitors has the brand's.",
+      };
+    }
+  }
+
+  // A range as the tab passes a custom one; none, the tab's All time.
+  const ranged = Boolean(params.dateFrom || params.dateTo);
+  const filters: CitationsFilters = {
+    datePreset: ranged ? 'custom' : 'all',
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    platforms: params.model ? [params.model] : undefined,
+    regions: params.region ? [params.region] : undefined,
+    topicIds: params.topicId ? [params.topicId] : undefined,
+  };
+  const days = ranged ? rollupDayWindow(filters) : null;
+  const gaps = await asService(() => getCitationGaps(params.brandId, filters));
+  const base = {
+    period:
+      days && days !== 'latest-run'
+        ? { day_from: days.dayFrom ?? null, day_to: days.dayTo ?? null }
+        : 'all time',
+    answers: gaps.totalAnswers,
+    answers_with_brand: gaps.ourAnswerCount,
+    low_visibility: gaps.lowVisibility,
+    ...(gaps.lowVisibility
+      ? {
+          low_visibility_note:
+            'The brand is in fewer than 1 answer in 10 here, so the list may be broad: the tab says to work on baseline visibility first.',
+        }
+      : {}),
+    gap_rule: GAP_RULE,
+    // The tab's competitor picker: those with a cited source, by name.
+    competitors: gaps.competitors.map((c) => ({
+      competitor_id: c.id,
+      name: c.name,
+      source_domains: gaps.byCompetitor[c.id]?.length ?? 0,
+    })),
+  };
+  if (competitor) {
+    return {
+      ...base,
+      view: 'by_competitor',
+      competitor: { competitor_id: competitor.id, name: competitor.name },
+      ...page(
+        (gaps.byCompetitor[competitor.id] ?? []).map(competitorSourceRow),
+        'source_domains',
+        params,
+        {
+          what: `third-party domains cited in answers naming ${competitor.name}`,
+          order: 'strongest first',
+        },
+      ),
+    };
+  }
+  return {
+    ...base,
+    view: 'gap_list',
+    ...page(gaps.gapDomains.map(gapDomainRow), 'gap_domains', params, {
+      what: 'gap domains',
+      order: 'strongest first',
+    }),
   };
 }
 

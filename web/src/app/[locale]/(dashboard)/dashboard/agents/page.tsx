@@ -1,7 +1,10 @@
 import { notFound } from 'next/navigation';
 import { AgentCenter } from '@/components/chat/agents/agent-center';
-import { presetsOnInstall } from '@/lib/chat/agents/catalog';
-import { readMyWorkAreas, readPresetLocks } from '@/lib/chat/agents/ready-setup';
+import {
+  readMyWorkAreas,
+  readOfferedPresets,
+  readPresetLocks,
+} from '@/lib/chat/agents/ready-setup';
 import { chatPageOpen } from '../chat/_chat-page-access';
 
 /**
@@ -14,14 +17,19 @@ import { chatPageOpen } from '../chat/_chat-page-access';
  */
 export default async function AgentCenterPage() {
   if (!(await chatPageOpen())) notFound();
-  const [locks, workAreas] = await Promise.all([readPresetLocks(), readMyWorkAreas()]);
+  const [locks, workAreas, presets] = await Promise.all([
+    readPresetLocks(),
+    readMyWorkAreas(),
+    readOfferedPresets(),
+  ]);
   return (
     <AgentCenter
       locks={locks}
       workAreas={workAreas}
-      // As this install offers them: a skill behind a flag that is off is left out, and an
-      // agent whose primary skill is (the Paid Opportunity agent without Ads) isn't listed.
-      presets={presetsOnInstall()}
+      // As this install offers them to the workspace: a skill behind a flag that is off is left
+      // out, and an agent whose primary skill is (the Paid Opportunity agent without Ads, the
+      // AEO Operator without CHAT_OPERATOR for this workspace) isn't listed.
+      presets={presets}
     />
   );
 }

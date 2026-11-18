@@ -390,7 +390,9 @@ vi.mock('./registry/tools', async (importOriginal) => {
         t.name === 'fetch_page' ||
         t.name === 'explain_change' ||
         // A page checked against its rules, read through the faked reads (W4-12b part 2).
-        t.name === 'check_draft_rules',
+        t.name === 'check_draft_rules' ||
+        // An AEO Operator's plan (PR 4): offered only in an Operator's run.
+        t.name === 'get_agent_plan',
     ),
     publishPage,
     // Ads' read of a named period, as its row has it, only with Ads on (ADS_ENABLED).
@@ -4560,6 +4562,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'forget_memory',
     // W4-26: an agent's run only, for the agents its Can call names.
     'run_agent',
+    // AEO Operator PR 4: an Operator's run only, its plan's card.
+    'run_agent_plan',
     // Ads Phase 0 PR 15: Admins and Managers, only with Ads on (off here).
     'save_ad_drafts',
   ];
@@ -4640,8 +4644,11 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     expect(offered).toEqual({
       // Admins have no one to ask: no request to the Admins, and nothing to explain about it.
       // run_agent only in an agent's run with an agent to call: never a person's own chat.
-      admin: anyPage.filter((name) => name !== 'request_access' && name !== 'run_agent').sort(),
-      manager: anyPage.filter((name) => name !== 'run_agent').sort(),
+      // run_agent_plan only in an AEO Operator's run.
+      admin: anyPage
+        .filter((name) => !['request_access', 'run_agent', 'run_agent_plan'].includes(name))
+        .sort(),
+      manager: anyPage.filter((name) => !['run_agent', 'run_agent_plan'].includes(name)).sort(),
       // A Manager's write and going live stay out for both; an Agency partner doesn't dismiss
       // suggestions.
       analyst: [
@@ -10736,5 +10743,88 @@ describe('Claude Fable 5.2 on Anthropic’s API, through its SDK, against a fake
     await engine.driveRun(ADMIN, again.runId);
     expect(runRow(again.runId).status).toBe('done');
     expect(JSON.stringify(next.sonnet.seen[0].prompt)).not.toContain('"type":"reasoning"');
+  });
+});
+
+// ─── An AEO Operator's run (AEO Operator plan §4.2 step 4; PR 4) ────────────
+
+describe('an AEO Operator’s run', () => {
+  const models = useModels;
+  const OPERATOR_RUN = 'abababab-0000-4000-8000-0000000000e1';
+  const OPERATOR = 'abababab-0000-4000-8000-0000000000f1';
+
+  beforeEach(() => {
+    db.tables.chat_agent_runs = [
+      { id: OPERATOR_RUN, organization_id: ORG, agent_id: OPERATOR, agent_version: 1 },
+    ];
+    db.tables.chat_agents = [
+      { id: OPERATOR, organization_id: ORG, name: 'AEO Operator', kind: 'operator' },
+    ];
+  });
+
+  /** An Admin's turn in a chat that is the Operator's run (or, `kind`, another agent's). */
+  async function operatorTurn(kind: 'operator' | 'agent' = 'operator', progress = {}) {
+    db.tables.chat_agents[0].kind = kind;
+    const { haiku, sonnet } = models([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, { message: '/operator', brandId: BRAND });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    db.tables.chat_conversations.find((c) => c.id === started.conversationId)!.agent_run_id =
+      OPERATOR_RUN;
+    const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    state.progress = { ...(state.progress as object), ...progress };
+    await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+    return {
+      read: (haiku.seen[0]?.tools ?? []).map((tool) => tool.name).sort(),
+      write: (sonnet.seen[0]?.tools ?? []).map((tool) => tool.name).sort(),
+    };
+  }
+
+  it('is offered its plan’s card, its plan’s read and the question card: nothing else', async () => {
+    const offered = await operatorTurn();
+    expect(offered.write).toEqual([ASK_TOOL, 'get_agent_plan', 'run_agent_plan'].sort());
+    // While reading: its plan's read only (a part, a skill or another read never).
+    expect(offered.read.filter((name) => name !== 'final_answer')).toEqual(
+      offered.read.includes('get_agent_plan') ? ['get_agent_plan'] : [],
+    );
+    expect(engine.OPERATOR_RUN_TOOLS).toEqual(new Set(['run_agent_plan', 'get_agent_plan']));
+  });
+
+  it('keeps them out of every other run, and an agent’s run keeps its own', async () => {
+    const other = await operatorTurn('agent');
+    expect(other.write).not.toContain('run_agent_plan');
+    expect(other.write).not.toContain('get_agent_plan');
+    expect(other.write).toContain('create_draft');
+    const { sonnet } = models([READY], [text('Hi.')]);
+    await turn(ADMIN, 'What can you change?');
+    const own = (sonnet.seen[0].tools ?? []).map((tool) => tool.name);
+    expect(own).not.toContain('run_agent_plan');
+    expect(own).not.toContain('get_agent_plan');
+  });
+
+  it('holds to its own tools when its driver marked it, even if its agent can’t be read', async () => {
+    db.failures.chat_agents = { message: 'down' };
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const offered = await operatorTurn('operator', { operatorRun: true });
+    errors.mockRestore();
+    expect(offered.write).toEqual([ASK_TOOL]);
+    delete db.failures.chat_agents;
+  });
+
+  it('filters the rows a run is offered (offeredInRun): an Operator’s keeps its own two', async () => {
+    const tools = {
+      offered: CHAT_TOOLS.filter((tool) =>
+        ['create_draft', 'run_agent_plan', 'get_agent_plan', 'read_visibility'].includes(tool.name),
+      ),
+      refused: [],
+    } as unknown as Parameters<typeof engine.offeredInRun>[0];
+    const shown = await engine.offeredInRun(tools, {
+      agentRunId: OPERATOR_RUN,
+      parentRunId: null,
+      operator: true,
+    });
+    expect(shown.offered.map((tool) => tool.name).sort()).toEqual([
+      'get_agent_plan',
+      'run_agent_plan',
+    ]);
   });
 });

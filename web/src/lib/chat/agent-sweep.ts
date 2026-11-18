@@ -1,17 +1,38 @@
 import { isAiProvider } from '@/lib/agent/providers';
 import { getAiUsageFor } from '@/lib/mcp/account';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { FAILURES_TO_PAUSE, settleAgentRun, startNextAgentRuns } from './agent-driver';
+import {
+  FAILURES_TO_PAUSE,
+  endUnansweredPlan,
+  settleAgentRun,
+  startNextAgentRuns,
+} from './agent-driver';
 import type { AgentRunDriver } from './agent-runs';
 import { readAgentShares } from './agent-shares';
 import { isTriggered, readArmedOrgs } from './agent-triggers';
 import { pauseAgentForSystem } from './agents';
 import { endHeldRun, sweepChatRuns } from './engine';
-import { chatAgenticEnabled } from './flag';
+import {
+  chatAgenticEnabled,
+  chatAgenticOrgScope,
+  chatOperatorEnabled,
+  chatOperatorOrgScope,
+} from './flag';
 import { chatRunsOnOwnKey } from './key';
 import { ownKeyFailure, resumeOwnKeyAgents } from './key-health';
 import { notifyOwnKeyFailure } from './key-notice';
+import { dispatchedPlans, proposedPlansThrough, type PlanView } from './operator/plan-store';
+import {
+  SUMMARY_STALE_MS,
+  ageOf,
+  partialPlanSummary,
+  readPlanSummary,
+  sendPlanSummary,
+  summaryDue,
+  type ReadSummary,
+} from './operator/summary';
 import { readOwnKeyCap } from './own-key-cap';
+import { dayIn } from '@/lib/time-zone';
 
 /**
  * The agents' sweep (CHAT-21 §G, §H, §M; W2-16), on the server's minute
@@ -19,6 +40,15 @@ import { readOwnKeyCap } from './own-key-cap';
  *   - Chat's own sweep first (sweepChatRuns): a card left 7 days stops its
  *     run, "No answer in 7 days"; a run with no sign of life for 10 minutes
  *     (its driver was lost) times out.
+ *   - An AEO Operator's plan unanswered at the end of its local day
+ *     expires: the Chat run waiting on its card stops as expired, its
+ *     agent run stops (no_answer), so the next morning's run isn't held
+ *     back by it (AEO Operator plan §4.2 step 8).
+ *   - An AEO Operator's plan whose agents are done (each ended, or waits
+ *     for its person) gets its summary, once: in the Operator's chat, the
+ *     Inbox, and by e-mail or Slack; 8 hours after they started, whoever
+ *     is still working (§4.2 step 7, operator/summary.ts). After the
+ *     settle pass, so it reads their runs as they are now.
  *   - Every agent run still running, waiting on a person or at its limit
  *     follows its Chat run (settleAgentRun): an approval made in a chat
  *     carries the agent run on, a lost one fails, one started 5 minutes ago
@@ -53,6 +83,10 @@ export interface AgentSweep {
   started: number;
   /** Own keys whose Admins got the 3-day reminder. */
   reminded: number;
+  /** AEO Operators' plans unanswered at the end of their day, expired. */
+  plansExpired: number;
+  /** AEO Operators' plans whose summary this sweep sent. */
+  plansSummarized: number;
   /** The parts that failed; the others ran. */
   failed: string[];
 }
@@ -289,6 +323,120 @@ async function openRunsToSettle(): Promise<OpenRun[]> {
   return runs.slice(0, SWEEP_ROWS);
 }
 
+/**
+ * AEO Operators' plans unanswered at the end of their local day (above):
+ * those whose day may have ended anywhere (on or before today in UTC, the
+ * zones ahead of it closing theirs first), each checked in its own zone.
+ */
+async function expireUnansweredPlans(now: Date): Promise<number> {
+  let expired = 0;
+  const lastDay = dayIn(now.getTime(), 'UTC');
+  for (const plan of await proposedPlansThrough(lastDay, SWEEP_ROWS, chatAgenticOrgScope())) {
+    if (!chatAgenticEnabled(plan.organizationId)) continue;
+    try {
+      if (await endUnansweredPlan(plan, now)) expired += 1;
+    } catch (err) {
+      console.error('[chat/agents] could not expire an Operator’s plan:', err);
+    }
+  }
+  return expired;
+}
+
+/**
+ * The statuses of the runs each dispatched plan started, by plan: one read
+ * per workspace, held to its organization, and each run to its plan's brand.
+ */
+async function childStatuses(
+  plans: readonly PlanView[],
+): Promise<Map<string, Map<string, string>>> {
+  const byPlan = new Map(plans.map((plan) => [plan.id, new Map<string, string>()]));
+  const byOrg = new Map<string, PlanView[]>();
+  for (const plan of plans)
+    byOrg.set(plan.organizationId, [...(byOrg.get(plan.organizationId) ?? []), plan]);
+  for (const [orgId, own] of byOrg) {
+    const planOfRun = new Map(own.map((plan) => [plan.runId, plan]));
+    const { data, error } = await supabaseAdmin
+      .from('chat_agent_runs')
+      .select('id, called_by_run_id, brand_id, status')
+      .eq('organization_id', orgId)
+      .in('called_by_run_id', [...planOfRun.keys()]);
+    if (error) throw new Error(`Could not read the Operators' runs: ${error.message}`);
+    for (const run of (data ?? []) as {
+      id: string;
+      called_by_run_id: string;
+      brand_id: string | null;
+      status: string;
+    }[]) {
+      const plan = planOfRun.get(run.called_by_run_id);
+      if (plan && run.brand_id === plan.brandId) byPlan.get(plan.id)?.set(run.id, run.status);
+    }
+  }
+  return byPlan;
+}
+
+/**
+ * The plan's summary when it can't be read in full 48 hours on: from its
+ * own row and its runs' statuses, posted in its chat if that can be found.
+ */
+async function partialRead(
+  plan: PlanView,
+  why: 'done' | 'deadline',
+  statuses: ReadonlyMap<string, string>,
+): Promise<ReadSummary> {
+  let operatorChatId: string | null = null;
+  try {
+    const { data } = await supabaseAdmin
+      .from('chat_conversations')
+      .select('id')
+      .eq('agent_run_id', plan.runId)
+      .eq('organization_id', plan.organizationId)
+      .maybeSingle();
+    operatorChatId = (data as { id: string } | null)?.id ?? null;
+  } catch {
+    // No chat to post in: the notice still goes.
+  }
+  return {
+    summary: partialPlanSummary(plan, why, statuses),
+    person: null,
+    operator: '',
+    operatorChatId,
+  };
+}
+
+/**
+ * AEO Operators' plans whose summary is due (above), longest started
+ * first: each read and sent once. One whose summary can't be read waits for
+ * the next sweep, until 48 hours after its agents started: then it is
+ * summarized anyway, from its own row. Only where the AEO Operator is on.
+ */
+async function summarizeDispatchedPlans(now: Date): Promise<number> {
+  const plans = (await dispatchedPlans(SWEEP_ROWS, chatOperatorOrgScope())).filter((plan) =>
+    chatOperatorEnabled(plan.organizationId),
+  );
+  if (plans.length === 0) return 0;
+  const statuses = await childStatuses(plans);
+  let sent = 0;
+  for (const plan of plans) {
+    const runs = statuses.get(plan.id) ?? new Map<string, string>();
+    const why = summaryDue(plan, [...runs.values()], now);
+    if (!why) continue;
+    try {
+      let read: ReadSummary;
+      try {
+        read = await readPlanSummary(plan, why);
+      } catch (err) {
+        if (ageOf(plan, now) < SUMMARY_STALE_MS) throw err;
+        console.error('[chat/agents] an Operator’s summary read only in part:', err);
+        read = await partialRead(plan, why, runs);
+      }
+      if (await sendPlanSummary(plan, read, now)) sent += 1;
+    } catch (err) {
+      console.error('[chat/agents] could not send an Operator’s summary:', err);
+    }
+  }
+  return sent;
+}
+
 interface OpenRun {
   id: string;
   organization_id: string;
@@ -307,6 +455,8 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
     resumed: 0,
     started: 0,
     reminded: 0,
+    plansExpired: 0,
+    plansSummarized: 0,
     failed: [],
   };
   // Each part on its own: one that fails is named in `failed`, and the rest still run.
@@ -323,6 +473,11 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
     const chat = await sweepChatRuns(now);
     counts.expired = chat.expired;
     counts.lost = chat.lost;
+  });
+
+  // Operators' plans past their day: before the settle pass, which then finds their runs ended.
+  await part('plans', async () => {
+    counts.plansExpired = await expireUnansweredPlans(now);
   });
 
   // Agent runs follow their Chat runs; the slots they free are filled below.
@@ -348,6 +503,12 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
       .select('id');
     if (error) throw new Error(`Could not stop the stale runs: ${error.message}`);
     counts.staleQueued = (stale ?? []).length;
+  });
+
+  // Operators' plans whose agents are done, or at their deadline: after the settle pass
+  // and the stale queue, so their runs are read as they are now.
+  await part('planSummaries', async () => {
+    counts.plansSummarized = await summarizeDispatchedPlans(now);
   });
 
   // The failures rule's backstop: an ended run counts itself (settleAgentRun).

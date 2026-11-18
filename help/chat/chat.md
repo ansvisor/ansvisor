@@ -124,6 +124,8 @@ Ask about one item by what you see: a signal's code (S-07), a prompt's words, a 
 
 Ask about topics, fan-outs, a competitor head to head, AI bots and Search Console pages: Chat reads the same tables those pages show, such as the prompts where a competitor is ahead of you.
 
+Ask which sites cite your competitors but not you: Chat reads the **Competitor Gaps** tab on Citations, strongest first, or one competitor's sources.
+
 ## Change what you track
 
 Admins and Managers can ask Chat to track new prompts in a topic, pause prompts, add or rename a topic, and add or remove competitors. A prompt goes into a topic the brand already has, so Chat adds a new topic first. A prompt, topic or competitor the brand already has is skipped. Your plan's prompt locations still apply: Chat says so when they run out.

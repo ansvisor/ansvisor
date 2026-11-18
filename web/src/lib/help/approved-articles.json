@@ -1031,6 +1031,13 @@
       "route": "/dashboard/agents",
       "keywords": [
         "agents",
+        "aeo operator",
+        "operator",
+        "daily budget",
+        "agents a day",
+        "daily plan",
+        "approve the plan",
+        "skip the plan",
         "agent center",
         "chat agents",
         "ready to use",
@@ -1156,7 +1163,7 @@
         "ai visitors who sign up"
       ],
       "plan": "all",
-      "updated": "2026-11-15",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
@@ -1260,7 +1267,11 @@
         },
         {
           "heading": "Let an agent run other agents",
-          "text": "On Growth and up, an agent can run up to 5 of your other agents. Pick them under **Can call** on the agent's last step. A paused agent isn't run until you resume it.\n\nA run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and how much of your monthly AI limit it may use. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 4 minutes.\n\nIn **Run history**, its run shows **Called by** and the first agent. The first run says how many agents it ran: click it for each one's result and AI use."
+          "text": "On Growth and up, an agent can run up to 5 of your other agents. Pick them under **Can call** on the agent's last step. A paused agent isn't run until you resume it.\n\nA run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and its share of your monthly AI limit. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 4 minutes.\n\nIn **Run history**, its run shows **Called by** and the first agent. Click the first run's agent count for each one's result and AI use. One you can't see shows as **An agent you can't see**."
+        },
+        {
+          "heading": "AEO Operator",
+          "text": "On Growth and up, the **AEO Operator** picks which of your agents to run on one brand, on its schedule's days (weekdays at 07:00 to start).\n\nEach morning it sends one card: the agents, why each, and the AI they may use. It starts them only after you **Approve**, in Chat, from **Inbox**, or in Slack. **Skip** runs nothing that day, and a card left unanswered ends at midnight.\n\nIts **Daily budget** is 5% of the monthly AI limit by default, from 1% to 10%, and it plans less as the month's use grows. It runs at most 5 agents a day (up to 8), from all your active agents or ones you pick.\n\nOnce every agent has finished or waits on you, or 8 hours after you approve, a summary shows in its chat, in **Inbox** (**Open summary**), and by email or Slack per your notify setting."
         },
         {
           "heading": "When a run asks before a change",
@@ -1660,7 +1671,7 @@
         },
         {
           "heading": "Topics, fan-outs and head to head",
-          "text": "Ask about topics, fan-outs, a competitor head to head, AI bots and Search Console pages: Chat reads the same tables those pages show, such as the prompts where a competitor is ahead of you."
+          "text": "Ask about topics, fan-outs, a competitor head to head, AI bots and Search Console pages: Chat reads the same tables those pages show, such as the prompts where a competitor is ahead of you.\n\nAsk which sites cite your competitors but not you: Chat reads the **Competitor Gaps** tab on Citations, strongest first, or one competitor's sources."
         },
         {
           "heading": "Change what you track",
@@ -2956,7 +2967,8 @@
         "suggest competitors",
         "remove competitor",
         "competitor domain",
-        "competitors page"
+        "competitors page",
+        "competitor type"
       ],
       "synonyms": [
         "new competitor",
@@ -2964,7 +2976,10 @@
         "competitor list",
         "delete a competitor",
         "where is the competitors page",
-        "find competitors"
+        "find competitors",
+        "kind of competitor",
+        "competitor category",
+        "set type"
       ],
       "plan": "all",
       "updated": "2026-11-17",
@@ -2979,7 +2994,11 @@
         },
         {
           "heading": "Add a competitor",
-          "text": "Click **Add Competitor** and fill in:\n\n- **Name**: as AI answers write it, not the web address. Ansvisor looks for the name in every answer.\n- **Domain** (optional): Ansvisor also looks for the domain in answers, counts citations of the competitor's pages, and marks those pages **Competitor** on Visibility's **Citations** tab. The card that follows the competitor's pages over time needs it too.\n\nClick **Add**."
+          "text": "Click **Add Competitor** and fill in:\n\n- **Name**: as AI answers write it, not the web address. Ansvisor looks for the name in every answer.\n- **Domain** (optional): Ansvisor also looks for the domain in answers, counts citations of the competitor's pages, and marks those pages **Competitor** on Visibility's **Citations** tab. The card that follows the competitor's pages over time needs it too.\n- **Type** (optional): what kind of competitor it is. See **Competitor types** below.\n\nClick **Add**."
+        },
+        {
+          "heading": "Competitor types",
+          "text": "A type says what kind of competitor each one is, so you can filter and group your list by it. Pick **Direct competitor**, **Marketplace / aggregator**, **Publisher / review site** or **Other**, or choose **New type…** and name your own, such as a kind of company in your industry. A type you name is offered for your other competitors too.\n\nTo set or change one, click the tag icon (**Set type for** the competitor) on its card in **Tracked Competitors**, or beside it on the **Competitors** tab of the brand's settings. Pick the type and click **Save**; **No type** clears it.\n\nA type is only a label: it doesn't change how Ansvisor finds the competitor in answers or scores it. Only admins and managers set types."
         },
         {
           "heading": "Suggest competitors",
@@ -3018,14 +3037,17 @@
         "gaps",
         "strengths",
         "platform breakdown",
-        "prompt-by-prompt"
+        "prompt-by-prompt",
+        "competitor types"
       ],
       "synonyms": [
         "benchmark competitors",
         "how do we compare",
         "competitor visibility",
         "us versus them",
-        "competitor score"
+        "competitor score",
+        "filter competitors",
+        "group competitors"
       ],
       "plan": "all",
       "updated": "2026-11-17",
@@ -3037,6 +3059,10 @@
         {
           "heading": "Tracked Competitors",
           "text": "The **Tracked Competitors** card lists every competitor with its domain and:\n\n- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.\n- the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.\n\n**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.\n\nThe **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores. **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations."
+        },
+        {
+          "heading": "Filter and group by type",
+          "text": "Once one of your competitors has a type, each card shows it under the domain, and two controls sit above the list:\n\n- the type menu, **All types** at first, shows only the competitors of one type, or those with **No type**;\n- **Group by type** lists them under a heading per type, with how many each has, the ones without a type last.\n\nThey only change which cards show and in what order: scores, the date range and the head-to-head stay as they are. **Export CSV** has a type column. Setting a type is in **Add competitors to track**."
         },
         {
           "heading": "Open a head-to-head comparison",
@@ -3065,6 +3091,53 @@
         {
           "heading": "Close a visibility gap",
           "text": "1. On **Gaps**, find the prompts where the competitor leads most.\n2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on Visibility's **Citations** tab lists the sources AI cites with the competitor and not with you.\n3. Create content for that prompt in **Content**.\n4. Publish it, earn placements on those sources, and watch the prompt in the comparison as new answers are tracked."
+        }
+      ]
+    },
+    {
+      "id": "competitors/merge-competitors",
+      "title": "Merge duplicate competitors",
+      "route": "/dashboard/competitors",
+      "keywords": [
+        "merge competitors",
+        "duplicate competitor",
+        "same company",
+        "unmerge",
+        "merged competitors",
+        "competitor alias",
+        "other names"
+      ],
+      "synonyms": [
+        "combine competitors",
+        "two competitors are the same",
+        "competitor added twice",
+        "join competitors",
+        "undo a merge",
+        "alternate name",
+        "also known as"
+      ],
+      "plan": "all",
+      "updated": "2026-11-17",
+      "sections": [
+        {
+          "heading": null,
+          "text": "When one company is tracked as two competitors, say under two names or two websites, you can merge them into one on the **Competitors** page. Only admins and managers merge and unmerge competitors."
+        },
+        {
+          "heading": "Merge competitors",
+          "text": "Click **Merge** in **Tracked Competitors**. Tick the competitors that are the same company, choose **Keep this one** on the one to keep, read what will happen and click **Merge**.\n\nThe one you keep keeps its name, type and logo. The names and domains of the others become its other names, shown as **Also:** on its card. From the merge on, an answer that names any of them, or cites their sites, counts for the one you kept.\n\nThe others leave your list, comparisons, share of voice, Chat and the Action Center. A merged competitor can't be added again: unmerge it instead.\n\nWhen two competitors share a website or a name, the page asks **These may be the same company**. Click **Merge…** to start with both, or close it."
+        },
+        {
+          "heading": "Numbers from before the merge",
+          "text": "Numbers from before the merge aren't combined. Each merged competitor keeps its own history, hidden while it is merged, and the one you kept shows only its own numbers for those days. Answers count together from the merge on."
+        },
+        {
+          "heading": "Unmerge a competitor",
+          "text": "Open **Merged competitors** under the list. It shows what was merged into what, when and by whom. Click **Unmerge** on one, then **Unmerge** again to confirm.\n\nIt comes back as its own competitor, with its numbers from before the merge, and its names stop counting for the one you kept. Answers counted for the kept competitor while they were merged stay with it.\n\nRemoving a competitor also removes the ones merged into it."
+        },
+        {
+          "heading": "When the workspace is read-only",
+          "text": "On Ansvisor Cloud, while the workspace is read-only, **Merge** and **Unmerge** open the plan dialog instead."
         }
       ]
     },

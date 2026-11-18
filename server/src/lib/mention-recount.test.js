@@ -154,3 +154,37 @@ describe('recountRow', () => {
     expect(next.competitor_mentions).toEqual([gone]);
   });
 });
+
+describe('recountRow with a merged competitor (00543)', () => {
+  const tracked = [
+    {
+      id: 'c1',
+      name: 'Rival',
+      domain: 'rival.example',
+      aliases: ['Rival Tours'],
+      aliasDomains: [],
+      merged: [{ name: 'Rival Tours', domain: '', since: '2026-11-17T10:00:00Z' }],
+    },
+    { id: 'c2', name: 'Other', domain: '' },
+  ];
+  const text = 'Rival Tours is popular.';
+
+  it('counts the merged name for the kept one in an answer from the merge on', () => {
+    const next = recountRow(
+      stored(text, { created_at: '2026-11-17T11:00:00Z' }),
+      brandInfo,
+      tracked,
+    );
+    expect(next.competitor_mentions[0].mention_count).toBe(2);
+  });
+
+  it('counts the kept one by its own names in an answer from before the merge', () => {
+    const next = recountRow(
+      stored(text, { created_at: '2026-11-16T11:00:00Z' }),
+      brandInfo,
+      tracked,
+    );
+    // "Rival" alone, as the answer was counted then.
+    expect(next.competitor_mentions[0].mention_count).toBe(1);
+  });
+});
