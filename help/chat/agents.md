@@ -174,13 +174,13 @@ In **Run history**, its run shows **Called by** and the first agent. Click the f
 
 ## AEO Operator
 
-On Growth and up, the **AEO Operator** picks which of your agents to run each day, on one brand, on its schedule's days (weekdays at 07:00 to start).
+On Growth and up, the **AEO Operator** picks which of your agents to run on one brand, on its schedule's days (weekdays at 07:00 to start).
 
-Each morning it sends one card: the agents, why each one, and how much of your monthly AI limit they may use. It starts them only after you **Approve**, in Chat, from **Inbox**, or in Slack. **Skip** runs nothing that day, and a card left unanswered ends at midnight.
+Each morning it sends one card: the agents, why each, and the AI they may use. It starts them only after you **Approve**, in Chat, from **Inbox**, or in Slack. **Skip** runs nothing that day, and a card left unanswered ends at midnight.
 
-Its **Daily budget** is 5% of the monthly AI limit by default, from 1% to 10%, and it plans less as the month's use grows. It runs at most 5 agents a day (up to 8), from all your active agents or the ones you pick.
+Its **Daily budget** is 5% of the monthly AI limit by default, from 1% to 10%, and it plans less as the month's use grows. It runs at most 5 agents a day (up to 8), from all your active agents or ones you pick.
 
-Its page shows today's plan and the budget used. Once its agents are done, a summary shows in its chat and in Inbox.
+Once every agent has finished or waits on you, or 8 hours after you approve, a summary shows in its chat, in **Inbox** (**Open summary**), and by email or Slack per your notify setting.
 
 ## When a run asks before a change
 
