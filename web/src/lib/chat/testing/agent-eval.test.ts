@@ -9,9 +9,14 @@ import {
   checkLabel,
   inventedNumbers,
   numbersIn,
+  pageScopeMissed,
+  pageScopeUnsaid,
+  pageSearchMissed,
+  pageTopMissed,
   promptCauseClaims,
   readByCodes,
   readCitationsByDomain,
+  readOpenItem,
   readSignalsByCodes,
   skillReads,
   substituteActions,
@@ -21,8 +26,25 @@ import {
   unnamedAskedActions,
   unnamedAskedDomains,
   unnamedAskedSignals,
+  unnamedPageRows,
 } from './agent-eval';
-import { EVAL_CITED_DOMAIN, EVAL_CODE_SIGNAL, EVAL_IDS, evalReadResult } from './agent-eval-data';
+import {
+  EVAL_CITED_DOMAIN,
+  EVAL_CODE_SIGNAL,
+  EVAL_IDS,
+  EVAL_PAGE_SEARCH,
+  EVAL_PAGE_SEARCH_PROMPTS,
+  EVAL_PAGE_TOP_PROMPTS,
+  EVAL_HEAD_TO_HEAD_LOSSES,
+  EVAL_OPEN_COMPETITOR,
+  EVAL_OPEN_TOPIC,
+  EVAL_PROMPTS,
+  EVAL_TOPIC_PROMPTS,
+  EVAL_PAGE_VIEW_ACTIONS,
+  EVAL_PAGE_VIEW_SIGNALS,
+  EVAL_SIGNAL_BACKLOG,
+  evalReadResult,
+} from './agent-eval-data';
 import { PROMPT_ASSOCIATION_LABEL } from '@/lib/traffic-conversions';
 import { safetyChecks, safetyFindings } from './safety-checks';
 
@@ -524,5 +546,238 @@ describe('the AEO Operator’s scenarios (AEO Operator plan §4.6)', () => {
       }),
     ).toBe(false);
     expect(held.ok({ answer: '', reads: [] })).toBe(false);
+  });
+});
+
+// The owner's rule (2026-11-16): Chat opened on a page reads what that page shows.
+describe("the page's period and filters", () => {
+  const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'citations-page-scope')!;
+  const NOW = Date.parse('2026-11-02T13:00:00.000Z');
+  const run = (input: Record<string, unknown>) => ({
+    reads: ['list_citations'],
+    readInputs: [input],
+  });
+
+  it('asks on Citations, on its 24 hours, ChatGPT and Brand sources', () => {
+    expect(scenario).toMatchObject({
+      message: 'What are my top cited domains?',
+      page: {
+        route: '/dashboard/citations',
+        read: { tool: 'list_citations', days: 1, input: { model: 'chatgpt-web' } },
+      },
+    });
+    expect(scenario.page!.chips.map((c) => c.key)).toEqual([
+      'page',
+      'brand',
+      'dates',
+      'filter:platform',
+      'filter:sources',
+    ]);
+  });
+
+  it("checks a read took the page's inputs over its window", () => {
+    const read = scenario.page!.read!;
+    const scoped = {
+      date_from: '2026-11-01T13:00:00.000Z',
+      date_to: '2026-11-02',
+      model: 'chatgpt-web',
+      source_filter: 'owned',
+    };
+    expect(pageScopeMissed(run(scoped), read, NOW)).toBeNull();
+    expect(pageScopeMissed(run({ ...scoped, date_from: '2026-10-04' }), read, NOW)).toBe(
+      'date_from "2026-10-04"',
+    );
+    expect(pageScopeMissed(run({ ...scoped, model: undefined }), read, NOW)).toBe('model null');
+    expect(pageScopeMissed({ reads: [], readInputs: [] }, read, NOW)).toBe(
+      'list_citations not read',
+    );
+  });
+
+  it('checks the answer says its scope: as on the page, counts for all sources', () => {
+    const chips = scenario.page!.chips;
+    expect(
+      pageScopeUnsaid(
+        'Last 24 hours, ChatGPT, as on the page: citation counts for all sources, lists for Brand sources.',
+        chips,
+      ),
+    ).toBeNull();
+    expect(
+      pageScopeUnsaid('Son 24 saat, sayfadaki gibi; sayılar tüm kaynaklar için.', chips),
+    ).toBeNull();
+    expect(pageScopeUnsaid('Your top domains, as on the page.', chips)).toBe(
+      'no "all sources" for the counts',
+    );
+    expect(pageScopeUnsaid('Your top domains.', chips)).toBe('no "as on the page"');
+    // No Sources on the page: "as on the page" is enough.
+    expect(pageScopeUnsaid('As on the page: 31 citations.', chips.slice(0, 4))).toBeNull();
+  });
+});
+
+// The owner's plan (2026-11-16, item 7): "my top 5 prompts" are the Prompts page's top 5.
+describe("the Prompts page's top rows", () => {
+  const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'prompts-page-top')!;
+
+  it('asks on Prompts, on its 24 hours, for the top 5 by its Visibility', () => {
+    expect(scenario).toMatchObject({
+      message: 'What are my top 5 prompts?',
+      page: {
+        route: '/dashboard/prompts/tracked',
+        read: { tool: 'get_prompt_performance', days: 1, input: {} },
+      },
+    });
+    expect(scenario.pageTop).toEqual(EVAL_PAGE_TOP_PROMPTS);
+    // The read ranks by the AI Visibility Score; by the average answer score the top differs.
+    const read = evalReadResult('get_prompt_performance', {}) as {
+      prompts: { text: string; ai_visibility_score: number }[];
+    };
+    expect(read.prompts.slice(0, 5).map((p) => p.text)).toEqual(EVAL_PAGE_TOP_PROMPTS);
+    const old = evalReadResult('get_prompt_performance', { sort_by: 'answer_score' }) as {
+      prompts: { text: string }[];
+    };
+    expect(old.prompts.slice(0, 5).map((p) => p.text)).not.toEqual(EVAL_PAGE_TOP_PROMPTS);
+  });
+
+  it('checks the answer names the five in the page order', () => {
+    const [a, b, c, d, e] = EVAL_PAGE_TOP_PROMPTS;
+    expect(
+      pageTopMissed(`1. ${a}\n2. ${b}\n3. ${c}\n4. ${d}\n5. ${e}`, scenario.pageTop!),
+    ).toBeNull();
+    expect(pageTopMissed(`1. ${b}\n2. ${a}\n3. ${c}\n4. ${d}\n5. ${e}`, scenario.pageTop!)).toBe(
+      `"${b}" before "${a}"`,
+    );
+    expect(pageTopMissed(`1. ${a}\n2. ${b}`, scenario.pageTop!)).toBe(
+      `missing "${c}", "${d}", "${e}"`,
+    );
+  });
+});
+
+// The owner's plan (2026-11-16, item 8): the page's view, its rows on screen and its search.
+describe("the page's view", () => {
+  it('asks "what are these?" on Actions by Priority Score, three rows on screen, by their codes', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'actions-page-view')!;
+    expect(scenario.message).toBe('What are these?');
+    expect(scenario.page!.view).toMatchObject({ sort: { key: 'priority', dir: 'desc' }, total: 3 });
+    expect(scenario.page!.view!.rows!.map((row) => row.ref)).toEqual(['AC-41', 'AC-42', 'AC-44']);
+    expect(scenario.askedActions).toEqual(EVAL_PAGE_VIEW_ACTIONS);
+    // No period on Actions: no period check.
+    expect(scenario.page!.read).toBeUndefined();
+  });
+
+  it('asks "how are these doing?" on Prompts with a search, whose prompts it lists', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'prompts-page-search')!;
+    expect(scenario.page!.view!.search).toBe(EVAL_PAGE_SEARCH);
+    expect(scenario.pageSearch).toEqual({ tool: 'list_prompts', search: EVAL_PAGE_SEARCH });
+    // Every prompt holding the words, and only those; the read by that search finds them.
+    expect(EVAL_PAGE_SEARCH_PROMPTS.length).toBeGreaterThan(2);
+    for (const prompt of EVAL_PAGE_SEARCH_PROMPTS) {
+      expect(prompt.text.toLowerCase()).toContain('coffee subscription');
+    }
+    const read = evalReadResult('list_prompts', { search: EVAL_PAGE_SEARCH }) as {
+      prompts: { id: string }[];
+    };
+    expect(read.prompts.map((p) => p.id)).toEqual(EVAL_PAGE_SEARCH_PROMPTS.map((p) => p.id));
+  });
+
+  it("checks a read took the page's search, and the answer names every row", () => {
+    const page = { tool: 'list_prompts', search: 'coffee subscription' };
+    const run = (search?: string) => ({
+      reads: ['list_prompts'],
+      readInputs: [search === undefined ? {} : { search }],
+    });
+    expect(pageSearchMissed(run(' Coffee Subscription '), page)).toBeNull();
+    expect(pageSearchMissed(run('coffee'), page)).toBe('search "coffee"');
+    expect(pageSearchMissed(run(), page)).toBe('search null');
+    expect(pageSearchMissed({ reads: [], readInputs: [] }, page)).toBe('list_prompts not read');
+    expect(unnamedPageRows('A and b.', ['a', 'B', 'c'])).toEqual(['c']);
+  });
+});
+
+// Step 9 of the owner's plan: the pages that send their context.
+describe('the pages that send their context since step 9', () => {
+  it('asks "bunlar ne?" on Signals, three rows on screen none of the newest, by their S- codes', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'signals-page-view')!;
+    expect(scenario.message).toBe('bunlar ne?');
+    expect(scenario.page!.route).toBe('/dashboard/action-center/signals');
+    expect(scenario.page!.view!.rows!.map((row) => row.ref)).toEqual(['S-41', 'S-23', 'S-07']);
+    expect(scenario.askedSignals).toEqual(EVAL_PAGE_VIEW_SIGNALS);
+    // Each title its own: naming one never reads as naming another.
+    for (const asked of EVAL_PAGE_VIEW_SIGNALS) {
+      expect(EVAL_SIGNAL_BACKLOG.filter((s) => s.title === asked.title)).toHaveLength(1);
+    }
+    const newest = (
+      evalReadResult('list_signals', {}, 'long_lists') as { signals: { code: string }[] }
+    ).signals
+      .slice(0, 3)
+      .map((s) => s.code);
+    expect(newest).not.toEqual(expect.arrayContaining(['S-41']));
+  });
+
+  it('asks "bu rakibe karşı nerede kaybediyoruz?" on Competitors with one open', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'competitor-open-losses')!;
+    expect(scenario.page!.view).toEqual({
+      open: { ref: EVAL_OPEN_COMPETITOR.id, label: EVAL_OPEN_COMPETITOR.name },
+      query: { competitor: EVAL_OPEN_COMPETITOR.id },
+    });
+    expect(scenario.pageOpen).toEqual({
+      tool: 'get_competitor_head_to_head',
+      input: { competitor_id: EVAL_OPEN_COMPETITOR.id },
+      names: EVAL_HEAD_TO_HEAD_LOSSES.map((row) => row.prompt),
+    });
+    // The read finds the open competitor's losses; another's has none, an unknown one is not found.
+    const losses = evalReadResult('get_competitor_head_to_head', {
+      competitor_id: EVAL_OPEN_COMPETITOR.id,
+      side: 'losing',
+    }) as { prompts: { prompt: string }[] };
+    expect(losses.prompts.map((row) => row.prompt)).toEqual(scenario.pageOpen!.names);
+    expect(evalReadResult('get_competitor_head_to_head', { competitor: 'Nobody' })).toEqual({
+      not_found: ['Nobody'],
+    });
+  });
+
+  it('asks "bu konuda en zayıf promptumuz hangisi?" on a topic’s page, whose weakest isn’t the brand’s', () => {
+    const scenario = QUESTION_SCENARIOS.find((s) => s.id === 'topic-page-weakest')!;
+    expect(scenario.page!.route).toBe(`/dashboard/prompts/topics/${EVAL_OPEN_TOPIC.id}`);
+    expect(scenario.page!.view!.open).toEqual({
+      ref: EVAL_OPEN_TOPIC.id,
+      label: EVAL_OPEN_TOPIC.name,
+    });
+    // The topic's prompts, best first: the weakest is named, read for that topic.
+    expect(EVAL_TOPIC_PROMPTS.map((p) => p.text)).toEqual([
+      'Which coffee subscription lets you pause or skip a delivery?',
+      'What are the best coffee subscriptions in 2026?',
+      'Cheapest specialty coffee subscription',
+    ]);
+    expect(scenario.pageOpen).toEqual({
+      tool: 'get_prompt_performance',
+      input: { topic_id: EVAL_OPEN_TOPIC.id },
+      names: ['Cheapest specialty coffee subscription'],
+    });
+    const weakest = (input: Record<string, unknown>) =>
+      (
+        evalReadResult('get_prompt_performance', { ...input, order: 'asc' }) as {
+          prompts: { text: string }[];
+        }
+      ).prompts[0].text;
+    expect(weakest({ topic_id: EVAL_OPEN_TOPIC.id })).toBe(scenario.pageOpen!.names[0]);
+    // Over every topic, the weakest is another topic's.
+    expect(weakest({})).toBe('Light roast vs dark roast for espresso');
+    expect(EVAL_PROMPTS.find((p) => p.text === weakest({}))!.topic).not.toBe(EVAL_OPEN_TOPIC.name);
+    // A lookup reads its prompts in every topic.
+    const looked = evalReadResult('get_prompt_performance', {
+      topic_id: EVAL_OPEN_TOPIC.id,
+      prompt_ids: [EVAL_PROMPTS[6].id],
+    }) as { prompts: { id: string }[] };
+    expect(looked.prompts.map((p) => p.id)).toEqual([EVAL_PROMPTS[6].id]);
+  });
+
+  it('checks the read of the item the page holds open, by its read and inputs', () => {
+    const open = { tool: 'get_competitor_head_to_head', input: { competitor_id: 'c3' } };
+    const run = (tool: string, input: Record<string, unknown>) => ({
+      reads: [tool],
+      readInputs: [input],
+    });
+    expect(readOpenItem(run(open.tool, { competitor_id: 'c3', side: 'losing' }), open)).toBe(true);
+    expect(readOpenItem(run(open.tool, { competitor_id: 'c1' }), open)).toBe(false);
+    expect(readOpenItem(run('list_competitors', { competitor_id: 'c3' }), open)).toBe(false);
   });
 });

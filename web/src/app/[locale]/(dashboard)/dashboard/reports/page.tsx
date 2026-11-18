@@ -8,6 +8,8 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { createReport, getReports, deleteReport, type ReportListItem } from '@/lib/actions/reports';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { viewRows } from '@/lib/chat/page-view';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
@@ -151,6 +153,25 @@ export default function ReportsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): once read, the
+  // saved reports listed by id, each with its title and the days it covers, and how many.
+  useChatPageContext(
+    activeBrandId
+      ? {
+          pageName: t('title'),
+          view: loading
+            ? {}
+            : {
+                rows: viewRows(reports, (report) => ({
+                  ref: report.id,
+                  label: `${report.title} (${report.dateFrom.slice(0, 10)} – ${report.dateTo.slice(0, 10)})`,
+                })),
+                total: reports.length,
+              },
+        }
+      : null,
+  );
 
   const handleGenerate = async () => {
     const targetBrandId = reportBrandId ?? activeBrandId;

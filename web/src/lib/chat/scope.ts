@@ -4,6 +4,16 @@ import { platformFamily, platformName } from '@/lib/signals/names';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { oldestFirst } from './fit';
+import type { DayWindow } from '@/lib/insights-windows';
+import {
+  WHY_PERIOD_FIELDS,
+  readsRunDays,
+  rollingWindow,
+  runDaysWindow,
+  whyPeriodsOf,
+} from './page-periods';
+import { AS_LISTED, pageFilterInputs, type PageScope } from './page-scope';
+import { samePage } from './page-route';
 import { FALLBACK_RANGE, rangeDaysBack, rangeWindow, type ChatRange } from './range';
 import type { ChatTool } from './registry/define-tool';
 
@@ -11,12 +21,13 @@ import type { ChatTool } from './registry/define-tool';
  * Chat's scope decisions, in one place (CHAT-04 items 2–4, Rule 1; CHAT-20
  * §7 "Platforms by plan"): which dates, platforms and how many rows a read
  * covers. The server sets them, not the model: a read with no dates gets the
- * person's date range (range.ts: their default, or one their message named),
- * or the app's last 30 days, unless the person asked for all time; a plan
- * that tracks some platforms reads only those, and every list stops at its
- * row limit and says it was cut (`truncated`). The engine scopes each read
- * here before it runs (scopeRead) and cuts its rows after (capRows). Server
- * only.
+ * person's date range (range.ts: one their message named, the page's in the
+ * side panel, or their default), or the app's last 30 days, unless the
+ * person asked for all time; the page's filters fill the inputs the model
+ * left out (page-scope.ts); a plan that tracks some platforms reads only
+ * those, and every list stops at its row limit and says it was cut
+ * (`truncated`). The engine scopes each read here before it runs
+ * (scopeRead) and cuts its rows after (capRows). Server only.
  */
 
 /** A read with no dates and no range set covers the app's last this many days (CHAT-04 item 2). */
@@ -24,6 +35,14 @@ export const DEFAULT_RANGE_DAYS = 30;
 
 /** No list a model reads is longer than this (CHAT-04 Rule 1: "at most ~50 rows"). */
 export const ROW_CAP = 50;
+
+/**
+ * A trend's buckets: every day of a year by day, or years by week. A series
+ * is one list the answer reads whole (the Overview's trend shows up to 90
+ * days by day); its share of the run (run-limits.ts) cuts a longer one,
+ * saying so (fit.ts).
+ */
+export const TREND_ROWS = 400;
 
 /**
  * Rows per read, by tool: `default` when the model names none, `max` the
@@ -43,6 +62,8 @@ export const ROW_LIMITS: Readonly<Record<string, { default: number; max: number 
   list_action_center_tasks: { default: ROW_CAP, max: ROW_CAP },
   // What's new shows 3 updates at most (CHAT-11 item 10).
   get_whats_new: { default: 3, max: 3 },
+  // Every day of the period, as the trend on the page (the owner's plan of 2026-11-16, item 7).
+  get_visibility_trend: { default: TREND_ROWS, max: TREND_ROWS },
 };
 
 /**
@@ -72,9 +93,15 @@ export const NAMED_ROWS: Readonly<Record<string, readonly string[]>> = {
   get_reports: ['ids', 'search'],
 };
 
-/** Whether a read's input names its rows (NAMED_ROWS): a list or words in one of its fields. */
+/**
+ * Whether a read's input names its rows (NAMED_ROWS): a list or words in one
+ * of its fields. A search as listed (page-scope.ts AS_LISTED, the page's
+ * search) names none: it reads the list, its page and limit as the list's.
+ */
 export function namesRows(toolName: string, input: Record<string, unknown>): boolean {
+  const listed = input[AS_LISTED] === true;
   return (NAMED_ROWS[toolName] ?? []).some((field) => {
+    if (field === 'search' && listed) return false;
     const value = input[field];
     return Array.isArray(value)
       ? value.length > 0
@@ -141,8 +168,15 @@ interface DatesUsed {
   dateTo: string | null;
   dates: DateChoice;
   days?: number;
-  /** The range a read with no dates took (range.ts): the person's, or the app's 30 days. */
+  /** The range a read with no dates took (range.ts): the page's, the person's or the app's. */
   range?: ChatRange;
+  /**
+   * How its page cuts that range (page-periods.ts): `latest_run`, Last 24
+   * hours as the latest completed tracking run's days (Overview, Citations);
+   * `rolling`, the last N × 24 hours (Prompts, AI Traffic). Left out: whole
+   * UTC days.
+   */
+  window?: 'latest_run' | 'rolling';
 }
 
 /** Whether a read's input gives its own period: dates, or days back. */
@@ -282,6 +316,10 @@ export interface ScopeUsed extends DatesUsed {
   platforms: string[] | null;
   /** The rows it asked for, or its lists were cut to. */
   rows: number;
+  /** What the page set (page-scope.ts): `period`, and its filters' keys (`platform`, `sources`, `search`). */
+  page?: string[];
+  /** The page's search, as the read took it (page-scope.ts), when it took one. */
+  pageSearch?: string;
 }
 
 /** A read the plan doesn't cover: the model says so, it doesn't run (CHAT-04 item 2). */
@@ -298,17 +336,34 @@ export interface ScopeFacts {
   /** The person's question: an all-time ask lifts the default window. */
   question: string | null | undefined;
   /**
-   * The range a read with no dates covers (range.ts): the person's default,
-   * or one their message named. Null or left out: none is set, and the app's
-   * last 30 days are read (Google's reads keep their pages' 28).
+   * The range a read with no dates covers (range.ts): one their message
+   * named, the page's, or the person's default. Null or left out: none is
+   * set, and the app's last 30 days are read (Google's reads keep their
+   * pages' 28).
    */
   range?: ChatRange | null;
+  /**
+   * Where the range came from: a period the message named (or a short
+   * range), the page the question was asked on (range.ts pageDatesOf), or
+   * the person's default (picked on the card, or kept). Left out: default.
+   */
+  rangeFrom?: 'message' | 'page' | 'default';
+  /** The page shows all time: a read with no dates covers all of it, as asked. */
+  allTime?: boolean;
+  /** The page's filters, for the reads that take them (page-scope.ts). */
+  page?: PageScope | null;
   /** The plan's platform limits; null when they couldn't be read. */
   limits: PlatformLimits | null;
   planName: string;
   now?: Date;
   /** The brand's AI models (brandModels); a test's own. Null: they couldn't be read. */
   modelsOf?: (brandId: string) => Promise<readonly string[] | null>;
+  /**
+   * The UTC days of the brand's latest completed tracking run (the pages'
+   * getTrackingWindow), for Overview's and Citations' Last 24 hours; null
+   * before its first run, or when it can't be read: the rolling 24 hours.
+   */
+  runDaysOf?: (brandId: string) => Promise<DayWindow | null>;
 }
 
 export type ScopedRead =
@@ -349,18 +404,22 @@ const accepts = (tool: Pick<ChatTool, 'inputSchema'>, input: Record<string, unkn
   tool.inputSchema.safeParse(input).success;
 
 /**
- * A read's input with the server's scope (CHAT-04 item 4): its dates, its
- * platforms and its rows. A platform the plan doesn't track is refused
- * (`not_on_plan`) rather than read empty or read anyway.
+ * A read's input with the server's scope (CHAT-04 item 4): its dates, the
+ * page's filters, its platforms and its rows. A platform the plan doesn't
+ * track (the page's too) is refused (`not_on_plan`) rather than read empty
+ * or read anyway.
  */
 export async function scopeRead(
-  tool: Pick<ChatTool, 'name' | 'inputSchema' | 'planGate'>,
+  tool: Pick<ChatTool, 'name' | 'inputSchema' | 'planGate'> & Partial<Pick<ChatTool, 'route'>>,
   raw: Record<string, unknown>,
   facts: ScopeFacts,
 ): Promise<ScopedRead> {
   const now = facts.now ?? new Date();
-  const allTime = asksAllTime(facts.question);
-  const input: Record<string, unknown> = { ...raw };
+  const askedAllTime = asksAllTime(facts.question);
+  const allTime = askedAllTime || facts.allTime === true;
+  // The page's filters, where the read takes them and the model gave none (page-scope.ts).
+  const fromPage = pageFilterInputs(tool, raw, facts.page ?? null, facts.question);
+  const input = fromPage.input;
 
   // Platforms: what was asked must be on the plan; nothing asked, the plan's.
   const plan = planPlatforms(facts.limits);
@@ -412,14 +471,22 @@ export async function scopeRead(
     );
     delete input.date_from;
     delete input.date_to;
-    for (const [key, value] of Object.entries(resolved.values)) {
+    // A range the app set, cut as the read's own page cuts it (page-periods.ts).
+    const pageWindow = resolved.range
+      ? await ownPageWindow(tool, resolved.range, input, facts, now)
+      : null;
+    const values = pageWindow
+      ? { date_from: pageWindow.dateFrom, date_to: pageWindow.dateTo }
+      : resolved.values;
+    for (const [key, value] of Object.entries(values)) {
       if (hasField(tool, key)) input[key] = value;
     }
     dates = {
-      dateFrom: resolved.dateFrom,
-      dateTo: resolved.dateTo,
+      dateFrom: pageWindow?.dateFrom ?? resolved.dateFrom,
+      dateTo: pageWindow?.dateTo ?? resolved.dateTo,
       dates: resolved.dates,
       ...(resolved.range ? { range: resolved.range } : {}),
+      ...(pageWindow ? { window: pageWindow.window } : {}),
     };
   } else if (hasField(tool, 'days')) {
     const asked = typeof input.days === 'number' ? input.days : null;
@@ -441,7 +508,38 @@ export async function scopeRead(
       days: fits,
       ...(range && fits === days ? { range } : {}),
     };
+  } else if (hasField(tool, 'period_b_from')) {
+    // The Why read compares the run's period with as many days before (page-periods.ts),
+    // unless the model named periods or a day; too short a period keeps its own 7 against 7.
+    const named = WHY_PERIOD_FIELDS.some((field) => input[field] !== undefined);
+    const periods = !named && facts.range && !allTime ? whyPeriodsOf(facts.range, now) : null;
+    if (periods && accepts(tool, { ...input, ...periods })) {
+      Object.assign(input, periods);
+      dates = {
+        dateFrom: periods.period_b_from,
+        dateTo: periods.period_b_to,
+        dates: 'default',
+        range: facts.range!,
+      };
+    }
+  } else if (hasField(tool, 'period') && input.period === undefined && facts.range && !allTime) {
+    // A read of a named period (Ads' 7d, 30d, 90d) takes one the message named, or its own
+    // page's; never the person's default nor another page's range: else its own default, as
+    // its page opens on (the owner, 2026-11-16).
+    const ownPage = samePage(tool.route, facts.page?.route);
+    const named = facts.rangeFrom === 'message' || (facts.rangeFrom === 'page' && ownPage);
+    if (named && accepts(tool, { ...input, period: facts.range })) {
+      input.period = facts.range;
+      const window = rangeWindow(facts.range, now);
+      dates = { ...window, dates: 'default', range: facts.range };
+    }
   }
+  // The page's period: a read that took the range, or all time, the page set.
+  const pagePeriod =
+    facts.rangeFrom === 'page' &&
+    !askedAllTime &&
+    (dates.range !== undefined || dates.dates === 'all_time');
+  const page = [...(pagePeriod ? ['period'] : []), ...fromPage.applied];
 
   // Rows: the model's count, held to the tool's max; one more read to see if there are more,
   // unless the read counts them itself.
@@ -463,10 +561,41 @@ export async function scopeRead(
   return {
     kind: 'read',
     input,
-    used: { ...dates, platforms, rows: cap.rows },
+    used: {
+      ...dates,
+      platforms,
+      rows: cap.rows,
+      ...(page.length > 0 ? { page } : {}),
+      ...(fromPage.applied.includes('search') ? { pageSearch: String(input.search) } : {}),
+    },
     platformNames,
     cap,
   };
+}
+
+/**
+ * The window a range covers on the read's own page, when that page cuts it
+ * its own way (page-periods.ts): Overview's and Citations' Last 24 hours,
+ * the latest completed run's days (the rolling 24 hours before a first run,
+ * or when they can't be read); Prompts' and AI Traffic's presets, the last
+ * N × 24 hours.
+ * Null: whole UTC days, as rangeWindow cuts them.
+ */
+async function ownPageWindow(
+  tool: Partial<Pick<ChatTool, 'route'>>,
+  range: ChatRange,
+  input: Record<string, unknown>,
+  facts: ScopeFacts,
+  now: Date,
+): Promise<{ dateFrom: string; dateTo: string; window: 'latest_run' | 'rolling' } | null> {
+  if (range === '24h' && readsRunDays(tool.route) && facts.runDaysOf) {
+    const brandId = typeof input.brand_id === 'string' ? input.brand_id : null;
+    const days = brandId ? await facts.runDaysOf(brandId).catch(() => null) : null;
+    const window = runDaysWindow(days);
+    return window ? { ...window, window: 'latest_run' } : null;
+  }
+  const rolling = rollingWindow(tool.route, range, now);
+  return rolling ? { ...rolling, window: 'rolling' } : null;
 }
 
 // ─── Rows ───────────────────────────────────────────────────────────────────

@@ -19,7 +19,10 @@ import { getActionHistory } from '@/lib/actions/action-history';
 import { getActionScorecard } from '@/lib/actions/action-scorecard';
 import { SCORECARD_BY, type ScorecardBy, type ScorecardRow } from '@/lib/action-center/scorecard';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
-import { actionTexts } from '@/lib/action-center/display';
+import { actionKindName, actionTexts } from '@/lib/action-center/display';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel, type ChatPageFilter } from '@/lib/chat/page-context';
+import { viewRows, type ChatPageView } from '@/lib/chat/page-view';
 import {
   HISTORY_PAGE_SIZE,
   HISTORY_SORTS,
@@ -210,6 +213,73 @@ export default function ActionCenterHistoryPage() {
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / HISTORY_PAGE_SIZE));
   const visible = filtered.slice((page - 1) * HISTORY_PAGE_SIZE, page * HISTORY_PAGE_SIZE);
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its range, and on
+  // the list its filters, sort and search and once read the actions on this page by code, with
+  // how many match; on the Scorecard its rows by kind of action.
+  const tChatRange = useTranslations('chatPanel.range');
+  const onList = view === 'actions';
+  const chatFilters: ChatPageFilter[] = onList
+    ? [
+        ...(status !== 'all'
+          ? [{ key: 'status', label: t(`status.${status}`), value: status }]
+          : []),
+        // History's Type is the action's category, as get_action_history names it.
+        ...(type !== 'all' ? [{ key: 'category', label: tTypes(type), value: type }] : []),
+        ...(priority !== 'all'
+          ? [{ key: 'priority', label: tActions(`priority.levels.${priority}`), value: priority }]
+          : []),
+        ...(source !== 'all' ? [{ key: 'source', label: tSources(source), value: source }] : []),
+      ]
+    : [];
+  const chatView: ChatPageView = onList
+    ? {
+        tab: view,
+        // The page's Sort once it isn't the default (newest first, as the read lists).
+        ...(sort !== 'newest'
+          ? { sort: { key: sort, dir: sort === 'oldest' ? 'asc' : 'desc' } }
+          : {}),
+        ...(search.trim() ? { search: search.trim() } : {}),
+        ...(items && !isLoading
+          ? {
+              rows: viewRows(visible, (item) => ({
+                ref: actionCode(item),
+                label: actionTexts(
+                  { kind: item.kind, payload: item.payload } as Parameters<typeof actionTexts>[0],
+                  tTexts,
+                ).title,
+              })),
+              total: filtered.length,
+            }
+          : {}),
+      }
+    : {
+        tab: view,
+        // By kind of action, as get_action_scorecard reads it; by play it has no read.
+        ...(scorecard && scorecardBy === 'kind'
+          ? {
+              rows: viewRows(scorecard, (row) => ({
+                ref: row.kind,
+                label: actionKindName(row.kind, tTexts),
+              })),
+              total: scorecard.length,
+            }
+          : {}),
+      };
+  useChatPageContext(
+    brandId
+      ? {
+          pageName: t('title'),
+          dateRange: {
+            from: range,
+            to: null,
+            label: rangeChipLabel(range, {}, (key, values) => tChatRange(key, values)),
+          },
+          filters: chatFilters,
+          view: chatView,
+        }
+      : null,
+  );
 
   const hasActiveFilters =
     status !== 'all' || type !== 'all' || priority !== 'all' || source !== 'all' || search !== '';

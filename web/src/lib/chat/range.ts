@@ -402,6 +402,20 @@ export function pageRangeOf(
   return parseRange(`${from}/${to}`, now);
 }
 
+/**
+ * The period a question from the side panel reads when it names none
+ * (the owner's rule, 2026-11-16: Chat reads what the page shows): the
+ * page's range (pageRangeOf), `all` for its All time, null for none.
+ */
+export function pageDatesOf(
+  chips: readonly { key: string; value?: string }[] | undefined,
+  now: Date,
+): ChatRange | 'all' | null {
+  const value = chips?.find((chip) => chip.key === 'dates')?.value;
+  if (value === 'all/') return 'all';
+  return pageRangeOf(chips, now);
+}
+
 /** One button of the range card: a range, and whether it is the page's. */
 export interface RangeOption {
   range: ChatRange;

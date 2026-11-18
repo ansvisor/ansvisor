@@ -322,3 +322,75 @@ describe('Delete topic in a row\'s "…" menu', () => {
     expect(getPromptCountByTopic).not.toHaveBeenCalled();
   });
 });
+
+describe("what Chat's side panel sees of the table (the owner's plan, step 9)", () => {
+  const topic = (id: string, name: string, visibilityRate: number, promptCount: number) => ({
+    id,
+    name,
+    promptCount,
+    visibilityRate,
+    visiblePrompts: 1,
+    activePrompts: 2,
+    visibilityChange: null,
+    totalMentions: 3,
+    totalCitations: 1,
+    shareOfVoice: 20,
+    topCompetitor: null,
+    lastRunAt: null,
+    trendSparkline: [],
+  });
+  const draw = async (onChatView: (view: unknown) => void) => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <TopicsTab
+              actionsSlot={slot}
+              range={{ from: '2026-10-11T00:00:00.000Z', days: 7 }}
+              rangePreset="7d"
+              customFrom=""
+              customTo=""
+              onChatView={onChatView}
+            />
+          </UpgradeDialogContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+  };
+
+  it('hands up the topics in the table’s order by id, and the sort once another is picked', async () => {
+    topicRows = [topic('t1', 'Espresso', 20, 5), topic('t2', 'Cold brew', 60, 2)];
+    const onChatView = vi.fn();
+    await draw(onChatView);
+    // Visibility, highest first, is the read's own order: no sort is sent.
+    expect(onChatView).toHaveBeenLastCalledWith({
+      rows: [
+        { ref: 't2', label: 'Cold brew' },
+        { ref: 't1', label: 'Espresso' },
+      ],
+      total: 2,
+    });
+    const byPrompts = container.querySelector<HTMLButtonElement>('button[aria-label^="Sort by"]')!;
+    await act(async () => byPrompts.click());
+    expect(onChatView).toHaveBeenLastCalledWith({
+      sort: { key: 'prompts', dir: 'desc' },
+      rows: [
+        { ref: 't1', label: 'Espresso' },
+        { ref: 't2', label: 'Cold brew' },
+      ],
+      total: 2,
+    });
+  });
+
+  it('hands up nothing while it reads, and takes it back when the tab goes', async () => {
+    getTopicsOverview.mockReturnValueOnce(new Promise(() => {}));
+    const onChatView = vi.fn();
+    await draw(onChatView);
+    expect(onChatView).toHaveBeenLastCalledWith(null);
+    act(() => root.unmount());
+    expect(onChatView).toHaveBeenLastCalledWith(null);
+    root = createRoot(container);
+  });
+});

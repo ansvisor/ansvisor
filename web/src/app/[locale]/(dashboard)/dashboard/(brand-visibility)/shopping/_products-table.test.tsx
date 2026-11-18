@@ -128,3 +128,34 @@ describe('ProductsTable', () => {
     ]);
   });
 });
+
+describe("what Chat's side panel sees of it (the owner's plan, step 9)", () => {
+  it('hands up the products on screen by catalog id, in its order, with the view’s count', () => {
+    const onChatView = vi.fn();
+    render(
+      <ProductsTable products={{ rows, total: 2400 }} loading={false} onChatView={onChatView} />,
+    );
+    expect(onChatView).toHaveBeenLastCalledWith({
+      rows: [
+        { ref: 'p2', label: 'StormShell Jacket' },
+        { ref: 'p1', label: 'Ridge 30L Backpack' },
+      ],
+      total: 2400,
+    });
+    const never = [...container.querySelectorAll('button[aria-pressed]')].find((b) =>
+      b.textContent?.startsWith('Never shown'),
+    ) as HTMLButtonElement;
+    act(() => never.click());
+    expect(onChatView.mock.lastCall![0].rows).toEqual([{ ref: 'p1', label: 'Ridge 30L Backpack' }]);
+  });
+
+  it('hands up nothing while it reads, and takes it back when it goes', () => {
+    const onChatView = vi.fn();
+    render(<ProductsTable products={null} loading onChatView={onChatView} />);
+    expect(onChatView).toHaveBeenLastCalledWith(null);
+    render(<ProductsTable products={{ rows, total: 2 }} loading={false} onChatView={onChatView} />);
+    act(() => root.unmount());
+    expect(onChatView).toHaveBeenLastCalledWith(null);
+    root = createRoot(container);
+  });
+});
