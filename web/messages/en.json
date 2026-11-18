@@ -4219,6 +4219,10 @@
       "name": "Read Search Console pages",
       "step": "Read AI Traffic · Search Console pages"
     },
+    "citationGaps": {
+      "name": "Read Competitor Gaps",
+      "step": "Read Citations · Competitor Gaps"
+    },
     "aiAnswers": { "name": "Read a prompt's AI answers", "step": "Read AI answers" },
     "promptInsights": { "name": "Read prompt insights", "step": "Read Prompts · Insights" },
     "overviewSummary": { "name": "Read the brand overview", "step": "Read Visibility" },

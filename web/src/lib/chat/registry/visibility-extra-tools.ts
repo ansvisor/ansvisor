@@ -3,6 +3,7 @@ import { contentUuid } from '@/lib/mcp/content-schemas';
 import {
   FANOUT_LIGHT_MAX_DAYS,
   getAiBotsFor,
+  getCitationGapsFor,
   getCompetitorHeadToHeadFor,
   getGscPagesFor,
   getQueryFanoutsFor,
@@ -18,11 +19,11 @@ import { PAGED, pageInput } from './list-paging';
  * that no other row reads (the owner's plan "Chat must read everything a
  * page shows", step 6c): the Topics tab, Query Fan-outs for a plain
  * question, a competitor's head-to-head, the Overview's Topics vs
- * competitors map and Opportunities card, AI bots and Search Console pages.
- * Each calls lib/mcp/visibility-extra-reads.ts, which reads what the page
- * reads. Inputs are named as the other reads' (brand_id, date_from,
- * date_to, model, region, competitor_id, days), so the server's scope and
- * the page's filters fill them the same way.
+ * competitors map and Opportunities card, Citations › Gaps, AI bots and
+ * Search Console pages. Each calls lib/mcp/visibility-extra-reads.ts, which
+ * reads what the page reads. Inputs are named as the other reads' (brand_id,
+ * date_from, date_to, model, region, topic_id, competitor_id, days), so the
+ * server's scope and the page's filters fill them the same way.
  */
 
 const brandId = contentUuid.describe('Brand id, from list_brands.');
@@ -30,6 +31,7 @@ const dateFrom = z.string().optional().describe('ISO timestamp (inclusive) lower
 const dateTo = z.string().optional().describe('ISO timestamp (inclusive) upper bound.');
 const model = z.string().optional().describe('A model slug, or comma-separated slugs.');
 const region = z.string().optional().describe('A region code, e.g. "US" or "TR".');
+const topicId = contentUuid.optional().describe('Topic id, from list_topics.');
 
 const BRAND = FIXTURE_IDS.brand;
 
@@ -198,6 +200,43 @@ export const VISIBILITY_EXTRA_READS = [
         dateTo: input.date_to,
         model: input.model,
         region: input.region,
+        limit: input.limit,
+        offset: input.offset,
+      }),
+    fixture: { input: { brand_id: BRAND } },
+  }),
+  defineTool({
+    name: 'get_citation_gaps',
+    class: 'read',
+    area: 'citations',
+    description: `Citations › Gaps (the Competitor Gaps tab), as it shows them: the domains that cite competitors but not the brand. The Gap list (default): third-party domains cited in at least two answers that name a competitor and not the brand, and in none where the brand appears, strongest first, each with its competitor answers, the competitors named and its source type; 100 at most, as on the tab. With competitor_id (from list_competitors), the By competitor view: the third-party domains cited in answers naming that competitor, and whether each also appears where the brand does. low_visibility: the brand is in under 1 answer in 10, so say the list may be broad. For "which sites cite our competitors but not us"; list_citations has every cited domain.${PAGED}`,
+    minRole: 'analyst',
+    planGate: { platforms: true },
+    brandOf: { input: 'brand_id' },
+    costClass: 'C1',
+    labelKey: 'citationGaps',
+    route: '/dashboard/citations',
+    mcpTool: null,
+    specRow: '28',
+    inputSchema: z.object({
+      brand_id: brandId,
+      date_from: dateFrom,
+      date_to: dateTo,
+      model,
+      region,
+      topic_id: topicId,
+      competitor_id: contentUuid.optional().describe('Competitor id, from list_competitors.'),
+      ...pageInput,
+    }),
+    run: (ctx, input) =>
+      getCitationGapsFor(ctx, {
+        brandId: input.brand_id,
+        dateFrom: input.date_from,
+        dateTo: input.date_to,
+        model: input.model,
+        region: input.region,
+        topicId: input.topic_id,
+        competitorId: input.competitor_id,
         limit: input.limit,
         offset: input.offset,
       }),
