@@ -51,11 +51,25 @@ const pack = (id: string, kind: 'ai' | 'storage', price: string | null, over = {
   grant_bytes: kind === 'storage' ? 26843545600 : null,
   valid_months: kind === 'ai' ? 12 : null,
   stripe_price_id: price,
+  sale: 'self_serve',
+  plans: null,
   active: true,
   highlight: false,
   sort: 1,
   ...over,
 });
+
+/** A Growth add-on (00546) in the same catalog: never a pack, never on Billing's pack card. */
+const tracking = {
+  ...pack('tracking_100_month', 'ai', 'price_tr100'),
+  kind: 'tracking',
+  price_cents: 7500,
+  billing: 'monthly',
+  grant_ai_usd: null,
+  grant_prompts: 100,
+  valid_months: null,
+  plans: ['growth'],
+};
 
 /** The plan's subscription, billed monthly unless said otherwise. */
 const subscription = (interval = 'month') => ({
@@ -97,6 +111,7 @@ beforeEach(() => {
       pack('ai_10', 'ai', null),
       pack('storage_25', 'storage', 'price_st25'),
       pack('storage_100', 'storage', 'price_st100', { active: false }),
+      tracking,
     ],
     add_on_purchases: [],
   };
@@ -226,6 +241,11 @@ describe('is refused', () => {
       ok: false,
       failure: 'unavailable',
     });
+    // A Growth add-on isn't a pack: it is bought on its own path.
+    await expect(startAddOnPurchase('tracking_100_month')).resolves.toEqual({
+      ok: false,
+      failure: 'unavailable',
+    });
     expect(purchases()).toEqual([]);
     expect(stripeCalled()).toBe(false);
   });
@@ -292,6 +312,7 @@ describe('Billing’s Add-ons', () => {
       pack('ai_250', 'ai', null, { price_cents: 25000, grant_ai_usd: 125, sort: 3 }),
       pack('storage_25', 'storage', 'price_st25', { highlight: true }),
       pack('storage_100', 'storage', 'price_st100', { active: false }),
+      tracking,
     ];
     db.tables.add_on_purchases = [
       purchase('p1', 'ai_50', 'paid'),
