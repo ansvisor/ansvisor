@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sectionFromPath } from '@/lib/prompts-routes';
 import {
   GETTING_STARTED_STEPS,
   buildGettingStarted,
@@ -58,6 +59,16 @@ describe('the step list', () => {
       'ga',
     ]);
   });
+
+  it('opens topics and prompts on the Prompts page, and no step on a brand’s own pages', () => {
+    const href = (key: GettingStartedStepKey) =>
+      GETTING_STARTED_STEPS.find((s) => s.key === key)!.href;
+    expect(href('topics')).toBe('/dashboard/prompts/topics');
+    expect(href('prompts')).toBe('/dashboard/prompts/suggestions');
+    expect(sectionFromPath(href('topics'))?.tab).toBe('topics');
+    expect(sectionFromPath(href('prompts'))).toMatchObject({ tab: 'all', view: 'suggestions' });
+    expect(GETTING_STARTED_STEPS.filter((s) => s.href.startsWith('/dashboard/brands'))).toEqual([]);
+  });
 });
 
 describe('buildGettingStarted', () => {
@@ -93,6 +104,21 @@ describe('buildGettingStarted', () => {
       progress: { value: 2, target: 3 },
     });
     expect(step(facts({ topicPrompts: [0, 0, 0] }), 'topics').state).toBe('done');
+  });
+
+  it('counts topics and prompts from the brand’s data, wherever they were added: no page visit', () => {
+    // Added on the Prompts page (Topics, Tracked Prompts, Prompt Suggestions),
+    // in Chat or at setup: the data finishes the steps, with no record kept.
+    const added = facts({ topicPrompts: [3, 3, 3] });
+    expect(step(added, 'topics')).toMatchObject({ state: 'done', updatedAt: null });
+    expect(step(added, 'prompts')).toMatchObject({ state: 'done', updatedAt: null });
+    // Opening a page finishes neither, the Prompts page's or any other.
+    expect(pageOpenedStep('/dashboard/prompts/topics')).toBeNull();
+    expect(pageOpenedStep('/dashboard/prompts/suggestions')).toBeNull();
+    expect(pageOpenedStep('/dashboard/brands/b1/prompts')).toBeNull();
+    const opened = facts({ records: { topics: 'opened', prompts: 'opened' } });
+    expect(step(opened, 'topics').state).toBe('new');
+    expect(step(opened, 'prompts').state).toBe('new');
   });
 
   it('wants three prompts in every topic, and at least three topics of them', () => {

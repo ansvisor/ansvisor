@@ -21,6 +21,7 @@ import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AskAboutThis } from '@/components/chat/panel/ask-about-this';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { trafficChatView } from './_chat-view';
 import { rangeChipLabel } from '@/lib/chat/page-context';
 import type { Brand } from '@/types';
 import {
@@ -753,6 +754,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       { type: 'table', id: 'traffic-platforms', label: t('chat.platformsTable') },
       { type: 'table', id: 'traffic-pages', label: t('chat.pagesTable') },
     ],
+    // And what else it shows (the owner's plan, item 8): the visit list's search, and once
+    // read, its visits on screen with how many match.
+    view: trafficChatView(filters.search, isLoadingLogs ? null : { logs, total: logsTotal }),
   });
 
   return (

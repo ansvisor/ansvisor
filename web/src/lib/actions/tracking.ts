@@ -2732,13 +2732,28 @@ export async function getCompetitorComparison(
   // brand's own row always matches the Visibility card.
   const visWindows = comparisonWindows(opts);
 
+  // On the daily path the delta's windows follow from the request alone.
+  // A preset's window (both ends given) is the delta's current window too,
+  // so the displayed read answers it instead of the same read running a
+  // second time, and the previous window's read starts now, beside the
+  // displayed one, rather than after it: the page waits for one
+  // competitor_aggregates_daily instead of two in a row, and runs two, not
+  // three. Promise.resolve sends the (lazy) request now.
+  const deltaDays = daily ? deltaDayWindows(daily, opts?.previousDays) : null;
+  const curIsDisplay =
+    deltaDays !== null &&
+    deltaDays.cur.dayFrom === daily?.dayFrom &&
+    deltaDays.cur.dayTo === daily?.dayTo;
+  const prevDaily = deltaDays ? Promise.resolve(compRpc(deltaDays.prev)) : null;
+
   // Brand name + the displayed-period aggregates fire in parallel — all
   // are needed before we can shape the response.
-  const [{ data: brand }, { data: aggDisplay, error: aggErr }, visDisplayRes] = await Promise.all([
+  const [{ data: brand }, displayRes, visDisplayRes] = await Promise.all([
     supabase.from('brands').select('name').eq('id', brandId).single(),
     compRpc(daily, opts?.dateFrom ?? undefined, expandDateToEndOfDay(opts?.dateTo) ?? undefined),
     aiVisibilityWindow(supabase, brandId, opts, visWindows.cur),
   ]);
+  const { data: aggDisplay, error: aggErr } = displayRes;
   if (aggErr) throw new Error(aggErr.message);
   if (visDisplayRes.error) throw new Error(visDisplayRes.error.message);
   const visDisplay = foldAiVisibility(visDisplayRes.data);
@@ -2765,19 +2780,18 @@ export async function getCompetitorComparison(
 
   const duration = currentTo.getTime() - currentFrom.getTime();
   const prevFrom = new Date(currentFrom.getTime() - duration);
-  const deltaDays = daily ? deltaDayWindows(daily, opts?.previousDays) : null;
 
   const [curRes, prevRes, visPrevRes] = await Promise.all([
     deltaDays
-      ? compRpc(deltaDays.cur)
+      ? curIsDisplay
+        ? displayRes
+        : compRpc(deltaDays.cur)
       : compRpc(
           null,
           opts?.dateFrom ?? currentFrom.toISOString(),
           expandDateToEndOfDay(opts?.dateTo) ?? undefined,
         ),
-    deltaDays
-      ? compRpc(deltaDays.prev)
-      : compRpc(null, prevFrom.toISOString(), currentFrom.toISOString()),
+    prevDaily ?? compRpc(null, prevFrom.toISOString(), currentFrom.toISOString()),
     visWindows.prev
       ? aiVisibilityWindow(supabase, brandId, opts, visWindows.prev)
       : Promise.resolve({ data: null, error: new Error('no previous window') }),

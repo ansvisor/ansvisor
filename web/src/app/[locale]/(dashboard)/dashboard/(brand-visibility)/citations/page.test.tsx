@@ -38,6 +38,7 @@ vi.mock('next/dynamic', () => ({ default: () => () => null }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const { default: CitationsPage } = await import('./page');
+const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -222,5 +223,70 @@ describe('CitationsPage: a failed read', () => {
     await act(async () => retry()!.click());
     expect(getCitationGaps).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain('No gap domains for these filters');
+  });
+});
+
+// The owner's plan (2026-11-16, item 8): Chat's side panel sees the open tab and the page of
+// domains or URLs on screen, by their domain or address, with how many the table has.
+describe("CitationsPage: what Chat's side panel sees", () => {
+  it('tells the open tab and the rows on screen in the scope, by domain, then by address', async () => {
+    getCitationsOverview.mockResolvedValue({
+      ...overview(2),
+      urlRows: [
+        {
+          url: 'https://acme.example/pricing',
+          domain: 'acme.example',
+          category: 'you',
+          title: 'Pricing',
+          models: ['gpt-5'],
+          totalCitations: 5,
+          resultsCiting: 3,
+          usagePct: 30,
+          articleType: null,
+        },
+        {
+          url: 'https://blog.acme.example/guide',
+          domain: 'blog.acme.example',
+          category: 'you',
+          title: '',
+          models: ['gpt-5'],
+          totalCitations: 2,
+          resultsCiting: 2,
+          usagePct: 20,
+          articleType: null,
+        },
+      ],
+    });
+    const setPage = vi.fn();
+    window.history.replaceState(null, '', '/dashboard/citations?scope=own');
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatPageSetterContext.Provider value={setPage}>
+            <CitationsPage />
+          </ChatPageSetterContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(setPage.mock.lastCall![0].view).toEqual({
+      tab: 'domains',
+      rows: [
+        { ref: 'acme.example', label: 'acme.example' },
+        { ref: 'blog.acme.example', label: 'blog.acme.example' },
+      ],
+      total: 2,
+    });
+    const urls = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((tab) =>
+      tab.textContent?.startsWith('URLs'),
+    )!;
+    await act(async () => urls.click());
+    expect(setPage.mock.lastCall![0].view).toEqual({
+      tab: 'urls',
+      rows: [
+        { ref: 'https://acme.example/pricing', label: 'Pricing' },
+        { ref: 'https://blog.acme.example/guide', label: 'https://blog.acme.example/guide' },
+      ],
+      total: 2,
+    });
   });
 });

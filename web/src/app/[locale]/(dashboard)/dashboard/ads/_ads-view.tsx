@@ -29,6 +29,7 @@ import {
   type AdsTab,
 } from '@/lib/ads/tabs';
 import { rangeChipLabel } from '@/lib/chat/page-context';
+import type { ChatPageView } from '@/lib/chat/page-view';
 import { isDemoSelected } from '@/lib/demo/demo-brand';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -36,6 +37,15 @@ import { AdsCampaigns } from './_campaigns';
 import { AdsConnections } from './_connections';
 import { AdsOpportunities } from './_opportunities';
 import { AdsOverview } from './_overview';
+
+/** Each tab as Chat's side panel names it (page-view.ts): the hash's ids are short. */
+const TAB_NAMES: Record<AdsTab, string> = {
+  ov: 'overview',
+  op: 'opportunities',
+  sov: 'paid_sov',
+  cmp: 'campaigns',
+  con: 'connections',
+};
 
 const TAB_ICONS: Record<AdsTab, LucideIcon> = {
   ov: LayoutDashboard,
@@ -119,11 +129,16 @@ export function AdsView() {
   const Icon = TAB_ICONS[tab];
   const periodOff = tab !== 'ov' && tab !== 'op';
 
-  // Chat's side panel sees the page: Ads, its period and three questions.
+  // What Chat's side panel sees of Opportunities' list, which keeps its own filter.
+  const [listView, setListView] = useState<ChatPageView | null>(null);
+
+  // Chat's side panel sees the page: Ads, its period and three questions; and what else it
+  // shows (the owner's plan, item 8): the open tab, and on Opportunities the prompts on screen.
   useChatPageContext({
     pageName: t('title'),
     dateRange: { from: period, to: null, label: rangeChipLabel(period, {}, tRange) },
     suggestions: [t('chat.pay'), t('chat.rivals'), t('chat.earn')],
+    view: { tab: TAB_NAMES[tab], ...(tab === 'op' && listView ? listView : {}) },
   });
 
   return (
@@ -224,7 +239,12 @@ export function AdsView() {
         {tab === 'ov' ? (
           <AdsOverview period={period} onOpenTab={openTab} />
         ) : tab === 'op' ? (
-          <AdsOpportunities period={period} writable={readable && !demo} thresholds={thresholds} />
+          <AdsOpportunities
+            period={period}
+            writable={readable && !demo}
+            thresholds={thresholds}
+            onChatView={setListView}
+          />
         ) : readable && tab === 'cmp' ? (
           <AdsCampaigns />
         ) : readable && tab === 'con' ? (

@@ -7,6 +7,9 @@ import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { track } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
+import { pickOnOpen } from '@/lib/brand-prompts-link';
+import { sectionFromPath } from '@/lib/prompts-routes';
+import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
 import {
   getGettingStarted,
@@ -158,7 +161,7 @@ export function SetupSection({
         <>
           <ul className="space-y-2 text-sm">
             {listed.map((step) => (
-              <SetupStep key={step.key} step={step} />
+              <SetupStep key={step.key} brandId={brandId} step={step} />
             ))}
           </ul>
           <div className="flex gap-3.5 text-[13px] text-muted-foreground">
@@ -186,15 +189,27 @@ export function SetupSection({
   );
 }
 
-function SetupStep({ step }: { step: GettingStartedStep }) {
+/**
+ * One step, linked to its page. A step on the Prompts page (Topics, Prompt
+ * Suggestions), whose address names no brand, picks the card's brand as it
+ * opens, here or in a new tab, as every link to it for one brand does
+ * (lib/brand-prompts-link.ts).
+ */
+function SetupStep({ brandId, step }: { brandId: string; step: GettingStartedStep }) {
   const t = useTranslations('actionCenter.today.setup');
   const tSteps = useTranslations('actionCenter.gettingStarted.steps');
+  const setActiveBrand = useBrandStore((s) => s.setActiveBrand);
   const finished = step.state === 'done' || step.state === 'skipped';
+  const pick = sectionFromPath(step.href) ? pickOnOpen(() => setActiveBrand(brandId)) : null;
   return (
     <li data-setup-step={step.key}>
       <Link
         href={step.href}
-        onClick={() => track('today_setup_step_clicked', { step: step.key })}
+        onClick={() => {
+          pick?.onClick();
+          track('today_setup_step_clicked', { step: step.key });
+        }}
+        onAuxClick={pick?.onAuxClick}
         className={cn(
           'flex justify-between gap-2 hover:underline',
           finished && 'text-muted-foreground',

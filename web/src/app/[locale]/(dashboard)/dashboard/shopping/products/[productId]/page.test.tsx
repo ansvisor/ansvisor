@@ -44,6 +44,12 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
+
 const { default: ShoppingProductPage } = await import('./page');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -286,5 +292,35 @@ describe('ShoppingProductPage', () => {
     expect(await render()).toContain('Product Visibility comes with the Growth plan.');
     expect(getShoppingProductDetail).not.toHaveBeenCalled();
     expect(getProductAiSays).not.toHaveBeenCalled();
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9's detail pages)", () => {
+  it('holds the product open by its id, with its title, over the 30 days the page reads', async () => {
+    getShoppingProductDetail.mockResolvedValue(detail);
+    await render();
+    expect(chatPage.mock.lastCall![0]).toEqual({
+      pageName: 'Ridge 30L Backpack',
+      dateRange: { from: '30d', to: null, label: 'Last 30 days' },
+      view: { open: { ref: 'p1', label: 'Ridge 30L Backpack' } },
+    });
+  });
+
+  it('says nothing while it reads', async () => {
+    getShoppingProductDetail.mockReturnValue(new Promise(() => {}));
+    await render();
+    expect(chatPage.mock.lastCall![0]).toBeNull();
+  });
+
+  it('says nothing for a product not in the catalog', async () => {
+    getShoppingProductDetail.mockResolvedValue(null);
+    await render();
+    expect(chatPage.mock.lastCall![0]).toBeNull();
+  });
+
+  it('says nothing on a plan without Product Visibility', async () => {
+    gate.allowed = false;
+    await render();
+    expect(chatPage.mock.lastCall![0]).toBeNull();
   });
 });

@@ -70,6 +70,7 @@ import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import type { ChatPageFilter } from '@/lib/chat/page-context';
+import { viewRows } from '@/lib/chat/page-view';
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import {
   generateOpportunitiesOnDemand,
@@ -1209,6 +1210,18 @@ export default function ContentPage() {
             tChat('opportunitiesFirst'),
             tChat('actions'),
           ],
+          // And what else it shows (the owner's plan, item 8): the sort, the search, and once
+          // read, the page of opportunities on screen with how many match.
+          view: {
+            sort: { key: sortOrder, dir: sortOrder === 'oldest' ? 'asc' : 'desc' },
+            ...(search.trim() ? { search: search.trim() } : {}),
+            ...(loading
+              ? {}
+              : {
+                  rows: viewRows(opportunities, (o) => ({ ref: o.id, label: o.title })),
+                  total,
+                }),
+          },
         }
       : null,
   );

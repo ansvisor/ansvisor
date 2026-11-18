@@ -42,6 +42,10 @@ vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: unknown) => unknown) =>
     pick({ brands: [{ id: 'brand-1', name: 'Acme Coffee' }], activeBrandId: 'brand-1' }),
 }));
+/** The page's view as the panel hands the chat a way to read it, as a message goes. */
+const handed = vi.hoisted(() => ({
+  pageView: undefined as ((route?: string) => unknown) | undefined,
+}));
 vi.mock('../chat-thread-view', () => ({
   ChatThreadView: ({
     thread,
@@ -52,6 +56,7 @@ vi.mock('../chat-thread-view', () => ({
     onRemoveChip,
     pageReferences,
     pageRoute,
+    pageView,
     draft,
     pageOpen,
     afterLast,
@@ -66,45 +71,49 @@ vi.mock('../chat-thread-view', () => ({
     onRemoveChip?: (key: string) => void;
     pageReferences?: ChatReference[];
     pageRoute?: string;
+    pageView?: (route?: string) => unknown;
     draft?: PanelDraft | null;
     pageOpen?: string;
     afterLast?: (actions: { send: (message: string) => void; disabled: boolean }) => ReactNode;
     afterTurn?: number;
     markedTurn?: number | null;
-  }) => (
-    <div
-      data-testid="thread"
-      data-after-turn={afterTurn ?? ''}
-      data-marked-turn={markedTurn ?? ''}
-      data-variant={variant}
-      data-route={pageRoute}
-      data-page-open={pageOpen ?? 'ask'}
-    >
-      {(thread?.messages.length ?? 0) === 0 && empty}
-      <ul data-testid="chips">
-        {chips?.map((chip) => (
-          <li key={chip.key}>
-            {chip.label}
-            <button type="button" data-chip={chip.key} onClick={() => onRemoveChip?.(chip.key)}>
-              ×
-            </button>
-          </li>
+  }) => {
+    handed.pageView = pageView;
+    return (
+      <div
+        data-testid="thread"
+        data-after-turn={afterTurn ?? ''}
+        data-marked-turn={markedTurn ?? ''}
+        data-variant={variant}
+        data-route={pageRoute}
+        data-page-open={pageOpen ?? 'ask'}
+      >
+        {(thread?.messages.length ?? 0) === 0 && empty}
+        <ul data-testid="chips">
+          {chips?.map((chip) => (
+            <li key={chip.key}>
+              {chip.label}
+              <button type="button" data-chip={chip.key} onClick={() => onRemoveChip?.(chip.key)}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p data-testid="refs">{pageReferences?.map((r) => r.label).join('|')}</p>
+        <p data-testid="draft">
+          {draft ? `${draft.text ?? ''}${draft.reference ? `@${draft.reference.label}` : ''}` : ''}
+        </p>
+        {thread?.messages.map((m, i) => (
+          <p key={i}>{m.text}</p>
         ))}
-      </ul>
-      <p data-testid="refs">{pageReferences?.map((r) => r.label).join('|')}</p>
-      <p data-testid="draft">
-        {draft ? `${draft.text ?? ''}${draft.reference ? `@${draft.reference.label}` : ''}` : ''}
-      </p>
-      {thread?.messages.map((m, i) => (
-        <p key={i}>{m.text}</p>
-      ))}
-      {afterLast?.({ send: () => undefined, disabled: false })}
-      <textarea data-action="composer.input" />
-      <button type="button" data-testid="send" onClick={() => onConversation?.('chat-new')}>
-        send
-      </button>
-    </div>
-  ),
+        {afterLast?.({ send: () => undefined, disabled: false })}
+        <textarea data-action="composer.input" />
+        <button type="button" data-testid="send" onClick={() => onConversation?.('chat-new')}>
+          send
+        </button>
+      </div>
+    );
+  },
 }));
 
 // An in-memory localStorage: the test environment has none.
@@ -626,6 +635,42 @@ describe('the page’s context (W1-08)', () => {
     // New chat leaves the object with the chat it was for.
     await click(container.querySelector('[data-action="panel.newChat"][aria-label]'));
     expect(container.querySelector('[data-testid="draft"]')!.textContent).toBe('');
+  });
+
+  it("hands the chat the page's view with its URL's own keys, read as the message goes (item 8)", async () => {
+    pageContext = {
+      ...mentions('All platforms'),
+      view: {
+        tab: 'mentions',
+        sort: { key: 'oldest', dir: 'asc' },
+        rows: [{ ref: '11111111-1111-4111-8111-111111111111', label: 'Best coffee · ChatGPT' }],
+        total: 1,
+        // A page's own query is the URL's: the panel sets it.
+        query: { token: 'x' },
+      },
+    };
+    window.history.replaceState(
+      null,
+      '',
+      `/dashboard/mentions?tab=mentions&sort=oldest&q=${'d'.repeat(400)}&token=abc&code=123&next=%2Fx&utm_source=mail`,
+    );
+    await render();
+    await click(ask());
+    expect(handed.pageView!('/dashboard/mentions')).toEqual({
+      tab: 'mentions',
+      sort: { key: 'oldest', dir: 'asc' },
+      rows: [{ ref: '11111111-1111-4111-8111-111111111111', label: 'Best coffee · ChatGPT' }],
+      total: 1,
+      query: { tab: 'mentions', sort: 'oldest', q: 'd'.repeat(300) },
+    });
+    // Read as the message goes: the URL as it is then.
+    window.history.replaceState(null, '', '/dashboard/mentions?sort=newest');
+    expect(handed.pageView!('/dashboard/mentions')).toMatchObject({ query: { sort: 'newest' } });
+    // A Retry from another page sends none; nor once the page's chip is off.
+    expect(handed.pageView!('/dashboard/citations')).toBeUndefined();
+    await click(container.querySelector('[data-chip="page"]'));
+    expect(handed.pageView!('/dashboard/mentions')).toBeUndefined();
+    window.history.replaceState(null, '', '/');
   });
 
   it('has no Ask about this where the panel isn’t', async () => {

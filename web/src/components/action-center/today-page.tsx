@@ -14,6 +14,14 @@ import { topicCardTime } from '@/lib/action-center/topic-card';
 import type { FocusCard } from '@/lib/actions/today-focus';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { actionCode } from '@/lib/action-center/action-ref';
+import { actionTexts } from '@/lib/action-center/display';
+import type { WaitingRow } from '@/lib/action-center/waiting';
+import { viewRows, type ChatPageViewRow } from '@/lib/chat/page-view';
+import { signalTexts } from '@/lib/signals/display';
+import type { Signal } from '@/lib/signals/map';
+import { signalCode } from '@/lib/signals/signal-code';
 import { ActionCenterHeader } from './action-center-header';
 import { ActionCenterTabs } from './action-center-tabs';
 import { FirstDayView } from './today/first-day';
@@ -173,6 +181,50 @@ export function TodayPage() {
     },
     [brandId],
   );
+  // What Chat's side panel sees of Today (the owner's plan of 2026-11-16, step 9): each part's
+  // rows once that part has read, in the page's order, by the code each shows (Waiting's
+  // drafts by id), each with the part it is in; never read again for it.
+  const [sinceRead, setSinceRead] = useState<Signal[] | null>(null);
+  const [waitingRead, setWaitingRead] = useState<WaitingRow[] | null>(null);
+  const tTexts = useTranslations('actionCenter.actionTexts');
+  const tSignalTexts = useTranslations('actionCenter.signalTexts');
+  const tTabs = useTranslations('actionCenter.tabs');
+  const tSince = useTranslations('actionCenter.today.since');
+  const tWaiting = useTranslations('actionCenter.today.waiting');
+  const inPart = (part: string, title: string) => `${part}: ${title}`;
+  const chatRows: ChatPageViewRow[] = [
+    ...viewRows(focusCards, (card) => ({
+      ref: actionCode(card.action),
+      label: inPart(tFocus('title'), actionTexts(card.action, tTexts).title),
+    })),
+    ...(mode === 'normal'
+      ? [
+          ...viewRows(sinceRead, (signal) => ({
+            ref: signalCode(signal) ?? signal.id,
+            label: inPart(tSince('title'), signalTexts(signal, tSignalTexts).title),
+          })),
+          ...viewRows(waitingRead, (row) =>
+            row.type === 'due' || row.type === 'reminder'
+              ? {
+                  ref: actionCode(row.item.action),
+                  label: inPart(tWaiting('title'), actionTexts(row.item.action, tTexts).title),
+                }
+              : row.type === 'drafts'
+                ? { ref: row.draftId, label: inPart(tWaiting('title'), row.title) }
+                : { ref: null, label: null },
+          ),
+        ]
+      : []),
+  ];
+  useChatPageContext(
+    brandId
+      ? {
+          pageName: tTabs('today'),
+          view: chatRows.length > 0 ? { rows: chatRows.slice(0, 100) } : {},
+        }
+      : null,
+  );
+
   const summary =
     mode === 'ended'
       ? tEnded('readOnly')
@@ -274,6 +326,7 @@ export function TodayPage() {
               visit={visit}
               focus={finishOne(focusCards ?? [])}
               onSummary={setWaiting}
+              onRows={setWaitingRead}
             />
             {!week && <StandSection load={standing} />}
           </div>
@@ -283,6 +336,7 @@ export function TodayPage() {
             zone={zone}
             standing={standing}
             onSummary={onSince}
+            onSignals={setSinceRead}
           />
           <FocusSection
             brandId={brandId}
