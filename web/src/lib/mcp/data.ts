@@ -22,7 +22,12 @@ import {
   matchesCompetitorType,
   missingCompetitorTypeColumn,
 } from '@/lib/competitor-types';
-import { wholeDayWindow, type DayWindow } from '@/lib/insights-windows';
+import {
+  answeredSpanMs,
+  coveringDayWindow,
+  wholeDayWindow,
+  type DayWindow,
+} from '@/lib/insights-windows';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { PLANS, type Feature, getMinimumPlanForFeature, hasFeature, isCloud } from '@/config/plans';
@@ -65,6 +70,13 @@ import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-esti
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
 import { PAGE_ROWS, pageRows } from './list-page';
 import {
+  ANSWERS_READ_ROWS,
+  citedPagesCutNote,
+  cutOf,
+  productCutNote,
+  type AnswersCut,
+} from './answers-read';
+import {
   CITED_TOP,
   LOOKUP_MAX,
   LOOKUP_WORDS,
@@ -99,6 +111,11 @@ import {
   type OpportunityVolumeForMcp,
 } from '@/lib/content/question-volume';
 import { refreshYears } from '@/lib/content/current-year';
+import type { OpportunitySort } from '@/lib/content/opportunity-list';
+import {
+  comparePromptSortRows,
+  type PromptSortRow,
+} from '@/app/[locale]/(dashboard)/dashboard/prompts/prompt-sort';
 import { readPageComparison, type RangedAuditRow } from '@/lib/audit/page-trend';
 import type { ScoreRange } from '@/lib/audit/score-range';
 import { actionCode } from '@/lib/action-center/action-ref';
@@ -191,12 +208,14 @@ export interface VisibilitySummary {
     /** AI Visibility Score over the brand's answers (shared denominator). */
     score: number | null;
   }>;
-}
-
-interface CompetitorMentionRow {
-  name: string;
-  mention_count: number;
-  visibility_score: number;
+  /**
+   * The whole UTC days read in place of the period asked, when it started or
+   * ended inside a day and ran longer than a day (`note` says so): every day
+   * it touches, from the daily rollups. An absent bound stays open.
+   */
+  roundedToDays?: DayWindow;
+  /** Why the summary covers other times than the period asked, when it does. */
+  note?: string;
 }
 
 /** ai_visibility_aggregates(_daily)'s payload: the score's components, brand and competitors. */
@@ -280,6 +299,22 @@ export async function getVisibilitySummaryFor(
     });
   }
 
+  // Inside a day and longer than about a day (an MCP call's timestamps): the whole UTC days
+  // it touches, from the rollups, saying so. The raw aggregates' cost follows the answers in
+  // the window: on the busiest brand 13 s for 7 days, past 120 s for 90 (the maintainer's
+  // review of 2026-11-17).
+  const span = answeredSpanMs(params.dateFrom, params.dateTo);
+  if (span === null || span > SUB_DAY_RAW_MAX_MS) {
+    const covering = coveringDayWindow(params.dateFrom, params.dateTo);
+    if (!covering) throw new Error(UNREADABLE_PERIOD);
+    const summary = await visibilitySummaryFromRollups(brand, {
+      models: p_models_arg,
+      region: params.region ?? null,
+      days: covering,
+    });
+    return { ...summary, roundedToDays: covering, note: roundedToDaysNote(covering) };
+  }
+
   const rpcBaseArgs = {
     p_brand_id: params.brandId,
     p_platform: null as string | null,
@@ -294,141 +329,62 @@ export async function getVisibilitySummaryFor(
   // excludes chatgpt-shopping for the same reason: its model isn't
   // comparable to a normal ChatGPT answer and would skew brand visibility.
   //
-  // A window that starts or ends inside a day reads the raw rows. Run the
-  // raw-row query and the rate RPCs in parallel:
-  //   • visible_prompt_stats  → visiblePrompts (numerator)
-  //   • tracked_prompt_count  → promptCount (denominator)
-  // This is the exact same source pair used by getVisibilityRateKpi /
-  // getTrackedPromptsKpi on the Insights KPI card, so the numbers match.
-  let query = supabaseAdmin
-    .from('prompt_results')
-    .select(
-      'visibility_score, mention_count, citation_count, sentiment, model_used, competitor_mentions',
-    )
-    .eq('brand_id', params.brandId)
-    .neq('platform', 'chatgpt-shopping');
-
-  if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
-  const expandedDateTo = expandDateToEndOfDay(params.dateTo);
-  if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
-  if (params.region) query = query.eq('region', params.region);
-  if (p_models_arg) {
-    query =
-      p_models_arg.length > 1
-        ? query.in('model_used', p_models_arg)
-        : query.eq('model_used', p_models_arg[0]);
-  }
-
-  const [{ data: rows, error }, visibleRes, promptCountRes, aiVisRes] = await Promise.all([
-    query,
+  // A window of at most about a day that starts or ends inside a day is
+  // answered to the minute by the raw aggregates the Visibility page reads
+  // for it (the maintainer's review of 2026-11-16: no answer rows leave the
+  // database), all four together:
+  //   • competitor_aggregates → the answers, mentions, citations and legacy
+  //     average, and each live competitor's mentions and legacy average, as
+  //     the Competitors comparison reads them (security invoker: the
+  //     service role reads them by brand, after the check above);
+  //   • visible_prompt_stats → visiblePrompts (numerator)
+  //   • tracked_prompt_count  → promptCount (denominator), the source pair
+  //     of getVisibilityRateKpi / getTrackedPromptsKpi on the Insights KPI card;
+  //   • ai_visibility_aggregates → the AI Visibility Score's components.
+  const [aggRes, visibleRes, promptCountRes, aiVisRes] = await Promise.all([
+    supabaseAdmin.rpc('competitor_aggregates', rpcBaseArgs),
     supabaseAdmin.rpc('visible_prompt_stats', rpcBaseArgs),
     supabaseAdmin.rpc('tracked_prompt_count', rpcBaseArgs),
     supabaseAdmin.rpc('ai_visibility_aggregates', rpcBaseArgs),
   ]);
-
-  if (error) throw new Error(error.message);
+  if (aggRes.error) throw new Error(aggRes.error.message);
   if (visibleRes.error) throw new Error(visibleRes.error.message);
   if (promptCountRes.error) throw new Error(promptCountRes.error.message);
   if (aiVisRes.error) throw new Error(aiVisRes.error.message);
 
-  const results = (rows ?? []) as Array<{
-    visibility_score: number;
-    mention_count: number;
-    citation_count: number;
-    sentiment: string;
-    model_used: string | null;
-    competitor_mentions: CompetitorMentionRow[] | null;
-  }>;
-
   // Rate fields come from the RPCs — single source of truth, exact parity
   // with the Insights KPI card for the same brand/window/filters.
-  const visRpcRow = (visibleRes.data ?? {}) as {
-    visible_prompts?: number;
-    visible_results?: number;
-  };
-  const visiblePrompts = Number(visRpcRow.visible_prompts ?? 0);
-  const promptCount = Number(promptCountRes.data ?? 0);
-  const visibilityRatePct =
-    promptCount > 0 ? Math.round((visiblePrompts / promptCount) * 1000) / 10 : 0;
+  const visRpcRow = (visibleRes.data ?? {}) as { visible_prompts?: number };
+  return visibilitySummaryOf(brand, aggRes.data, aiVisRes.data, {
+    visiblePrompts: Number(visRpcRow.visible_prompts ?? 0),
+    promptCount: Number(promptCountRes.data ?? 0),
+  });
+}
 
-  // AI Visibility Score — the same blend every dashboard surface shows.
-  const { competitors: compScores, ...score } = foldAiVisibility(aiVisRes.data);
-  const compScoreByName = new Map<string, number | null>();
-  for (const c of compScores) if (c.name) compScoreByName.set(c.name, c.score);
+/**
+ * The longest window starting or ending inside a day that the visibility
+ * summary reads to the minute, from the raw aggregates: a day of answers,
+ * with an hour to spare for a rolling "Last 24 hours" read a moment after it
+ * was cut (Chat's before a brand's first run). A longer one is read over the
+ * whole UTC days it touches, from the daily rollups (the maintainer's
+ * review of 2026-11-17).
+ */
+const SUB_DAY_RAW_MAX_MS = 25 * 60 * 60 * 1000;
 
-  if (results.length === 0) {
-    return {
-      brand: { id: brand.id, name: brand.name },
-      totals: {
-        resultCount: 0,
-        avgVisibility: 0,
-        totalMentions: 0,
-        totalCitations: 0,
-        visiblePrompts,
-        promptCount,
-        visibilityRatePct,
-        ...score,
-      },
-      topCompetitors: [],
-    };
-  }
+const UNREADABLE_PERIOD =
+  'date_from and date_to take a day (2026-11-01) or an ISO time (2026-11-01T09:00:00Z).';
 
-  let totalMentions = 0;
-  let totalCitations = 0;
-  let sumVis = 0;
-  const compTotals = new Map<string, { mentions: number; visSum: number }>();
-
-  for (const r of results) {
-    sumVis += r.visibility_score ?? 0;
-    totalMentions += r.mention_count ?? 0;
-    totalCitations += r.citation_count ?? 0;
-
-    for (const cm of r.competitor_mentions ?? []) {
-      const agg = compTotals.get(cm.name) ?? { mentions: 0, visSum: 0 };
-      agg.mentions += cm.mention_count ?? 0;
-      agg.visSum += cm.visibility_score ?? 0;
-      compTotals.set(cm.name, agg);
-    }
-  }
-
-  const avgVisibility = Math.round((sumVis / results.length) * 10) / 10;
-
-  // Fix: divide competitor scores by the same total result-row count as the
-  // brand (every filtered row, not just rows where the competitor appeared).
-  // Prevents inflated scores for competitors that only appear in their best
-  // runs — the same denominator fix applied to the dashboard leaderboard in
-  // PR #478.
-  const totalRows = results.length;
-  const topCompetitors = [...compTotals.entries()]
-    .map(([name, agg]) => ({
-      name,
-      mentions: agg.mentions,
-      avgVisibility: totalRows > 0 ? Math.round((agg.visSum / totalRows) * 10) / 10 : 0,
-      score: compScoreByName.get(name) ?? null,
-    }))
-    .sort((a, b) => b.mentions - a.mentions)
-    .slice(0, 5);
-
-  return {
-    brand: { id: brand.id, name: brand.name },
-    totals: {
-      resultCount: results.length,
-      avgVisibility,
-      totalMentions,
-      totalCitations,
-      visiblePrompts,
-      promptCount,
-      visibilityRatePct,
-      ...score,
-    },
-    topCompetitors,
-  };
+/** What a summary rounded to whole days says of its period. */
+function roundedToDaysNote(days: DayWindow): string {
+  const from = days.dayFrom ?? 'the first day tracked';
+  const to = days.dayTo ?? 'today';
+  return `The period asked starts or ends inside a day and is longer than a day, so it was rounded to whole UTC days: ${from} to ${to}, every day it touches, from the daily totals the Visibility page reads. A period of a day or less is read to the minute.`;
 }
 
 const roundTenth = (value: number) => Math.round(value * 10) / 10;
 
-/** competitor_aggregates_daily's payload, the parts the summary reads. */
-interface CompetitorAggregatesDaily {
+/** competitor_aggregates(_daily)'s payload, the parts the summary reads. */
+interface CompetitorAggregatesPayload {
   brand_row_count?: number;
   brand_sum_visibility?: number | string | null;
   brand_total_mentions?: number;
@@ -447,10 +403,7 @@ interface CompetitorAggregatesDaily {
  * The visibility summary over whole UTC days, from the daily rollups
  * (00066, 00164): what the Visibility page reads for the same window, in two
  * calls that run together. Their cost follows the days in the window, not
- * the answers in it. The raw path reads the window's answers in four
- * queries at once, unpacking each answer's competitor list, and its row read
- * stops at PostgREST's 1,000 rows: on a brand with a month of answers it
- * outran Chat's 20 s read limit (2026-11-11).
+ * the answers in it.
  *
  *   • competitor_aggregates_daily → the answers, mentions, citations and
  *     legacy average, the prompts answered and appeared in, and each live
@@ -477,12 +430,25 @@ async function visibilitySummaryFromRollups(
   ]);
   if (aggRes.error) throw new Error(aggRes.error.message);
   if (aiVisRes.error) throw new Error(aiVisRes.error.message);
+  return visibilitySummaryOf(brand, aggRes.data, aiVisRes.data);
+}
 
-  const agg = (aggRes.data ?? {}) as CompetitorAggregatesDaily;
+/**
+ * The summary from competitor_aggregates(_daily) and ai_visibility_aggregates(_daily):
+ * the prompts answered and appeared in are the aggregate's, or the KPI card's
+ * pair when given.
+ */
+function visibilitySummaryOf(
+  brand: { id: string; name: string },
+  aggData: unknown,
+  aiVisData: unknown,
+  prompts?: { visiblePrompts: number; promptCount: number },
+): VisibilitySummary {
+  const agg = (aggData ?? {}) as CompetitorAggregatesPayload;
   const resultCount = Number(agg.brand_row_count ?? 0);
-  const visiblePrompts = Number(agg.brand_visible_prompts ?? 0);
-  const promptCount = Number(agg.brand_prompt_count ?? 0);
-  const { competitors: compScores, ...score } = foldAiVisibility(aiVisRes.data);
+  const visiblePrompts = prompts?.visiblePrompts ?? Number(agg.brand_visible_prompts ?? 0);
+  const promptCount = prompts?.promptCount ?? Number(agg.brand_prompt_count ?? 0);
+  const { competitors: compScores, ...score } = foldAiVisibility(aiVisData);
   const scoreById = new Map(compScores.map((c) => [c.id, c.score]));
   // The legacy averages divide by the brand's answers, competitors' too (#478).
   const average = (sum: number | string | null | undefined) =>
@@ -1055,8 +1021,15 @@ export interface ListPromptsParams {
   /**
    * Chat's lookup: the prompts whose text holds every word of this, in any
    * order and case (lookup.ts searchWords), whatever their topic or state.
+   * With asListed, the list's own search instead.
    */
   search?: string;
+  /**
+   * With search: the list as filtered (topic, active state), the prompts
+   * whose text holds every word, newest first: the page's search (Chat's
+   * as_listed, the maintainer's review of 2026-11-17), not a lookup.
+   */
+  asListed?: boolean;
 }
 
 const PROMPT_LIST_DEFAULT_LIMIT = 100;
@@ -1090,10 +1063,11 @@ export async function promptsPageFor(
   );
 
   const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
-  // A lookup (Chat's ids or search) reads every topic and state, its organization joined on the rows.
-  const lookup = params.ids !== undefined || params.search !== undefined;
+  // A lookup (Chat's ids or search) reads every topic and state, its organization joined on the
+  // rows; a search as listed (asListed) reads the list as filtered, with its words.
+  const lookup = params.ids !== undefined || (params.search !== undefined && !params.asListed);
   const words = searchWords(params.search);
-  if (lookup && (params.ids?.length === 0 || (params.search !== undefined && !words.length))) {
+  if (params.ids?.length === 0 || (params.search !== undefined && !words.length)) {
     return { rows: [], total: 0 };
   }
   const organizationId = auth.organizationId;
@@ -1118,6 +1092,8 @@ export async function promptsPageFor(
     if (typeof params.isActive === 'boolean') {
       query = query.eq('is_active', params.isActive);
     }
+    // The list's search (asListed): each word, escaped, as the lookup matches it.
+    for (const word of words) query = query.ilike('text', containsPattern(word));
     return query;
   };
   const { rows: data, total } = await pageRows(
@@ -1262,8 +1238,24 @@ export interface ListContentOpportunitiesParams {
   offset?: number;
   /** Chat's lookup: these opportunities only, by id (checked ids), in any status, archived too. */
   ids?: readonly string[];
-  /** Chat's lookup: the opportunities whose title holds every word of this, in any status, archived too. */
+  /**
+   * Chat's lookup: the opportunities whose title holds every word of this,
+   * in any status, archived too. With asListed, the list's own search instead.
+   */
   search?: string;
+  /**
+   * With search: the list as filtered (status, impact, type; archived set
+   * aside unless asked by status) and sorted, the opportunities whose title
+   * holds every word: the page's search (Chat's as_listed, the maintainer's
+   * review of 2026-11-17), not a lookup.
+   */
+  asListed?: boolean;
+  /**
+   * The Content page's Sort (lib/content/opportunity-list.ts), in its order:
+   * newest or oldest by when each was suggested, score by its score, then
+   * by id. Left out: highest score, newest on a tie (the MCP tool's order).
+   */
+  sort?: OpportunitySort;
 }
 
 /** A year in a search: Content shows a past year in a title as this one (refreshYears), so it isn't matched. */
@@ -1294,13 +1286,14 @@ export async function contentOpportunitiesPageFor(
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   const offset = Math.max(Math.trunc(params.offset ?? 0), 0);
-  // A lookup (Chat's ids or search) reads every status, archived too, its organization joined.
-  const lookup = params.ids !== undefined || params.search !== undefined;
+  // A lookup (Chat's ids or search) reads every status, archived too, its organization joined;
+  // a search as listed (asListed) reads the list as filtered and sorted, with its words.
+  const lookup = params.ids !== undefined || (params.search !== undefined && !params.asListed);
   const searched = searchWords(params.search);
   const words = searched.some((w) => !YEAR.test(w))
     ? searched.filter((w) => !YEAR.test(w))
     : searched;
-  if (lookup && (params.ids?.length === 0 || (params.search !== undefined && !words.length))) {
+  if (params.ids?.length === 0 || (params.search !== undefined && !words.length)) {
     return { rows: [], total: 0 };
   }
   const organizationId = auth.organizationId;
@@ -1326,12 +1319,23 @@ export async function contentOpportunitiesPageFor(
     query = params.status ? query.eq('status', params.status) : query.neq('status', 'archived');
     if (params.impact) query = query.eq('impact', params.impact);
     if (params.type) query = query.eq('type', params.type);
+    // The list's search (asListed): each word, escaped, as the lookup matches it.
+    for (const word of words) query = query.ilike('title', containsPattern(word));
     return query;
   };
-  const { rows: data, total } = await pageRows(
-    await matching()
+  // The Content page's sorts as its list orders them (server/src/routes/content.js), else the score's.
+  const sorted = () => {
+    const query = matching();
+    if (params.sort === 'score') return query.order('opportunity_score', { ascending: false });
+    if (params.sort === 'newest' || params.sort === 'oldest') {
+      return query.order('created_at', { ascending: params.sort === 'oldest' });
+    }
+    return query
       .order('opportunity_score', { ascending: false })
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false });
+  };
+  const { rows: data, total } = await pageRows(
+    await sorted()
       .order('id')
       .range(offset, offset + limit - 1),
     () => matching(true),
@@ -2363,6 +2367,18 @@ export interface ListCitationsParams {
   offset?: number;
   /** Restrict to owned / competitor / external citations. Default `all`. */
   sourceFilter?: CitationSourceFilter;
+  /**
+   * Chat's, when Sources came from the Citations page: beside the filtered
+   * lists, the citations of every source and their average per answer, as
+   * the page's cards count them (`all_sources_totals`), from the same scan.
+   */
+  allSourcesTotals?: boolean;
+}
+
+/** What the Citations page's cards count over every source, whatever Sources the table shows. */
+export interface AllSourcesTotals {
+  citations: number;
+  avg_citations_per_result: number;
 }
 
 export interface CitationsOverviewOutput {
@@ -2397,47 +2413,240 @@ export interface CitationsOverviewOutput {
     usage_pct: number;
     article_type: string | null;
   }>;
+  /**
+   * Only when the window held more answers than the bounded read takes
+   * (answers-read.ts): what the figures read from answers cover, in its note.
+   */
+  answers_cut?: AnswersCut;
+  /**
+   * Only with allSourcesTotals and a source filter: the citations of every
+   * source and their average per answer (the page's cards), beside the
+   * filtered lists and totals.
+   */
+  all_sources_totals?: AllSourcesTotals;
 }
 
 const CITATIONS_DEFAULT_LIMIT = 50;
 const CITATIONS_MAX_LIMIT = 200;
 
+/** A cited domain as the citations reads count it: a row of the Citations page's table. */
 interface CitedDomainAgg {
   domain: string;
   category: SourceCategory;
   totalCitations: number;
-  resultsCiting: Set<string>;
-  models: Set<string>;
-  articleTypeCounts: Map<string, number>;
+  /** Answers citing it. */
+  resultsCiting: number;
+  models: string[];
+  articleTypes: Array<{ type: string; count: number }>;
 }
+/** A cited page as the citations reads count it. */
 interface CitedUrlAgg {
   url: string;
   domain: string;
   category: SourceCategory;
   title: string;
   totalCitations: number;
-  resultsCiting: Set<string>;
-  models: Set<string>;
+  /** Answers citing it, of the answers read. */
+  resultsCiting: number;
+  models: string[];
   articleType: string | null;
 }
 
-/** Every cited domain and page of the brand's answers in a window, most cited first. */
+/** The cited domains and pages of the brand's answers in a window, most cited first. */
 interface CitationAggregates {
-  /** The answers read (chatgpt-shopping aside). */
+  /** The answers the domains and totals are counted over (chatgpt-shopping aside). */
   results: number;
   totalCitations: number;
+  /** Every source's citations, whatever the filter: the Citations page's cards. */
+  allSourcesCitations: number;
+  /** Answers read with a citation of the filter's sources. */
   resultsWithCitations: number;
   domains: CitedDomainAgg[];
+  /** From the answers read (readCitedAnswers): every answer of the window unless `cut`. */
   urls: CitedUrlAgg[];
-  /** Each answer's prompt, by the answer's id. */
+  /** The answers read: the pages' share of answers is of these. */
+  answersRead: number;
+  /** The answers read citing each domain and page, by domain and by page. */
+  citing: { domains: Map<string, Set<string>>; urls: Map<string, Set<string>> };
+  /** Each answer's prompt, by the answer's id, of the answers read. */
   promptOf: Map<string, string>;
+  /** Null when the answers read were every answer of the window; else what they cover. */
+  cut: AnswersCut | null;
+}
+
+/** citations_domains_daily's rows (00118): a domain over the window's daily rollups. */
+interface DomainDailyRow {
+  domain: string;
+  total_citations: number | string;
+  results_citing: number | string;
+  models: string[] | null;
+}
+
+/** One answer of the window, as the bounded read takes it. */
+interface CitedAnswerRow {
+  id: string;
+  prompt_id: string | null;
+  platform: string | null;
+  model_used: string | null;
+  created_at: string | null;
+  citations: Citation[] | null;
+}
+
+/** The same address however it is tracked: query, fragment and a trailing slash aside. */
+function citedUrlKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return url;
+  }
 }
 
 /**
- * The scan both citation reads share: the brand's answers in the window
- * and filters, each citation classified and counted by domain and by page.
- * Ownership-check first; the prompt_results scan only runs after the brand
- * belongs to the caller's org and access.
+ * The answers read, each citation classified and counted by domain and by
+ * page; with a source filter, only the citations it keeps (an answer counts
+ * toward results_with_citations when it cites one of them, #297), while
+ * every source's citations are counted beside them in the same pass.
+ */
+function aggregateCitedAnswers(
+  rows: readonly CitedAnswerRow[],
+  classifyCtx: Parameters<typeof classifyDomain>[1],
+  sourceFilter: CitationSourceFilter,
+) {
+  interface Counting {
+    total: number;
+    results: Set<string>;
+    models: Set<string>;
+  }
+  const domainMap = new Map<
+    string,
+    Counting & { category: SourceCategory; types: Map<string, number> }
+  >();
+  const urlMap = new Map<
+    string,
+    Counting & { domain: string; category: SourceCategory; title: string; type: string | null }
+  >();
+  const promptOf = new Map<string, string>();
+  let totalCitations = 0;
+  let allSourcesCitations = 0;
+  let resultsWithCitations = 0;
+  const hasSourceFilter = sourceFilter !== 'all';
+
+  for (const result of rows) {
+    const citations = Array.isArray(result.citations) ? result.citations : [];
+    if (citations.length === 0) continue;
+    if (result.prompt_id) promptOf.set(result.id, result.prompt_id);
+    const modelKey = result.model_used || result.platform || '';
+    let matchedInResult = false;
+    for (const cite of citations) {
+      const host = extractHostname(cite.url);
+      if (!host) continue;
+      allSourcesCitations += 1;
+      const category = classifyDomain(host, classifyCtx);
+      if (hasSourceFilter && !citationCategoryMatches(category, sourceFilter)) continue;
+      matchedInResult = true;
+      totalCitations += 1;
+
+      const domain = domainMap.get(host) ?? {
+        category,
+        total: 0,
+        results: new Set<string>(),
+        models: new Set<string>(),
+        types: new Map<string, number>(),
+      };
+      domain.total += 1;
+      domain.results.add(result.id);
+      if (modelKey) domain.models.add(modelKey);
+      const articleType = classifyArticleType(cite.url, cite.title);
+      if (articleType) domain.types.set(articleType, (domain.types.get(articleType) ?? 0) + 1);
+      domainMap.set(host, domain);
+
+      const key = citedUrlKey(cite.url);
+      const url = urlMap.get(key) ?? {
+        domain: host,
+        category,
+        title: cite.title || '',
+        total: 0,
+        results: new Set<string>(),
+        models: new Set<string>(),
+        type: articleType,
+      };
+      url.total += 1;
+      url.results.add(result.id);
+      if (modelKey) url.models.add(modelKey);
+      if (!url.title && cite.title) url.title = cite.title;
+      urlMap.set(key, url);
+    }
+    if (!hasSourceFilter || matchedInResult) resultsWithCitations += 1;
+  }
+
+  const byTotal = <T extends { totalCitations: number }>(a: T, b: T) =>
+    b.totalCitations - a.totalCitations;
+  return {
+    totalCitations,
+    allSourcesCitations,
+    resultsWithCitations,
+    domains: [...domainMap]
+      .map(
+        ([domain, agg]): CitedDomainAgg => ({
+          domain,
+          category: agg.category,
+          totalCitations: agg.total,
+          resultsCiting: agg.results.size,
+          models: [...agg.models].sort(),
+          articleTypes: [...agg.types]
+            .map(([type, count]) => ({ type, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 3),
+        }),
+      )
+      .sort(byTotal),
+    urls: [...urlMap]
+      .map(
+        ([url, agg]): CitedUrlAgg => ({
+          url,
+          domain: agg.domain,
+          category: agg.category,
+          title: agg.title,
+          totalCitations: agg.total,
+          resultsCiting: agg.results.size,
+          models: [...agg.models].sort(),
+          articleType: agg.type,
+        }),
+      )
+      .sort(byTotal),
+    citing: {
+      domains: new Map([...domainMap].map(([domain, agg]) => [domain, agg.results])),
+      urls: new Map([...urlMap].map(([url, agg]) => [url, agg.results])),
+    },
+    promptOf,
+  };
+}
+
+/**
+ * The citations reads' aggregates, as the Citations page counts them (the
+ * maintainer's review of 2026-11-16): over whole UTC days, the domains, the
+ * citations and the answers come from the page's own daily rollups (00118:
+ * citations_domains_daily, citations_window_stats_daily), which read the
+ * rollup tables by brand as security invoker, so the service role runs them
+ * once the brand is the caller's. Each domain is classified here, as the page
+ * classifies its rows, and the Sources filter keeps its own (the page filters
+ * its uncapped domain list the same way); every source's citations are
+ * counted beside them from the same rows.
+ *
+ * What no rollup the service role may read holds, the pages and the prompts
+ * citing them (citations_urls_daily and citation_url_occurrences check the
+ * person's brand access and answer the service role nothing), comes from one
+ * bounded read of the window's newest answers (answers-read.ts), never paged.
+ * A window that starts or ends inside a day, which only the raw functions
+ * answer (they refuse the service role too), is counted from that read
+ * alone. Either way `cut` says what the read covered when the window held
+ * more answers than it takes.
+ *
+ * Ownership-check first; nothing is read before the brand belongs to the
+ * caller's organization and access.
  */
 async function readCitationAggregates(
   auth: McpAuthContext,
@@ -2459,7 +2668,6 @@ async function readCitationAggregates(
     supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', params.brandId),
     supabaseAdmin.from('competitors').select('domain').eq('brand_id', params.brandId),
   ]);
-
   const brandDomains = (brandDomainRows ?? [])
     .map((r) => normalizeDomain((r as { domain: string }).domain))
     .filter(Boolean);
@@ -2467,189 +2675,162 @@ async function readCitationAggregates(
     .map((r) => normalizeDomain((r as { domain: string }).domain))
     .filter(Boolean);
   const classifyCtx = { brandDomains, competitorDomains };
+  const sourceFilter = params.sourceFilter ?? 'all';
 
-  // #155 — Citations summary is part of the Insights surface; chatgpt-shopping
-  // rows are isolated from these aggregations.
-  let query = supabaseAdmin
-    .from('prompt_results')
-    .select('id, prompt_id, platform, model_used, region, created_at, citations, citation_count')
-    .eq('brand_id', params.brandId)
-    .neq('platform', 'chatgpt-shopping');
-
-  if (params.dateFrom) query = query.gte('created_at', params.dateFrom);
-  const expandedDateTo = expandDateToEndOfDay(params.dateTo);
-  if (expandedDateTo) query = query.lte('created_at', expandedDateTo);
-  if (params.region) query = query.eq('region', params.region);
-  if (params.model) {
-    const list = params.model
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    query =
-      list.length > 1
-        ? query.in('model_used', list)
-        : query.eq('model_used', list[0] ?? params.model);
-  }
+  const models = params.model
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const modelList = models && models.length > 0 ? models : null;
+  let topicPromptIds: string[] | null = null;
   if (params.topicId) {
     const { data: topicPrompts } = await supabaseAdmin
       .from('prompts')
       .select('id')
       .eq('topic_id', params.topicId);
-    const topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
-    query = query.in(
+    topicPromptIds = ((topicPrompts ?? []) as { id: string }[]).map((p) => p.id);
+  }
+
+  const days = wholeDayWindow(params.dateFrom, params.dateTo);
+  // #155 — Citations summary is part of the Insights surface; chatgpt-shopping
+  // rows are isolated from these aggregations (the rollups leave them out too).
+  // One request, newest first: the window's answers, up to ANSWERS_READ_ROWS.
+  // Off the rollups it also counts them, for what the read covers.
+  const expandedDateTo = expandDateToEndOfDay(params.dateTo);
+  let answers = supabaseAdmin
+    .from('prompt_results')
+    .select('id, prompt_id, platform, model_used, created_at, citations', {
+      count: days ? undefined : 'exact',
+    })
+    .eq('brand_id', params.brandId)
+    .neq('platform', 'chatgpt-shopping');
+  if (params.dateFrom) answers = answers.gte('created_at', params.dateFrom);
+  if (expandedDateTo) answers = answers.lte('created_at', expandedDateTo);
+  if (params.region) answers = answers.eq('region', params.region);
+  if (modelList) {
+    answers =
+      modelList.length > 1
+        ? answers.in('model_used', modelList)
+        : answers.eq('model_used', modelList[0]);
+  }
+  if (topicPromptIds) {
+    answers = answers.in(
       'prompt_id',
       topicPromptIds.length > 0 ? topicPromptIds : ['00000000-0000-0000-0000-000000000000'],
     );
   }
+  const answersRead = answers
+    .order('created_at', { ascending: false })
+    .order('id')
+    .limit(ANSWERS_READ_ROWS);
 
-  const { data: rows, error } = await query;
-  if (error) throw new Error(error.message);
-
-  const results = (rows ?? []) as Array<{
-    id: string;
-    prompt_id: string | null;
-    platform: string | null;
-    model_used: string | null;
-    citations: Citation[] | null;
-  }>;
-
-  const domainMap = new Map<string, CitedDomainAgg>();
-  const urlMap = new Map<string, CitedUrlAgg>();
-  const promptOf = new Map<string, string>();
-  let totalCitations = 0;
-  let resultsWithCitations = 0;
-  const sourceFilter = params.sourceFilter ?? 'all';
-  const hasSourceFilter = sourceFilter !== 'all';
-
-  for (const result of results) {
-    const citations = Array.isArray(result.citations) ? result.citations : [];
-    if (citations.length === 0) continue;
-    if (result.prompt_id) promptOf.set(result.id, result.prompt_id);
-    const modelKey = result.model_used || result.platform || '';
-    // #297 — when a source_filter is set, a result only counts toward
-    // results_with_citations if it contributes at least one matching citation.
-    // With `all` (the default) we never call the matcher, so the aggregation is
-    // byte-identical to the pre-#297 output.
-    let matchedInResult = false;
-
-    for (const cite of citations) {
-      const host = extractHostname(cite.url);
-      if (!host) continue;
-
-      const category = classifyDomain(host, classifyCtx);
-      if (hasSourceFilter && !citationCategoryMatches(category, sourceFilter)) continue;
-      matchedInResult = true;
-      totalCitations += 1;
-
-      const existingDomain = domainMap.get(host) ?? {
-        domain: host,
-        category,
-        totalCitations: 0,
-        resultsCiting: new Set<string>(),
-        models: new Set<string>(),
-        articleTypeCounts: new Map<string, number>(),
-      };
-      existingDomain.totalCitations += 1;
-      existingDomain.resultsCiting.add(result.id);
-      if (modelKey) existingDomain.models.add(modelKey);
-      const articleType = classifyArticleType(cite.url, cite.title);
-      if (articleType) {
-        existingDomain.articleTypeCounts.set(
-          articleType,
-          (existingDomain.articleTypeCounts.get(articleType) ?? 0) + 1,
-        );
-      }
-      domainMap.set(host, existingDomain);
-
-      // De-dupe URLs by stripping query/fragment + trailing slash so the same
-      // article cited with different tracking params still aggregates.
-      let normalizedUrl = cite.url;
-      try {
-        const parsed = new URL(cite.url);
-        parsed.search = '';
-        parsed.hash = '';
-        normalizedUrl = parsed.toString().replace(/\/$/, '');
-      } catch {
-        // leave as-is
-      }
-      const existingUrl = urlMap.get(normalizedUrl) ?? {
-        url: normalizedUrl,
-        domain: host,
-        category,
-        title: cite.title || '',
-        totalCitations: 0,
-        resultsCiting: new Set<string>(),
-        models: new Set<string>(),
-        articleType,
-      };
-      existingUrl.totalCitations += 1;
-      existingUrl.resultsCiting.add(result.id);
-      if (modelKey) existingUrl.models.add(modelKey);
-      if (!existingUrl.title && cite.title) existingUrl.title = cite.title;
-      urlMap.set(normalizedUrl, existingUrl);
-    }
-    // `all`: count every result that had citations (original behavior).
-    // Filtered: only results that contributed a matching citation.
-    if (!hasSourceFilter || matchedInResult) resultsWithCitations += 1;
+  if (!days) {
+    // Inside a day: the raw functions refuse the service role, so the answers read are the counts.
+    const { data, error, count } = await answersRead;
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as CitedAnswerRow[];
+    const read = aggregateCitedAnswers(rows, classifyCtx, sourceFilter);
+    return {
+      ...read,
+      results: rows.length,
+      answersRead: rows.length,
+      cut: cutOf(rows, count ?? null),
+    };
   }
 
+  // The page's daily functions, with its arguments (actions/citations.ts dailyArgs).
+  const daily = {
+    p_brand_id: params.brandId,
+    p_day_from: days.dayFrom,
+    p_day_to: days.dayTo,
+    p_models: modelList ?? undefined,
+    p_regions: params.region ? [params.region] : undefined,
+    p_topic_ids: params.topicId ? [params.topicId] : undefined,
+  };
+  const [domainRes, statsRes, answerRes] = await Promise.all([
+    supabaseAdmin.rpc('citations_domains_daily', daily),
+    supabaseAdmin.rpc('citations_window_stats_daily', daily),
+    answersRead,
+  ]);
+  if (domainRes.error) throw new Error(domainRes.error.message);
+  if (statsRes.error) throw new Error(statsRes.error.message);
+  if (answerRes.error) throw new Error(answerRes.error.message);
+
+  const stats = (statsRes.data as { results: number | string }[] | null)?.[0];
+  const results = Number(stats?.results ?? 0);
+  let allSourcesCitations = 0;
+  const domains: CitedDomainAgg[] = [];
+  for (const row of (domainRes.data as DomainDailyRow[] | null) ?? []) {
+    const totalCitations = Number(row.total_citations);
+    allSourcesCitations += totalCitations;
+    const category = classifyDomain(row.domain, classifyCtx);
+    if (sourceFilter !== 'all' && !citationCategoryMatches(category, sourceFilter)) continue;
+    domains.push({
+      domain: row.domain,
+      category,
+      totalCitations,
+      resultsCiting: Number(row.results_citing),
+      models: (row.models ?? []).slice().sort(),
+      // As on the page: its rows carry no article types (CitationDomainRow).
+      articleTypes: [],
+    });
+  }
+  const rows = (answerRes.data ?? []) as CitedAnswerRow[];
+  const read = aggregateCitedAnswers(rows, classifyCtx, sourceFilter);
   return {
-    results: results.length,
-    totalCitations,
-    resultsWithCitations,
-    domains: Array.from(domainMap.values()).sort((a, b) => b.totalCitations - a.totalCitations),
-    urls: Array.from(urlMap.values()).sort((a, b) => b.totalCitations - a.totalCitations),
-    promptOf,
+    results,
+    totalCitations: domains.reduce((sum, d) => sum + d.totalCitations, 0),
+    allSourcesCitations,
+    resultsWithCitations: read.resultsWithCitations,
+    // In the page's order: most cited first, as its function returns them.
+    domains,
+    urls: read.urls,
+    answersRead: rows.length,
+    citing: read.citing,
+    promptOf: read.promptOf,
+    cut: cutOf(rows, results, citedPagesCutNote),
   };
 }
 
-/** A share of the answers read, in percent to one decimal. */
+/** A share of the answers counted, in percent to one decimal. */
 const usagePct = (citing: number, results: number) =>
   results > 0 ? Math.round((citing / results) * 1000) / 10 : 0;
 
 /** A cited domain as the citations reads give it. */
 function citedDomainRow(agg: CitedDomainAgg, results: number) {
-  const resultsCiting = agg.resultsCiting.size;
-  const articleTypes = Array.from(agg.articleTypeCounts.entries())
-    .map(([type, count]) => ({ type, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 3);
   return {
     domain: agg.domain,
     category: agg.category,
     total_citations: agg.totalCitations,
-    results_citing: resultsCiting,
-    usage_pct: usagePct(resultsCiting, results),
-    models: Array.from(agg.models).sort(),
-    article_types: articleTypes,
+    results_citing: agg.resultsCiting,
+    usage_pct: usagePct(agg.resultsCiting, results),
+    models: agg.models,
+    article_types: agg.articleTypes,
   };
 }
 
 /** A cited page as the citations reads give it. */
 function citedUrlRow(agg: CitedUrlAgg, results: number) {
-  const resultsCiting = agg.resultsCiting.size;
   return {
     url: agg.url,
     domain: agg.domain,
     category: agg.category,
     title: agg.title,
     total_citations: agg.totalCitations,
-    results_citing: resultsCiting,
-    usage_pct: usagePct(resultsCiting, results),
+    results_citing: agg.resultsCiting,
+    usage_pct: usagePct(agg.resultsCiting, results),
     article_type: agg.articleType,
   };
 }
 
 /**
  * Return the URLs and domains AI engines cite alongside a brand, classified by
- * source type (news / review / owned / social / forum). Ports the JS-side
- * aggregation from `getCitationsOverview` in `actions/citations.ts` — citations
- * are stored as JSONB inside `prompt_results.citations` and each URL needs the
- * `classifyDomain` / `classifyArticleType` helpers, so this can't be folded
- * into a Postgres aggregate the way the competitor / SoV surfaces were in #114.
+ * source type (news / review / owned / social / forum), as the Citations page
+ * counts them (readCitationAggregates): its daily rollups for the domains and
+ * totals, one bounded read of the newest answers for the pages.
  *
- * Ownership-check first; the prompt_results scan only runs after the brand
- * belongs to the caller's org.
+ * Ownership-check first; nothing is read before the brand belongs to the
+ * caller's org.
  */
 export async function listCitationsFor(
   auth: McpAuthContext,
@@ -2670,7 +2851,7 @@ export async function listCitationsFor(
   const allUrls = agg.urls;
   const topUrls = allUrls
     .slice(offset, offset + limit)
-    .map((url) => citedUrlRow(url, totalResults));
+    .map((url) => citedUrlRow(url, agg.answersRead));
 
   // Source breakdown counts each *domain* once (matches the existing UI),
   // not each citation, so news/review/owned/social/forum percentages reflect
@@ -2689,18 +2870,28 @@ export async function listCitationsFor(
     };
   }).filter((b) => b.count > 0);
 
+  const perResult = (citations: number) =>
+    totalResults > 0 ? Math.round((citations / totalResults) * 10) / 10 : 0;
   return {
     totals: {
       domains: totalDomains,
       urls: allUrls.length,
       citations: agg.totalCitations,
       results_with_citations: agg.resultsWithCitations,
-      avg_citations_per_result:
-        totalResults > 0 ? Math.round((agg.totalCitations / totalResults) * 10) / 10 : 0,
+      avg_citations_per_result: perResult(agg.totalCitations),
     },
     source_type_breakdown: sourceTypeBreakdown,
     top_domains: topDomains,
     top_urls: topUrls,
+    ...(agg.cut ? { answers_cut: agg.cut } : {}),
+    ...(params.allSourcesTotals && (params.sourceFilter ?? 'all') !== 'all'
+      ? {
+          all_sources_totals: {
+            citations: agg.allSourcesCitations,
+            avg_citations_per_result: perResult(agg.allSourcesCitations),
+          },
+        }
+      : {}),
   };
 }
 
@@ -2718,19 +2909,23 @@ type CitedUrlRow = ReturnType<typeof citedUrlRow>;
 export type CitationLookup = CitedLookup<
   CitedDomainRow & { prompts: CitingPrompt[]; prompts_total: number },
   CitedUrlRow & { prompts: CitingPrompt[]; prompts_total: number }
-> & { period: { date_from: string | null; date_to: string | null } };
+> & {
+  period: { date_from: string | null; date_to: string | null };
+  /** Only when the window held more answers than the bounded read takes (answers-read.ts). */
+  answers_cut?: AnswersCut;
+};
 
 /**
  * The cited domains and pages a person named (the Citations page's rows,
  * the citation URL page's address), for Chat (the owner's plan of
- * 2026-11-16, item 2): from the same scan as listCitationsFor, over the same
+ * 2026-11-16, item 2): from the same read as listCitationsFor, over the same
  * window, platforms, region and topic, every source type (sourceFilter and
  * the page don't apply). A domain finds itself and its subdomains, each with
  * its most cited pages; an address finds its page however it is written
  * (scheme, "www." and a trailing slash aside). Each comes with the prompts
- * whose answers cite it, most answers first. What isn't cited in the window
- * is in not_found. Null for a brand outside the caller's organization or
- * access.
+ * whose answers cite it, most answers first, of the answers read. What isn't
+ * cited in the window is in not_found. Null for a brand outside the caller's
+ * organization or access.
  */
 export async function lookUpCitationsFor(
   auth: McpAuthContext,
@@ -2741,13 +2936,11 @@ export async function lookUpCitationsFor(
 ): Promise<CitationLookup | null> {
   const agg = await readCitationAggregates(auth, { ...params, sourceFilter: 'all' });
   if (!agg) return null;
-  const domainAggs = new Map(agg.domains.map((d) => [d.domain, d]));
-  const urlAggs = new Map(agg.urls.map((u) => [u.url, u]));
   const found = lookUpCited(
     { domains: params.domains, urls: params.urls },
     {
       domains: agg.domains.map((d) => citedDomainRow(d, agg.results)),
-      urls: agg.urls.map((u) => citedUrlRow(u, agg.results)),
+      urls: agg.urls.map((u) => citedUrlRow(u, agg.answersRead)),
     },
     periodWords(params.dateFrom, params.dateTo),
   );
@@ -2762,8 +2955,8 @@ export async function lookUpCitationsFor(
     const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     return { top: ranked.slice(0, CITED_TOP), total: ranked.length };
   };
-  const domainPrompts = found.domains.map((d) => citing(domainAggs.get(d.domain)?.resultsCiting));
-  const urlPrompts = found.urls.map((u) => citing(urlAggs.get(u.url)?.resultsCiting));
+  const domainPrompts = found.domains.map((d) => citing(agg.citing.domains.get(d.domain)));
+  const urlPrompts = found.urls.map((u) => citing(agg.citing.urls.get(u.url)));
   const promptIds = [
     ...new Set([...domainPrompts, ...urlPrompts].flatMap((p) => p.top.map(([id]) => id))),
   ];
@@ -2791,6 +2984,7 @@ export async function lookUpCitationsFor(
     period: { date_from: params.dateFrom ?? null, date_to: params.dateTo ?? null },
     domains: found.domains.map((d, i) => ({ ...d, ...withPrompts(domainPrompts[i]) })),
     urls: found.urls.map((u, i) => ({ ...u, ...withPrompts(urlPrompts[i]) })),
+    ...(agg.cut ? { note: `${found.note} ${agg.cut.note}`, answers_cut: agg.cut } : {}),
   };
 }
 
@@ -3367,6 +3561,12 @@ export interface ProductVisibilityOutput {
   average_rating: number | null;
   total_reviews: number | null;
   merchant_domains: Array<{ domain: string; count: number }>;
+  /**
+   * Only when it appeared more often than the bounded read takes
+   * (answers-read.ts): total_appearances counts every one; the breakdowns,
+   * ratings and merchants cover its newest appearances, from counted_from on.
+   */
+  answers_cut?: AnswersCut;
 }
 
 /** One product's visibility: NOT_IN_PLAN on a plan without shopping analytics (Starter). */
@@ -3386,19 +3586,36 @@ export async function getProductVisibility(
   if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
   if (!(await planIncludes(auth.organizationId, 'shopping_analytics'))) return NOT_IN_PLAN;
 
-  const { data: cards, error } = await supabaseAdmin
+  // The Products page has no aggregate of a product's appearances: its
+  // product page reads the cards themselves. One bounded request here, never
+  // paged (answers-read.ts): every appearance counted, the newest read.
+  const { data, error, count } = await supabaseAdmin
     .from('prompt_result_shopping_cards')
     .select(
-      'platform, region, created_at, price_amount, price_currency, rating, review_count, merchant_domain',
+      'id, platform, region, created_at, price_amount, price_currency, rating, review_count, merchant_domain',
+      { count: 'exact' },
     )
     .eq('brand_id', params.brandId)
     .eq('product_title', params.productTitle)
-    .order('created_at', { ascending: false });
-
+    .order('created_at', { ascending: false })
+    .order('id')
+    .limit(ANSWERS_READ_ROWS);
   if (error) throw new Error(error.message);
-  if (!cards || cards.length === 0) return null;
+  const cards = (data ?? []) as Array<{
+    id: string;
+    platform: string | null;
+    region: string | null;
+    created_at: string;
+    price_amount: number | null;
+    price_currency: string | null;
+    rating: number | null;
+    review_count: number | null;
+    merchant_domain: string | null;
+  }>;
+  const cut = cutOf(cards, count ?? null, productCutNote);
+  if (cards.length === 0) return null;
 
-  const total_appearances = cards.length;
+  const total_appearances = Math.max(count ?? 0, cards.length);
 
   const platformMap = new Map<string, number>();
   const regionMap = new Map<string, number>();
@@ -3463,6 +3680,7 @@ export async function getProductVisibility(
     average_rating,
     total_reviews: totalReviews,
     merchant_domains,
+    ...(cut ? { answers_cut: cut } : {}),
   };
 }
 
@@ -3473,7 +3691,12 @@ export interface PromptPerformanceParams {
   dateFrom?: string;
   dateTo?: string;
   topicId?: string;
-  sortBy?: 'visibility' | 'mentions' | 'citations' | 'appearances';
+  /**
+   * `visibility`: the average answer score (avg_visibility, the MCP tool's
+   * default); `ai_visibility`: the AI Visibility Score, the Prompts page's
+   * Visibility column and its order (needs withScore; Chat's default).
+   */
+  sortBy?: 'visibility' | 'ai_visibility' | 'mentions' | 'citations' | 'appearances';
   order?: 'desc' | 'asc';
   limit?: number;
   /** Prompts before this page, in the same order (Chat's pages). */
@@ -3485,6 +3708,11 @@ export interface PromptPerformanceParams {
    * whatever its topic; no page, and topicId doesn't apply.
    */
   promptIds?: readonly string[];
+  /**
+   * Also each prompt's AI Visibility Score and Coverage, as the Prompts page
+   * shows them (prompt-scores.ts): Chat's; the MCP tool's output stays as it was.
+   */
+  withScore?: boolean;
 }
 
 export interface PromptPerformanceOutput {
@@ -3501,6 +3729,10 @@ export interface PromptPerformanceOutput {
     total_mentions: number;
     total_citations: number;
     avg_competitor_score: number;
+    /** The Prompts page's Visibility: the AI Visibility Score (withScore only; null: no answers). */
+    ai_visibility_score?: number | null;
+    /** The Prompts page's Coverage: visible runs of runs, in percent (withScore only). */
+    coverage_pct?: number;
   }>;
 }
 
@@ -3553,6 +3785,18 @@ export async function getPromptPerformanceFor(
 
   if (error) throw new Error(error.message);
 
+  // The Prompts page's Visibility and Coverage over the same window and region: its own
+  // function, which counts every platform's answers as the page does (prompt-scores.ts).
+  const scored = params.withScore
+    ? await (
+        await import('./prompt-scores')
+      ).promptScoresFor(params.brandId, {
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo,
+        region: params.region,
+      })
+    : null;
+
   const named = params.promptIds ? new Set(params.promptIds) : null;
   const raw = ((data as unknown as PromptPerformanceRpcResult[]) ?? []).filter(
     (item) => !named || named.has(item.prompt_id),
@@ -3567,6 +3811,7 @@ export async function getPromptPerformanceFor(
         ? Math.round(Number(item.comp_sum_visibility) / Number(item.comp_count))
         : 0;
 
+    const score = scored?.get(item.prompt_id);
     return {
       prompt_id: item.prompt_id,
       prompt_text: item.prompt_text,
@@ -3576,6 +3821,9 @@ export async function getPromptPerformanceFor(
       total_mentions: Number(item.total_mentions),
       total_citations: Number(item.total_citations),
       avg_competitor_score,
+      ...(scored
+        ? { ai_visibility_score: score?.score ?? null, coverage_pct: score?.coverage_pct ?? 0 }
+        : {}),
     };
   });
 
@@ -3585,6 +3833,17 @@ export async function getPromptPerformanceFor(
   const isAsc = order === 'asc';
 
   prompts.sort((a, b) => {
+    if (sortBy === 'ai_visibility') {
+      // The Prompts table's own comparator on its Visibility column (prompt-sort.ts): a
+      // prompt the page scores with no score counts as 0, one it doesn't score sorts last.
+      const byScore = comparePromptSortRows(
+        'visibility',
+        promptSortRowOf(scored?.get(a.prompt_id)),
+        promptSortRowOf(scored?.get(b.prompt_id)),
+        order,
+      );
+      return byScore || a.prompt_id.localeCompare(b.prompt_id);
+    }
     let valA = 0;
     let valB = 0;
     if (sortBy === 'visibility') {
@@ -3626,6 +3885,16 @@ export async function getPromptPerformanceFor(
     },
     total,
     prompts,
+  };
+}
+
+/** A prompt as the Prompts table's comparator reads its Visibility: its score, or none when unscored. */
+function promptSortRowOf(score: { score: number | null } | undefined): PromptSortRow {
+  return {
+    createdAt: '',
+    visibility: score
+      ? { score: score.score, totalMentions: 0, totalCitations: 0, runs: 0, lastRunAt: '' }
+      : undefined,
   };
 }
 

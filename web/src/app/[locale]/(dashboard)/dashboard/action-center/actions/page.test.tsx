@@ -395,10 +395,61 @@ describe('what Chat’s side panel sees (W1-08)', () => {
       referenceables: [{ type: 'task', id: action.id }],
     });
     expect(page.suggestions).toEqual(expect.arrayContaining(['actionsImpact', 'actionsWeek']));
+    // And its view (the owner's plan, item 8): the default sort and the actions in view by code.
+    expect(page.view).toEqual({
+      sort: { key: 'updated', dir: 'desc' },
+      rows: [{ ref: 'AC-35', label: expect.any(String) }],
+      total: 1,
+    });
     // Leaving the page takes it back.
     act(() => root.unmount());
     expect(setPage).toHaveBeenLastCalledWith(null);
     root = createRoot(container);
+  });
+
+  it('tells the panel the sort and search picked, and the rows on screen in that order (item 8)', async () => {
+    const numbered = (n: number, priorityScore: number): ActionItem => ({
+      ...action,
+      id: `a${n}`,
+      actionNo: n,
+      brandNo: n,
+      priorityScore,
+    });
+    getActions.mockResolvedValue([numbered(3, 40), numbered(7, 95), numbered(12, 60)]);
+    const setPage = vi.fn();
+    const renderWithPanel = async () => {
+      act(() => root.unmount());
+      root = createRoot(container);
+      await act(async () =>
+        root.render(
+          <ChatPageSetterContext.Provider value={setPage}>
+            <UpgradeDialogContext.Provider
+              value={{ isLocked: false, reason: 'ended', adminName: null, openUpgrade }}
+            >
+              <ActionCenterActionsPage />
+            </UpgradeDialogContext.Provider>
+          </ChatPageSetterContext.Provider>,
+        ),
+      );
+      return setPage.mock.lastCall![0].view;
+    };
+    window.history.replaceState(null, '', '/?sort=priority');
+    const sorted = await renderWithPanel();
+    expect(sorted).toMatchObject({ sort: { key: 'priority', dir: 'desc' }, total: 3 });
+    // By the code the list shows (the brand's number), in the list's order.
+    expect(sorted.rows.map((row: { ref: string }) => row.ref)).toEqual(['AC-07', 'AC-12', 'AC-03']);
+    // A search that finds none: its words, no rows, and how many match.
+    window.history.replaceState(null, '', '/?sort=priority_asc&q=nothing-like-this');
+    expect(await renderWithPanel()).toEqual({
+      sort: { key: 'priority', dir: 'asc' },
+      search: 'nothing-like-this',
+      rows: [],
+      total: 0,
+    });
+    // Before the list is read: no rows and no count yet.
+    getActions.mockReturnValue(new Promise(() => {}));
+    window.history.replaceState(null, '', '/?sort=due_date');
+    expect(await renderWithPanel()).toEqual({ sort: { key: 'due_date', dir: 'asc' } });
   });
 
   it('asks how to finish the first of the Top actions, whatever order the list came in', async () => {

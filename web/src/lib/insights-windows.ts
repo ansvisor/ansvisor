@@ -71,6 +71,66 @@ function wholeDayBound(value: string | null | undefined, side: 'from' | 'to'): s
   return side === 'to' && intoDay >= DAY_MS - 1000 ? day : null;
 }
 
+/**
+ * The whole UTC days a date range touches, for the daily rollups: a bound
+ * inside a day widens the window to that whole day (a lower one to the day's
+ * start, an upper one to its end), so the days cover every answer asked
+ * for. A range of whole days gives wholeDayWindow's days. Null when a bound
+ * isn't a date or a time.
+ */
+export function coveringDayWindow(
+  dateFrom?: string | null,
+  dateTo?: string | null,
+): DayWindow | null {
+  const from = coveringDayBound(dateFrom, 'from');
+  const to = coveringDayBound(dateTo, 'to');
+  if (from === null || to === null) return null;
+  return { ...(from ? { dayFrom: from } : {}), ...(to ? { dayTo: to } : {}) };
+}
+
+/** A bound's whole day, widened: '' when absent, null when it can't be read. */
+function coveringDayBound(value: string | null | undefined, side: 'from' | 'to'): string | null {
+  const whole = wholeDayBound(value, side);
+  if (whole !== null) return whole;
+  const at = boundAt(value, side);
+  return typeof at === 'number' ? new Date(at).toISOString().slice(0, 10) : null;
+}
+
+/**
+ * A bound's instant: a bare 'YYYY-MM-DD' at its day's first instant (a lower
+ * bound) or last millisecond (an upper one, as expandDateToEndOfDay reads
+ * it); a timestamp without a zone is UTC. Undefined when absent, null when
+ * it isn't a date or a time.
+ */
+function boundAt(value: string | null | undefined, side: 'from' | 'to'): number | null | undefined {
+  const text = value?.trim();
+  if (!text) return undefined;
+  if (BARE_DAY.test(text)) {
+    const start = Date.parse(`${text}T00:00:00Z`);
+    if (Number.isNaN(start)) return null;
+    return side === 'from' ? start : start + DAY_MS - 1;
+  }
+  const at = Date.parse(HAS_ZONE.test(text) ? text : `${text}Z`);
+  return Number.isNaN(at) ? null : at;
+}
+
+/**
+ * How long a date range holds answers for, in ms: from its lower bound to
+ * its upper one or `now`, whichever comes first (no answer is later than
+ * now), at least 0. Null when its lower bound is open or a bound can't be
+ * read. What a read over the raw rows costs follows it.
+ */
+export function answeredSpanMs(
+  dateFrom?: string | null,
+  dateTo?: string | null,
+  now: number = Date.now(),
+): number | null {
+  const from = boundAt(dateFrom, 'from');
+  const to = boundAt(dateTo, 'to');
+  if (typeof from !== 'number' || to === null) return null;
+  return Math.max(0, Math.min(to ?? now, now) - from);
+}
+
 export function utcToday(): string {
   return new Date().toISOString().slice(0, 10);
 }

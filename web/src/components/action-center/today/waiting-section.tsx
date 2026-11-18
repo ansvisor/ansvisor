@@ -54,6 +54,7 @@ export function WaitingSection({
   visit,
   focus,
   onSummary,
+  onRows,
 }: {
   brandId: string;
   /** The part's read, started with Today's others; null until the day is known. */
@@ -62,6 +63,8 @@ export function WaitingSection({
   /** Today's focus as read, for "A good day to finish one". */
   focus: FocusCard | null;
   onSummary: (count: number | null) => void;
+  /** The rows listed, once read (null till then): Chat's side panel sees them. */
+  onRows?: (rows: WaitingRow[] | null) => void;
 }) {
   const t = useTranslations('actionCenter.today.waiting');
   const chatOn = useChatAgentic();
@@ -101,6 +104,11 @@ export function WaitingSection({
   useEffect(() => {
     onSummary(count);
   }, [count, onSummary]);
+  // By value: the rows are built anew whenever the menu's sections are read again.
+  const rowsKey = rows ? JSON.stringify(rows) : null;
+  useEffect(() => {
+    onRows?.(rowsKey ? (JSON.parse(rowsKey) as WaitingRow[]) : null);
+  }, [rowsKey, onRows]);
 
   if (failed) return null;
   return (

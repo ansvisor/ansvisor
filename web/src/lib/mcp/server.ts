@@ -312,14 +312,22 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         'totals.visiblePrompts / totals.promptCount. totals.avgVisibility and the competitors’ ' +
         'avgVisibility are DEPRECATED legacy intensity averages — prefer each competitor’s ' +
         '`score`, which shares the brand’s denominator. ' +
-        'Use this for "how is my brand doing" / "what changed" style questions.',
+        'Use this for "how is my brand doing" / "what changed" style questions. ' +
+        'A period that starts or ends inside a day and is longer than a day is read over the ' +
+        'whole UTC days it touches, as the Visibility page reads a period: the result then ' +
+        'has roundedToDays and a note saying so. A period of a day or less is read to the minute.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
           .string()
           .optional()
-          .describe('ISO timestamp (inclusive) lower bound, e.g. 2026-05-01T00:00:00Z.'),
-        date_to: z.string().optional().describe('ISO timestamp (inclusive) upper bound.'),
+          .describe(
+            'A day (2026-05-01) or an ISO timestamp (inclusive) lower bound, e.g. 2026-05-01T00:00:00Z.',
+          ),
+        date_to: z
+          .string()
+          .optional()
+          .describe('A day (its end) or an ISO timestamp (inclusive) upper bound.'),
         model: z
           .string()
           .optional()

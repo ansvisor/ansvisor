@@ -1,4 +1,5 @@
 import { dashboardNav, type NavGroup } from '@/config/dashboard';
+import type { ChatPageView } from './page-view';
 import type { ChatReference } from './references';
 
 /**
@@ -29,6 +30,12 @@ export interface ChatPageContext {
   suggestions?: string[];
   /** What on the page can be asked about: first in the @ menu (CHAT-02 item 16). */
   referenceables?: ChatReference[];
+  /**
+   * What else it shows (the owner's plan of 2026-11-16, item 8): its tab,
+   * sort and search, the rows on screen and its list's total. Sent with the
+   * message, never shown as chips; the side panel adds the URL's state.
+   */
+  view?: ChatPageView;
 }
 
 /** A context chip: the composer's ComposerChip, with the value the run reads. */

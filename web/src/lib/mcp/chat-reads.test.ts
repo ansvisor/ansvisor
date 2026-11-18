@@ -407,6 +407,52 @@ describe('Overview, KPIs and Getting started', () => {
       data_as_of: '2026-10-29T04:00:00Z',
     });
     expect(kpis?.kpis[0]).not.toHaveProperty('trend');
+    // Each KPI over its own timeframe without a period; over the page's days with one (step 9).
+    expect(mocks.getKpiSnapshots).toHaveBeenLastCalledWith(BRAND, undefined);
+    expect(kpis).not.toHaveProperty('period');
+    const ranged = await getActionCenterKpisFor(auth(), {
+      brandId: BRAND,
+      dateFrom: '2026-10-18',
+      dateTo: '2026-11-16T23:59:59.999Z',
+    });
+    expect(mocks.getKpiSnapshots).toHaveBeenLastCalledWith(BRAND, {
+      dayFrom: '2026-10-18',
+      dayTo: '2026-11-16',
+    });
+    expect(ranged).toMatchObject({ period: { from: '2026-10-18', to: '2026-11-16' } });
+    // A day that isn't one, or only one end: no period.
+    await getActionCenterKpisFor(auth(), { brandId: BRAND, dateFrom: '2026-10-18,x' });
+    expect(mocks.getKpiSnapshots).toHaveBeenLastCalledWith(BRAND, undefined);
+    expect(ranged).not.toHaveProperty('note');
+
+    // At most a year (the maintainer's review of 2026-11-17): ten years keep their last 365 days.
+    const decade = await getActionCenterKpisFor(auth(), {
+      brandId: BRAND,
+      dateFrom: '2016-11-17',
+      dateTo: '2026-11-16',
+    });
+    expect(mocks.getKpiSnapshots).toHaveBeenLastCalledWith(BRAND, {
+      dayFrom: '2025-11-17',
+      dayTo: '2026-11-16',
+    });
+    expect(decade).toMatchObject({ period: { from: '2025-11-17', to: '2026-11-16' } });
+    expect(decade?.note).toBe(
+      'The period asked, 2016-11-17 to 2026-11-16, is longer than 365 days, the most the KPIs read: they are over its last 365 days, 2025-11-17 to 2026-11-16.',
+    );
+    // 90 days, and exactly 365, as asked.
+    for (const dateFrom of ['2026-08-19', '2025-11-17']) {
+      const kept = await getActionCenterKpisFor(auth(), {
+        brandId: BRAND,
+        dateFrom,
+        dateTo: '2026-11-16',
+      });
+      expect(mocks.getKpiSnapshots).toHaveBeenLastCalledWith(BRAND, {
+        dayFrom: dateFrom,
+        dayTo: '2026-11-16',
+      });
+      expect(kept).toMatchObject({ period: { from: dateFrom, to: '2026-11-16' } });
+      expect(kept).not.toHaveProperty('note');
+    }
 
     mocks.getGettingStarted.mockResolvedValue({
       active: true,

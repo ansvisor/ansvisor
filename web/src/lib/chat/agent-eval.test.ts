@@ -347,6 +347,7 @@ vi.mock('./registry/tools', async (importOriginal) => {
                 tool.name,
                 (input ?? {}) as Record<string, unknown>,
                 fakes.run?.workspace,
+                { allSourcesTotals: ctx.allSourcesTotals },
               );
           fakes.run?.reads.push(tool.name);
           fakes.run?.readInputs.push((input ?? {}) as Record<string, unknown>);
@@ -934,6 +935,17 @@ async function runScenario(scenario: AgentEvalScenario): Promise<EvalResult> {
       message: scenario.message ?? '',
       brandId: BRAND,
       mode: scenario.mode,
+      // Asked beside a page: the side panel's context, as it posts it.
+      ...(scenario.page
+        ? {
+            origin: 'panel' as const,
+            context: {
+              route: scenario.page.route,
+              chips: [...scenario.page.chips],
+              ...(scenario.page.view ? { view: scenario.page.view } : {}),
+            },
+          }
+        : {}),
     });
     if (!startedRun.ok) throw new Error(`${scenario.id}: not started: ${startedRun.code}`);
     chatRunId = startedRun.runId;
@@ -1055,6 +1067,7 @@ function scripted(script: Step[]) {
     phases: 'single',
     pick: () => choice,
   } satisfies ChatModels);
+  return model;
 }
 
 const REPORT =
@@ -1480,6 +1493,364 @@ describe('the agents’ test set harness, on a scripted model', () => {
       ).toMatchObject({ must: true, ok: true });
     }
     expect(result.passed).toBe(true);
+  });
+
+  it("reads Citations' top domains over the page's 24 hours, on ChatGPT and Brand sources", async () => {
+    const scenario = skillOf('citations-page-scope');
+    scripted([
+      calls(toolCall('r1', 'list_citations', { brand_id: BRAND })),
+      text(
+        'Last 24 hours, ChatGPT, as on the page: citation counts for all sources, lists for Brand sources. AI answers cited you 418 times in all. Your top cited pages are the subscriptions page with 31 citations, the freshness guide with 26 and the subscriptions blog post with 21.',
+      ),
+    ]);
+    const result = await runScenario(scenario);
+    // No range card: the page's range is read, and kept as nobody's default.
+    expect(result.run.questions).toBe(0);
+    expect(db.tables.chat_user_prefs ?? []).toEqual([]);
+    // One read: the lists on Brand sources, every source's totals beside them from the same scan.
+    expect(result.run.reads).toEqual(['list_citations']);
+    const [filtered] = result.run.readInputs;
+    expect(filtered).toMatchObject({ model: 'chatgpt-web', source_filter: 'owned' });
+    expect(JSON.parse(result.run.readValues[0])).toMatchObject({
+      all_sources_totals: { citations: 418 },
+    });
+    expect(Date.now() - Date.parse(String(filtered.date_from))).toBeLessThanOrEqual(
+      24 * 60 * 60 * 1000 + 60_000,
+    );
+    for (const name of [
+      "reads with the page's period and filters",
+      'says what the answer covers, as on the page',
+      'no invented numbers',
+    ]) {
+      expect(
+        result.checks.find((c) => c.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails a read that leaves the page's platform out, and an answer that doesn't say its scope", async () => {
+    scripted([
+      calls(toolCall('r1', 'list_citations', { brand_id: BRAND, model: '' })),
+      text('Your subscriptions page leads with 31 citations.'),
+    ]);
+    const result = await runScenario(skillOf('citations-page-scope'));
+    const failed = Object.fromEntries(
+      result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(failed).toMatchObject({
+      "reads with the page's period and filters": 'model null',
+      'says what the answer covers, as on the page': 'no "as on the page"',
+    });
+    expect(result.passed).toBe(false);
+  });
+
+  // The owner's plan (2026-11-16, item 7): "my top 5 prompts" are the Prompts page's top 5.
+  it("names the Prompts page's top 5 in its order, read over its 24 hours", async () => {
+    const { EVAL_PAGE_TOP_PROMPTS } = await import('./testing/agent-eval-data');
+    const [a, b, c, d, e] = EVAL_PAGE_TOP_PROMPTS;
+    scripted([
+      calls(toolCall('r1', 'get_prompt_performance', { brand_id: BRAND })),
+      text(
+        `Last 24 hours, as on the page, by Visibility (the AI Visibility Score), highest first:\n1. ${a}: 74\n2. ${b}: 62\n3. ${c}: 55\n4. ${d}: 46\n5. ${e}: 38`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('prompts-page-top'));
+    expect(result.run.questions).toBe(0);
+    expect(result.run.reads).toEqual(['get_prompt_performance']);
+    // Its default order is the page's: no sort given, none needed.
+    expect(result.run.readInputs[0].sort_by).toBeUndefined();
+    const read = JSON.parse(result.run.readValues[0]) as { prompts: { text: string }[] };
+    expect(read.prompts.slice(0, 5).map((p) => p.text)).toEqual(EVAL_PAGE_TOP_PROMPTS);
+    for (const name of [
+      "reads with the page's period and filters",
+      'says what the answer covers, as on the page',
+      "names the page's top rows in its order",
+      'no invented numbers',
+    ]) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails a top 5 by the average answer score, not the page’s Visibility', async () => {
+    scripted([
+      calls(toolCall('r1', 'get_prompt_performance', { brand_id: BRAND, sort_by: 'answer_score' })),
+      text('As on the page, your top prompts are the ones with the best average answer score.'),
+    ]);
+    const result = await runScenario(skillOf('prompts-page-top'));
+    const failed = result.checks.filter((check) => check.must && !check.ok).map((c) => c.name);
+    expect(failed).toContain("names the page's top rows in its order");
+    expect(result.passed).toBe(false);
+  });
+
+  // The owner's plan (2026-11-16, item 8): "these" are the rows on screen, read by their refs.
+  it('reads the three actions on screen by their codes and names them, in the page’s order', async () => {
+    const { EVAL_PAGE_VIEW_ACTIONS } = await import('./testing/agent-eval-data');
+    const [a, b, c] = EVAL_PAGE_VIEW_ACTIONS;
+    const model = scripted([
+      calls(
+        toolCall('r1', 'list_action_center_tasks', {
+          brand_id: BRAND,
+          codes: [a.ref, b.ref, c.ref],
+        }),
+      ),
+      text(
+        `The three on the page, highest Priority Score first:\n1. **${a.title}** (${a.ref})\n2. **${b.title}** (${b.ref})\n3. **${c.title}** (${c.ref})`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('actions-page-view'));
+    expect(result.run.reads).toEqual(['list_action_center_tasks']);
+    // The reader saw the rows on screen, as untrusted data, and the page's chosen sort.
+    const seen = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(seen).toContain('<untrusted_data source=\\"page_view\\">');
+    expect(seen).toContain(`${a.ref} — ${a.title}`);
+    expect(seen).toContain('highest Priority Score first, as the person sorted it');
+    expect(seen).toContain('read those rows by their refs');
+    for (const name of [
+      'reads the actions by their codes',
+      'names each action asked by its title and code',
+      'names no other action in their place',
+      'no invented numbers',
+    ]) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails "these" answered from a list read, guessing which they are', async () => {
+    scripted([
+      calls(toolCall('r1', 'list_action_center_tasks', { brand_id: BRAND })),
+      text(
+        'These are your open actions: **Correct the cancellation fee claim on Gemini** (AC-43).',
+      ),
+    ]);
+    const result = await runScenario(skillOf('actions-page-view'));
+    const failed = result.checks.filter((check) => check.must && !check.ok).map((c) => c.name);
+    expect(failed).toEqual(
+      expect.arrayContaining([
+        'reads the actions by their codes',
+        'names each action asked by its title and code',
+        'names no other action in their place',
+      ]),
+    );
+    expect(result.passed).toBe(false);
+  });
+
+  it('reads the prompts a search shows: the app applies the page’s search, and the answer says it', async () => {
+    const { EVAL_PAGE_SEARCH, EVAL_PAGE_SEARCH_PROMPTS, EVAL_PROMPTS } =
+      await import('./testing/agent-eval-data');
+    const shown = EVAL_PAGE_SEARCH_PROMPTS.map(
+      (p) => EVAL_PROMPTS.find((prompt) => prompt.id === p.id)!,
+    );
+    const model = scripted([
+      // The model gives no search: the server fills the page's (page-scope.ts).
+      calls(toolCall('r1', 'list_prompts', { brand_id: BRAND })),
+      calls(
+        toolCall('r2', 'get_prompt_performance', {
+          brand_id: BRAND,
+          prompt_ids: shown.map((p) => p.id),
+        }),
+      ),
+      text(
+        `Matching "${EVAL_PAGE_SEARCH}", as on the page, by Visibility, highest first:\n${shown.map((p) => `- ${p.text}: ${p.visibility_pct}`).join('\n')}`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('prompts-page-search'));
+    expect(result.run.reads).toEqual(['list_prompts', 'get_prompt_performance']);
+    expect(result.run.readInputs[0].search).toBe(EVAL_PAGE_SEARCH);
+    // Only that page's list takes it: the figures read by ids don't.
+    expect(result.run.readInputs[1]).not.toHaveProperty('search');
+    // The read's scope says the search came from the page, for the writer to say so.
+    const written = JSON.stringify(model.doStreamCalls.at(-1)!.prompt);
+    expect(written).toContain(
+      `\\"from_page\\":{\\"took\\":[\\"search\\"],\\"search\\":\\"${EVAL_PAGE_SEARCH}\\"}`,
+    );
+    expect(written).toContain('with a search, \\"matching \\"skip a month\\", as on the page\\"');
+    for (const name of [
+      "reads with the page's search",
+      "says the page's search",
+      'names the rows on screen',
+      'no invented numbers',
+    ]) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails a read that leaves the page's search out", async () => {
+    scripted([
+      calls(toolCall('r1', 'get_prompt_performance', { brand_id: BRAND })),
+      text('Your prompts are doing fine.'),
+    ]);
+    const result = await runScenario(skillOf('prompts-page-search'));
+    const failed = Object.fromEntries(
+      result.checks.filter((c) => c.must && !c.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(failed).toMatchObject({
+      "reads with the page's search": 'list_prompts not read',
+      "says the page's search": 'no "coffee subscription"',
+    });
+    expect(failed['names the rows on screen']).toContain('missing');
+    expect(result.passed).toBe(false);
+  });
+
+  // Step 9 of the owner's plan: the pages that send their context.
+  it('reads the signals on screen by their S- codes on Signals, and names each', async () => {
+    const { EVAL_PAGE_VIEW_SIGNALS } = await import('./testing/agent-eval-data');
+    const codes = EVAL_PAGE_VIEW_SIGNALS.map((s) => s.code);
+    const model = scripted([
+      calls(toolCall('r1', 'list_signals', { brand_id: BRAND, codes })),
+      text(
+        `Ekrandaki üç sinyal:\n${EVAL_PAGE_VIEW_SIGNALS.map((s) => `- **${s.title}** (${s.code})`).join('\n')}`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('signals-page-view'));
+    expect(result.run.reads).toEqual(['list_signals']);
+    // The reader saw the rows on screen as untrusted data, with this page's own lookups.
+    const seen = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(seen).toContain('<untrusted_data source=\\"page_view\\">');
+    expect(seen).toContain(`${codes[0]} — ${EVAL_PAGE_VIEW_SIGNALS[0].title.slice(0, 30)}`);
+    expect(seen).toContain('S- codes with list_signals codes; ids with list_signals ids.');
+    for (const name of [
+      'reads the signals by their codes',
+      'names each signal asked by its title and code',
+      'names no other signal in their place',
+    ]) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails "these" on Signals answered from the newest page of the list', async () => {
+    const { EVAL_SIGNAL_BACKLOG } = await import('./testing/agent-eval-data');
+    const newest = EVAL_SIGNAL_BACKLOG[0];
+    scripted([
+      calls(toolCall('r1', 'list_signals', { brand_id: BRAND })),
+      text(`Bunlar en yeni sinyaller: **${newest.title}** (${newest.code}).`),
+    ]);
+    const result = await runScenario(skillOf('signals-page-view'));
+    const failed = result.checks.filter((check) => check.must && !check.ok).map((c) => c.name);
+    expect(failed).toEqual(
+      expect.arrayContaining([
+        'reads the signals by their codes',
+        'names each signal asked by its title and code',
+        'names no other signal in their place',
+      ]),
+    );
+    expect(result.passed).toBe(false);
+  });
+
+  it('reads the head-to-head of the competitor Competitors holds open, and names the prompts', async () => {
+    const { EVAL_HEAD_TO_HEAD_LOSSES, EVAL_OPEN_COMPETITOR } =
+      await import('./testing/agent-eval-data');
+    const model = scripted([
+      calls(
+        toolCall('r1', 'get_competitor_head_to_head', {
+          brand_id: BRAND,
+          competitor_id: EVAL_OPEN_COMPETITOR.id,
+          side: 'losing',
+        }),
+      ),
+      text(
+        `${EVAL_OPEN_COMPETITOR.name} şu promptlarda önde:\n${EVAL_HEAD_TO_HEAD_LOSSES.map((row) => `- ${row.prompt}`).join('\n')}`,
+      ),
+    ]);
+    const result = await runScenario(skillOf('competitor-open-losses'));
+    expect(result.run.reads).toEqual(['get_competitor_head_to_head']);
+    // The reader was told which competitor "this one" is, and the read that reads it.
+    const seen = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(seen).toContain(
+      `open: competitor ${EVAL_OPEN_COMPETITOR.id} — ${EVAL_OPEN_COMPETITOR.name}`,
+    );
+    expect(seen).toContain('read it with get_competitor_head_to_head with competitor_id first');
+    for (const name of ['reads the item the page holds open', 'names what that read found']) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails "this competitor" answered for another competitor', async () => {
+    const { EVAL_COMPETITORS } = await import('./testing/agent-eval-data');
+    scripted([
+      calls(
+        toolCall('r1', 'get_competitor_head_to_head', {
+          brand_id: BRAND,
+          competitor_id: EVAL_COMPETITORS[0].id,
+        }),
+      ),
+      text(`${EVAL_COMPETITORS[0].name} karşısında kaybettiğimiz bir prompt yok.`),
+    ]);
+    const result = await runScenario(skillOf('competitor-open-losses'));
+    const failed = Object.fromEntries(
+      result.checks.filter((check) => check.must && !check.ok).map((c) => [c.name, c.detail]),
+    );
+    expect(Object.keys(failed)).toEqual(
+      expect.arrayContaining(['reads the item the page holds open', 'names what that read found']),
+    );
+    expect(result.passed).toBe(false);
+  });
+
+  // Step 9's detail pages: on a topic's page, its prompts are that topic's.
+  it('reads the prompts of the topic its page holds open, the topic filled from the path, and names the weakest', async () => {
+    const { EVAL_OPEN_TOPIC, EVAL_TOPIC_PROMPTS } = await import('./testing/agent-eval-data');
+    const weakest = EVAL_TOPIC_PROMPTS.at(-1)!;
+    const model = scripted([
+      // The model gives no topic: the server fills the page's, from its path (page-scope.ts).
+      calls(toolCall('r1', 'get_prompt_performance', { brand_id: BRAND, order: 'asc' })),
+      text(`Bu konudaki en zayıf promptunuz **${weakest.text}**.`),
+    ]);
+    const result = await runScenario(skillOf('topic-page-weakest'));
+    expect(result.run.reads).toEqual(['get_prompt_performance']);
+    expect(result.run.readInputs[0]).toMatchObject({ topic_id: EVAL_OPEN_TOPIC.id });
+    expect(JSON.parse(result.run.readValues[0]).prompts[0].text).toBe(weakest.text);
+    // The reader was told which topic "this topic" is, and the read that reads it.
+    const seen = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(seen).toContain(`open: topic ${EVAL_OPEN_TOPIC.id} — ${EVAL_OPEN_TOPIC.name}`);
+    expect(seen).toContain('its prompts with get_prompt_performance with topic_id first');
+    for (const name of ['reads the item the page holds open', 'names what that read found']) {
+      expect(
+        result.checks.find((check) => check.name === name),
+        name,
+      ).toMatchObject({ must: true, ok: true });
+    }
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails "this topic" answered from another topic’s prompts', async () => {
+    const { EVAL_IDS } = await import('./testing/agent-eval-data');
+    scripted([
+      calls(
+        toolCall('r1', 'get_prompt_performance', {
+          brand_id: BRAND,
+          topic_id: EVAL_IDS.topics[1],
+          order: 'asc',
+        }),
+      ),
+      text('Bu konudaki en zayıf promptunuz **Light roast vs dark roast for espresso**.'),
+    ]);
+    const result = await runScenario(skillOf('topic-page-weakest'));
+    const failed = result.checks.filter((check) => check.must && !check.ok).map((c) => c.name);
+    expect(failed).toEqual(
+      expect.arrayContaining(['reads the item the page holds open', 'names what that read found']),
+    );
+    expect(result.passed).toBe(false);
   });
 
   it('refuses every network call but the model’s', async () => {

@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
+import { productRows } from '@/lib/shopping/products';
 
 /**
  * Visibility's Product Visibility tab: each view reads only what it shows,
@@ -90,6 +91,11 @@ vi.hoisted(() => {
   });
 });
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 const { default: ShoppingPage } = await import('./page');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
@@ -301,5 +307,52 @@ describe('the Product Visibility tab', () => {
       "Admins and managers can turn it on in the brand's settings.",
     );
     expect(off.querySelector('button')).toBeNull();
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+  it('sends its period and the view open; on Products, the catalog products on screen by id', async () => {
+    await render();
+    await settle();
+    expect(chatPage.mock.lastCall![0]).toEqual({
+      pageName: 'Product Visibility',
+      dateRange: { from: '30d', to: null, label: 'Last 30 days' },
+      filters: [],
+      view: { tab: 'shelf' },
+    });
+    act(() => root.unmount());
+    root = createRoot(container);
+    reads.getShoppingProducts.mockResolvedValue({
+      rows: productRows(
+        [
+          {
+            id: 'p1',
+            title: 'Ridge 30L Backpack',
+            url: null,
+            productType: 'Backpacks',
+            brand: 'Northwind',
+            description: null,
+            image: null,
+            category: null,
+            price: 119,
+            currency: 'USD',
+            inStock: true,
+            hasGtin: false,
+          },
+        ],
+        [],
+        [],
+      ),
+      total: 1,
+    });
+    await render('/dashboard/shopping?tab=products');
+    await settle();
+    expect(chatPage.mock.lastCall![0].view).toEqual({
+      tab: 'products',
+      rows: [{ ref: 'p1', label: 'Ridge 30L Backpack' }],
+      total: 1,
+    });
   });
 });

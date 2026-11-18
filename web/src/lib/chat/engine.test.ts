@@ -348,8 +348,15 @@ vi.mock('./registry/tools', async (importOriginal) => {
   });
   // The same read under a name the engine trusts: the workspace's own numbers (§16a).
   const ownNumbers = { ...readVisibility, name: 'get_visibility_summary' };
-  // A read that lists cited pages in its structured fields (CHAT-10 item 11).
-  const citations = { ...readVisibility, name: 'list_citations' };
+  // A read that lists cited pages in its structured fields (CHAT-10 item 11), on its page's Sources.
+  const citations = {
+    ...readVisibility,
+    name: 'list_citations',
+    route: '/dashboard/citations',
+    inputSchema: readVisibility.inputSchema.extend({
+      source_filter: z.enum(['all', 'owned', 'competitor', 'external']).optional(),
+    }),
+  };
   // One Site Audit in full, whose result shows as its card.
   const audit = { ...readVisibility, name: 'list_site_audit_issues' };
   // A list read a page at a time (scope.ts pagedRead): its next pages count lightly.
@@ -386,6 +393,17 @@ vi.mock('./registry/tools', async (importOriginal) => {
         t.name === 'check_draft_rules',
     ),
     publishPage,
+    // Ads' read of a named period, as its row has it, only with Ads on (ADS_ENABLED).
+    {
+      ...readVisibility,
+      name: 'get_ads_opportunities',
+      route: '/dashboard/ads',
+      inputSchema: z.object({
+        brand_id: z.string(),
+        period: z.enum(['7d', '30d', '90d']).optional(),
+      }),
+      offerIn: async () => process.env.ADS_ENABLED === 'true',
+    },
     {
       ...real.chatTool('run_subtasks')!,
       offerIn: async (run: { parentRunId?: string | null }) => subtaskTests.on && !run.parentRunId,
@@ -5885,6 +5903,74 @@ describe('starting', () => {
     }
   });
 
+  it("tells both models the page's list order beside its context (the owner's plan, item 7)", async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Your latest actions.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What are the first ones on the page?',
+      brandId: BRAND,
+      context: {
+        route: '/dashboard/action-center/actions',
+        chips: [{ key: 'page', label: 'Actions' }],
+      },
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    for (const prompt of [haiku.seen[0].prompt, sonnet.seen[0].prompt]) {
+      const seen = JSON.stringify(prompt);
+      expect(seen).toContain('The page lists its actions, most recently updated first');
+      expect(seen).toContain('status \\"all\\" and sort \\"updated\\"');
+    }
+    // The writer says which order a list is in.
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain(
+      'When you list items, say once in which order',
+    );
+  });
+
+  it("gives both models the page's view as untrusted data, with its chosen sort (the owner's plan, item 8)", async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Your three actions.')]);
+    const view = {
+      sort: { key: 'priority', dir: 'desc' },
+      rows: [
+        { ref: 'AC-41', label: 'Win back citations' },
+        { ref: 'AC-42', label: 'Close the gift box gap' },
+      ],
+      total: 2,
+      query: { status: 'new', token: 'tok-9f8e7d' },
+    };
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What are these?',
+      brandId: BRAND,
+      context: {
+        route: '/dashboard/action-center/actions',
+        chips: [{ key: 'page', label: 'Actions' }],
+        view,
+      },
+    });
+    if (!started.ok) throw new Error('not started');
+    const question = db.tables.chat_messages.find((m) => m.content_md === 'What are these?');
+    // Kept with the message, its URL keys the page's own.
+    expect(question?.context_json).toMatchObject({
+      context: { view: { ...view, query: { status: 'new' } } },
+    });
+    await engine.driveRun(ADMIN, started.runId);
+    for (const prompt of [haiku.seen[0].prompt, sonnet.seen[0].prompt]) {
+      const seen = JSON.stringify(prompt);
+      expect(seen).toContain('<page_view>\\n<untrusted_data source=\\"page_view\\">');
+      expect(seen).toContain('AC-41 — Win back citations\\nAC-42 — Close the gift box gap');
+      expect(seen).not.toContain('tok-9f8e7d');
+      // The context block itself no longer carries the view.
+      const context = seen.slice(seen.indexOf('<page_context>'), seen.indexOf('</page_context>'));
+      expect(context).not.toContain('AC-41');
+      // The person's sort over the page's default.
+      expect(seen).toContain('highest Priority Score first, as the person sorted it');
+      expect(seen).toContain('status \\"all\\" and sort \\"priority\\"');
+    }
+    expect(JSON.stringify(haiku.seen[0].prompt)).toContain('read those rows by their refs');
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain(
+      'Never say how many rows were read or sent',
+    );
+  });
+
   it('starts a server’s run tainted, its scope read as untrusted data (Run with Chat, W2-17)', async () => {
     const { haiku } = useModels([READY], [text('On it.')]);
     const started = await engine.startChatRun(
@@ -9874,8 +9960,8 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     expect(readInput()).toMatchObject({ date_from: day(-89), date_to: day(0) });
   });
 
-  it("offers the page's own range first in the side panel, so the numbers match the screen", async () => {
-    useModels([read(), READY], [text('Up 12%.')]);
+  it("reads the page's own range in the side panel without asking, and keeps no default", async () => {
+    const { sonnet } = useModels([read(), READY], [text('Up 12%.')]);
     const started = await engine.startChatRun(ADMIN, {
       message: 'Why did visibility drop?',
       brandId: BRAND,
@@ -9891,18 +9977,19 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     });
     if (!started.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, started.runId);
-    expect((await cardsOf(started.runId))[0].options).toEqual([
-      { label: "This page's range: last 7 days", recommended: true },
-      { label: 'Last 24 hours', recommended: false },
-      { label: 'Last 30 days', recommended: false },
-      { label: 'Last 90 days', recommended: false },
-    ]);
-    expect(await pick(ADMIN, started.runId, { selected: [0] })).toMatchObject({ ok: true });
-    expect(savedRange()).toBe('7d');
+    expect(await cardsOf(started.runId)).toEqual([]);
     expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
+    expect(stepsOf(started.runId)[0]).toMatchObject({ kind: 'read', detail: 'Last 7 days' });
+    expect(savedRange()).toBeNull();
+    expect(runRow(started.runId).status).toBe('done');
+    // The writer is told the period is the page's, to say once what the answer covers.
+    const written = promptOf(sonnet.seen[0]);
+    expect(written).toContain('\\"from_page\\":{\\"took\\":[\\"period\\"]}');
+    expect(written).toContain('as on the page');
+    expect(written).toContain('with any filter of the page no read took');
+    expect(written).toContain('never how many rows were read');
 
-    // A page's custom range is the first of five.
-    db.tables.chat_user_prefs = [];
+    // A page's custom range, and its All time: read as the page shows them.
     useModels([read(), READY], [text('Up 12%.')]);
     const custom = await engine.startChatRun(ADMIN, {
       message: 'Why did visibility drop?',
@@ -9912,30 +9999,257 @@ describe('the date range Chat asks for (owner request 2026-11-11)', () => {
     });
     if (!custom.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, custom.runId);
-    const options = (await cardsOf(custom.runId))[0].options;
-    expect(options).toHaveLength(5);
-    expect(options[0]).toMatchObject({ recommended: true });
-    expect(options[0].label).toMatch(/^This page's range: \w{3} \d+ – \w{3} \d+$/);
-    expect((asksOf(custom.runId)[0].options_json as unknown[])[0]).toMatchObject({
-      range: `${day(-14)}/${day(-1)}`,
-    });
-  });
+    expect(await cardsOf(custom.runId)).toEqual([]);
+    expect(readInput()).toMatchObject({ date_from: day(-14), date_to: day(-1) });
 
-  it("doesn't take the page's range as dates: the reader is told the app sets the period", async () => {
-    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
-    const { haiku } = useModels([read(), READY], [text('Up 12%.')]);
-    const started = await engine.startChatRun(ADMIN, {
-      message: 'How are we doing?',
+    useModels([read(), READY], [text('Up 12%.')]);
+    const all = await engine.startChatRun(ADMIN, {
+      message: 'Why did visibility drop?',
       brandId: BRAND,
       origin: 'panel',
-      context: { chips: [{ key: 'dates', label: 'Last 7 days', value: '7d/' }] },
+      context: { chips: [{ key: 'dates', label: 'All time', value: 'all/' }] },
+    });
+    if (!all.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, all.runId);
+    expect(await cardsOf(all.runId)).toEqual([]);
+    expect(readInput()).not.toHaveProperty('date_from');
+    expect(savedRange()).toBeNull();
+
+    // A page with no dates still asks.
+    useModels([read(), READY], [text('Up 12%.')]);
+    const plain = await engine.startChatRun(ADMIN, {
+      message: 'Why did visibility drop?',
+      brandId: BRAND,
+      origin: 'panel',
+      context: { chips: [{ key: 'page', label: 'Actions' }] },
+    });
+    if (!plain.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, plain.runId);
+    expect(await cardsOf(plain.runId)).toHaveLength(1);
+  });
+
+  it("reads the page's range before the person's default; a period the message names wins", async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
+    const ask = async (message: string, dates?: string) => {
+      const started = await engine.startChatRun(ADMIN, {
+        message,
+        brandId: BRAND,
+        origin: 'panel',
+        context: {
+          chips: [
+            { key: 'page', label: 'Visibility' },
+            ...(dates ? [{ key: 'dates', label: 'Page range', value: dates }] : []),
+          ],
+        },
+      });
+      if (!started.ok) throw new Error('not started');
+      await engine.driveRun(ADMIN, started.runId);
+    };
+    const { haiku } = useModels([read(), READY], [text('Up 12%.')]);
+    await ask('How are we doing?', '7d/');
+    const seen = promptOf(haiku.seen[0]);
+    expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
+    expect(seen).toContain("the page's dates when the question came from a page");
+    expect(seen).toContain("applies the page's filters (platform, region, topic, status");
+    expect(seen).toContain('give dates only when the person');
+    expect(seen).toContain('the app reads over its date range and applies its filters');
+    expect(seen).not.toContain("except its date range: the app sets each read's period");
+
+    useModels([read(), READY], [text('Up 12%.')]);
+    await ask('How did we do in the last 90 days?', '7d/');
+    expect(readInput()).toMatchObject({ date_from: day(-89), date_to: day(0) });
+    expect(savedRange()).toBe('30d');
+
+    useModels([read(), READY], [text('Up 12%.')]);
+    await ask('How are we doing?');
+    expect(readInput()).toMatchObject({ date_from: day(-29), date_to: day(0) });
+  });
+
+  it("reads Ads over its own page's period, and off that page over 30 days, whatever the default", async () => {
+    vi.stubEnv('ADS_ENABLED', 'true');
+    const ASK = 'Which prompts should we pay for?';
+    const cases: {
+      message: string;
+      dates?: string;
+      route?: string;
+      saved: string;
+      period: string | null;
+    }[] = [
+      // On Ads: the page's period, over the person's default.
+      { message: ASK, dates: '90d/', route: '/dashboard/ads', saved: '7d', period: '90d' },
+      { message: ASK, dates: '7d/', route: '/dashboard/ads', saved: '90d', period: '7d' },
+      // Off Ads: its own 30 days, never the default or another page's range.
+      { message: ASK, saved: '7d', period: null },
+      { message: ASK, saved: '90d', period: null },
+      { message: ASK, dates: '7d/', route: '/dashboard/citations', saved: '7d', period: null },
+      // A period the message names, anywhere.
+      { message: `${ASK.slice(0, -1)} in the last 90 days?`, saved: '7d', period: '90d' },
+    ];
+    // Not a hook: a script for each case's model (useModels).
+    const script = useModels;
+    for (const { message, dates, route, saved, period } of cases) {
+      db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: saved }];
+      fakes.readRun.mockClear();
+      script(
+        [calls(toolCall('r1', 'get_ads_opportunities', { brand_id: BRAND })), READY],
+        [text('Pay on two prompts.')],
+      );
+      const started = await engine.startChatRun(ADMIN, {
+        message,
+        brandId: BRAND,
+        ...(route
+          ? {
+              origin: 'panel' as const,
+              context: {
+                route,
+                chips: [
+                  { key: 'brand', label: 'Northwind', value: BRAND },
+                  ...(dates ? [{ key: 'dates', label: 'Page range', value: dates }] : []),
+                ],
+              },
+            }
+          : {}),
+      });
+      if (!started.ok) throw new Error('not started');
+      await engine.driveRun(ADMIN, started.runId);
+      expect(readInput().period ?? null, `${message} ${route ?? 'Chat'} ${saved}`).toBe(period);
+    }
+  });
+
+  it("lists Citations' Sources from the page beside the citations of every source, as the page does", async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
+    fakes.readRun.mockClear();
+    // The read counts every source in the scan of its filtered lists when asked (citation-totals.ts).
+    fakes.readRun.mockImplementation(async (ctx: { allSourcesTotals?: boolean }) => ({
+      totals: { domains: 1, citations: 3, avg_citations_per_result: 0.8 },
+      top_domains: [{ domain: 'northwind.example', total_citations: 3 }],
+      ...(ctx.allSourcesTotals
+        ? { all_sources_totals: { citations: 6, avg_citations_per_result: 1.5 } }
+        : {}),
+    }));
+    const { sonnet } = useModels(
+      [calls(toolCall('r1', 'list_citations', { brand_id: BRAND })), READY],
+      [
+        text(
+          'Last 7 days, as on the page: citation counts for all sources, lists for Brand sources.',
+        ),
+      ],
+    );
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'How many citations do we have, and which domains?',
+      brandId: BRAND,
+      origin: 'panel',
+      context: {
+        route: '/dashboard/citations',
+        chips: [
+          { key: 'page', label: 'Citations' },
+          { key: 'brand', label: 'Northwind', value: BRAND },
+          { key: 'dates', label: 'Last 7 days', value: '7d/' },
+          { key: 'filter:sources', label: 'Brand', value: 'own' },
+        ],
+      },
     });
     if (!started.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, started.runId);
-    const seen = promptOf(haiku.seen[0]);
-    expect(seen).toContain('give dates only when the person');
-    expect(seen).toContain("except its date range: the app sets each read's period");
-    expect(readInput()).toMatchObject({ date_from: day(-29), date_to: day(0) });
+    // One read: the lists on Brand, asked for the totals of every source from the same scan.
+    expect(fakes.readRun).toHaveBeenCalledTimes(1);
+    const [ctx, input] = fakes.readRun.mock.calls[0] as [Record<string, unknown>, unknown];
+    expect(input).toMatchObject({ source_filter: 'owned', date_from: day(-6) });
+    expect(ctx.allSourcesTotals).toBe(true);
+    // One step: the person sees one read.
+    expect(stepsOf(started.runId).filter((s) => s.kind === 'read')).toHaveLength(1);
+    const written = promptOf(sonnet.seen[0]);
+    expect(written).toContain(
+      '\\"all_sources_totals\\":{\\"citations\\":6,\\"avg_citations_per_result\\":1.5}',
+    );
+    expect(written).toContain('\\"from_page\\":{\\"took\\":[\\"period\\",\\"sources\\"]}');
+    expect(written).toContain('citation counts for all sources, lists for Brand sources');
+    const message = db.tables.chat_runs.find((r) => r.id === started.runId)!.message_id;
+    expect(db.tables.chat_messages.find((m) => m.id === message)!.content_md).toContain(
+      'citation counts for all sources, lists for Brand sources',
+    );
+
+    // Sources the person named: their own totals, nothing of every source.
+    fakes.readRun.mockClear();
+    useModels(
+      [calls(toolCall('r1', 'list_citations', { brand_id: BRAND, source_filter: 'owned' })), READY],
+      [text('Brand sources only.')],
+    );
+    const own = await engine.startChatRun(ADMIN, {
+      message: 'How many citations from our own sites?',
+      brandId: BRAND,
+      origin: 'panel',
+      context: {
+        route: '/dashboard/citations',
+        chips: [
+          { key: 'brand', label: 'Northwind', value: BRAND },
+          { key: 'filter:sources', label: 'All', value: 'all' },
+        ],
+      },
+    });
+    if (!own.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, own.runId);
+    expect(fakes.readRun).toHaveBeenCalledTimes(1);
+    expect(fakes.readRun.mock.calls[0][0]).not.toHaveProperty('allSourcesTotals');
+  });
+
+  it("applies the page's filters to the reads that take them; the person's own words win", async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
+    const reads = (call: Record<string, unknown> = {}) => [
+      calls(toolCall('r1', 'read_visibility', { brand_id: BRAND, ...call })),
+      READY,
+    ];
+    const ask = async (
+      message: string,
+      brand: { label: string; value: string } = { label: 'Northwind', value: BRAND },
+    ) => {
+      const started = await engine.startChatRun(ADMIN, {
+        message,
+        brandId: BRAND,
+        origin: 'panel',
+        context: {
+          route: '/dashboard/mentions',
+          chips: [
+            { key: 'page', label: 'Mentions & Sentiment' },
+            { key: 'brand', ...brand },
+            { key: 'filter:platform', label: 'ChatGPT', value: 'chatgpt-web' },
+            { key: 'filter:priority', label: 'High', value: 'high' },
+          ],
+        },
+      });
+      if (!started.ok) throw new Error('not started');
+      await engine.driveRun(ADMIN, started.runId);
+      return started.runId;
+    };
+    // None given: the page's platform, and the writer told it came from the page.
+    const { sonnet } = useModels(reads(), [text('Up 12%.')]);
+    const runId = await ask('How are we doing?');
+    expect(readInput()).toMatchObject({ brand_id: BRAND, platform: 'chatgpt-web' });
+    expect(stepsOf(runId)[0]).toMatchObject({ detail: 'Last 30 days · ChatGPT' });
+    expect(promptOf(sonnet.seen[0])).toContain('\\"from_page\\":{\\"took\\":[\\"platform\\"]}');
+
+    // The model's own platform, or "" for all of them, wins.
+    useModels(reads({ platform: 'gemini-web' }), [text('Up 12%.')]);
+    await ask('How are we doing on Gemini?');
+    expect(readInput()).toMatchObject({ platform: 'gemini-web' });
+    useModels(reads({ platform: '' }), [text('Up 12%.')]);
+    await ask('How are we doing?');
+    expect(readInput()).not.toHaveProperty('platform');
+    // A question for all platforms drops the chip.
+    useModels(reads(), [text('Up 12%.')]);
+    await ask('How are we doing on all platforms?');
+    expect(readInput()).not.toHaveProperty('platform');
+    // Posted from a page of another brand: its filters are words only.
+    useModels(reads(), [text('Up 12%.')]);
+    await ask('How are we doing?', { label: 'Elsewhere', value: OTHER_BRAND });
+    expect(readInput()).not.toHaveProperty('platform');
+    const question = db.tables.chat_messages.findLast((m) => m.content_md === 'How are we doing?');
+    expect((question?.context_json as { context: { chips: unknown[] } }).context.chips).toEqual([
+      { key: 'page', label: 'Mentions & Sentiment' },
+      { key: 'brand', label: 'Northwind', value: BRAND },
+      { key: 'filter:platform', label: 'ChatGPT' },
+      { key: 'filter:priority', label: 'High' },
+    ]);
   });
 
   it('changes the default at once on a short range, and answers the chat’s question again', async () => {
