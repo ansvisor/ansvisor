@@ -351,13 +351,21 @@ export type Database = {
           created_at: string
           currency: string
           grant_ai_usd: number | null
+          grant_brands: number | null
+          grant_briefs: number | null
           grant_bytes: number | null
+          grant_opportunities: number | null
+          grant_prompts: number | null
           highlight: boolean
           id: string
           kind: string
+          multiplier: number | null
           name: string
+          plans: string[] | null
           price_cents: number
+          sale: string
           sort: number
+          stripe_lookup_key: string | null
           stripe_price_id: string | null
           updated_at: string
           valid_months: number | null
@@ -368,13 +376,21 @@ export type Database = {
           created_at?: string
           currency?: string
           grant_ai_usd?: number | null
+          grant_brands?: number | null
+          grant_briefs?: number | null
           grant_bytes?: number | null
+          grant_opportunities?: number | null
+          grant_prompts?: number | null
           highlight?: boolean
           id: string
           kind: string
+          multiplier?: number | null
           name: string
+          plans?: string[] | null
           price_cents: number
+          sale?: string
           sort?: number
+          stripe_lookup_key?: string | null
           stripe_price_id?: string | null
           updated_at?: string
           valid_months?: number | null
@@ -385,13 +401,21 @@ export type Database = {
           created_at?: string
           currency?: string
           grant_ai_usd?: number | null
+          grant_brands?: number | null
+          grant_briefs?: number | null
           grant_bytes?: number | null
+          grant_opportunities?: number | null
+          grant_prompts?: number | null
           highlight?: boolean
           id?: string
           kind?: string
+          multiplier?: number | null
           name?: string
+          plans?: string[] | null
           price_cents?: number
+          sale?: string
           sort?: number
+          stripe_lookup_key?: string | null
           stripe_price_id?: string | null
           updated_at?: string
           valid_months?: number | null
@@ -6761,6 +6785,8 @@ export type Database = {
       }
       organizations: {
         Row: {
+          add_on_brands: number
+          add_on_prompts: number
           anthropic_api_key_encrypted: string | null
           anthropic_api_key_last4: string | null
           anthropic_api_key_set_at: string | null
@@ -6781,6 +6807,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          add_on_brands?: number
+          add_on_prompts?: number
           anthropic_api_key_encrypted?: string | null
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
@@ -6801,6 +6829,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          add_on_brands?: number
+          add_on_prompts?: number
           anthropic_api_key_encrypted?: string | null
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
@@ -8428,6 +8458,63 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_top_ups: {
+        Row: {
+          ai_usd: number
+          briefs: number
+          created_at: string
+          id: string
+          multiplier: number
+          opportunities: number
+          organization_id: string
+          paid_at: string
+          purchase_id: string
+          refunded_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_usd: number
+          briefs: number
+          created_at?: string
+          id?: string
+          multiplier: number
+          opportunities: number
+          organization_id: string
+          paid_at: string
+          purchase_id: string
+          refunded_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_usd?: number
+          briefs?: number
+          created_at?: string
+          id?: string
+          multiplier?: number
+          opportunities?: number
+          organization_id?: string
+          paid_at?: string
+          purchase_id?: string
+          refunded_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_top_ups_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_top_ups_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: true
+            referencedRelation: "add_on_purchases"
             referencedColumns: ["id"]
           },
         ]

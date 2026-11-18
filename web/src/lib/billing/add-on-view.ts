@@ -1,4 +1,4 @@
-import type { AddOnKind, AddOnProductRow } from './add-ons';
+import type { AddOnKind, AddOnPackRow } from './add-ons';
 
 /**
  * What Settings › Billing › Add-ons shows of the packs (CHAT-18 §A items 3–4,
@@ -46,7 +46,7 @@ export const gigabytes = (bytes: number) => Math.round(bytes / GB);
  * storage pack's GB. Null without a limit to measure against (unlimited).
  */
 export function packAdds(
-  pack: Pick<AddOnProductRow, 'kind' | 'grant_ai_usd' | 'grant_bytes'>,
+  pack: Pick<AddOnPackRow, 'kind' | 'grant_ai_usd' | 'grant_bytes'>,
   includedUsd: number | null,
 ): AddOnAdds | null {
   if (pack.kind === 'storage') {
@@ -59,7 +59,7 @@ export function packAdds(
   return { kind: 'limits', count: Math.floor(ratio * 10 + 1e-9) / 10 };
 }
 
-export function packView(pack: AddOnProductRow, includedUsd: number | null): AddOnPackView {
+export function packView(pack: AddOnPackRow, includedUsd: number | null): AddOnPackView {
   return {
     id: pack.id,
     kind: pack.kind,

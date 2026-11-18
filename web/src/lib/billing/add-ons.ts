@@ -1,6 +1,8 @@
 /**
  * Add-on packs (CHAT-18, 00413), behind CHAT_AGENTIC: AI credits and storage
- * a workspace's Admins buy with Stripe when a limit runs out.
+ * a workspace's Admins buy with Stripe when a limit runs out. The same
+ * catalog holds Growth's add-ons (00546: extra tracking, extra brands, AI
+ * top-ups), which are not sold yet; CHAT-18's paths read only its own kinds.
  *
  *   - AI credits: one payment (a Stripe Checkout in payment mode, its invoice
  *     carrying the pack's line), valid 12 months, adding half its price in
@@ -31,31 +33,93 @@ export async function loadStripe(): Promise<Stripe | null> {
 /** The metadata key that names the add_on_purchases row on a pack's Stripe objects. */
 export const ADD_ON_PURCHASE_KEY = 'add_on_purchase_id';
 
+/** CHAT-18's packs (00413): AI credits and storage, on Settings › Billing › Add-ons. */
 export type AddOnKind = 'ai' | 'storage';
 
-/** An add_on_products row: the packs on sale, staff-edited. Server only (dollars of model cost). */
+/**
+ * Every kind in the catalog: CHAT-18's packs, and Growth's add-ons (00546):
+ * an extra tracking tier and extra brands on the plan's subscription, and
+ * one-time AI top-ups.
+ */
+export type AddOnProductKind = AddOnKind | 'tracking' | 'brand' | 'ai_topup';
+
+/** The kinds CHAT-18's card, purchase and history handle; the Growth add-ons have their own. */
+export const ADD_ON_PACK_KINDS: readonly AddOnKind[] = ['ai', 'storage'];
+
+/** An add_on_products row: the add-ons on sale, staff-edited. Server only (dollars of model cost). */
 export interface AddOnProductRow {
   id: string;
-  kind: AddOnKind;
+  kind: AddOnProductKind;
   name: string;
   price_cents: number;
   currency: string;
-  billing: 'one_time' | 'monthly';
+  billing: 'one_time' | 'monthly' | 'yearly';
   grant_ai_usd: number | null;
   grant_bytes: number | null;
+  /** Tracking: the prompt locations its tier adds. */
+  grant_prompts: number | null;
+  /** Brand: the brands one unit adds. */
+  grant_brands: number | null;
+  /** AI top-up: the briefs and opportunities it adds this period. */
+  grant_briefs: number | null;
+  grant_opportunities: number | null;
+  /** AI top-up: its "+Nx". */
+  multiplier: number | null;
   valid_months: number | null;
+  /** The Stripe price's lookup key; the server resolves it into stripe_price_id. */
+  stripe_lookup_key: string | null;
   stripe_price_id: string | null;
+  /** contact_sales: shown with "Contact sales", never sold. */
+  sale: 'self_serve' | 'contact_sales';
+  /** Who may buy it; null: any paid plan (CHAT-18's packs). */
+  plans: string[] | null;
   active: boolean;
   highlight: boolean;
   sort: number;
 }
 
-export const ADD_ON_PRODUCT_COLUMNS =
-  'id, kind, name, price_cents, currency, billing, grant_ai_usd, grant_bytes, valid_months, stripe_price_id, active, highlight, sort';
+/** A CHAT-18 pack's row. */
+export type AddOnPackRow = AddOnProductRow & { kind: AddOnKind };
 
-/** A pack is sold only while it is active and has its Stripe price on this deployment. */
-export function addOnOnSale(product: Pick<AddOnProductRow, 'active' | 'stripe_price_id'>): boolean {
-  return product.active && !!product.stripe_price_id;
+export const ADD_ON_PRODUCT_COLUMNS =
+  'id, kind, name, price_cents, currency, billing, grant_ai_usd, grant_bytes, grant_prompts, grant_brands, grant_briefs, grant_opportunities, multiplier, valid_months, stripe_lookup_key, stripe_price_id, sale, plans, active, highlight, sort';
+
+/**
+ * An add-on is sold only while it is active, sold in the product (not
+ * "Contact sales") and has its Stripe price on this deployment.
+ */
+export function addOnOnSale(
+  product: Pick<AddOnProductRow, 'active' | 'stripe_price_id' | 'sale'>,
+): boolean {
+  return product.active && product.sale === 'self_serve' && !!product.stripe_price_id;
+}
+
+/** Whether a workspace on `planId` may buy it (null `plans`: any paid plan). */
+export function addOnForPlan(product: Pick<AddOnProductRow, 'plans'>, planId: string): boolean {
+  return !product.plans || product.plans.includes(planId);
+}
+
+/** The Stripe interval a recurring add-on bills on; null for a one-time one. */
+export function addOnInterval(product: Pick<AddOnProductRow, 'billing'>): 'month' | 'year' | null {
+  if (product.billing === 'monthly') return 'month';
+  if (product.billing === 'yearly') return 'year';
+  return null;
+}
+
+/**
+ * The extra tracking tiers on one interval (the plan's: an item must share
+ * it), active, smallest first. "Contact sales" tiers stay in the list; they
+ * are shown, not sold (`addOnOnSale`).
+ */
+export function trackingTiers<T extends AddOnProductRow>(
+  products: readonly T[],
+  interval: 'month' | 'year',
+): T[] {
+  return products
+    .filter(
+      (p) => p.kind === 'tracking' && p.active && p.grant_prompts && addOnInterval(p) === interval,
+    )
+    .sort((a, b) => (a.grant_prompts ?? 0) - (b.grant_prompts ?? 0));
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

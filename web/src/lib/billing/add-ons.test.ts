@@ -1,13 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { addMonthsUtc, addOnOnSale, planItemOf, purchaseIdOf } from './add-ons';
+import {
+  addMonthsUtc,
+  addOnForPlan,
+  addOnInterval,
+  addOnOnSale,
+  planItemOf,
+  purchaseIdOf,
+  trackingTiers,
+  type AddOnProductRow,
+} from './add-ons';
 
 const PURCHASE = 'a0000000-0000-4000-8000-000000000001';
 
 describe('add-on packs', () => {
-  it('are on sale only while active with a Stripe price', () => {
-    expect(addOnOnSale({ active: true, stripe_price_id: 'price_1' })).toBe(true);
-    expect(addOnOnSale({ active: true, stripe_price_id: null })).toBe(false);
-    expect(addOnOnSale({ active: false, stripe_price_id: 'price_1' })).toBe(false);
+  it('are on sale only while active, sold in the product and with a Stripe price', () => {
+    const self = 'self_serve' as const;
+    expect(addOnOnSale({ active: true, stripe_price_id: 'price_1', sale: self })).toBe(true);
+    expect(addOnOnSale({ active: true, stripe_price_id: null, sale: self })).toBe(false);
+    expect(addOnOnSale({ active: false, stripe_price_id: 'price_1', sale: self })).toBe(false);
+    expect(addOnOnSale({ active: true, stripe_price_id: 'price_1', sale: 'contact_sales' })).toBe(
+      false,
+    );
   });
 
   it('name their purchase in Stripe metadata, and nothing else passes for one', () => {
@@ -30,5 +43,60 @@ describe('add-on packs', () => {
     expect(planItemOf([pack, plan])).toBe(plan);
     expect(planItemOf([plan, pack])).toBe(plan);
     expect(planItemOf([])).toBeUndefined();
+  });
+});
+
+const product = (over: Partial<AddOnProductRow>): AddOnProductRow => ({
+  id: 'x',
+  kind: 'tracking',
+  name: 'Extra tracking',
+  price_cents: 7500,
+  currency: 'usd',
+  billing: 'monthly',
+  grant_ai_usd: null,
+  grant_bytes: null,
+  grant_prompts: 100,
+  grant_brands: null,
+  grant_briefs: null,
+  grant_opportunities: null,
+  multiplier: null,
+  valid_months: null,
+  stripe_lookup_key: null,
+  stripe_price_id: 'price_1',
+  sale: 'self_serve',
+  plans: ['growth'],
+  active: true,
+  highlight: false,
+  sort: 0,
+  ...over,
+});
+
+describe('Growth add-ons', () => {
+  it('are for the plans they name; a pack with no plans is for any paid plan', () => {
+    expect(addOnForPlan({ plans: ['growth'] }, 'growth')).toBe(true);
+    expect(addOnForPlan({ plans: ['growth'] }, 'starter')).toBe(false);
+    expect(addOnForPlan({ plans: ['growth'] }, 'enterprise')).toBe(false);
+    expect(addOnForPlan({ plans: null }, 'starter')).toBe(true);
+  });
+
+  it('bill on the interval their billing names', () => {
+    expect(addOnInterval({ billing: 'monthly' })).toBe('month');
+    expect(addOnInterval({ billing: 'yearly' })).toBe('year');
+    expect(addOnInterval({ billing: 'one_time' })).toBeNull();
+  });
+
+  it('list the active tracking tiers of one interval, smallest first, Contact sales kept', () => {
+    const rows = [
+      product({ id: 't1000m', grant_prompts: 1000 }),
+      product({ id: 't100m', grant_prompts: 100 }),
+      product({ id: 't5000m', grant_prompts: 5000, sale: 'contact_sales' }),
+      product({ id: 't250m', grant_prompts: 250, active: false }),
+      product({ id: 't100y', grant_prompts: 100, billing: 'yearly' }),
+      product({ id: 'brand', kind: 'brand', grant_prompts: null, grant_brands: 1 }),
+    ];
+    expect(trackingTiers(rows, 'month').map((p) => p.id)).toEqual(['t100m', 't1000m', 't5000m']);
+    expect(trackingTiers(rows, 'year').map((p) => p.id)).toEqual(['t100y']);
+    const shown = trackingTiers(rows, 'month');
+    expect(shown.filter(addOnOnSale).map((p) => p.id)).toEqual(['t100m', 't1000m']);
   });
 });

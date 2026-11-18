@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { addMonthsUtc, loadStripe, purchaseIdOf } from './add-ons';
+import { addMonthsUtc, loadStripe, purchaseIdOf, type AddOnProductKind } from './add-ons';
 
 /**
  * The Stripe webhook's part for add-on packs (CHAT-18 §E items 15–18): the
@@ -49,7 +49,7 @@ interface Purchase {
 
 interface PackGrant {
   id: string;
-  kind: 'ai' | 'storage';
+  kind: AddOnProductKind;
   grant_ai_usd: number | null;
   grant_bytes: number | null;
   valid_months: number | null;
@@ -426,7 +426,7 @@ async function refund(purchaseId: string, at: number) {
       ) as { id: string }[] | null;
       if (!hit?.length) throw new Error('AI credit grant changed while refunding');
     }
-  } else {
+  } else if (pack.kind === 'storage') {
     unwrap(
       await supabaseAdmin
         .from('storage_grants')

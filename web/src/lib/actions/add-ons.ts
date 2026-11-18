@@ -6,13 +6,14 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { PLANS, getPlan, isCloud } from '@/config/plans';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import {
+  ADD_ON_PACK_KINDS,
   ADD_ON_PRODUCT_COLUMNS,
   ADD_ON_PURCHASE_KEY,
   addOnOnSale,
   loadStripe,
   planItemOf,
   type AddOnKind,
-  type AddOnProductRow,
+  type AddOnPackRow,
 } from '@/lib/billing/add-ons';
 import {
   creditLeftCents,
@@ -128,8 +129,10 @@ async function start(productId: unknown): Promise<AddOnPurchaseStart> {
     .from('add_on_products')
     .select(ADD_ON_PRODUCT_COLUMNS)
     .eq('id', parsed.data)
+    // Growth's add-ons are bought on their own path, never as a pack.
+    .in('kind', ADD_ON_PACK_KINDS)
     .maybeSingle();
-  if (!product || !addOnOnSale(product as AddOnProductRow)) return refuse('unavailable');
+  if (!product || !addOnOnSale(product as AddOnPackRow)) return refuse('unavailable');
   // Without its key, Stripe sells nothing here.
   const stripe = await loadStripe();
   if (!stripe) return refuse('unavailable');
@@ -142,12 +145,12 @@ async function start(productId: unknown): Promise<AddOnPurchaseStart> {
     customerId: (org.stripe_customer_id as string | null) ?? null,
     subscriptionId: (org.stripe_subscription_id as string | null) ?? null,
   };
-  const pack = product as AddOnProductRow;
+  const pack = product as AddOnPackRow;
   return pack.kind === 'ai' ? startAiCheckout(buyer, pack) : addStorageItem(buyer, pack);
 }
 
 /** The purchase's row, pending until the webhook hears it was paid. */
-async function newPurchase(buyer: Buyer, pack: AddOnProductRow): Promise<string> {
+async function newPurchase(buyer: Buyer, pack: AddOnPackRow): Promise<string> {
   const { data, error } = await supabaseAdmin
     .from('add_on_purchases')
     .insert({
@@ -164,7 +167,7 @@ async function newPurchase(buyer: Buyer, pack: AddOnProductRow): Promise<string>
 }
 
 /** What every Stripe object of the purchase carries, for the webhook to find it by. */
-const metadataOf = (purchaseId: string, buyer: Buyer, pack: AddOnProductRow) => ({
+const metadataOf = (purchaseId: string, buyer: Buyer, pack: AddOnPackRow) => ({
   [ADD_ON_PURCHASE_KEY]: purchaseId,
   organization_id: buyer.organizationId,
   product_id: pack.id,
@@ -189,7 +192,7 @@ async function customerOf(buyer: Buyer): Promise<string> {
  * pack's line (the Stripe product's name, "AI credits · $50"). The purchase,
  * the payment and the invoice all name the purchase.
  */
-async function startAiCheckout(buyer: Buyer, pack: AddOnProductRow): Promise<AddOnPurchaseStart> {
+async function startAiCheckout(buyer: Buyer, pack: AddOnPackRow): Promise<AddOnPurchaseStart> {
   const customer = await customerOf(buyer);
   const purchaseId = await newPurchase(buyer, pack);
   const metadata = metadataOf(purchaseId, buyer, pack);
@@ -230,7 +233,7 @@ function declined(err: unknown): err is { message: string } {
  * file. Nothing changes unless it's paid: a declined card is an error and
  * the purchase fails. A plan billed yearly can't take a monthly item.
  */
-async function addStorageItem(buyer: Buyer, pack: AddOnProductRow): Promise<AddOnPurchaseStart> {
+async function addStorageItem(buyer: Buyer, pack: AddOnPackRow): Promise<AddOnPurchaseStart> {
   if (!buyer.subscriptionId) return refuse('unavailable');
   const subscription = await buyer.stripe.subscriptions.retrieve(buyer.subscriptionId);
   if (planItemOf(subscription.items.data)?.price?.recurring?.interval !== 'month') {
@@ -402,7 +405,8 @@ async function readBillingAddOns(now: Date): Promise<BillingAddOns | null> {
     supabaseAdmin
       .from('add_on_products')
       .select(ADD_ON_PRODUCT_COLUMNS)
-      .then((r) => rows<AddOnProductRow>(r)),
+      .in('kind', ADD_ON_PACK_KINDS)
+      .then((r) => rows<AddOnPackRow>(r)),
     supabaseAdmin
       .from('ai_credit_grants')
       .select('purchase_id, usd_total, usd_used, expires_at')
@@ -459,7 +463,7 @@ async function readBillingAddOns(now: Date): Promise<BillingAddOns | null> {
 
 function history(
   purchases: PurchaseRow[],
-  productById: Map<string, AddOnProductRow>,
+  productById: Map<string, AddOnPackRow>,
   priced: Map<string, CreditGrant>,
   storage: { purchase_id: string; active_until: string }[],
   now: Date,
