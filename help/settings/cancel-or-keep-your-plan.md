@@ -1,11 +1,11 @@
 ---
 title: Cancel your plan, or keep it after canceling
 route: /dashboard/settings/billing
-keywords: [cancel subscription, keep my plan, plan ends, reactivate subscription, cancel plan]
+keywords: [cancel subscription, keep my plan, plan ends, reactivate subscription, cancel plan, add-ons on a plan change]
 synonyms: [stop my subscription, undo cancel, resume my plan, when does my plan end]
 plan: starter
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-11-18
+last_checked: 2026-11-18
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -28,3 +28,8 @@ The band's close button hides it in that browser tab. It comes back in a new tab
 ## When the plan has ended
 
 Your workspace becomes read-only: you can look around, but adding, running and AI need a plan. Choose one from **See plans**.
+
+## Your add-ons when the plan changes
+
+Extra tracking and extra brands are part of your Growth plan's subscription. Switching between monthly and annual billing moves them to the new period's prices on the same invoice. Moving from Growth to Starter ends them at once, and their unused time is credited to your next invoices. When your plan is canceled, they run to the end of the period with it. The confirmation before a change says which applies.
+

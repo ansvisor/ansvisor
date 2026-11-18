@@ -16579,6 +16579,8 @@
     "changePlanConfirmTitle": "Change to {plan}?",
     "changePlanConfirmDescription": "You will be switched to the {plan} plan at ${price}/{interval, select, year {yr} other {mo}}. Proration will be applied to your next invoice.",
     "changePlanConfirm": "Confirm Change",
+    "addOnsEnd": "Your add-ons end with Growth: {prompts, plural, =0 {} other {extra tracking (+# prompt locations)}}{prompts, plural, =0 {} other {{brands, plural, =0 {} other { and }}}}{brands, plural, =0 {} one {# extra brand} other {# extra brands}}. Their unused time is credited to your next invoices.",
+    "addOnsMove": "Your extra tracking and extra brands move to {interval, select, year {yearly} other {monthly}} prices too, prorated on the same invoice.",
     "changePeriodTitle": "Switch to {interval, select, year {annual} other {monthly}} billing?",
     "changePeriodDescription": "Your {plan} plan will cost ${price} a {interval, select, year {year} other {month}}. Proration will be applied to your next invoice.",
     "billingPeriod": "Billing period",

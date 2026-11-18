@@ -6,6 +6,9 @@ import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
 import { planChange, planRequestSchema, type BillingInterval } from '@/lib/billing/plan-purchase';
 import { planItemOf } from '@/lib/billing/add-ons';
+import { syncAddOns } from '@/lib/billing/add-on-sync';
+import { resolveAddOnPrice, type ResolvableRow } from '@/lib/billing/add-on-prices';
+import { addOnsThroughPlanChange, type CartItem, type PeriodRow } from '@/lib/billing/add-on-cart';
 
 type SubscriptionItem = {
   id: string;
@@ -51,12 +54,47 @@ async function getOrgStripeIds() {
   const { data: org } = await supabase
     .from('organizations')
     .select(
-      'id, plan, subscription_status, stripe_customer_id, stripe_subscription_id, subscription_ends_at',
+      'id, plan, subscription_status, stripe_customer_id, stripe_subscription_id, subscription_ends_at, add_on_prompts, add_on_brands',
     )
     .eq('id', profile.organization_id)
     .single();
 
   return org ? { ...org, role: profile.role as string | null } : null;
+}
+
+/** What the plan's subscription adds (00546), for the plan switcher to say what a change does to it. */
+function addOnsOf(org: { add_on_prompts?: unknown; add_on_brands?: unknown }) {
+  const count = (v: unknown) => (typeof v === 'number' && v > 0 ? v : 0);
+  return { prompts: count(org.add_on_prompts), brands: count(org.add_on_brands) };
+}
+
+/**
+ * Growth's add-on items through a plan change (00546): on Growth they move
+ * to the new interval's prices in the same update; on any other plan they
+ * end, their unused time credited. Null when one has no price on the new
+ * interval: the change doesn't go ahead.
+ */
+async function addOnItemChanges(
+  sub: SubscriptionRaw,
+  target: { planId: string; interval: 'month' | 'year' },
+): Promise<Record<string, unknown>[] | null> {
+  const { data, error } = await supabaseAdmin
+    .from('add_on_products')
+    .select(
+      'id, kind, billing, active, price_cents, currency, grant_prompts, grant_brands, stripe_price_id, stripe_lookup_key',
+    )
+    .in('kind', ['tracking', 'brand']);
+  if (error) throw new Error(error.message);
+  const catalog = (data ?? []) as (PeriodRow & ResolvableRow)[];
+  const plan = addOnsThroughPlanChange(sub.items.data as unknown as CartItem[], catalog, target);
+  if (plan.missing.length) return null;
+  const changes: Record<string, unknown>[] = plan.removals.map((id) => ({ id, deleted: true }));
+  for (const swap of plan.swaps) {
+    const price = await resolveAddOnPrice(stripe, swap.row as PeriodRow & ResolvableRow);
+    if (!price) return null;
+    changes.push({ id: swap.itemId, price });
+  }
+  return changes;
 }
 
 /** A card the charge needs was declined, or its bank wants it confirmed. */
@@ -92,6 +130,7 @@ export async function GET() {
     const price = item?.price;
 
     return NextResponse.json({
+      addOns: addOnsOf(org),
       planId: org.plan ?? 'starter',
       status: sub.status,
       currentPeriodEnd: periodEndIso(sub),
@@ -238,12 +277,26 @@ export async function PATCH(req: NextRequest) {
         return paymentFailed(err);
       }
     } else {
+      // Growth's add-ons move with the period, or end with Growth.
+      const addOnChanges = await addOnItemChanges(currentSub, {
+        planId: change.planId,
+        interval: change.interval,
+      });
+      if (!addOnChanges) {
+        return NextResponse.json(
+          {
+            error: "Your add-ons can't move to that billing period right now.",
+            code: 'add_ons_unavailable',
+          },
+          { status: 400 },
+        );
+      }
       try {
         // A new billing period is invoiced at once: as when buying, nothing
         // changes unless it's paid, so a declined card leaves the plan as it
         // was rather than on the new period and past due.
         updated = (await stripe.subscriptions.update(subscriptionId, {
-          items: [{ id: itemId, price: priceId }],
+          items: [{ id: itemId, price: priceId }, ...addOnChanges],
           metadata: { plan_id: change.planId, organization_id: org.id },
           proration_behavior: 'create_prorations',
           payment_behavior: 'error_if_incomplete',
@@ -272,6 +325,15 @@ export async function PATCH(req: NextRequest) {
         ...(change.kind === 'buy_now' ? { cancel_at_period_end: false } : {}),
       })
       .eq('id', org.id);
+
+    // What the add-ons add now; the webhook writes the same from Stripe.
+    if (change.kind !== 'buy_now') {
+      try {
+        await syncAddOns(subscriptionId);
+      } catch (syncErr) {
+        console.error('[stripe/subscription] Add-on sync failed:', syncErr);
+      }
+    }
 
     // Align prompts to the new plan's engine set so an upgrade actually
     // expands (Starter → Growth: 2 → 5 engines) or trims (Growth → Starter:

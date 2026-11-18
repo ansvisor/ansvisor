@@ -63,6 +63,8 @@ interface SubscriptionData {
   cancelAtPeriodEnd: boolean;
   priceAmount: number | null;
   interval: string | null;
+  /** What the subscription adds (Growth's extra tracking and brands, 00546). */
+  addOns?: { prompts: number; brands: number };
 }
 
 interface PlanSwitcherProps {
@@ -542,6 +544,18 @@ export function PlanSwitcher({
                             })}
                     </DialogDescription>
                   </DialogHeader>
+                  {!pending.buy &&
+                    currentPlanId === 'growth' &&
+                    !!(subscription.addOns?.prompts || subscription.addOns?.brands) && (
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                        {pending.planId === 'growth'
+                          ? t('addOnsMove', { interval: period })
+                          : t('addOnsEnd', {
+                              prompts: subscription.addOns?.prompts ?? 0,
+                              brands: subscription.addOns?.brands ?? 0,
+                            })}
+                      </p>
+                    )}
                   {pending.buy && period === 'month' && (
                     <div className="space-y-1.5">
                       <label htmlFor="promo-code" className="text-sm font-medium">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { currentAddOns, itemChanges, type CartItem } from './add-on-cart';
+import { addOnsThroughPlanChange, currentAddOns, itemChanges, type CartItem } from './add-on-cart';
 import type { RecurringAddOnRow } from './add-on-sync';
 
 /** The item changes a Growth workspace's add-on pick makes on its subscription (00546). */
@@ -83,5 +83,64 @@ describe('itemChanges', () => {
     const current = currentAddOns([plan, tracking(100), brands(2)], CATALOG);
     expect(itemChanges(current, target('price_t100', 2))).toEqual([]);
     expect(itemChanges(none, target(null, 0))).toEqual([]);
+  });
+});
+
+describe('addOnsThroughPlanChange', () => {
+  const periodRow = (
+    id: string,
+    kind: 'tracking' | 'brand',
+    billing: 'monthly' | 'yearly',
+    units: number | null,
+  ) => ({
+    id,
+    kind,
+    billing,
+    active: true,
+    stripe_price_id: null,
+    stripe_lookup_key: `addon_${id}`,
+    grant_prompts: units,
+    grant_brands: kind === 'brand' ? 1 : null,
+  });
+  const ROWS = [
+    periodRow('tracking_100_month', 'tracking', 'monthly', 100),
+    periodRow('tracking_100_year', 'tracking', 'yearly', 100),
+    periodRow('brand_month', 'brand', 'monthly', null),
+    periodRow('brand_year', 'brand', 'yearly', null),
+  ];
+  const items = [plan, tracking(100), brands(2)];
+
+  it('moves each add-on to the new period’s price on Growth', () => {
+    expect(addOnsThroughPlanChange(items, ROWS, { planId: 'growth', interval: 'year' })).toEqual({
+      removals: [],
+      swaps: [
+        { itemId: 'si_tracking', row: ROWS[1] },
+        { itemId: 'si_brand', row: ROWS[3] },
+      ],
+      missing: [],
+    });
+  });
+
+  it('leaves them when the period stays', () => {
+    expect(addOnsThroughPlanChange(items, ROWS, { planId: 'growth', interval: 'month' })).toEqual({
+      removals: [],
+      swaps: [],
+      missing: [],
+    });
+  });
+
+  it('ends them on any other plan', () => {
+    expect(addOnsThroughPlanChange(items, ROWS, { planId: 'starter', interval: 'month' })).toEqual({
+      removals: ['si_tracking', 'si_brand'],
+      swaps: [],
+      missing: [],
+    });
+  });
+
+  it('names one with no price on the new period', () => {
+    const noYear = ROWS.filter((r) => r.id !== 'brand_year');
+    expect(
+      addOnsThroughPlanChange(items, noYear, { planId: 'growth', interval: 'year' }).missing,
+    ).toEqual(['si_brand']);
   });
 });
