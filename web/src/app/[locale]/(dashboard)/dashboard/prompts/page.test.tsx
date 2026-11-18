@@ -46,7 +46,11 @@ const pageReads = vi.hoisted(() => ({
   readPromptsPageData: vi.fn(),
   readPromptVolumes: vi.fn(),
 }));
-vi.mock('@/lib/prompts-reads', () => pageReads);
+// The module's own constants (VOLUME_READ_RETRIES) stay as they are.
+vi.mock('@/lib/prompts-reads', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/prompts-reads')>()),
+  ...pageReads,
+}));
 const volumesFromPageData = async () => {
   const page = (await actions.getPromptsPageData.getMockImplementation()?.('b1')) as
     | PageDataMock

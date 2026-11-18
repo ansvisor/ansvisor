@@ -150,7 +150,7 @@ import {
   updatePrompt,
   type LocationQuota,
 } from '@/lib/actions/prompt';
-import { readPromptsPageData, readPromptVolumes } from '@/lib/prompts-reads';
+import { readPromptsPageData, readPromptVolumes, VOLUME_READ_RETRIES } from '@/lib/prompts-reads';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
@@ -173,6 +173,7 @@ import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getBrandFilterOptions } from '@/lib/visibility-reads';
 import { formatRegionDisplay, regionLabel } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
+import { VolumesFailedCard } from './_volumes-failed';
 import { brandLocation, useAllowedEngines } from './_prompt-defaults';
 import { TrackNowLine, useTrackNow } from './_track-now';
 import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
@@ -1321,14 +1322,6 @@ const VOLUME_POLL_MS = 10_000;
  * the page just stops narrating it and shows what has landed.
  */
 const VOLUME_WATCH_MS = 30 * 60_000;
-
-/**
- * How many times a failed volumes read is tried again, at once, before the
- * page says the volumes are unavailable: a first read that hits a blip
- * otherwise left every Volume cell empty and every prompt "not analyzed"
- * until the range was changed.
- */
-const VOLUME_READ_RETRIES = 1;
 
 /**
  * Wording for the closed set of failure codes. Server text never reaches a
@@ -2522,21 +2515,7 @@ export default function PromptsPage() {
           {loading || volumesState === 'loading' ? (
             <InsightsSkeleton />
           ) : volumesState === 'failed' ? (
-            <Card data-volumes-failed>
-              <CardContent className="py-14 text-center text-sm">
-                <AlertCircle className="mx-auto h-9 w-9 text-destructive/60" />
-                <p className="mt-2 font-medium">Volume data couldn&apos;t be loaded.</p>
-                <Button
-                  className="mt-4 gap-2"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void loadVolumes()}
-                >
-                  <RotateCw className="h-4 w-4" />
-                  Retry
-                </Button>
-              </CardContent>
-            </Card>
+            <VolumesFailedCard onRetry={() => void loadVolumes()} />
           ) : volumes.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
