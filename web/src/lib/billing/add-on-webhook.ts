@@ -59,6 +59,10 @@ interface PackGrant {
   grant_ai_usd: number | null;
   grant_bytes: number | null;
   valid_months: number | null;
+  /** AI top-up (00546): what it adds to this period, and its "+Nx". */
+  grant_briefs: number | null;
+  grant_opportunities: number | null;
+  multiplier: number | null;
 }
 
 /** A purchase still waiting for its payment, or paid, takes its grant; a failed, refunded or cancelled one never does. */
@@ -75,7 +79,9 @@ async function readPack(productId: string): Promise<PackGrant | null> {
   return unwrap(
     await supabaseAdmin
       .from('add_on_products')
-      .select('id, kind, grant_ai_usd, grant_bytes, valid_months')
+      .select(
+        'id, kind, grant_ai_usd, grant_bytes, valid_months, grant_briefs, grant_opportunities, multiplier',
+      )
       .eq('id', productId)
       .maybeSingle(),
   ) as PackGrant | null;
@@ -171,6 +177,100 @@ async function markFailed(purchaseId: string) {
       .eq('id', purchaseId)
       .eq('status', 'pending'),
   );
+}
+
+// ─── AI top-ups (00546) ─────────────────────────────────────────────────────
+
+/**
+ * A paid AI top-up: what it adds to the quota window it was paid in (AI
+ * dollars, briefs, opportunities), once. The server's plan reads it until
+ * the plan renews.
+ */
+async function grantTopUp(purchaseId: string, payment: Payment) {
+  const found = await readPurchase(purchaseId);
+  if (!found || found.pack.kind !== 'ai_topup' || found.pack.grant_ai_usd == null) {
+    console.warn('[add-ons] No AI top-up purchase to grant:', purchaseId);
+    return;
+  }
+  const { purchase, pack } = found;
+  if (!GRANTABLE.has(purchase.status)) return;
+  // Written first and once: a second delivery, or one racing it, inserts nothing.
+  unwrap(
+    await supabaseAdmin.from('usage_top_ups').upsert(
+      {
+        organization_id: purchase.organization_id,
+        purchase_id: purchase.id,
+        ai_usd: pack.grant_ai_usd,
+        briefs: pack.grant_briefs ?? 0,
+        opportunities: pack.grant_opportunities ?? 0,
+        multiplier: pack.multiplier ?? 1,
+        paid_at: iso(payment.at),
+      },
+      { onConflict: 'purchase_id', ignoreDuplicates: true },
+    ),
+  );
+  await markPaid(purchase.id, payment, null);
+}
+
+/** A paid purchase named on its invoice: an AI pack's credits, or an AI top-up. */
+async function grantNamedPurchase(purchaseId: string, payment: Payment) {
+  const found = await readPurchase(purchaseId);
+  if (found?.pack.kind === 'ai_topup') return grantTopUp(purchaseId, payment);
+  return grantAiCredits(purchaseId, payment);
+}
+
+/**
+ * The AI top-ups an invoice paid for: a line named by its purchase (the
+ * top-up rode on a plan change, add_invoice_items), else the workspace's
+ * oldest pending top-up of that price. True when any was granted.
+ */
+async function grantTopUpsFromInvoice(invoice: Stripe.Invoice, paidAt: number): Promise<boolean> {
+  const lines = (await linesOf(invoice)).filter((line) => line.amount > 0);
+  if (!lines.length) return false;
+  const prices = [...new Set(lines.map(priceOf).filter((p): p is string => !!p))];
+  const topUps = prices.length
+    ? ((unwrap(
+        await supabaseAdmin
+          .from('add_on_products')
+          .select('id, stripe_price_id')
+          .eq('kind', 'ai_topup')
+          .in('stripe_price_id', prices),
+      ) ?? []) as { id: string; stripe_price_id: string }[])
+    : [];
+  let granted = false;
+  for (const line of lines) {
+    const named = purchaseIdOf(line.metadata);
+    const product = topUps.find((t) => t.stripe_price_id === priceOf(line));
+    if (!named && !product) continue;
+    let purchaseId = named;
+    if (!purchaseId && product) {
+      const orgId = await organizationOfCustomer(idOf(invoice.customer));
+      if (!orgId) continue;
+      const pending = unwrap(
+        await supabaseAdmin
+          .from('add_on_purchases')
+          .select('id')
+          .eq('organization_id', orgId)
+          .eq('product_id', product.id)
+          .eq('status', 'pending')
+          .is('stripe_invoice_id', null)
+          .order('created_at', { ascending: true })
+          .limit(1),
+      ) as { id: string }[] | null;
+      purchaseId = pending?.[0]?.id ?? null;
+    }
+    if (!purchaseId) continue;
+    const found = await readPurchase(purchaseId);
+    if (found?.pack.kind !== 'ai_topup') continue;
+    await grantTopUp(purchaseId, {
+      at: paidAt,
+      invoiceId: invoice.id ?? null,
+      amountCents: line.amount,
+      currency: line.currency,
+    });
+    granted = true;
+  }
+  return granted;
 }
 
 // ─── Storage, from the invoices that pay for it ────────────────────────────
@@ -444,6 +544,15 @@ async function refund(purchaseId: string, at: number) {
       ) as { id: string }[] | null;
       if (!hit?.length) throw new Error('AI credit grant changed while refunding');
     }
+  } else if (pack.kind === 'ai_topup') {
+    // What it added leaves this period's limits; what was used stays used.
+    unwrap(
+      await supabaseAdmin
+        .from('usage_top_ups')
+        .update({ refunded_at: iso(at) })
+        .eq('purchase_id', purchase.id)
+        .is('refunded_at', null),
+    );
   } else if (pack.kind === 'storage') {
     unwrap(
       await supabaseAdmin
@@ -500,7 +609,7 @@ export async function handleAddOnEvent(event: Stripe.Event): Promise<boolean> {
       const invoice = event.data.object;
       const purchaseId = purchaseIdOf(invoice.metadata);
       if (purchaseId) {
-        await grantAiCredits(purchaseId, {
+        await grantNamedPurchase(purchaseId, {
           at: event.created,
           invoiceId: invoice.id ?? null,
           amountCents: invoice.amount_paid,
@@ -508,7 +617,9 @@ export async function handleAddOnEvent(event: Stripe.Event): Promise<boolean> {
         });
         return true;
       }
-      return grantStorageFromInvoice(invoice, event.created);
+      const storage = await grantStorageFromInvoice(invoice, event.created);
+      const topUps = await grantTopUpsFromInvoice(invoice, event.created);
+      return storage || topUps;
     }
     case 'invoice.payment_succeeded':
     case 'invoice.payment_failed':

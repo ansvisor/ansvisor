@@ -38,6 +38,7 @@ const { handleAddOnEvent } = await import('./add-on-webhook');
 const ORG = '11111111-1111-4111-8111-111111111111';
 const AI_PURCHASE = 'a0000000-0000-4000-8000-000000000001';
 const STORAGE_PURCHASE = 'a0000000-0000-4000-8000-000000000002';
+const TOPUP_PURCHASE = 'a0000000-0000-4000-8000-000000000003';
 // 2026-10-30 10:00 UTC, in Stripe's seconds.
 const PAID_AT = Date.UTC(2026, 9, 30, 10) / 1000;
 const PERIOD_END = Date.UTC(2026, 10, 20, 9) / 1000;
@@ -76,7 +77,11 @@ beforeEach(() => {
       : { id, lookup_key: null, metadata: {} },
   );
   // 00413's unique keys: one grant per purchase.
-  db.unique = { ai_credit_grants: [['purchase_id']], storage_grants: [['purchase_id']] };
+  db.unique = {
+    ai_credit_grants: [['purchase_id']],
+    storage_grants: [['purchase_id']],
+    usage_top_ups: [['purchase_id']],
+  };
   db.tables = {
     organizations: [{ id: ORG, stripe_customer_id: 'cus_1' }],
     add_on_products: [
@@ -103,6 +108,7 @@ beforeEach(() => {
     ],
     ai_credit_grants: [],
     storage_grants: [],
+    usage_top_ups: [],
   };
 });
 
@@ -472,4 +478,90 @@ it('throws on a database failure, so Stripe sends the event again', async () => 
   db.failures = {};
   await handleAddOnEvent(event('checkout.session.completed', checkout()));
   expect(grantsOf('ai_credit_grants', AI_PURCHASE)).toHaveLength(1);
+});
+
+describe('an AI top-up (00546)', () => {
+  beforeEach(() => {
+    db.tables.add_on_products.push({
+      id: 'ai_topup_10x',
+      kind: 'ai_topup',
+      grant_ai_usd: 50,
+      grant_bytes: null,
+      valid_months: null,
+      grant_briefs: 100,
+      grant_opportunities: 100,
+      multiplier: 10,
+      stripe_price_id: 'price_topup10',
+    });
+    db.tables.add_on_purchases.push(purchase(TOPUP_PURCHASE, 'ai_topup_10x'));
+  });
+
+  const topUps = () => db.tables.usage_top_ups;
+  const named = { add_on_purchase_id: TOPUP_PURCHASE };
+
+  it('is granted once from its own paid invoice, for the window it was paid in', async () => {
+    const paid = invoice('in_topup', [line(null, 'price_topup10', 6900)], {
+      metadata: named,
+      amount_paid: 6900,
+    });
+    await expect(handleAddOnEvent(event('invoice.paid', paid))).resolves.toBe(true);
+    await handleAddOnEvent(event('invoice.paid', paid));
+    expect(topUps()).toEqual([
+      expect.objectContaining({
+        organization_id: ORG,
+        purchase_id: TOPUP_PURCHASE,
+        ai_usd: 50,
+        briefs: 100,
+        opportunities: 100,
+        multiplier: 10,
+        paid_at: new Date(PAID_AT * 1000).toISOString(),
+      }),
+    ]);
+    expect(row('add_on_purchases', TOPUP_PURCHASE)).toMatchObject({
+      status: 'paid',
+      stripe_invoice_id: 'in_topup',
+      amount_paid_cents: 6900,
+    });
+    expect(db.tables.ai_credit_grants).toEqual([]);
+  });
+
+  it('is granted from a plan change’s invoice, by its line’s purchase', async () => {
+    const lineWithPurchase = { ...line(null, 'price_topup10', 6900), metadata: named };
+    const paid = invoice('in_change', [line('si_t', 'price_tracking', 4120), lineWithPurchase]);
+    await expect(handleAddOnEvent(event('invoice.paid', paid))).resolves.toBe(true);
+    expect(topUps()).toHaveLength(1);
+    expect(row('add_on_purchases', TOPUP_PURCHASE).status).toBe('paid');
+  });
+
+  it('is granted by its price when the line names no purchase: the oldest pending one', async () => {
+    const paid = invoice('in_change', [line(null, 'price_topup10', 6900)]);
+    await handleAddOnEvent(event('invoice.paid', paid));
+    expect(topUps()).toEqual([expect.objectContaining({ purchase_id: TOPUP_PURCHASE })]);
+  });
+
+  it('never grants a failed purchase', async () => {
+    row('add_on_purchases', TOPUP_PURCHASE).status = 'failed';
+    await handleAddOnEvent(
+      event(
+        'invoice.paid',
+        invoice('in_topup', [line(null, 'price_topup10', 6900)], { metadata: named }),
+      ),
+    );
+    expect(topUps()).toEqual([]);
+  });
+
+  it('leaves this period’s limits once refunded in full', async () => {
+    await handleAddOnEvent(
+      event(
+        'invoice.paid',
+        invoice('in_topup', [line(null, 'price_topup10', 6900)], { metadata: named }),
+      ),
+    );
+    const refundedAt = PAID_AT + 3600;
+    await handleAddOnEvent(
+      event('charge.refunded', { id: 'ch_1', refunded: true, metadata: named }, refundedAt),
+    );
+    expect(topUps()[0].refunded_at).toBe(new Date(refundedAt * 1000).toISOString());
+    expect(row('add_on_purchases', TOPUP_PURCHASE).status).toBe('refunded');
+  });
 });

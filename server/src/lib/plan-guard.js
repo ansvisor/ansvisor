@@ -110,7 +110,7 @@ async function resolveOrgPlanByOrgId(orgId, { readOnly = false } = {}) {
 
   const { data: org } = await supabaseAdmin
     .from('organizations')
-    .select('plan, subscription_status, plan_overrides')
+    .select('plan, subscription_status, plan_overrides, subscription_ends_at')
     .eq('id', orgId)
     .single();
 
@@ -127,7 +127,65 @@ async function resolveOrgPlanByOrgId(orgId, { readOnly = false } = {}) {
     );
   }
 
-  return applyTrialAiBudget(applyPlanOverrides(getPlan(org.plan), org), org);
+  const plan = applyTrialAiBudget(applyPlanOverrides(getPlan(org.plan), org), org);
+  return applyTopUps(plan, await topUpsThisPeriod(orgId, org));
+}
+
+/**
+ * The AI top-ups paid in the organization's current quota window and not
+ * refunded (00546 usage_top_ups), summed; null without any. A read that
+ * fails is logged and counts as none: a top-up must never stop the plan
+ * from being read.
+ */
+async function topUpsThisPeriod(orgId, org, now = new Date()) {
+  try {
+    const endsAt = org?.subscription_ends_at ? new Date(org.subscription_ends_at) : null;
+    const since =
+      endsAt && !Number.isNaN(endsAt.getTime())
+        ? anchoredPeriodStart(endsAt, now)
+        : startOfCurrentMonth(now);
+    const { data, error } = await supabaseAdmin
+      .from('usage_top_ups')
+      .select('ai_usd, briefs, opportunities, multiplier')
+      .eq('organization_id', orgId)
+      .gte('paid_at', since.toISOString())
+      .is('refunded_at', null);
+    if (error) throw new Error(error.message);
+    if (!data?.length) return null;
+    return data.reduce(
+      (sum, row) => ({
+        aiUsd: sum.aiUsd + (Number(row.ai_usd) || 0),
+        briefs: sum.briefs + (Number(row.briefs) || 0),
+        opportunities: sum.opportunities + (Number(row.opportunities) || 0),
+        multiplier: sum.multiplier + (Number(row.multiplier) || 0),
+      }),
+      { aiUsd: 0, briefs: 0, opportunities: 0, multiplier: 0 },
+    );
+  } catch (err) {
+    logger.error({ err, orgId }, '[plan-guard] AI top-ups not read; the plan counts none');
+    return null;
+  }
+}
+
+/**
+ * The plan with this period's AI top-ups (00546): their AI dollars on the
+ * monthly AI budget, their briefs and opportunities on the month's limits.
+ * An unlimited limit (-1) stays so. `topUp` marks the plan with the "+Nx"
+ * bought this period, for what shows it.
+ */
+export function applyTopUps(plan, topUps) {
+  if (!topUps) return plan;
+  const add = (base, extra) => (typeof base !== 'number' || base === -1 ? base : base + extra);
+  return {
+    ...plan,
+    topUp: { multiplier: topUps.multiplier },
+    limits: {
+      ...plan.limits,
+      improveMonthlyBudgetUsd: add(plan.limits.improveMonthlyBudgetUsd, topUps.aiUsd),
+      maxBriefGenerations: add(plan.limits.maxBriefGenerations, topUps.briefs),
+      maxOpportunitiesPerMonth: add(plan.limits.maxOpportunitiesPerMonth, topUps.opportunities),
+    },
+  };
 }
 
 /**
