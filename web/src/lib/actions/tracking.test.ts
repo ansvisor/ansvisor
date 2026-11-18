@@ -508,6 +508,26 @@ describe('topic-filtered reads (00164)', () => {
     }
   });
 
+  it('reads a preset window once and its previous window beside it', async () => {
+    rpcByName = true;
+    const { getCompetitorComparison } = await import('./tracking');
+
+    await getCompetitorComparison('brand-id', {
+      days: { dayFrom: '2026-09-01', dayTo: '2026-09-30' },
+    });
+
+    // The displayed window is the delta's current window: one read for both,
+    // and the previous window's read already sent (the brand has no rows, so
+    // the page stops after the displayed read).
+    const windows = rpcCalls
+      .filter((c) => c.name === 'competitor_aggregates_daily')
+      .map((c) => [c.args.p_day_from, c.args.p_day_to]);
+    expect(windows).toEqual([
+      ['2026-08-02', '2026-08-31'],
+      ['2026-09-01', '2026-09-30'],
+    ]);
+  });
+
   it('leaves brand-level reads unscoped', async () => {
     rpcByName = true;
     const { getInsightsSummary } = await import('./tracking');
