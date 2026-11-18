@@ -4395,7 +4395,7 @@
         "track a search"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
@@ -4423,7 +4423,7 @@
         },
         {
           "heading": "What counts on your plan",
-          "text": "Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor tracks the prompts that fit and saves the rest as **Waiting for a spot**: kept, but not tracked and not counted. A waiting prompt never starts by itself; in **Tracked Prompts**, admins and managers can **Free up a spot** to swap one in."
+          "text": "Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor tracks the prompts that fit and saves the rest as **Waiting for a spot**: kept, but not tracked and not counted. A waiting prompt never starts by itself; in **Tracked Prompts**, admins and managers can **Free up a spot** to swap one in. On Growth, **Add more tracking** opens your plan's add-ons in **Settings › Billing**."
         }
       ]
     },
@@ -4707,7 +4707,7 @@
         "prompts for a topic"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
@@ -4743,7 +4743,7 @@
         },
         {
           "heading": "When your plan's prompts are full",
-          "text": "When your plan's prompt locations run out, **Add All** and **+** still add: the suggestions past the limit become prompts **Waiting for a spot**, kept but not tracked. An amber note above the list says how many were added and how many wait.\n\nA waiting prompt never starts by itself. **Go to Tracked Prompts** opens the list, where admins and managers can **Free up a spot**, or upgrade your plan or ask us to raise your limit."
+          "text": "When your plan's prompt locations run out, **Add All** and **+** still add: the suggestions past the limit become prompts **Waiting for a spot**, kept but not tracked. An amber note above the list says how many were added and how many wait.\n\nA waiting prompt never starts by itself. **Go to Tracked Prompts** opens the list, where admins and managers can **Free up a spot**, or get more room: Starter upgrades, Growth adds more tracking, and Enterprise asks us."
         },
         {
           "heading": "How AI suggestions are written",
@@ -4904,7 +4904,7 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
@@ -4916,7 +4916,7 @@
         },
         {
           "heading": "Prompt statuses",
-          "text": "Each row has a status:\n\n- **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.\n- **Active**: tracked on its schedule.\n- **Paused**: kept, but not tracked.\n- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.\n\nWhile prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them."
+          "text": "Each row has a status:\n\n- **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.\n- **Active**: tracked on its schedule.\n- **Paused**: kept, but not tracked.\n- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.\n\nWhile prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. On Growth, **Add more tracking** opens your plan's add-ons in **Settings › Billing**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them."
         },
         {
           "heading": "Track new prompts now",

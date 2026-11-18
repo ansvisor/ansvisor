@@ -255,7 +255,11 @@ function Ready({
             full: plan.used >= plan.max ? 'yes' : 'no',
           })}{' '}
           {prompt.locations > 1 && <>{t('needs', { count: n(prompt.locations) })} </>}
-          {plan.id === 'starter' ? t('howStarter') : t('howContact')}
+          {plan.id === 'starter'
+            ? t('howStarter')
+            : plan.id === 'growth'
+              ? t('howGrowth')
+              : t('howContact')}
         </DialogDescription>
       </DialogHeader>
 

@@ -3,6 +3,10 @@
 import { useTranslations } from 'next-intl';
 import { Hourglass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
+import { Link } from '@/i18n/navigation';
+import { track } from '@/lib/analytics';
+import { ADD_TRACKING_HREF } from '@/lib/billing/add-on-links';
 import type { LocationQuota } from '@/lib/actions/prompt';
 import type { Prompt } from '@/types';
 
@@ -28,6 +32,7 @@ export function WaitingBanner({
   quota,
   onShow,
   onFreeUp,
+  addMore = false,
 }: {
   prompts: readonly Prompt[];
   /** The plan's numbers, from the usage cards; null while they load. */
@@ -35,6 +40,8 @@ export function WaitingBanner({
   onShow: () => void;
   /** Opens the swap dialog; undefined for those who can't act. */
   onFreeUp?: () => void;
+  /** Growth can buy more tracking (00546): offered beside freeing up a spot. */
+  addMore?: boolean;
 }) {
   const t = useTranslations('prompts.waiting.banner');
   const count = prompts.filter((p) => !p.isActive && p.waitingSince).length;
@@ -64,6 +71,15 @@ export function WaitingBanner({
           <Button size="sm" onClick={onFreeUp}>
             {room ? t('track') : t('freeUp')}
           </Button>
+        )}
+        {addMore && !room && (
+          <Link
+            href={ADD_TRACKING_HREF}
+            onClick={() => track('add_on_entry', { source: 'waiting_banner' })}
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            {t('addTracking')}
+          </Link>
         )}
       </div>
     </div>
