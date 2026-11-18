@@ -235,6 +235,8 @@ export async function runAgentOnAction(
   if (row.status === 'archived') return refused('archived');
   if (!version) return refused('failed');
 
+  // An AEO Operator plans its own day on its brand: never on one action.
+  if (row.kind === 'operator') return refused('operator_action');
   const action = await readActionForRun(ctx, actionId, now);
   if (!action.ok) return action;
   const { snapshot, brand: actionBrand } = action.value;

@@ -92,6 +92,8 @@ export const SKILL_ORDER = [
   // Ads Phase 0 PR 15: only with Ads on (flagged.ts ADS_SKILLS).
   'earn-or-pay',
   'ad-drafts',
+  // AEO Operator plan §4.2 step 4: the Operator's own, agent-only, with CHAT_OPERATOR on.
+  'operator',
 ] as const;
 
 export interface LibrarySkill {
@@ -104,6 +106,12 @@ export interface LibrarySkill {
   filters: SkillFilter[];
   /** Its instructions, loaded only when it is used. */
   body: string;
+  /**
+   * `metadata.agent_only: "true"`: an agent's own skill (the AEO Operator's
+   * /operator), loaded only in that agent's runs. Never in the / menu, the
+   * Skills page, a prompt's <available_skills> or a person's /name.
+   */
+  agentOnly?: true;
 }
 
 /** A shortcut's playbook: a hidden library skill, with the reads its data plan allows. */
@@ -156,6 +164,7 @@ export function buildSkillLibrary(files: readonly { folder: string; text: string
         description: skill.description ?? '',
         filters: listOf(skill.metadata.filters) as SkillFilter[],
         body: skill.body.trim(),
+        ...(skill.metadata.agent_only === 'true' ? { agentOnly: true as const } : {}),
       },
     };
   });
@@ -184,8 +193,13 @@ export function enabledSkills(
   organizationId: string | null,
   skills: readonly LibrarySkill[] = SKILL_LIBRARY,
 ): readonly LibrarySkill[] {
-  return chatAgenticEnabled(organizationId) ? skills.filter((s) => skillFlagOn(s.name)) : [];
+  return chatAgenticEnabled(organizationId)
+    ? skills.filter((s) => skillFlagOn(s.name, organizationId))
+    : [];
 }
+
+/** Whether a person may pick a skill (the / menu, a /name, use_skill): not an agent's own. */
+export const personSkill = (skill: { agentOnly?: true }) => skill.agentOnly !== true;
 
 /**
  * A shortcut's playbook for a workspace (W2-09): none while the new Chat is

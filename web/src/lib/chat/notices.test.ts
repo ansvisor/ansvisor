@@ -129,4 +129,52 @@ describe('noticeOf', () => {
     }
     expect(noticeOf(row({ kind: 'agent_go_live_off', payload: { agent: 'P' } }))).toBeNull();
   });
+
+  it('reads an AEO Operator’s summary (00545): counts and its chat, never a name of its agents', () => {
+    const payload = {
+      agent: 'AEO Operator',
+      agentId: 'abababab-0000-4000-8000-0000000000ff',
+      planId: 'f0f0f0f0-0000-4000-8000-000000000001',
+      chatId: 'eeeeeeee-0000-4000-8000-0000000000ff',
+      day: '2026-11-18',
+      total: 4,
+      done: 2,
+      waiting: 1,
+      failed: 0,
+      stopped: 1,
+      working: 0,
+      notStarted: 0,
+      approveAll: true,
+    };
+    expect(noticeOf(row({ kind: 'agent_plan_summary', payload }))).toEqual({
+      id: 'n1',
+      kind: 'agent_plan_summary',
+      agent: 'AEO Operator',
+      agentId: payload.agentId,
+      chatId: payload.chatId,
+      day: '2026-11-18',
+      total: 4,
+      done: 2,
+      waiting: 1,
+      failed: 0,
+      stopped: 1,
+      working: 0,
+      notStarted: 0,
+      createdAt: '2026-11-01T09:00:00Z',
+      read: false,
+    });
+    // A count that doesn't read is none; a chat that isn't an id is no chat.
+    expect(
+      noticeOf(
+        row({ kind: 'agent_plan_summary', payload: { ...payload, done: 'x', chatId: 'nope' } }),
+      ),
+    ).toMatchObject({ done: 0, chatId: null });
+    for (const bad of [
+      { ...payload, agent: 3 },
+      { ...payload, agentId: 'agent-1' },
+      { ...payload, day: 'today' },
+    ]) {
+      expect(noticeOf(row({ kind: 'agent_plan_summary', payload: bad }))).toBeNull();
+    }
+  });
 });
