@@ -4486,6 +4486,7 @@
       "step": "Took page down from your site"
     },
     "makeReport": { "name": "Make reports", "step": "Made report" },
+    "reportPresentation": { "name": "Make presentations", "step": "Made presentation" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "imageModels": { "name": "Read image models", "step": "Read image models" },
     "makeImages": { "name": "Create images", "step": "Created images" },
@@ -5080,6 +5081,13 @@
       "notFiled": "The images were made but couldn't be saved to Files.",
       "providerOff": "{model}'s maker is turned off for this workspace in Settings › Chat. Pick another image model.",
       "providersOff": "Every image model's maker is turned off for this workspace in Settings › Chat, so Chat can't make images here. An Admin can turn one on."
+    },
+    "presentations": {
+      "title": "Presentation · {title}",
+      "unavailable": "Presentations are not available here.",
+      "notFound": "That report was not found. List the saved reports, then pick one.",
+      "storageFull": "The workspace's storage is full. Free up space in Files, then try again.",
+      "notFiled": "The deck was made but could not be filed. Please try again."
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
@@ -5695,6 +5703,7 @@
       "pdf": "PDF",
       "csv": "CSV",
       "xlsx": "Excel",
+      "pptx": "PowerPoint",
       "json": "JSON",
       "jsonld": "JSON-LD",
       "txt": "TXT",
@@ -7135,6 +7144,7 @@
       "sendToWebhook": "Sent the page “{title}” to your webhook",
       "takeDownFromCms": "Took the page “{title}” down from {cms}",
       "makeReport": "Made the report “{title}”",
+      "reportPresentation": "Made the presentation “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
       "makeImages": "Created images “{title}” with {model}",
