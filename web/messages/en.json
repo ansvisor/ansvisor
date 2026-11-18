@@ -14354,6 +14354,10 @@
       "aiTitle": "Est. AI Volume",
       "aiSub": "monthly AI searches, across prompts"
     },
+    "volumesFailed": {
+      "title": "Volume data couldn't be loaded.",
+      "retry": "Retry"
+    },
     "volumeInsights": {
       "totalTitle": "Total Est. AI Volume",
       "detailTitle": "AI searches a month",

@@ -42,3 +42,11 @@ export type PromptVolumesRead = Awaited<ReturnType<typeof volumes.getPromptVolum
 export const readPromptVolumes = (
   ...args: Parameters<typeof volumes.getPromptVolumes>
 ): Promise<PromptVolumesRead> => read('volumes', args);
+
+/**
+ * How many times a failed volumes read is tried again, at once, before the
+ * page says the volumes are unavailable: a first read that hits a blip
+ * otherwise left every Volume cell empty and every prompt "not analyzed"
+ * until the range was changed. Tracked Prompts, Insights and Similar Topics.
+ */
+export const VOLUME_READ_RETRIES = 1;
