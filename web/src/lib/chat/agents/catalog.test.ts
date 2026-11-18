@@ -4,7 +4,12 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import { presetTriggerDraft, triggerError, triggerInputOf } from '../agent-form';
-import { DEFAULT_AGENT_SETTINGS, agentTriggerSchema, modeDenial } from '../agent-rules';
+import {
+  DEFAULT_AGENT_SETTINGS,
+  agentTriggerSchema,
+  modeDenial,
+  operatorDenial,
+} from '../agent-rules';
 import { ANSVISOR_SKILLS, skillConnections } from '../agent-skills';
 import { planFactsFromOrgRow, planGateLock } from '../plan-facts';
 import { SKILL_LIBRARY } from '../skills/library';
@@ -22,6 +27,7 @@ import {
   presetFilterOptions,
   presetFit,
   presetCardHref,
+  isOperatorPreset,
   presetGate,
   presetSameness,
   presetsOnInstall,
@@ -92,6 +98,7 @@ describe('the preset files', () => {
       'fanout-gap-filler',
       'prompt-portfolio',
       'onboarding-help',
+      'aeo-operator',
       'paid-opportunity',
       'product-answer-pages',
       'seasonal-prompt-planner',
@@ -107,7 +114,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(15);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(14);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -415,6 +422,7 @@ describe('the Paid Opportunity agent (Ads Phase 0 PR 18)', () => {
 
   it('is in no list while Ads is off: Ready to use, New agent, the recommendations', () => {
     vi.stubEnv('ADS_ENABLED', '');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
     const ids = presetsOnInstall().map((preset) => preset.id);
     expect(ids).toEqual(AGENT_PRESETS.map((p) => p.id).filter((id) => id !== PAID));
     expect(readyPreset(PAID)).toBeNull();
@@ -424,10 +432,62 @@ describe('the Paid Opportunity agent (Ads Phase 0 PR 18)', () => {
 
   it('is in each with Ads on, with both its skills', () => {
     vi.stubEnv('ADS_ENABLED', 'true');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
     expect(presetsOnInstall().map((preset) => preset.id)).toEqual([...PRESET_ORDER]);
     expect(presetsOnInstall().find((p) => p.id === PAID)?.skills).toEqual(paid.skills);
     expect(readyPreset(PAID)).toBe(paid);
     expect(recommendedPresets(viewer, [paid])).toEqual([{ preset: paid, fit: null }]);
+  });
+});
+
+describe('the AEO Operator (AEO Operator plan §4.3, PR 6)', () => {
+  const OPERATOR = 'aeo-operator';
+  const operator = AGENT_PRESETS.find((preset) => preset.id === OPERATOR)!;
+  const ORG_A = '11111111-1111-4111-8111-111111111111';
+  const ORG_B = '22222222-2222-4222-8222-222222222222';
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('is ready: /operator alone, weekdays at 07:00 on the creator’s clock, in Auto, needing nothing', () => {
+    expect(operator).toMatchObject({
+      goal: 'tasks',
+      skills: ['operator'],
+      triggers: [{ kind: 'schedule', repeat: 'weekdays', time: '07:00' }],
+      mode: 'auto',
+      connections: [],
+      status: 'ready',
+      needs: [],
+    });
+    expect(isOperatorPreset(operator)).toBe(true);
+    // Growth and up, whatever its mode; never recommended at setup: it runs the others.
+    expect(presetGate(operator)).toEqual({ minPlan: 'growth' });
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    expect(
+      recommendedPresets({ siteType: null, workAreas: [] }).map(({ preset }) => preset.id),
+    ).not.toContain(OPERATOR);
+    // No preset waits on sub-agents any more.
+    expect(AGENT_PRESETS.some((preset) => preset.needs.includes('sub_agents'))).toBe(false);
+  });
+
+  it('is in no list while CHAT_OPERATOR is off, nor for a workspace CHAT_OPERATOR_ORGS leaves out', () => {
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect(presetsOnInstall().map((p) => p.id)).not.toContain(OPERATOR);
+    expect(presetsOnInstall(AGENT_PRESETS, ORG_A).map((p) => p.id)).not.toContain(OPERATOR);
+    expect(readyPreset(OPERATOR)).toBeNull();
+    expect(readyPreset(OPERATOR, ORG_A)).toBeNull();
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    expect(presetsOnInstall().map((p) => p.id)).toContain(OPERATOR);
+    expect(readyPreset(OPERATOR)).toBe(operator);
+    vi.stubEnv('CHAT_OPERATOR_ORGS', ORG_A);
+    expect(presetsOnInstall(AGENT_PRESETS, ORG_A).map((p) => p.id)).toContain(OPERATOR);
+    expect(presetsOnInstall(AGENT_PRESETS, ORG_B).map((p) => p.id)).not.toContain(OPERATOR);
+    // A workspace that couldn't be read is left out where the flag names workspaces.
+    expect(presetsOnInstall(AGENT_PRESETS, null).map((p) => p.id)).not.toContain(OPERATOR);
+    expect(readyPreset(OPERATOR, ORG_A)).toBe(operator);
+    expect(readyPreset(OPERATOR, ORG_B)).toBeNull();
+    // Every other preset is offered the same to any workspace.
+    expect(presetsOnInstall(AGENT_PRESETS, ORG_B).length).toBe(
+      presetsOnInstall(AGENT_PRESETS, ORG_A).length - 1,
+    );
   });
 });
 
@@ -509,7 +569,10 @@ describe('the plan a preset needs', () => {
       const facts = planFactsFromOrgRow(row);
       for (const preset of AGENT_PRESETS) {
         const lock = planGateLock(facts, presetGate(preset));
-        const denial = modeDenial(preset.mode, facts, DEFAULT_AGENT_SETTINGS, 'admin');
+        // The AEO Operator: Growth and up whatever its mode (operatorDenial, PR 4).
+        const denial =
+          modeDenial(preset.mode, facts, DEFAULT_AGENT_SETTINGS, 'admin') ??
+          (isOperatorPreset(preset) ? operatorDenial('operator', facts) : null);
         const refused = denial?.denial.code === 'plan_locked' ? denial.denial.needs : null;
         expect(lock, `${preset.id} on ${row.plan} ${row.subscription_status}`).toBe(refused);
       }
@@ -520,7 +583,28 @@ describe('the plan a preset needs', () => {
     expect(presetGate({ mode: 'full_auto' })).toEqual({ minPlan: 'growth' });
     expect(presetGate({ mode: 'auto' })).toBeNull();
     expect(presetGate({ mode: 'ask_first' })).toBeNull();
+    // The AEO Operator is Growth's whatever its mode (AEO Operator plan §4.5), by its id or skill.
+    expect(presetGate(AGENT_PRESETS.find((p) => p.id === 'aeo-operator')!)).toEqual({
+      minPlan: 'growth',
+    });
+    expect(presetGate({ mode: 'auto', skills: ['operator'] })).toEqual({ minPlan: 'growth' });
+    expect(presetGate({ mode: 'auto', skills: ['operator', 'faq'] })).toBeNull();
     expect(readyPreset('weekly-report')?.mode).toBe('full_auto');
+  });
+
+  it('locks the ready AEO Operator’s card below a paid Growth, though it runs in Auto', () => {
+    const operator = AGENT_PRESETS.find((p) => p.id === 'aeo-operator')!;
+    expect(operator).toMatchObject({ status: 'ready', mode: 'auto' });
+    for (const row of workspaces) {
+      const facts = planFactsFromOrgRow(row);
+      expect(modeDenial(operator.mode, facts, DEFAULT_AGENT_SETTINGS, 'admin')).toBeNull();
+      // Starter, and any plan's free trial, as Full auto and Can call are.
+      const locked = row.plan === 'starter' || row.subscription_status === 'trialing';
+      expect(
+        planGateLock(facts, presetGate(operator)),
+        `${row.plan} ${row.subscription_status}`,
+      ).toBe(locked ? 'growth' : null);
+    }
   });
 
   it('is open off the cloud', () => {
@@ -675,6 +759,14 @@ describe('the agents setup recommends (AGENTS plan §8)', () => {
   });
   const ids = (viewer: { siteType: string | null; workAreas: string[] }, list?: AgentPreset[]) =>
     recommendedPresets(viewer, list).map(({ preset, fit }) => [preset.id, fit]);
+
+  it('never include the AEO Operator, even ready: it runs the others (AEO Operator plan §4.3)', () => {
+    const operator = fake('aeo-operator', { skills: ['operator'] });
+    const bySkill = fake('my-operator', { skills: ['operator'] });
+    expect(ids({ siteType: null, workAreas: [] }, [operator, bySkill, fake('faq-only')])).toEqual([
+      ['faq-only', null],
+    ]);
+  });
 
   it('are Ready to use’s first for the person: what fits, then the launch set, 3 to 5', () => {
     // A B2B brand and a content person: what fits, in the catalog's order, as Ready to use shows it.

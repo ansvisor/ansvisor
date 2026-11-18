@@ -77,6 +77,8 @@ const AG = {
   paused: agent(8),
   /** Its current version is missing: it can't run. */
   noVersion: agent(9),
+  /** An Operator by its kind, though its version names no Operator skill: never a candidate. */
+  operatorKind: agent(10),
 };
 
 function agentRow(id: string, over: Record<string, unknown> = {}) {
@@ -93,6 +95,7 @@ function agentRow(id: string, over: Record<string, unknown> = {}) {
     max_month_share: null,
     fail_count: 0,
     demo_brand_id: null,
+    kind: 'agent',
     updated_at: '2026-11-10T00:00:00.000Z',
     ...over,
   };
@@ -345,6 +348,7 @@ function seed() {
       agentRow(AG.foreign, { organization_id: OTHER_ORG, visibility: 'workspace' }),
       agentRow(AG.paused, { status: 'paused', updated_at: '2026-11-13T00:00:00.000Z' }),
       agentRow(AG.noVersion, { version: 2 }),
+      agentRow(AG.operatorKind, { kind: 'operator' }),
     ],
     chat_agent_versions: [
       versionRow(AG.mine, ['winback', 'faq'], { connections: [{ key: 'cms', required: true }] }),
@@ -356,6 +360,7 @@ function seed() {
       versionRow(AG.foreign, ['winback'], { chat_agents: { organization_id: OTHER_ORG } }),
       versionRow(AG.paused, ['refresh'], { scope: { brand_ids: [SISTER] } }),
       versionRow(AG.noVersion, ['winback']),
+      versionRow(AG.operatorKind, ['winback']),
     ],
     chat_agent_triggers: [
       {

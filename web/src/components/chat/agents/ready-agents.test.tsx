@@ -165,7 +165,9 @@ describe('Ready to use', () => {
     expect(shown[10].getAttribute('data-preset')).toBe('onboarding-help');
     expect(shown.slice(8, 24).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
     expect(shown.slice(24).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
-    expect(shown).toHaveLength(39);
+    // Not the AEO Operator: the browser reads CHAT_OPERATOR off, and the page hands it in when on.
+    expect(shown).toHaveLength(38);
+    expect(ids()).not.toContain('aeo-operator');
     // No brand on screen and no work areas: nothing is marked.
     expect(all('[data-slot="preset-fit"]')).toHaveLength(0);
   });
@@ -177,6 +179,35 @@ describe('Ready to use', () => {
     expect(card('paid-opportunity').querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
       '/earn-or-pay/ad-draftsAuto, ask before changes',
     );
+  });
+
+  it('shows the AEO Operator ready, weekdays at 07:00, with its Growth lock, when the page hands it in', async () => {
+    // CHAT_OPERATOR on for the workspace: the page hands the whole catalog in.
+    await render(
+      'manager',
+      { 'aeo-operator': { kind: 'plan', plan: 'Growth', current: 'Starter' } },
+      [],
+      AGENT_PRESETS,
+    );
+    const operator = card('aeo-operator');
+    expect(operator.getAttribute('data-status')).toBe('ready');
+    expect(operator.querySelector('h3')?.textContent).toBe('AEO Operator');
+    expect(operator.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
+      '/operatorAuto, ask before changes',
+    );
+    expect(operator.querySelector('[data-cell="trigger"]')?.textContent).toBe(
+      'TriggerWeekdays 07:00',
+    );
+    expect(operator.querySelector('[data-slot="preset-soon"]')).toBeNull();
+    const lock = operator.querySelector<HTMLElement>('[data-slot="preset-lock"]')!;
+    expect(lock.textContent).toBe('Needs Growth · you’re on Starter');
+    // No mode to fall back on: it is Growth's whatever its mode.
+    expect(lock.title).toBe('The AEO Operator runs other agents, which needs Growth');
+    expect(operator.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
+      '/dashboard/agents/new?preset=aeo-operator',
+    );
+    // Among the ready ones, after Onboarding & Help, as the catalog orders them.
+    expect(ids().indexOf('aeo-operator')).toBe(ids().indexOf('onboarding-help') + 1);
   });
 
   it('gives a ready card its line, skills, mode and triggers, and Use this agent into New agent', async () => {
@@ -260,7 +291,9 @@ describe('Ready to use', () => {
     );
     expect(localization.querySelector('a')).toBeNull();
     expect(localization.querySelector('button')).toBeNull();
-    expect(card('aeo-operator').textContent).toContain('Needs sub-agents');
+    // The AEO Operator isn't a Soon card any more: it is ready, and shown only while it is on.
+    expect(container.querySelector('[data-preset="aeo-operator"]')).toBeNull();
+    expect(container.textContent).not.toContain('Needs sub-agents');
     expect(card('revenue-attribution').textContent).toContain('Needs HubSpot');
     for (const soon of cards().filter((c) => c.getAttribute('data-status') === 'soon')) {
       expect(soon.querySelector('[data-action="agents.usePreset"]')).toBeNull();
@@ -358,7 +391,7 @@ describe('Ready to use', () => {
     await click(option('All'));
     expect(header('goal').textContent).toBe('Goal');
     expect(header('goal').getAttribute('data-picked')).toBeNull();
-    expect(cards()).toHaveLength(39);
+    expect(cards()).toHaveLength(38);
   });
 
   it('opens one panel at a time, and closes it with Escape or a click outside', async () => {
@@ -385,7 +418,7 @@ describe('Ready to use', () => {
     expect(panels()).toHaveLength(0);
     expect(header('businessType').getAttribute('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(header('businessType'));
-    expect(cards()).toHaveLength(39);
+    expect(cards()).toHaveLength(38);
 
     // A click outside closes it too.
     await click(header('role'));
@@ -398,7 +431,7 @@ describe('Ready to use', () => {
     await settle();
     expect(panels()).toHaveLength(0);
     expect(header('role').getAttribute('aria-expanded')).toBe('false');
-    expect(cards()).toHaveLength(39);
+    expect(cards()).toHaveLength(38);
   });
 
   it('works with the keyboard: the arrow keys open a header and move through its options', async () => {
@@ -478,7 +511,7 @@ describe('Ready to use', () => {
     // The Soon ones still come last, theirs first among them.
     const soon = cards().filter((c) => c.getAttribute('data-status') === 'soon');
     expect(soon[0].getAttribute('data-preset')).toBe('review-site-presence');
-    expect(cards()).toHaveLength(39);
+    expect(cards()).toHaveLength(38);
   });
 
   it('reads a brand without a site type as its guess, and an e-commerce brand gets its pack', async () => {

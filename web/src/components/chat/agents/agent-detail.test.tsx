@@ -11,6 +11,7 @@ import {
   NOTHING_CAN,
   NOW,
   detail,
+  operatorDetail,
   run,
 } from '@/lib/chat/testing/agent-fixtures';
 
@@ -520,8 +521,23 @@ describe('AgentDetail', () => {
     runs = [
       run({
         calls: [
-          { agent: 'FAQ writer', status: 'done', usageShare: 0.015, maxShare: 0.06 },
-          { agent: 'Rival brief', status: 'failed', usageShare: 0.002, maxShare: 0.05 },
+          {
+            agent: 'FAQ writer',
+            agentId: 'cccccccc-0000-4000-8000-000000000001',
+            chatId: null,
+            status: 'done',
+            usageShare: 0.015,
+            maxShare: 0.06,
+          },
+          {
+            agent: '',
+            agentId: null,
+            chatId: null,
+            hidden: true,
+            status: 'failed',
+            usageShare: 0.002,
+            maxShare: 0.05,
+          },
         ],
       }),
       run({ triggerKind: 'agent', calledBy: 'Weekly report', chatId: null }),
@@ -540,7 +556,11 @@ describe('AgentDetail', () => {
     expect(called[0].textContent).toContain('Ran FAQ writer');
     expect(called[0].textContent).toContain('Done');
     expect(called[0].textContent).toContain('1.5% of 6%');
+    // One the person can't see is never named.
+    expect(called[1].textContent).toContain('An agent you can’t see');
+    expect(called[1].textContent).not.toContain('Ran');
     expect(called[1].textContent).toContain('Failed');
+    expect(called[1].querySelector('a')).toBeNull();
     await click(action('agent.toggleRunCalls')[0]);
     expect(all('[data-slot="agent-run-call"]')).toHaveLength(0);
   });
@@ -712,6 +732,157 @@ describe('AgentDetail', () => {
     expect(toast.error).toHaveBeenCalledWith("This agent is paused, so it can't do that now.");
     expect(nav.push).not.toHaveBeenCalled();
     expect(one('h1')?.textContent).toBe('Citation win-back');
+  });
+});
+
+describe('AgentDetail: an AEO Operator (AEO Operator plan §4.3)', () => {
+  const CHILD = 'aaaaaaaa-0000-4000-8000-0000000000b1';
+
+  it('shows its badge, daily budget, agents and count in place of connections, model and Can call', async () => {
+    agent = operatorDetail();
+    runs = [];
+    await render();
+    expect(one('[data-slot="agent-meta"] [data-slot="agent-operator-badge"]')?.textContent).toBe(
+      'Operator',
+    );
+    expect(one('[data-slot="agent-meta"] [data-slot="agent-daily-budget"]')?.textContent).toBe(
+      'Daily budget 5%',
+    );
+    const fields = all('[data-field]').map((f) => f.getAttribute('data-field'));
+    expect(fields).toEqual(['skills', 'mode', 'agents', 'maxRuns']);
+    expect(one('[data-field="agents"]')?.textContent).toContain('All your active agents');
+    expect(one('[data-field="maxRuns"]')?.textContent).toContain('At most 5 agents a day');
+    expect(one('[data-row="canCall"]')).toBeNull();
+    expect(one('[data-row="operatorAgents"]')?.textContent).toBe('All your active agents');
+    expect(one('[data-row="engines"]')).toBeNull();
+    expect(one('[data-row="perRun"]')?.previousElementSibling?.textContent).toBe('Daily budget');
+  });
+
+  it('shows today’s plan: each agent, why, its run, the budget used, and Review in Chat', async () => {
+    agent = operatorDetail();
+    runs = [];
+    await render();
+    const panel = one('[data-slot="operator-today"]')!;
+    expect(panel.getAttribute('data-state')).toBe('waiting');
+    expect(panel.querySelector('[data-slot="operator-today-state"]')?.textContent).toBe(
+      'Waiting for you',
+    );
+    expect(panel.querySelector('[data-slot="operator-budget"]')?.textContent).toContain(
+      '0.2% of 5% used',
+    );
+    const review = panel.querySelector<HTMLElement>('[data-action="operator.openPlan"]')!;
+    expect(review.textContent).toBe('Review in Chat');
+    expect(review.getAttribute('href')).toBe(
+      '/dashboard/chat/cccccccc-0000-4000-8000-0000000000a1',
+    );
+    const items = [...panel.querySelectorAll<HTMLElement>('[data-slot="operator-item"]')];
+    expect(items).toHaveLength(2);
+    const link = items[0].querySelector<HTMLElement>('[data-action="operator.openAgent"]')!;
+    expect(link.textContent).toBe('Citation Win-back');
+    expect(link.getAttribute('href')).toBe(`/dashboard/agents/${CHILD}`);
+    expect(items[0].querySelector('[data-slot="operator-item-why"]')?.textContent).toBe(
+      '3 open Recover actions · last ran 9 days ago',
+    );
+    expect(items[0].querySelector('[data-slot="operator-item-status"]')?.textContent).toBe(
+      'Starts once you approve',
+    );
+    expect(items[0].querySelector('[data-slot="operator-item-ai-use"]')?.textContent).toBe(
+      'up to 2%',
+    );
+    // One the person can't see: never named, never linked.
+    expect(items[1].textContent).toContain('An agent you can’t see');
+    expect(items[1].querySelector('a')).toBeNull();
+    expect(panel.querySelector('[data-slot="operator-passed"]')?.textContent).toBe(
+      '3 other agents wait for another day.',
+    );
+  });
+
+  it('shows each started agent’s run and chat once approved, and why one didn’t start', async () => {
+    const day = operatorDetail().operatorDay!;
+    const [first, second] = day.today!.items;
+    agent = operatorDetail({
+      operatorDay: {
+        ...day,
+        today: {
+          ...day.today!,
+          status: 'dispatched',
+          state: 'approved',
+          usedShare: 0.021,
+          items: [
+            {
+              ...first,
+              status: 'done',
+              usageShare: 0.012,
+              chatId: 'cccccccc-0000-4000-8000-0000000000c9',
+            },
+            { ...second, hidden: undefined, agentId: CHILD, agent: 'Rival brief', skipped: 'busy' },
+          ],
+        },
+      },
+    });
+    runs = [];
+    await render();
+    const items = all('[data-slot="operator-item"]');
+    expect(items[0].querySelector('[data-slot="operator-item-status"]')?.textContent).toBe('Done');
+    expect(items[0].querySelector('[data-action="operator.openChat"]')?.getAttribute('href')).toBe(
+      '/dashboard/chat/cccccccc-0000-4000-8000-0000000000c9',
+    );
+    expect(items[0].querySelector('[data-slot="operator-item-ai-use"]')?.textContent).toBe(
+      '1.2% of 2%',
+    );
+    expect(items[1].textContent).toContain('Not started');
+    expect(items[1].textContent).toContain(
+      'It already has a run waiting or working on this brand.',
+    );
+    expect(one('[data-action="operator.openPlan"]')?.textContent).toBe('Open its chat');
+  });
+
+  it('says when it plans next before today’s plan, and lists its last 7 plans', async () => {
+    agent = operatorDetail({
+      operatorDay: { ...operatorDetail().operatorDay!, today: null },
+    });
+    runs = [];
+    await render();
+    expect(one('[data-slot="operator-today-empty"]')?.textContent).toContain('No plan yet today.');
+    const rows = all('[data-slot="operator-history-row"]');
+    expect(rows.map((r) => r.getAttribute('data-state'))).toEqual([
+      'waiting',
+      'approved',
+      'skipped',
+    ]);
+    expect(rows[1].textContent).toContain('Thu, Oct 29');
+    expect(rows[1].textContent).toContain('Approved');
+    expect(rows[1].textContent).toContain('3');
+    expect(rows[1].textContent).toContain('3.1% of 5%');
+  });
+
+  it('links each agent a run started to its chat and its page', async () => {
+    agent = operatorDetail();
+    runs = [
+      run({
+        calls: [
+          {
+            agent: 'Citation Win-back',
+            agentId: CHILD,
+            chatId: 'cccccccc-0000-4000-8000-0000000000c9',
+            status: 'running',
+            usageShare: 0.004,
+            maxShare: 0.02,
+          },
+        ],
+      }),
+    ];
+    await render();
+    await click(action('agent.toggleRunCalls')[0]);
+    const row = one('[data-slot="agent-run-call"]')!;
+    expect(row.textContent).toContain('Ran Citation Win-back');
+    expect(row.querySelector('[data-action="agent.openCallAgent"]')?.getAttribute('href')).toBe(
+      `/dashboard/agents/${CHILD}`,
+    );
+    expect(row.querySelector('[data-action="agent.openCallChat"]')?.getAttribute('href')).toBe(
+      '/dashboard/chat/cccccccc-0000-4000-8000-0000000000c9',
+    );
+    expect(row.textContent).toContain('0.4% of 2%');
   });
 });
 

@@ -240,6 +240,13 @@ vi.mock('@/lib/actions/chat-schedules', () => ({
 vi.mock('@/lib/actions/chat-agent-calls', () => ({
   runAgentFromChat: tracked.track('actions/chat-agent-calls.runAgentFromChat'),
 }));
+// The AEO Operator's card (PR 4): its server action, and its plan's read.
+vi.mock('@/lib/actions/chat-operator', () => ({
+  approveAgentPlanFromChat: tracked.track('actions/chat-operator.approveAgentPlanFromChat'),
+}));
+vi.mock('@/lib/mcp/agent-plan-reads', () => ({
+  getAgentPlanFor: tracked.track('mcp/agent-plan-reads.getAgentPlanFor'),
+}));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
 }));
@@ -297,6 +304,8 @@ const SESSION_FREE = [
   // An agent's Ready for review in Full auto (owner decision 2026-11-03).
   'set_task_ready_for_review',
   'update_draft',
+  // The AEO Operator's plan, approved from Slack (AEO Operator plan §4.2 step 6).
+  'run_agent_plan',
 ];
 /** A run's place, as runLoggedWrite gives a write. */
 const place = {
@@ -1213,6 +1222,8 @@ describe('approval policies', () => {
       forget_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
       // An agent running another agent (CHAT-27 phase 2): Admins and Managers, as agents are.
       run_agent: ['admin', 'manager'],
+      // The AEO Operator's plan card (PR 4): Admins and Managers, as agents are.
+      run_agent_plan: ['admin', 'manager'],
       // Ad drafts (Ads Phase 0 PR 15): Admins and Managers, as the Pay card's route.
       save_ad_drafts: ['admin', 'manager'],
     });
@@ -1603,7 +1614,7 @@ describe("the model's tool list on the registry's rows", () => {
     // Running another agent and saving ad drafts are Growth and up (CHAT-27 decision 4, ADS-01 §8).
     expect(list('manager', starter)).toEqual([
       ...starterReads,
-      ...writes.filter((name) => !['run_agent', 'save_ad_drafts'].includes(name)),
+      ...writes.filter((name) => !['run_agent', 'run_agent_plan', 'save_ad_drafts'].includes(name)),
     ]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
     expect(list('analyst', facts(null, false))).toEqual([

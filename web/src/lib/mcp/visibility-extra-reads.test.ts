@@ -24,6 +24,7 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const reads = await import('./visibility-extra-reads');
 const { getTopicsOverview } = await import('@/lib/actions/topic');
+const { getCitationGaps } = await import('@/lib/actions/citations');
 const { getHeadToHeadComparison } = await import('@/lib/actions/tracking');
 const { getTrafficBots, getTrafficGooglePages } = await import('@/lib/actions/traffic');
 const { parseTopicCompetitors, topicHeatmap } = await import('@/lib/insights-topics');
@@ -34,6 +35,7 @@ const BRAND = '11111111-1111-4111-8111-111111111111';
 const OTHER_BRAND = '66666666-6666-4666-8666-666666666666';
 const T = ['a0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002'];
 const T3 = 'a0000000-0000-4000-8000-000000000003';
+const T_OTHER = 'a0000000-0000-4000-8000-000000000009';
 const C1 = 'c0000000-0000-4000-8000-000000000001';
 const C2 = 'c0000000-0000-4000-8000-000000000002';
 const C_OTHER = 'c0000000-0000-4000-8000-000000000009';
@@ -99,6 +101,23 @@ const group = (
   latest_at: latest,
 });
 
+/** A domain of citation_gap_domains_daily (00203), as the Gaps tab reads it. */
+const gapRow = (
+  domain: string,
+  competitorAnswers: number,
+  appearsInOurs: boolean,
+  strength: number,
+  names: string[],
+) => ({
+  domain,
+  competitor_answers: competitorAnswers,
+  appears_in_ours: appearsInOurs,
+  strength,
+  competitor_names: names,
+  our_answer_count: 0,
+  total_answers: 0,
+});
+
 function seed() {
   db.tables = {
     brands: [
@@ -118,7 +137,15 @@ function seed() {
         created_at: '2026-01-02',
       },
       { id: T3, brand_id: BRAND, name: 'Support', is_active: true, created_at: '2026-01-03' },
+      {
+        id: T_OTHER,
+        brand_id: OTHER_BRAND,
+        name: 'Elsewhere',
+        is_active: true,
+        created_at: '2026-01-04',
+      },
     ],
+    brand_domains: [{ brand_id: BRAND, domain: 'www.nw.example' }],
     prompt_sets: [{ id: 'set-1', brand_id: BRAND }],
     prompts: [
       {
@@ -341,6 +368,21 @@ function seed() {
     alert_from: '2026-10-01',
     since: '2026-10-18',
   }));
+  rpc('citation_gap_domains_daily', () => [
+    // The window's totals: the brand is in 12 of 40 answers.
+    { domain: null, our_answer_count: 12, total_answers: 40 },
+    gapRow('review.example', 5, false, 2.5, ['Acme CRM', 'Zen CRM']),
+    gapRow('forum.example', 2, false, 1.2, ['Zen CRM']),
+    gapRow('blog.example', 3, false, 1.2, ['Acme CRM']),
+    // Also where the brand appears, and cited by one answer only: not gaps.
+    gapRow('news.example', 4, true, 3, ['Acme CRM']),
+    gapRow('lone.example', 1, false, 0.9, ['Zen CRM']),
+  ]);
+  rpc('citation_competitor_sources_daily', () => [
+    { competitor_id: C1, domain: 'review.example', answers_feeding: 4, strength: 2 },
+    { competitor_id: C1, domain: 'news.example', answers_feeding: 3, strength: 2.5 },
+    { competitor_id: C2, domain: 'forum.example', answers_feeding: 2, strength: 1.2 },
+  ]);
   rpc('ai_traffic_google_pages', () => ({
     last_day: '2026-11-14',
     since: '2026-10-16',
@@ -667,6 +709,138 @@ describe('AI Traffic: AI bots and Search Console pages', () => {
   });
 });
 
+describe('Citations › Gaps (get_citation_gaps)', () => {
+  it("lists the Gap list as the tab does, strongest first, from the tab's own read", async () => {
+    const read = await reads.getCitationGapsFor(AUTH, {
+      brandId: BRAND,
+      ...DATES,
+      model: 'chatgpt-web,perplexity',
+      region: 'US',
+      topicId: T[0],
+    });
+    // The tab's own read of the same filters, a custom range as its date control passes it.
+    const tab = await getCitationGaps(BRAND, {
+      datePreset: 'custom',
+      dateFrom: '2026-10-18',
+      dateTo: '2026-11-16T23:59:59.999Z',
+      platforms: ['chatgpt-web,perplexity'],
+      regions: ['US'],
+      topicIds: [T[0]],
+    });
+    expect(read).toMatchObject({
+      view: 'gap_list',
+      period: { day_from: '2026-10-18', day_to: '2026-11-16' },
+      answers: tab.totalAnswers,
+      answers_with_brand: tab.ourAnswerCount,
+      low_visibility: false,
+      total: 3,
+      offset: 0,
+      next_offset: null,
+    });
+    expect((read as { gap_domains: unknown[] }).gap_domains).toEqual(
+      tab.gapDomains.map((g) => ({
+        domain: g.domain,
+        source_type: g.category,
+        competitor_answers: g.competitorAnswers,
+        competitors: g.competitors,
+        strength: g.strength,
+      })),
+    );
+    // Strongest first, more competitor answers first on a tie; never where the brand appears.
+    expect(
+      (read as { gap_domains: { domain: string }[] }).gap_domains.map((g) => g.domain),
+    ).toEqual(['review.example', 'blog.example', 'forum.example']);
+    expect((read as { competitors: unknown[] }).competitors).toEqual([
+      { competitor_id: C1, name: 'Acme CRM', source_domains: 2 },
+      { competitor_id: C2, name: 'Zen CRM', source_domains: 1 },
+    ]);
+    // The tab's arguments: whole UTC days, the brand's and its competitors' domains, its filters.
+    const calls = rpcCalls.filter((c) => c.name === 'citation_gap_domains_daily');
+    expect(calls).toHaveLength(2);
+    expect(calls[0].args).toEqual(calls[1].args);
+    expect(calls[0].args).toEqual({
+      p_brand_id: BRAND,
+      p_day_from: '2026-10-18',
+      p_day_to: '2026-11-16',
+      p_models: ['chatgpt-web', 'perplexity'],
+      p_regions: ['US'],
+      p_topic_ids: [T[0]],
+      p_brand_domains: ['nw.example'],
+      p_competitor_domains: ['acme.example', 'zencrm.example'],
+    });
+  });
+
+  it("reads one competitor's sources as the By competitor view does", async () => {
+    const read = (await reads.getCitationGapsFor(AUTH, {
+      brandId: BRAND,
+      ...DATES,
+      competitorId: C1,
+    })) as Record<string, unknown> & { source_domains: Record<string, unknown>[] };
+    const tab = await getCitationGaps(BRAND, {
+      datePreset: 'custom',
+      dateFrom: '2026-10-18',
+      dateTo: '2026-11-16T23:59:59.999Z',
+    });
+    expect(read).toMatchObject({
+      view: 'by_competitor',
+      competitor: { competitor_id: C1, name: 'Acme CRM' },
+      total: 2,
+    });
+    expect(read.source_domains).toEqual(
+      tab.byCompetitor[C1].map((d) => ({
+        domain: d.domain,
+        source_type: d.category,
+        answers_feeding: d.answersFeeding,
+        also_cites_brand: d.alsoCitesUs,
+        strength: d.strength,
+      })),
+    );
+    expect(read.source_domains.map((d) => [d.domain, d.also_cites_brand])).toEqual([
+      ['news.example', true],
+      ['review.example', false],
+    ]);
+  });
+
+  it("reads all time with no period (the tab's All time), and says when the list may be broad", async () => {
+    rpc('citation_gap_domains_daily', () => [
+      { domain: null, our_answer_count: 3, total_answers: 40 },
+      gapRow('review.example', 5, false, 2.5, ['Acme CRM']),
+    ]);
+    const read = await reads.getCitationGapsFor(AUTH, { brandId: BRAND });
+    expect(read).toMatchObject({ period: 'all time', low_visibility: true, total: 1 });
+    expect((read as { low_visibility_note: string }).low_visibility_note).toContain('broad');
+    const args = rpcCalls.find((c) => c.name === 'citation_gap_domains_daily')!.args;
+    expect(args.p_day_from).toBeUndefined();
+    expect(args.p_day_to).toBeUndefined();
+  });
+
+  it('pages the Gap list', async () => {
+    const read = await reads.getCitationGapsFor(AUTH, {
+      brandId: BRAND,
+      ...DATES,
+      limit: 1,
+      offset: 1,
+    });
+    expect(read).toMatchObject({ total: 3, offset: 1, next_offset: 2 });
+    expect((read as { gap_domains: { domain: string }[] }).gap_domains).toEqual([
+      expect.objectContaining({ domain: 'blog.example' }),
+    ]);
+    expect((read as { note: string }).note).toContain('Read the next page with offset 2');
+  });
+
+  it("finds another brand's topic or competitor not, and reads no gaps for it", async () => {
+    for (const asked of [{ topicId: T_OTHER }, { competitorId: C_OTHER }]) {
+      rpcCalls.length = 0;
+      const read = await reads.getCitationGapsFor(AUTH, { brandId: BRAND, ...DATES, ...asked });
+      expect(read, JSON.stringify(asked)).toMatchObject({
+        not_found: [asked.topicId ?? asked.competitorId],
+      });
+      expect(read).not.toHaveProperty('gap_domains');
+      expect(rpcCalls).toEqual([]);
+    }
+  });
+});
+
 /** Every new read, on the brand given. */
 const everyRead = (auth: McpAuthContext, brandId: string) =>
   [
@@ -679,6 +853,8 @@ const everyRead = (auth: McpAuthContext, brandId: string) =>
     () => reads.getVisibilityOpportunitiesFor(auth, { brandId, ...DATES }),
     () => reads.getAiBotsFor(auth, { brandId, ...DATES }),
     () => reads.getGscPagesFor(auth, { brandId, ...DATES }),
+    () => reads.getCitationGapsFor(auth, { brandId, ...DATES, topicId: T[0] }),
+    () => reads.getCitationGapsFor(auth, { brandId, ...DATES, competitorId: C1 }),
   ] as const;
 
 describe('scope', () => {

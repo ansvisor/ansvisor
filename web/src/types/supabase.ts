@@ -2108,6 +2108,95 @@ export type Database = {
           },
         ]
       }
+      chat_agent_plans: {
+        Row: {
+          agent_id: string
+          brand_id: string
+          budget_share: number | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          dispatched_at: string | null
+          id: string
+          items: Json
+          organization_id: string
+          passed: Json
+          plan_day: string
+          planned_share: number | null
+          run_id: string
+          status: string
+          summarized_at: string | null
+          summary_json: Json | null
+        }
+        Insert: {
+          agent_id: string
+          brand_id: string
+          budget_share?: number | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          dispatched_at?: string | null
+          id?: string
+          items?: Json
+          organization_id: string
+          passed?: Json
+          plan_day: string
+          planned_share?: number | null
+          run_id: string
+          status?: string
+          summarized_at?: string | null
+          summary_json?: Json | null
+        }
+        Update: {
+          agent_id?: string
+          brand_id?: string
+          budget_share?: number | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          dispatched_at?: string | null
+          id?: string
+          items?: Json
+          organization_id?: string
+          passed?: Json
+          plan_day?: string
+          planned_share?: number | null
+          run_id?: string
+          status?: string
+          summarized_at?: string | null
+          summary_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_agent_plans_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_plans_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_plans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_plans_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: true
+            referencedRelation: "chat_agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_agent_runs: {
         Row: {
           acting_user_id: string | null
@@ -2329,6 +2418,7 @@ export type Database = {
           mode: string
           model: string
           notify_user_ids: string[]
+          operator_json: Json | null
           scope: Json
           skill_ids: string[]
           version: number
@@ -2345,6 +2435,7 @@ export type Database = {
           mode?: string
           model?: string
           notify_user_ids?: string[]
+          operator_json?: Json | null
           scope?: Json
           skill_ids: string[]
           version: number
@@ -2361,6 +2452,7 @@ export type Database = {
           mode?: string
           model?: string
           notify_user_ids?: string[]
+          operator_json?: Json | null
           scope?: Json
           skill_ids?: string[]
           version?: number
@@ -2384,6 +2476,7 @@ export type Database = {
           demo_brand_id: string | null
           fail_count: number
           id: string
+          kind: string
           max_month_share: number | null
           max_run_share: number
           name: string
@@ -2403,6 +2496,7 @@ export type Database = {
           demo_brand_id?: string | null
           fail_count?: number
           id?: string
+          kind?: string
           max_month_share?: number | null
           max_run_share?: number
           name: string
@@ -2422,6 +2516,7 @@ export type Database = {
           demo_brand_id?: string | null
           fail_count?: number
           id?: string
+          kind?: string
           max_month_share?: number | null
           max_run_share?: number
           name?: string
@@ -4485,6 +4580,7 @@ export type Database = {
           domain: string
           id: string
           name: string
+          type: string | null
         }
         Insert: {
           brand_id: string
@@ -4492,6 +4588,7 @@ export type Database = {
           domain?: string
           id?: string
           name: string
+          type?: string | null
         }
         Update: {
           brand_id?: string
@@ -4499,6 +4596,7 @@ export type Database = {
           domain?: string
           id?: string
           name?: string
+          type?: string | null
         }
         Relationships: [
           {
@@ -6684,6 +6782,63 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merged_competitors: {
+        Row: {
+          brand_id: string
+          created_at: string
+          domain: string
+          id: string
+          merged_at: string
+          merged_by: string | null
+          merged_into_id: string
+          name: string
+          page_events: Json
+          scanned_at: string | null
+          type: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at: string
+          domain?: string
+          id: string
+          merged_at?: string
+          merged_by?: string | null
+          merged_into_id: string
+          name: string
+          page_events?: Json
+          scanned_at?: string | null
+          type?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          domain?: string
+          id?: string
+          merged_at?: string
+          merged_by?: string | null
+          merged_into_id?: string
+          name?: string
+          page_events?: Json
+          scanned_at?: string | null
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merged_competitors_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merged_competitors_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
             referencedColumns: ["id"]
           },
         ]
@@ -9601,6 +9756,19 @@ export type Database = {
           p_search?: string
           p_topic_id?: string
         }
+        Returns: Json
+      }
+      merge_competitors: {
+        Args: {
+          p_brand_id: string
+          p_kept_id: string
+          p_merged_ids: string[]
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      unmerge_competitor: {
+        Args: { p_brand_id: string; p_competitor_id: string; p_user_id?: string }
         Returns: Json
       }
       override_mention_sentiment: {

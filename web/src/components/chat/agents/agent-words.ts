@@ -4,24 +4,31 @@ import type { AgentListItem, AgentTriggerView } from '@/lib/chat/agents';
 import {
   nextRunOf,
   outcomeCounts,
+  percentOf,
   triggerSummary,
   whenParts,
   type TriggerSummary,
 } from '@/lib/chat/agent-view';
+import type { OperatorReason } from '@/lib/chat/operator/reasons';
+import type { OperatorDayState, OperatorTodayLine } from '@/lib/chat/operator/views';
 
 /**
  * The words Agent Center puts around an agent (CHAT-21 §B item 6, §C):
  * times ("Today 09:14", "Mon 07:00"), triggers in short ("Every Mon 09:00 ·
  * New Recover signal"), the next run, the scope ("Brand A", "3 brands"),
- * connections and the 30-day outcomes. One place for the list and the
- * detail. A schedule's times are on its own clock, as its rule reads
+ * connections and the 30-day outcomes; an AEO Operator's daily budget, its
+ * line for today's plan and why it picked each agent. One place for the
+ * list and the detail. A schedule's times are on its own clock, as its rule reads
  * ("Every Mon 07:00" runs next "Mon 07:00"); other times on the viewer's.
  * `now` and `timeZone` are fixed in tests; the browser's otherwise.
  */
 export function useAgentWords(now: Date, timeZone?: string) {
   const t = useTranslations('chatAgents');
   const tCategories = useTranslations('actionCenter.actionCategories');
+  const tSignals = useTranslations('actionCenter.signalCategories');
   const tKpis = useTranslations('actionCenter.registry');
+  const tOperator = useTranslations('chatAgents.operatorUi');
+  const tReason = useTranslations('chatAgents.runner.operatorReason');
 
   return useMemo(() => {
     /**
@@ -136,8 +143,81 @@ export function useAgentWords(now: Date, timeZone?: string) {
     const model = (id: string | null | undefined) =>
       !id || id === 'auto' ? t('model.auto') : (id.split('/').pop() ?? id);
 
-    return { when, trigger, triggersShort, nextRun, scope, connection, outcomes, model };
-  }, [t, tCategories, tKpis, now, timeZone]);
+    /** An AEO Operator's budget: "Daily budget 5%". */
+    const dailyBudget = (share: number) => tOperator('dailyBudget', { share: percentOf(share) });
+
+    /**
+     * Today's plan on an AEO Operator's card (AEO Operator plan §4.3): "Today:
+     * 4 agents · waiting for you", "Today: approved, 2 of 4 done", "Today:
+     * nothing to do", "Today: skipped".
+     */
+    const operatorToday = (line: OperatorTodayLine) => {
+      switch (line.state) {
+        case 'waiting':
+          return tOperator('today.waiting', { count: line.agents });
+        case 'starting':
+          return tOperator('today.starting', { count: line.agents });
+        case 'approved':
+          return line.started === 0
+            ? tOperator('today.approvedNone')
+            : tOperator('today.approved', { done: line.done, count: line.started });
+        default:
+          return tOperator(`today.${line.state}`);
+      }
+    };
+
+    /** A plan's state in a word or two: "Waiting for you", "Approved", "Skipped". */
+    const planState = (state: OperatorDayState) => tOperator(`planState.${state}`);
+
+    /** Why the Operator picked an agent, from its codes: "3 open Recover actions". */
+    const operatorReason = (reason: OperatorReason) => {
+      switch (reason.code) {
+        case 'open_actions':
+          return tReason('open_actions', {
+            count: reason.count,
+            category: tCategories.has(reason.category)
+              ? tCategories(reason.category)
+              : reason.category,
+          });
+        case 'new_signals':
+          return tReason('new_signals', {
+            count: reason.count,
+            category: tSignals.has(reason.category) ? tSignals(reason.category) : reason.category,
+          });
+        case 'kpi_off_track':
+          return tReason('kpi_off_track', {
+            kpi: tKpis.has(`${reason.kpi}.name`) ? tKpis(`${reason.kpi}.name`) : reason.kpi,
+          });
+        case 'overdue':
+        case 'last_ran':
+          return tReason(reason.code, { days: reason.days });
+        case 'never_ran':
+          return tReason('never_ran');
+        default:
+          return tReason(reason.code, { count: reason.count });
+      }
+    };
+
+    /** The reasons a plan item shows, joined: "3 open Recover actions · last ran 9 days ago". */
+    const operatorWhy = (reasons: readonly OperatorReason[]) =>
+      reasons.map(operatorReason).join(' · ');
+
+    return {
+      when,
+      trigger,
+      triggersShort,
+      nextRun,
+      scope,
+      connection,
+      outcomes,
+      model,
+      dailyBudget,
+      operatorToday,
+      planState,
+      operatorReason,
+      operatorWhy,
+    };
+  }, [t, tCategories, tSignals, tKpis, tOperator, tReason, now, timeZone]);
 }
 
 export type AgentWords = ReturnType<typeof useAgentWords>;
