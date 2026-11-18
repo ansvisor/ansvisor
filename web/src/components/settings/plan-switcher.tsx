@@ -48,6 +48,7 @@ import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
+import { ExpandableMark } from './plan-feature-mark';
 import { trackCancelOpened, trackReactivated } from '@/lib/billing/cancel-events';
 import {
   aiUsageMultiple,
@@ -438,6 +439,7 @@ export function PlanSwitcher({
                       >
                         {feature.text}
                       </span>
+                      {feature.expandable && <ExpandableMark />}
                     </li>
                   ))}
                 </ul>
