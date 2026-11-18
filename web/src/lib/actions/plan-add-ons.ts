@@ -9,7 +9,13 @@ import { getPlan, isCloud } from '@/config/plans';
 import { assertWritable, SubscriptionInactiveError } from '@/lib/subscription-guard';
 import { getOrgLocationUsage } from '@/lib/prompt-locations';
 import { countPlanBrands } from '@/lib/plan-brand-count';
-import { addOnForPlan, addOnInterval, loadStripe, planItemOf } from '@/lib/billing/add-ons';
+import {
+  ADD_ON_PURCHASE_KEY,
+  addOnForPlan,
+  addOnInterval,
+  loadStripe,
+  planItemOf,
+} from '@/lib/billing/add-ons';
 import { addOnTotals, type RecurringAddOnRow } from '@/lib/billing/add-on-sync';
 import { resolveAddOnPrice } from '@/lib/billing/add-on-prices';
 import {
@@ -36,6 +42,13 @@ import {
  * discount the add-ons too: when the subscription will hold an add-on, the
  * discount moves onto the plan's item, so it keeps discounting the plan
  * alone.
+ *
+ * An AI usage top-up (+5x, +10x, +20x) can be in the same cart: one
+ * payment, added to this period's AI usage, briefs and opportunities until
+ * the plan renews (00546 usage_top_ups), and bought again any time. With a
+ * tier or brands it rides on the same update (add_invoice_items), so the
+ * cart is one charge; alone, it is a one-line invoice paid at once. Either
+ * way a purchase waits as pending and only the webhook grants it once paid.
  *
  * Kept apart from CHAT-18's packs (add-ons.ts): nothing here waits on Chat.
  * Never throws (#1777): every refusal is a reason the page can word.
@@ -87,6 +100,8 @@ export interface AddOnChangeInput {
   trackingUnits: number;
   /** Extra brands on top of the plan's; 0 for none. */
   extraBrands: number;
+  /** The AI usage top-up's multiplier (5, 10 or 20); 0 or none for no top-up. */
+  topUp?: number;
   /** The preview's proration date (Unix seconds), so the charge is the amount shown. */
   prorationDate?: number;
 }
@@ -114,6 +129,7 @@ export type AddOnChangeResult =
 const inputSchema = z.object({
   trackingUnits: z.number().int().min(0).max(1_000_000),
   extraBrands: z.number().int().min(0).max(1_000),
+  topUp: z.number().int().min(0).max(100).optional(),
   prorationDate: z.number().int().positive().optional(),
 });
 
@@ -125,21 +141,24 @@ export async function previewAddOnChange(input: AddOnChangeInput): Promise<AddOn
   try {
     const cart = await prepare(input);
     if (!cart.ok) return cart;
-    const preview = await cart.stripe.invoices.createPreview({
-      customer: cart.customerId,
-      subscription: cart.subscription.id,
-      ...(cart.discountsMove ? { discounts: '' as const } : {}),
-      subscription_details: {
-        items: cart.items as Stripe.InvoiceCreatePreviewParams.SubscriptionDetails.Item[],
-        proration_behavior: 'always_invoice',
-        proration_date: cart.prorationDate,
-      },
-    });
+    const preview = cart.changes.length
+      ? await cart.stripe.invoices.createPreview({
+          customer: cart.customerId,
+          subscription: cart.subscription.id,
+          ...(cart.discountsMove ? { discounts: '' as const } : {}),
+          subscription_details: {
+            items: cart.items as Stripe.InvoiceCreatePreviewParams.SubscriptionDetails.Item[],
+            proration_behavior: 'always_invoice',
+            proration_date: cart.prorationDate,
+          },
+        })
+      : null;
     return {
       ok: true,
-      changed: cart.changes.length > 0,
+      changed: cart.changes.length > 0 || !!cart.topUp,
       limits: cart.limits,
-      dueTodayCents: cart.changes.length ? preview.amount_due : 0,
+      // The rest of this period, and the top-up in full.
+      dueTodayCents: (preview?.amount_due ?? 0) + (cart.topUp?.row.price_cents ?? 0),
       totalCents: cart.totalCents,
       currency: cart.currency,
       interval: cart.interval,
@@ -171,10 +190,23 @@ export async function applyAddOnChange(input: AddOnChangeInput): Promise<AddOnCh
 async function apply(input: AddOnChangeInput): Promise<AddOnChangeResult> {
   const cart = await prepare(input);
   if (!cart.ok) return cart;
-  if (!cart.changes.length) return { ok: true, changed: false, limits: cart.limits };
+  if (!cart.changes.length && !cart.topUp) {
+    return { ok: true, changed: false, limits: cart.limits };
+  }
+
+  // The top-up's purchase, pending until the webhook hears it was paid.
+  const purchaseId = cart.topUp ? await newTopUpPurchase(cart) : null;
+  const metadata = purchaseId
+    ? { [ADD_ON_PURCHASE_KEY]: purchaseId, organization_id: cart.organizationId }
+    : undefined;
+
+  if (!cart.changes.length) {
+    const charged = await chargeTopUp(cart, purchaseId as string, metadata ?? {});
+    return charged.ok ? { ok: true, changed: true, limits: cart.limits } : charged;
+  }
 
   const key = createHash('sha256')
-    .update(JSON.stringify([cart.subscription.id, cart.items, cart.prorationDate]))
+    .update(JSON.stringify([cart.subscription.id, cart.items, cart.prorationDate, purchaseId]))
     .digest('hex')
     .slice(0, 32);
   let updated: Stripe.Subscription;
@@ -184,6 +216,7 @@ async function apply(input: AddOnChangeInput): Promise<AddOnChangeResult> {
       {
         items: cart.items as Stripe.SubscriptionUpdateParams.Item[],
         ...(cart.discountsMove ? { discounts: '' as const } : {}),
+        ...(cart.topUp ? { add_invoice_items: [{ price: cart.topUp.priceId, metadata }] } : {}),
         proration_behavior: 'always_invoice',
         proration_date: cart.prorationDate,
         payment_behavior: 'error_if_incomplete',
@@ -191,13 +224,19 @@ async function apply(input: AddOnChangeInput): Promise<AddOnChangeResult> {
       { idempotencyKey: `plan-add-ons-${cart.organizationId}-${key}` },
     );
   } catch (err) {
-    // Declined or needing the customer: nothing changed.
-    if (declined(err)) return refuse('payment_failed', { message: err.message });
+    // Declined or needing the customer: nothing changed, nothing was bought.
+    if (declined(err)) {
+      if (purchaseId) await markPurchaseFailed(purchaseId);
+      return refuse('payment_failed', { message: err.message });
+    }
     throw err;
   }
 
   // What the plan's limits read now; the webhook writes the same from Stripe.
-  const totals = addOnTotals(updated.items.data as CartItem[], cart.catalog);
+  const totals = addOnTotals(
+    updated.items.data as CartItem[],
+    cart.catalog.filter((r): r is CatalogRow & RecurringAddOnRow => r.kind !== 'ai_topup'),
+  );
   const { error } = await supabaseAdmin
     .from('organizations')
     .update({ add_on_prompts: totals.prompts, add_on_brands: totals.brands })
@@ -205,6 +244,82 @@ async function apply(input: AddOnChangeInput): Promise<AddOnChangeResult> {
     .eq('stripe_subscription_id', cart.subscription.id);
   if (error) console.error('[plan-add-ons] Limits write failed:', error.message);
   return { ok: true, changed: true, limits: cart.limits };
+}
+
+/** The top-up's purchase row: pending until paid. */
+async function newTopUpPurchase(cart: Cart): Promise<string> {
+  const { data, error } = await supabaseAdmin
+    .from('add_on_purchases')
+    .insert({
+      organization_id: cart.organizationId,
+      product_id: cart.topUp!.row.id,
+      bought_by: cart.userId,
+      status: 'pending',
+      currency: cart.topUp!.row.currency,
+    })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(error?.message ?? 'No purchase row');
+  return (data as { id: string }).id;
+}
+
+async function markPurchaseFailed(purchaseId: string) {
+  const { error } = await supabaseAdmin
+    .from('add_on_purchases')
+    .update({ status: 'failed' })
+    .eq('id', purchaseId)
+    .eq('status', 'pending');
+  if (error) console.error('[plan-add-ons] Purchase not marked failed:', error.message);
+}
+
+/**
+ * A top-up alone: a one-line invoice on the plan's customer, paid at once
+ * from the card on file. Declined, the invoice is voided and nothing is
+ * bought; any other failure leaves the purchase pending for the webhook.
+ */
+async function chargeTopUp(
+  cart: Cart,
+  purchaseId: string,
+  metadata: Record<string, string>,
+): Promise<{ ok: true } | AddOnChangeRefusal> {
+  const { stripe } = cart;
+  const invoice = await stripe.invoices.create(
+    {
+      customer: cart.customerId,
+      collection_method: 'charge_automatically',
+      auto_advance: false,
+      pending_invoice_items_behavior: 'exclude',
+      metadata,
+    },
+    { idempotencyKey: `add-on-invoice-${purchaseId}` },
+  );
+  const invoiceId = invoice.id as string;
+  await stripe.invoiceItems.create(
+    {
+      customer: cart.customerId,
+      invoice: invoiceId,
+      pricing: { price: cart.topUp!.priceId },
+      metadata,
+    },
+    { idempotencyKey: `add-on-item-${purchaseId}` },
+  );
+  await supabaseAdmin
+    .from('add_on_purchases')
+    .update({ stripe_invoice_id: invoiceId })
+    .eq('id', purchaseId)
+    .is('stripe_invoice_id', null);
+  await stripe.invoices.finalizeInvoice(invoiceId, { auto_advance: false });
+  try {
+    await stripe.invoices.pay(invoiceId);
+  } catch (err) {
+    if (!declined(err)) throw err;
+    await stripe.invoices.voidInvoice(invoiceId).catch((voidErr: unknown) => {
+      console.error('[plan-add-ons] Declined invoice not voided:', voidErr);
+    });
+    await markPurchaseFailed(purchaseId);
+    return refuse('payment_failed', { message: err.message });
+  }
+  return { ok: true };
 }
 
 function declined(err: unknown): err is { message: string } {
@@ -216,7 +331,9 @@ function declined(err: unknown): err is { message: string } {
 
 type StripeClient = NonNullable<Awaited<ReturnType<typeof loadStripe>>>;
 
-type CatalogRow = RecurringAddOnRow & {
+type CatalogRow = Omit<RecurringAddOnRow, 'kind'> & {
+  kind: RecurringAddOnRow['kind'] | 'ai_topup';
+  multiplier: number | null;
   id: string;
   price_cents: number;
   currency: string;
@@ -229,6 +346,7 @@ type CatalogRow = RecurringAddOnRow & {
 interface Cart {
   ok: true;
   stripe: StripeClient;
+  userId: string;
   organizationId: string;
   customerId: string;
   subscription: Stripe.Subscription;
@@ -237,6 +355,8 @@ interface Cart {
   /** The items Stripe is sent: the changes, and the plan's item when a discount moves onto it. */
   items: Record<string, unknown>[];
   discountsMove: boolean;
+  /** The AI usage top-up in the cart, with its resolved price. */
+  topUp: { row: CatalogRow; priceId: string } | null;
   limits: AddOnLimits;
   totalCents: number;
   currency: string;
@@ -245,7 +365,7 @@ interface Cart {
 }
 
 const CATALOG_COLUMNS =
-  'id, kind, price_cents, currency, billing, grant_prompts, grant_brands, stripe_price_id, stripe_lookup_key, sale, plans, active';
+  'id, kind, price_cents, currency, billing, grant_prompts, grant_brands, multiplier, stripe_price_id, stripe_lookup_key, sale, plans, active';
 
 /** A proration date the preview gave, if it's recent; else now. */
 function prorationDateOf(asked: number | undefined): number {
@@ -309,13 +429,16 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
   const { data: rows, error } = await supabaseAdmin
     .from('add_on_products')
     .select(CATALOG_COLUMNS)
-    .in('kind', ['tracking', 'brand']);
+    .in('kind', ['tracking', 'brand', 'ai_topup']);
   if (error) throw new Error(error.message);
   const catalog = (rows ?? []) as CatalogRow[];
+  const recurring = catalog.filter(
+    (r): r is CatalogRow & RecurringAddOnRow => r.kind === 'tracking' || r.kind === 'brand',
+  );
   const forThisPlan = (row: CatalogRow) =>
     row.active && addOnForPlan(row, 'growth') && addOnInterval(row) === interval;
 
-  const current = currentAddOns(items, catalog);
+  const current = currentAddOns(items, recurring);
   const base = getPlan('growth').limits;
   const limits: AddOnLimits = {
     prompts: base.maxPrompts + input.trackingUnits,
@@ -355,7 +478,7 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
 
   // Never below what's in use: a change that lowers a limit under it waits
   // until prompt locations are paused or brands removed.
-  const before = addOnTotals(items, catalog);
+  const before = addOnTotals(items, recurring);
   const lowers = input.trackingUnits < before.prompts || input.extraBrands < before.brands;
   if (changes.length && lowers) {
     const [usage, brandsInUse] = await Promise.all([
@@ -391,6 +514,22 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     });
   }
 
+  // The top-up: one payment, bought again any time (no monthly cap).
+  let topUp: Cart['topUp'] = null;
+  if (input.topUp) {
+    const row = catalog.find(
+      (r) =>
+        r.kind === 'ai_topup' &&
+        r.multiplier === input.topUp &&
+        r.active &&
+        addOnForPlan(r, 'growth'),
+    );
+    if (!row || row.sale === 'contact_sales') return refuse('unavailable');
+    const priceId = await resolveAddOnPrice(stripe, row);
+    if (!priceId) return refuse('unavailable');
+    topUp = { row, priceId };
+  }
+
   const planCents = (planItem.price?.unit_amount ?? 0) * (planItem.quantity ?? 1);
   const tierCents = tier
     ? tier.price_cents
@@ -402,6 +541,7 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
   return {
     ok: true,
     stripe,
+    userId: user.id,
     organizationId,
     customerId,
     subscription,
@@ -409,6 +549,7 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     changes,
     items: sent,
     discountsMove,
+    topUp,
     limits,
     totalCents: planCents + tierCents + brandCents,
     currency: planItem.price?.currency ?? 'usd',

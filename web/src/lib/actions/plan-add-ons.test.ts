@@ -35,11 +35,23 @@ const stripeApi = vi.hoisted(() => ({
   update: vi.fn(),
   preview: vi.fn(),
   listPrices: vi.fn(),
+  createInvoice: vi.fn(),
+  createInvoiceItem: vi.fn(),
+  finalize: vi.fn(),
+  pay: vi.fn(),
+  voidInvoice: vi.fn(),
 }));
 vi.mock('@/lib/stripe', () => ({
   stripe: {
     subscriptions: { retrieve: stripeApi.retrieve, update: stripeApi.update },
-    invoices: { createPreview: stripeApi.preview },
+    invoices: {
+      createPreview: stripeApi.preview,
+      create: stripeApi.createInvoice,
+      finalizeInvoice: stripeApi.finalize,
+      pay: stripeApi.pay,
+      voidInvoice: stripeApi.voidInvoice,
+    },
+    invoiceItems: { create: stripeApi.createInvoiceItem },
     prices: { list: stripeApi.listPrices },
   },
 }));
@@ -65,6 +77,22 @@ const row = (id: string, kind: 'tracking' | 'brand', units: number | null, over 
   plans: ['growth'],
   active: true,
   ...over,
+});
+
+const topUpRow = (multiplier: number, price: number) => ({
+  id: `ai_topup_${multiplier}x`,
+  kind: 'ai_topup',
+  price_cents: price,
+  currency: 'usd',
+  billing: 'one_time',
+  grant_prompts: null,
+  grant_brands: null,
+  multiplier,
+  stripe_price_id: `price_ai_topup_${multiplier}x`,
+  stripe_lookup_key: `addon_ai_topup_${multiplier}x`,
+  sale: 'self_serve',
+  plans: ['growth'],
+  active: true,
 });
 
 const planItem = (interval = 'month') => ({
@@ -132,8 +160,17 @@ beforeEach(() => {
       row('tracking_1000_year', 'tracking', 1000),
       row('brand_month', 'brand', null),
       row('brand_year', 'brand', null),
+      topUpRow(5, 3900),
+      topUpRow(10, 6900),
+      topUpRow(20, 12900),
     ],
+    add_on_purchases: [],
   };
+  stripeApi.createInvoice.mockResolvedValue({ id: 'in_topup' });
+  stripeApi.createInvoiceItem.mockResolvedValue({ id: 'ii_topup' });
+  stripeApi.finalize.mockResolvedValue({ id: 'in_topup' });
+  stripeApi.pay.mockResolvedValue({ id: 'in_topup', status: 'paid' });
+  stripeApi.voidInvoice.mockResolvedValue({ id: 'in_topup' });
   stripeApi.retrieve.mockResolvedValue(subscription([planItem()]));
   stripeApi.preview.mockResolvedValue({ amount_due: 4120 });
   stripeApi.update.mockImplementation(async (_id: string, params: { items: unknown[] }) => ({
@@ -364,5 +401,103 @@ describe('is refused', () => {
   it('for input that isn’t a count', async () => {
     await refused('unavailable', { trackingUnits: -1, extraBrands: 0 });
     await refused('unavailable', { trackingUnits: 100, extraBrands: 1.5 });
+  });
+});
+
+describe('an AI usage top-up', () => {
+  const purchases = () => db.tables.add_on_purchases;
+
+  it('adds its price in full to what’s due today', async () => {
+    const preview = await previewAddOnChange({ trackingUnits: 100, extraBrands: 0, topUp: 10 });
+    expect(preview).toMatchObject({ ok: true, changed: true, dueTodayCents: 4120 + 6900 });
+    // Alone: nothing to prorate, no preview asked of Stripe.
+    stripeApi.preview.mockClear();
+    await expect(
+      previewAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 5 }),
+    ).resolves.toMatchObject({ ok: true, changed: true, dueTodayCents: 3900 });
+    expect(stripeApi.preview).not.toHaveBeenCalled();
+  });
+
+  it('rides on the plan change, one charge, its purchase pending until the webhook', async () => {
+    await expect(
+      applyAddOnChange({ trackingUnits: 100, extraBrands: 0, topUp: 10 }),
+    ).resolves.toMatchObject({ ok: true, changed: true });
+    expect(purchases()).toEqual([
+      expect.objectContaining({
+        organization_id: ORG,
+        product_id: 'ai_topup_10x',
+        bought_by: 'u_admin',
+        status: 'pending',
+      }),
+    ]);
+    const params = stripeApi.update.mock.calls[0][1];
+    expect(params.add_invoice_items).toEqual([
+      {
+        price: 'price_ai_topup_10x',
+        metadata: { add_on_purchase_id: purchases()[0].id, organization_id: ORG },
+      },
+    ]);
+    expect(stripeApi.createInvoice).not.toHaveBeenCalled();
+  });
+
+  it('alone is a one-line invoice, paid at once from the card on file', async () => {
+    await expect(
+      applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 20 }),
+    ).resolves.toMatchObject({ ok: true, changed: true });
+    expect(stripeApi.update).not.toHaveBeenCalled();
+    const purchaseId = purchases()[0].id;
+    expect(stripeApi.createInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: 'cus_1',
+        collection_method: 'charge_automatically',
+        auto_advance: false,
+        pending_invoice_items_behavior: 'exclude',
+        metadata: { add_on_purchase_id: purchaseId, organization_id: ORG },
+      }),
+      { idempotencyKey: `add-on-invoice-${purchaseId}` },
+    );
+    expect(stripeApi.createInvoiceItem).toHaveBeenCalledWith(
+      expect.objectContaining({ invoice: 'in_topup', pricing: { price: 'price_ai_topup_20x' } }),
+      { idempotencyKey: `add-on-item-${purchaseId}` },
+    );
+    expect(stripeApi.pay).toHaveBeenCalledWith('in_topup');
+    expect(purchases()[0]).toMatchObject({ status: 'pending', stripe_invoice_id: 'in_topup' });
+  });
+
+  it('can be bought again: no monthly cap', async () => {
+    await applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 20 });
+    await applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 20 });
+    expect(purchases()).toHaveLength(2);
+    expect(stripeApi.pay).toHaveBeenCalledTimes(2);
+  });
+
+  it('declined: the invoice is voided and nothing is bought', async () => {
+    stripeApi.pay.mockRejectedValue({
+      type: 'StripeCardError',
+      statusCode: 402,
+      message: 'Your card was declined.',
+    });
+    await expect(applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 5 })).resolves.toEqual(
+      { ok: false, failure: 'payment_failed', message: 'Your card was declined.' },
+    );
+    expect(stripeApi.voidInvoice).toHaveBeenCalledWith('in_topup');
+    expect(purchases()[0].status).toBe('failed');
+  });
+
+  it('declined with a plan change: nothing changes and the purchase fails', async () => {
+    stripeApi.update.mockRejectedValue({ type: 'StripeCardError', message: 'Declined.' });
+    await applyAddOnChange({ trackingUnits: 100, extraBrands: 0, topUp: 5 });
+    expect(purchases()[0].status).toBe('failed');
+  });
+
+  it('isn’t sold when its multiplier isn’t in the catalog, or on Starter', async () => {
+    await expect(
+      applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 7 }),
+    ).resolves.toMatchObject({ ok: false, failure: 'unavailable' });
+    org().plan = 'starter';
+    await expect(
+      applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 5 }),
+    ).resolves.toMatchObject({ ok: false, failure: 'not_growth' });
+    expect(purchases()).toEqual([]);
   });
 });
