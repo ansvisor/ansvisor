@@ -35,6 +35,7 @@ import internalChatPagesRoutes from './routes/internal-chat-pages.js';
 import internalChatModelsRoutes from './routes/internal-chat-models.js';
 import internalChatGoLiveRoutes from './routes/internal-chat-go-live.js';
 import internalChatQualityRoutes from './routes/internal-chat-quality.js';
+import internalActionCenterRoutes from './routes/internal-action-center.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import { pruneLlmVerdicts } from './lib/audit/llm-verdicts.js';
@@ -722,6 +723,11 @@ app.use('/api/internal/chat/go-live', internalChatGoLiveRoutes);
 // Content Quality's reads of a page Chat made or changed, for its version card
 // and check_draft_rules, as the run's own steps (routes/internal-chat-quality.js).
 app.use('/api/internal/chat/quality', internalChatQualityRoutes);
+
+// --- Internal Action Center reads (CRON_SECRET auth, called by the web's agents) ---
+// A person's Today ranking on a brand, ids and categories only, for the AEO
+// Operator's plan, which runs with no session (routes/internal-action-center.js).
+app.use('/api/internal/action-center', internalActionCenterRoutes);
 
 // --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
 // The web MCP layer verifies the caller's `ans_` API key org owns the prompt
