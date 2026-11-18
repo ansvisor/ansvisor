@@ -14290,7 +14290,9 @@
         "show": "Show them",
         "freeUp": "Free up a spot",
         "track": "Track a waiting prompt",
-        "addTracking": "Add more tracking"
+        "addTracking": "Add more tracking",
+        "moved": "{count, plural, one {One of them was tracked until {date}} other {# of them were tracked until {date}}}, when your plan's tracking went down to {limit, number} prompt locations.",
+        "movedNoLimit": "{count, plural, one {One of them was tracked until {date}} other {# of them were tracked until {date}}}, when your plan's tracking went down."
       },
       "dialog": {
         "pill": "Prompt limit reached · {used} of {max}",

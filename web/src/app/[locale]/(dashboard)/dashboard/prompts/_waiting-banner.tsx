@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { Hourglass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -19,6 +19,28 @@ export function oldestWaiting(prompts: readonly Prompt[]): Prompt | null {
   }
   return oldest;
 }
+
+/**
+ * A prompt saved waiting starts waiting as it is added; one that started
+ * waiting well after (an hour) was tracked, then set waiting because the
+ * plan's tracking went down (prompt-capacity.ts). How many, and the latest
+ * day it happened; null when none.
+ */
+export function movedToWaiting(
+  prompts: readonly Prompt[],
+): { count: number; latest: string } | null {
+  let count = 0;
+  let latest: string | null = null;
+  for (const p of prompts) {
+    if (p.isActive || !p.waitingSince) continue;
+    if (Date.parse(p.waitingSince) - Date.parse(p.createdAt) <= MOVED_AFTER_MS) continue;
+    count++;
+    if (!latest || Date.parse(p.waitingSince) > Date.parse(latest)) latest = p.waitingSince;
+  }
+  return latest ? { count, latest } : null;
+}
+
+const MOVED_AFTER_MS = 60 * 60 * 1000;
 
 /**
  * Tracked Prompts' yellow banner while prompts wait for a spot (Simplify
@@ -44,10 +66,13 @@ export function WaitingBanner({
   addMore?: boolean;
 }) {
   const t = useTranslations('prompts.waiting.banner');
+  const format = useFormatter();
   const count = prompts.filter((p) => !p.isActive && p.waitingSince).length;
   if (count === 0) return null;
   const free = !quota ? 0 : quota.maxPrompts === -1 ? null : quota.maxPrompts - quota.used;
   const room = free === null || free > 0;
+  const moved = movedToWaiting(prompts);
+  const limit = quota && quota.maxPrompts >= 0 ? quota.maxPrompts : null;
   return (
     <div
       role="status"
@@ -61,6 +86,15 @@ export function WaitingBanner({
           <p className="text-amber-800/80 dark:text-amber-300/80">
             {free === null ? t('bodyUnlimited') : room ? t('bodyRoom', { free }) : t('body')}
           </p>
+          {moved && (
+            <p data-moved className="text-amber-800/80 dark:text-amber-300/80">
+              {t(limit === null ? 'movedNoLimit' : 'moved', {
+                count: moved.count,
+                date: format.dateTime(new Date(moved.latest), { month: 'short', day: 'numeric' }),
+                limit: limit ?? 0,
+              })}
+            </p>
+          )}
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">

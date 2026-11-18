@@ -30,9 +30,9 @@ Each row has a status:
 - **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.
 - **Active**: tracked on its schedule.
 - **Paused**: kept, but not tracked.
-- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. If your plan shrinks, the newest prompts past it wait too. It never starts by itself.
+- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. If your plan shrinks, the newest prompts past it wait. It never starts by itself.
 
-While prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. On Growth, **Add more tracking** opens your plan's add-ons in **Settings › Billing**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them.
+While prompts wait, a yellow banner says how many, and why; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. On Growth, **Add more tracking** opens your plan's add-ons in **Settings › Billing**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them.
 
 ## Track new prompts now
 
