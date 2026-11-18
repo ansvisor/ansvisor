@@ -34,6 +34,8 @@ export const SKIPPED = {
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
     "A person's sentiment corrections on Mentions: the demo's answers carry their own.",
+  merged_competitors:
+    "A brand's merged competitors (00543): a merge is a person's own click, refused on a demo brand, whose competitors are the sample ones.",
   user_brand_state:
     "A person's own Today and menu state on a brand (00529): their visits, focus and hidden cards, made by their own clicks, never sample data; on the demo brand everyone starts with none.",
 
@@ -88,6 +90,8 @@ export const SKIPPED = {
     'What agents published or sent on their own (00443): no agent runs for a demo brand, and nothing is ever published or sent for one.',
   chat_agent_trigger_claims:
     "An agent's fire once per brand, When a brand is added (00482): the demo brand is made by the API server, not added by a person, and no trigger ever fires for it.",
+  chat_agent_plans:
+    "An AEO Operator run's daily plan (00545): made only when an Operator's schedule fires, and no agent runs for a demo brand, so it has none.",
   chat_notices:
     "A person's notes from the system (00446): one about a brand tells of an agent going live on its own, which never happens for a demo brand.",
   chat_why_analyses:

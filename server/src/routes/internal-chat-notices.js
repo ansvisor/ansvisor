@@ -20,10 +20,18 @@
  *   An agent's run waits for its person (status needs_you, 00474): by their
  *   "Notify me when an agent needs me", one e-mail, once per run
  *   (lib/chat-notices/needs-you.js). A run that doesn't wait: 0 and 0.
+ *
+ * POST /api/internal/chat/notices/agent-plan { orgId, planId }
+ *   An AEO Operator's plan was summarized (00545, AEO Operator plan §4.2
+ *   step 7): the person its run acts as gets the Inbox notice and, by their
+ *   "Notify me when an agent needs me", the e-mail or the brand's Slack
+ *   message, once per plan (lib/chat-notices/agent-plan.js). A plan not
+ *   summarized: 0 and 0.
  */
 
 import { Router } from 'express';
 import { z } from 'zod';
+import { tellAgentPlan } from '../lib/chat-notices/agent-plan.js';
 import { tellGoLiveOff } from '../lib/chat-notices/go-live.js';
 import { tellNeedsYou } from '../lib/chat-notices/needs-you.js';
 import { notifyOwnKeyFailure } from '../lib/chat-notices/own-key.js';
@@ -99,6 +107,25 @@ router.post('/needs-you', async (req, res) => {
     return res.json({ success: true, ...told });
   } catch (err) {
     logger.error({ err, agentRunId: parsed.data.agentRunId }, 'needs-you notice failed');
+    return res.status(500).json({ success: false, message: 'Could not tell them' });
+  }
+});
+
+const agentPlanSchema = z.object({
+  orgId: z.guid(),
+  planId: z.guid(),
+});
+
+router.post('/agent-plan', async (req, res) => {
+  const parsed = agentPlanSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'Invalid request' });
+  }
+  try {
+    const told = await tellAgentPlan(parsed.data);
+    return res.json({ success: true, ...told });
+  } catch (err) {
+    logger.error({ err, planId: parsed.data.planId }, 'agent plan summary notice failed');
     return res.status(500).json({ success: false, message: 'Could not tell them' });
   }
 });

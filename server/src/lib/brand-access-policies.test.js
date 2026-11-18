@@ -623,6 +623,8 @@ describe('every brand table answers to the brand’s access', () => {
       'brand_integrations',
       // A person's own Today and menu state (00529): their rows, on brands they access.
       'user_brand_state',
+      // An AEO Operator's daily plans (00545): as its runs, on brands the reader accesses.
+      'chat_agent_plans',
     ]) {
       expect(reaching, table).toContain(table);
     }

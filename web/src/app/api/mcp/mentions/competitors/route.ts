@@ -4,19 +4,22 @@ import { getMentionCompetitorsFor, mentionsFiltersFromUrl } from '@/lib/mcp/ment
 
 /**
  * GET /api/mcp/mentions/competitors — REST mirror of the
- * `get_mention_competitors` MCP tool, with the summary's filters.
+ * `get_mention_competitors` MCP tool, with the summary's filters and `type`.
  */
 export async function GET(req: Request) {
   const auth = await authenticateMcpRequest(req);
   if (auth instanceof NextResponse) return auth;
 
-  const filters = mentionsFiltersFromUrl(new URL(req.url));
+  const url = new URL(req.url);
+  const filters = mentionsFiltersFromUrl(url);
   if (!filters) {
     return NextResponse.json({ error: 'brand_id is required' }, { status: 400 });
   }
 
   try {
-    const competitors = await getMentionCompetitorsFor(auth, filters);
+    const competitors = await getMentionCompetitorsFor(auth, filters, {
+      type: url.searchParams.get('type') ?? undefined,
+    });
     if (!competitors) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }

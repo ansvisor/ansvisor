@@ -15,11 +15,17 @@
  * mentions it is 'neutral', as an answer is saved (cloro-result-handler.js):
  * a brand named only in an entity tag's disambig had its sentiment read.
  */
+import { competitorsAt } from './merged-names.js';
 import { stripEntityMarkup } from './entity-markup.js';
 import { parseResponse } from './response-parser.js';
 
-/** The row's new values, or null when nothing changes. */
-export function recountRow(row, brandInfo, competitors, { cleanMarkup = false } = {}) {
+/**
+ * The row's new values, or null when nothing changes. A competitor's merged
+ * names (00543, loadTrackedCompetitors) count only in answers from its merge
+ * on (the row's created_at), as tracking counted them.
+ */
+export function recountRow(row, brandInfo, trackedCompetitors, { cleanMarkup = false } = {}) {
+  const competitors = competitorsAt(trackedCompetitors, row.created_at);
   const response = cleanMarkup ? stripEntityMarkup(row.response ?? '') : (row.response ?? '');
   const answer = { text: response, citations: Array.isArray(row.citations) ? row.citations : [] };
   let sentiment = row.sentiment ?? 'neutral';

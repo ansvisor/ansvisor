@@ -9,6 +9,7 @@ import {
   agentScopeSchema,
   agentTriggerSchema,
   defaultAgentName,
+  isOperatorSkills,
   triggerTimeProblem,
   type AgentConnection,
   type AgentEffort,
@@ -26,6 +27,15 @@ import { skillConnections } from './agent-skills';
 import type { AgentDetail, AgentTriggerView } from './agents';
 import type { AgentPreset, PresetTrigger } from './agents/catalog';
 import { offeredModel, pickedModelOwnKey, runChoiceOf } from './models';
+import {
+  OPERATOR_DAILY_BUDGET_DEFAULT,
+  OPERATOR_DAILY_BUDGET_MAX,
+  OPERATOR_DAILY_BUDGET_MIN,
+  OPERATOR_MAX_RUNS_DEFAULT,
+  OPERATOR_MAX_RUNS_MAX,
+  OPERATOR_MAX_RUNS_MIN,
+  OPERATOR_SKILL,
+} from './operator/defaults';
 import type { ChatMode } from './precedence';
 
 /**
@@ -104,6 +114,13 @@ export interface AgentFormSetup {
    * off (skills/flagged.ts): the form's pickers leave them out.
    */
   offSkills?: string[];
+  /**
+   * The agents an AEO Operator of the person's may run (AEO Operator plan
+   * §4.3, decision 4): the ones they see that are on or paused, never an
+   * Operator nor a demo brand's, theirs (`mine`) or shared with the
+   * workspace (`workspace`), by name.
+   */
+  operatorAgents?: { id: string; name: string; mine: boolean; workspace: boolean }[];
 }
 
 /** How often a Schedule fires, as its token offers it (mockup: Monday, Weekday, 1st of the month). */
@@ -160,6 +177,18 @@ export type TriggerDraft = { key: string; enabled: boolean; raw: Json | null } &
 
 export type TriggerKind = TriggerDraft['kind'];
 
+/**
+ * An AEO Operator's own settings as its form edits them (AEO Operator plan
+ * §4.2, §4.3): the agents it may run (null: all its owner's active ones),
+ * workspace agents too, and at most how many a day, as typed. Its daily
+ * budget is the form's `maxRun`; its days and time are its schedule.
+ */
+export interface OperatorFormState {
+  allowed: string[] | null;
+  includeWorkspace: boolean;
+  maxRuns: string;
+}
+
 export interface AgentFormState {
   /** The primary skill first, then up to 2 follow-on skills. */
   skills: string[];
@@ -185,11 +214,34 @@ export interface AgentFormState {
   /** The person typed a name: a skill or brand change no longer renames it. */
   nameEdited: boolean;
   visibility: AgentVisibility;
-  /** Percents as typed. */
+  /** Percents as typed: an AEO Operator's daily budget. */
   maxRun: string;
   monthCapOn: boolean;
   maxMonth: string;
+  /**
+   * An AEO Operator's settings: the form is the Operator's (one brand, its
+   * budget and agents; no Can call, connections, engines, topics, tags or
+   * URLs). Null for every other agent.
+   */
+  operator: OperatorFormState | null;
 }
+
+/** Whether the form makes or edits an AEO Operator. */
+export const isOperatorForm = (state: Pick<AgentFormState, 'operator'>) => state.operator !== null;
+
+/** An AEO Operator's preset schedule (aeo-operator.json): weekdays at 07:00, on the person's clock. */
+export const OPERATOR_SCHEDULE: PresetTrigger = {
+  kind: 'schedule',
+  repeat: 'weekdays',
+  time: '07:00',
+};
+
+/** A new AEO Operator's settings: all its owner's active agents, theirs only, 5 a day. */
+export const NEW_OPERATOR: OperatorFormState = Object.freeze({
+  allowed: null,
+  includeWorkspace: false,
+  maxRuns: String(OPERATOR_MAX_RUNS_DEFAULT),
+});
 
 /**
  * The models the Model step offers (CHAT-16): Auto, or Haiku for Fast and
@@ -524,14 +576,17 @@ export function syncConnections(
 /** A new agent's name (§O); the server names it again against every agent (`autoName`). */
 export { defaultAgentName };
 
-/** A new agent's form: the skill it starts from, if any, the brand on screen, Monday 07:00. */
+/**
+ * A new agent's form: the skill it starts from, if any, the brand on screen,
+ * Monday 07:00. From /operator, an AEO Operator's (operatorForm).
+ */
 export function newForm(
   setup: Pick<AgentFormSetup, 'brands' | 'runShareDefault'>,
   options: { timeZone: string; brandId: string | null; skill: string | null; triggerKey: string },
 ): AgentFormState {
   const brand = setup.brands.find((b) => b.id === options.brandId) ?? setup.brands[0] ?? null;
   const skills = options.skill ? [options.skill] : [];
-  return {
+  const form: AgentFormState = {
     skills,
     instructions: '',
     triggers: [newTriggerDraft('schedule', options.triggerKey, options.timeZone)],
@@ -554,6 +609,35 @@ export function newForm(
     maxRun: String(Math.round(setup.runShareDefault * 100)),
     monthCapOn: false,
     maxMonth: '',
+    operator: null,
+  };
+  return options.skill === OPERATOR_SKILL ? operatorForm(form, options.timeZone) : form;
+}
+
+/**
+ * A form made an AEO Operator's (AEO Operator plan §4.3): /operator alone, on
+ * one brand (the one it had, else none), weekdays at 07:00, private, in Auto,
+ * a 5% daily budget and its settings' defaults; no connections, Can call,
+ * engines, topics, tags or URLs.
+ */
+export function operatorForm(form: AgentFormState, timeZone: string): AgentFormState {
+  return {
+    ...form,
+    skills: [OPERATOR_SKILL],
+    instructions: '',
+    triggers: [presetTriggerDraft(OPERATOR_SCHEDULE, 'k0', timeZone)],
+    allBrands: false,
+    brandIds: form.brandIds.slice(0, 1),
+    topicIds: [],
+    engines: [],
+    tagsText: '',
+    urlsText: '',
+    mode: 'auto',
+    connections: [],
+    canCall: [],
+    visibility: 'private',
+    maxRun: String(Math.round(OPERATOR_DAILY_BUDGET_DEFAULT * 100)),
+    operator: { ...NEW_OPERATOR },
   };
 }
 
@@ -598,6 +682,20 @@ export function formFromPreset(
 ): AgentFormState {
   const skills = [...preset.skills];
   const allBrands = preset.triggers.some((trigger) => trigger.kind === 'brand_added');
+  // The AEO Operator's preset: the Operator's own form, on its preset's schedule.
+  if (isOperatorSkills(skills)) {
+    const form = operatorForm(
+      newForm(setup, { ...options, skill: null, triggerKey: 'k0' }),
+      options.timeZone,
+    );
+    return {
+      ...form,
+      triggers: preset.triggers.map((trigger, i) =>
+        presetTriggerDraft(trigger, `k${i}`, options.timeZone),
+      ),
+      mode: preset.mode === 'full_auto' && setup.fullAuto !== 'open' ? 'auto' : preset.mode,
+    };
+  }
   return {
     ...newForm(setup, { ...options, skill: null, triggerKey: 'k0' }),
     ...(allBrands ? { allBrands, brandIds: [] } : {}),
@@ -648,11 +746,21 @@ export function formFromAgent(
     maxRun: String(Math.round(agent.maxRunShare * 100)),
     monthCapOn: agent.maxMonthShare !== null,
     maxMonth: agent.maxMonthShare !== null ? String(Math.round(agent.maxMonthShare * 100)) : '',
+    // An AEO Operator's own settings, as kept (the defaults where they couldn't be read).
+    operator:
+      settings.operator || isOperatorSkills(settings.skills)
+        ? {
+            allowed: settings.operator?.allowed ?? null,
+            includeWorkspace: settings.operator?.includeWorkspace ?? false,
+            maxRuns: String(settings.operator?.maxRuns ?? OPERATOR_MAX_RUNS_DEFAULT),
+          }
+        : null,
   };
 }
 
-/** The scope as kept (§D step 2): brands or all, then the lists that narrow it. */
+/** The scope as kept (§D step 2): brands or all, then the lists that narrow it. An Operator's: its brand. */
 export function scopeOf(state: AgentFormState): Record<string, unknown> {
+  if (isOperatorForm(state)) return { brand_ids: state.brandIds };
   const tags = parseList(state.tagsText);
   const urls = parseList(state.urlsText);
   return {
@@ -681,6 +789,9 @@ export type FormField =
   | 'visibility'
   | 'maxRun'
   | 'maxMonth'
+  /** An AEO Operator's: the agents it may run, and at most how many a day. */
+  | 'operatorAgents'
+  | 'maxRuns'
   | 'form';
 
 /** A step's problems: by field, and by trigger (its key). */
@@ -707,6 +818,7 @@ export function stepProblems(
 ): StepProblems {
   const fields: StepProblems['fields'] = {};
   const triggers: StepProblems['triggers'] = {};
+  if (state.operator) return operatorStepProblems(step, state, state.operator, ctx);
   switch (step) {
     case 0:
       if (state.skills.length === 0) fields.skills = 'skill_required';
@@ -768,6 +880,58 @@ export function stepProblems(
   return { fields, triggers };
 }
 
+/**
+ * An AEO Operator's steps (AEO Operator plan §4.3): its schedule's triggers
+ * and one brand; then its name, a daily budget of 1–10%, its agents (one at
+ * least when picked) and at most 1–8 a day, and an Admin's monthly cap. Its
+ * skill and its approvals are fixed.
+ */
+function operatorStepProblems(
+  step: AgentFormStep,
+  state: AgentFormState,
+  operator: OperatorFormState,
+  ctx: FormContext,
+): StepProblems {
+  const fields: StepProblems['fields'] = {};
+  const triggers: StepProblems['triggers'] = {};
+  switch (step) {
+    case 1: {
+      for (const draft of state.triggers) {
+        const problem = triggerError(draft, ctx.now);
+        if (problem) triggers[draft.key] = problem;
+      }
+      if (state.triggers.length > MAX_AGENT_TRIGGERS) fields.triggers = 'triggers_many';
+      else {
+        const keys = builtTriggers(state).map((t) => `${t.kind}:${canonical(t.config)}`);
+        if (new Set(keys).size !== keys.length) fields.triggers = 'triggers_same';
+      }
+      if (ctx.setup.brands.length === 0) fields.brands = 'no_brands';
+      else if (state.allBrands || state.brandIds.length !== 1) fields.brands = 'operator_brand';
+      break;
+    }
+    case 3: {
+      const name = foldName(state.name);
+      if (!name) fields.name = 'name_required';
+      else if (name.length > MAX_NAME) fields.name = 'name_long';
+      const budget = [OPERATOR_DAILY_BUDGET_MIN, OPERATOR_DAILY_BUDGET_MAX].map((share) =>
+        Math.round(share * 100),
+      );
+      if (!wholeIn(state.maxRun, budget[0], budget[1])) fields.maxRun = 'operator_budget';
+      if (operator.allowed !== null && operator.allowed.length === 0) {
+        fields.operatorAgents = 'operator_agents';
+      }
+      if (!wholeIn(operator.maxRuns, OPERATOR_MAX_RUNS_MIN, OPERATOR_MAX_RUNS_MAX)) {
+        fields.maxRuns = 'operator_max_runs';
+      }
+      if (ctx.setup.role === 'admin' && state.monthCapOn && !wholeIn(state.maxMonth, 1, 100)) {
+        fields.maxMonth = 'month_share';
+      }
+      break;
+    }
+  }
+  return { fields, triggers };
+}
+
 export const hasProblems = (problems: StepProblems) =>
   Object.keys(problems.fields).length > 0 || Object.keys(problems.triggers).length > 0;
 
@@ -805,6 +969,29 @@ export function createBody(
   autoTitle: string | null = null,
 ): Record<string, unknown> {
   const auto = !state.nameEdited && !!autoTitle;
+  if (state.operator) {
+    // An AEO Operator: private, its daily budget, one brand and its own settings; nothing else.
+    return {
+      name: auto ? autoTitle : foldName(state.name),
+      ...(auto ? { autoName: true } : {}),
+      visibility: 'private',
+      maxRunShare: shareOf(state.maxRun),
+      ...(role === 'admin'
+        ? { maxMonthShare: state.monthCapOn ? shareOf(state.maxMonth) : null }
+        : {}),
+      skills: [OPERATOR_SKILL],
+      instructions: null,
+      mode: state.mode,
+      connections: [],
+      model: state.model,
+      effort: state.effort,
+      scope: scopeOf(state),
+      notifyUserIds: state.notifyUserIds,
+      followupDays: state.followupDays,
+      triggers: builtTriggers(state),
+      operator: operatorInputOf(state.operator),
+    };
+  }
   return {
     name: auto ? autoTitle : foldName(state.name),
     ...(auto ? { autoName: true } : {}),
@@ -824,6 +1011,19 @@ export function createBody(
     followupDays: state.followupDays,
     ...(state.canCall.length > 0 ? { canCall: state.canCall } : {}),
     triggers: builtTriggers(state),
+  };
+}
+
+/** An AEO Operator's settings as the API takes them (agent-rules.ts operatorSettingsInput). */
+export function operatorInputOf(operator: OperatorFormState): {
+  allowed: string[] | null;
+  includeWorkspace: boolean;
+  maxRuns: number;
+} {
+  return {
+    allowed: operator.allowed,
+    includeWorkspace: operator.includeWorkspace,
+    maxRuns: Math.round(Number(operator.maxRuns)),
   };
 }
 
@@ -866,6 +1066,22 @@ export function patchBody(
   const triggers = builtTriggers(state);
   const was = agent.triggers.map((t) => ({ kind: t.kind, config: t.config, enabled: t.enabled }));
   if (canonical(triggers) !== canonical(was)) patch.triggers = triggers;
+  if (state.operator) {
+    // An AEO Operator's settings: all of them when one changed (they make a new version).
+    const operator = operatorInputOf(state.operator);
+    const kept = settings.operator;
+    if (
+      !kept ||
+      canonical(operator) !==
+        canonical({
+          allowed: kept.allowed,
+          includeWorkspace: kept.includeWorkspace,
+          maxRuns: kept.maxRuns,
+        })
+    ) {
+      patch.operator = operator;
+    }
+  }
   if (Object.keys(patch).length === 0) return null;
   return { expectedVersion: agent.version, expectedUpdatedAt: agent.updatedAt, ...patch };
 }
@@ -897,7 +1113,14 @@ export function refusalPlace(
     case 'topic_not_found':
     case 'no_brand':
     case 'demo_brand':
+    // An AEO Operator: one brand, and one Operator on a brand at a time.
+    case 'operator_scope':
+    case 'operator_taken':
       return { step: 1, field: 'brands' };
+    case 'operator_budget':
+      return { step: 3, field: 'maxRun' };
+    case 'operator_visibility':
+      return { step: 3, field: 'visibility' };
     // The box under the Approvals table (AUTONOMOUS-GO-LIVE §7.2).
     case 'go_live_off':
     case 'go_live_mode':

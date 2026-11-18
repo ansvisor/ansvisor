@@ -50,6 +50,10 @@
  * it is connected: Optional, as for /traffic. What isn't set up is "Not
  * measured", with the step that sets it up.
  *
+ * Last, /operator: the AEO Operator's own skill, an agent made of it alone
+ * (agent-rules.ts isOperatorSkills), which reads only Ansvisor's own numbers
+ * and uses no connection.
+ *
  * A workspace's own skills (CHAT-13, W3-06) are instructions only: an
  * agent may name one by its /command, and it needs no connection (skillOf
  * gives none). Whether it may run now is the workspace's to say
@@ -133,6 +137,9 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   // Ads Phase 0 PR 15, only with Ads on: Ansvisor's own Ads reads, and drafts saved in it.
   { id: 'earn-or-pay', uses: [] },
   { id: 'ad-drafts', uses: [] },
+  // AEO Operator plan §4.2: the Operator's own, its only skill, with CHAT_OPERATOR on. It reads
+  // the workspace's own numbers and starts other agents' runs: no connection of its own.
+  { id: 'operator', uses: [] },
 ];
 
 /** Connections any agent may add as Optional (mockup: Google Analytics). */

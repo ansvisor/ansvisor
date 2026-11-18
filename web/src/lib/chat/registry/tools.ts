@@ -4,6 +4,7 @@ import type { ChatTool, PlanGate, ToolFlags } from './define-tool';
 import { ACTION_CENTER_TOOLS } from './action-center-tools';
 import { ADS_READS, ADS_WRITES } from './ads-tools';
 import { AGENT_CALL_TOOLS } from './agent-call-tools';
+import { OPERATOR_READS, OPERATOR_WRITES } from './operator-tools';
 import { AUDIT_TOOLS } from './audit-tools';
 import { COMPETITOR_TOOLS } from './competitor-tools';
 import { CONTENT_TOOLS } from './content-tools';
@@ -41,6 +42,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...WHATS_NEW_READS,
   ...READY_AGENT_READS,
   ...TODAY_READS,
+  ...OPERATOR_READS,
   ...SUBTASK_TOOLS,
   ...WHY_TOOLS,
   ...IMAGE_READS,
@@ -60,6 +62,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...SKILL_TOOLS,
   ...MEMORY_TOOLS,
   ...AGENT_CALL_TOOLS,
+  ...OPERATOR_WRITES,
   ...ADS_WRITES,
 ];
 

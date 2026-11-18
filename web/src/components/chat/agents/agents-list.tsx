@@ -24,7 +24,15 @@ import { AGENT_TABS, averageShare, barWidth, percentOf, writesAgents } from '@/l
 import { viewRows, type ChatPageView } from '@/lib/chat/page-view';
 import { cn } from '@/lib/utils';
 import { AgentDot, agentDotOf } from './agent-dot';
-import { AgentDenial, FormulaChips, GoLiveBadge, StatusLine, liveRunOf } from './agent-parts';
+import {
+  AgentDenial,
+  CHIP,
+  FormulaChips,
+  GoLiveBadge,
+  OperatorBadge,
+  StatusLine,
+  liveRunOf,
+} from './agent-parts';
 import { readAgents } from './agent-requests';
 import { AgentsKeyBanner } from '@/components/chat/own-key-notice';
 import { useAgentWords, type AgentWords } from './agent-words';
@@ -37,7 +45,9 @@ import { useAgentActions } from './use-agent-actions';
  * Archived with their counts, and a search by name or skill. One card per
  * agent: its state, skills and mode, its triggers in short, next run,
  * scope, last run, the last 30 days' outcomes and its AI use as a share of
- * the monthly limit with a thin bar. Each card's Run now and Pause / Resume
+ * the monthly limit with a thin bar. An AEO Operator's card also has its
+ * badge, its daily budget and a line for today's plan (AEO Operator plan
+ * §4.3). Each card's Run now and Pause / Resume
  * are the ones the server's `can` gives the row. Analysts and Agency
  * partners read, and start on Workspace. A card's first button opens its
  * run in Chat (runInChatOf).
@@ -115,6 +125,38 @@ function AiUseCell({ agent }: { agent: AgentListItem }) {
   );
 }
 
+/**
+ * An AEO Operator's lines on its card: the badge and "Daily budget 5%", then
+ * today's plan from its chat_agent_plans row, "Today: 4 agents · waiting for
+ * you", in amber while it waits on the person.
+ */
+function OperatorLines({ agent, words }: { agent: AgentListItem; words: AgentWords }) {
+  const today = agent.operator?.today ?? null;
+  return (
+    <>
+      <div data-slot="agent-operator" className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <OperatorBadge />
+        <span data-slot="agent-daily-budget" className={cn(CHIP, 'tabular-nums')}>
+          {words.dailyBudget(agent.maxRunShare)}
+        </span>
+      </div>
+      {today && (
+        <p
+          data-slot="agent-operator-today"
+          data-state={today.state}
+          title={words.operatorToday(today)}
+          className={cn(
+            'truncate text-xs font-medium',
+            today.state === 'waiting' ? 'text-amber-700 dark:text-amber-400' : 'text-foreground/80',
+          )}
+        >
+          {words.operatorToday(today)}
+        </p>
+      )}
+    </>
+  );
+}
+
 function AgentCard({
   agent,
   words,
@@ -183,6 +225,7 @@ function AgentCard({
       {agent.goLiveLimit !== undefined && (
         <GoLiveBadge limit={agent.goLiveLimit} className="w-fit" />
       )}
+      {agent.operator && <OperatorLines agent={agent} words={words} />}
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
         {cell(tList('cells.trigger'), value(words.triggersShort(agent.triggers)), 'trigger')}
