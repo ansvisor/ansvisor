@@ -23,11 +23,14 @@ export default async function NewAgentPage({
   if (!setup) notFound();
   const { skill, preset } = await searchParams;
   const ready = readyPreset(typeof preset === 'string' ? preset : null);
+  // A preset whose primary skill is off for this workspace (the AEO Operator without
+  // CHAT_OPERATOR for it) opens nothing: the setup lists the skills that are off for it.
+  const offered = ready && !(setup.offSkills ?? []).includes(ready.skills[0] ?? '') ? ready : null;
   return (
     <AgentForm
       setup={setup}
       initialSkill={typeof skill === 'string' ? skill : null}
-      preset={ready && presetOnInstall(ready)}
+      preset={offered && presetOnInstall(offered)}
     />
   );
 }

@@ -90,6 +90,8 @@ export const SKIPPED = {
     'What agents published or sent on their own (00443): no agent runs for a demo brand, and nothing is ever published or sent for one.',
   chat_agent_trigger_claims:
     "An agent's fire once per brand, When a brand is added (00482): the demo brand is made by the API server, not added by a person, and no trigger ever fires for it.",
+  chat_agent_plans:
+    "An AEO Operator run's daily plan (00545): made only when an Operator's schedule fires, and no agent runs for a demo brand, so it has none.",
   chat_notices:
     "A person's notes from the system (00446): one about a brand tells of an agent going live on its own, which never happens for a demo brand.",
   chat_why_analyses:

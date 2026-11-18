@@ -34,7 +34,8 @@ import type { AgentWords } from './agent-words';
  * set the selected trigger's kind (Manual: none, Run now only); and the
  * rule box — WHEN or EVERY for the selected trigger, FOR the scope (brands,
  * platforms, and topics, prompt tags and URLs that narrow it), THEN Run
- * agent.
+ * agent. An AEO Operator's (`operator`): schedules only, the days and time
+ * it plans, FOR one brand, THEN Plan today (AEO Operator plan §4.3).
  */
 
 /** The mockup's `.opt`, in both themes. */
@@ -236,6 +237,8 @@ function Check({
  * the brands next to FOR are marked until they are.
  */
 const KINDS = ['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added'] as const;
+/** An AEO Operator plans on its schedule's days and time: its quiet days are the ones it skips. */
+const OPERATOR_KINDS = ['schedule'] as const;
 
 /** The control a trigger's problem is about, so it is marked and read with it. */
 const PROBLEM_CONTROL: Record<string, 'date' | 'time' | 'category' | 'kpi' | 'threshold'> = {
@@ -264,6 +267,7 @@ export function TriggerStep({
   onAdd,
   onRemove,
   onTrigger,
+  operator = false,
 }: {
   state: AgentFormState;
   update: (patch: Partial<AgentFormState>) => void;
@@ -281,8 +285,11 @@ export function TriggerStep({
   onAdd: () => void;
   onRemove: (key: string) => void;
   onTrigger: (key: string, patch: Partial<TriggerDraft>) => void;
+  /** An AEO Operator's form: schedules and one brand only. */
+  operator?: boolean;
 }) {
   const t = useTranslations('chatAgents.form');
+  const tOperator = useTranslations('chatAgents.form.operator');
   const tAgents = useTranslations('chatAgents');
   const tErrors = useTranslations('chatAgents.form.errors');
   const tCategories = useTranslations('actionCenter.actionCategories');
@@ -474,7 +481,7 @@ export function TriggerStep({
         onKeyDown={radioKeys}
         className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2"
       >
-        {KINDS.map((kind, i) => {
+        {(operator ? OPERATOR_KINDS : KINDS).map((kind, i) => {
           const on = draft?.kind === kind;
           // Watch rules are chosen on the rule (CHAT-22): a kept one stays, no new one here.
           const locked =
@@ -504,6 +511,15 @@ export function TriggerStep({
           );
         })}
       </div>
+
+      {operator && (
+        <p
+          data-slot="agent-form-operator-days"
+          className="mt-2 text-[11.5px] text-muted-foreground"
+        >
+          {tOperator('schedule.note')}
+        </p>
+      )}
 
       <div
         data-slot="agent-form-rule"
@@ -692,111 +708,140 @@ export function TriggerStep({
           </FieldError>
         )}
 
-        <div className={ROW}>
-          <span className={KW}>{t('trigger.kw.for')}</span>
-          <TokenPanel
-            label={t('scope.brands')}
-            text={brandsText}
-            action="agentNew.brands"
-            invalid={shown && !!problems.fields.brands}
-            field="brands"
-          >
-            <Check
-              checked={state.allBrands}
-              label={t('scope.allBrands')}
-              action="agentNew.allBrands"
-              onChange={(on) => setBrands(on, on ? [] : state.brandIds)}
-            />
-            {setup.brands.map((brand) => (
-              <Check
-                key={brand.id}
-                checked={!state.allBrands && state.brandIds.includes(brand.id)}
-                label={brand.name}
-                action="agentNew.brand"
-                onChange={(on) =>
-                  setBrands(false, toggle(state.allBrands ? [] : state.brandIds, brand.id, on))
-                }
-              />
-            ))}
-          </TokenPanel>
-          <TokenPanel
-            label={t('scope.engines')}
-            text={enginesText}
-            action="agentNew.engines"
-            invalid={shown && !!problems.fields.engines}
-            field="engines"
-          >
-            <Check
-              checked={state.engines.length === 0}
-              label={t('scope.allEngines')}
-              action="agentNew.allEngines"
-              onChange={(on) => on && update({ engines: [] })}
-            />
-            {setup.engines.map((id) => (
-              <Check
-                key={id}
-                checked={state.engines.includes(id)}
-                label={engineName(id)}
-                action="agentNew.engine"
-                onChange={(on) => update({ engines: toggle(state.engines, id, on) })}
-              />
-            ))}
-          </TokenPanel>
-          {(topics.length > 0 || state.topicIds.length > 0) && (
-            <TokenPanel label={t('scope.topics')} text={topicsText} action="agentNew.topics">
-              {topics.length === 0 && (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('scope.noTopics')}</p>
+        {operator ? (
+          <div className={ROW}>
+            <span className={KW}>{t('trigger.kw.for')}</span>
+            {/* One brand (AEO Operator plan §4.3, decision 1): no engines, topics, tags or URLs. */}
+            <select
+              aria-label={tOperator('brand.label')}
+              data-action="agentNew.operatorBrand"
+              aria-invalid={(shown && !!problems.fields.brands) || undefined}
+              aria-describedby={shown && problems.fields.brands ? errorId('brands') : undefined}
+              value={!state.allBrands && state.brandIds.length === 1 ? state.brandIds[0] : ''}
+              onChange={(event) =>
+                event.target.value &&
+                update({ allBrands: false, brandIds: [event.target.value], topicIds: [] })
+              }
+              className={TOK}
+            >
+              {(state.allBrands || state.brandIds.length !== 1) && (
+                <option value="">{tOperator('brand.pick')}</option>
               )}
-              {topics.map((topic) => (
+              {setup.brands.map((brand) => (
+                <option key={brand.id} value={brand.id}>
+                  {brand.name}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">{tOperator('brand.note')}</span>
+          </div>
+        ) : (
+          <div className={ROW}>
+            <span className={KW}>{t('trigger.kw.for')}</span>
+            <TokenPanel
+              label={t('scope.brands')}
+              text={brandsText}
+              action="agentNew.brands"
+              invalid={shown && !!problems.fields.brands}
+              field="brands"
+            >
+              <Check
+                checked={state.allBrands}
+                label={t('scope.allBrands')}
+                action="agentNew.allBrands"
+                onChange={(on) => setBrands(on, on ? [] : state.brandIds)}
+              />
+              {setup.brands.map((brand) => (
                 <Check
-                  key={topic.id}
-                  checked={state.topicIds.includes(topic.id)}
-                  label={topic.name}
-                  action="agentNew.topic"
-                  onChange={(on) => update({ topicIds: toggle(state.topicIds, topic.id, on) })}
+                  key={brand.id}
+                  checked={!state.allBrands && state.brandIds.includes(brand.id)}
+                  label={brand.name}
+                  action="agentNew.brand"
+                  onChange={(on) =>
+                    setBrands(false, toggle(state.allBrands ? [] : state.brandIds, brand.id, on))
+                  }
                 />
               ))}
             </TokenPanel>
-          )}
-          <TokenPanel
-            label={t('scope.tags')}
-            text={
-              tags.length === 0 ? t('scope.anyTag') : t('scope.tagCount', { count: tags.length })
-            }
-            action="agentNew.tags"
-            invalid={shown && !!problems.fields.tags}
-            field="tags"
-          >
-            <Textarea
-              aria-label={t('scope.tags')}
-              data-action="agentNew.tagsText"
-              rows={4}
-              value={state.tagsText}
-              onChange={(event) => update({ tagsText: event.target.value })}
-              className="text-[13px]"
-            />
-            <p className="px-1 pt-1 text-[11.5px] text-muted-foreground">{t('scope.tagsNote')}</p>
-          </TokenPanel>
-          <TokenPanel
-            label={t('scope.urls')}
-            text={
-              urls.length === 0 ? t('scope.anyUrl') : t('scope.urlCount', { count: urls.length })
-            }
-            action="agentNew.urls"
-            invalid={shown && !!problems.fields.urls}
-            field="urls"
-          >
-            <Textarea
-              aria-label={t('scope.urls')}
-              data-action="agentNew.urlsText"
-              rows={4}
-              value={state.urlsText}
-              onChange={(event) => update({ urlsText: event.target.value })}
-              className="text-[13px]"
-            />
-            <p className="px-1 pt-1 text-[11.5px] text-muted-foreground">{t('scope.urlsNote')}</p>
-          </TokenPanel>
-        </div>
+            <TokenPanel
+              label={t('scope.engines')}
+              text={enginesText}
+              action="agentNew.engines"
+              invalid={shown && !!problems.fields.engines}
+              field="engines"
+            >
+              <Check
+                checked={state.engines.length === 0}
+                label={t('scope.allEngines')}
+                action="agentNew.allEngines"
+                onChange={(on) => on && update({ engines: [] })}
+              />
+              {setup.engines.map((id) => (
+                <Check
+                  key={id}
+                  checked={state.engines.includes(id)}
+                  label={engineName(id)}
+                  action="agentNew.engine"
+                  onChange={(on) => update({ engines: toggle(state.engines, id, on) })}
+                />
+              ))}
+            </TokenPanel>
+            {(topics.length > 0 || state.topicIds.length > 0) && (
+              <TokenPanel label={t('scope.topics')} text={topicsText} action="agentNew.topics">
+                {topics.length === 0 && (
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('scope.noTopics')}</p>
+                )}
+                {topics.map((topic) => (
+                  <Check
+                    key={topic.id}
+                    checked={state.topicIds.includes(topic.id)}
+                    label={topic.name}
+                    action="agentNew.topic"
+                    onChange={(on) => update({ topicIds: toggle(state.topicIds, topic.id, on) })}
+                  />
+                ))}
+              </TokenPanel>
+            )}
+            <TokenPanel
+              label={t('scope.tags')}
+              text={
+                tags.length === 0 ? t('scope.anyTag') : t('scope.tagCount', { count: tags.length })
+              }
+              action="agentNew.tags"
+              invalid={shown && !!problems.fields.tags}
+              field="tags"
+            >
+              <Textarea
+                aria-label={t('scope.tags')}
+                data-action="agentNew.tagsText"
+                rows={4}
+                value={state.tagsText}
+                onChange={(event) => update({ tagsText: event.target.value })}
+                className="text-[13px]"
+              />
+              <p className="px-1 pt-1 text-[11.5px] text-muted-foreground">{t('scope.tagsNote')}</p>
+            </TokenPanel>
+            <TokenPanel
+              label={t('scope.urls')}
+              text={
+                urls.length === 0 ? t('scope.anyUrl') : t('scope.urlCount', { count: urls.length })
+              }
+              action="agentNew.urls"
+              invalid={shown && !!problems.fields.urls}
+              field="urls"
+            >
+              <Textarea
+                aria-label={t('scope.urls')}
+                data-action="agentNew.urlsText"
+                rows={4}
+                value={state.urlsText}
+                onChange={(event) => update({ urlsText: event.target.value })}
+                className="text-[13px]"
+              />
+              <p className="px-1 pt-1 text-[11.5px] text-muted-foreground">{t('scope.urlsNote')}</p>
+            </TokenPanel>
+          </div>
+        )}
         {(['brands', 'engines', 'tags', 'urls'] as const).map((field) => (
           <span key={field} className="contents">
             {error(problems.fields[field], field)}
@@ -805,7 +850,9 @@ export function TriggerStep({
 
         <div className={ROW}>
           <span className={KW}>{t('trigger.kw.then')}</span>
-          <span className={cn(TOK, 'bg-muted hover:border-border')}>{t('trigger.runAgent')}</span>
+          <span className={cn(TOK, 'bg-muted hover:border-border')}>
+            {operator ? tOperator('schedule.then') : t('trigger.runAgent')}
+          </span>
         </div>
       </div>
     </>

@@ -6,6 +6,16 @@ import { ACTION_CATEGORIES } from '@/lib/action-center/registry';
 import type { BrandAccess } from '@/lib/brand-access';
 import { KPI_KEYS } from '@/lib/kpis/registry';
 import { ONCE_MAX_AHEAD_MS, scheduleConfigSchema } from './agent-schedule';
+import {
+  OPERATOR_DAILY_BUDGET_MAX,
+  OPERATOR_DAILY_BUDGET_MIN,
+  OPERATOR_MAX_RUNS_DEFAULT,
+  OPERATOR_MAX_RUNS_MAX,
+  OPERATOR_MAX_RUNS_MIN,
+  OPERATOR_SKILL,
+  operatorSettingsOf,
+  type OperatorSettings,
+} from './operator/defaults';
 import type { PlanFacts } from './plan-facts';
 import { CHAT_MODES, type ChatMode, type ToolDenial } from './precedence';
 
@@ -234,6 +244,28 @@ export const agentTriggersSchema = z
     'The same trigger twice',
   );
 
+/** An Operator's daily budget: its max_run_share, 1–10% of the monthly AI limit (5% by default). */
+export const operatorBudgetSchema = share(OPERATOR_DAILY_BUDGET_MIN, OPERATOR_DAILY_BUDGET_MAX);
+
+/**
+ * An Operator's settings as the API takes them (decisions 4 and 5): the
+ * agents it may run (null: every eligible agent its owner owns), workspace
+ * agents too (opt-in), how many a day (1–8, 5 by default), and Ask first,
+ * fixed on in v1 (its plan is always a card).
+ */
+export const operatorSettingsInput = z.strictObject({
+  allowed: ids(50).nullable().default(null),
+  includeWorkspace: z.boolean().default(false),
+  maxRuns: z
+    .number()
+    .int()
+    .min(OPERATOR_MAX_RUNS_MIN)
+    .max(OPERATOR_MAX_RUNS_MAX)
+    .default(OPERATOR_MAX_RUNS_DEFAULT),
+  askFirst: z.literal(true).default(true),
+});
+export type OperatorSettingsInput = z.output<typeof operatorSettingsInput>;
+
 /** A new agent, saved as a draft (§D item 17). */
 export const createAgentInput = z.strictObject({
   name: agentNameSchema,
@@ -258,6 +290,8 @@ export const createAgentInput = z.strictObject({
   followupDays: versionFields.followupDays.default(14),
   canCall: versionFields.canCall.default([]),
   triggers: agentTriggersSchema.default([]),
+  /** An AEO Operator's settings (skills ['operator'] only); its daily budget is maxRunShare. */
+  operator: operatorSettingsInput.optional(),
 });
 export type CreateAgentInput = z.output<typeof createAgentInput>;
 
@@ -289,6 +323,8 @@ export const updateAgentInput = z
     followupDays: versionFields.followupDays.optional(),
     canCall: versionFields.canCall.optional(),
     triggers: agentTriggersSchema.optional(),
+    /** An AEO Operator's settings, all of them: they make a new version. */
+    operator: operatorSettingsInput.optional(),
   })
   .refine(
     (patch) =>
@@ -363,6 +399,8 @@ export interface AgentVersionData {
   followup_days: number;
   /** The agents it may run (00466). */
   can_call: string[];
+  /** An AEO Operator's settings (00545 operator_json); absent for every other agent. */
+  operator_json?: OperatorJson;
 }
 
 const VERSION_KEYS = [
@@ -376,6 +414,7 @@ const VERSION_KEYS = [
   'notifyUserIds',
   'followupDays',
   'canCall',
+  'operator',
 ] as const;
 
 /** The version a new agent starts with. */
@@ -391,6 +430,10 @@ export function firstVersion(input: CreateAgentInput): AgentVersionData {
     notify_user_ids: input.notifyUserIds,
     followup_days: input.followupDays,
     can_call: input.canCall,
+    // An Operator's settings, its defaults where none are given; no other agent has them.
+    ...(isOperatorSkills(input.skills)
+      ? { operator_json: operatorJsonOf(input.operator ?? operatorSettingsInput.parse({})) }
+      : {}),
   };
 }
 
@@ -416,6 +459,8 @@ export function nextVersion(
     followup_days: patch.followupDays ?? current.followup_days,
     can_call: patch.canCall ?? current.can_call,
   };
+  const operator = patch.operator ? operatorJsonOf(patch.operator) : current.operator_json;
+  if (operator) next.operator_json = operator;
   return sameVersion(current, next) ? null : next;
 }
 
@@ -447,6 +492,7 @@ export function versionFromRow(row: {
   notify_user_ids: string[];
   followup_days: number;
   can_call?: string[] | null;
+  operator_json?: unknown;
 }): AgentVersionData {
   const scope = agentScopeSchema.safeParse(row.scope);
   const connections = agentConnectionsSchema.safeParse(row.connections);
@@ -462,6 +508,10 @@ export function versionFromRow(row: {
     notify_user_ids: row.notify_user_ids,
     followup_days: row.followup_days,
     can_call: row.can_call ?? [],
+    // An Operator's settings as stored, read back defensively; none for any other agent.
+    ...(row.operator_json && typeof row.operator_json === 'object'
+      ? { operator_json: operatorJsonFromRow(row.operator_json) }
+      : {}),
   };
 }
 
@@ -569,7 +619,9 @@ export type AgentAsk =
   /** An agent's permission to publish and send on its own (AUTONOMOUS-GO-LIVE §7.2). */
   | 'goLive'
   /** Letting an agent run other agents (CHAT-27 phase 2): Growth and up. */
-  | 'canCall';
+  | 'canCall'
+  /** An AEO Operator (AEO Operator plan §4.5): Growth and up. */
+  | 'operator';
 
 /** A refusal: the precedence's denial, and what was asked in words. */
 export interface AgentDenial {
@@ -637,7 +689,14 @@ export function canSeeAgent(agent: AgentFacts, viewer: AgentViewer): boolean {
 /** The acts on an existing agent (create and duplicate make a new one). */
 export type AgentAct = Exclude<
   AgentAsk,
-  'workspace' | 'monthCap' | 'fullAuto' | 'engines' | 'runWithChat' | 'goLive' | 'canCall'
+  | 'workspace'
+  | 'monthCap'
+  | 'fullAuto'
+  | 'engines'
+  | 'runWithChat'
+  | 'goLive'
+  | 'canCall'
+  | 'operator'
 >;
 
 /** What only an Admin may do to a workspace agent while Settings › Chat keeps them to Admins. */
@@ -737,6 +796,16 @@ export function canCallDenial(canCall: readonly string[], plan: PlanFacts): Agen
   return { denial: { code: 'plan_locked', needs: 'growth' }, asked: 'canCall' };
 }
 
+/**
+ * An AEO Operator (AEO Operator plan §4.5, decision 8): Growth and up, with
+ * Can call's plan gate (the same as canCallDenial). In runChecks too, so a
+ * downgrade pauses an Operator (plan) before its next run.
+ */
+export function operatorDenial(kind: AgentKind, plan: PlanFacts): AgentDenial | null {
+  if (kind !== 'operator' || plan.fullAuto) return null;
+  return { denial: { code: 'plan_locked', needs: 'growth' }, asked: 'operator' };
+}
+
 /** The lowest plan above the workspace's that tracks an engine; Enterprise for API models. */
 function engineNeeds(plan: PlanFacts, engineId: string): PlanId | null {
   const isModel = ALL_MODELS.some((m) => m.id === engineId);
@@ -817,4 +886,130 @@ export function agentPlanLimits(plan: PlanFacts): AgentPlanLimits {
     };
   }
   return plan.planId === 'growth' ? AGENT_LIMITS.growth : AGENT_LIMITS.starter;
+}
+
+// ─── The AEO Operator (AEO Operator plan §4.2, §4.5; 00545) ─────────────────
+
+/** What an agent is (chat_agents.kind): an agent, or an AEO Operator, which runs agents. */
+export type AgentKind = 'agent' | 'operator';
+
+/** Whether a version's skills make an AEO Operator: /operator, its only skill. */
+export const isOperatorSkills = (skills: readonly string[]) =>
+  skills.length === 1 && skills[0] === OPERATOR_SKILL;
+
+/** An agent's kind by its skills, set when it is made and never changed (00545's trigger). */
+export const agentKindOf = (skills: readonly string[]): AgentKind =>
+  isOperatorSkills(skills) ? 'operator' : 'agent';
+
+/** An Operator's settings as chat_agent_versions.operator_json keeps them (snake_case). */
+export interface OperatorJson {
+  allowed: string[] | null;
+  include_workspace: boolean;
+  max_runs: number;
+  ask_first: true;
+}
+
+/** The settings as stored, from what the API took. */
+export function operatorJsonOf(input: OperatorSettingsInput): OperatorJson {
+  return {
+    allowed: input.allowed,
+    include_workspace: input.includeWorkspace,
+    max_runs: input.maxRuns,
+    ask_first: true,
+  };
+}
+
+/**
+ * Stored settings read back defensively (operator/defaults.ts bounds them):
+ * what doesn't read is the default; Ask first is always on.
+ */
+export function operatorJsonFromRow(json: unknown): OperatorJson {
+  const raw = (json && typeof json === 'object' ? json : {}) as Record<string, unknown>;
+  const allowed = Array.isArray(raw.allowed)
+    ? raw.allowed.filter((id): id is string => typeof id === 'string').slice(0, 50)
+    : null;
+  return {
+    allowed,
+    include_workspace: raw.include_workspace === true,
+    max_runs: operatorSettingsOf({
+      maxRuns: typeof raw.max_runs === 'number' ? raw.max_runs : undefined,
+    }).maxRuns,
+    ask_first: true,
+  };
+}
+
+/**
+ * The planner's settings for an Operator's day (operator/plan.ts): its
+ * daily budget (max_run_share), its stored settings and the zone its day is
+ * counted in, bounded as the planner bounds them.
+ */
+export function operatorPlanSettings(
+  json: OperatorJson | null | undefined,
+  dailyBudget: number,
+  timeZone: string,
+): OperatorSettings {
+  const stored = json ?? operatorJsonFromRow(null);
+  return operatorSettingsOf({
+    dailyBudget,
+    maxRuns: stored.max_runs,
+    allowed: stored.allowed,
+    includeWorkspace: stored.include_workspace,
+    timeZone,
+  });
+}
+
+/**
+ * What an Operator's definition gets wrong (decisions 1, 13), as its
+ * refusal's code; null when it is fine:
+ *   - operator_skills: /operator beside other skills, or an Operator's
+ *     settings on an agent that isn't one;
+ *   - operator_kind: a change that would make an agent an Operator, or an
+ *     Operator an agent (its kind is set when it is made);
+ *   - operator_scope: not exactly one brand;
+ *   - operator_visibility: shared with the workspace (private only in v1);
+ *   - operator_budget: a daily budget outside 1–10%;
+ *   - operator_can_call: Can call set (an Operator runs agents by its plan).
+ */
+export type OperatorProblem =
+  | 'operator_skills'
+  | 'operator_kind'
+  | 'operator_scope'
+  | 'operator_visibility'
+  | 'operator_budget'
+  | 'operator_can_call';
+
+export function operatorProblem(agent: {
+  kind: AgentKind;
+  skills: readonly string[];
+  scope: AgentScope;
+  visibility: AgentVisibility;
+  maxRunShare: number;
+  canCall: readonly string[];
+  /** Operator settings were given (operator_json). */
+  settings: boolean;
+}): OperatorProblem | null {
+  const named = agent.skills.includes(OPERATOR_SKILL);
+  if (agent.kind === 'agent') {
+    if (named) return isOperatorSkills(agent.skills) ? 'operator_kind' : 'operator_skills';
+    return agent.settings ? 'operator_skills' : null;
+  }
+  if (!isOperatorSkills(agent.skills)) return named ? 'operator_skills' : 'operator_kind';
+  if (agent.scope.all_brands === true || (agent.scope.brand_ids ?? []).length !== 1) {
+    return 'operator_scope';
+  }
+  if (agent.visibility !== 'private') return 'operator_visibility';
+  if (
+    agent.maxRunShare < OPERATOR_DAILY_BUDGET_MIN - 1e-9 ||
+    agent.maxRunShare > OPERATOR_DAILY_BUDGET_MAX + 1e-9
+  ) {
+    return 'operator_budget';
+  }
+  if (agent.canCall.length > 0) return 'operator_can_call';
+  return null;
+}
+
+/** The one brand an Operator works on (its scope's), or null for a scope that isn't one brand. */
+export function operatorBrandOf(scope: AgentScope): string | null {
+  const ids = scope.brand_ids ?? [];
+  return scope.all_brands !== true && ids.length === 1 ? ids[0] : null;
 }

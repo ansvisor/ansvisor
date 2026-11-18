@@ -6,7 +6,15 @@ import messages from '../../../../messages/en.json';
 import type { AgentFormSetup } from '@/lib/chat/agent-form';
 import type { AgentDetail } from '@/lib/chat/agents';
 import { readyPreset } from '@/lib/chat/agents/catalog';
-import { ADMIN_CAN, AGENT_ID, NOTHING_CAN, NOW, detail } from '@/lib/chat/testing/agent-fixtures';
+import {
+  ADMIN_CAN,
+  AGENT_ID,
+  NOTHING_CAN,
+  NOW,
+  OPERATOR_ID,
+  detail,
+  operatorDetail,
+} from '@/lib/chat/testing/agent-fixtures';
 
 /**
  * Create and edit an agent (CHAT-21 §D, §C item 14; governance mockup
@@ -74,6 +82,7 @@ async function render(
   preset: string | null = null,
   /** The form's clock; null, the person's zone (`setup.timeZone`), else the browser's. */
   timeZone: string | null = 'UTC',
+  initialSkill: string | null = null,
 ) {
   await act(async () => {
     root.render(
@@ -82,6 +91,7 @@ async function render(
           setup={setup}
           agent={agent}
           preset={readyPreset(preset)}
+          initialSkill={initialSkill}
           now={NOW}
           timeZone={timeZone ?? undefined}
         />
@@ -439,8 +449,10 @@ describe('AgentForm: new agent', () => {
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
     // The fourteen and /chatgpt-profile after /facts (ChatGPT Business Hub plan, PR 7), then the
     // seven, /plan, the packs' three (/content-plan, /seasonal, /traffic), /ai-revenue and Ads'
-    // two (Ads Phase 0 PR 15), each offered here while its flag is on.
+    // two (Ads Phase 0 PR 15), each offered here while its flag is on. Never /operator: the AEO
+    // Operator's own form opens from its ready-to-use agent or ?skill=operator (PR 6).
     expect(skills).toHaveLength(32);
+    expect(skills).not.toContain('operator');
     expect(skills.slice(15, 22)).toEqual([
       'questions',
       'features',
@@ -467,9 +479,13 @@ describe('AgentForm: new agent', () => {
   });
 
   it('leaves out a skill this install does not offer now, as a pick and as a follow-on', async () => {
-    await render({ ...SETUP, offSkills: ['chatgpt-profile', 'earn-or-pay', 'ad-drafts'] });
+    await render({
+      ...SETUP,
+      offSkills: ['chatgpt-profile', 'earn-or-pay', 'ad-drafts', 'operator'],
+    });
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
     expect(skills).toHaveLength(29);
+    expect(skills).not.toContain('operator');
     expect(skills).not.toContain('chatgpt-profile');
     expect(skills).not.toContain('ad-drafts');
     await click(one('[data-skill="wrongclaim"]')!);
@@ -1165,5 +1181,179 @@ describe('AgentForm: publish and send on its own (AUTONOMOUS-GO-LIVE §7.2)', ()
     expect(boxSwitch()!.disabled).toBe(true);
     expect(box()!.textContent).toContain('Ask your Admin');
     expect(one('[data-field="goLiveLimit"]')).toBeNull();
+  });
+});
+
+describe('AgentForm: an AEO Operator (AEO Operator plan §4.3)', () => {
+  const MINE = 'cccccccc-0000-4000-8000-0000000000c1';
+  const SHARED = 'cccccccc-0000-4000-8000-0000000000c2';
+  const OP_SETUP: AgentFormSetup = {
+    ...SETUP,
+    fullAuto: 'open',
+    planName: 'Growth',
+    offSkills: [],
+    operatorAgents: [
+      { id: MINE, name: 'Citation Win-back', mine: true, workspace: false },
+      { id: SHARED, name: 'Team report', mine: false, workspace: true },
+    ],
+  };
+  beforeEach(() => vi.stubEnv('CHAT_OPERATOR', 'true'));
+  afterEach(() => vi.unstubAllEnvs());
+  const stepLabels = () => action('agentNew.step').map((b) => b.textContent);
+
+  it('opens its own form from its preset: its steps, defaults and summary', async () => {
+    await render(OP_SETUP, null, 'aeo-operator');
+    expect(stepLabels()).toEqual(['1Operator', '2Days & brand', '3Approvals', '4Budget & agents']);
+    expect(one('[data-slot="agent-form-operator-intro"]')!.textContent).toContain(
+      'Nothing starts until you approve.',
+    );
+    // No skill picker, follow-ons or instructions.
+    expect(all('[data-skill]')).toHaveLength(0);
+    expect(action('agentNew.instructions')).toHaveLength(0);
+    expect(summary('trigger')).toBe('Weekdays 07:00');
+    expect(summary('brand')).toBe('Ansvisor');
+    expect(summary('agents')).toBe('All my active agents');
+    expect(summary('maxRuns')).toBe('5 agents a day');
+    expect(summary('dailyBudget')).toBe('Up to 5% of the monthly AI limit a day');
+    expect(summary('shared')).toBe('Only you. An AEO Operator is private.');
+    expect(one('[data-row="connections"]')).toBeNull();
+    expect(one('[data-row="model"]')).toBeNull();
+  });
+
+  it('hides Can call, connections, engines, topics, tags, URLs, model and the modes', async () => {
+    await render(OP_SETUP, null, 'aeo-operator');
+    await next();
+    expect(all('[data-trigger]').map((b) => b.getAttribute('data-trigger'))).toEqual(['schedule']);
+    expect(action('agentNew.operatorBrand')).toHaveLength(1);
+    for (const hidden of ['brands', 'engines', 'topics', 'tags', 'urls']) {
+      expect(action(`agentNew.${hidden}`), hidden).toHaveLength(0);
+    }
+    await next();
+    expect(action('agentNew.mode')).toHaveLength(0);
+    expect(all('[data-approval]').map((r) => r.getAttribute('data-approval'))).toEqual([
+      'plan',
+      'start',
+      'agents',
+      'skip',
+    ]);
+    await next();
+    expect(step()).toBe('3');
+    expect(all('[data-connection]')).toHaveLength(0);
+    expect(action('agentNew.model')).toHaveLength(0);
+    expect(action('agentNew.canCall')).toHaveLength(0);
+    expect(one('[data-slot="agent-form-can-call-locked"]')).toBeNull();
+    expect(action('agentNew.visibility')).toHaveLength(0);
+    expect(action('agentNew.maxRun')).toHaveLength(0);
+    const budget = one('[data-action="agentNew.dailyBudget"]') as HTMLInputElement;
+    expect([budget.value, budget.min, budget.max]).toEqual(['5', '1', '10']);
+    expect(one('[data-slot="agent-form-operator-budget-hint"]')!.textContent).toContain(
+      'At 5% a day, one day’s agents use at most 5% of your monthly AI limit.',
+    );
+    const runs = one('[data-action="agentNew.maxRuns"]') as HTMLInputElement;
+    expect([runs.value, runs.min, runs.max]).toEqual(['5', '1', '8']);
+    expect(
+      one('[data-action="agentNew.operatorAgents"][data-choice="all"]')!.getAttribute(
+        'aria-checked',
+      ),
+    ).toBe('true');
+  });
+
+  it('keeps the budget to 1–10%, the count to 1–8 and a pick to one agent at least', async () => {
+    await render(OP_SETUP, null, 'aeo-operator');
+    await click(one('[data-step-button="3"]')!);
+    await type(one('[data-action="agentNew.dailyBudget"]')!, '11');
+    await type(one('[data-action="agentNew.maxRuns"]')!, '9');
+    await click(one('[data-action="agentNew.operatorAgents"][data-choice="picked"]')!);
+    await click(one(`[data-action="agentNew.operatorPick"][data-agent="${MINE}"]`)!);
+    await click(action('agentNew.saveDraft')[0]);
+    expect(calls()).toEqual([]);
+    expect(errors()).toEqual([
+      'Enter a daily budget from 1% to 10%.',
+      'Pick at least one agent, or choose All my active agents.',
+      'Enter a whole number from 1 to 8.',
+    ]);
+  });
+
+  it('saves its settings and its daily budget as maxRunShare', async () => {
+    await render(OP_SETUP, null, 'aeo-operator');
+    await click(one('[data-step-button="3"]')!);
+    await type(one('[data-action="agentNew.dailyBudget"]')!, '7');
+    await type(one('[data-action="agentNew.maxRuns"]')!, '3');
+    // Workspace agents opt-in: offered only with the switch on.
+    expect(action('agentNew.operatorPick')).toHaveLength(0);
+    await click(one('[data-action="agentNew.operatorWorkspace"]')!);
+    await click(one('[data-action="agentNew.operatorAgents"][data-choice="picked"]')!);
+    expect(action('agentNew.operatorPick').map((p) => p.getAttribute('data-agent'))).toEqual([
+      MINE,
+      SHARED,
+    ]);
+    await click(one(`[data-action="agentNew.operatorPick"][data-agent="${SHARED}"]`)!);
+    await click(action('agentNew.saveDraft')[0]);
+    expect(calls()).toEqual(['POST /api/chat/agents']);
+    const body = bodyOf(0);
+    expect(body).toMatchObject({
+      // Named after its preset, for the server to number by §O.
+      name: 'AEO Operator',
+      autoName: true,
+      visibility: 'private',
+      maxRunShare: 0.07,
+      skills: ['operator'],
+      connections: [],
+      scope: { brand_ids: ['bbbbbbbb-0000-4000-8000-000000000001'] },
+      operator: { allowed: [MINE, SHARED], includeWorkspace: true, maxRuns: 3 },
+    });
+    expect(body).not.toHaveProperty('canCall');
+  });
+
+  it('opens from ?skill=operator too, and patches an Operator’s settings on Edit', async () => {
+    await render(OP_SETUP, null, null, 'UTC', 'operator');
+    expect(stepLabels()[0]).toBe('1Operator');
+    act(() => root.unmount());
+    root = createRoot(container);
+    answer = (url, init) =>
+      url === `/api/chat/agents/${OPERATOR_ID}` && init?.method === 'PATCH'
+        ? Response.json({ ok: true, agent: operatorDetail({ can: { ...ADMIN_CAN } }) })
+        : Response.json({ ok: false, failure: 'failed' }, { status: 500 });
+    await render(OP_SETUP, operatorDetail({ can: { ...ADMIN_CAN } }));
+    expect(stepLabels()[3]).toBe('4Budget & agents');
+    await click(one('[data-step-button="3"]')!);
+    await type(one('[data-action="agentNew.maxRuns"]')!, '8');
+    await click(action('agentNew.save')[0]);
+    expect(calls()).toEqual([`PATCH /api/chat/agents/${OPERATOR_ID}`]);
+    expect(bodyOf(0)).toMatchObject({
+      operator: { allowed: null, includeWorkspace: false, maxRuns: 8 },
+    });
+    expect(bodyOf(0)).not.toHaveProperty('maxRunShare');
+  });
+
+  it('shows one Operator a brand on Days & brand', async () => {
+    answer = () =>
+      Response.json(
+        {
+          ok: false,
+          failure: 'failed',
+          code: 'operator_taken',
+          error: 'Another AEO Operator is on for this brand.',
+        },
+        { status: 409 },
+      );
+    await render(OP_SETUP, null, 'aeo-operator');
+    await click(one('[data-step-button="3"]')!);
+    await click(action('agentNew.saveDraft')[0]);
+    expect(step()).toBe('1');
+    expect(one('[data-slot="agent-form-alert"]')!.getAttribute('data-refusal')).toBe(
+      'operator_taken',
+    );
+  });
+
+  it('is no form of its own while the AEO Operator is off for the workspace', async () => {
+    await render({ ...OP_SETUP, offSkills: ['operator'] }, null, 'aeo-operator');
+    expect(stepLabels()[0]).toBe('1Skill');
+    expect(one('[data-slot="agent-form-operator-intro"]')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ ...OP_SETUP, offSkills: ['operator'] }, null, null, 'UTC', 'operator');
+    expect(stepLabels()[0]).toBe('1Skill');
+    expect(all('[data-skill][aria-checked="true"]')).toHaveLength(0);
   });
 });
