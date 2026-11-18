@@ -85,6 +85,7 @@ import {
   type MentionsFilterParams,
 } from './mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
+import { COMPETITOR_TYPE_FILTER_WORDS, COMPETITOR_TYPE_WORDS } from '@/lib/competitor-types';
 import { gateWriteTools, oauthPlanToolResult } from './subscription-gate';
 import { getAiUsageFor, getMeFor } from './account';
 import { getActionScorecardFor } from './learning';
@@ -159,6 +160,14 @@ const looksUp = (...fields: (readonly unknown[] | string | undefined)[]) =>
 /** What every lookup's description says of what it didn't find. */
 const LOOKUP_NOT_FOUND =
   'Each one asked is in the result or in `not_found`: say "not found" plainly for those, with where you looked, and never offer others as the closest or similar. Never say one doesn\'t exist because a page of this list didn\'t show it.';
+
+/** A competitor read's type filter (00542). */
+const competitorTypeInput = z
+  .string()
+  .trim()
+  .max(60)
+  .optional()
+  .describe(COMPETITOR_TYPE_FILTER_WORDS);
 
 /** Brand Visibility's Mentions tab's filters, the same on every mentions tool. */
 const mentionFilters = {
@@ -627,14 +636,16 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Competitors',
       description:
-        'List the competitors configured for a brand. Returns only id, name, and domain. Use list_brands first to resolve the brand id. This is the configured competitor list, not a performance ranking.',
+        'List the competitors configured for a brand. Returns id, name, domain and type: the kind of competitor it is, ' +
+        `${COMPETITOR_TYPE_WORDS} Use list_brands first to resolve the brand id. This is the configured competitor list, not a performance ranking.`,
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        type: competitorTypeInput,
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const competitors = await listCompetitorsFor(auth, args.brand_id);
+      const competitors = await listCompetitorsFor(auth, args.brand_id, { type: args.type });
       if (competitors === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -1043,7 +1054,10 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         'percentage (brand mentions ÷ (brand + competitor mentions)) and the same split per ' +
         '(model_used, platform). Use this for "how do I compare to my competitors?" or "who is ' +
         'gaining share of voice?" questions. Snapshot for the given window — call again with an ' +
-        'earlier window to compute a delta.',
+        'earlier window to compute a delta. Each competitor carries its type (the kind of ' +
+        'competitor it is, null for none); with `type`, only competitors of that type are listed ' +
+        'and share_of_voice.of_type sets the brand against just them, while the other ' +
+        'share_of_voice figures still count every competitor.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         date_from: z
@@ -1061,6 +1075,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         topic_id: relaxedUuid
           .optional()
           .describe('Optional topic UUID (from list_topics) to restrict to one topic.'),
+        type: competitorTypeInput,
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -1072,6 +1087,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         model: args.model,
         region: args.region,
         topicId: args.topic_id,
+        type: args.type,
       });
       if (!result) {
         return {
@@ -1885,13 +1901,17 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         "Competitor framing from Visibility's Mentions tab: how often AI names each competitor in the " +
         "brand's tracked responses (count and share of responses, change against the window " +
-        'before) and how often in the same response as the brand. ' +
+        'before) and how often in the same response as the brand. Each competitor carries its ' +
+        'type (the kind of competitor it is, null for none); with `type`, only competitors of ' +
+        'that type. ' +
         MENTIONS_BASIS,
-      inputSchema: mentionFilters,
+      inputSchema: { ...mentionFilters, type: competitorTypeInput },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
-      const competitors = await getMentionCompetitorsFor(auth, mentionParams(args));
+      const competitors = await getMentionCompetitorsFor(auth, mentionParams(args), {
+        type: args.type,
+      });
       if (!competitors) {
         return { content: [{ type: 'text', text: 'Brand not found' }], isError: true };
       }

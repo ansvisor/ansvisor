@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
-import { mayUseBrand } from './data';
+import { competitorTypesFor, mayUseBrand } from './data';
+import { competitorTypeLabel, matchesCompetitorType } from '@/lib/competitor-types';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import { mentionExcerpt } from '@/lib/mention-match';
 import {
@@ -328,21 +329,25 @@ export interface MentionCompetitors {
     previousMentions: number;
     /** Against the window before, in percent; null with none before. */
     mentionsChangePct: number | null;
+    /** Its type as the Competitors page names it (00542); null for none. */
+    type: string | null;
   }>;
 }
 
 /**
  * The Overview's competitor framing (get_mention_competitors): how often AI
  * names each competitor in the brand's tracked responses, and how often in the
- * same response as the brand.
+ * same response as the brand. With `type`, only competitors of that type
+ * (matchesCompetitorType).
  */
 export async function getMentionCompetitorsFor(
   auth: McpAuthContext,
   params: MentionsFilterParams,
+  opts: { type?: string } = {},
 ): Promise<MentionCompetitors | null> {
   const brand = await ownedBrand(auth, params.brandId);
   if (!brand) return null;
-  const o = await readOverview(params);
+  const [o, types] = await Promise.all([readOverview(params), competitorTypesFor(auth, brand.id)]);
   if (!o) return null;
   const answers = o.current.answers;
   const share = (n: number) => round1(answers > 0 ? (n * 100) / answers : null);
@@ -354,7 +359,8 @@ export async function getMentionCompetitorsFor(
       shareOfResponses: share(o.current.mentions),
     },
     trackedResponses: answers,
-    competitors: [...o.competitors]
+    competitors: o.competitors
+      .filter((c) => matchesCompetitorType(types.get(c.competitorId), opts.type))
       .sort((a, b) => b.mentions - a.mentions)
       .map((c) => ({
         competitorId: c.competitorId,
@@ -364,6 +370,7 @@ export async function getMentionCompetitorsFor(
         sameResponseAsYou: c.coMentions,
         previousMentions: c.previousMentions,
         mentionsChangePct: whole(relativeChange(c.mentions, c.previousMentions)),
+        type: competitorTypeLabel(types.get(c.competitorId)),
       })),
   };
 }

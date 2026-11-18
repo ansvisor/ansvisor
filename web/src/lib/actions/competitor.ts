@@ -14,6 +14,7 @@ import {
   weeklyMentions,
   type CompetitorTimeline,
 } from '@/lib/competitor-timeline';
+import { COMPETITOR_TYPE_MAX_LENGTH, normalizeCompetitorType } from '@/lib/competitor-types';
 
 /** A competitor's page events the timeline reads at most. */
 const TIMELINE_EVENTS = 50;
@@ -24,7 +25,32 @@ function mapRow(row: Record<string, unknown>): Competitor {
     brandId: row.brand_id as string,
     name: row.name as string,
     domain: (row.domain as string) ?? '',
+    type: (row.type as string | null) ?? null,
   };
+}
+
+const TYPE_TOO_LONG = `A competitor type can be at most ${COMPETITOR_TYPE_MAX_LENGTH} characters.`;
+
+/**
+ * The types the brand's competitors have (00542), but for the ones named in
+ * `except`: what a typed type is matched against, so "airline" joins the
+ * brand's "Airline". The competitors being changed are left out, so one can
+ * still change its own label's case.
+ */
+async function brandCompetitorTypes(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  except: readonly string[] = [],
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('competitors')
+    .select('id, type')
+    .eq('brand_id', brandId)
+    .not('type', 'is', null);
+  if (error) throw new Error(error.message);
+  return (data ?? [])
+    .filter((row) => !except.includes(row.id as string))
+    .map((row) => row.type as string);
 }
 
 export async function getCompetitors(brandId: string): Promise<Competitor[]> {
@@ -42,10 +68,22 @@ export async function getCompetitors(brandId: string): Promise<Competitor[]> {
 
 export async function addCompetitor(
   brandId: string,
-  input: { name: string; domain: string },
+  input: { name: string; domain: string; type?: string | null },
 ): Promise<Competitor> {
   await assertWritable({ onboarding: true, brandId });
   const supabase = await createClient();
+
+  // Its type (00542), when one was picked: one of the brand's own labels in
+  // any case is stored as the brand wrote it.
+  let type: string | null = null;
+  if (input.type?.trim()) {
+    const normalized = normalizeCompetitorType(
+      input.type,
+      await brandCompetitorTypes(supabase, brandId),
+    );
+    if (!normalized.ok) throw new Error(TYPE_TOO_LONG);
+    type = normalized.type;
+  }
 
   const { data, error } = await supabase
     .from('competitors')
@@ -56,6 +94,7 @@ export async function addCompetitor(
         .trim()
         .replace(/^https?:\/\//, '')
         .replace(/\/+$/, ''),
+      ...(type ? { type } : {}),
     })
     .select()
     .single();
@@ -81,7 +120,12 @@ export type AddCompetitorsResult =
       /** partial: some weren't added (CHAT-20 §11a), each with why. */
       code: 'ok' | 'partial';
       added: Competitor[];
-      skipped: { name: string; domain: string; reason: 'duplicate' | 'failed' }[];
+      skipped: {
+        name: string;
+        domain: string;
+        type?: string | null;
+        reason: 'duplicate' | 'failed';
+      }[];
     }
   | { ok: false; reason: 'forbidden_role' | 'duplicate' | 'failed'; message: string };
 
@@ -94,7 +138,7 @@ export type AddCompetitorsResult =
  */
 export async function addCompetitors(
   brandId: string,
-  items: { name: string; domain: string }[],
+  items: { name: string; domain: string; type?: string | null }[],
 ): Promise<AddCompetitorsResult> {
   try {
     await assertWritable({ brandId });
@@ -111,7 +155,7 @@ export async function addCompetitors(
 
 async function addSomeCompetitors(
   brandId: string,
-  items: { name: string; domain: string }[],
+  items: { name: string; domain: string; type?: string | null }[],
 ): Promise<AddCompetitorsResult> {
   if (!(await isManager(await createClient()))) {
     return {
@@ -232,6 +276,56 @@ export async function deleteCompetitor(id: string): Promise<void> {
   if (!data?.length) throw new Error("The competitor couldn't be removed.");
 
   revalidatePath('/dashboard/brands');
+}
+
+/** The most competitors one Set type changes at once. */
+const MAX_TYPED_AT_ONCE = 200;
+
+/**
+ * Set the type (00542) of one or more of a brand's competitors, or clear it
+ * with null: the Competitors page and brand settings. Admins and Managers,
+ * checked here as the table's update rule does. The type is cleaned as
+ * normalizeCompetitorType does: a generic type by its key, one of the
+ * brand's own labels in any case as the brand wrote it. Only the brand's own
+ * competitors change; their rows come back.
+ */
+export async function setCompetitorTypes(
+  brandId: string,
+  competitorIds: string[],
+  type: string | null,
+): Promise<Competitor[]> {
+  await assertWritable({ brandId });
+  const ids = [...new Set(competitorIds)];
+  if (
+    !z.guid().safeParse(brandId).success ||
+    ids.length === 0 ||
+    ids.length > MAX_TYPED_AT_ONCE ||
+    !ids.every((id) => z.guid().safeParse(id).success)
+  ) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  if (!(await isManager(supabase))) {
+    throw new Error('Only an admin or a manager can change competitor types.');
+  }
+  const normalized = normalizeCompetitorType(
+    type,
+    type?.trim() ? await brandCompetitorTypes(supabase, brandId, ids) : [],
+  );
+  if (!normalized.ok) throw new Error(TYPE_TOO_LONG);
+
+  const { data, error } = await supabase
+    .from('competitors')
+    .update({ type: normalized.type })
+    .eq('brand_id', brandId)
+    .in('id', ids)
+    .select('*');
+  if (error) throw new Error(error.message);
+  // None of them the brand's, or the row rules let none change.
+  if (!data?.length) throw new Error("The competitors' type couldn't be changed.");
+
+  revalidatePath('/dashboard/brands');
+  return data.map((row) => mapRow(row as Record<string, unknown>));
 }
 
 /**
