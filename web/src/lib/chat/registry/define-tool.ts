@@ -399,6 +399,15 @@ interface ToolFields<S extends z.ZodObject> {
    * run is tainted after it, so every later change shows a card (CHAT-20 §16a).
    */
   taintsRun?: true;
+  /**
+   * What a Skip on its card records beyond telling the model no (the AEO
+   * Operator's plan is declined), in the app or from Slack: who skipped it,
+   * in which agent run. A failure is logged; the Skip stands.
+   */
+  onSkip?(
+    run: { userId: string; organizationId: string; agentRunId: string | null },
+    input: z.output<S>,
+  ): Promise<unknown>;
   /** A valid input, for the registry's tests and the permission fixtures (CHAT-20 §19). */
   fixture: { input: z.input<S> };
 }

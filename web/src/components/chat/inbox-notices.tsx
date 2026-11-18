@@ -28,8 +28,9 @@ import { INBOX_ROW } from './inbox-suggestions';
  * an edit stopped it, with Open agent (AUTONOMOUS-GO-LIVE §6.4, §7.2,
  * 00446): its owner and the people it notifies get them, and opening one
  * closes it. A scheduled job's run failed, or the job paused (00461), or a
- * follow-up check has its result (W3-05), with Open. Shown, they are marked
- * read.
+ * follow-up check has its result (W3-05), with Open. An AEO Operator's
+ * summary once its plan's agents are done (00545), with Open summary, which
+ * closes it. Shown, they are marked read.
  */
 export function NoticeRows({ notices }: { notices: ChatNotice[] }) {
   const unread = notices
@@ -51,6 +52,8 @@ function NoticeRow({ notice }: { notice: ChatNotice }) {
       return <WentLiveRow notice={notice} />;
     case 'agent_go_live_off':
       return <GoLiveOffRow notice={notice} />;
+    case 'agent_plan_summary':
+      return <PlanSummaryRow notice={notice} />;
     case 'schedule_failed':
     case 'schedule_paused':
     case 'followup_result':
@@ -364,6 +367,89 @@ function GoLiveOffRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_g
         className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'w-full')}
       >
         {t('openAgent')}
+      </Link>
+    </div>
+  );
+}
+
+/** A plan's day, as its summary names it: "Nov 18". */
+const planDayOf = (day: string) =>
+  new Date(`${day}T00:00:00.000Z`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+
+/**
+ * An AEO Operator's summary (§4.2 step 7): where the agents of its plan are,
+ * counted, and Open summary, its run's chat. Amber while some wait for the
+ * person, as the Inbox's other rows that wait on them; news otherwise.
+ */
+function PlanSummaryRow({
+  notice,
+}: {
+  notice: Extract<ChatNotice, { kind: 'agent_plan_summary' }>;
+}) {
+  const t = useTranslations('chatShell.inbox.notice');
+  const waits = notice.waiting > 0;
+  const words = t('planSummary', { agent: notice.agent, day: planDayOf(notice.day) });
+  const detail =
+    notice.total === 0
+      ? t('planNone')
+      : [
+          t('planDone', { done: notice.done, total: notice.total }),
+          waits ? t('planWaiting', { count: notice.waiting }) : null,
+          notice.failed ? t('planFailed', { count: notice.failed }) : null,
+          notice.stopped ? t('planStopped', { count: notice.stopped }) : null,
+          notice.working ? t('planWorking', { count: notice.working }) : null,
+          notice.notStarted ? t('planNotStarted', { count: notice.notStarted }) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+  return (
+    <div
+      data-slot="inbox-notice"
+      data-kind={notice.kind}
+      className={cn(
+        INFO_ROW,
+        waits && 'border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'size-2 rounded-full',
+          waits ? 'bg-amber-600 dark:bg-amber-400' : 'bg-foreground/60',
+        )}
+      />
+      <span className="min-w-0 text-[13.5px]">
+        <span className={cn('block truncate', !notice.read && 'font-semibold')} title={words}>
+          {words}
+        </span>
+        <span
+          className={cn(
+            'block truncate text-xs',
+            waits ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
+          )}
+        >
+          {detail}
+        </span>
+      </span>
+      <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+        {dayOf(notice.createdAt)}
+      </span>
+      <Link
+        href={
+          notice.chatId ? `/dashboard/chat/${notice.chatId}` : `/dashboard/agents/${notice.agentId}`
+        }
+        data-action="inbox.openPlanSummary"
+        onClick={closeOnOpen(notice.id)}
+        className={cn(
+          buttonVariants({ variant: waits ? 'default' : 'outline', size: 'sm' }),
+          'w-full',
+        )}
+      >
+        {t('openSummary')}
       </Link>
     </div>
   );

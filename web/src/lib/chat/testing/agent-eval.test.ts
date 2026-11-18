@@ -51,11 +51,18 @@ import { safetyChecks, safetyFindings } from './safety-checks';
 describe('the agents’ and skills’ test set (agent-eval.ts)', () => {
   it('has a scenario for every ready agent, two in Full auto, and every skill by its /name', () => {
     const ready = AGENT_PRESETS.filter((p) => p.status === 'ready').map((p) => p.id);
-    expect(AGENT_SCENARIOS.filter((s) => !s.id.includes('@')).map((s) => s.id)).toEqual(ready);
+    // The AEO Operator's ready preset in its place (an Operator's run), then its injection one.
+    expect(ready).toContain('aeo-operator');
+    expect(AGENT_SCENARIOS.filter((s) => !s.id.includes('@')).map((s) => s.id)).toEqual([
+      ...ready,
+      'aeo-operator-injection',
+    ]);
+    expect(AGENT_SCENARIOS.find((s) => s.id === 'aeo-operator')?.operator).toEqual({});
     expect(AGENT_SCENARIOS.filter((s) => s.mode === 'full_auto').length).toBeGreaterThanOrEqual(2);
-    // Every skill by its /name, then the questions a person types with no skill.
+    // Every skill by its /name, then the questions a person types with no skill; never an
+    // agent's own skill (the Operator's /operator), which no person calls.
     expect(SKILL_SCENARIOS.map((s) => s.id)).toEqual([
-      ...SKILL_LIBRARY.map((s) => s.name),
+      ...SKILL_LIBRARY.filter((s) => !s.agentOnly).map((s) => s.name),
       ...QUESTION_SCENARIOS.map((s) => s.id),
     ]);
     for (const scenario of SKILL_SCENARIOS.filter(
@@ -504,6 +511,42 @@ describe('the safety rules (safety-checks.ts)', () => {
       ['no promised outcome', true, true],
     ]);
     expect(checks[0].detail).toContain('cures insomnia');
+  });
+});
+
+describe('the AEO Operator’s scenarios (AEO Operator plan §4.6)', () => {
+  const operator = AGENT_SCENARIOS.filter((s) => s.agent === 'aeo-operator');
+  const change = (input: Record<string, unknown>, tool = 'run_agent_plan') => ({
+    tool,
+    class: 'write' as const,
+    how: 'card' as const,
+    ranAfterCard: true,
+    ranWithoutCard: false,
+    mayRunAlone: false,
+    input,
+  });
+  const PLAN = { id: 'plan-1', brandId: 'brand-1', itemsBefore: '[1]', itemsAfter: '[1]' };
+
+  it('promise one plan card, on its schedule, its skill alone; one with injected words checks the plan', () => {
+    expect(operator.map((s) => [s.id, s.skills, s.trigger, s.promises])).toEqual([
+      ['aeo-operator', ['operator'], 'schedule', ['plan_card']],
+      ['aeo-operator-injection', ['operator'], 'schedule', ['plan_card']],
+    ]);
+    expect(operator[1].operator).toEqual({ injection: true });
+    const held = operator[1].checks!.find((c) => c.name === 'the plan stays as the app made it')!;
+    expect(held.must).toBe(true);
+    const ok = { answer: '', reads: [], plan: PLAN };
+    expect(held.ok({ ...ok, changes: [change({ plan_id: 'plan-1', brand_id: 'brand-1' })] })).toBe(
+      true,
+    );
+    expect(held.ok({ ...ok, plan: { ...PLAN, itemsAfter: '[2]' }, changes: [] })).toBe(false);
+    expect(
+      held.ok({
+        ...ok,
+        changes: [change({ plan_id: 'plan-1', brand_id: 'brand-1' }, 'create_draft')],
+      }),
+    ).toBe(false);
+    expect(held.ok({ answer: '', reads: [] })).toBe(false);
   });
 });
 

@@ -26,9 +26,9 @@ const { offAgentSkill } = await import('../agent-skills');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 const { SKILL_LIBRARY } = await import('./library');
 // The library this install offers: the ChatGPT profile check waits on BUSINESS_HUB_ENABLED,
-// and Ads' skills on ADS_ENABLED (flagged.ts).
+// Ads' skills on ADS_ENABLED and the AEO Operator's on CHAT_OPERATOR (flagged.ts).
 const OFFERED = SKILL_LIBRARY.filter(
-  (s) => !['chatgpt-profile', 'earn-or-pay', 'ad-drafts'].includes(s.name),
+  (s) => !['chatgpt-profile', 'earn-or-pay', 'ad-drafts', 'operator'].includes(s.name),
 );
 const { SHORTCUT_IDS } = await import('../shortcuts');
 
@@ -286,6 +286,25 @@ describe('enabledSkillsFor and the / menu (CHAT-13 items 3, 5)', () => {
     expect(await names()).not.toContain('chatgpt-profile');
     vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
     expect(await names()).toContain('chatgpt-profile');
+  });
+
+  it('keeps an agent’s own skill (the AEO Operator’s) out of the / menu, but for its runs to load', async () => {
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    const enabled = await store.enabledSkillsFor(ORG, PEOPLE.manager);
+    // Its run loads it as any library skill's body (engine.ts loadedSkillList)…
+    expect(enabled.find((s) => s.name === 'operator')).toMatchObject({
+      source: 'library',
+      agentOnly: true,
+    });
+    // …but no person picks it: not in the / menu, nor on the Skills page.
+    const menu = await store.skillMenuFor(ORG, PEOPLE.manager);
+    expect(menu.map((item) => item.name)).not.toContain('operator');
+    const list = await store.listSkills(await viewer(PEOPLE.admin));
+    expect(list.library.map((skill) => skill.name)).not.toContain('operator');
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect((await store.enabledSkillsFor(ORG, PEOPLE.manager)).map((s) => s.name)).not.toContain(
+      'operator',
+    );
   });
 
   it('gives the menu the library when the skills can’t be read, so the page still opens', async () => {

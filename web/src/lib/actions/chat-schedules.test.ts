@@ -29,7 +29,7 @@ vi.mock('@/lib/supabase/admin', () => ({
   },
 }));
 vi.mock('@/lib/subscription-guard', () => ({ assertWritable: vi.fn(async () => undefined) }));
-vi.mock('@/lib/chat/flag', () => ({ chatAgenticEnabled: () => true }));
+vi.mock('@/lib/chat/flag', () => ({ chatAgenticEnabled: () => true, chatOperatorOn: () => false }));
 vi.mock('@/lib/chat/schedule/store', async (original) => ({
   ...(await original<typeof import('@/lib/chat/schedule/store')>()),
   createSchedule: store.createSchedule,

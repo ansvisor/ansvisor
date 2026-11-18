@@ -6,7 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * site, its subdomains (a blog) included.
  */
 
-const db = vi.hoisted(() => ({ rpc: vi.fn(), competitors: [], rules: null, own: [], calls: [] }));
+const db = vi.hoisted(() => ({
+  rpc: vi.fn(),
+  competitors: [],
+  merged: [],
+  rules: null,
+  own: [],
+  calls: [],
+}));
 
 vi.mock('../../../config/supabase.js', () => ({
   default: {
@@ -21,6 +28,10 @@ vi.mock('../../../config/supabase.js', () => ({
           data: table === 'brand_domains' ? db.own : db.competitors,
           error: null,
         }),
+        // Merged competitors (00543), read in one go.
+        ...(table === 'merged_competitors'
+          ? { then: (resolve) => resolve({ data: db.merged, error: null }) }
+          : {}),
       };
       return chain;
     },
@@ -47,6 +58,7 @@ beforeEach(() => {
   db.rules = null;
   db.own = [];
   db.competitors = [{ domain: 'https://www.Rival-Travel.example/' }, { domain: null }];
+  db.merged = [];
   db.rpc.mockReset().mockResolvedValue({
     data: [
       cited('rival-travel.example'),
@@ -91,5 +103,19 @@ describe('the sources family', () => {
       'acme.example',
       'guidebook.example',
     ]);
+  });
+
+  it('suggests no merged competitor’s site either (00543): it is the kept one’s', async () => {
+    db.merged = [{ merged_into_id: 'c1', name: 'Guide Book', domain: 'guidebook.example' }];
+    db.rpc.mockResolvedValue({
+      data: [cited('guidebook.example'), cited('www.guidebook.example'), cited('other.example')],
+      error: null,
+    });
+    const found = await run();
+    expect(db.calls).toContainEqual({
+      table: 'merged_competitors',
+      columns: 'id, merged_into_id, name, domain, merged_at',
+    });
+    expect(found.map((f) => f.payload.domain)).toEqual(['other.example']);
   });
 });

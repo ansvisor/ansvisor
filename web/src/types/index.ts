@@ -176,6 +176,12 @@ export interface Competitor {
   brandId: string;
   name: string;
   domain: string;
+  /**
+   * What kind of competitor it is (00542): a generic type's key ('direct',
+   * 'marketplace', 'publisher', 'other') or the brand's own label; null for
+   * none. competitorTypeLabel (lib/competitor-types) says how it reads.
+   */
+  type: string | null;
 }
 
 export interface PromptVolume {

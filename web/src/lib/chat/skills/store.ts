@@ -16,7 +16,7 @@ import { MAX_BYTES, MAX_DESCRIPTION, MAX_NAME, checkSkillFile } from './format';
 import type { GithubRefusalCode } from './github';
 import type { ImportRefusalCode, ParsedImport } from './import';
 import type { SkillsShRefusalCode } from './skills-sh';
-import { SKILL_LIBRARY, enabledSkills, type SkillFilter } from './library';
+import { SKILL_LIBRARY, enabledSkills, personSkill, type SkillFilter } from './library';
 import { skillFlagOn } from './flagged';
 import { MAX_TITLE, skillChecksum, skillFileText, type SkillParts } from './skill-file';
 
@@ -73,6 +73,8 @@ export interface EnabledSkill {
   createdBy: string | null;
   /** An import's source, for its step's repo owner. */
   sourceUrl: string | null;
+  /** An agent's own library skill (library.ts agentOnly): loaded only in that agent's runs. */
+  agentOnly?: true;
 }
 
 /** The longest title (00458). */
@@ -379,6 +381,7 @@ export async function enabledSkillsFor(
           id: null,
           createdBy: null,
           sourceUrl: null,
+          ...(skill.agentOnly ? { agentOnly: true as const } : {}),
         }),
       ),
     ...((own.data ?? []) as (ListRow & { source: string })[])
@@ -408,14 +411,16 @@ export async function skillMenuFor(
   organizationId: string,
   userId: string,
 ): Promise<ChatSkillItem[]> {
+  // An agent's own skill (the Operator's /operator) is never a person's to pick.
   try {
-    return (await enabledSkillsFor(organizationId, userId)).map(({ name, title }) => ({
-      name,
-      title,
-    }));
+    return (await enabledSkillsFor(organizationId, userId))
+      .filter(personSkill)
+      .map(({ name, title }) => ({ name, title }));
   } catch (err) {
     console.error('[chat/skills] could not read the skills for the / menu:', err);
-    return enabledSkills(organizationId).map(({ name, title }) => ({ name, title }));
+    return enabledSkills(organizationId)
+      .filter(personSkill)
+      .map(({ name, title }) => ({ name, title }));
   }
 }
 
@@ -633,8 +638,10 @@ export async function listSkills(viewer: SkillViewer): Promise<SkillList> {
   if (rows.error) throw new Error(`Could not read the workspace's skills: ${rows.error.message}`);
   const disabled = new Set(off);
   return {
-    // A skill behind a flag that is off isn't listed (flagged.ts).
-    library: SKILL_LIBRARY.filter((skill) => skillFlagOn(skill.name)).map((skill) => ({
+    // A skill behind a flag that is off isn't listed (flagged.ts), nor an agent's own.
+    library: SKILL_LIBRARY.filter(
+      (skill) => skillFlagOn(skill.name, viewer.organizationId) && personSkill(skill),
+    ).map((skill) => ({
       name: skill.name,
       title: skill.title,
       description: skill.description,

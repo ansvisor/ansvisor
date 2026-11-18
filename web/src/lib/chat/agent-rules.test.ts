@@ -19,6 +19,15 @@ import {
   triggerTimeProblem,
   updateAgentInput,
   visibilityDenial,
+  agentKindOf,
+  isOperatorSkills,
+  operatorBrandOf,
+  operatorDenial,
+  operatorJsonFromRow,
+  operatorPlanSettings,
+  operatorProblem,
+  operatorSettingsInput,
+  versionFromRow,
   type AgentFacts,
   type AgentViewer,
 } from './agent-rules';
@@ -506,5 +515,165 @@ describe('what the plan allows', () => {
     expect(canCallDenial(['bbbbbbbb-0000-4000-8000-000000000001'], selfHosted)).toBeNull();
     expect(enginesDenial(selfHosted, ['claude-sonnet-5'])).toBeNull();
     expect(agentPlanLimits(selfHosted).activeAgents).toBeNull();
+  });
+});
+
+// ─── The AEO Operator (AEO Operator plan §4.2, §4.5; PR 4) ──────────────────
+
+describe('the AEO Operator', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const OTHER_BRAND = '33333333-3333-4333-8333-333333333333';
+  const operator = {
+    kind: 'operator' as const,
+    skills: ['operator'],
+    scope: { brand_ids: [BRAND] },
+    visibility: 'private' as const,
+    maxRunShare: 0.05,
+    canCall: [] as string[],
+    settings: true,
+  };
+
+  it('is an agent made of /operator alone: its kind, set when it is made', () => {
+    expect(isOperatorSkills(['operator'])).toBe(true);
+    expect(isOperatorSkills(['operator', 'faq'])).toBe(false);
+    expect(isOperatorSkills(['faq', 'operator'])).toBe(false);
+    expect(agentKindOf(['operator'])).toBe('operator');
+    expect(agentKindOf(['winback'])).toBe('agent');
+    expect(agentKindOf(['operator', 'faq'])).toBe('agent');
+  });
+
+  it('takes its settings with their defaults: all my agents, 5 a day (1–8), Ask first fixed on', () => {
+    expect(operatorSettingsInput.parse({})).toEqual({
+      allowed: null,
+      includeWorkspace: false,
+      maxRuns: 5,
+      askFirst: true,
+    });
+    expect(operatorSettingsInput.safeParse({ maxRuns: 1 }).success).toBe(true);
+    expect(operatorSettingsInput.safeParse({ maxRuns: 8 }).success).toBe(true);
+    for (const maxRuns of [0, 9, 2.5]) {
+      expect(operatorSettingsInput.safeParse({ maxRuns }).success, String(maxRuns)).toBe(false);
+    }
+    // Ask first can't be turned off in v1 (decision 12).
+    expect(operatorSettingsInput.safeParse({ askFirst: false }).success).toBe(false);
+    expect(operatorSettingsInput.safeParse({ allowed: [BRAND, BRAND] }).success).toBe(false);
+    expect(operatorSettingsInput.safeParse({ somethingElse: 1 }).success).toBe(false);
+    // A new agent takes them under `operator`, its daily budget as its maxRunShare.
+    const input = createAgentInput.parse({ ...base, skills: ['operator'], operator: {} });
+    expect(firstVersion(input).operator_json).toEqual({
+      allowed: null,
+      include_workspace: false,
+      max_runs: 5,
+      ask_first: true,
+    });
+    // Without settings an Operator still gets the defaults; another agent never has any.
+    expect(
+      firstVersion(createAgentInput.parse({ ...base, skills: ['operator'] })).operator_json,
+    ).toMatchObject({ max_runs: 5 });
+    expect(firstVersion(createAgentInput.parse(base))).not.toHaveProperty('operator_json');
+  });
+
+  it('reads stored settings back within their bounds, and the planner’s from them', () => {
+    expect(
+      operatorJsonFromRow({ max_runs: 12, include_workspace: true, ask_first: false }),
+    ).toEqual({ allowed: null, include_workspace: true, max_runs: 8, ask_first: true });
+    expect(operatorJsonFromRow(null)).toEqual({
+      allowed: null,
+      include_workspace: false,
+      max_runs: 5,
+      ask_first: true,
+    });
+    expect(operatorJsonFromRow({ allowed: [BRAND, 3], max_runs: 'x' })).toMatchObject({
+      allowed: [BRAND],
+      max_runs: 5,
+    });
+    // The daily budget is max_run_share: 5% by default, 1–10% whatever was stored.
+    expect(operatorPlanSettings(null, 0.05, 'Europe/Istanbul')).toEqual({
+      dailyBudget: 0.05,
+      maxRuns: 5,
+      allowed: null,
+      includeWorkspace: false,
+      timeZone: 'Europe/Istanbul',
+    });
+    expect(operatorPlanSettings(null, 0.5, 'UTC').dailyBudget).toBe(0.1);
+    expect(operatorPlanSettings(null, 0, 'UTC').dailyBudget).toBe(0.01);
+    expect(
+      operatorPlanSettings({ ...operatorJsonFromRow(null), max_runs: 3 }, 0.07, 'UTC'),
+    ).toMatchObject({ dailyBudget: 0.07, maxRuns: 3 });
+  });
+
+  it('keeps its settings in its versions: a change of them is a new version', () => {
+    const current = firstVersion(createAgentInput.parse({ ...base, skills: ['operator'] }));
+    const next = nextVersion(current, updateAgentInput.parse({ operator: { maxRuns: 3 } }));
+    expect(next?.operator_json).toMatchObject({ max_runs: 3 });
+    expect(nextVersion(current, updateAgentInput.parse({ operator: {} }))).toBeNull();
+    // A version's other change keeps them.
+    expect(
+      nextVersion(current, updateAgentInput.parse({ instructions: 'Hi.' }))?.operator_json,
+    ).toEqual(current.operator_json);
+    const row = {
+      skill_ids: ['operator'],
+      instructions: null,
+      mode: 'auto',
+      connections: [],
+      model: 'auto',
+      effort: 'normal',
+      scope: { brand_ids: [BRAND] },
+      notify_user_ids: [],
+      followup_days: 14,
+      can_call: [],
+    };
+    expect(versionFromRow({ ...row, operator_json: { max_runs: 2 } }).operator_json).toMatchObject({
+      max_runs: 2,
+    });
+    expect(versionFromRow({ ...row, operator_json: null })).not.toHaveProperty('operator_json');
+  });
+
+  it('is one brand, private, a 1–10% daily budget and no Can call; its kind never changes', () => {
+    expect(operatorProblem(operator)).toBeNull();
+    expect(operatorProblem({ ...operator, maxRunShare: 0.01 })).toBeNull();
+    expect(operatorProblem({ ...operator, maxRunShare: 0.1 })).toBeNull();
+    expect(operatorProblem({ ...operator, skills: ['operator', 'faq'] })).toBe('operator_skills');
+    expect(operatorProblem({ ...operator, skills: ['faq'] })).toBe('operator_kind');
+    expect(operatorProblem({ ...operator, scope: { all_brands: true } })).toBe('operator_scope');
+    expect(operatorProblem({ ...operator, scope: { brand_ids: [BRAND, OTHER_BRAND] } })).toBe(
+      'operator_scope',
+    );
+    expect(operatorProblem({ ...operator, visibility: 'workspace' })).toBe('operator_visibility');
+    expect(operatorProblem({ ...operator, maxRunShare: 0.11 })).toBe('operator_budget');
+    expect(operatorProblem({ ...operator, maxRunShare: 0.005 })).toBe('operator_budget');
+    expect(operatorProblem({ ...operator, canCall: [OTHER] })).toBe('operator_can_call');
+    // An agent: becoming an Operator, /operator beside another skill, an Operator's settings.
+    const agent = { ...operator, kind: 'agent' as const, skills: ['winback'], settings: false };
+    expect(operatorProblem(agent)).toBeNull();
+    expect(operatorProblem({ ...agent, maxRunShare: 0.3, visibility: 'workspace' })).toBeNull();
+    expect(operatorProblem({ ...agent, skills: ['operator'] })).toBe('operator_kind');
+    expect(operatorProblem({ ...agent, skills: ['winback', 'operator'] })).toBe('operator_skills');
+    expect(operatorProblem({ ...agent, settings: true })).toBe('operator_skills');
+    expect(operatorBrandOf({ brand_ids: [BRAND] })).toBe(BRAND);
+    expect(operatorBrandOf({ all_brands: true })).toBeNull();
+  });
+
+  it('is Growth and up, paid, as Can call; open off the cloud; nothing for another agent', () => {
+    expect(operatorDenial('operator', plan('starter'))).toEqual({
+      denial: { code: 'plan_locked', needs: 'growth' },
+      asked: 'operator',
+    });
+    expect(operatorDenial('operator', plan('growth', 'trialing'))).not.toBeNull();
+    expect(operatorDenial('operator', plan('growth'))).toBeNull();
+    expect(operatorDenial('operator', plan('enterprise'))).toBeNull();
+    expect(operatorDenial('agent', plan('starter'))).toBeNull();
+    // The same gate as Can call's, on every plan.
+    for (const [id, status] of [
+      ['starter', 'active'],
+      ['growth', 'trialing'],
+      ['growth', 'active'],
+    ] as const) {
+      expect(operatorDenial('operator', plan(id, status)) === null).toBe(
+        canCallDenial([OTHER], plan(id, status)) === null,
+      );
+    }
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(operatorDenial('operator', plan('starter'))).toBeNull();
   });
 });
