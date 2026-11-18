@@ -18,7 +18,13 @@ import {
   neededConnections,
   readBrandConnections,
 } from './agent-connections';
-import { canWriteAgents, versionFromRow, type AgentPausedReason } from './agent-rules';
+import {
+  canWriteAgents,
+  operatorPlanSettings,
+  versionFromRow,
+  type AgentPausedReason,
+  type AgentVersionData,
+} from './agent-rules';
 import { startQueuedAgentRuns, type AgentRunDriver } from './agent-runs';
 import {
   agentMonthCapReached,
@@ -35,6 +41,7 @@ import {
   runChecks,
   runnableBrands,
   type AgentRefusal,
+  type LoadedAgent,
 } from './agents';
 import {
   APPROVAL_TTL_MS,
@@ -51,6 +58,16 @@ import { openHeadlessRun } from './headless-run';
 import { callScopeOf, callableAgentsOf, type CallScope } from './agent-calls';
 import { operatorReasonWords, operatorScopeOf, type OperatorScope } from './agent-children';
 import { openAgentFollowUps } from './schedule/followup';
+import { readOperatorFacts } from './operator/facts';
+import { planDay } from './operator/plan';
+import {
+  expirePlan,
+  insertPlan,
+  planInForce,
+  readRunPlan,
+  type PlanView,
+} from './operator/plan-store';
+import { dayIn } from '@/lib/time-zone';
 
 /**
  * The agent run driver (CHAT-21 §H, CHAT-27 §E; W2-16): runs a started
@@ -115,7 +132,7 @@ export const FAILURES_TO_PAUSE = 3;
 const AGENT_RUN_COLUMNS =
   'id, organization_id, agent_id, agent_version, brand_id, trigger_kind, trigger_ref, acting_user_id, status, evidence_json, action_id, queued_at, started_at';
 const VERSION_COLUMNS =
-  'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days, can_call';
+  'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days, can_call, operator_json';
 
 /** The agent run statuses a run holds its place in (00419's chat_agent_runs_active_uidx). */
 const HELD = ['running', 'needs_you', 'paused_cap'];
@@ -411,16 +428,33 @@ function runScope(
   };
 }
 
+/** A started run that passed the checks before a run (below), ready for its chat or its plan. */
+interface CheckedRun {
+  run: AgentRunRow;
+  agent: LoadedAgent;
+  version: AgentVersionData;
+  actor: ChatActor;
+  brand: { id: string; name: string };
+  /** The Optional connections its brand lacks, by key. */
+  optional: string[];
+  action: ActionSnapshot | null;
+  evidence: AgentEvidence;
+  timezone: string;
+  call: CallScope | null;
+  operator: OperatorScope | null;
+  callable: { id: string; name: string }[];
+}
+
 /**
- * Makes a started agent run's Chat run, after the checks (above), or ends
- * the run when it can't start. Null when there is nothing to drive: the run
- * ended, isn't running, or already has its chat (a second driver).
+ * The checks before a run (above), for the person it acts as now: a run
+ * that can't start ends here (and a triggered agent pauses for the reason).
+ * Null when there is nothing to drive: the run ended, or isn't running.
  */
-export async function openAgentRun(
+async function checkAgentRun(
   runId: string,
   organizationId: string,
-  now = new Date(),
-): Promise<OpenedAgentRun | null> {
+  now: Date,
+): Promise<CheckedRun | null> {
   const run = await readAgentRun(runId);
   if (!run || run.organization_id !== organizationId || run.status !== 'running') return null;
   // With Chat off for the workspace nothing runs.
@@ -456,6 +490,7 @@ export async function openAgentRun(
   // Read-only after the trial: nothing runs (the AI budget can't be spent).
   if (!ctx.plan.writable) return endBeforeStart(run, 'stopped', { now });
 
+  // An AEO Operator's too: CHAT_OPERATOR for the workspace, Growth and up (agents.ts runChecks).
   const failing = await runChecks(
     ctx,
     { row: agent.row, version },
@@ -505,23 +540,55 @@ export async function openAgentRun(
   // plan's reasons in words the code writes. Nothing the Operator's model wrote reaches it.
   const operator =
     run.trigger_kind === 'agent' && !call ? operatorScopeOf(run.evidence_json) : null;
-  // The agents it may run (none for a run another run started: no chains).
-  const callable = call || operator ? [] : await callableAgentsOf(run.id);
+  // The agents it may run (none for a run another run started, nor for an Operator: no chains).
+  const callable =
+    call || operator || agent.row.kind === 'operator' ? [] : await callableAgentsOf(run.id);
+  return {
+    run,
+    agent: { row: agent.row, version },
+    version,
+    actor,
+    brand,
+    optional: gaps.optional,
+    action,
+    evidence,
+    timezone,
+    call,
+    operator,
+    callable,
+  };
+}
+
+/** Names who a run acts as on its row, once it has its chat: the owner now, for a trigger. */
+async function nameActingUser(run: AgentRunRow, actingUserId: string): Promise<void> {
+  if (actingUserId === run.acting_user_id) return;
+  const { error } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .update({ acting_user_id: actingUserId })
+    .eq('id', run.id);
+  if (error) console.error('[chat/agents] could not name who a run acts as:', error);
+}
+
+/** A checked run's chat (above): its message, its scope, its mode. Null when a second driver made it. */
+async function openCheckedRun(checked: CheckedRun, now: Date): Promise<OpenedAgentRun | null> {
+  const { run, agent, version, actor, brand, action, evidence, timezone, call } = checked;
+  const organizationId = run.organization_id;
+  const actingUserId = actor.userId;
   const words = {
     agent: agent.row.name,
     brand: brand.name,
     triggerKind: run.trigger_kind,
     action,
     call,
-    operator,
-    callable,
+    operator: checked.operator,
+    callable: checked.callable,
   };
   const text = agentRunMessage({
     ...words,
     skills: version.skill_ids,
     instructions: version.instructions,
     evidence,
-    missing: gaps.optional,
+    missing: checked.optional,
   });
 
   // Its chat, owned by the person it acts as; one per agent run: a second driver leaves it.
@@ -557,14 +624,8 @@ export async function openAgentRun(
   });
   if (!opened) return null;
   const { conversationId, chatRunId } = opened;
-  if (actingUserId !== run.acting_user_id) {
-    const { error } = await supabaseAdmin
-      .from('chat_agent_runs')
-      .update({ acting_user_id: actingUserId })
-      .eq('id', run.id);
-    if (error) console.error('[chat/agents] could not name who a run acts as:', error);
-  }
-  if (run.action_id) {
+  await nameActingUser(run, actingUserId);
+  if (run.action_id && action) {
     await logActionRunEvent(
       run.action_id,
       'agent_run_started',
@@ -579,6 +640,227 @@ export async function openAgentRun(
     );
   }
   return { agentRunId: run.id, organizationId, chatRunId, actor };
+}
+
+/**
+ * Makes a started agent run's Chat run, after the checks (above), or ends
+ * the run when it can't start. An AEO Operator's run plans its day first
+ * (prepareAgentPlan), here in the request: the driver does that in the
+ * background. Null when there is nothing to drive: the run ended, isn't
+ * running, already has its chat (a second driver), or had nothing to do.
+ */
+export async function openAgentRun(
+  runId: string,
+  organizationId: string,
+  now = new Date(),
+): Promise<OpenedAgentRun | null> {
+  const checked = await checkAgentRun(runId, organizationId, now);
+  if (!checked) return null;
+  if (checked.agent.row.kind === 'operator') return prepareAgentPlan(checked, { now });
+  return openCheckedRun(checked, now);
+}
+
+// ─── An AEO Operator's day ───────────────────────────────────────────────────
+
+/**
+ * The plan step's own deadline, from the run's start: inside the 5 minutes
+ * after which a started run with no chat counts as lost (HANDOVER_GRACE_MS),
+ * with room to open its chat.
+ */
+export const PLAN_DEADLINE_MS = 4 * 60_000;
+
+/** How the plan step reads its facts and plans: the app's by default (tests swap them). */
+export interface PlanStepDeps {
+  now: Date;
+  readFacts?: typeof readOperatorFacts;
+  plan?: typeof planDay;
+}
+
+/** "Nov 18, 2026": a plan's day as its chat's title says it. */
+function dayWords(day: string): string {
+  const date = new Date(`${day}T12:00:00Z`);
+  return Number.isNaN(date.getTime())
+    ? day
+    : date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+}
+
+/** A run that had nothing to do (or its day has a plan already): skipped, no chat, no model call. */
+async function skipRun(
+  run: AgentRunRow,
+  reason: 'nothing_to_do' | 'daily_limit',
+  now: Date,
+): Promise<null> {
+  const { error } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .update({ status: 'skipped', skipped_reason: reason, finished_at: now.toISOString() })
+    .eq('id', run.id)
+    .eq('status', 'running');
+  if (error) throw new Error(`Could not skip the agent run: ${error.message}`);
+  return null;
+}
+
+/** The facts, or null when the plan step's deadline comes first. */
+async function factsWithin<T>(read: Promise<T>, ms: number): Promise<T | null> {
+  if (ms <= 0) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  try {
+    return await Promise.race([read, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * An AEO Operator's day (AEO Operator plan §4.2 steps 2–3), after the
+ * checks before a run: in the driver's background task, never the tick's
+ * awaited path (many Operators fire at 07:00), and within PLAN_DEADLINE_MS
+ * of the run's start.
+ *
+ *   - Its day is the fire's time zone's (a Run now's: its schedule's, else
+ *     UTC). A plan in force for the Operator, brand and day already (an
+ *     earlier run's, proposed or started): the run is skipped, daily_limit.
+ *     A declined, expired or empty one leaves room for a new plan.
+ *   - The facts (operator/facts.ts, as the run's person, on its brand), and
+ *     the plan (operator/plan.ts), by code: no model.
+ *   - Its row (chat_agent_plans): proposed with its agents, or empty.
+ *   - Nothing to do: the run is skipped, nothing_to_do. No chat, no model call.
+ *   - Else its chat opens, "{agent} · {brand} · {day}", with the /operator
+ *     skill loaded, and the plan in its scope as the app's data: ids, codes,
+ *     counts and shares, never an agent's name or an action's title.
+ */
+export async function prepareAgentPlan(
+  checked: CheckedRun,
+  deps: PlanStepDeps,
+): Promise<OpenedAgentRun | null> {
+  const { now, readFacts = readOperatorFacts, plan = planDay } = deps;
+  const { run, agent, version, actor, brand } = checked;
+  const organizationId = run.organization_id;
+  const timezone = await planZoneOf(run, agent.row.id);
+  const day = dayIn(now.getTime(), timezone);
+
+  // A second driver of this run, or a run whose day already has its plan.
+  if (await readRunPlan(organizationId, run.id)) return null;
+  if (await planInForce(organizationId, agent.row.id, brand.id, day)) {
+    return skipRun(run, 'daily_limit', now);
+  }
+
+  const startedAt = Date.parse(run.started_at ?? run.queued_at);
+  const left = PLAN_DEADLINE_MS - (now.getTime() - (Number.isFinite(startedAt) ? startedAt : 0));
+  const facts = await factsWithin(
+    readFacts({ orgId: organizationId, brandId: brand.id, ownerId: actor.userId, now }),
+    left,
+  );
+  // Its facts took past the deadline: the run fails rather than open a chat its sweep calls lost.
+  if (!facts) return endBeforeStart(run, 'failed', { now });
+  const settings = operatorPlanSettings(version.operator_json, agent.row.max_run_share, timezone);
+  const dayPlan = plan(facts, settings, now);
+
+  const saved = await insertPlan({
+    organizationId,
+    agentId: agent.row.id,
+    runId: run.id,
+    brandId: brand.id,
+    day,
+    plan: dayPlan,
+  });
+  // Another run's plan took the day between the read and the write.
+  if (!saved) return skipRun(run, 'daily_limit', now);
+  if (saved.items.length === 0) return skipRun(run, 'nothing_to_do', now);
+
+  const words = {
+    agent: agent.row.name,
+    brand: brand.name,
+    triggerKind: run.trigger_kind,
+  };
+  const text = [
+    runnerT('message', {
+      agent: agent.row.name,
+      brand: brand.name,
+      skills: skillsLine(version.skill_ids),
+    }),
+    runnerT('operatorPlan', { brand: brand.name, count: saved.items.length }),
+    runnerT('operatorBackground'),
+  ].join('\n\n');
+  // The plan as the app's data: ids, codes, counts and shares only.
+  const operatorPlan = {
+    plan_id: saved.id,
+    brand_id: brand.id,
+    day,
+    budget_share: saved.budgetShare,
+    agents: saved.items.map((item) => ({
+      agent_id: item.agent_id,
+      share: item.share,
+      reasons: item.reasons,
+    })),
+    passed_over: saved.passedCount,
+  };
+  const scope = runScope(words, checked.evidence, true);
+  const opened = await openHeadlessRun({
+    origin: 'agent',
+    organizationId,
+    userId: actor.userId,
+    chat: {
+      create: {
+        brandId: brand.id,
+        title: runnerT('operatorTitle', {
+          agent: agent.row.name,
+          brand: brand.name,
+          day: dayWords(day),
+        }),
+        agentRunId: run.id,
+      },
+    },
+    message: { text, context: runScope(words, checked.evidence, false) as unknown as Json },
+    timezone,
+    brandId: brand.id,
+    mode: version.mode,
+    model: version.model,
+    effort: version.effort,
+    status: 'running',
+    progress: {
+      scope: { ...scope, operator_plan: operatorPlan },
+      // Its own skill, loaded from the start: nothing for the model to pick.
+      skills: [...version.skill_ids],
+      // Its own tools and the question card, nothing else (engine.ts OPERATOR_RUN_TOOLS).
+      operatorRun: true,
+    },
+    now,
+  });
+  if (!opened) return null;
+  await nameActingUser(run, actor.userId);
+  return { agentRunId: run.id, organizationId, chatRunId: opened.chatRunId, actor };
+}
+
+/**
+ * The zone an Operator's day is counted in: the fire's (its schedule's), or
+ * for a run with none (Run now) its first enabled schedule's, else UTC.
+ * The sweep counts the end of a plan's day the same way.
+ */
+export async function planZoneOf(
+  run: Pick<AgentRunRow, 'evidence_json'>,
+  agentId: string,
+): Promise<string> {
+  const fired = evidenceOf(run.evidence_json).fires.find((f) => f.timezone)?.timezone;
+  if (fired) return validTimezone(fired);
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_triggers')
+    .select('config_json, enabled')
+    .eq('agent_id', agentId)
+    .eq('kind', 'schedule');
+  if (error) throw new Error(`Could not read the Operator's schedule: ${error.message}`);
+  for (const row of (data ?? []) as { config_json: Json; enabled: boolean }[]) {
+    const zone = (row.config_json as { timezone?: unknown } | null)?.timezone;
+    if (row.enabled && typeof zone === 'string') return validTimezone(zone);
+  }
+  return 'UTC';
 }
 
 // ─── Keeping it in step ──────────────────────────────────────────────────────
@@ -758,6 +1040,34 @@ async function stopForClosedAction(
   return 'stopped';
 }
 
+/**
+ * An AEO Operator's plan still unanswered at the end of its day (§4.2 step
+ * 8), in the zone its day is counted in: the Chat run waiting on its card
+ * stops as expired, the agent run follows it (stopped, no_answer) and the
+ * plan expires, so the run's held place (the unique index on held runs)
+ * never blocks the next morning's. False while its day lasts, and for a plan
+ * no longer waiting. Safe to call twice.
+ */
+export async function endUnansweredPlan(
+  plan: Pick<PlanView, 'id' | 'organizationId' | 'agentId' | 'runId' | 'day' | 'status'>,
+  now: Date,
+): Promise<boolean> {
+  if (plan.status !== 'proposed') return false;
+  const run = await readAgentRun(plan.runId);
+  if (run && run.organization_id !== plan.organizationId) return false;
+  const zone = run ? await planZoneOf(run, plan.agentId) : 'UTC';
+  if (dayIn(now.getTime(), zone) <= plan.day) return false;
+  if (run && HELD.includes(run.status)) {
+    const chatRunId = await chatRunOf(run.id);
+    if (chatRunId) await endHeldRun(chatRunId, 'waiting', 'expired');
+    // Stopped, no_answer; its plan expires with it (expireRunPlan).
+    await settleAgentRun(run.id, { now });
+  }
+  // A run that ended some other way, or none: the plan expires all the same.
+  await expirePlan(plan.organizationId, plan.id);
+  return true;
+}
+
 /** Starts the workspace's next queued runs, while it has room and may run them. */
 export async function startNextAgentRuns(
   organizationId: string,
@@ -850,8 +1160,24 @@ export async function settleAgentRun(
       }
     }
   }
-  if (ENDED.includes(target.status)) await logActionRunEnd(run, target.status, target.stopReason);
+  if (ENDED.includes(target.status)) {
+    await logActionRunEnd(run, target.status, target.stopReason);
+    // An AEO Operator's run that ended with its plan unanswered: the plan expires, and Run now
+    // (or tomorrow's run) may make another (§4.2 step 8).
+    await expireRunPlan(run);
+  }
   return target.status;
+}
+
+/** An ended run's plan still waiting for its answer (an AEO Operator's): expired. */
+async function expireRunPlan(run: AgentRunRow): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('chat_agent_plans')
+    .update({ status: 'expired' })
+    .eq('run_id', run.id)
+    .eq('organization_id', run.organization_id)
+    .eq('status', 'proposed');
+  if (error) console.error('[chat/agents] could not expire an Operator’s plan:', error.message);
 }
 
 // ─── The driver ──────────────────────────────────────────────────────────────
@@ -889,17 +1215,29 @@ function inBackground(task: () => Promise<void>) {
  */
 export function createAgentRunDriver(deps: Partial<AgentRunDriverDeps> = {}): AgentRunDriver {
   const { background = inBackground, drive = driveAgentRun, now = () => new Date() } = deps;
-  const driver: AgentRunDriver = async ({ id, organizationId, sessionUserId = null }) => {
-    const opened = await openAgentRun(id, organizationId, now());
-    if (!opened) return;
+  const driveOpened = async (opened: OpenedAgentRun, sessionUserId: string | null) => {
     const session = sessionUserId === opened.actor.userId ? sessionUserId : null;
-    background(async () => {
-      try {
-        await drive(opened.actor, opened.chatRunId, session);
-      } finally {
-        await settleAgentRun(opened.agentRunId, { now: now() });
-      }
-    });
+    try {
+      await drive(opened.actor, opened.chatRunId, session);
+    } finally {
+      await settleAgentRun(opened.agentRunId, { now: now() });
+    }
+  };
+  const driver: AgentRunDriver = async ({ id, organizationId, sessionUserId = null }) => {
+    const checked = await checkAgentRun(id, organizationId, now());
+    if (!checked) return;
+    // An AEO Operator plans its day in the background, chat and all (§4.2 step 2): the tick
+    // only checks it, however many Operators fire at 07:00.
+    if (checked.agent.row.kind === 'operator') {
+      background(async () => {
+        const opened = await prepareAgentPlan(checked, { now: now() });
+        if (opened) await driveOpened(opened, sessionUserId);
+      });
+      return;
+    }
+    const opened = await openCheckedRun(checked, now());
+    if (!opened) return;
+    background(() => driveOpened(opened, sessionUserId));
   };
   return driver;
 }

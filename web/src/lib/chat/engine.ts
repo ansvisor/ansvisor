@@ -294,6 +294,7 @@ import {
   USE_SKILL_TOOL,
   availableSkillsBlock,
   loadedSkillsBlock,
+  personSkill,
   shortcutPlaybook,
   skillsForPrompt,
   typedSkills,
@@ -495,17 +496,32 @@ interface RunScope {
 }
 
 /**
+ * The rows an AEO Operator's run is offered (AEO Operator plan §4.2 step 4,
+ * §4.5): its plan's card and its plan's read. With the question card, that
+ * is all it has: no other read or change, no parts, no skill to pick, no
+ * next moves.
+ */
+export const OPERATOR_RUN_TOOLS: ReadonlySet<string> = new Set([
+  'run_agent_plan',
+  'get_agent_plan',
+]);
+
+/**
  * The rows a run is offered at all (their offerIn, W4-26: run_agent only in
  * an agent's run with an agent to call), and refused ones it may explain:
  * a row not offered here isn't explained either. A check that fails leaves
- * the row out.
+ * the row out. An AEO Operator's run: its own rows only (OPERATOR_RUN_TOOLS).
  */
-async function offeredInRun(
+export async function offeredInRun(
   tools: ReturnType<typeof engineTools>,
-  run: { agentRunId: string | null; parentRunId: string | null },
+  run: { agentRunId: string | null; parentRunId: string | null; operator?: boolean },
 ): Promise<ReturnType<typeof engineTools>> {
   const hidden = new Set<string>();
   for (const tool of CHAT_TOOLS) {
+    if (run.operator && !OPERATOR_RUN_TOOLS.has(tool.name)) {
+      hidden.add(tool.name);
+      continue;
+    }
     if (!tool.offerIn) continue;
     const here = await tool.offerIn(run).catch((err) => {
       console.error('[chat/engine] could not tell whether a tool is offered:', err);
@@ -1048,6 +1064,11 @@ const STEP_RETRY_MS = 1_000;
 
 type Progress = RunProgress & {
   question?: string;
+  /**
+   * An AEO Operator's run, as its driver started it (agent-driver.ts
+   * prepareAgentPlan): its own tools only, whatever a read of its agent says.
+   */
+  operatorRun?: boolean;
   scope?: MessageScope;
   /** How many files the question was sent with (00409): its run can't go on without them. */
   attachments?: number;
@@ -1156,6 +1177,11 @@ interface RunContext {
   batchAnswer?: string;
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
+  /**
+   * The agent run is an AEO Operator's (AEO Operator plan §4.2 step 4): it is
+   * offered its own two tools and the question card, nothing else.
+   */
+  operatorRun?: boolean;
   /** The language the person set Chat to answer in (Settings › Chat); null: their question's. */
   answerLanguage: Language | null;
   /** The person shows "Thought for N s" above answers (Settings › Chat; on unless turned off). */
@@ -1442,7 +1468,14 @@ async function openContext(
   const tools = engineTools(ctx, scope);
   // A shortcut's run reads only its data plan (W2-09).
   const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
-  const shown = await offeredInRun(tools, { agentRunId, parentRunId: run.parentRunId });
+  // An AEO Operator's run: its own two tools and the question card (§4.2 step 4).
+  const operatorRun =
+    progress.operatorRun === true || (agentRunId ? await isOperatorRunOrNot(agentRunId) : false);
+  const shown = await offeredInRun(tools, {
+    agentRunId,
+    parentRunId: run.parentRunId,
+    operator: operatorRun,
+  });
   // Suggestions in the editor are only for the page open there beside the chat (W4-14).
   const openDraft = openDraftOf(progress.scope);
   // A part of a run only reads, and explains nothing (CHAT-27 items 2–4).
@@ -1482,13 +1515,14 @@ async function openContext(
     refused,
     openDraft,
     agentRunId,
+    operatorRun,
     answerLanguage,
     showThought,
     // The job's own run only: a person's message in its chat is theirs.
     scheduleId: progress.scheduled ? scheduleId : null,
     sessionUserId,
     skills: {
-      ...(await runSkills(actor, progress, history.plan)),
+      ...(await runSkills(actor, progress, history.plan, operatorRun)),
       playbook,
       planNote: playbook ? playbookPlanNote(playbook, refused, ctx.plan.planName) : null,
     },
@@ -1596,17 +1630,21 @@ async function runSkills(
   actor: ChatActor,
   progress: Progress,
   history: HistoryPlan,
+  /** An AEO Operator's run: its own skill, loaded already; none listed to pick. */
+  operatorRun = false,
 ): Promise<Pick<RunContext['skills'], 'enabled' | 'listed'>> {
   const enabled = await enabledSkillsFor(actor.organizationId, actor.userId);
   if (enabled.length === 0) return { enabled, listed: [] };
   await loadSkillBodies(actor, enabled, progress.skills ?? []);
+  if (operatorRun) return { enabled, listed: [] };
   const question = progress.question ?? '';
   const names = (text: string) => typedSkills(text, enabled).map((skill) => skill.name);
   const earlier = history.recent
     .filter((message) => message.role === 'user')
     .flatMap((message) => names(messageText(message)));
   const page = progress.scope?.context;
-  const listed = skillsForPrompt(enabled, {
+  // An agent's own skill (the Operator's /operator) is loaded by its run, never listed.
+  const listed = skillsForPrompt(enabled.filter(personSkill), {
     typed: names(question),
     used: [...(progress.skills ?? []), ...earlier],
     request: [question, page?.route ?? '', ...(page?.chips ?? []).map((chip) => chip.label)].join(
@@ -2128,10 +2166,10 @@ async function loadShortcut(rc: RunContext): Promise<number> {
  */
 async function loadTypedSkills(rc: RunContext): Promise<number> {
   if (rc.progress.tainted) return 0;
-  const typed = typedSkills(rc.progress.question ?? '', rc.skills.enabled).slice(
-    0,
-    MAX_SKILL_BODIES - (rc.progress.skills?.length ?? 0),
-  );
+  const typed = typedSkills(
+    rc.progress.question ?? '',
+    rc.skills.enabled.filter(personSkill),
+  ).slice(0, MAX_SKILL_BODIES - (rc.progress.skills?.length ?? 0));
   let loaded = 0;
   for (const skill of typed) if (await loadSkill(rc, skill, 'typed')) loaded += 1;
   return loaded;
@@ -2635,8 +2673,24 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
       }),
     });
   }
+  // An AEO Operator's run: its own rows and the question card, nothing more (§4.2 step 4).
+  if (rc.operatorRun) {
+    return Object.fromEntries(
+      Object.entries(set).filter(([name]) => OPERATOR_RUN_TOOLS.has(name) || name === ASK_TOOL),
+    );
+  }
   // A part asks nothing and suggests nothing: nobody reads it but its parent (CHAT-27).
   return rc.run.parentRunId ? partToolSet(set) : set;
+}
+
+/** Whether the agent run is an AEO Operator's; a read that fails reads as not (all its rows). */
+async function isOperatorRunOrNot(agentRunId: string): Promise<boolean> {
+  try {
+    return await (await import('./operator/approve')).isOperatorRun(agentRunId);
+  } catch (err) {
+    console.error("[chat/engine] could not read an agent run's kind:", err);
+    return false;
+  }
 }
 
 /** What the tools add to a step's prompt, for its token estimate. */
@@ -5259,6 +5313,19 @@ async function resumePending(
   if (!tool || !bound || action.kind === 'skip') {
     const row = await updateStep(pending.stepId, { status: 'skipped', detail: t('step.skipped') });
     rc.sink.emit('step.finished', { step: clientStep(row) });
+    // What a Skip records beyond the model's no (the AEO Operator's plan is declined).
+    if (tool?.onSkip && bound && action.kind === 'skip') {
+      await tool
+        .onSkip(
+          {
+            userId: rc.actor.userId,
+            organizationId: rc.actor.organizationId,
+            agentRunId: rc.agentRunId,
+          },
+          asked as never,
+        )
+        .catch((err) => console.error('[chat/engine] could not record a Skip:', err));
+    }
     answer = {
       toolCallId: call.toolCallId,
       toolName: call.toolName,

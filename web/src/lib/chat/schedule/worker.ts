@@ -15,6 +15,7 @@ import { planFactsFromOrgRow, type OrgPlanRow, type PlanFacts } from '../plan-fa
 import type { ChatMode } from '../precedence';
 import { readPrecedenceContext } from '../precedence-context';
 import { RUNS_PER_USER, claimRunSlot, readRunCounts, workspaceRunLimit } from '../run-limits';
+import { personSkill } from '../skills/library';
 import { enabledSkillsFor, loadSkillBodies } from '../skills/store';
 import {
   closeJobNotices,
@@ -517,8 +518,9 @@ async function checkJob(
  * that doesn't is switched off, as a run's load does).
  */
 async function skillOn(actor: ChatActor, name: string): Promise<boolean> {
+  // Never an agent's own skill (the Operator's /operator): a job is a person's.
   const skill = (await enabledSkillsFor(actor.organizationId, actor.userId)).find(
-    (s) => s.name === name,
+    (s) => s.name === name && personSkill(s),
   );
   if (!skill) return false;
   await loadSkillBodies(actor, [skill], [name]);

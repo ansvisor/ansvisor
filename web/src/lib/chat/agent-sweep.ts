@@ -1,7 +1,12 @@
 import { isAiProvider } from '@/lib/agent/providers';
 import { getAiUsageFor } from '@/lib/mcp/account';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { FAILURES_TO_PAUSE, settleAgentRun, startNextAgentRuns } from './agent-driver';
+import {
+  FAILURES_TO_PAUSE,
+  endUnansweredPlan,
+  settleAgentRun,
+  startNextAgentRuns,
+} from './agent-driver';
 import type { AgentRunDriver } from './agent-runs';
 import { readAgentShares } from './agent-shares';
 import { isTriggered, readArmedOrgs } from './agent-triggers';
@@ -11,7 +16,9 @@ import { chatAgenticEnabled } from './flag';
 import { chatRunsOnOwnKey } from './key';
 import { ownKeyFailure, resumeOwnKeyAgents } from './key-health';
 import { notifyOwnKeyFailure } from './key-notice';
+import { proposedPlansThrough } from './operator/plan-store';
 import { readOwnKeyCap } from './own-key-cap';
+import { dayIn } from '@/lib/time-zone';
 
 /**
  * The agents' sweep (CHAT-21 §G, §H, §M; W2-16), on the server's minute
@@ -19,6 +26,10 @@ import { readOwnKeyCap } from './own-key-cap';
  *   - Chat's own sweep first (sweepChatRuns): a card left 7 days stops its
  *     run, "No answer in 7 days"; a run with no sign of life for 10 minutes
  *     (its driver was lost) times out.
+ *   - An AEO Operator's plan unanswered at the end of its local day
+ *     expires: the Chat run waiting on its card stops as expired, its
+ *     agent run stops (no_answer), so the next morning's run isn't held
+ *     back by it (AEO Operator plan §4.2 step 8).
  *   - Every agent run still running, waiting on a person or at its limit
  *     follows its Chat run (settleAgentRun): an approval made in a chat
  *     carries the agent run on, a lost one fails, one started 5 minutes ago
@@ -53,6 +64,8 @@ export interface AgentSweep {
   started: number;
   /** Own keys whose Admins got the 3-day reminder. */
   reminded: number;
+  /** AEO Operators' plans unanswered at the end of their day, expired. */
+  plansExpired: number;
   /** The parts that failed; the others ran. */
   failed: string[];
 }
@@ -289,6 +302,24 @@ async function openRunsToSettle(): Promise<OpenRun[]> {
   return runs.slice(0, SWEEP_ROWS);
 }
 
+/**
+ * AEO Operators' plans unanswered at the end of their local day (above):
+ * those whose day may have ended anywhere (on or before today in UTC, the
+ * zones ahead of it closing theirs first), each checked in its own zone.
+ */
+async function expireUnansweredPlans(now: Date): Promise<number> {
+  let expired = 0;
+  for (const plan of await proposedPlansThrough(dayIn(now.getTime(), 'UTC'), SWEEP_ROWS)) {
+    if (!chatAgenticEnabled(plan.organizationId)) continue;
+    try {
+      if (await endUnansweredPlan(plan, now)) expired += 1;
+    } catch (err) {
+      console.error('[chat/agents] could not expire an Operator’s plan:', err);
+    }
+  }
+  return expired;
+}
+
 interface OpenRun {
   id: string;
   organization_id: string;
@@ -307,6 +338,7 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
     resumed: 0,
     started: 0,
     reminded: 0,
+    plansExpired: 0,
     failed: [],
   };
   // Each part on its own: one that fails is named in `failed`, and the rest still run.
@@ -323,6 +355,11 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
     const chat = await sweepChatRuns(now);
     counts.expired = chat.expired;
     counts.lost = chat.lost;
+  });
+
+  // Operators' plans past their day: before the settle pass, which then finds their runs ended.
+  await part('plans', async () => {
+    counts.plansExpired = await expireUnansweredPlans(now);
   });
 
   // Agent runs follow their Chat runs; the slots they free are filled below.

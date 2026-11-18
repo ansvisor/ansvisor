@@ -8,16 +8,21 @@ import { SIGNAL_CATEGORIES } from '@/lib/signals/registry';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { calleeCheck, type CalleeRefusal } from './agent-calls';
-import { agentPlanLimits, canCallDenial, canWriteAgents } from './agent-rules';
+import {
+  agentPlanLimits,
+  canWriteAgents,
+  operatorDenial,
+  operatorJsonFromRow,
+} from './agent-rules';
 import { AGENT_RUN_DRIVER, startQueuedAgentRuns, type AgentRunDriver } from './agent-runs';
 import { loadAgent, readAgentContext } from './agents';
-import { chatAgenticEnabled } from './flag';
+import { chatOperatorEnabled } from './flag';
 
 /**
  * Sub-agents (AEO Operator plan §4.1, PR 2 of 6): an AEO Operator's run
  * starts other agents' runs in the background, once its day's plan
- * (chat_agent_plans, 00545) is approved. Nothing calls dispatchChildren yet:
- * the Operator's plan card (PR 4) does, approved in Chat or in Slack.
+ * (chat_agent_plans, 00545) is approved: the Operator's plan card
+ * (run_agent_plan, operator/approve.ts), approved in Chat or in Slack.
  *
  *   - Linked: each child is a chat_agent_runs row queued with trigger agent
  *     and called_by_run_id, the Operator's run (00466's link), on its brand,
@@ -38,7 +43,8 @@ import { chatAgenticEnabled } from './flag';
  *   - Capped: each child's max_share is its part of the plan's budget (the
  *     plan's split), at most its own Max per run and at least 1%, and all of
  *     them together at most the day's budget, which is at most the
- *     Operator's run's cap; at most MAX_CHILDREN a run. On the server
+ *     Operator's run's cap; at most its "N a day" (operator_json.max_runs,
+ *     5 by default, never past MAX_CHILDREN) a run. On the server
  *     (chat-budget.js) a child is held within what is left of the Operator's
  *     run's cap too, so together they never pass it.
  *   - Once: the plan is claimed from proposed to dispatching (compare and
@@ -71,7 +77,11 @@ const signalCategoryT = createTranslator({
 });
 const kpiT = createTranslator({ locale: 'en', messages, namespace: 'actionCenter.registry' });
 
-/** Runs one Operator's run starts at most: the setting's top (8); the database allows 10. */
+/**
+ * Runs one Operator's run starts at most, whatever its setting: the
+ * setting's top (8); the database allows 10. Each run starts at most its
+ * version's own "at most N a day" (operator_json.max_runs, 5 by default).
+ */
 export const MAX_CHILDREN = 8;
 /** The smallest cap a child gets: chat_agent_runs.max_share is in whole percents. */
 export const MIN_CHILD_SHARE = 0.01;
@@ -285,6 +295,7 @@ interface ParentRun {
   id: string;
   organization_id: string;
   agent_id: string;
+  agent_version: number;
   brand_id: string;
   acting_user_id: string | null;
   called_by_run_id: string | null;
@@ -339,7 +350,7 @@ const rawItemsOf = (json: Json): unknown[] => (Array.isArray(json) ? json : []);
 const pointsOf = (share: number) => Math.floor(share * 100 + 1e-9);
 
 const PARENT_COLUMNS =
-  'id, organization_id, agent_id, brand_id, acting_user_id, called_by_run_id, status, max_share';
+  'id, organization_id, agent_id, agent_version, brand_id, acting_user_id, called_by_run_id, status, max_share';
 const PLAN_COLUMNS = 'id, status, budget_share, items, dispatched_at';
 
 /** The Operator's run, in the person's workspace; null without its agent or brand. */
@@ -364,6 +375,23 @@ async function readParent(org: string, runId: string): Promise<ParentRun | null>
     brand_id: row.brand_id,
     max_share: Number(row.max_share),
   };
+}
+
+/**
+ * The most runs the Operator's run may start: its version's setting (at most
+ * N a day, 1–8, 5 by default), never past MAX_CHILDREN. A version that can't
+ * be read: the default.
+ */
+async function childLimit(parent: ParentRun): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_versions')
+    .select('operator_json')
+    .eq('agent_id', parent.agent_id)
+    .eq('version', parent.agent_version)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the Operator's settings: ${error.message}`);
+  const settings = operatorJsonFromRow((data as { operator_json?: unknown } | null)?.operator_json);
+  return Math.min(MAX_CHILDREN, settings.max_runs);
 }
 
 /** The plan, only as the Operator's run's own: its organization, brand, run and agent. */
@@ -543,8 +571,9 @@ export async function dispatchChildren(
   if (parent.status !== 'running' && parent.status !== 'needs_you') return refuse('closed');
   const operator = await loadAgent(org, parent.agent_id);
   if (operator?.row.kind !== 'operator') return refuse('not_operator');
-  // The person, read now: Admins and Managers, Growth and up, a workspace that may run agents.
-  if (!chatAgenticEnabled(org)) return refuse('cannot_run');
+  // The person, read now: Admins and Managers, Growth and up, a workspace that may run agents,
+  // with the AEO Operator on for it (CHAT_OPERATOR).
+  if (!chatOperatorEnabled(org)) return refuse('cannot_run');
   const context = await readAgentContext({
     userId: actorUserId,
     email: null,
@@ -554,7 +583,7 @@ export async function dispatchChildren(
     !context ||
     !canWriteAgents(context.viewer.role) ||
     !context.plan.writable ||
-    canCallDenial([operator.row.id], context.plan)
+    operatorDenial(operator.row.kind, context.plan)
   ) {
     return refuse('cannot_run');
   }
@@ -586,6 +615,7 @@ export async function dispatchChildren(
       if (child.agent_id && !earlier.has(child.agent_id)) earlier.set(child.agent_id, child);
     }
     let started = earlier.size;
+    const limit = await childLimit(parent);
     // The day's budget in whole percents: the plan's, never past the Operator's run's cap.
     // Null when nothing is metered (self-hosted): each child keeps its own cap.
     const budget =
@@ -609,7 +639,7 @@ export async function dispatchChildren(
         });
         continue;
       }
-      if (started >= MAX_CHILDREN) {
+      if (started >= limit) {
         outcomes.set(agentId, skipped(agentId, 'call_limit'));
         continue;
       }

@@ -409,3 +409,80 @@ describe('the agents’ sweep', () => {
     expect(driver).not.toHaveBeenCalled();
   });
 });
+
+// ─── An AEO Operator's plan at the end of its day (AEO Operator plan §4.2 step 8) ─
+
+describe('an AEO Operator’s unanswered plan', () => {
+  const PLAN = 'f0f0f0f0-0000-4000-8000-000000000001';
+  const zoned = (timezone: string) => ({
+    fires: [{ kind: 'schedule', ref: 's', at: '2026-11-02T04:00:00.000Z', timezone }],
+    earlier: [],
+  });
+
+  beforeEach(() => {
+    db.tables.chat_agents = [agent(AGENT, { kind: 'operator' })];
+    fakes.endHeld.mockImplementation(async (chatRunId: string, from: string, reason: string) => {
+      const chat = db.tables.chat_runs.find((r) => r.id === chatRunId);
+      if (!chat || chat.status !== from) return false;
+      chat.status = 'stopped';
+      const state = db.tables.chat_run_state.find((s) => s.run_id === chatRunId)!;
+      state.progress = { ...(state.progress as object), stoppedFor: reason };
+      return true;
+    });
+    db.tables.chat_agent_plans = [
+      {
+        id: PLAN,
+        organization_id: ORG,
+        agent_id: AGENT,
+        run_id: 'run-op',
+        brand_id: BRAND,
+        plan_day: '2026-11-02',
+        status: 'proposed',
+        budget_share: 0.05,
+        planned_share: 0.04,
+        items: [],
+        passed: [],
+        decided_at: null,
+        created_at: '2026-11-02T04:00:00.000Z',
+      },
+    ];
+  });
+
+  it('expires at the end of its local day: its card stops, its run with no answer', async () => {
+    // 21:00 UTC: midnight in Istanbul, the plan's zone.
+    run('run-op', { status: 'needs_you', evidence_json: zoned('Europe/Istanbul') });
+    const chat = chatOf('run-op', 'waiting');
+    const counts = await sweepAgents(new Date('2026-11-02T21:00:00.000Z'), driver);
+    expect(counts.plansExpired).toBe(1);
+    expect(fakes.endHeld).toHaveBeenCalledWith(chat, 'waiting', 'expired');
+    expect(runRow('run-op')).toMatchObject({ status: 'stopped', stop_reason: 'no_answer' });
+    expect(db.tables.chat_agent_plans[0].status).toBe('expired');
+    expect(counts.failed).toEqual([]);
+  });
+
+  it('waits while its day lasts in its zone, and leaves a plan already decided as it is', async () => {
+    // 21:00 UTC is still Nov 2 in New York.
+    run('run-op', { status: 'needs_you', evidence_json: zoned('America/New_York') });
+    chatOf('run-op', 'waiting');
+    let counts = await sweepAgents(new Date('2026-11-02T21:00:00.000Z'), driver);
+    expect(counts.plansExpired).toBe(0);
+    expect(runRow('run-op').status).toBe('needs_you');
+    expect(db.tables.chat_agent_plans[0].status).toBe('proposed');
+    // Approved and started: no longer proposed, never expired.
+    db.tables.chat_agent_plans[0].status = 'dispatched';
+    counts = await sweepAgents(new Date('2026-11-04T12:00:00.000Z'), driver);
+    expect(counts.plansExpired).toBe(0);
+    expect(db.tables.chat_agent_plans[0].status).toBe('dispatched');
+  });
+
+  it('expires a plan whose run ended some other way, and touches nothing with Chat off', async () => {
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'someone-else');
+    run('run-op', { status: 'failed', evidence_json: zoned('UTC') });
+    expect((await sweepAgents(new Date('2026-11-03T01:00:00.000Z'), driver)).plansExpired).toBe(0);
+    expect(db.tables.chat_agent_plans[0].status).toBe('proposed');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    expect((await sweepAgents(new Date('2026-11-03T01:00:00.000Z'), driver)).plansExpired).toBe(1);
+    expect(db.tables.chat_agent_plans[0].status).toBe('expired');
+    expect(fakes.endHeld).not.toHaveBeenCalled();
+  });
+});
