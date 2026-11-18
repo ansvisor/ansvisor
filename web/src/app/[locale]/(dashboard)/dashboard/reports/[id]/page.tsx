@@ -40,6 +40,8 @@ import { REPORT_TEMPLATES } from '@/lib/reports/templates';
 import { auditScoreView } from '@/lib/reports/audit-score';
 import { ScoreRangeMark, useScoreRangeTip } from '@/components/audit/score-range';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
 
 const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
 
@@ -180,6 +182,27 @@ export default function ReportDetailPage() {
       cancelled = true;
     };
   }, [id, attempt]);
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9's detail pages): the
+  // saved report it holds open by its id, and the days it covers. Its sections are a snapshot:
+  // get_report reads them whole, so no row is sent.
+  const tChatRange = useTranslations('chatPanel.range');
+  const period = report && {
+    from: report.dateFrom.slice(0, 10),
+    to: report.dateTo.slice(0, 10),
+  };
+  useChatPageContext(
+    report && period && report.id === id && !loading
+      ? {
+          pageName: report.title,
+          dateRange: {
+            ...period,
+            label: rangeChipLabel('custom', period, (key, values) => tChatRange(key, values)),
+          },
+          view: { open: { ref: id, label: report.title } },
+        }
+      : null,
+  );
 
   if (loading) {
     return (

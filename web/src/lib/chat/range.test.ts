@@ -4,6 +4,7 @@ import messages from '../../../messages/en.json';
 import { getDateRange } from '@/lib/date-range';
 import {
   RANGE_PRESETS,
+  pageDatesOf,
   pageRangeOf,
   parseRange,
   rangeCommand,
@@ -173,6 +174,17 @@ describe("the page's range and the card's buttons", () => {
     expect(pageRangeOf(chip('/'), NOW)).toBeNull();
     expect(pageRangeOf([{ key: 'page' }], NOW)).toBeNull();
     expect(pageRangeOf(undefined, NOW)).toBeNull();
+  });
+
+  it("reads the page's dates a question takes: its range, or its All time", () => {
+    const chip = (value: string) => [{ key: 'page' }, { key: 'dates', value }];
+    expect(pageDatesOf(chip('24h/'), NOW)).toBe('24h');
+    expect(pageDatesOf(chip('2026-10-01/2026-10-15'), NOW)).toBe('2026-10-01/2026-10-15');
+    expect(pageDatesOf(chip('all/'), NOW)).toBe('all');
+    // A custom range not picked yet, or one past today: none.
+    expect(pageDatesOf(chip('/'), NOW)).toBeNull();
+    expect(pageDatesOf(chip('2026-10-01/2099-01-01'), NOW)).toBeNull();
+    expect(pageDatesOf([{ key: 'page' }], NOW)).toBeNull();
   });
 
   it("puts the page's range first, without its preset twice", () => {

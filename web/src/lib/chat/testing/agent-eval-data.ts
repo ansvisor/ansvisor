@@ -884,9 +884,20 @@ export const EVAL_CODE_SIGNAL = backlogSignal(7, {
   resolved: '2026-09-02',
 });
 
+/**
+ * Two more of the brand's signals with titles of their own, for the Signals
+ * page scenario (step 9): the others repeat a title every 8 codes.
+ */
+const OWN_TITLE_SIGNALS: Readonly<Record<number, ReturnType<typeof backlogSignal>>> = {
+  7: EVAL_CODE_SIGNAL,
+  23: backlogSignal(23, { title: 'Your espresso guide dropped out of Gemini answers' }),
+  41: backlogSignal(41, { title: 'Perplexity started citing your brewing ratio chart' }),
+};
+
 /** The brand's 60 signals, newest first. */
-const SIGNAL_BACKLOG = Array.from({ length: 60 }, (_, i) =>
-  60 - i === 7 ? EVAL_CODE_SIGNAL : backlogSignal(60 - i),
+const SIGNAL_BACKLOG = Array.from(
+  { length: 60 },
+  (_, i) => OWN_TITLE_SIGNALS[60 - i] ?? backlogSignal(60 - i),
 );
 export const EVAL_SIGNAL_BACKLOG = SIGNAL_BACKLOG;
 
@@ -1005,13 +1016,25 @@ const CITED_URLS = [
  * prompts citing each), or a page of the domains, most cited first, with
  * the total. The default workspace keeps its own answer.
  */
-function evalCitationsRead(input: Record<string, unknown>, workspace: EvalWorkspace): unknown {
+function evalCitationsRead(
+  input: Record<string, unknown>,
+  workspace: EvalWorkspace,
+  ctx: EvalReadContext,
+): unknown {
   if (workspace !== 'long_lists') {
+    const owned = input.source_filter === 'owned';
+    const every = { citations: SUMMARY.citations, avg_citations_per_result: 0.4 };
     return {
       ...window,
       owned: OWNED_CITATIONS,
       external: EXTERNAL_CITATIONS,
       competitors: COMPETITOR_CITATIONS,
+      // Its totals: Brand sources' with that filter (Citations' Sources on Brand), else every one.
+      totals: owned
+        ? { domains: 1, citations: SUMMARY.owned_citations, avg_citations_per_result: 0.1 }
+        : every,
+      // Sources from the page: every source's beside them, from the same scan (citation-totals.ts).
+      ...(owned && ctx.allSourcesTotals ? { all_sources_totals: every } : {}),
     };
   }
   const list = (value: unknown) => (Array.isArray(value) ? value.map(String) : undefined);
@@ -1120,6 +1143,11 @@ export const EVAL_PAGES: Readonly<Record<string, { title: string; text: string }
     text: 'Our favourite coffee gifts: Morning Ritual Co. brewing kits and Kettle & Crate variety boxes.',
   },
 };
+
+/** What the engine tells a read beside its input (ChatToolContext): the citations read's Sources. */
+export interface EvalReadContext {
+  allSourcesTotals?: boolean;
+}
 
 // Customers from AI: conversions from AI visits are on, with a week of them, but on the
 // `conversions_off` workspace (EvalWorkspace), where they were never turned on.
@@ -1428,10 +1456,154 @@ function aiRevenueRead(tool: string, workspace: EvalWorkspace): unknown {
  * a scenario names one). A read of the other brand answers as that brand: a
  * run that wanders shows it.
  */
+/**
+ * Each prompt's average answer score (get_prompt_performance's
+ * avg_visibility): another order than the Prompts page's Visibility.
+ */
+const ANSWER_SCORES = [48, 41, 63, 70, 66, 37, 52, 44];
+
+/**
+ * The prompts as get_prompt_performance gives them: ai_visibility_score is
+ * the Prompts page's Visibility (the AI Visibility Score), highest first as
+ * the page lists them; sort_by "answer_score" orders by avg_visibility.
+ */
+function evalPromptPerformance(input: Record<string, unknown>) {
+  const byAnswer = input.sort_by === 'answer_score';
+  const ascending = input.order === 'asc';
+  // A lookup: by every word of a search, in any order and case (list_prompts), or by ids.
+  const words =
+    typeof input.search === 'string' ? input.search.toLowerCase().split(/\s+/).filter(Boolean) : [];
+  const ids = Array.isArray(input.prompt_ids ?? input.ids)
+    ? ((input.prompt_ids ?? input.ids) as unknown[]).map(String)
+    : null;
+  // A topic's prompts, unless it is a lookup (which reads every topic).
+  const topic =
+    !ids && !words.length ? TOPICS.find((t) => t.id === input.topic_id)?.name : undefined;
+  const prompts = PROMPTS.map((prompt, i) => ({
+    ...prompt,
+    ai_visibility_score: prompt.visibility_pct,
+    avg_visibility: ANSWER_SCORES[i],
+  }))
+    .filter((prompt) => words.every((word) => prompt.text.toLowerCase().includes(word)))
+    .filter((prompt) => !ids || ids.includes(prompt.id))
+    .filter((prompt) => !topic || prompt.topic === topic)
+    .sort(
+      (a, b) =>
+        (ascending ? -1 : 1) *
+        (byAnswer
+          ? b.avg_visibility - a.avg_visibility
+          : b.ai_visibility_score - a.ai_visibility_score),
+    );
+  const order = `${
+    byAnswer ? 'by average answer score' : 'by AI Visibility Score, as the Prompts page lists them'
+  }${ascending ? ', lowest first' : ''}`;
+  return {
+    ...window,
+    total: prompts.length,
+    offset: 0,
+    next_offset: null,
+    note: `All ${prompts.length} prompts with results, ${order}.`,
+    prompts,
+  };
+}
+
+/**
+ * A topic's page (step 9's detail pages): Coffee subscriptions, with the
+ * prompts it ranks, best first. Its weakest isn't the brand's weakest
+ * overall, so "our weakest prompt on this topic" read over every topic
+ * names another.
+ */
+export const EVAL_OPEN_TOPIC = TOPICS[0];
+export const EVAL_TOPIC_PROMPTS: readonly { id: string; text: string }[] = evalPromptPerformance({
+  topic_id: EVAL_OPEN_TOPIC.id,
+}).prompts.map((prompt) => ({ id: prompt.id, text: prompt.text }));
+
+/** The Prompts page's top 5, by its Visibility: what "my top 5 prompts" names, in order. */
+export const EVAL_PAGE_TOP_PROMPTS: readonly string[] = evalPromptPerformance({})
+  .prompts.slice(0, 5)
+  .map((prompt) => prompt.text);
+
+/**
+ * The Actions page sorted by Priority Score and filtered to New (the
+ * owner's plan of 2026-11-16, item 8): the three rows on screen, in order.
+ */
+export const EVAL_PAGE_VIEW_ACTIONS: readonly { ref: string; title: string }[] = ACTIONS.filter(
+  (action) => action.status === 'new',
+)
+  .sort((a, b) => b.priority_score - a.priority_score)
+  .map((action) => ({ ref: action.number, title: action.title }));
+
+/**
+ * Action Center › Signals, filtered to one category (the owner's plan of
+ * 2026-11-16, step 9): the three rows on screen, by their S- codes, none of
+ * them the newest three, so "these" read from the list's first page are others.
+ */
+export const EVAL_PAGE_VIEW_SIGNALS: readonly { code: string; title: string }[] = [41, 23, 7].map(
+  (n) => ({ code: OWN_TITLE_SIGNALS[n].code, title: OWN_TITLE_SIGNALS[n].title }),
+);
+
+/**
+ * Competitors with Morning Ritual Co. open for its head-to-head (step 9):
+ * the prompts where it is ahead, biggest gap first, then one where the brand is.
+ */
+export const EVAL_OPEN_COMPETITOR = COMPETITORS[2];
+export const EVAL_HEAD_TO_HEAD_LOSSES = [
+  { prompt: PROMPTS[4].text, brand_visibility: 29, competitor_visibility: 71 },
+  { prompt: PROMPTS[1].text, brand_visibility: 40, competitor_visibility: 55 },
+];
+const HEAD_TO_HEAD_WINS = [
+  { prompt: PROMPTS[0].text, brand_visibility: 62, competitor_visibility: 20 },
+];
+
+/** The head-to-head as getCompetitorHeadToHeadFor answers it: only for a competitor of the brand. */
+function evalHeadToHead(input: Record<string, unknown>): unknown {
+  const named = typeof input.competitor === 'string' ? input.competitor.toLowerCase() : null;
+  const competitor = COMPETITORS.find(
+    (c) =>
+      c.id === input.competitor_id ||
+      (named && (c.name.toLowerCase() === named || c.domain === named)),
+  );
+  if (!competitor) {
+    return { not_found: [String(input.competitor_id ?? input.competitor ?? '')] };
+  }
+  if (competitor.id !== EVAL_OPEN_COMPETITOR.id) {
+    return { competitor: { name: competitor.name, domain: competitor.domain }, prompts: [] };
+  }
+  const rows =
+    input.side === 'winning'
+      ? HEAD_TO_HEAD_WINS
+      : input.side === 'losing'
+        ? EVAL_HEAD_TO_HEAD_LOSSES
+        : [...EVAL_HEAD_TO_HEAD_LOSSES, ...HEAD_TO_HEAD_WINS];
+  return {
+    competitor: { name: competitor.name, domain: competitor.domain },
+    period: 'every tracked answer',
+    summary: {
+      brand_visibility: 44,
+      competitor_visibility: 49,
+      competitor_ahead: 2,
+      brand_ahead: 1,
+    },
+    side: input.side ?? 'all',
+    prompts: rows.map((row) => ({
+      ...row,
+      platform: 'ChatGPT',
+      runs: 6,
+      difference: row.brand_visibility - row.competitor_visibility,
+    })),
+  };
+}
+
+/** The Prompts page's search, and the prompts it shows, by Visibility. */
+export const EVAL_PAGE_SEARCH = 'coffee subscription';
+export const EVAL_PAGE_SEARCH_PROMPTS: readonly { id: string; text: string }[] =
+  evalPromptPerformance({ search: EVAL_PAGE_SEARCH }).prompts.map(({ id, text }) => ({ id, text }));
+
 export function evalReadResult(
   tool: string,
   input: Record<string, unknown>,
   workspace: EvalWorkspace = 'default',
+  ctx: EvalReadContext = {},
 ): unknown {
   const brandId = typeof input.brand_id === 'string' ? input.brand_id : null;
   if (brandId && brandId !== EVAL_IDS.brand) {
@@ -1478,7 +1650,7 @@ export function evalReadResult(
       return TREND;
     case 'list_prompts':
     case 'get_prompt_performance':
-      return { ...window, prompts: PROMPTS };
+      return evalPromptPerformance(input);
     case 'get_prompt_volumes':
       return {
         volumes: PROMPTS.map((p) => ({ prompt: p.text, searches_a_month: p.searches_a_month })),
@@ -1560,9 +1732,11 @@ export function evalReadResult(
         ],
       };
     case 'list_citations':
-      return evalCitationsRead(input, workspace);
+      return evalCitationsRead(input, workspace, ctx);
     case 'list_competitors':
       return { competitors: COMPETITORS };
+    case 'get_competitor_head_to_head':
+      return evalHeadToHead(input);
     case 'get_competitor_comparison':
       return {
         ...window,

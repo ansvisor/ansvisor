@@ -16,6 +16,10 @@ function builder(table: string) {
     select: () => chain,
     eq: (column: string, value: unknown) => (filters.push([table, `eq ${column}`, value]), chain),
     lte: (column: string, value: unknown) => (filters.push([table, `lte ${column}`, value]), chain),
+    contains: (column: string, value: unknown) => (
+      filters.push([table, `contains ${column}`, value]),
+      chain
+    ),
     or: (value: string) => (filters.push([table, 'or', value]), chain),
     is: () => chain,
     in: () => chain,
@@ -114,6 +118,25 @@ describe('listSignalsPageFor', () => {
       expect(kind, String(value)).toBe('or');
       expect(value).toMatch(/^resolved_at\.is\.null,resolved_at\.gte\.\d{4}-\d\d-\d\dT[\d:.]+Z$/);
     }
+  });
+
+  it("takes the Signals page's category, impact and source filters (step 9)", async () => {
+    await listSignalsPageFor(auth, {
+      brandId: 'b1',
+      status: 'new',
+      category: 'citation',
+      impact: 'high',
+      source: 'gsc',
+    });
+    expect(filters).toEqual(
+      expect.arrayContaining([
+        ['signals', 'eq status', 'new'],
+        ['signals', 'eq category', 'citation'],
+        ['signals', 'eq impact', 'high'],
+        // A signal any of whose sources it is, as the page's Source filter.
+        ['signals', 'contains source', ['gsc']],
+      ]),
+    );
   });
 
   it("reads nothing of a brand outside the caller's access", async () => {

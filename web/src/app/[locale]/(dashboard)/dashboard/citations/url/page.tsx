@@ -56,6 +56,10 @@ import {
 import { formatDate, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { useTranslations } from 'next-intl';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
+import { formatRegionDisplay } from '@/lib/region';
 
 const CITED_IN_PAGE_SIZE = 10;
 const DATE_PRESET_VALUES: CitationsDatePreset[] = ['24h', '7d', '30d', '90d', 'all', 'custom'];
@@ -176,6 +180,46 @@ export default function CitationUrlDetailPage() {
   const platformOptions = useMemo(
     () => (data ? buildPlatformOptions([{ models: data.totals.models }]) : []),
     [data],
+  );
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its period and
+  // filters; the panel adds its address (?u=), which it holds open, from the URL.
+  const tChatPanel = useTranslations('chatPanel');
+  useChatPageContext(
+    brand && targetUrl
+      ? {
+          pageName: tChatPanel('pageNames.citedPage'),
+          dateRange: {
+            from: filters.datePreset === 'custom' ? filters.dateFrom : filters.datePreset,
+            to: filters.datePreset === 'custom' ? filters.dateTo : null,
+            label: rangeChipLabel(
+              filters.datePreset,
+              { from: filters.dateFrom, to: filters.dateTo },
+              (key, values) => tChatPanel(`range.${key}`, values),
+            ),
+          },
+          filters: [
+            ...(filters.platform
+              ? [
+                  {
+                    key: 'platform',
+                    label: getPlatformDisplayLabel(filters.platform),
+                    value: filters.platform,
+                  },
+                ]
+              : []),
+            ...(filters.region
+              ? [
+                  {
+                    key: 'region',
+                    label: formatRegionDisplay(filters.region),
+                    value: filters.region,
+                  },
+                ]
+              : []),
+          ],
+        }
+      : null,
   );
 
   const pageOccurrences = data?.occurrences.slice(citedInPager.start, citedInPager.end) ?? [];

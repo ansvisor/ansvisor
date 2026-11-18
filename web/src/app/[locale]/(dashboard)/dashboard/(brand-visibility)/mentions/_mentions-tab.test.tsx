@@ -7,6 +7,7 @@ import { DEFAULT_MENTIONS_FILTERS } from '@/lib/mentions-filters';
 import { DEFAULT_MENTIONS_TABLE, type MentionRow, type MentionsList } from '@/lib/mentions-list';
 import type { Competitor } from '@/types';
 import { MentionsListTab } from './_mentions-tab';
+import { mentionPlatformLabel } from '@/lib/mentions-headline';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const listMentions = vi.fn();
@@ -179,6 +180,28 @@ describe('MentionsListTab', () => {
     expect(marks[1][0]).toBe('Acme Coffee');
     expect(marks[1][1]).toContain('bg-primary');
     expect(rows[1].textContent).toContain('—');
+  });
+
+  // The owner's plan (2026-11-16, item 8): Chat's side panel sees the table too.
+  it("tells Chat's side panel its sort, and once read the answers on screen and how many match", async () => {
+    window.history.replaceState(null, '', '/dashboard/mentions?tab=mentions&sort=oldest');
+    listMentions.mockResolvedValue(list({ total: 240 }));
+    const onChatView = vi.fn();
+    render(tab({ onChatView }));
+    // Before the read: its sort alone.
+    expect(onChatView).toHaveBeenCalledWith({ sort: { key: 'oldest', dir: 'asc' } });
+    await settle();
+    expect(onChatView).toHaveBeenLastCalledWith({
+      sort: { key: 'oldest', dir: 'asc' },
+      rows: [
+        { ref: 'r1', label: 'Best espresso beans? · Gemini' },
+        { ref: 'r2', label: `Best espresso beans? · ${mentionPlatformLabel('claude')}` },
+      ],
+      total: 240,
+    });
+    act(() => root.unmount());
+    expect(onChatView).toHaveBeenLastCalledWith(null);
+    root = createRoot(container);
   });
 
   it('heads each group with its name and size', async () => {

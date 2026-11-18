@@ -11,6 +11,8 @@
  * listed; Today's focus covers the first work on content.
  */
 
+import { sectionFor } from '@/lib/prompts-routes';
+
 /** Every step is a set-up step (Chat's and MCP's onboarding reads name it). */
 export type GettingStartedStage = 'setup';
 
@@ -44,14 +46,16 @@ const INTEGRATIONS_HREF = '/dashboard/settings?tab=integrations';
  * The set-up steps, in order: Today's card lists the first two still open.
  * The AI Traffic snippet comes first: AI visits, conversions and revenue
  * stay empty without it, and setup's optional "Connect your site" leaves it
- * open for whoever skipped it (lib/onboarding/connect-site.ts).
+ * open for whoever skipped it (lib/onboarding/connect-site.ts). Topics and
+ * prompts open the Prompts page (Topics, Prompt Suggestions), where a
+ * brand's prompts are managed, never the brand's own prompts page.
  */
 export const GETTING_STARTED_STEPS: readonly GettingStartedStepDef[] = [
   { key: 'snippet', stage: 'setup', href: '/dashboard/traffic' },
   { key: 'kpis', stage: 'setup', href: '/dashboard/action-center/kpis' },
   { key: 'competitors', stage: 'setup', href: '/dashboard/competitors' },
-  { key: 'topics', stage: 'setup', href: '/dashboard/prompts/topics' },
-  { key: 'prompts', stage: 'setup', href: '/dashboard/prompts/suggestions' },
+  { key: 'topics', stage: 'setup', href: sectionFor('topics', 'tracked').href },
+  { key: 'prompts', stage: 'setup', href: sectionFor('all', 'suggestions').href },
   { key: 'gsc', stage: 'setup', href: INTEGRATIONS_HREF, optional: true },
   { key: 'ga', stage: 'setup', href: INTEGRATIONS_HREF, optional: true },
 ];

@@ -13,6 +13,8 @@ import { writesAgents } from '@/lib/chat/agent-view';
 import { composeHref } from '@/lib/chat/compose-param';
 import { isDemoSelected } from '@/lib/demo/demo-brand';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import type { ChatPageView } from '@/lib/chat/page-view';
 import { AgentsList } from './agents-list';
 import { ChatMadeAgents } from './chat-made-agents';
 import { useAgentWords } from './agent-words';
@@ -96,7 +98,14 @@ export function AgentCenter({
       presets={presets}
     />
   );
-  const yours = <AgentsList now={nowProp} timeZone={timeZone} onSummary={setSummary} />;
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): Your agents' tab,
+  // search and the agents listed, as the list hands them up.
+  const tTabs = useTranslations('actionCenter.tabs');
+  const [chatView, setChatView] = useState<ChatPageView | null>(null);
+  useChatPageContext({ pageName: tTabs('agents'), view: chatView ?? {} });
+  const yours = (
+    <AgentsList now={nowProp} timeZone={timeZone} onSummary={setSummary} onChatView={setChatView} />
+  );
 
   return (
     <div className="max-w-[1100px]" data-layout="action-center">

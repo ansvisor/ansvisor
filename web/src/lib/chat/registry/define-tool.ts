@@ -167,6 +167,12 @@ export interface ChatWritePlace {
 export type ChatToolContext = McpAuthContext & {
   chat?: ChatWritePlace;
   pageSites?: { hosts: readonly string[]; domains: readonly string[] };
+  /**
+   * The citations read took Sources from the Citations page: it also counts
+   * every source's citations in the same scan, as the page's cards do
+   * (citation-totals.ts). The engine's, never the model's.
+   */
+  allSourcesTotals?: boolean;
   /** The run's time zone (the person's): what a schedule's date phrase is read in. */
   timezone?: string;
   /**

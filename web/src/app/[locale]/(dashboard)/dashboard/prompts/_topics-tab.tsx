@@ -73,6 +73,7 @@ import { formatRelative } from '@/lib/format-relative';
 import { formatNumber } from '@/lib/format';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { compareNullsLast, type SortDir } from './prompt-sort';
+import { viewRows, type ChatPageView } from '@/lib/chat/page-view';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -267,6 +268,7 @@ export function TopicsTab({
   onLoaded,
   openAddTopic: addTopicRequested = false,
   onAddTopicOpened,
+  onChatView,
 }: {
   /**
    * The Prompts page's place for a tab's buttons, beside the tabs: Add Topic,
@@ -288,6 +290,12 @@ export function TopicsTab({
    */
   openAddTopic?: boolean;
   onAddTopicOpened?: () => void;
+  /**
+   * What Chat's side panel sees of the table (the owner's plan of 2026-11-16, step 9): the
+   * sort once a header other than Visibility (highest first) is picked, and once read the
+   * topics in the table's order by id, with how many.
+   */
+  onChatView?: (view: ChatPageView | null) => void;
 }) {
   const t = useTranslations('topics');
   const common = useTranslations('common');
@@ -437,6 +445,20 @@ export function TopicsTab({
     };
     return [...topics].sort((a, b) => compareNullsLast(valueOf(a), valueOf(b), sortDir));
   }, [topics, sortKey, sortDir]);
+
+  const chatView = loading
+    ? null
+    : JSON.stringify({
+        ...(sortKey !== 'visibility' || sortDir !== 'desc'
+          ? { sort: { key: sortKey, dir: sortDir } }
+          : {}),
+        rows: viewRows(sortedTopics, (topic) => ({ ref: topic.id, label: topic.name })),
+        total: sortedTopics.length,
+      } satisfies ChatPageView);
+  useEffect(() => {
+    onChatView?.(chatView ? (JSON.parse(chatView) as ChatPageView) : null);
+  }, [onChatView, chatView]);
+  useEffect(() => () => onChatView?.(null), [onChatView]);
 
   const kpis = useMemo(() => {
     if (topics.length === 0) return null;

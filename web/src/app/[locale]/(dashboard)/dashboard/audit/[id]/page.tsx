@@ -26,7 +26,9 @@ import {
   sendAuditToActionCenter,
   type AuditResult,
 } from '@/lib/actions/audits';
-import { AuditReport } from '@/components/audit/audit-report';
+import { AuditReport, CATEGORY_META } from '@/components/audit/audit-report';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { viewRows } from '@/lib/chat/page-view';
 import { failingChecks } from '@/lib/audit/failing-checks';
 import { actionCodeNo } from '@/lib/action-center/action-ref';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
@@ -137,6 +139,39 @@ export default function AuditDetailPage() {
       toast.error(err instanceof Error ? err.message : tFailed);
     }
   };
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9's detail pages): the
+  // report it holds open by its id, named by the page it audits, and once complete the checks it
+  // fails or warns on, in the report's order, by their keys.
+  const tChatPanel = useTranslations('chatPanel');
+  const shown = audit?.id === id ? audit : null;
+  useChatPageContext(
+    shown
+      ? {
+          pageName: tChatPanel('pageNames.siteAuditReport'),
+          view: {
+            open: { ref: id, label: shown.finalUrl || shown.url },
+            ...(shown.status === 'completed'
+              ? {
+                  rows: viewRows(
+                    CATEGORY_META.flatMap((category) =>
+                      shown.signals.filter(
+                        (s) =>
+                          s.category === category.key &&
+                          (s.status === 'fail' || s.status === 'warn'),
+                      ),
+                    ),
+                    (s) => ({
+                      ref: s.key,
+                      label: `${s.label} (${s.status === 'fail' ? 'failed' : 'warning'})`,
+                    }),
+                  ),
+                }
+              : {}),
+          },
+        }
+      : null,
+  );
 
   // The page and the checks it fails, sent to the Action Center as one Fix action (learning D2).
   const [sendingToAction, setSendingToAction] = useState(false);

@@ -25,6 +25,10 @@ export const SKIPPED = {
     "Each brand's last action and signal number (00534), kept by the insert trigger as the demo's rows are written: nothing is built for it.",
   mentions_terms_packed_ready:
     'The brands whose live Perception read sums the packed terms (00540), listed by the backfill script (src/scripts/backfill-perception-packed.js), which walks only brands in fast_rollups_ready: never a demo brand, which reads the rollups it always has.',
+  brand_filter_values:
+    "The region and model filter options' counts (00544), kept by the triggers on prompt_results as the demo's answers are written: nothing is built for it, and a write of its own would make its counts wrong.",
+  brand_filter_values_backfill:
+    'Where each brand stands in the filter options backfill (00544): a demo brand made after 00544 is listed ready by the brands trigger, and one from before by the backfill script (src/scripts/backfill-filter-values.js); nothing is built for it.',
   webhook_configs: 'Outgoing webhooks: a demo brand never calls out.',
   prompt_table_views:
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
