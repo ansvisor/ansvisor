@@ -242,6 +242,7 @@ describe('the Get more window', () => {
       trackingUnits: 100,
       extraBrands: 1,
       topUp: 20,
+      topUpOnly: true,
     });
     expect(text()).toContain('Top-up bought. It counts as soon as the payment is confirmed.');
   });
