@@ -48,9 +48,14 @@ vi.mock('@/components/action-center/agent-work-gear', () => ({
 }));
 // The brand on screen; a test switches it and draws again.
 let activeBrandId = 'b1';
+const { setActiveBrand } = vi.hoisted(() => ({ setActiveBrand: vi.fn() }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (
-    selector: (state: { activeBrandId: string; brands: { id: string; name: string }[] }) => unknown,
+    selector: (state: {
+      activeBrandId: string;
+      brands: { id: string; name: string }[];
+      setActiveBrand: (id: string) => void;
+    }) => unknown,
   ) =>
     selector({
       activeBrandId,
@@ -58,6 +63,7 @@ vi.mock('@/stores/use-brand-store', () => ({
         { id: 'b1', name: 'Brewline Coffee' },
         { id: 'b2', name: 'Other Roasters' },
       ],
+      setActiveBrand,
     }),
 }));
 let firstRun: { progress: { current: number; total: number } | null } | null = null;
@@ -954,6 +960,45 @@ describe('Action Center › Today', () => {
     await act(async () => button('Show all steps')?.click());
     expect(steps()).toHaveLength(7);
     expect(steps()[6]).toBe('Connect Google AnalyticsSkipped');
+  });
+
+  it('opens the topics and prompts steps on the Prompts page, picking the brand as they open', async () => {
+    reads.getGettingStarted.mockResolvedValue(
+      setUp({ firstVisit: true, gsc: true, topicPrompts: [3, 1] }),
+    );
+    await draw();
+    const part = container.querySelector('[data-today-part="setup"]')!;
+    const link = (key: string) =>
+      part.querySelector<HTMLAnchorElement>(`[data-setup-step="${key}"] a`)!;
+    // The next two open steps: topics and prompts.
+    expect(link('topics').getAttribute('href')).toBe('/dashboard/prompts/topics');
+    expect(link('prompts').getAttribute('href')).toBe('/dashboard/prompts/suggestions');
+    await act(async () => button('Show all steps')?.click());
+    const hrefs = [...part.querySelectorAll('[data-setup-step] a')].map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(hrefs.filter((href) => href?.startsWith('/dashboard/brands/'))).toEqual([]);
+
+    // A click, here or with Ctrl/Cmd for a new tab, picks the card's brand.
+    // (jsdom doesn't navigate: the clicks stay on the page.)
+    container.addEventListener('click', (event) => event.preventDefault());
+    await act(async () => link('prompts').click());
+    expect(setActiveBrand).toHaveBeenCalledWith('b1');
+    expect(track).toHaveBeenCalledWith('today_setup_step_clicked', { step: 'prompts' });
+    setActiveBrand.mockClear();
+    // A middle click opens a new tab: it picks the brand too; a right click doesn't.
+    await act(async () => {
+      link('topics').dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 2 }));
+    });
+    expect(setActiveBrand).not.toHaveBeenCalled();
+    await act(async () => {
+      link('topics').dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    });
+    expect(setActiveBrand).toHaveBeenCalledWith('b1');
+    setActiveBrand.mockClear();
+    // A step off the Prompts page picks nothing: its page shows the brand on screen.
+    await act(async () => link('competitors').click());
+    expect(setActiveBrand).not.toHaveBeenCalled();
   });
 
   it('hides the steps for the brand when an admin or manager hides them', async () => {
