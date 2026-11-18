@@ -4,6 +4,7 @@ import {
   addOnForPlan,
   addOnInterval,
   addOnOnSale,
+  isAddOnPrice,
   planItemOf,
   purchaseIdOf,
   trackingTiers,
@@ -43,6 +44,30 @@ describe('add-on packs', () => {
     expect(planItemOf([pack, plan])).toBe(plan);
     expect(planItemOf([plan, pack])).toBe(plan);
     expect(planItemOf([])).toBeUndefined();
+  });
+
+  it('never take a Growth add-on item for the plan’s, by its lookup key or metadata (00546)', () => {
+    const plan = { id: 'si_plan', metadata: {}, price: { lookup_key: null, metadata: {} } };
+    const tracking = {
+      id: 'si_tracking',
+      metadata: {},
+      price: { lookup_key: 'addon_tracking_1000_month', metadata: { addon: 'tracking' } },
+    };
+    const brand = { id: 'si_brand', metadata: {}, price: { metadata: { addon: 'brand' } } };
+    expect(planItemOf([tracking, brand, plan])).toBe(plan);
+    // No plan's item: none, rather than an add-on's.
+    expect(planItemOf([tracking, brand])).toBeUndefined();
+  });
+
+  it('know a Growth add-on’s price', () => {
+    expect(isAddOnPrice({ lookup_key: 'addon_brand_year' })).toBe(true);
+    expect(isAddOnPrice({ lookup_key: null, metadata: { addon: 'ai_topup' } })).toBe(true);
+    expect(isAddOnPrice({ lookup_key: 'growth_month', metadata: { plan_id: 'growth' } })).toBe(
+      false,
+    );
+    expect(isAddOnPrice({ metadata: { addon: 'something' } })).toBe(false);
+    expect(isAddOnPrice('price_1')).toBe(false);
+    expect(isAddOnPrice(null)).toBe(false);
   });
 });
 

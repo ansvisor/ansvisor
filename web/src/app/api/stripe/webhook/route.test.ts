@@ -66,6 +66,10 @@ vi.mock('@/lib/plan-engines', () => ({ alignPromptsToPlanForOrg: align }));
 const addOns = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/billing/add-on-webhook', () => ({ handleAddOnEvent: addOns }));
 
+// Growth's add-ons on the subscription (00546): their own module, tested on its own.
+const sync = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/billing/add-on-sync', () => ({ syncAddOns: sync }));
+
 // The trial reminder (lib/billing/trial-ending.ts): its own module, tested on its own.
 const trialEnding = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/billing/trial-ending', () => ({ handleTrialWillEnd: trialEnding }));
@@ -105,6 +109,7 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   align.mockResolvedValue({ promptCount: 0, platforms: [], models: [] });
   addOns.mockResolvedValue(false);
+  sync.mockResolvedValue(undefined);
   trialEnding.mockResolvedValue('done');
   db.eq.mockResolvedValue({ error: null });
   brands.filters = [];
@@ -402,6 +407,34 @@ describe('add-on packs (CHAT-18)', () => {
     await deliver('checkout.session.completed', { customer: 'cus1', subscription: 'sub1' });
     expect(addOns).toHaveBeenCalled();
     expect(db.update).toHaveBeenCalled();
+  });
+});
+
+describe('Growth add-ons on the subscription (00546)', () => {
+  it('are synced from Stripe on a checkout, an update and the end of a subscription', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('active', 1_800_000_000));
+    await deliver('checkout.session.completed', { customer: 'cus1', subscription: 'sub1' });
+    await deliver('customer.subscription.updated', subscription('active', 1_800_000_000));
+    await deliver('customer.subscription.deleted', subscription('canceled'));
+    expect(sync.mock.calls).toEqual([['sub1'], ['sub1'], ['sub1']]);
+  });
+
+  it('are not synced when the checkout’s organization could not be written', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('active'));
+    db.eq.mockResolvedValue({ error: { message: 'down' } });
+    await deliver('checkout.session.completed', { customer: 'cus1', subscription: 'sub1' });
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it('answer 500 when the sync fails, so Stripe sends the event again', async () => {
+    sync.mockRejectedValue(new Error('down'));
+    const res = await deliver('customer.subscription.updated', subscription('active'));
+    expect(res.status).toBe(500);
+  });
+
+  it('are never synced on an invoice', async () => {
+    await deliver('invoice.payment_failed', { id: 'in_1', customer: 'cus1' });
+    expect(sync).not.toHaveBeenCalled();
   });
 });
 

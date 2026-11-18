@@ -19,6 +19,7 @@ const stripeApi = vi.hoisted(() => ({
   listInvoicePayments: vi.fn(),
   listLineItems: vi.fn(),
   deleteItem: vi.fn(),
+  retrievePrice: vi.fn(),
 }));
 vi.mock('@/lib/stripe', () => ({
   stripe: {
@@ -26,6 +27,7 @@ vi.mock('@/lib/stripe', () => ({
     invoicePayments: { list: stripeApi.listInvoicePayments },
     invoices: { listLineItems: stripeApi.listLineItems },
     subscriptionItems: { del: stripeApi.deleteItem },
+    prices: { retrieve: stripeApi.retrievePrice },
   },
 }));
 
@@ -67,6 +69,12 @@ beforeEach(() => {
   db.failures = {};
   db.log = [];
   db.defaults = {};
+  // Stripe's prices: a plan's has no add-on lookup key or metadata.
+  stripeApi.retrievePrice.mockImplementation(async (id: string) =>
+    id.startsWith('price_addon')
+      ? { id, lookup_key: id.replace('price_', ''), metadata: { addon: 'tracking' } }
+      : { id, lookup_key: null, metadata: {} },
+  );
   // 00413's unique keys: one grant per purchase.
   db.unique = { ai_credit_grants: [['purchase_id']], storage_grants: [['purchase_id']] };
   db.tables = {
@@ -316,6 +324,24 @@ describe('storage', () => {
         event('invoice.payment_succeeded', invoice('in_ai', [], { metadata: checkout().metadata })),
       ),
     ).resolves.toBe(true);
+  });
+
+  it('keeps a Growth add-on’s payment from changing the plan’s status, read from Stripe (00546)', async () => {
+    // Not in the catalog yet: Stripe's lookup key says it's an add-on.
+    const addOnOnly = invoice('in_tracking', [
+      line('si_tracking', 'price_addon_tracking_100_month', 7500),
+      line('si_brand', 'price_addon_brand_month', 2500),
+    ]);
+    await expect(handleAddOnEvent(event('invoice.payment_failed', addOnOnly))).resolves.toBe(true);
+    // A plan's line among them: the plan's invoice, as is a renewal of both.
+    const mixed = invoice('in_renewal', [
+      line('si_plan', 'price_growth', 24900),
+      line('si_tracking', 'price_addon_tracking_100_month', 7500),
+    ]);
+    await expect(handleAddOnEvent(event('invoice.payment_failed', mixed))).resolves.toBe(false);
+    // Stripe unreachable: the plan's handlers decide, as before.
+    stripeApi.retrievePrice.mockRejectedValue(new Error('down'));
+    await expect(handleAddOnEvent(event('invoice.payment_failed', addOnOnly))).resolves.toBe(false);
   });
 });
 
