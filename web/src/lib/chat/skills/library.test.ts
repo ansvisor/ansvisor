@@ -9,7 +9,7 @@ import { CHAT_TOOLS } from '../registry/tools';
 import { numbersIn } from '../testing/agent-eval';
 import { SHORTCUTS, SHORTCUT_IDS } from '../shortcuts';
 import { checkSkillFile, parseSkillFile } from './format';
-import { ADS_SKILLS } from './flagged';
+import { ADS_SKILLS, skillFlagOn } from './flagged';
 import { RESERVED_SKILL_NAMES } from './reserved-names';
 import {
   MAX_LISTED_SKILLS,
@@ -22,6 +22,7 @@ import {
   buildSkillLibrary,
   enabledSkills,
   loadedSkillsBlock,
+  personSkill,
   shortcutPlaybook,
   skillsForPrompt,
   typedSkills,
@@ -230,7 +231,15 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'Writes or rewrites ad drafts for ChatGPT, Google and Microsoft from your approved brand facts, and saves those that pass the claims check.',
   },
+  // AEO Operator plan §4.2 step 4: the Operator's own, agent-only (metadata.agent_only).
+  operator: {
+    title: 'AEO Operator',
+    description:
+      'Each morning, picks which of your agents to run today on one brand, within a daily AI budget, and puts them on one card for you to approve.',
+  },
 };
+/** Agent-only skills (metadata.agent_only): their agent's runs load them, no person picks them. */
+const AGENT_ONLY = ['operator'];
 const LIBRARY_NAMES = Object.keys(ANSVISOR_SKILLS);
 
 /** Words that read as a tool's name: a verb Chat's tools start with, then snake_case. */
@@ -271,7 +280,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's thirty-two, with the mockup's titles and descriptions", () => {
+  it("are Ansvisor's thirty-two and the Operator's own, with their titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {
@@ -310,10 +319,15 @@ describe('the skills in /skills', () => {
       ) {
         say(`metadata.filters must name some of ${SKILL_FILTERS.join(', ')}`);
       }
-      const extra = Object.keys(skill.metadata).filter(
-        (key) => !['title', 'filters'].includes(key),
-      );
+      // agent_only: an agent's own skill (the Operator's), and only those.
+      const allowed = AGENT_ONLY.includes(folder)
+        ? ['title', 'filters', 'agent_only']
+        : ['title', 'filters'];
+      const extra = Object.keys(skill.metadata).filter((key) => !allowed.includes(key));
       if (extra.length > 0) say(`metadata has ${extra.join(', ')}`);
+      if (AGENT_ONLY.includes(folder) && skill.metadata.agent_only !== 'true') {
+        say('metadata.agent_only must be "true"');
+      }
       if (skill.license !== 'MIT') say('license must be MIT');
       if (COMPETITORS.test(text)) say(`names a competitor: ${COMPETITORS.exec(text)?.[0]}`);
       return out;
@@ -426,6 +440,7 @@ describe('enabledSkills', () => {
     vi.stubEnv('CHAT_AGENTIC_ORGS', '');
     vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
     vi.stubEnv('ADS_ENABLED', 'true');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
     expect(enabledSkills('org-1')).toEqual(SKILL_LIBRARY);
     expect(enabledSkills('org-1').map((skill) => skill.name)).toEqual([...SKILL_ORDER]);
     expect(
@@ -444,6 +459,7 @@ describe('a skill behind a flag (flagged.ts)', () => {
     vi.stubEnv('CHAT_AGENTIC_ORGS', '');
     vi.stubEnv('BUSINESS_HUB_ENABLED', '');
     vi.stubEnv('ADS_ENABLED', 'true');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
     const names = enabledSkills('org-1').map((skill) => skill.name);
     expect(names).not.toContain('chatgpt-profile');
     expect(names).toEqual(SKILL_ORDER.filter((name) => name !== 'chatgpt-profile'));
@@ -467,7 +483,44 @@ describe('a skill behind a flag (flagged.ts)', () => {
     expect([...ADS_SKILLS]).toEqual(['earn-or-pay', 'ad-drafts']);
     expect(names().filter((name) => ADS_SKILLS.has(name))).toEqual([]);
     vi.stubEnv('ADS_ENABLED', 'true');
-    expect(names().slice(-2)).toEqual(['earn-or-pay', 'ad-drafts']);
+    expect(names().filter((name) => ADS_SKILLS.has(name))).toEqual(['earn-or-pay', 'ad-drafts']);
+  });
+
+  it('leaves the AEO Operator’s skill out unless CHAT_OPERATOR is on for the workspace', () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    const names = (org: string) => enabledSkills(org).map((skill) => skill.name);
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect(names('org-1')).not.toContain('operator');
+    expect(skillFlagOn('operator')).toBe(false);
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    expect(names('org-1')).toContain('operator');
+    // CHAT_OPERATOR_ORGS narrows it to its workspaces; with none named, the install's switch.
+    vi.stubEnv('CHAT_OPERATOR_ORGS', 'org-2');
+    expect(names('org-1')).not.toContain('operator');
+    expect(names('org-2')).toContain('operator');
+    expect(skillFlagOn('operator')).toBe(true);
+    expect(skillFlagOn('operator', 'org-1')).toBe(false);
+    // Its name stays the library's meanwhile.
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect(RESERVED_SKILL_NAMES.has('operator')).toBe(true);
+  });
+});
+
+describe('an agent-only skill (the AEO Operator’s /operator)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('is marked agentOnly, and no person picks it: not by /name, not in the prompt’s list', () => {
+    const operator = SKILL_LIBRARY.find((skill) => skill.name === 'operator')!;
+    expect(operator.agentOnly).toBe(true);
+    expect(SKILL_LIBRARY.filter((skill) => skill.agentOnly).map((s) => s.name)).toEqual(AGENT_ONLY);
+    expect(personSkill(operator)).toBe(false);
+    expect(SKILL_LIBRARY.filter(personSkill).map((s) => s.name)).not.toContain('operator');
+    // Its run calls its card once and says nothing else; it names only the Operator's tools.
+    expect(operator.body).toContain('Call `run_agent_plan` once');
+    expect(operator.body).toMatch(/Write nothing before the card/);
+    const named = [...operator.body.matchAll(/`([a-z_]+)`/g)].map((m) => m[1]);
+    expect([...new Set(named)].sort()).toEqual(['get_agent_plan', 'run_agent_plan']);
   });
 });
 

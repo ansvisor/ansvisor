@@ -25,6 +25,7 @@ import {
   AGENT_VISIBILITIES,
   DEFAULT_AGENT_SETTINGS,
   agentActDenial,
+  agentKindOf,
   agentScopeSchema,
   agentPlanLimits,
   agentTriggerSchema,
@@ -41,6 +42,9 @@ import {
   monthCapDenial,
   nameKey,
   nextVersion,
+  operatorBrandOf,
+  operatorDenial,
+  operatorProblem,
   triggerScopeProblem,
   triggerTimeProblem,
   versionFromRow,
@@ -49,6 +53,7 @@ import {
   type AgentAsk,
   type AgentDenial,
   type AgentFacts,
+  type AgentKind,
   type AgentLifecycleAction,
   type AgentListView,
   type AgentPausedReason,
@@ -67,6 +72,7 @@ import {
 import { nextScheduleFire } from './agent-schedule';
 import { readAgentShares } from './agent-shares';
 import { buildActionDenial } from './denial';
+import { chatOperatorEnabled } from './flag';
 import { canonicalJson } from './idempotency';
 import type { ChatActor } from './engine';
 import type { ChatDenialCard } from './events';
@@ -78,6 +84,7 @@ import {
   tellGoLiveOff,
   type AgentGoLiveDetail,
 } from './agent-go-live';
+import { OPERATOR_DAILY_BUDGET_DEFAULT } from './operator/defaults';
 import { ownKeyCapReached } from './own-key-cap';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
@@ -203,6 +210,23 @@ export type AgentRefusalCode =
   | 'agent_not_found'
   /** Can call names one of the demo brand's sample agents (00475), which nothing runs. */
   | 'demo_agent'
+  /**
+   * An AEO Operator's definition (agent-rules.ts operatorProblem): /operator
+   * beside other skills, a change of kind, not one brand, shared, a daily
+   * budget outside 1–10%, Can call set.
+   */
+  | 'operator_skills'
+  | 'operator_kind'
+  | 'operator_scope'
+  | 'operator_visibility'
+  | 'operator_budget'
+  | 'operator_can_call'
+  /** Another AEO Operator is on for the brand: one a brand (decision 1). */
+  | 'operator_taken'
+  /** The AEO Operator isn't on for the workspace (CHAT_OPERATOR, flag.ts). */
+  | 'operator_off'
+  /** An AEO Operator plans its own day: it doesn't run on one action. */
+  | 'operator_action'
   | 'failed';
 
 export type AgentRefusal =
@@ -265,6 +289,15 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   go_live_mode: 409,
   agent_not_found: 400,
   demo_agent: 400,
+  operator_skills: 400,
+  operator_kind: 409,
+  operator_scope: 400,
+  operator_visibility: 400,
+  operator_budget: 400,
+  operator_can_call: 400,
+  operator_taken: 409,
+  operator_off: 403,
+  operator_action: 409,
   failed: 500,
 };
 
@@ -332,7 +365,7 @@ async function firstDenial(
 const AGENT_COLUMNS =
   'id, organization_id, name, status, paused_reason, owner_id, visibility, version, max_run_share, max_month_share, created_by, created_at, updated_at, activated_at, archived_at, demo_brand_id, kind';
 const VERSION_COLUMNS =
-  'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days, can_call, created_at';
+  'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days, can_call, operator_json, created_at';
 const TRIGGER_COLUMNS = 'id, agent_id, kind, config_json, enabled, last_fired_at, created_at';
 const RUN_COLUMNS =
   'id, agent_id, agent_version, brand_id, trigger_kind, acting_user_id, status, skipped_reason, stop_reason, max_share, usage_share, outcome, outcome_confidence, queued_at, started_at, finished_at, called_by_run_id';
@@ -367,7 +400,7 @@ export interface AgentRow {
 }
 
 /** What an agent is (chat_agents.kind, 00545). */
-export type AgentKind = 'agent' | 'operator';
+export type { AgentKind } from './agent-rules';
 
 interface VersionRow {
   agent_id: string;
@@ -382,6 +415,8 @@ interface VersionRow {
   notify_user_ids: string[];
   followup_days: number;
   can_call: string[] | null;
+  /** An AEO Operator's settings (00545); null for every other agent. */
+  operator_json?: Json | null;
   created_at: string;
 }
 
@@ -1414,11 +1449,20 @@ async function referencesRefusal(
     if (agentId && callees.includes(agentId)) return refused('agent_not_found');
     const { data, error } = await supabaseAdmin
       .from('chat_agents')
-      .select('id, status, demo_brand_id')
+      .select('id, status, demo_brand_id, kind')
       .eq('organization_id', organizationId)
       .in('id', callees);
     if (error) throw new Error(`Could not read the agents it calls: ${error.message}`);
-    const found = (data ?? []) as { id: string; status: string; demo_brand_id: string | null }[];
+    const found = (
+      (data ?? []) as {
+        id: string;
+        status: string;
+        demo_brand_id: string | null;
+        kind?: string;
+      }[]
+    )
+      // Never an AEO Operator: Can call names agents only (00545).
+      .filter((a) => a.kind !== 'operator');
     // Never the demo brand's sample agents (00475), as Can call's options leave them out
     // (runnableAgents): nothing runs them. One picked before is refused too, as an archived one is.
     if (found.some((a) => a.demo_brand_id)) return refused('demo_agent');
@@ -1574,9 +1618,15 @@ export async function runChecks(
 ): Promise<Refused | null> {
   const version = agent.version;
   if (!version) return refused('failed');
+  // An AEO Operator with CHAT_OPERATOR off for the workspace: gone, never paused for it.
+  if (agent.row.kind === 'operator' && !chatOperatorEnabled(ctx.actor.organizationId)) {
+    return refused('operator_off');
+  }
   const denial = await firstDenial(ctx, [
     modeDenial(version.mode, ctx.plan, ctx.settings, actingRole),
     enginesDenial(ctx.plan, enginesNamed(version.scope, triggers)),
+    // An Operator is Growth and up: a downgrade pauses it (plan) before its next run.
+    operatorDenial(agent.row.kind, ctx.plan),
   ]);
   if (denial) return denial;
   if ((await runnableBrands(ctx.actor.organizationId, version.scope, access)).length === 0) {
@@ -1699,6 +1749,8 @@ const versionInsert = (agentId: string, version: number, data: AgentVersionData,
   notify_user_ids: data.notify_user_ids,
   followup_days: data.followup_days,
   can_call: data.can_call,
+  // An AEO Operator's settings; left to the column's null for every other agent.
+  ...(data.operator_json ? { operator_json: data.operator_json as unknown as Json } : {}),
   created_by: by,
 });
 
@@ -1717,6 +1769,77 @@ const triggerInsert = (agentId: string, trigger: AgentTriggerInput, enabled = tr
 const triggerKey = (kind: string, config: unknown) => `${kind}:${canonicalJson(config)}`;
 
 /**
+ * What an AEO Operator's definition gets wrong, as its refusal (agent-rules.ts
+ * operatorProblem), or the Operator isn't on for the workspace (CHAT_OPERATOR);
+ * null for an agent that isn't one and has nothing of one, and for a fine Operator.
+ */
+function operatorRefusal(
+  ctx: AgentContext,
+  agent: Parameters<typeof operatorProblem>[0],
+): Refused | null {
+  const problem = operatorProblem(agent);
+  if (problem) return refused(problem);
+  if (agent.kind === 'operator' && !chatOperatorEnabled(ctx.actor.organizationId)) {
+    return refused('operator_off');
+  }
+  return null;
+}
+
+/**
+ * Another AEO Operator on for the brand (decision 1: one a brand): an active
+ * Operator of the workspace, but `except`, whose current version's one brand
+ * it is. Its name is never said: it may be someone else's private agent.
+ */
+async function operatorOnBrand(
+  organizationId: string,
+  brandId: string,
+  except: string,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agents')
+    .select('id, version')
+    .eq('organization_id', organizationId)
+    .eq('kind', 'operator')
+    .eq('status', 'active');
+  if (error) throw new Error(`Could not read the workspace's Operators: ${error.message}`);
+  const others = ((data ?? []) as { id: string; version: number }[]).filter((a) => a.id !== except);
+  if (others.length === 0) return false;
+  const versions = await supabaseAdmin
+    .from('chat_agent_versions')
+    .select('agent_id, version, scope')
+    .in(
+      'agent_id',
+      others.map((a) => a.id),
+    );
+  if (versions.error) {
+    throw new Error(`Could not read the workspace's Operators: ${versions.error.message}`);
+  }
+  const current = new Map(others.map((a) => [a.id, a.version]));
+  return ((versions.data ?? []) as { agent_id: string; version: number; scope: Json }[]).some(
+    (v) => {
+      if (current.get(v.agent_id) !== v.version) return false;
+      const scope = agentScopeSchema.safeParse(v.scope);
+      return scope.success && operatorBrandOf(scope.data) === brandId;
+    },
+  );
+}
+
+/** An Operator that would be a second one on its brand (decision 1), as its refusal. */
+async function operatorTakenRefusal(
+  organizationId: string,
+  kind: AgentKind,
+  scope: AgentScope | undefined,
+  agentId: string,
+): Promise<Refused | null> {
+  if (kind !== 'operator' || !scope) return null;
+  const brandId = operatorBrandOf(scope);
+  if (!brandId) return null;
+  return (await operatorOnBrand(organizationId, brandId, agentId))
+    ? refused('operator_taken')
+    : null;
+}
+
+/**
  * A new agent, saved as a draft (§D item 17): Admins and Managers only
  * (§D item 20), shared with the workspace only where Settings › Chat lets
  * them, a monthly cap only by an Admin, Full auto and engines as the plan
@@ -1729,16 +1852,32 @@ export async function createAgent(
   now = new Date(),
 ): Promise<AgentResult<AgentDetail>> {
   const version = firstVersion(input);
+  // An AEO Operator when /operator is its only skill (00545), for good.
+  const kind = agentKindOf(input.skills);
+  // An Operator's max_run_share is its daily budget: 5% unless given, never the per-run default.
+  const maxRunShare =
+    input.maxRunShare ??
+    (kind === 'operator' ? OPERATOR_DAILY_BUDGET_DEFAULT : ctx.settings.runShareDefault);
   const denial = await firstDenial(ctx, [
     agentActDenial('create', ctx.viewer, null, ctx.settings),
     visibilityDenial(input.visibility, ctx.viewer, ctx.settings),
     input.maxMonthShare !== null ? monthCapDenial(ctx.viewer) : null,
     modeDenial(version.mode, ctx.plan, ctx.settings, ctx.viewer.role),
     canCallDenial(version.can_call, ctx.plan),
+    operatorDenial(kind, ctx.plan),
     enginesDenial(ctx.plan, enginesNamed(version.scope, input.triggers)),
   ]);
   if (denial) return denial;
   const problem =
+    operatorRefusal(ctx, {
+      kind,
+      skills: input.skills,
+      scope: version.scope,
+      visibility: input.visibility,
+      maxRunShare,
+      canCall: version.can_call,
+      settings: input.operator !== undefined,
+    }) ??
     triggersRefusal(input.triggers, now) ??
     triggerScopeRefusal(input.triggers, version.scope) ??
     (await referencesRefusal(ctx, version));
@@ -1770,9 +1909,11 @@ export async function createAgent(
       owner_id: ctx.actor.userId,
       visibility: input.visibility,
       version: 1,
-      max_run_share: input.maxRunShare ?? ctx.settings.runShareDefault,
+      max_run_share: maxRunShare,
       max_month_share: input.maxMonthShare,
       created_by: ctx.actor.userId,
+      // Set once, here: the database refuses a change of kind (00545).
+      ...(kind === 'operator' ? { kind } : {}),
     })
     .select(AGENT_COLUMNS)
     .single();
@@ -1857,9 +1998,24 @@ export async function updateAgent(
     ownerRole ? modeDenial(result.mode, ctx.plan, ctx.settings, ownerRole) : null,
     next || patch.triggers ? enginesDenial(ctx.plan, enginesNamed(result.scope, triggers)) : null,
     patch.canCall ? canCallDenial(patch.canCall, ctx.plan) : null,
+    next ? operatorDenial(row.kind, ctx.plan) : null,
   ]);
   if (denial) return denial;
   const problem =
+    // Its kind stays what it was made as: an Operator stays one, with an Operator's shape.
+    operatorRefusal(ctx, {
+      kind: row.kind,
+      skills: result.skill_ids,
+      scope: result.scope,
+      visibility: patch.visibility ?? row.visibility,
+      maxRunShare: patch.maxRunShare ?? row.max_run_share,
+      canCall: result.can_call,
+      settings: patch.operator !== undefined,
+    }) ??
+    // An Operator that is on, moved to another brand: one a brand.
+    (row.status === 'active' && patch.scope
+      ? await operatorTakenRefusal(ctx.actor.organizationId, row.kind, result.scope, row.id)
+      : null) ??
     triggersRefusal(changedTriggers, now) ??
     (patch.triggers || patch.scope ? triggerScopeRefusal(triggers, result.scope) : null) ??
     (next && (patch.scope || patch.notifyUserIds || patch.canCall)
@@ -2058,6 +2214,9 @@ export async function changeAgentState(
     if (limit !== null && (await activeCount(org, row.id)) >= limit) {
       return refused('agent_limit', { limit });
     }
+    // One AEO Operator on a brand at a time (decision 1).
+    const taken = await operatorTakenRefusal(org, row.kind, agent.version?.scope, row.id);
+    if (taken) return taken;
     const failing = await runChecks(
       ctx,
       agent,
@@ -2135,6 +2294,10 @@ export async function takeOverAgent(
     if (backOn && limit !== null && (await activeCount(org, row.id)) >= limit) {
       return refused('agent_limit', { limit });
     }
+    const taken = backOn
+      ? await operatorTakenRefusal(org, row.kind, agent.version?.scope, row.id)
+      : null;
+    if (taken) return taken;
     const failing = await runChecks(
       ctx,
       agent,
@@ -2252,10 +2415,21 @@ export async function duplicateAgent(
   const denial = await firstDenial(ctx, [
     modeDenial(agent.version.mode, ctx.plan, ctx.settings, ctx.viewer.role),
     canCallDenial(agent.version.can_call, ctx.plan),
+    operatorDenial(row.kind, ctx.plan),
     enginesDenial(ctx.plan, enginesNamed(agent.version.scope, triggerInputs(sourceTriggers))),
   ]);
   if (denial) return denial;
-  const problem = await referencesRefusal(ctx, agent.version);
+  // A copy of an AEO Operator is one too (its skills say so), held to an Operator's shape.
+  const problem =
+    operatorRefusal(ctx, {
+      kind: row.kind,
+      skills: agent.version.skill_ids,
+      scope: agent.version.scope,
+      visibility: 'private',
+      maxRunShare: row.max_run_share,
+      canCall: agent.version.can_call,
+      settings: false,
+    }) ?? (await referencesRefusal(ctx, agent.version));
   if (problem) return problem;
   const { data: names, error: namesError } = await supabaseAdmin
     .from('chat_agents')
@@ -2279,6 +2453,7 @@ export async function duplicateAgent(
       max_run_share: row.max_run_share,
       max_month_share: ctx.viewer.role === 'admin' ? row.max_month_share : null,
       created_by: ctx.actor.userId,
+      ...(row.kind === 'operator' ? { kind: row.kind } : {}),
     })
     .select(AGENT_COLUMNS)
     .single();

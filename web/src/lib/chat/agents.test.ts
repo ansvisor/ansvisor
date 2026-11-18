@@ -1816,3 +1816,216 @@ describe('the demo brand’s sample agents (00475)', () => {
     ).toMatchObject({ ok: true });
   });
 });
+
+// ─── The AEO Operator (AEO Operator plan §4.2, §4.5; PR 4) ──────────────────
+
+describe('the AEO Operator', () => {
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', '');
+  });
+  const operator = (over: Record<string, unknown> = {}) => ({
+    name: 'AEO Operator',
+    skills: ['operator'],
+    ...over,
+  });
+  const refusalOf = async (userId: string, over: Record<string, unknown>) => {
+    const result = await agents.createAgent(await ctxOf(userId), input(operator(over)), NOW);
+    return result.ok ? 'ok' : result.refusal.code;
+  };
+  const versionRow = (id: string) =>
+    rows('chat_agent_versions').find(
+      (v) => v.agent_id === id && v.version === agentRow(id).version,
+    )!;
+
+  it('makes an Operator of /operator alone: its kind, a 5% daily budget and its settings', async () => {
+    const made = await create(PEOPLE.manager, operator({ operator: { maxRuns: 3 } }));
+    expect(agentRow(made.id)).toMatchObject({
+      kind: 'operator',
+      visibility: 'private',
+      // Its daily budget: 5% by default, never the workspace's per-run default (10%).
+      max_run_share: 0.05,
+      status: 'draft',
+    });
+    expect(versionRow(made.id)).toMatchObject({
+      skill_ids: ['operator'],
+      operator_json: { allowed: null, include_workspace: false, max_runs: 3, ask_first: true },
+    });
+    // Settings left out: the defaults, 5 a day.
+    const plain = await create(
+      PEOPLE.manager,
+      operator({ name: 'Operator 2', scope: { brand_ids: [BRAND_2] } }),
+    );
+    expect(versionRow(plain.id).operator_json).toMatchObject({ max_runs: 5 });
+    // Its budget may be set within 1–10%.
+    const seven = await create(PEOPLE.manager, operator({ name: 'Operator 3', maxRunShare: 0.07 }));
+    expect(agentRow(seven.id).max_run_share).toBe(0.07);
+    // Any other agent stays an agent, with no Operator settings.
+    const agent = await create(PEOPLE.manager);
+    expect(agentRow(agent.id).kind ?? 'agent').toBe('agent');
+    expect(versionRow(agent.id).operator_json).toBeUndefined();
+  });
+
+  it('refuses an Operator that isn’t one brand, private, 1–10% and without Can call, or isn’t alone', async () => {
+    expect(await refusalOf(PEOPLE.manager, { scope: { brand_ids: [BRAND, BRAND_2] } })).toBe(
+      'operator_scope',
+    );
+    expect(await refusalOf(PEOPLE.manager, { scope: { all_brands: true } })).toBe('operator_scope');
+    expect(await refusalOf(PEOPLE.admin, { visibility: 'workspace' })).toBe('operator_visibility');
+    expect(await refusalOf(PEOPLE.manager, { maxRunShare: 0.2 })).toBe('operator_budget');
+    expect(await refusalOf(PEOPLE.manager, { skills: ['operator', 'faq'] })).toBe(
+      'operator_skills',
+    );
+    // An Operator's settings on another agent.
+    expect(await refusalOf(PEOPLE.manager, { skills: ['winback'], operator: {} })).toBe(
+      'operator_skills',
+    );
+    const callee = await create(PEOPLE.manager, { name: 'Callee' });
+    expect(await refusalOf(PEOPLE.manager, { canCall: [callee.id] })).toBe('operator_can_call');
+    expect(rows('chat_agents').map((a) => a.name)).toEqual(['Callee']);
+  });
+
+  it('is Growth and up (operatorDenial), and nothing while CHAT_OPERATOR is off for the workspace', async () => {
+    db.tables.organizations[0].plan = 'starter';
+    const starter = await agents.createAgent(await ctxOf(PEOPLE.admin), input(operator()), NOW);
+    expect(starter).toMatchObject({
+      ok: false,
+      refusal: {
+        kind: 'denied',
+        code: 'plan_locked',
+        asked: 'operator',
+        denial: { needsPlan: 'Growth' },
+      },
+    });
+    db.tables.organizations[0].plan = 'growth';
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect(await refusalOf(PEOPLE.manager, {})).toBe('operator_off');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', OTHER_ORG);
+    expect(await refusalOf(PEOPLE.manager, {})).toBe('operator_off');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', ORG);
+    expect(await refusalOf(PEOPLE.manager, {})).toBe('ok');
+  });
+
+  it('keeps its kind and its shape on a change; its settings make a new version', async () => {
+    const op = await create(PEOPLE.manager, operator());
+    const agent = await create(PEOPLE.manager, { name: 'Win back' });
+    const ctx = await ctxOf(PEOPLE.manager);
+    const change = async (id: string, patch: Record<string, unknown>) => {
+      const result = await agents.updateAgent(ctx, id, updateAgentInput.parse(patch), NOW);
+      return result.ok ? 'ok' : result.refusal.code;
+    };
+    // Never an agent made an Operator, or an Operator made an agent.
+    expect(await change(agent.id, { skills: ['operator'] })).toBe('operator_kind');
+    expect(await change(op.id, { skills: ['winback'] })).toBe('operator_kind');
+    expect(await change(op.id, { skills: ['operator', 'faq'] })).toBe('operator_skills');
+    expect(await change(agent.id, { operator: { maxRuns: 2 } })).toBe('operator_skills');
+    // An Operator's shape: one brand, private, 1–10%.
+    expect(await change(op.id, { scope: { brand_ids: [BRAND, BRAND_2] } })).toBe('operator_scope');
+    expect(await change(op.id, { maxRunShare: 0.12 })).toBe('operator_budget');
+    expect(await change(op.id, { visibility: 'workspace' })).toBe('operator_visibility');
+    expect(agentRow(op.id).version).toBe(1);
+    // Its settings: a new version; its budget: on the agent.
+    expect(await change(op.id, { operator: { maxRuns: 8, includeWorkspace: true } })).toBe('ok');
+    expect(agentRow(op.id).version).toBe(2);
+    expect(versionRow(op.id).operator_json).toMatchObject({ max_runs: 8, include_workspace: true });
+    expect(await change(op.id, { maxRunShare: 0.1 })).toBe('ok');
+    expect(agentRow(op.id)).toMatchObject({ max_run_share: 0.1, kind: 'operator' });
+  });
+
+  it('turns on one Operator a brand, and never names the one that is on', async () => {
+    const admin = await ctxOf(PEOPLE.admin);
+    const mine = await create(PEOPLE.manager, operator());
+    const theirs = await create(PEOPLE.admin, operator({ name: 'Admin Operator' }));
+    const other = await create(
+      PEOPLE.admin,
+      operator({ name: 'B', scope: { brand_ids: [BRAND_2] } }),
+    );
+    expect(await agents.changeAgentState(admin, theirs.id, 'activate', NOW)).toMatchObject({
+      ok: true,
+    });
+    const second = await agents.changeAgentState(
+      await ctxOf(PEOPLE.manager),
+      mine.id,
+      'activate',
+      NOW,
+    );
+    expect(second).toMatchObject({ ok: false, refusal: { code: 'operator_taken' } });
+    expect(JSON.stringify(second)).not.toContain('Admin Operator');
+    // Another brand's is fine; once the first is paused, the brand is free.
+    expect(await agents.changeAgentState(admin, other.id, 'activate', NOW)).toMatchObject({
+      ok: true,
+    });
+    await agents.changeAgentState(admin, theirs.id, 'pause', NOW);
+    expect(
+      await agents.changeAgentState(await ctxOf(PEOPLE.manager), mine.id, 'activate', NOW),
+    ).toMatchObject({ ok: true });
+    // Moving one that is on to a brand that has one: refused too.
+    const moved = await agents.updateAgent(
+      await ctxOf(PEOPLE.admin),
+      other.id,
+      updateAgentInput.parse({ scope: { brand_ids: [BRAND] } }),
+      NOW,
+    );
+    expect(moved).toMatchObject({ ok: false, refusal: { code: 'operator_taken' } });
+    // Resume, too.
+    expect(await agents.changeAgentState(admin, theirs.id, 'resume', NOW)).toMatchObject({
+      ok: false,
+      refusal: { code: 'operator_taken' },
+    });
+  });
+
+  it('won’t run (runChecks) below Growth, nor with CHAT_OPERATOR off; never on one action', async () => {
+    const op = await create(PEOPLE.admin, operator());
+    const admin = await ctxOf(PEOPLE.admin);
+    expect(await agents.changeAgentState(admin, op.id, 'activate', NOW)).toMatchObject({
+      ok: true,
+    });
+    const loaded = (await agents.loadAgent(ORG, op.id))!;
+    expect(await agents.runChecks(admin, loaded, 'admin', [])).toBeNull();
+    db.tables.organizations[0].plan = 'starter';
+    // A plan gate: the driver pauses a triggered Operator for it (plan).
+    expect(await agents.runChecks(await ctxOf(PEOPLE.admin), loaded, 'admin', [])).toMatchObject({
+      ok: false,
+      refusal: { kind: 'denied', code: 'plan_locked', asked: 'operator' },
+    });
+    db.tables.organizations[0].plan = 'growth';
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect(await agents.runChecks(admin, loaded, 'admin', [])).toMatchObject({
+      ok: false,
+      refusal: { code: 'operator_off' },
+    });
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    db.tables.actions = [
+      {
+        id: 'acacacac-0000-4000-8000-000000000001',
+        brand_id: BRAND,
+        status: 'new',
+        deleted_at: null,
+      },
+    ];
+    expect(
+      await runs.runAgentOnAction(admin, op.id, 'acacacac-0000-4000-8000-000000000001', NOW, null),
+    ).toMatchObject({ ok: false, refusal: { code: 'operator_action' } });
+  });
+
+  it('is never named in another agent’s Can call', async () => {
+    const op = await create(PEOPLE.manager, operator());
+    const result = await agents.createAgent(
+      await ctxOf(PEOPLE.manager),
+      input({ name: 'Caller', canCall: [op.id] }),
+      NOW,
+    );
+    expect(result).toMatchObject({ ok: false, refusal: { code: 'agent_not_found' } });
+  });
+
+  it('copies an Operator as an Operator draft, with its settings', async () => {
+    const op = await create(PEOPLE.admin, operator({ operator: { maxRuns: 4 } }));
+    const copy = await agents.duplicateAgent(await ctxOf(PEOPLE.admin), op.id, NOW);
+    if (!copy.ok) throw new Error(JSON.stringify(copy.refusal));
+    expect(agentRow(copy.value.id)).toMatchObject({ kind: 'operator', status: 'draft' });
+    expect(versionRow(copy.value.id).operator_json).toMatchObject({ max_runs: 4 });
+  });
+});

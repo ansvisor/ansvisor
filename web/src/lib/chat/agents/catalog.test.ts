@@ -4,7 +4,12 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import { presetTriggerDraft, triggerError, triggerInputOf } from '../agent-form';
-import { DEFAULT_AGENT_SETTINGS, agentTriggerSchema, modeDenial } from '../agent-rules';
+import {
+  DEFAULT_AGENT_SETTINGS,
+  agentTriggerSchema,
+  modeDenial,
+  operatorDenial,
+} from '../agent-rules';
 import { ANSVISOR_SKILLS, skillConnections } from '../agent-skills';
 import { planFactsFromOrgRow, planGateLock } from '../plan-facts';
 import { SKILL_LIBRARY } from '../skills/library';
@@ -22,6 +27,7 @@ import {
   presetFilterOptions,
   presetFit,
   presetCardHref,
+  isOperatorPreset,
   presetGate,
   presetSameness,
   presetsOnInstall,
@@ -509,7 +515,10 @@ describe('the plan a preset needs', () => {
       const facts = planFactsFromOrgRow(row);
       for (const preset of AGENT_PRESETS) {
         const lock = planGateLock(facts, presetGate(preset));
-        const denial = modeDenial(preset.mode, facts, DEFAULT_AGENT_SETTINGS, 'admin');
+        // The AEO Operator: Growth and up whatever its mode (operatorDenial, PR 4).
+        const denial =
+          modeDenial(preset.mode, facts, DEFAULT_AGENT_SETTINGS, 'admin') ??
+          (isOperatorPreset(preset) ? operatorDenial('operator', facts) : null);
         const refused = denial?.denial.code === 'plan_locked' ? denial.denial.needs : null;
         expect(lock, `${preset.id} on ${row.plan} ${row.subscription_status}`).toBe(refused);
       }
@@ -520,6 +529,12 @@ describe('the plan a preset needs', () => {
     expect(presetGate({ mode: 'full_auto' })).toEqual({ minPlan: 'growth' });
     expect(presetGate({ mode: 'auto' })).toBeNull();
     expect(presetGate({ mode: 'ask_first' })).toBeNull();
+    // The AEO Operator is Growth's whatever its mode (AEO Operator plan §4.5), by its id or skill.
+    expect(presetGate(AGENT_PRESETS.find((p) => p.id === 'aeo-operator')!)).toEqual({
+      minPlan: 'growth',
+    });
+    expect(presetGate({ mode: 'auto', skills: ['operator'] })).toEqual({ minPlan: 'growth' });
+    expect(presetGate({ mode: 'auto', skills: ['operator', 'faq'] })).toBeNull();
     expect(readyPreset('weekly-report')?.mode).toBe('full_auto');
   });
 
@@ -675,6 +690,14 @@ describe('the agents setup recommends (AGENTS plan §8)', () => {
   });
   const ids = (viewer: { siteType: string | null; workAreas: string[] }, list?: AgentPreset[]) =>
     recommendedPresets(viewer, list).map(({ preset, fit }) => [preset.id, fit]);
+
+  it('never include the AEO Operator, even ready: it runs the others (AEO Operator plan §4.3)', () => {
+    const operator = fake('aeo-operator', { skills: ['operator'] });
+    const bySkill = fake('my-operator', { skills: ['operator'] });
+    expect(ids({ siteType: null, workAreas: [] }, [operator, bySkill, fake('faq-only')])).toEqual([
+      ['faq-only', null],
+    ]);
+  });
 
   it('are Ready to use’s first for the person: what fits, then the launch set, 3 to 5', () => {
     // A B2B brand and a content person: what fits, in the catalog's order, as Ready to use shows it.

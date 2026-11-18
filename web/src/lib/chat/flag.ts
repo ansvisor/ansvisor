@@ -54,3 +54,32 @@ export function autoGoLiveEnabled(organizationId?: string | null): boolean {
   if (orgs.length === 0) return true;
   return !!organizationId && orgs.includes(organizationId.trim().toLowerCase());
 }
+
+/**
+ * The AEO Operator (AEO Operator plan §4.5) behind CHAT_OPERATOR, on top of
+ * CHAT_AGENTIC: off unless "true", and CHAT_OPERATOR_ORGS narrows it as
+ * CHAT_AGENTIC_ORGS does. Off, the /operator skill is in no list
+ * (skills/flagged.ts), no Operator can be made, turned on or run, and an
+ * Operator's run already queued stops before it starts. Web only: the API
+ * server never reads it.
+ */
+export function chatOperatorEnabled(organizationId?: string | null): boolean {
+  if (!chatAgenticEnabled(organizationId)) return false;
+  return chatOperatorOn(organizationId);
+}
+
+/**
+ * CHAT_OPERATOR alone, for a list with no workspace to ask about (the
+ * install's skills, its ready-to-use agents); with one, its CHAT_OPERATOR_ORGS
+ * too. CHAT_AGENTIC is chatOperatorEnabled's to check.
+ */
+export function chatOperatorOn(organizationId?: string | null): boolean {
+  if (process.env.CHAT_OPERATOR !== 'true') return false;
+  if (organizationId === undefined) return true;
+  const orgs = (process.env.CHAT_OPERATOR_ORGS ?? '')
+    .split(',')
+    .map((id) => id.trim().toLowerCase())
+    .filter(Boolean);
+  if (orgs.length === 0) return true;
+  return !!organizationId && orgs.includes(organizationId.trim().toLowerCase());
+}

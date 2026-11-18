@@ -145,6 +145,23 @@ const runAgent: UndoRule = {
   href: (id) => `/dashboard/agents/${id}`,
 };
 
+// ─── run_agent_plan: recorded, no Undo (each agent it started keeps its own run) ─
+
+const runAgentPlan: UndoRule = {
+  ...NO_UNDO,
+  targetType: 'agent_plan',
+  async record(input, output): Promise<WriteRecord> {
+    const made = asObject(output);
+    const count = (value: unknown) => String(typeof value === 'number' ? value : 0);
+    return {
+      target: { type: 'agent_plan', id: textOf(asObject(input).plan_id) },
+      summaryParams: { started: count(made.started), skipped: count(made.skipped) },
+      undo: null,
+    };
+  },
+  href: () => '/dashboard/agents',
+};
+
 // ─── generate_image: recorded, no Undo (§9 row 70: the set is deleted in Files) ─
 
 const generateImage: UndoRule = {
@@ -190,6 +207,8 @@ export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   suggest_draft_changes: suggestDraftChanges,
   run_site_audit: runSiteAudit,
   run_agent: runAgent,
+  // The AEO Operator's plan, started (AEO Operator PR 4).
+  run_agent_plan: runAgentPlan,
   generate_image: generateImage,
   // Ad drafts saved through the claims gate (Ads Phase 0 PR 15).
   save_ad_drafts: saveAdDrafts,

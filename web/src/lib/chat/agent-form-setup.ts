@@ -67,7 +67,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
       supabaseAdmin.from('brands').select('id, name, is_demo').eq('organization_id', org),
       supabaseAdmin
         .from('chat_agents')
-        .select('id, name, visibility, owner_id, status')
+        .select('id, name, visibility, owner_id, status, kind')
         .eq('organization_id', org),
       resolveChatModelKey(org)
         .then((resolved) => (resolved?.source === 'own' ? resolved.config.provider : null))
@@ -125,14 +125,15 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
       visibility: string;
       owner_id: string;
       status: string;
+      kind?: string;
     }[]
   )
     // Admins see every agent; others theirs and the workspace's (§K item 51).
     .filter((a) => admin || a.visibility === 'workspace' || a.owner_id === me);
   const seen = visible.map((a) => a.name);
-  // Can call's choices: the ones on or paused (CHAT-27 item 14), by name.
+  // Can call's choices: the ones on or paused (CHAT-27 item 14), by name; never an AEO Operator.
   const callable = visible
-    .filter((a) => a.status === 'active' || a.status === 'paused')
+    .filter((a) => (a.status === 'active' || a.status === 'paused') && a.kind !== 'operator')
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(({ id, name }) => ({ id, name }));
 
@@ -159,7 +160,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     callable,
     canCallLocked: !ctx.plan.fullAuto,
     librarySkills,
-    offSkills: ANSVISOR_SKILLS.map((skill) => skill.id).filter((id) => !skillFlagOn(id)),
+    offSkills: ANSVISOR_SKILLS.map((skill) => skill.id).filter((id) => !skillFlagOn(id, org)),
   };
 }
 

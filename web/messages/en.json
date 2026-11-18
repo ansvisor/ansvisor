@@ -4334,7 +4334,9 @@
     "agentRuns": { "name": "Read an agent's runs", "step": "Read agent runs" },
     "signalsSummary": { "name": "Read the signals summary", "step": "Read Signals summary" },
     "adsOpportunities": { "name": "Read Ads opportunities", "step": "Read Ads opportunities" },
-    "adDrafts": { "name": "Save ad drafts", "step": "Saved ad drafts" }
+    "adDrafts": { "name": "Save ad drafts", "step": "Saved ad drafts" },
+    "operatorPlan": { "name": "Start today’s agents", "step": "Started today’s agents" },
+    "agentPlan": { "name": "Read today’s agent plan", "step": "Read today’s agent plan" }
   },
   "agentic": {
     "avatar": {
@@ -6972,7 +6974,8 @@
       "modelProviderOff": "Turned off {provider} models in Chat",
       "outsideEmailSent": "Sent “{title}” to {to}, outside the workspace",
       "outsideEmailCancelled": "Cancelled the e-mail of “{title}” to {to}",
-      "adDrafts": "Saved ad drafts"
+      "adDrafts": "Saved ad drafts",
+      "operatorPlan": "Started today’s agents: {started} started, {skipped} skipped"
     },
     "undo": {
       "ok": "Undone.",
@@ -7069,7 +7072,8 @@
       "engines": "Use these engines in an agent",
       "runWithChat": "Run Chat on an Action Center action",
       "goLive": "Let an agent publish and send on its own",
-      "canCall": "Let an agent run other agents"
+      "canCall": "Let an agent run other agents",
+      "operator": "Use the AEO Operator"
     },
     "refusal": {
       "invalid": "Some of this agent's settings aren't valid. Check them and try again.",
@@ -7100,7 +7104,16 @@
       "go_live_off": "An Admin hasn’t allowed agents to publish on their own in Settings › Chat.",
       "agent_not_found": "One of the agents it can call isn’t this workspace’s, is archived, or is this agent itself.",
       "demo_agent": "One of the agents it can call is a sample agent of the demo brand, which can’t be run. Take it out of Can call.",
-      "go_live_mode": "This agent isn’t in Full auto. Pick Full auto first."
+      "go_live_mode": "This agent isn’t in Full auto. Pick Full auto first.",
+      "operator_skills": "/operator is an AEO Operator’s only skill, and only an AEO Operator has its settings.",
+      "operator_kind": "An agent can’t become an AEO Operator, and an AEO Operator can’t become another agent. Make a new agent instead.",
+      "operator_scope": "An AEO Operator works on one brand. Pick one.",
+      "operator_visibility": "An AEO Operator is private to its owner: it can’t be shared with the workspace.",
+      "operator_budget": "An AEO Operator’s daily budget is 1–10% of the monthly AI limit.",
+      "operator_can_call": "An AEO Operator starts agents from its daily plan, not with Can call. Leave Can call empty.",
+      "operator_taken": "This brand already has an AEO Operator on, and a brand has one at a time. Pause that one first.",
+      "operator_off": "The AEO Operator isn’t available in this workspace yet.",
+      "operator_action": "An AEO Operator plans its own day on its brand: it doesn’t run on one action."
     },
     "ownKey": {
       "why": {
@@ -7287,7 +7300,10 @@
         "slot": "Scheduled for",
         "earlier": "Earlier fires",
         "action": "Action"
-      }
+      },
+      "operatorTitle": "{agent} · {brand} · {day}",
+      "operatorPlan": "Today’s plan for {brand} is ready in this run’s scope: {count, plural, one {1 agent} other {# agents}}. Put it on its card for the person to approve or skip, and say nothing else.",
+      "operatorBackground": "Nobody watches this run until its card. Ask nothing, and never pick, add or drop an agent yourself: the plan is the app’s."
     },
     "runWithChat": {
       "message": "Work on the Action Center action AC-{no} ({category}): read it and its open tasks, then draft what each task needs. Keep to its targets. I close tasks myself.",
@@ -7399,7 +7415,8 @@
       "traffic": "AI traffic and sign-ups",
       "ai-revenue": "Customers and revenue from AI",
       "earn-or-pay": "Earn or pay",
-      "ad-drafts": "Ad drafts"
+      "ad-drafts": "Ad drafts",
+      "operator": "AEO Operator"
     },
     "form": {
       "titleNew": "New agent",
@@ -8137,6 +8154,21 @@
         "openReports": "Open in Reports",
         "loadFailed": "Couldn't load what this agent did."
       }
+    },
+    "operator": {
+      "target": "{names} · up to {budget}",
+      "more": "{names} +{count}",
+      "reasons": "{reasons} · about {cost}",
+      "why": "Picked by the app from {brand}’s own numbers today: Today’s focus, open actions, new signals and KPIs, and each agent’s last runs and their cost.",
+      "waiting": "{count, plural, one {1 other agent waits for another day.} other {# other agents wait for another day.}}",
+      "goal": "Within your {budget} daily budget",
+      "goalPaced": "Within today’s {budget}, paced to the month’s AI limit (your daily budget is {daily})",
+      "goalCount": "At most {count, plural, one {1 agent} other {# agents}} today",
+      "aiUse": "Up to {share} of the monthly AI limit",
+      "started": "{count, plural, =0 {No agent started} one {1 agent started} other {# agents started}}",
+      "skipped": "{count, plural, one {1 skipped} other {# skipped}}",
+      "unknownAgent": "An agent",
+      "cost": "about {cost}"
     }
   },
   "chatFollowUps": {

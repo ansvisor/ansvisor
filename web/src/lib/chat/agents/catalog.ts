@@ -6,6 +6,7 @@ import type { WorkAreaId } from '@/lib/menu-access';
 import { RRULE_DAYS } from '../agent-schedule';
 import { CHAT_MODES } from '../precedence';
 import type { PlanGate } from '../registry/define-tool';
+import { OPERATOR_SKILL } from '../operator/defaults';
 import { skillFlagOn } from '../skills/flagged';
 import catalog from './catalog.json';
 
@@ -247,7 +248,7 @@ export function buildPresetCatalog(files: readonly { file: string; json: unknown
  * pages what it decided: in the browser the flags read off.
  */
 export function presetOnInstall(preset: AgentPreset): AgentPreset {
-  const skills = preset.skills.filter(skillFlagOn);
+  const skills = preset.skills.filter((id) => skillFlagOn(id));
   return skills.length === preset.skills.length ? preset : { ...preset, skills };
 }
 
@@ -281,12 +282,26 @@ export function readyPreset(id: string | null | undefined): AgentPreset | null {
 /**
  * The plan a preset needs beyond what any plan with agents has, as a tool's
  * gate (planGateLock reads it): Full auto is Growth's, paid (CHAT-20 §7,
- * CHAT-21 §D item 19). Own AI keys never: a preset names no key.
+ * CHAT-21 §D item 19), and so is the AEO Operator, whatever its mode (AEO
+ * Operator plan §4.5: agent-rules.ts operatorDenial). Own AI keys never: a
+ * preset names no key.
  */
 export const FULL_AUTO_PLAN: PlanId = 'growth';
 
-export function presetGate(preset: Pick<AgentPreset, 'mode'>): PlanGate | null {
-  return preset.mode === 'full_auto' ? { minPlan: FULL_AUTO_PLAN } : null;
+/** The AEO Operator's preset: an agent that runs agents (AEO Operator plan §4.3). */
+export const OPERATOR_PRESET = 'aeo-operator';
+
+/** Whether a preset is the AEO Operator's: by its id, or by its only skill, /operator. */
+export const isOperatorPreset = (preset: { id?: string; skills?: readonly string[] }) =>
+  preset.id === OPERATOR_PRESET ||
+  (preset.skills?.length === 1 && preset.skills[0] === OPERATOR_SKILL);
+
+export function presetGate(
+  preset: Pick<AgentPreset, 'mode'> & Partial<Pick<AgentPreset, 'id' | 'skills'>>,
+): PlanGate | null {
+  return preset.mode === 'full_auto' || isOperatorPreset(preset)
+    ? { minPlan: FULL_AUTO_PLAN }
+    : null;
 }
 
 /**
@@ -405,17 +420,22 @@ export const RECOMMENDED_MAX = 5;
  * made for the brand's site type or one of their work areas first, up to 5,
  * then, while fewer than 3 fit, the launch set's agents for every brand.
  * Ready ones this install offers only (presetOffered), never the onboarding
- * agent itself; each with why it fits, null for one made for every brand.
+ * agent itself nor the AEO Operator; each with why it fits, null for one
+ * made for every brand.
  * Only a list: turning one on stays the person's click in Agent Center.
  */
 export function recommendedPresets(
   viewer: PresetViewer,
   presets: readonly AgentPreset[] = AGENT_PRESETS,
 ): { preset: AgentPreset; fit: PresetFit | null }[] {
+  // Never the AEO Operator: it runs the other agents, so it comes after them (AEO Operator plan §4.3).
   const ordered = filterPresets(presets, {}, viewer)
     .filter(
       (preset) =>
-        preset.status === 'ready' && preset.id !== ONBOARDING_PRESET && presetOffered(preset),
+        preset.status === 'ready' &&
+        preset.id !== ONBOARDING_PRESET &&
+        !isOperatorPreset(preset) &&
+        presetOffered(preset),
     )
     .map((preset) => ({ preset, fit: presetFit(preset, viewer) }));
   const fitting = ordered.filter((entry) => entry.fit !== null).length;

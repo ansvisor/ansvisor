@@ -168,14 +168,21 @@ describe('agentFormSetupFor', () => {
   it('names the Ansvisor skills this install does not offer now: the ChatGPT profile check until Business Hub is on, and Ads’ until Ads is', async () => {
     vi.stubEnv('BUSINESS_HUB_ENABLED', '');
     vi.stubEnv('ADS_ENABLED', '');
+    vi.stubEnv('CHAT_OPERATOR', '');
     expect((await setupOf(PEOPLE.manager)).offSkills).toEqual([
       'chatgpt-profile',
       'earn-or-pay',
       'ad-drafts',
+      // The AEO Operator's skill until CHAT_OPERATOR is on for the workspace (PR 4).
+      'operator',
     ]);
     vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
     vi.stubEnv('ADS_ENABLED', 'true');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
     expect((await setupOf(PEOPLE.manager)).offSkills).toEqual([]);
+    // CHAT_OPERATOR_ORGS names another workspace: off for this one.
+    vi.stubEnv('CHAT_OPERATOR_ORGS', '99999999-9999-4999-8999-999999999999');
+    expect((await setupOf(PEOPLE.manager)).offSkills).toEqual(['operator']);
     vi.unstubAllEnvs();
   });
 

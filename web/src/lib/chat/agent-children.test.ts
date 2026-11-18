@@ -171,6 +171,9 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  // The AEO Operator (PR 4): its flag, on for every workspace here.
+  vi.stubEnv('CHAT_OPERATOR', 'true');
+  vi.stubEnv('CHAT_OPERATOR_ORGS', '');
   seedWorkspace(db);
   db.from = realFrom;
   clock = NOW.getTime();
@@ -187,6 +190,12 @@ beforeEach(() => {
   db.rpcs = { chat_start_next_agent_run: startNext };
   agent(OPERATOR, 'AEO Operator', { kind: 'operator', max_run_share: 0.05 });
   versionOf(OPERATOR).skill_ids = ['operator'];
+  versionOf(OPERATOR).operator_json = {
+    allowed: null,
+    include_workspace: false,
+    max_runs: 5,
+    ask_first: true,
+  };
   agent(A, 'Citation win-back', { max_run_share: 0.1 });
   agent(B, 'Rival brief', { max_run_share: 0.1 });
   parentRun();
@@ -542,6 +551,8 @@ describe('dispatchChildren', () => {
       (_, n) => `abababab-0000-4000-8000-0000000002${String(n).padStart(2, '0')}`,
     );
     for (const id of ids) agent(id, `Agent ${id.slice(-2)}`, { max_run_share: 0.04 });
+    // Its setting's top: 8 a day.
+    (versionOf(OPERATOR).operator_json as { max_runs: number }).max_runs = 8;
     planRow().budget_share = null;
     planRow().planned_share = null;
     planRow().items = ids.map((id) => item(id, 0.04));
@@ -550,6 +561,37 @@ describe('dispatchChildren', () => {
     expect(outcomes.slice(0, 8).every((c) => c.share === 0.04)).toBe(true);
     expect(outcomes[8]).toMatchObject({ status: 'skipped', reason: 'call_limit' });
     expect(childRuns()).toHaveLength(children.MAX_CHILDREN);
+  });
+
+  it('starts at most its setting’s N a day (operator_json.max_runs), 5 when it has none', async () => {
+    const ids = Array.from(
+      { length: 7 },
+      (_, n) => `abababab-0000-4000-8000-0000000003${String(n).padStart(2, '0')}`,
+    );
+    for (const id of ids) agent(id, `Agent ${id.slice(-2)}`, { max_run_share: 0.04 });
+    planRow().budget_share = null;
+    planRow().planned_share = null;
+    planRow().items = ids.map((id) => item(id, 0.04));
+    (versionOf(OPERATOR).operator_json as { max_runs: number }).max_runs = 3;
+    let result = await dispatch();
+    expect(result.ok && result.children.map((c) => c.reason ?? 'started')).toEqual([
+      'started',
+      'started',
+      'started',
+      'call_limit',
+      'call_limit',
+      'call_limit',
+      'call_limit',
+    ]);
+    expect(childRuns()).toHaveLength(3);
+    // No settings read: the default, 5.
+    db.tables.chat_agent_runs = db.tables.chat_agent_runs.filter((r) => r.id === PARENT);
+    planRow().status = 'proposed';
+    planRow().items = ids.map((id) => item(id, 0.04));
+    delete versionOf(OPERATOR).operator_json;
+    result = await dispatch();
+    expect(childRuns()).toHaveLength(5);
+    expect(result.ok && result.children[5]).toMatchObject({ reason: 'call_limit' });
   });
 
   it('starts nothing for anyone but the run’s person, or for a run, plan or person that can’t', async () => {
@@ -594,6 +636,13 @@ describe('dispatchChildren', () => {
     vi.stubEnv('CHAT_AGENTIC', 'false');
     expect(await refusal()).toBe('cannot_run');
     vi.stubEnv('CHAT_AGENTIC', 'true');
+    // The AEO Operator off for the workspace (CHAT_OPERATOR, CHAT_OPERATOR_ORGS).
+    vi.stubEnv('CHAT_OPERATOR', 'false');
+    expect(await refusal()).toBe('cannot_run');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', OTHER_ORG);
+    expect(await refusal()).toBe('cannot_run');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', '');
     // A brand taken from them since (Selected brands without it).
     db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
     db.tables.member_brands = [
