@@ -5,9 +5,10 @@ import type { DayPlan } from './plan';
 
 /**
  * An AEO Operator's plans, as chat_agent_plans (00545) keeps them (AEO
- * Operator plan §4.2 steps 2, 5, 6 and 8): the row its run writes once the
- * day is planned, the card reads, the approval claims (agent-children.ts),
- * Skip declines and the sweep expires at the end of its day. One plan in
+ * Operator plan §4.2 steps 2, 5–8): the row its run writes once the day is
+ * planned, the card reads, the approval claims (agent-children.ts), Skip
+ * declines, the sweep expires at the end of its day, and the sweep marks
+ * summarized once its summary is sent (operator/summary.ts). One plan in
  * force per Operator, brand and day (the partial unique index); a declined,
  * expired or empty one leaves room for Run now to make another.
  *
@@ -52,11 +53,13 @@ export interface PlanView {
   /** The agents passed over today, counted. */
   passedCount: number;
   decidedAt: string | null;
+  /** When its agents were started (dispatched), or its claim's last renewal while dispatching. */
+  dispatchedAt: string | null;
   createdAt: string;
 }
 
 const PLAN_COLUMNS =
-  'id, organization_id, agent_id, run_id, brand_id, plan_day, status, budget_share, planned_share, items, passed, decided_at, created_at';
+  'id, organization_id, agent_id, run_id, brand_id, plan_day, status, budget_share, planned_share, items, passed, decided_at, dispatched_at, created_at';
 
 const numberOr = (value: unknown, fallback: number | null) => {
   const n = Number(value);
@@ -96,6 +99,7 @@ function viewOf(row: Record<string, unknown>): PlanView {
     }),
     passedCount: Array.isArray(row.passed) ? row.passed.length : 0,
     decidedAt: typeof row.decided_at === 'string' ? row.decided_at : null,
+    dispatchedAt: typeof row.dispatched_at === 'string' ? row.dispatched_at : null,
     createdAt: String(row.created_at ?? ''),
   };
 }
@@ -256,4 +260,44 @@ export async function proposedPlansThrough(lastDay: string, limit: number): Prom
     .limit(limit);
   if (error) throw new Error(`Could not read the Operators' plans: ${error.message}`);
   return ((data ?? []) as Record<string, unknown>[]).map(viewOf);
+}
+
+/**
+ * The plans whose agents were started and whose summary hasn't been sent
+ * (dispatched), the longest started first: the sweep sends each one's
+ * summary once its agents are done or wait for their person, or at its
+ * deadline (operator/summary.ts).
+ */
+export async function dispatchedPlans(limit: number): Promise<PlanView[]> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_plans')
+    .select(PLAN_COLUMNS)
+    .eq('status', 'dispatched')
+    .order('dispatched_at', { ascending: true })
+    .limit(limit);
+  if (error) throw new Error(`Could not read the Operators' plans: ${error.message}`);
+  return ((data ?? []) as Record<string, unknown>[]).map(viewOf);
+}
+
+/**
+ * The summary is this sweep's to send (§4.2 step 7): dispatched →
+ * summarized, with when and what it says, in one compare-and-set, so of two
+ * sweeps at once only one sends it. False when the plan wasn't dispatched
+ * any more (another sweep took it first).
+ */
+export async function markPlanSummarized(
+  organizationId: string,
+  planId: string,
+  summary: Json,
+  now: Date,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_plans')
+    .update({ status: 'summarized', summarized_at: now.toISOString(), summary_json: summary })
+    .eq('id', planId)
+    .eq('organization_id', organizationId)
+    .eq('status', 'dispatched')
+    .select('id');
+  if (error) throw new Error(`Could not keep the Operator's summary: ${error.message}`);
+  return (data ?? []).length > 0;
 }

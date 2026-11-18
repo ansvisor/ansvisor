@@ -6068,7 +6068,16 @@
         "scheduleFailed": "{title} didn’t run",
         "schedulePaused": "{title} is paused",
         "followUpResult": "{title} · result",
-        "open": "Open"
+        "open": "Open",
+        "planSummary": "{agent} · what the {day} plan’s agents did",
+        "planDone": "{done} of {total} done",
+        "planWaiting": "{count, plural, one {1 waits for you} other {# wait for you}}",
+        "planFailed": "{count} failed",
+        "planStopped": "{count} stopped",
+        "planWorking": "{count} still working",
+        "planNotStarted": "{count} not started",
+        "planNone": "No agent was started",
+        "openSummary": "Open summary"
       },
       "outside": {
         "title": "Send to {to}",
@@ -7043,6 +7052,37 @@
         "depth": "A run another agent started can’t start agents itself.",
         "failed": "It couldn’t be started."
       }
+    },
+    "operatorSummary": {
+      "title": "**The {day} plan on {brand}: what its agents did**",
+      "yourBrand": "your brand",
+      "done": "Every agent it started has finished, or waits for you.",
+      "deadline": "Some of its agents are still working: this is where each one is now. They carry on.",
+      "partial": "What its agents did couldn’t be read, so this says only where each one is.",
+      "none": "No agent was started.",
+      "item": "- **{name}** · {line}",
+      "state": {
+        "done": "Done",
+        "failed": "Failed",
+        "stopped": "Stopped",
+        "waiting": "Waits for you",
+        "working": "Still working",
+        "not_started": "Not started"
+      },
+      "counts": {
+        "drafts": "{count, plural, one {1 draft saved} other {# drafts saved}}",
+        "findings": "{count, plural, one {1 Action Center finding} other {# Action Center findings}}",
+        "tasks": "{count, plural, one {1 task ready for review} other {# tasks ready for review}}",
+        "shipped": "{count, plural, one {1 page sent or published} other {# pages sent or published}}",
+        "nothing": "No changes"
+      },
+      "ai": "{used} of its {share}",
+      "openChat": "[Open its chat]({href})",
+      "openAgent": "[Open the agent]({href})",
+      "total": "AI used: {used} of the day’s {budget} budget, the plan’s own run included.",
+      "waiting": "**Waits for you:** {count, plural, one {1 agent} other {# agents}}. Open each from its chat above.",
+      "approveAll": "Several wait on changes to the same draft: [Approve all in the Inbox]({href}).",
+      "footer": "Made by the app from the runs’ own records, with no AI."
     },
     "asked": {
       "create": "Create an agent",

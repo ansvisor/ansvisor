@@ -486,3 +486,203 @@ describe('an AEO Operator’s unanswered plan', () => {
     expect(fakes.endHeld).not.toHaveBeenCalled();
   });
 });
+
+// ─── An AEO Operator's summary once its agents are done (AEO Operator plan §4.2 step 7) ─
+
+describe('an AEO Operator’s summary', () => {
+  const PLAN = 'f0f0f0f0-0000-4000-8000-000000000002';
+  const OPERATOR = 'abababab-0000-4000-8000-0000000000ff';
+  const OP_CHAT = 'eeeeeeee-0000-4000-8000-0000000000ff';
+  const DISPATCHED = '2026-11-02T08:00:00.000Z';
+  const HOUR = 60 * 60_000;
+  const at = (hours: number) => new Date(Date.parse(DISPATCHED) + hours * HOUR);
+  let fetchMock: ReturnType<typeof vi.fn>;
+  const serverCalls = () =>
+    fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/notices/agent-plan'));
+  const plan = () => db.tables.chat_agent_plans[0];
+
+  /** A run the Operator's run started, on its brand. */
+  const child = (id: string, status: string, agentId = AGENT) =>
+    run(id, {
+      agent_id: agentId,
+      status,
+      trigger_kind: 'agent',
+      called_by_run_id: 'run-op',
+      usage_share: 0.004,
+      max_share: 0.01,
+      queued_at: DISPATCHED,
+      started_at: DISPATCHED,
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    vi.stubEnv('CRON_SECRET', 'shh');
+    fetchMock = vi.fn(async () => new Response('{}'));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    db.tables.chat_agents = [
+      agent(OPERATOR, { kind: 'operator', name: 'AEO Operator' }),
+      agent(AGENT, { name: 'Citation Win-back' }),
+      agent(OTHER_AGENT, { name: 'Competitor Watch' }),
+    ];
+    run('run-op', {
+      agent_id: OPERATOR,
+      status: 'done',
+      usage_share: 0.002,
+      max_share: 0.05,
+      queued_at: '2026-11-02T07:00:00.000Z',
+    });
+    db.tables.chat_conversations.push({
+      id: OP_CHAT,
+      organization_id: ORG,
+      user_id: PEOPLE.manager,
+      agent_run_id: 'run-op',
+    });
+    db.tables.chat_messages = [];
+    db.tables.chat_notices = [];
+    db.tables.chat_activity_log = [];
+    db.tables.chat_agent_plans = [
+      {
+        id: PLAN,
+        organization_id: ORG,
+        agent_id: OPERATOR,
+        run_id: 'run-op',
+        brand_id: BRAND,
+        plan_day: '2026-11-02',
+        status: 'dispatched',
+        budget_share: 0.05,
+        planned_share: 0.02,
+        items: [
+          { agent_id: AGENT, share: 0.01, cost: 0.01, value: 3, reasons: [], child_run_id: 'c-1' },
+          {
+            agent_id: OTHER_AGENT,
+            share: 0.01,
+            cost: 0.01,
+            value: 2,
+            reasons: [],
+            child_run_id: 'c-2',
+          },
+        ],
+        passed: [],
+        decided_at: '2026-11-02T07:59:00.000Z',
+        dispatched_at: DISPATCHED,
+        summarized_at: null,
+        summary_json: null,
+        created_at: '2026-11-02T07:00:00.000Z',
+      },
+    ];
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('is sent once every agent has ended or waits for its person: in its chat, by the server, once', async () => {
+    child('c-1', 'done');
+    child('c-2', 'needs_you', OTHER_AGENT);
+    chatOf('c-2', 'waiting');
+    const counts = await sweepAgents(at(1), driver);
+    expect(counts.plansSummarized).toBe(1);
+    expect(counts.failed).toEqual([]);
+    expect(plan()).toMatchObject({ status: 'summarized', summarized_at: at(1).toISOString() });
+    expect(plan().summary_json).toMatchObject({
+      v: 1,
+      why: 'done',
+      waiting: 1,
+      children: [
+        { agent_id: AGENT, name: 'Citation Win-back', state: 'done' },
+        { agent_id: OTHER_AGENT, name: 'Competitor Watch', state: 'waiting' },
+      ],
+    });
+    expect(db.tables.chat_messages).toEqual([
+      expect.objectContaining({ conversation_id: OP_CHAT, role: 'assistant' }),
+    ]);
+    expect(serverCalls()).toHaveLength(1);
+    expect(JSON.parse((serverCalls()[0][1] as RequestInit).body as string)).toEqual({
+      orgId: ORG,
+      planId: PLAN,
+    });
+    // Sent: the next sweep sends nothing.
+    expect((await sweepAgents(at(2), driver)).plansSummarized).toBe(0);
+    expect(db.tables.chat_messages).toHaveLength(1);
+    expect(serverCalls()).toHaveLength(1);
+  });
+
+  it('waits while an agent works, then is sent at the 8-hour deadline', async () => {
+    child('c-1', 'done');
+    child('c-2', 'running', OTHER_AGENT);
+    chatOf('c-2', 'running');
+    expect((await sweepAgents(at(7.9), driver)).plansSummarized).toBe(0);
+    expect(plan().status).toBe('dispatched');
+    expect(db.tables.chat_messages).toEqual([]);
+    expect((await sweepAgents(at(8), driver)).plansSummarized).toBe(1);
+    expect(plan().summary_json).toMatchObject({
+      why: 'deadline',
+      children: [{ state: 'done' }, { state: 'working' }],
+    });
+    expect(db.tables.chat_messages[0].content_md).toContain('Some of its agents are still working');
+  });
+
+  it('is summarized anyway 48 hours on when it can’t be read in full', async () => {
+    child('c-1', 'done');
+    child('c-2', 'running', OTHER_AGENT);
+    chatOf('c-2', 'running');
+    db.failures = { chat_activity_log: { message: 'down' } };
+    // Due at the deadline, but unread: it waits for the next sweep.
+    expect((await sweepAgents(at(9), driver)).plansSummarized).toBe(0);
+    expect(plan().status).toBe('dispatched');
+    expect((await sweepAgents(at(47.9), driver)).plansSummarized).toBe(0);
+    expect((await sweepAgents(at(48), driver)).plansSummarized).toBe(1);
+    expect(plan().status).toBe('summarized');
+    expect(plan().summary_json).toMatchObject({
+      partial: true,
+      budget: null,
+      children: [
+        { agent_id: null, name: null, state: 'done' },
+        { agent_id: null, name: null, state: 'working' },
+      ],
+    });
+    expect(db.tables.chat_messages[0].content_md).toContain('couldn’t be read');
+    expect(serverCalls()).toHaveLength(1);
+  });
+
+  it('is sent exactly once when two sweeps run at once', async () => {
+    child('c-1', 'done');
+    child('c-2', 'failed', OTHER_AGENT);
+    const [one, two] = await Promise.all([sweepAgents(at(1), driver), sweepAgents(at(1), driver)]);
+    expect(one.plansSummarized + two.plansSummarized).toBe(1);
+    expect(plan().status).toBe('summarized');
+    expect(db.tables.chat_messages).toHaveLength(1);
+    expect(serverCalls()).toHaveLength(1);
+  });
+
+  it('does nothing for a declined or an expired plan, nor with the AEO Operator off', async () => {
+    child('c-1', 'done');
+    child('c-2', 'done', OTHER_AGENT);
+    for (const status of ['declined', 'expired']) {
+      plan().status = status;
+      expect((await sweepAgents(at(49), driver)).plansSummarized).toBe(0);
+      expect(plan()).toMatchObject({ status, summary_json: null });
+    }
+    plan().status = 'dispatched';
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect((await sweepAgents(at(49), driver)).plansSummarized).toBe(0);
+    expect(plan().status).toBe('dispatched');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', 'ffffffff-0000-4000-8000-000000000000');
+    expect((await sweepAgents(at(49), driver)).plansSummarized).toBe(0);
+    expect(db.tables.chat_messages).toEqual([]);
+    expect(serverCalls()).toEqual([]);
+  });
+
+  it('reads only its own runs: another brand’s run named by its run doesn’t hold it', async () => {
+    child('c-1', 'done');
+    child('c-2', 'done', OTHER_AGENT);
+    // On another brand: not the plan's, never waited for.
+    child('c-3', 'running');
+    runRow('c-3').brand_id = '22222222-2222-4222-8222-2222222222ff';
+    chatOf('c-3', 'running');
+    expect((await sweepAgents(at(1), driver)).plansSummarized).toBe(1);
+    expect((plan().summary_json as { children: unknown[] }).children).toHaveLength(2);
+  });
+});

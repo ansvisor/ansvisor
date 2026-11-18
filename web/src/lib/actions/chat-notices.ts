@@ -12,7 +12,8 @@ import { createClient } from '@/lib/supabase/server';
  * 4, PR 10), for Admins; an agent went live on its own, or an edit stopped
  * it (AUTONOMOUS-GO-LIVE §6.4, 00446), for its owner and the people it
  * notifies; a scheduled job's run failed or the job paused (00461), for its
- * owner. The server writes them. Read with the person's session (RLS:
+ * owner; an AEO Operator's summary once its plan's agents are done (00545),
+ * for the person its run acts as. The server writes them. Read with the person's session (RLS:
  * their own rows, about brands they reach), open ones only: a key that works
  * again, a period that renews or a limit raised resolves its notice; one
  * about an agent closes once the person opens it.

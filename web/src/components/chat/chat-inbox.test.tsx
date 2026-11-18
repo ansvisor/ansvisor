@@ -425,6 +425,58 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
     expect(notices.close).toHaveBeenCalledExactlyOnceWith(wentLive.id);
   });
 
+  it('tells of an AEO Operator’s summary, where its agents are, with Open summary that closes it (00545)', async () => {
+    notices.close.mockClear();
+    const summary = {
+      id: '1a2b3c4d-1b2c-4d3e-8f90-123456789abc',
+      kind: 'agent_plan_summary' as const,
+      agent: 'AEO Operator',
+      agentId: 'abababab-0000-4000-8000-0000000000ff',
+      chatId: 'eeeeeeee-0000-4000-8000-0000000000ff',
+      day: '2026-11-18',
+      total: 4,
+      done: 2,
+      waiting: 1,
+      failed: 0,
+      stopped: 1,
+      working: 0,
+      notStarted: 0,
+      createdAt: '2026-11-18T15:00:00Z',
+      read: false,
+    };
+    const quiet = {
+      ...summary,
+      id: '2b3c4d5e-2c3d-4e5f-9a01-23456789abcd',
+      chatId: null,
+      total: 0,
+      done: 0,
+      waiting: 0,
+      stopped: 0,
+      read: true,
+    };
+    await render(
+      <ChatInbox suggestions={ok()} notices={{ ok: true, notices: [summary, quiet] }} />,
+    );
+    const [row, none] = noticeRows();
+    expect(row.getAttribute('data-kind')).toBe('agent_plan_summary');
+    expect(row.textContent).toContain('AEO Operator · what the Nov 18 plan’s agents did');
+    expect(row.textContent).toContain('2 of 4 done · 1 waits for you · 1 stopped');
+    // Something waits for the person: amber, as the Inbox's other rows that wait on them.
+    expect(row.className).toContain('border-amber-200');
+    const open = row.querySelector<HTMLAnchorElement>('[data-action="inbox.openPlanSummary"]')!;
+    expect(open.textContent).toBe('Open summary');
+    expect(open.getAttribute('href')).toBe(`/dashboard/chat/${summary.chatId}`);
+    expect(none.textContent).toContain('No agent was started');
+    expect(none.className).not.toContain('border-amber-200');
+    // No chat found: Open summary opens the Operator.
+    expect(none.querySelector('[data-action="inbox.openPlanSummary"]')!.getAttribute('href')).toBe(
+      `/dashboard/agents/${quiet.agentId}`,
+    );
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([summary.id]);
+    await act(async () => open.click());
+    expect(notices.close).toHaveBeenCalledExactlyOnceWith(summary.id);
+  });
+
   it('tells of a page an agent published live on its own, Open page opening the live page (PR 9)', async () => {
     const published = {
       id: '9f0a4e3c-3d4e-4f60-8b12-3456789abcde',
