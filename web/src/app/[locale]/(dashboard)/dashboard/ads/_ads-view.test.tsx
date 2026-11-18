@@ -40,17 +40,33 @@ vi.mock('./_overview', () => ({
   ),
 }));
 
-// Opportunities' rows, lock row and writes are _opportunities.test.tsx's.
-vi.mock('./_opportunities', () => ({
-  AdsOpportunities: (props: { period: string; writable: boolean; thresholds: boolean }) => (
-    <div
-      data-slot="ads-opportunities"
-      data-period={props.period}
-      data-writable={String(props.writable)}
-      data-thresholds={String(props.thresholds)}
-    />
-  ),
-}));
+// Opportunities' rows, lock row and writes are _opportunities.test.tsx's; here, what it tells
+// Chat's side panel of its list.
+vi.mock('./_opportunities', async () => {
+  const { useEffect } = await import('react');
+  return {
+    AdsOpportunities: (props: {
+      period: string;
+      writable: boolean;
+      thresholds: boolean;
+      onChatView?: (view: object | null) => void;
+    }) => {
+      const { onChatView } = props;
+      useEffect(() => {
+        onChatView?.({ rows: [{ ref: 'p1', label: 'Best CRM for startups' }], total: 1 });
+        return () => onChatView?.(null);
+      }, [onChatView]);
+      return (
+        <div
+          data-slot="ads-opportunities"
+          data-period={props.period}
+          data-writable={String(props.writable)}
+          data-thresholds={String(props.thresholds)}
+        />
+      );
+    },
+  };
+});
 
 // Connections' reads and Notify me.
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -268,9 +284,19 @@ describe('AdsView', () => {
         'Where do competitors lead the AI answer on our buying-intent prompts?',
         'Which open prompts can we win with content?',
       ],
+      view: { tab: 'overview' },
     });
     await act(async () => periods()[2].click());
     expect(setPage.mock.lastCall?.[0].dateRange.label).toBe('Last 90 days');
+    // On Opportunities, its prompts on screen too (the owner's plan, item 8); none once it's left.
+    await act(async () => tab('Opportunities').click());
+    expect(setPage.mock.lastCall?.[0].view).toEqual({
+      tab: 'opportunities',
+      rows: [{ ref: 'p1', label: 'Best CRM for startups' }],
+      total: 1,
+    });
+    await act(async () => tab('Campaigns').click());
+    expect(setPage.mock.lastCall?.[0].view).toEqual({ tab: 'campaigns' });
   });
 
   it('opens the tab the Overview asks for', async () => {

@@ -54,6 +54,11 @@ const { toast } = vi.hoisted(() => ({
 }));
 vi.mock('sonner', () => ({ toast }));
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 import ActionCenterReviewPage from './page';
 
 const review: TaskReview = {
@@ -220,5 +225,29 @@ describe('Needs review, reached from Today', () => {
     const back = container.querySelector('[data-action="review.backToToday"]');
     expect(back?.getAttribute('href')).toBe('/dashboard/action-center/today');
     expect(back?.textContent).toBe('Back to Today');
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  it('sends the tasks waiting for review by id, each with its action’s code', async () => {
+    getTaskReviews.mockResolvedValue([review]);
+    await render();
+    expect(chatPage.mock.lastCall![0]).toEqual({
+      pageName: 'Needs review',
+      view: {
+        rows: [{ ref: review.id, label: 'AC-12 · Add a pricing FAQ to /pricing' }],
+        total: 1,
+      },
+    });
+  });
+
+  it('sends no rows while it reads, nor to someone who may not review', async () => {
+    getTaskReviews.mockReturnValue(new Promise(() => {}));
+    await render();
+    expect(chatPage.mock.lastCall![0].view).toEqual({});
+    canManage = false;
+    getTaskReviews.mockResolvedValue([review]);
+    await render();
+    expect(chatPage.mock.lastCall![0].view).toEqual({});
   });
 });

@@ -32,7 +32,13 @@ vi.mock('@/lib/visibility-reads', () => ({
 }));
 vi.mock('@/lib/actions/tracking', () => ({ exportPromptResults: actions.exportPromptResults }));
 vi.mock('@/hooks/use-first-run', () => ({ useFirstRun: () => null }));
-vi.mock('@/components/chat/panel/chat-panel-context', () => ({ useChatPageContext: () => {} }));
+// What the page tells Chat's side panel, last.
+const chatPage = vi.hoisted(() => ({ last: undefined as unknown }));
+vi.mock('@/components/chat/panel/chat-panel-context', () => ({
+  useChatPageContext: (page: unknown) => {
+    chatPage.last = page;
+  },
+}));
 vi.mock('@/components/providers/plan-provider', () => ({
   usePlanContext: () => ({ isCloud: true }),
 }));
@@ -197,6 +203,17 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   window.history.replaceState(null, '', '/');
+});
+
+// The owner's plan (2026-11-16, item 8): Overview has no list, so it sends no rows; its range,
+// platform, region and topic are its chips, and the side panel adds its URL's state.
+describe("what Chat's side panel sees of Overview", () => {
+  it('sends its chips and no view of rows', async () => {
+    actions.getInsightsData.mockResolvedValue(insights());
+    await render();
+    expect(chatPage.last).toMatchObject({ pageName: expect.any(String) });
+    expect(chatPage.last).not.toHaveProperty('view');
+  });
 });
 
 describe('the Overview tab while it loads', () => {

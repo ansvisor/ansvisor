@@ -4,6 +4,7 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 import { getKpiSnapshots } from '@/lib/actions/kpis';
 import { getGettingStarted } from '@/lib/actions/getting-started';
 import { getTrackingWindow } from '@/lib/actions/tracking';
+import { addDays } from '@/lib/insights-windows';
 import { actionCode } from '@/lib/action-center/action-ref';
 import { askedCodes, lookUpCodes, type ActionCodeLookup } from '@/lib/action-center/action-codes';
 import { actionTexts } from '@/lib/action-center/display';
@@ -25,10 +26,39 @@ import { asService, newestOf } from './chat-facts';
  * a brand outside the organization.
  */
 
-export async function getActionCenterKpisFor(auth: McpAuthContext, params: { brandId: string }) {
+/** A date the app or the model gave as its UTC day; null when it isn't one. */
+const kpiDay = (value: string | undefined) => {
+  const day = value?.slice(0, 10);
+  return day && /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day)) ? day : null;
+};
+
+/**
+ * The longest period the KPIs read, in days (the maintainer's review of
+ * 2026-11-17): a year. A longer one keeps its last KPI_PERIOD_MAX_DAYS days,
+ * as the other reads keep the end of a period too long for them (the Why
+ * read's 92 days, Prompts' 90), and the result's note says so.
+ */
+export const KPI_PERIOD_MAX_DAYS = 365;
+
+/**
+ * The brand's KPIs, as the KPIs page reads them: over the period's whole
+ * UTC days when both ends are given (the page's date range; at most
+ * KPI_PERIOD_MAX_DAYS, its last ones), else each KPI over its own timeframe.
+ */
+export async function getActionCenterKpisFor(
+  auth: McpAuthContext,
+  params: { brandId: string; dateFrom?: string; dateTo?: string },
+) {
   if (!(await brandAllowed(auth, params.brandId))) return null;
+  const dayFrom = kpiDay(params.dateFrom);
+  const dayTo = kpiDay(params.dateTo);
+  const asked = dayFrom && dayTo && dayFrom <= dayTo ? { dayFrom, dayTo } : undefined;
+  // A period over a year (2015 to today): its last KPI_PERIOD_MAX_DAYS days.
+  const earliest = asked ? addDays(asked.dayTo, -(KPI_PERIOD_MAX_DAYS - 1)) : null;
+  const capped = !!asked && !!earliest && asked.dayFrom < earliest;
+  const period = asked && capped ? { dayFrom: earliest!, dayTo: asked.dayTo } : asked;
   const [snapshots, window] = await asService(() =>
-    Promise.all([getKpiSnapshots(params.brandId), getTrackingWindow(params.brandId)]),
+    Promise.all([getKpiSnapshots(params.brandId, period), getTrackingWindow(params.brandId)]),
   );
   return {
     configured: snapshots.configured,
@@ -47,6 +77,12 @@ export async function getActionCenterKpisFor(auth: McpAuthContext, params: { bra
     })),
     // The KPIs read the brand's tracked answers: as of its last completed run.
     data_as_of: window.lastRunAt ?? null,
+    ...(period ? { period: { from: period.dayFrom, to: period.dayTo } } : {}),
+    ...(capped && asked && period
+      ? {
+          note: `The period asked, ${asked.dayFrom} to ${asked.dayTo}, is longer than ${KPI_PERIOD_MAX_DAYS} days, the most the KPIs read: they are over its last ${KPI_PERIOD_MAX_DAYS} days, ${period.dayFrom} to ${period.dayTo}.`,
+        }
+      : {}),
   };
 }
 
@@ -74,8 +110,11 @@ export async function getOnboardingProgressFor(auth: McpAuthContext, params: { b
 /** The most actions one page holds, and how many a page holds when none is asked (CHAT-04's ~50 rows). */
 export const ACTIONS_PAGE_MAX = 50;
 
-/** Which actions a page counts: `open` (New, In progress, On hold), or one status. */
-export type ActionsPageStatus = 'open' | ActionStatus;
+/**
+ * Which actions a page counts: `open` (New, In progress, On hold), `all`
+ * (every status, as the Actions list opens), or one status.
+ */
+export type ActionsPageStatus = 'open' | 'all' | ActionStatus;
 export type ActionsPageSort = 'priority' | 'updated';
 
 export interface ActionsPageParams {
@@ -83,7 +122,11 @@ export interface ActionsPageParams {
   /** `open` when left out. */
   status?: ActionsPageStatus;
   category?: string;
-  /** `priority` (default): highest Priority Score first, unscored last, as the Actions list. */
+  /**
+   * `priority` (default): highest Priority Score first, unscored last;
+   * `updated`: most recently updated first, as the Actions list opens
+   * (lib/action-center/sort.ts), its later number first on the same instant.
+   */
   sort?: ActionsPageSort;
   /** Rows on this page, 1 to ACTIONS_PAGE_MAX; ACTIONS_PAGE_MAX when left out. */
   limit?: number;
@@ -140,7 +183,7 @@ const textsT = createTranslator({ locale: 'en', messages, namespace: 'actionCent
 const plainTexts = (key: string, values?: Record<string, string | number>) =>
   textsT(key as never, values as never);
 
-const STATUS_WORDS: Record<ActionsPageStatus, string> = {
+const STATUS_WORDS: Record<Exclude<ActionsPageStatus, 'all'>, string> = {
   open: 'open',
   new: 'New',
   in_progress: 'In progress',
@@ -162,7 +205,8 @@ export function actionsPageNote(page: {
 }): string {
   const { total, offset, shown } = page;
   const where = page.category ? ` in ${page.category}` : '';
-  const what = `${STATUS_WORDS[page.status]} actions${where}`;
+  const status = page.status === 'all' ? '' : `${STATUS_WORDS[page.status]} `;
+  const what = `${status}actions${where}${page.status === 'all' ? ', every status' : ''}`;
   const order =
     page.sort === 'updated' ? 'most recently updated first' : 'highest Priority Score first';
   const naming = 'Name each by its title, with its ref.';
@@ -171,7 +215,7 @@ export function actionsPageNote(page: {
   const end = offset + shown;
   if (offset === 0 && end >= total) {
     return total === 1
-      ? `The only ${STATUS_WORDS[page.status]} action${where}. Name it by its title, with its ref.`
+      ? `The only ${status}action${where}. Name it by its title, with its ref.`
       : `All ${total} ${what}, ${order}. ${naming}`;
   }
   const left = total - end;
@@ -235,15 +279,16 @@ export async function listActionsPageFor(
       .eq('brand_id', params.brandId)
       // A deleted action (00168) is gone for everyone but the nightly generator.
       .is('deleted_at', null);
-    query =
-      status === 'open'
-        ? query.in('status', [...OPEN_ACTION_STATUSES])
-        : query.eq('status', status);
+    if (status === 'open') query = query.in('status', [...OPEN_ACTION_STATUSES]);
+    else if (status !== 'all') query = query.eq('status', status);
     return category ? query.eq('category', category) : query;
   };
   const ordered =
     sort === 'updated'
-      ? matching(false).order('updated_at', { ascending: false })
+      ? // As the Actions list orders it (sort.ts byUpdated): the later number first on the same instant.
+        matching(false)
+          .order('updated_at', { ascending: false })
+          .order('action_no', { ascending: false })
       : matching(false)
           .order('priority_score', { ascending: false, nullsFirst: false })
           .order('updated_at', { ascending: false });

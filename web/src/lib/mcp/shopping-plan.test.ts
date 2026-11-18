@@ -41,6 +41,7 @@ vi.mock('@/lib/supabase/admin', () => ({
         eq: () => chain,
         order: () => chain,
         limit: () => chain,
+        range: () => chain,
         maybeSingle: async () => answer(),
         then: (resolve: (value: unknown) => void) => resolve(answer()),
       };

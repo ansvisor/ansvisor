@@ -67,6 +67,7 @@ const { planFactsFromOrgRow } = await import('../plan-facts');
 const { isUntrustedRead, taintsRun } = await import('../untrusted');
 const { scopeRead, pagedRead } = await import('../scope');
 const { FALLBACK_RANGE, rangeWindow } = await import('../range');
+const { rollingWindow } = await import('../page-periods');
 
 const ctx = {
   userId: 'user-1',
@@ -578,9 +579,13 @@ describe("the app's scope on them", () => {
     const scorecard = await scoped('get_action_scorecard', { brand_id: BRAND });
     expect(scorecard.date_from).toBe(window.dateFrom);
     expect('date_to' in scorecard).toBe(false);
+    // Prompts › Tracked's Locations view: a preset as the Prompts page reads it, the last
+    // N × 24 hours up to now (page-periods.ts rollingWindow), as Chat's other Prompts reads.
+    const prompts = rollingWindow('/dashboard/prompts/tracked', FALLBACK_RANGE, now)!;
+    expect(prompts.dateFrom).toBe('2026-10-18T12:00:00.000Z');
     expect(await scoped('get_prompt_locations', { brand_id: BRAND })).toMatchObject({
-      date_from: window.dateFrom,
-      date_to: window.dateTo,
+      date_from: prompts.dateFrom,
+      date_to: prompts.dateTo,
     });
     for (const name of ['get_content_plan', 'get_content_impact', 'get_shopping_shelf']) {
       const input = name === 'get_content_impact' ? { draft_id: ITEM } : { brand_id: BRAND };

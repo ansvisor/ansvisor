@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUserRole } from '@/hooks/use-user-role';
+import { viewRows, type ChatPageView } from '@/lib/chat/page-view';
+import { mentionPlatformLabel } from '@/lib/mentions-headline';
 import { mentionsQuery, type MentionsFilters } from '@/lib/mentions-filters';
 import {
   DEFAULT_MENTIONS_TABLE,
@@ -65,6 +67,7 @@ export function MentionsListTab({
   brandDomains,
   showCountry,
   exporter,
+  onChatView,
 }: {
   brandId: string;
   filters: MentionsFilters;
@@ -72,6 +75,8 @@ export function MentionsListTab({
   brandDomains: string[];
   showCountry: boolean;
   exporter: ReturnType<typeof useMentionsExport>;
+  /** What Chat's side panel sees of the table (its sort and the answers on screen); null when gone. */
+  onChatView?: (view: ChatPageView | null) => void;
 }) {
   const t = useTranslations('mentions.table');
   const tActions = useTranslations('mentions.actions');
@@ -139,6 +144,26 @@ export function MentionsListTab({
   useEffect(() => {
     if (showing) shown();
   }, [showing, shown]);
+
+  // What Chat's side panel sees of the table (the owner's plan, item 8): its sort, and once
+  // read, the page of answers on screen, by their ids, with how many match.
+  const shownList = loaded?.status === 'ok' && loaded.brandId === brandId ? loaded.list : null;
+  const chatView = JSON.stringify({
+    sort: { key: table.sort, dir: table.sort === 'oldest' ? 'asc' : 'desc' },
+    ...(shownList
+      ? {
+          rows: viewRows(shownList.rows, (row) => ({
+            ref: row.id,
+            label: `${row.promptText} · ${mentionPlatformLabel(row.platform)}`,
+          })),
+          total: shownList.total,
+        }
+      : {}),
+  } satisfies ChatPageView);
+  useEffect(() => {
+    onChatView?.(JSON.parse(chatView) as ChatPageView);
+  }, [onChatView, chatView]);
+  useEffect(() => () => onChatView?.(null), [onChatView]);
 
   const [open, setOpen] = useState<MentionRow | null>(null);
   const actions = useMentionActions(brandId);
