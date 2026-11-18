@@ -22,9 +22,14 @@ vi.mock('@/components/chat/agents/agent-center', () => ({ AgentCenter: () => nul
 const locks = vi.hoisted(() => ({
   'weekly-report': { kind: 'plan', plan: 'Growth', current: 'Starter' },
 }));
+const ORG = '11111111-1111-4111-8111-111111111111';
 vi.mock('@/lib/chat/agents/ready-setup', () => ({
   readPresetLocks: vi.fn(async () => locks),
   readMyWorkAreas: vi.fn(async () => ['content', 'growth']),
+  // As the server reads them for the person's workspace.
+  readOfferedPresets: vi.fn(async () =>
+    (await import('@/lib/chat/agents/catalog')).presetsOnInstall(undefined, ORG),
+  ),
 }));
 vi.mock('@/components/chat/agents/agent-detail', () => ({ AgentDetail: () => null }));
 vi.mock('@/components/chat/agents/agent-form', () => ({ AgentForm: () => null }));
@@ -108,6 +113,22 @@ describe('Agent Center pages', () => {
     vi.unstubAllEnvs();
   });
 
+  it('offer the AEO Operator only while CHAT_OPERATOR is on for the workspace', async () => {
+    const offered = async () =>
+      (
+        (await AgentsPage()) as { props: { presets: { id: string }[] } }
+      ).props.presets.map((p) => p.id);
+    vi.stubEnv('CHAT_OPERATOR', '');
+    expect(await offered()).not.toContain('aeo-operator');
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    expect(await offered()).toContain('aeo-operator');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', '99999999-9999-4999-8999-999999999999');
+    expect(await offered()).not.toContain('aeo-operator');
+    vi.stubEnv('CHAT_OPERATOR_ORGS', ORG);
+    expect(await offered()).toContain('aeo-operator');
+    vi.unstubAllEnvs();
+  });
+
   it("are not found for an address that isn't an agent's id", async () => {
     await expect(AgentPage(params('new'))).rejects.toThrow('NEXT_NOT_FOUND');
   });
@@ -154,6 +175,25 @@ describe('New agent and Edit (W2-15)', () => {
       const other = (await NewAgentPage(search(undefined, id))) as { props: { preset: unknown } };
       expect(other.props.preset).toBeNull();
     }
+  });
+
+  it('open the AEO Operator’s preset only where its skill is on for the workspace', async () => {
+    const operator = async () =>
+      (
+        (await NewAgentPage(search(undefined, 'aeo-operator'))) as {
+          props: { preset: { id: string } | null };
+        }
+      ).props.preset?.id ?? null;
+    vi.stubEnv('CHAT_OPERATOR', 'true');
+    form.setup = { role: 'manager', offSkills: [] };
+    expect(await operator()).toBe('aeo-operator');
+    // CHAT_OPERATOR_ORGS leaves this workspace out: the setup says its skill is off.
+    form.setup = { role: 'manager', offSkills: ['operator'] };
+    expect(await operator()).toBeNull();
+    vi.stubEnv('CHAT_OPERATOR', '');
+    form.setup = { role: 'manager', offSkills: [] };
+    expect(await operator()).toBeNull();
+    vi.unstubAllEnvs();
   });
 
   it('fill the Guardian without the ChatGPT profile check while Business Hub is off', async () => {

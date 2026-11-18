@@ -245,10 +245,13 @@ export function buildPresetCatalog(files: readonly { file: string; json: unknown
  * A preset as this install offers it: without a skill whose flag is off
  * (skills/flagged.ts), such as the Brand Facts Guardian's ChatGPT profile
  * check before BUSINESS_HUB_ENABLED. Read on the server, which hands the
- * pages what it decided: in the browser the flags read off.
+ * pages what it decided: in the browser the flags read off. With a
+ * workspace, a flag that names workspaces (CHAT_OPERATOR_ORGS) is asked
+ * about it; null: a workspace that couldn't be read, off where the flag
+ * names workspaces.
  */
-export function presetOnInstall(preset: AgentPreset): AgentPreset {
-  const skills = preset.skills.filter((id) => skillFlagOn(id));
+export function presetOnInstall(preset: AgentPreset, organizationId?: string | null): AgentPreset {
+  const skills = preset.skills.filter((id) => skillFlagOn(id, organizationId));
   return skills.length === preset.skills.length ? preset : { ...preset, skills };
 }
 
@@ -260,21 +263,37 @@ export function presetOnInstall(preset: AgentPreset): AgentPreset {
  * New agent, the recommendations or their plan locks. A follow-on skill
  * that is off is only left out (presetOnInstall). Read on the server too.
  */
-export function presetOffered(preset: Pick<AgentPreset, 'skills'>): boolean {
+export function presetOffered(
+  preset: Pick<AgentPreset, 'skills'>,
+  organizationId?: string | null,
+): boolean {
   const primary = preset.skills[0];
-  return primary === undefined || skillFlagOn(primary);
+  return primary === undefined || skillFlagOn(primary, organizationId);
 }
 
-/** The catalog as this install offers it, in its order: Ready to use's cards. */
-export function presetsOnInstall(presets: readonly AgentPreset[] = AGENT_PRESETS): AgentPreset[] {
-  return presets.filter(presetOffered).map(presetOnInstall);
+/**
+ * The catalog as this install offers it, in its order: Ready to use's cards.
+ * With a workspace, as it is offered to it: the AEO Operator only where
+ * CHAT_OPERATOR is on for it.
+ */
+export function presetsOnInstall(
+  presets: readonly AgentPreset[] = AGENT_PRESETS,
+  organizationId?: string | null,
+): AgentPreset[] {
+  return presets
+    .filter((preset) => presetOffered(preset, organizationId))
+    .map((preset) => presetOnInstall(preset, organizationId));
 }
 
-/** A preset "Use this agent" may open: a ready one this install offers, by its id. */
-export function readyPreset(id: string | null | undefined): AgentPreset | null {
+/** A preset "Use this agent" may open: a ready one this install (or workspace) offers, by its id. */
+export function readyPreset(
+  id: string | null | undefined,
+  organizationId?: string | null,
+): AgentPreset | null {
   return (
     AGENT_PRESETS.find(
-      (preset) => preset.id === id && preset.status === 'ready' && presetOffered(preset),
+      (preset) =>
+        preset.id === id && preset.status === 'ready' && presetOffered(preset, organizationId),
     ) ?? null
   );
 }

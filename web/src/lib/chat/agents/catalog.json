@@ -343,20 +343,20 @@
       "businessTypes": [],
       "industries": [],
       "roles": [],
-      "skills": [],
+      "skills": [
+        "operator"
+      ],
       "triggers": [
         {
           "kind": "schedule",
-          "repeat": "daily",
+          "repeat": "weekdays",
           "time": "07:00"
         }
       ],
       "mode": "auto",
       "connections": [],
-      "status": "soon",
-      "needs": [
-        "sub_agents"
-      ]
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "technical-fixer",

@@ -1031,6 +1031,13 @@
       "route": "/dashboard/agents",
       "keywords": [
         "agents",
+        "aeo operator",
+        "operator",
+        "daily budget",
+        "agents a day",
+        "daily plan",
+        "approve the plan",
+        "skip the plan",
         "agent center",
         "chat agents",
         "ready to use",
@@ -1261,6 +1268,10 @@
         {
           "heading": "Let an agent run other agents",
           "text": "On Growth and up, an agent can run up to 5 of your other agents. Pick them under **Can call** on the agent's last step. A paused agent isn't run until you resume it.\n\nA run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and its share of your monthly AI limit. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 4 minutes.\n\nIn **Run history**, its run shows **Called by** and the first agent. Click the first run's agent count for each one's result and AI use. One you can't see shows as **An agent you can't see**."
+        },
+        {
+          "heading": "AEO Operator",
+          "text": "On Growth and up, the **AEO Operator** picks which of your agents to run each day, on one brand, on its schedule's days (weekdays at 07:00 to start).\n\nEach morning it sends one card: the agents, why each one, and how much of your monthly AI limit they may use. It starts them only after you **Approve**, in Chat, from **Inbox**, or in Slack. **Skip** runs nothing that day, and a card left unanswered ends at midnight.\n\nIts **Daily budget** is 5% of the monthly AI limit by default, from 1% to 10%, and it plans less as the month's use grows. It runs at most 5 agents a day (up to 8), from all your active agents or the ones you pick.\n\nIts page shows today's plan and the budget used. Once its agents are done, a summary shows in its chat and in Inbox."
         },
         {
           "heading": "When a run asks before a change",

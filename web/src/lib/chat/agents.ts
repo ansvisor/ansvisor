@@ -85,6 +85,14 @@ import {
   type AgentGoLiveDetail,
 } from './agent-go-live';
 import { OPERATOR_DAILY_BUDGET_DEFAULT } from './operator/defaults';
+import {
+  operatorZoneOf,
+  readOperatorCards,
+  readOperatorDetail,
+  todayLineOfView,
+  type OperatorCardView,
+  type OperatorDetailView,
+} from './operator/views';
 import { ownKeyCapReached } from './own-key-cap';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
@@ -660,6 +668,12 @@ export interface AgentListItem {
    * (AUTONOMOUS-GO-LIVE §7.2): its card's badge. Absent when it doesn't.
    */
   goLiveLimit?: number;
+  /**
+   * An AEO Operator (00545 kind): its card's badge, its daily budget
+   * (maxRunShare) and today's plan ("Today: 4 agents · waiting for you").
+   * Absent for every other agent.
+   */
+  operator?: OperatorCardView;
 }
 
 export interface AgentListResult {
@@ -738,6 +752,12 @@ export interface AgentSettingsView {
   followupDays: number;
   /** The agents it may run (CHAT-27 item 14). */
   canCall: string[];
+  /**
+   * An AEO Operator's settings (operator_json): the agents it may run (null:
+   * all its owner's active ones), workspace agents too, and at most how many
+   * a day. Its daily budget is maxRunShare. Absent for every other agent.
+   */
+  operator?: { allowed: string[] | null; includeWorkspace: boolean; maxRuns: number };
 }
 
 /** What the person may do with it now, so the page shows only those buttons. */
@@ -768,6 +788,11 @@ export interface AgentDetail extends AgentListItem {
    * CHAT_AUTO_GO_LIVE is off.
    */
   goLive?: AgentGoLiveDetail;
+  /**
+   * An AEO Operator's page (AEO Operator plan §4.3): today's plan, its
+   * agents and the budget used, and its last 7 plans. Absent for any other.
+   */
+  operatorDay?: OperatorDetailView;
 }
 
 function triggerView(row: TriggerRow, now: Date): AgentTriggerView {
@@ -1236,13 +1261,25 @@ export async function listAgents(
     );
     return last ? [last.id] : [];
   });
-  // The cards' "Publishes on its own" badge (AUTONOMOUS-GO-LIVE §7.2).
-  const [goLive, chats] = await Promise.all([
+  // The cards' "Publishes on its own" badge (AUTONOMOUS-GO-LIVE §7.2), and an
+  // AEO Operator's line for today's plan, on its own schedule's clock.
+  const [goLive, chats, operators] = await Promise.all([
     readGoLiveLimits(
       org,
       shown.map((agent) => ({ id: agent.row.id, version: agent.row.version })),
     ),
     runChats(org, ctx.actor.userId, lastRunIds),
+    readOperatorCards(
+      org,
+      ctx.viewer.brandAccess,
+      shown
+        .filter((agent) => agent.row.kind === 'operator')
+        .map((agent) => ({
+          id: agent.row.id,
+          zone: operatorZoneOf(triggers.filter((t) => t.agent_id === agent.row.id)),
+        })),
+      now,
+    ),
   ]);
 
   return {
@@ -1257,7 +1294,12 @@ export async function listAgents(
         chats,
       });
       const limit = goLive.get(agent.row.id);
-      return limit === undefined ? item : { ...item, goLiveLimit: limit };
+      const operator = operators.get(agent.row.id);
+      return {
+        ...item,
+        ...(limit === undefined ? {} : { goLiveLimit: limit }),
+        ...(operator ? { operator } : {}),
+      };
     }),
     counts,
     keyFailure: key ? { class: key.class, provider: key.provider } : null,
@@ -1341,9 +1383,29 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
     usage: usageOf(days30, row.id),
     now,
   });
-  const recentRuns = await runViews(org, ctx.viewer, runs);
+  const [recentRuns, operatorDay] = await Promise.all([
+    runViews(org, ctx.viewer, runs),
+    // An AEO Operator's Today panel and its last plans, on its schedule's clock.
+    row.kind === 'operator'
+      ? readOperatorDetail(
+          org,
+          ctx.viewer.brandAccess,
+          { id: row.id, zone: operatorZoneOf(triggers) },
+          {
+            agents: (ids) => agentsSeen(org, ctx.viewer, ids),
+            chats: (runIds) => runChats(org, ctx.actor.userId, runIds),
+          },
+          now,
+        )
+      : null,
+  ]);
+  const operatorSettings = version?.operator_json;
   return {
     ...item,
+    // An AEO Operator: its badge, and today's plan as its card says it.
+    ...(row.kind === 'operator'
+      ? { operator: { today: operatorDay?.today ? todayLineOfView(operatorDay.today) : null } }
+      : {}),
     // Its last run is the newest of these: the same chat, read once.
     lastRun: item.lastRun && { ...item.lastRun, chatId: recentRuns[0]?.chatId ?? null },
     createdAt: row.created_at,
@@ -1361,6 +1423,15 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
           notifyUserIds: version.notify_user_ids,
           followupDays: version.followup_days,
           canCall: version.can_call,
+          ...(operatorSettings
+            ? {
+                operator: {
+                  allowed: operatorSettings.allowed,
+                  includeWorkspace: operatorSettings.include_workspace,
+                  maxRuns: operatorSettings.max_runs,
+                },
+              }
+            : {}),
         }
       : null,
     brands: version
@@ -1380,6 +1451,7 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
       locked: !ctx.plan.fullAuto,
     },
     ...(goLive ? { goLive } : {}),
+    ...(operatorDay ? { operatorDay } : {}),
   };
 }
 

@@ -1,9 +1,10 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { operatorReasonWords, type OperatorReason } from '../agent-children';
+import { operatorReasonWords } from '../agent-children';
 import type { ToolCardDetails } from '../registry/define-tool';
 import { readPlan, type PlanView, type StoredPlanItem } from './plan-store';
+import { shownReasons } from './reasons';
 
 /**
  * The AEO Operator's plan card (AEO Operator plan §4.2 step 5), built from
@@ -17,16 +18,11 @@ import { readPlan, type PlanView, type StoredPlanItem } from './plan-store';
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.operator' });
 
-/** The reasons an item shows at most beside when it last ran. */
-const ITEM_REASONS = 2;
 /** The agents the target names before "+N". */
 const TARGET_NAMES = 2;
 
 /** A share of the monthly AI limit in words: "5%", "1.2%". */
 export const percent = (share: number) => `${Math.round(share * 1000) / 10}%`;
-
-const LAST_RAN: readonly OperatorReason['code'][] = ['last_ran', 'never_ran'];
-const OUTCOMES: readonly OperatorReason['code'][] = ['improved', 'declined'];
 
 /**
  * Why an agent runs today, in words: its first reasons of work (focus, open
@@ -34,13 +30,7 @@ const OUTCOMES: readonly OperatorReason['code'][] = ['improved', 'declined'];
  * it costs: "3 open Recover actions · last ran 9 days ago · about 1.2%".
  */
 export function itemLine(item: Pick<StoredPlanItem, 'reasons' | 'cost'>): string {
-  const work = item.reasons.filter(
-    (reason) => !LAST_RAN.includes(reason.code) && !OUTCOMES.includes(reason.code),
-  );
-  const ran = item.reasons.find((reason) => LAST_RAN.includes(reason.code));
-  const reasons = [...work.slice(0, ITEM_REASONS), ...(ran ? [ran] : [])]
-    .map(operatorReasonWords)
-    .join(' · ');
+  const reasons = shownReasons(item.reasons).map(operatorReasonWords).join(' · ');
   if (item.cost === null) return reasons;
   const cost = percent(item.cost);
   return reasons ? t('reasons', { reasons, cost }) : t('cost', { cost });

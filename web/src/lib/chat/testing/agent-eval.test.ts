@@ -29,12 +29,13 @@ import { safetyChecks, safetyFindings } from './safety-checks';
 describe('the agents’ and skills’ test set (agent-eval.ts)', () => {
   it('has a scenario for every ready agent, two in Full auto, and every skill by its /name', () => {
     const ready = AGENT_PRESETS.filter((p) => p.status === 'ready').map((p) => p.id);
-    // Then the AEO Operator's two (its preset is still soon: PR 6 makes it ready).
+    // The AEO Operator's ready preset in its place (an Operator's run), then its injection one.
+    expect(ready).toContain('aeo-operator');
     expect(AGENT_SCENARIOS.filter((s) => !s.id.includes('@')).map((s) => s.id)).toEqual([
       ...ready,
-      'aeo-operator',
       'aeo-operator-injection',
     ]);
+    expect(AGENT_SCENARIOS.find((s) => s.id === 'aeo-operator')?.operator).toEqual({});
     expect(AGENT_SCENARIOS.filter((s) => s.mode === 'full_auto').length).toBeGreaterThanOrEqual(2);
     // Every skill by its /name, then the questions a person types with no skill; never an
     // agent's own skill (the Operator's /operator), which no person calls.

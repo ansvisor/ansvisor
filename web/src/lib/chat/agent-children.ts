@@ -1,10 +1,6 @@
 import { createTranslator } from 'next-intl';
-import { z } from 'zod';
 import messages from '../../../messages/en.json';
-import { ACTION_CATEGORIES } from '@/lib/action-center/registry';
 import { hasBrandAccess, readAccessProfile } from '@/lib/brand-access';
-import { KPI_KEYS } from '@/lib/kpis/registry';
-import { SIGNAL_CATEGORIES } from '@/lib/signals/registry';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { calleeCheck, type CalleeRefusal } from './agent-calls';
@@ -17,6 +13,7 @@ import {
 import { AGENT_RUN_DRIVER, startQueuedAgentRuns, type AgentRunDriver } from './agent-runs';
 import { loadAgent, readAgentContext } from './agents';
 import { chatOperatorEnabled } from './flag';
+import { operatorReasonsOf, type OperatorReason } from './operator/reasons';
 
 /**
  * Sub-agents (AEO Operator plan §4.1, PR 2 of 6): an AEO Operator's run
@@ -90,42 +87,15 @@ export const MIN_CHILD_SHARE = 0.01;
  * approve route's and Slack's decide route's maxDuration is 300 s.
  */
 export const CLAIM_STALE_MS = 5 * 60_000;
-/** Reasons one child's evidence keeps at most. */
-const MAX_REASONS = 10;
 
 // ─── Why a child runs ────────────────────────────────────────────────────────
 
-const count = z.number().int().min(0).max(1_000_000);
-const days = z.number().int().min(0).max(3650);
-
 /**
- * Why the Operator starts an agent, as the plan's code writes it: a code
- * and its numbers, the categories and KPIs from the app's own lists. Never
- * text: the child's message words them (operatorReasonWords).
+ * Why the Operator starts an agent: codes and their numbers, never text
+ * (operator/reasons.ts, a plain module the pages read too). The child's
+ * message words them (operatorReasonWords).
  */
-const reasonSchema = z.discriminatedUnion('code', [
-  z.object({ code: z.literal('focus'), count }),
-  z.object({ code: z.literal('open_actions'), category: z.enum(ACTION_CATEGORIES), count }),
-  z.object({ code: z.literal('new_signals'), category: z.enum(SIGNAL_CATEGORIES), count }),
-  z.object({ code: z.literal('kpi_off_track'), kpi: z.enum(KPI_KEYS) }),
-  z.object({ code: z.literal('overdue'), days }),
-  z.object({ code: z.literal('improved'), count }),
-  z.object({ code: z.literal('declined'), count }),
-  z.object({ code: z.literal('last_ran'), days }),
-  z.object({ code: z.literal('never_ran') }),
-]);
-export type OperatorReason = z.infer<typeof reasonSchema>;
-
-/** Reasons as stored, read defensively: what doesn't read as a known code is left out. */
-export function operatorReasonsOf(json: unknown): OperatorReason[] {
-  if (!Array.isArray(json)) return [];
-  return json
-    .flatMap((raw) => {
-      const parsed = reasonSchema.safeParse(typeof raw === 'string' ? { code: raw } : raw);
-      return parsed.success ? [parsed.data] : [];
-    })
-    .slice(0, MAX_REASONS);
-}
+export { operatorReasonsOf, type OperatorReason } from './operator/reasons';
 
 /** One reason in words, for the child's message: "3 open Recover actions". */
 export function operatorReasonWords(reason: OperatorReason): string {

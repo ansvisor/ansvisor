@@ -7,6 +7,7 @@ import {
   formFromAgent,
   formFromPreset,
   FAST_MODEL,
+  isOperatorForm,
   modelKeyProvider,
   newForm,
   newTriggerDraft,
@@ -25,8 +26,8 @@ import {
   type TriggerDraft,
 } from './agent-form';
 import { createAgentInput, updateAgentInput } from './agent-rules';
-import { readyPreset } from './agents/catalog';
-import { AGENT_ID, detail } from './testing/agent-fixtures';
+import { AGENT_PRESETS, readyPreset } from './agents/catalog';
+import { AGENT_ID, OPERATOR_BRAND, detail, operatorDetail } from './testing/agent-fixtures';
 
 /**
  * The create-agent flow as data (CHAT-21 §D, CHAT-27 item 19): a new form
@@ -631,5 +632,156 @@ describe('the key the chosen model runs on', () => {
     const openai = { ownKeyProvider: 'openai', ownKeyProviders: ['openai'] };
     expect(keyOf(FAST_MODEL, { ...openai, modelChoiceOpen: false })).toBe('openai');
     expect(keyOf('openai/gpt-4o', openai)).toBe('openai');
+  });
+});
+
+describe('an AEO Operator’s form (AEO Operator plan §4.3)', () => {
+  const PRESET = AGENT_PRESETS.find((p) => p.id === 'aeo-operator')!;
+  const operatorForm = (over: Partial<AgentFormState> = {}): AgentFormState => ({
+    ...formFromPreset(SETUP, PRESET, { timeZone: 'Europe/Istanbul', brandId: BRAND_2 }),
+    name: 'AEO Operator',
+    ...over,
+  });
+
+  it('opens from its preset or /operator: one brand, weekdays 07:00, 5%, all my agents, 5 a day', () => {
+    const form = operatorForm();
+    expect(isOperatorForm(form)).toBe(true);
+    expect(form).toMatchObject({
+      skills: ['operator'],
+      allBrands: false,
+      brandIds: [BRAND_2],
+      mode: 'auto',
+      connections: [],
+      canCall: [],
+      visibility: 'private',
+      // Its daily budget: 5%, never the workspace's per-run default (10%).
+      maxRun: '5',
+      operator: { allowed: null, includeWorkspace: false, maxRuns: '5' },
+    });
+    // Weekdays at 07:00 on the creator's chosen clock, as every preset's schedule.
+    expect(triggerInputOf(form.triggers[0])).toEqual({
+      kind: 'schedule',
+      config: {
+        type: 'recurring',
+        rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=7;BYMINUTE=0',
+        timezone: 'Europe/Istanbul',
+      },
+      enabled: true,
+    });
+    // ?skill=operator opens the same form.
+    const bySkill = newForm(SETUP, {
+      timeZone: 'Europe/Istanbul',
+      brandId: BRAND_2,
+      skill: 'operator',
+      triggerKey: 'k0',
+    });
+    expect({ ...bySkill, triggers: [] }).toEqual({ ...form, name: '', triggers: [] });
+    expect(triggerInputOf(bySkill.triggers[0])).toEqual(triggerInputOf(form.triggers[0]));
+    // Any other agent's form isn't one.
+    expect(isOperatorForm(fresh())).toBe(false);
+    expect(fresh().operator).toBeNull();
+  });
+
+  it('checks one brand, a daily budget of 1–10%, 1–8 a day and its picked agents', () => {
+    const at = (step: 0 | 1 | 2 | 3, over: Partial<AgentFormState>) =>
+      stepProblems(step, operatorForm(over), ctxOf()).fields;
+    expect(at(1, {})).toEqual({});
+    expect(at(1, { brandIds: [] }).brands).toBe('operator_brand');
+    expect(at(1, { brandIds: [BRAND, BRAND_2] }).brands).toBe('operator_brand');
+    expect(at(1, { allBrands: true, brandIds: [] }).brands).toBe('operator_brand');
+    expect(stepProblems(1, operatorForm(), ctxOf({ brands: [] })).fields.brands).toBe('no_brands');
+    expect(at(3, {})).toEqual({});
+    for (const budget of ['0', '11', '50', '', '2.5']) {
+      expect(at(3, { maxRun: budget }).maxRun, budget).toBe('operator_budget');
+    }
+    for (const budget of ['1', '10']) expect(at(3, { maxRun: budget }).maxRun).toBeUndefined();
+    const settings = (over: Partial<NonNullable<AgentFormState['operator']>>) => ({
+      operator: { allowed: null, includeWorkspace: false, maxRuns: '5', ...over },
+    });
+    for (const runs of ['0', '9', '', 'x']) {
+      expect(at(3, settings({ maxRuns: runs })).maxRuns, runs).toBe('operator_max_runs');
+    }
+    expect(at(3, settings({ maxRuns: '8' })).maxRuns).toBeUndefined();
+    expect(at(3, settings({ allowed: [] })).operatorAgents).toBe('operator_agents');
+    expect(at(3, settings({ allowed: [AGENT_ID] })).operatorAgents).toBeUndefined();
+    // No Max per run, Can call, engines, tags or URLs to check: they aren't its.
+    expect(firstStepWithProblems(operatorForm(), ctxOf())).toBeNull();
+  });
+
+  it('sends its operator settings and its daily budget as maxRunShare, as the server’s schema takes them', () => {
+    const form = operatorForm({
+      maxRun: '7',
+      operator: { allowed: [AGENT_ID], includeWorkspace: true, maxRuns: '3' },
+    });
+    const body = createBody(form, 'manager');
+    expect(body).toMatchObject({
+      name: 'AEO Operator',
+      visibility: 'private',
+      maxRunShare: 0.07,
+      skills: ['operator'],
+      instructions: null,
+      mode: 'auto',
+      connections: [],
+      scope: { brand_ids: [BRAND_2] },
+      operator: { allowed: [AGENT_ID], includeWorkspace: true, maxRuns: 3 },
+    });
+    expect(body).not.toHaveProperty('canCall');
+    expect(createAgentInput.parse(body)).toMatchObject({
+      maxRunShare: 0.07,
+      operator: { allowed: [AGENT_ID], includeWorkspace: true, maxRuns: 3, askFirst: true },
+    });
+    // The defaults: all its owner's active agents, theirs only, 5 a day, 5%.
+    expect(createBody(operatorForm(), 'manager')).toMatchObject({
+      maxRunShare: 0.05,
+      operator: { allowed: null, includeWorkspace: false, maxRuns: 5 },
+    });
+  });
+
+  it('opens Edit on an Operator’s settings, and patches them all when one changes', () => {
+    const agent = operatorDetail({
+      maxRunShare: 0.07,
+      settings: {
+        ...operatorDetail().settings!,
+        operator: { allowed: [AGENT_ID], includeWorkspace: true, maxRuns: 3 },
+      },
+    });
+    const form = formFromAgent(agent, SETUP, { timeZone: 'UTC', triggerKey: (i) => `k${i}` })!;
+    expect(form).toMatchObject({
+      brandIds: [OPERATOR_BRAND],
+      maxRun: '7',
+      operator: { allowed: [AGENT_ID], includeWorkspace: true, maxRuns: '3' },
+    });
+    expect(patchBody(form, agent, 'manager')).toBeNull();
+    const patch = patchBody(
+      { ...form, maxRun: '4', operator: { ...form.operator!, maxRuns: '6' } },
+      agent,
+      'manager',
+    );
+    expect(patch).toEqual({
+      expectedVersion: agent.version,
+      expectedUpdatedAt: agent.updatedAt,
+      maxRunShare: 0.04,
+      operator: { allowed: [AGENT_ID], includeWorkspace: true, maxRuns: 6 },
+    });
+    expect(updateAgentInput.parse(patch)).toMatchObject({ operator: { maxRuns: 6 } });
+    // Back to all its owner's agents.
+    expect(
+      patchBody({ ...form, operator: { ...form.operator!, allowed: null } }, agent, 'manager'),
+    ).toMatchObject({ operator: { allowed: null, includeWorkspace: true, maxRuns: 3 } });
+    // An Operator kept without settings (none read): its defaults, sent once on a save.
+    const bare = operatorDetail({
+      settings: { ...operatorDetail().settings!, operator: undefined },
+    });
+    const kept = formFromAgent(bare, SETUP, { timeZone: 'UTC', triggerKey: (i) => `k${i}` })!;
+    expect(kept.operator).toEqual({ allowed: null, includeWorkspace: false, maxRuns: '5' });
+  });
+
+  it('puts the server’s Operator refusals on their steps', () => {
+    expect(refusalPlace('operator_scope', null)).toEqual({ step: 1, field: 'brands' });
+    expect(refusalPlace('operator_taken', null)).toEqual({ step: 1, field: 'brands' });
+    expect(refusalPlace('operator_budget', null)).toEqual({ step: 3, field: 'maxRun' });
+    expect(refusalPlace('operator_visibility', null)).toEqual({ step: 3, field: 'visibility' });
+    expect(refusalPlace('operator_off', null)).toEqual({ step: 3, field: 'form' });
+    expect(refusalPlace('plan_locked', 'operator')).toEqual({ step: 3, field: 'form' });
   });
 });

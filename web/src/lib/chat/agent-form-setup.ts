@@ -67,7 +67,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
       supabaseAdmin.from('brands').select('id, name, is_demo').eq('organization_id', org),
       supabaseAdmin
         .from('chat_agents')
-        .select('id, name, visibility, owner_id, status, kind')
+        .select('id, name, visibility, owner_id, status, kind, demo_brand_id')
         .eq('organization_id', org),
       resolveChatModelKey(org)
         .then((resolved) => (resolved?.source === 'own' ? resolved.config.provider : null))
@@ -126,6 +126,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
       owner_id: string;
       status: string;
       kind?: string;
+      demo_brand_id?: string | null;
     }[]
   )
     // Admins see every agent; others theirs and the workspace's (§K item 51).
@@ -136,6 +137,24 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     .filter((a) => (a.status === 'active' || a.status === 'paused') && a.kind !== 'operator')
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(({ id, name }) => ({ id, name }));
+  // An AEO Operator's choices (AEO Operator plan §4.3, decision 4): on or paused, never an
+  // Operator nor a demo brand's sample agent; the person's own, or shared with the workspace.
+  // Never someone else's private agent, even for an Admin, who sees it.
+  const operatorAgents = visible
+    .filter(
+      (a) =>
+        (a.status === 'active' || a.status === 'paused') &&
+        a.kind !== 'operator' &&
+        !a.demo_brand_id &&
+        (a.owner_id === me || a.visibility === 'workspace'),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      mine: a.owner_id === me,
+      workspace: a.visibility === 'workspace',
+    }));
 
   return {
     role: ctx.viewer.role,
@@ -161,6 +180,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     canCallLocked: !ctx.plan.fullAuto,
     librarySkills,
     offSkills: ANSVISOR_SKILLS.map((skill) => skill.id).filter((id) => !skillFlagOn(id, org)),
+    operatorAgents,
   };
 }
 

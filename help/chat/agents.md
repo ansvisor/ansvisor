@@ -1,7 +1,7 @@
 ---
 title: See and run your agents in Action Center › Agents
 route: /dashboard/agents
-keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, by agent, top agent, ai use by agent, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, library skills in an agent, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, what this agent did, agent impact, changes shipped by an agent, agent results, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use, fan-out gap filler, fan-out gaps, prompt portfolio manager, prompts to add, prompts to pause, content plan builder, /content-plan, seasonal prompt planner, /seasonal, ai traffic signups, ai traffic, sign-ups, /traffic, when a brand is added, brand added, new brand trigger, goal, role, filter agents, agent work, i approve first, agent starts on its own]
+keywords: [agents, aeo operator, operator, daily budget, agents a day, daily plan, approve the plan, skip the plan, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, by agent, top agent, ai use by agent, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, library skills in an agent, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, what this agent did, agent impact, changes shipped by an agent, agent results, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use, fan-out gap filler, fan-out gaps, prompt portfolio manager, prompts to add, prompts to pause, content plan builder, /content-plan, seasonal prompt planner, /seasonal, ai traffic signups, ai traffic, sign-ups, /traffic, when a brand is added, brand added, new brand trigger, goal, role, filter agents, agent work, i approve first, agent starts on its own]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent, agents for me, agent recommendations, setup help, new member setup, what did my agent do, did my agent work, run an agent on a new brand, agent for new brands, content plan, weekly plan, what to write this week, seasonal prompts, holiday prompts, black friday, ai traffic report, ai visitors who sign up]
 plan: all
 updated: 2026-11-18
@@ -171,6 +171,16 @@ On Growth and up, an agent can run up to 5 of your other agents. Pick them under
 A run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and its share of your monthly AI limit. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 4 minutes.
 
 In **Run history**, its run shows **Called by** and the first agent. Click the first run's agent count for each one's result and AI use. One you can't see shows as **An agent you can't see**.
+
+## AEO Operator
+
+On Growth and up, the **AEO Operator** picks which of your agents to run each day, on one brand, on its schedule's days (weekdays at 07:00 to start).
+
+Each morning it sends one card: the agents, why each one, and how much of your monthly AI limit they may use. It starts them only after you **Approve**, in Chat, from **Inbox**, or in Slack. **Skip** runs nothing that day, and a card left unanswered ends at midnight.
+
+Its **Daily budget** is 5% of the monthly AI limit by default, from 1% to 10%, and it plans less as the month's use grows. It runs at most 5 agents a day (up to 8), from all your active agents or the ones you pick.
+
+Its page shows today's plan and the budget used. Once its agents are done, a summary shows in its chat and in Inbox.
 
 ## When a run asks before a change
 
