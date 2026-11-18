@@ -939,7 +939,7 @@ const EMPTY_CALLS: CallsOf = { callers: new Map(), made: new Map() };
  * The agents of the workspace by id, with whether the person sees each
  * (canSeeAgent, its current version's scope): deleted ones left out.
  */
-async function agentsSeen(
+export async function agentsSeen(
   organizationId: string,
   viewer: AgentViewer,
   ids: string[],

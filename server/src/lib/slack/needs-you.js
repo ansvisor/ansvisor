@@ -24,7 +24,7 @@ import { deliverToSlack, slackAllowed } from './deliver.js';
  */
 
 /** The person's Slack user in the brand's workspace, by e-mail; null when not found. */
-async function slackUserOf(slack, email, { get = slackGet } = {}) {
+export async function slackUserOf(slack, email, { get = slackGet } = {}) {
   if (!email) return null;
   try {
     const data = await get(slack, 'users.lookupByEmail', { email });
@@ -39,7 +39,7 @@ async function slackUserOf(slack, email, { get = slackGet } = {}) {
 }
 
 /** People's names by id. */
-async function namesOf(ids) {
+export async function namesOf(ids) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id, full_name')
