@@ -637,7 +637,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       title: 'Competitors',
       description:
         'List the competitors configured for a brand. Returns id, name, domain and type: the kind of competitor it is, ' +
-        `${COMPETITOR_TYPE_WORDS} Use list_brands first to resolve the brand id. This is the configured competitor list, not a performance ranking.`,
+        `${COMPETITOR_TYPE_WORDS} Also aliases: the names and domains of competitors merged into it, which answers count as its own from the merge on (a merged competitor is never listed on its own). Use list_brands first to resolve the brand id. This is the configured competitor list, not a performance ranking.`,
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         type: competitorTypeInput,

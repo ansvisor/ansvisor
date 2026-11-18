@@ -25,6 +25,7 @@ import { resolve } from '../../config/action-engine.js';
 import { fetchPage } from '../safe-fetch.js';
 import { readWithRetry } from '../read-retry.js';
 import { extractHostname } from '../response-parser.js';
+import { mergedCompetitorDomains } from '../competitor-aliases.js';
 import { opportunityKey } from '../audit/opportunities.js';
 import { robotsGroups } from '../audit/signals/trust.js';
 import { logger } from '../logger.js';
@@ -343,7 +344,7 @@ export async function analyzeCompetitorPages({
   if (promptIds.length === 0) throw nothing('no_prompts', 'no prompts to read the answers of');
 
   const since = new Date(now.getTime() - C.answersDays * DAY_MS).toISOString();
-  const [answersRes, domainsRes, competitorsRes] = await Promise.all([
+  const [answersRes, domainsRes, competitorsRes, mergedDomains] = await Promise.all([
     supabaseAdmin
       .from('prompt_results')
       .select('mention_count, citations')
@@ -355,13 +356,18 @@ export async function analyzeCompetitorPages({
       .limit(ANSWERS_READ),
     supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
     supabaseAdmin.from('competitors').select('domain').eq('brand_id', brandId),
+    // A merged competitor's site (00543) is the kept one's: a competitor page too.
+    mergedCompetitorDomains(brandId),
   ]);
   for (const res of [answersRes, domainsRes, competitorsRes]) {
     if (res.error) throw new Error(res.error.message);
   }
   const picked = citedPages(answersRes.data ?? [], {
     ownDomains: (domainsRes.data ?? []).map((row) => row.domain).filter(Boolean),
-    competitorDomains: (competitorsRes.data ?? []).map((row) => row.domain).filter(Boolean),
+    competitorDomains: [
+      ...(competitorsRes.data ?? []).map((row) => row.domain).filter(Boolean),
+      ...mergedDomains,
+    ],
   });
   if (picked.competitors.length === 0) {
     throw nothing('none_cited', 'no competitor page cited for these prompts lately');

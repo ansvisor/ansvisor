@@ -190,6 +190,44 @@ function firstOccurrenceIndex(text, term) {
 }
 
 /**
+ * The names a competitor is matched by: its name and domain, as always, and
+ * (00543) the names and domains of the competitors merged into it, which
+ * count as its own from the merge on (competitor-aliases.js). A merged name
+ * or domain is taken once, and not when it is one of the kept one's own, so
+ * it isn't counted twice.
+ */
+function competitorTerms(comp) {
+  const own = [comp.name, ...(comp.domain ? [comp.domain] : [])];
+  return [...own, ...mergedTerms(own, [...(comp.aliases || []), ...(comp.aliasDomains || [])])];
+}
+
+/** A competitor's domains: its own and (00543) those merged into it. */
+function competitorDomains(comp) {
+  const own = comp.domain ? [comp.domain] : [];
+  return [...own, ...mergedTerms(own, comp.aliasDomains || [])];
+}
+
+/** The merged names not already among `own`, each once, case aside. */
+function mergedTerms(own, merged) {
+  const seen = new Set(
+    own.map((term) =>
+      String(term ?? '')
+        .trim()
+        .toLowerCase(),
+    ),
+  );
+  const out = [];
+  for (const raw of merged) {
+    const term = typeof raw === 'string' ? raw.trim() : '';
+    const key = term.toLowerCase();
+    if (!term || seen.has(key)) continue;
+    seen.add(key);
+    out.push(term);
+  }
+  return out;
+}
+
+/**
  * Where each tracked entity (the brand and its competitors) lands in the
  * answer's mention order. Deterministic: earliest word-boundary occurrence
  * of each entity's name/domain in the URL-stripped answer text; an entity's
@@ -224,7 +262,7 @@ export function computeMentionPosition(text, brand, competitors = []) {
   const mentionedCompetitors = (competitors || [])
     .map((comp) => ({
       id: comp.id,
-      index: entityFirstIndex([comp.name, ...(comp.domain ? [comp.domain] : [])]),
+      index: entityFirstIndex(competitorTerms(comp)),
     }))
     .filter((comp) => comp.index >= 0);
 
@@ -247,7 +285,7 @@ export function computeMentionPosition(text, brand, competitors = []) {
  * @param {{ text: string, citations: Array<{ url: string, title: string, startIndex: number, endIndex: number }> }} response
  * @param {{ brandName: string, domains: string[] }} brand
  * @param {'positive'|'neutral'|'negative'} sentiment - AI-analyzed sentiment
- * @param {Array<{ id: string, name: string, domain: string }>} [competitors] - Optional competitor list
+ * @param {Array<{ id: string, name: string, domain: string, aliases?: string[], aliasDomains?: string[] }>} [competitors] - Optional competitor list; aliases and aliasDomains are the names and domains merged into it (00543), matched as its own
  * @returns {{ mentionCount: number, citationCount: number, sentiment: string, visibilityScore: number, competitorMentions: Array, mentionPosition: number | null, mentionedEntityCount: number }}
  */
 export function parseResponse(response, brand, sentiment = 'neutral', competitors = []) {
@@ -280,17 +318,18 @@ export function parseResponse(response, brand, sentiment = 'neutral', competitor
 
   // --- Competitor mentions (on URL-stripped text) ---
   const competitorMentions = competitors.map((comp) => {
-    let compMentions = countOccurrences(cleanText, comp.name);
-    if (comp.domain) {
-      compMentions += countOccurrences(cleanText, comp.domain);
+    let compMentions = 0;
+    for (const term of competitorTerms(comp)) {
+      compMentions += countOccurrences(cleanText, term);
     }
 
     // Same hostname rule as own citations and the Citations page: the old
     // substring check (url.includes(domain)) also matched the competitor's
     // domain inside another site's host, path or query string.
     let compCitations = 0;
-    if (comp.domain) {
-      const isCompetitorCitation = ownDomainMatcher([comp.domain]);
+    const compDomains = competitorDomains(comp);
+    if (compDomains.length > 0) {
+      const isCompetitorCitation = ownDomainMatcher(compDomains);
       for (const cite of citations) {
         if (isCompetitorCitation(cite?.url)) compCitations++;
       }

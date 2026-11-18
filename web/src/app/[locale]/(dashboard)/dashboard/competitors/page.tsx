@@ -9,6 +9,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   getCompetitors,
+  getMergedCompetitors,
   addCompetitor,
   deleteCompetitor,
   getCompetitorTimeline,
@@ -82,6 +83,7 @@ import {
   Eye,
   Download,
   Tag,
+  Merge,
 } from 'lucide-react';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import {
@@ -97,6 +99,19 @@ import {
   groupCompetitorsByType,
   matchesCompetitorType,
 } from '@/lib/competitor-types';
+import {
+  CompetitorAliases,
+  DuplicateHint,
+  MergeCompetitorsDialog,
+  MergedCompetitorsSection,
+  UnmergeCompetitorDialog,
+} from '@/components/competitors/merge-competitors';
+import {
+  likelyDuplicates,
+  mergedMatch,
+  type CompetitorAlias,
+  type MergedCompetitor,
+} from '@/lib/competitor-merge';
 import {
   Select,
   SelectContent,
@@ -357,6 +372,7 @@ function DiffBadge({ diff }: { diff: number }) {
 
 function CompetitorCard({
   competitor,
+  aliases,
   stats,
   isSelected,
   onSelect,
@@ -365,6 +381,8 @@ function CompetitorCard({
   deleting,
 }: {
   competitor: Competitor;
+  /** The names and domains merged into it (00543), counted as its own. */
+  aliases?: readonly CompetitorAlias[];
   stats: {
     score: number | null;
     mentionAnswers: number;
@@ -425,6 +443,7 @@ function CompetitorCard({
           <span className="text-xs text-muted-foreground truncate">{competitor.domain || '—'}</span>
           <CompetitorTypeBadge type={competitor.type} className="shrink-0" />
         </div>
+        <CompetitorAliases name={competitor.name} aliases={aliases} />
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
@@ -1328,6 +1347,13 @@ export default function CompetitorsPage() {
   const [typeFor, setTypeFor] = useState<Competitor | null>(null);
   const [typeFilter, setTypeFilter] = useState(ALL_TYPES);
   const [groupByType, setGroupByType] = useState(false);
+  // Merging duplicates (00543): the brand's merged competitors, the Merge
+  // dialog (mounted fresh each time, with the competitors it starts from),
+  // the one being unmerged and the "may be the same company" pairs put off.
+  const [merged, setMerged] = useState<MergedCompetitor[]>([]);
+  const [mergeDialog, setMergeDialog] = useState<{ key: number; ids: string[] } | null>(null);
+  const [unmergeFor, setUnmergeFor] = useState<MergedCompetitor | null>(null);
+  const [hintsPutOff, setHintsPutOff] = useState<string[]>([]);
   // A read-only workspace (plan not active): Add, Suggest (it asks the AI as
   // it opens) and Delete open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
@@ -1376,9 +1402,14 @@ export default function CompetitorsPage() {
     const requestId = ++competitorsRequestId.current;
     setLoading(true);
     try {
-      const comps = await getCompetitors(brand.id);
+      const [comps, mergedComps] = await Promise.all([
+        getCompetitors(brand.id),
+        // The Merged competitors list and the cards' other names; the page works without them.
+        getMergedCompetitors(brand.id).catch(() => [] as MergedCompetitor[]),
+      ]);
       if (requestId !== competitorsRequestId.current) return;
       setCompetitors(comps);
+      setMerged(mergedComps);
     } catch {
       if (requestId === competitorsRequestId.current) toast.error(t('loadError'));
     } finally {
@@ -1566,6 +1597,17 @@ export default function CompetitorsPage() {
 
   async function handleAdd(name: string, domain: string, type: string | null) {
     if (!brand) return;
+    // One merged into another (00543) already counts there: never a second copy.
+    const alias = mergedMatch({ name, domain }, merged);
+    if (alias) {
+      toast.info(
+        t('merge.addMerged', {
+          name: alias.name,
+          kept: alias.mergedIntoName || t('merged.anotherCompetitor'),
+        }),
+      );
+      return;
+    }
     await addCompetitor(brand.id, { name, domain, type });
     toast.success(t('addSuccess'));
     void loadCompetitors();
@@ -1653,6 +1695,29 @@ export default function CompetitorsPage() {
   );
   const typeOf = (competitorId: string | undefined) =>
     competitors.find((c) => c.id === competitorId)?.type ?? null;
+
+  // Merging (00543): each kept competitor's other names, and the first pair
+  // that may be one company, for admins and managers, unless put off.
+  const aliasesOf = (competitorId: string): CompetitorAlias[] =>
+    merged.filter((m) => m.mergedIntoId === competitorId);
+  const hint = canManage
+    ? (likelyDuplicates(competitors).find((pair) => !hintsPutOff.includes(pair.join(' '))) ?? null)
+    : null;
+  const nameOf = (competitorId: string) =>
+    competitors.find((c) => c.id === competitorId)?.name ?? '';
+  const openMerge = guard(
+    (ids: string[] = []) => setMergeDialog((prev) => ({ key: (prev?.key ?? 0) + 1, ids })),
+    { action: tActions('mergeCompetitors') },
+  );
+  const openUnmerge = guard((competitor: MergedCompetitor) => setUnmergeFor(competitor), {
+    action: tActions('unmergeCompetitors'),
+  });
+
+  async function handleMerged(keptId: string, mergedIds: string[]) {
+    if (selectedCompetitorId && mergedIds.includes(selectedCompetitorId)) selectCompetitor(keptId);
+    await loadCompetitors();
+    void loadComparison();
+  }
 
   async function exportBenchmark() {
     if (!brand || !comparisonData?.brands.length) return;
@@ -1772,16 +1837,30 @@ export default function CompetitorsPage() {
                     {competitors.length}
                   </Badge>
                 </CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={exportBenchmark}
-                  disabled={!comparisonData?.brands.length}
-                >
-                  <Download className="h-4 w-4" />
-                  {common('exportCsv')}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {canManage && competitors.length >= 2 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      title={t('merge.openHint')}
+                      onClick={() => openMerge()}
+                    >
+                      <Merge className="h-4 w-4" />
+                      {t('merge.open')}
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={exportBenchmark}
+                    disabled={!comparisonData?.brands.length}
+                  >
+                    <Download className="h-4 w-4" />
+                    {common('exportCsv')}
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 {t('selectToCompare')}{' '}
@@ -1791,6 +1870,14 @@ export default function CompetitorsPage() {
                     ? t('windowAllTime')
                     : t('windowSelectedRange')}
               </p>
+              {hint && (
+                <DuplicateHint
+                  a={nameOf(hint[0])}
+                  b={nameOf(hint[1])}
+                  onMerge={() => openMerge([...hint])}
+                  onDismiss={() => setHintsPutOff((prev) => [...prev, hint.join(' ')])}
+                />
+              )}
               {anyTyped && (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <Select
@@ -1860,6 +1947,7 @@ export default function CompetitorsPage() {
                           <CompetitorCard
                             key={comp.id}
                             competitor={comp}
+                            aliases={aliasesOf(comp.id)}
                             stats={scoreMap.get(comp.name) ?? null}
                             isSelected={selectedCompetitorId === comp.id}
                             onSelect={() =>
@@ -1885,6 +1973,14 @@ export default function CompetitorsPage() {
                       </div>
                     </section>
                   ))}
+                </div>
+              )}
+              {merged.length > 0 && (
+                <div className="mt-4">
+                  <MergedCompetitorsSection
+                    merged={merged}
+                    onUnmerge={canManage ? openUnmerge : undefined}
+                  />
                 </div>
               )}
             </CardContent>
@@ -1970,12 +2066,49 @@ export default function CompetitorsPage() {
         open={suggestDialogOpen}
         onOpenChange={setSuggestDialogOpen}
         brand={brand}
-        existingCompetitors={competitors}
+        existingCompetitors={[
+          ...competitors,
+          // Merged ones (00543) aren't suggested again: they count for the one kept.
+          ...merged.map((m) => ({
+            id: m.id,
+            brandId: brand.id,
+            name: m.name,
+            domain: m.domain,
+            type: m.type,
+          })),
+        ]}
         onAddSelected={handleAddSuggested}
+      />
+
+      {mergeDialog && (
+        <MergeCompetitorsDialog
+          key={mergeDialog.key}
+          brandId={brand.id}
+          competitors={competitors}
+          initialIds={mergeDialog.ids}
+          open
+          onOpenChange={(open) => {
+            if (!open) setMergeDialog(null);
+          }}
+          onMerged={handleMerged}
+        />
+      )}
+
+      <UnmergeCompetitorDialog
+        brandId={brand.id}
+        competitor={unmergeFor}
+        onOpenChange={(open) => {
+          if (!open) setUnmergeFor(null);
+        }}
+        onUnmerged={() => {
+          void loadCompetitors();
+          void loadComparison();
+        }}
       />
 
       <ConfirmDeleteCompetitorDialog
         competitor={confirmDelete}
+        mergedCount={confirmDelete ? aliasesOf(confirmDelete.id).length : 0}
         onOpenChange={(open) => {
           if (!open) setConfirmDelete(null);
         }}
@@ -1993,11 +2126,14 @@ export default function CompetitorsPage() {
 
 function ConfirmDeleteCompetitorDialog({
   competitor,
+  mergedCount = 0,
   onOpenChange,
   onConfirm,
   deleting,
 }: {
   competitor: Competitor | null;
+  /** How many competitors are merged into it (00543): removed with it. */
+  mergedCount?: number;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   deleting: boolean;
@@ -2013,7 +2149,10 @@ function ConfirmDeleteCompetitorDialog({
             <AlertCircle className="h-5 w-5 text-destructive" />
             {t('confirmDeleteTitle', { name })}
           </DialogTitle>
-          <DialogDescription>{t('confirmDeleteDescription', { name })}</DialogDescription>
+          <DialogDescription>
+            {t('confirmDeleteDescription', { name })}
+            {mergedCount > 0 && <> {t('merge.deleteNote', { count: mergedCount })}</>}
+          </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-2">
           <Button

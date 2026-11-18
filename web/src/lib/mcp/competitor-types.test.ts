@@ -77,9 +77,15 @@ beforeEach(() => {
 describe('listCompetitorsFor', () => {
   it('gives each competitor its type as the page names it, null for none', async () => {
     expect(await listCompetitorsFor(auth, 'b1')).toEqual([
-      { id: 'c1', name: 'Sky Air', domain: 'sky.example', type: 'Airline' },
-      { id: 'c2', name: 'Trips', domain: 'trips.example', type: 'Marketplace / aggregator' },
-      { id: 'c3', name: 'Blue Ferry', domain: 'ferry.example', type: null },
+      { id: 'c1', name: 'Sky Air', domain: 'sky.example', type: 'Airline', aliases: [] },
+      {
+        id: 'c2',
+        name: 'Trips',
+        domain: 'trips.example',
+        type: 'Marketplace / aggregator',
+        aliases: [],
+      },
+      { id: 'c3', name: 'Blue Ferry', domain: 'ferry.example', type: null, aliases: [] },
     ]);
     expect(db.filters).toContainEqual(['competitors', 'brand_id', 'b1']);
     expect(db.filters).toContainEqual(['competitors', 'brands.organization_id', 'org-1']);
@@ -108,9 +114,9 @@ describe('listCompetitorsFor', () => {
       error: null,
     };
     expect(await listCompetitorsFor(auth, 'b1')).toEqual([
-      { id: 'c1', name: 'Sky Air', domain: 'sky.example', type: null },
-      { id: 'c2', name: 'Trips', domain: 'trips.example', type: null },
-      { id: 'c3', name: 'Blue Ferry', domain: 'ferry.example', type: null },
+      { id: 'c1', name: 'Sky Air', domain: 'sky.example', type: null, aliases: [] },
+      { id: 'c2', name: 'Trips', domain: 'trips.example', type: null, aliases: [] },
+      { id: 'c3', name: 'Blue Ferry', domain: 'ferry.example', type: null, aliases: [] },
     ]);
     expect(db.selects).toContain('competitors: id, name, domain, brands!inner(organization_id)');
     expect(
@@ -240,7 +246,7 @@ describe("the MCP Server's competitor tools", () => {
     });
     const [content] = listed.content as { text: string }[];
     expect(JSON.parse(content.text)).toEqual([
-      { id: 'c1', name: 'Sky Air', domain: 'sky.example', type: 'Airline' },
+      { id: 'c1', name: 'Sky Air', domain: 'sky.example', type: 'Airline', aliases: [] },
     ]);
     await client.close();
   });

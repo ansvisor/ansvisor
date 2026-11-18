@@ -14,6 +14,7 @@ import { classifyArticleType } from '@/lib/citations/article-type';
 import { scopeDomainArgs, type CitationsSourceScope } from '@/lib/citations/scope';
 import { citationUrlMatchKey, normalizeCitationUrl } from '@/lib/citations/normalize';
 import { rollupDayWindow, runDayWindow, type DayWindow } from '@/lib/citations/rollup-window';
+import { competitorDomainRows, mergedCompetitorDomains } from '@/lib/competitor-merge';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -250,7 +251,8 @@ export async function getCitationsOverview(
 
   const [{ data: brandDomainRows }, { data: competitorRows }, window] = await Promise.all([
     supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
-    supabase.from('competitors').select('domain').eq('brand_id', brandId),
+    // With the merged ones' (00543): the kept competitor's sites too.
+    competitorDomainRows(supabase, brandId),
     rollupWindow(supabase, brandId, filters),
   ]);
 
@@ -483,7 +485,13 @@ export async function getCitationGaps(
     name: string;
     domain: string;
   }>;
-  const competitorDomains = competitorList.map((c) => normalizeDomain(c.domain)).filter(Boolean);
+  // With the merged ones' (00543): the kept competitor's sites too.
+  const competitorDomains = [
+    ...competitorList.map((c) => c.domain),
+    ...(await mergedCompetitorDomains(supabase, brandId)),
+  ]
+    .map((domain) => normalizeDomain(domain))
+    .filter(Boolean);
   const competitorNameById = new Map(
     competitorList.map((c) => [c.id, (c.name || '').trim() || 'Competitor']),
   );
@@ -731,7 +739,8 @@ export async function getCitationUrlDetail(
   // Brand + competitor domains → category (same context as the overview).
   const [{ data: brandDomainRows }, { data: competitorRows }] = await Promise.all([
     supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
-    supabase.from('competitors').select('domain').eq('brand_id', brandId),
+    // With the merged ones' (00543): the kept competitor's sites too.
+    competitorDomainRows(supabase, brandId),
   ]);
   const brandDomains = (brandDomainRows ?? [])
     .map((r) => normalizeDomain((r as { domain: string }).domain))

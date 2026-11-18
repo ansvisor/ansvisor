@@ -19,7 +19,7 @@ export const COMPETITOR_TOOLS = [
     name: 'add_competitors',
     class: 'write',
     area: 'competitors',
-    description: `Add competitors to the brand, each with its name and website domain ("peec.ai"), and its type when the person said what kind it is: one of ${DEFAULT_COMPETITOR_TYPE_NAMES} or one of the brand's own (its competitors' types, from list_competitors), else none. One the brand already has (the same domain) is skipped. Only the ones the person asked for.`,
+    description: `Add competitors to the brand, each with its name and website domain ("peec.ai"), and its type when the person said what kind it is: one of ${DEFAULT_COMPETITOR_TYPE_NAMES} or one of the brand's own (its competitors' types, from list_competitors), else none. One the brand already has (the same domain) is skipped, and so is one merged into another of its competitors (an alias in list_competitors): say that answers naming it already count for that one. Only the ones the person asked for.`,
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
     minRole: 'manager',

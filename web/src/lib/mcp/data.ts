@@ -22,6 +22,7 @@ import {
   matchesCompetitorType,
   missingCompetitorTypeColumn,
 } from '@/lib/competitor-types';
+import { aliasesByCompetitor, type MergedCompetitorRow } from '@/lib/competitor-merge';
 import {
   answeredSpanMs,
   coveringDayWindow,
@@ -4872,6 +4873,12 @@ export interface McpCompetitorRow {
    * site", "Other") or the brand's own label ("Tour operator"); null for none.
    */
   type: string | null;
+  /**
+   * The competitors merged into it (00543), by name and domain: answers
+   * naming any of them count for it from their merge on. A merged competitor
+   * is never listed on its own.
+   */
+  aliases: { name: string; domain: string }[];
 }
 
 /**
@@ -4879,7 +4886,8 @@ export interface McpCompetitorRow {
  * authenticated organization. The joined ownership predicate on the data
  * query prevents a brand reassignment between the check and the read. With
  * `type`, only the competitors of that type (matchesCompetitorType: a type's
- * name or key in any case, "none" for the ones without a type).
+ * name or key in any case, "none" for the ones without a type). Each comes
+ * with the names merged into it (00543), read the same way.
  */
 export async function listCompetitorsFor(
   auth: McpAuthContext,
@@ -4897,22 +4905,39 @@ export async function listCompetitorsFor(
   if (brandError) throw new Error(brandError.message);
   if (!brand || !(await mayUseBrand(auth, brand.id))) return null;
 
-  const typed = await supabaseAdmin
-    .from('competitors')
-    .select('id, name, domain, type, brands!inner(organization_id)')
-    .eq('brand_id', brandId)
-    .eq('brands.organization_id', auth.organizationId)
-    .order('created_at', { ascending: true });
-  // A database without 00542 (the web deployed ahead of it): the list without types.
-  const { data, error } = missingCompetitorTypeColumn(typed.error)
-    ? await supabaseAdmin
-        .from('competitors')
-        .select('id, name, domain, brands!inner(organization_id)')
-        .eq('brand_id', brandId)
-        .eq('brands.organization_id', auth.organizationId)
-        .order('created_at', { ascending: true })
-    : typed;
+  // The brand's competitors, with their types; a database without 00542 (the
+  // web deployed ahead of it): the list without types.
+  const organizationId = auth.organizationId;
+  const competitorRows = async () => {
+    const typed = await supabaseAdmin
+      .from('competitors')
+      .select('id, name, domain, type, brands!inner(organization_id)')
+      .eq('brand_id', brandId)
+      .eq('brands.organization_id', organizationId)
+      .order('created_at', { ascending: true });
+    return missingCompetitorTypeColumn(typed.error)
+      ? await supabaseAdmin
+          .from('competitors')
+          .select('id, name, domain, brands!inner(organization_id)')
+          .eq('brand_id', brandId)
+          .eq('brands.organization_id', organizationId)
+          .order('created_at', { ascending: true })
+      : typed;
+  };
+  const [{ data, error }, merged] = await Promise.all([
+    competitorRows(),
+    supabaseAdmin
+      .from('merged_competitors')
+      .select('id, merged_into_id, name, domain, brands!inner(organization_id)')
+      .eq('brand_id', brandId)
+      .eq('brands.organization_id', auth.organizationId)
+      .order('merged_at', { ascending: true }),
+  ]);
   if (error) throw new Error(error.message);
+  // Without 00543 (or a failed read) the competitors come without their merged names.
+  const aliases = aliasesByCompetitor(
+    merged.error ? [] : ((merged.data ?? []) as MergedCompetitorRow[]),
+  );
 
   return (data ?? [])
     .map((row) => ({ ...row, type: (row as { type?: string | null }).type ?? null }))
@@ -4922,6 +4947,10 @@ export async function listCompetitorsFor(
       name: row.name as string,
       domain: (row.domain as string | null) ?? '',
       type: competitorTypeLabel(row.type),
+      aliases: (aliases.get(row.id as string) ?? []).map((alias) => ({
+        name: alias.name,
+        domain: alias.domain,
+      })),
     }));
 }
 

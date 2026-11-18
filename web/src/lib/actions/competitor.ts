@@ -15,6 +15,12 @@ import {
   type CompetitorTimeline,
 } from '@/lib/competitor-timeline';
 import { COMPETITOR_TYPE_MAX_LENGTH, normalizeCompetitorType } from '@/lib/competitor-types';
+import {
+  MAX_MERGED_AT_ONCE,
+  mergedMatch,
+  type MergedCompetitor,
+  type MergedCompetitorRow,
+} from '@/lib/competitor-merge';
 
 /** A competitor's page events the timeline reads at most. */
 const TIMELINE_EVENTS = 50;
@@ -85,6 +91,15 @@ export async function addCompetitor(
     type = normalized.type;
   }
 
+  // One merged into another (00543) is that one already: answers naming it
+  // count for it. Unmerge it instead of adding it again.
+  const merged = mergedMatch(input, await readMergedRows(supabase, brandId).catch(() => []));
+  if (merged) {
+    throw new Error(
+      `${merged.name} is merged into ${(await keptName(supabase, merged.merged_into_id)) || 'another competitor'}: answers naming it already count there. Unmerge it to track it on its own.`,
+    );
+  }
+
   const { data, error } = await supabase
     .from('competitors')
     .insert({
@@ -124,7 +139,9 @@ export type AddCompetitorsResult =
         name: string;
         domain: string;
         type?: string | null;
-        reason: 'duplicate' | 'failed';
+        /** merged: one merged into another competitor (00543), named in mergedInto. */
+        reason: 'duplicate' | 'merged' | 'failed';
+        mergedInto?: { id: string; name: string };
       }[];
     }
   | { ok: false; reason: 'forbidden_role' | 'duplicate' | 'failed'; message: string };
@@ -165,8 +182,12 @@ async function addSomeCompetitors(
     };
   }
   let existing: Competitor[];
+  let merged: MergedCompetitorRow[];
   try {
-    existing = await getCompetitors(brandId);
+    [existing, merged] = await Promise.all([
+      getCompetitors(brandId),
+      createClient().then((supabase) => readMergedRows(supabase, brandId)),
+    ]);
   } catch (err) {
     return {
       ok: false,
@@ -184,6 +205,17 @@ async function addSomeCompetitors(
       skipped.push({ ...item, reason: 'duplicate' });
       continue;
     }
+    // Merged into another (00543): that one already counts it. Offer it, never a second copy.
+    const alias = mergedMatch(item, merged);
+    const kept = alias && existing.find((c) => c.id === alias.merged_into_id);
+    if (alias) {
+      skipped.push({
+        ...item,
+        reason: 'merged',
+        mergedInto: { id: alias.merged_into_id, name: kept?.name ?? '' },
+      });
+      continue;
+    }
     known.add(keyOf(item));
     try {
       added.push(await addCompetitor(brandId, item));
@@ -192,8 +224,18 @@ async function addSomeCompetitors(
     }
   }
   if (added.length === 0) {
-    return skipped.every((s) => s.reason === 'duplicate')
-      ? { ok: false, reason: 'duplicate', message: 'The brand already has these competitors.' }
+    const merges = skipped.filter((s) => s.reason === 'merged');
+    return skipped.every((s) => s.reason === 'duplicate' || s.reason === 'merged')
+      ? {
+          ok: false,
+          reason: 'duplicate',
+          message:
+            merges.length > 0
+              ? `The brand already has these competitors. ${merges
+                  .map((s) => `${s.name} is merged into ${s.mergedInto?.name || 'another one'}`)
+                  .join('; ')}: answers naming it already count there.`
+              : 'The brand already has these competitors.',
+        }
       : { ok: false, reason: 'failed', message: "The competitors couldn't be added." };
   }
   return { ok: true, code: skipped.length > 0 ? 'partial' : 'ok', added, skipped };
@@ -276,6 +318,307 @@ export async function deleteCompetitor(id: string): Promise<void> {
   if (!data?.length) throw new Error("The competitor couldn't be removed.");
 
   revalidatePath('/dashboard/brands');
+}
+
+/** A database without merged_competitors yet (the web deployed ahead of 00543). */
+function missingMergedTable(error: { code?: string; message?: string }): boolean {
+  return (
+    (error.code === '42P01' || error.code === 'PGRST205') &&
+    (error.message ?? '').includes('merged_competitors')
+  );
+}
+
+/** The brand's merged competitors (00543), read through the person's own client. */
+async function readMergedRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+): Promise<MergedCompetitorRow[]> {
+  const { data, error } = await supabase
+    .from('merged_competitors')
+    .select('id, merged_into_id, name, domain')
+    .eq('brand_id', brandId);
+  if (error) {
+    if (missingMergedTable(error)) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []) as MergedCompetitorRow[];
+}
+
+async function keptName(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  competitorId: string,
+): Promise<string> {
+  const { data } = await supabase
+    .from('competitors')
+    .select('name')
+    .eq('id', competitorId)
+    .maybeSingle();
+  return (data?.name as string | undefined) ?? '';
+}
+
+/**
+ * The brand's merged competitors (00543), newest first, for the Merged
+ * competitors list: each one's name and domain, the competitor it was merged
+ * into, when and by whom. Through the person's own client (RLS: members who
+ * can access the brand). Empty before 00543.
+ */
+export async function getMergedCompetitors(brandId: string): Promise<MergedCompetitor[]> {
+  if (!z.guid().safeParse(brandId).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('merged_competitors')
+    .select('id, merged_into_id, name, domain, type, merged_at, merged_by')
+    .eq('brand_id', brandId)
+    .order('merged_at', { ascending: false });
+  if (error) {
+    if (missingMergedTable(error)) return [];
+    throw new Error(error.message);
+  }
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+
+  const keptIds = [...new Set(rows.map((row) => row.merged_into_id))];
+  const byIds = [...new Set(rows.map((row) => row.merged_by).filter((id): id is string => !!id))];
+  const [kept, people] = await Promise.all([
+    supabase.from('competitors').select('id, name').eq('brand_id', brandId).in('id', keptIds),
+    byIds.length > 0
+      ? supabase.from('profiles').select('id, full_name').in('id', byIds)
+      : Promise.resolve({ data: [] as { id: string; full_name: string | null }[], error: null }),
+  ]);
+  if (kept.error) throw new Error(kept.error.message);
+  const keptNames = new Map((kept.data ?? []).map((row) => [row.id, row.name]));
+  const names = new Map(
+    (people.data ?? []).map((row) => [row.id, row.full_name?.trim() || null] as const),
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    domain: row.domain ?? '',
+    type: row.type ?? null,
+    mergedIntoId: row.merged_into_id,
+    mergedIntoName: keptNames.get(row.merged_into_id) ?? '',
+    mergedAt: row.merged_at,
+    mergedBy: row.merged_by ? (names.get(row.merged_by) ?? null) : null,
+  }));
+}
+
+export type MergeCompetitorsResult =
+  | {
+      ok: true;
+      kept: { id: string; name: string };
+      /** The ones merged now. */
+      merged: { id: string; name: string }[];
+      /** The ones already merged before, left as they were (a merge run twice changes nothing). */
+      already: { id: string; name: string; mergedIntoId: string }[];
+    }
+  | {
+      ok: false;
+      reason: 'forbidden_role' | 'invalid' | 'not_found' | 'failed';
+      message: string;
+    };
+
+/**
+ * A database error as the person reads it: the merge functions' own refusals
+ * (their error codes, 00543) as they word them, anything else as `fallback`.
+ */
+const rpcMessage = (error: { message: string; code?: string }, fallback: string) =>
+  error.message && ['22023', 'P0002', '42501', '23514'].includes(error.code ?? '')
+    ? error.message
+    : fallback;
+
+/**
+ * Merge duplicate competitors (00543): the Competitors page. Each of
+ * `mergedIds` leaves the brand's competitors and its name and domain become
+ * `keptId`'s other names, so answers naming it count for the kept one from
+ * now on. Their history stays under their own ids: numbers from before the
+ * merge aren't combined. The plan first, then the role (admins and
+ * managers), then that every competitor is this brand's, then
+ * merge_competitors with the person's own client, which checks all of it
+ * again and records who and when. One already merged is left as it is and
+ * comes back under `already`. Errors come back as values.
+ */
+export async function mergeCompetitors(
+  brandId: string,
+  keptId: string,
+  mergedIds: string[],
+): Promise<MergeCompetitorsResult> {
+  await assertWritable({ brandId });
+  const ids = [...new Set(mergedIds)];
+  if (
+    !z.guid().safeParse(brandId).success ||
+    !z.guid().safeParse(keptId).success ||
+    ids.length === 0 ||
+    ids.length > MAX_MERGED_AT_ONCE ||
+    !ids.every((id) => z.guid().safeParse(id).success)
+  ) {
+    return { ok: false, reason: 'invalid', message: 'Pick the competitors to merge.' };
+  }
+  if (ids.includes(keptId)) {
+    return {
+      ok: false,
+      reason: 'invalid',
+      message: "A competitor can't be merged into itself.",
+    };
+  }
+  const supabase = await createClient();
+  if (!(await isManager(supabase))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can merge competitors.',
+    };
+  }
+
+  // Every one of them this brand's: the kept one tracked, the others tracked or already merged.
+  const [live, merged] = await Promise.all([
+    supabase
+      .from('competitors')
+      .select('id')
+      .eq('brand_id', brandId)
+      .in('id', [keptId, ...ids]),
+    readMergedRows(supabase, brandId).catch(() => null),
+  ]);
+  if (live.error || merged === null) {
+    return { ok: false, reason: 'failed', message: "The competitors couldn't be merged." };
+  }
+  const liveIds = new Set((live.data ?? []).map((row) => row.id as string));
+  const mergedIdsKnown = new Set(merged.map((row) => row.id));
+  if (!liveIds.has(keptId)) {
+    return {
+      ok: false,
+      reason: 'not_found',
+      message: mergedIdsKnown.has(keptId)
+        ? 'The competitor to keep is itself merged into another one.'
+        : "The competitor to keep isn't one of this brand's.",
+    };
+  }
+  if (!ids.every((id) => liveIds.has(id) || mergedIdsKnown.has(id))) {
+    return {
+      ok: false,
+      reason: 'not_found',
+      message: "One of the competitors to merge isn't one of this brand's.",
+    };
+  }
+
+  const { data, error } = await supabase.rpc('merge_competitors', {
+    p_brand_id: brandId,
+    p_kept_id: keptId,
+    p_merged_ids: ids,
+  });
+  if (error) {
+    return {
+      ok: false,
+      reason: error.code === '42501' ? 'forbidden_role' : 'failed',
+      message: rpcMessage(error, "The competitors couldn't be merged."),
+    };
+  }
+  const result = (data ?? {}) as {
+    kept?: { id: string; name: string };
+    merged?: { id: string; name: string }[];
+    already?: { id: string; name: string; merged_into_id: string }[];
+  };
+
+  revalidatePath('/dashboard/brands');
+  return {
+    ok: true,
+    kept: result.kept ?? { id: keptId, name: '' },
+    merged: result.merged ?? [],
+    already: (result.already ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      mergedIntoId: row.merged_into_id,
+    })),
+  };
+}
+
+export type UnmergeCompetitorResult =
+  | {
+      ok: true;
+      /** False when it wasn't merged: nothing changed. */
+      unmerged: boolean;
+      competitor: { id: string; name: string };
+      mergedInto: { id: string; name: string } | null;
+    }
+  | { ok: false; reason: 'forbidden_role' | 'invalid' | 'not_found' | 'failed'; message: string };
+
+/**
+ * Unmerge a competitor (00543): it is the brand's own again, with its id, its
+ * history from before the merge, its cited pages and its Action Center links;
+ * its name stops counting for the one it was merged into. What was counted
+ * for that one while they were merged stays there. The plan first, then the
+ * role, then the brand; unmerge_competitor checks all of it again.
+ */
+export async function unmergeCompetitor(
+  brandId: string,
+  competitorId: string,
+): Promise<UnmergeCompetitorResult> {
+  await assertWritable({ brandId });
+  if (!z.guid().safeParse(brandId).success || !z.guid().safeParse(competitorId).success) {
+    return { ok: false, reason: 'invalid', message: 'Pick the competitor to unmerge.' };
+  }
+  const supabase = await createClient();
+  if (!(await isManager(supabase))) {
+    return {
+      ok: false,
+      reason: 'forbidden_role',
+      message: 'Only an admin or a manager can unmerge competitors.',
+    };
+  }
+  const { data: row, error: readError } = await supabase
+    .from('merged_competitors')
+    .select('id, name, merged_into_id')
+    .eq('brand_id', brandId)
+    .eq('id', competitorId)
+    .maybeSingle();
+  if (readError) {
+    return { ok: false, reason: 'failed', message: "The competitor couldn't be unmerged." };
+  }
+  if (!row) {
+    const { data: live } = await supabase
+      .from('competitors')
+      .select('id, name')
+      .eq('brand_id', brandId)
+      .eq('id', competitorId)
+      .maybeSingle();
+    return live
+      ? {
+          ok: true,
+          unmerged: false,
+          competitor: { id: live.id, name: live.name },
+          mergedInto: null,
+        }
+      : {
+          ok: false,
+          reason: 'not_found',
+          message: "That competitor isn't one of this brand's.",
+        };
+  }
+
+  const { data, error } = await supabase.rpc('unmerge_competitor', {
+    p_brand_id: brandId,
+    p_competitor_id: competitorId,
+  });
+  if (error) {
+    return {
+      ok: false,
+      reason: error.code === '42501' ? 'forbidden_role' : 'failed',
+      message: rpcMessage(error, "The competitor couldn't be unmerged."),
+    };
+  }
+  const result = (data ?? {}) as {
+    unmerged?: boolean;
+    merged_into?: { id: string; name: string | null } | null;
+  };
+
+  revalidatePath('/dashboard/brands');
+  return {
+    ok: true,
+    unmerged: result.unmerged !== false,
+    competitor: { id: row.id, name: row.name },
+    mergedInto: result.merged_into
+      ? { id: result.merged_into.id, name: result.merged_into.name ?? '' }
+      : { id: row.merged_into_id, name: '' },
+  };
 }
 
 /** The most competitors one Set type changes at once. */
