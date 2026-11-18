@@ -287,3 +287,18 @@ describe("the opportunity's volume (2026-11-01)", () => {
     );
   });
 });
+
+describe("its own page (the owner's plan, step 9's detail pages)", () => {
+  it('hands the page the opportunity once read, for Chat’s side panel', async () => {
+    const onOpportunity = vi.fn();
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <OpportunityDetail id="o1" onOpportunity={onOpportunity} />
+        </NextIntlClientProvider>,
+      );
+    });
+    await act(async () => {});
+    expect(onOpportunity).toHaveBeenLastCalledWith(OPPORTUNITY);
+  });
+});

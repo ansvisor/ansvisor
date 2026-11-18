@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range above the box, add date range, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, settings in the chat menu, general settings, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, action code, what is ac, open action from answer, action link, most important actions, what should i do first, top actions, action title, signal code, what is s-07, look up a prompt, find a prompt, cited domain, cited page, find a draft, find a report, ask about today, today's focus, first focus card, my agents, agent runs, what did my agent do, action history, closed actions, signals summary]
+keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range above the box, add date range, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, page filters, page dates, as on the page, agent, new chat, open a chat, chat menu, governance, open governance, settings in the chat menu, general settings, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, action code, what is ac, open action from answer, action link, most important actions, what should i do first, top actions, action title, signal code, what is s-07, look up a prompt, find a prompt, cited domain, cited page, find a draft, find a report, same numbers as the page, top 5 prompts, first ones on the page, ranks like the page, latest tracking run, these, items on screen, rows on screen, my sort, my search, open tab, this one, open competitor, every page, ask about today, today's focus, first focus card, my agents, agent runs, what did my agent do, action history, closed actions, signals summary, this topic, this product, this report, this prompt, topic page, product page, report page]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-11-17
@@ -9,7 +9,7 @@ last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json, web/src/lib/chat/range.ts, web/src/components/chat/agents-for-you.tsx, web/src/lib/chat/agents-for-you.ts, web/src/lib/actions/agents-for-you.ts, web/src/components/chat/run/run-answer.tsx]
+sources: [web/messages/en.json, web/src/lib/chat/range.ts, web/src/lib/chat/page-scope.ts, web/src/lib/chat/page-order.ts, web/src/lib/chat/page-view.ts, web/src/lib/chat/page-periods.ts, web/src/components/chat/agents-for-you.tsx, web/src/lib/chat/agents-for-you.ts, web/src/lib/actions/agents-for-you.ts, web/src/components/chat/run/run-answer.tsx]
 ---
 
 Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Prompts › Tracked Prompts**, whatever your plan, or on the Action Center's **Today** tab when Prompts is off your menu; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off.
@@ -56,11 +56,17 @@ At the top of the panel, start a **New chat**, open a recent one from **Chat his
 
 ## What the panel looks at
 
-Above the box in the panel, chips show what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as your question's scope, but reads your own date range. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.
+Above the box in the panel, chips show what you have on screen: the page, your brand, the date range and the filters you picked. Chat answers for the page's dates and filters unless you ask otherwise. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.
 
 An empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.
 
 The speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center.
+
+## Numbers that match the page
+
+Chat ranks and counts as the page does. "My top 5 prompts" on Prompts are the table's top 5 by Visibility, and "the first ones" on Actions or Content are the rows you see, in the page's order. On Overview and Citations, **Last 24 hours** is the latest tracking run, as on those pages.
+
+Chat also sees the open tab, the sort and search you picked, and the items on screen, and reads those items before it answers: "these" are the rows you see. On Prompts, Content, Mentions, History and Agents, Chat's lists follow the page's search within its filters, and the answer says so; an item you name is found in any status. This works on every page, from Today and Signals to one product, topic, prompt, report or Site Audit: Chat knows the page, its dates, filters and rows, and "this one" is what you have open.
 
 ## Chats in the panel
 
@@ -94,15 +100,15 @@ While Chat asks, you can also answer in the box below. It shows the Recommended 
 
 ## The date range Chat reads
 
-The first time you ask for an analysis that reads your data, Chat asks **Which time range should I use?** Click **Last 24 hours**, **Last 7 days**, **Last 30 days** or **Last 90 days**, or **Custom** to pick a first and a last day. In the panel, on a page with its own date range, the first button is that page's range, so Chat's numbers match the screen.
+The first time you ask for an analysis that reads your data, Chat asks **Which time range should I use?** Click **Last 24 hours**, **Last 7 days**, **Last 30 days** or **Last 90 days**, or **Custom** to pick a first and a last day. In the panel, on a page with its own date range, Chat doesn't ask: it reads that page's range, so its numbers match the screen, and its answer says so.
 
-Chat keeps your pick as your default, in Chat and in the panel, for every brand, says so and answers. It doesn't ask again. **Skip** reads **Last 30 days**, or in the panel the page's range, for that answer only, and Chat asks next time.
+Chat keeps your pick as your default, in Chat and in the panel, for every brand, says so and answers. It doesn't ask again. **Skip** reads **Last 30 days** for that answer only, and Chat asks next time.
 
 Each range covers the same days as on the app's pages: **Last 30 days** is today and the 29 days before. A question that reads no data never asks.
 
 ## Change the date range
 
-Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. **Settings › General** in the chat menu has it too.
+Above the box, a chip shows the one Chat reads, such as **Last 30 days**. Click it to pick another; it is kept at once. **×** clears it, so Chat asks again before the next analysis. With none set, the chip reads **Add date range**. In the panel, beside a page's own date chip, it's hidden: Chat reads the page's. **Settings › General** in the chat menu has it too.
 
 Or send a short range as your message, such as "last 7d", "last 24h" or "use 90 days by default". Chat changes your default at once, says so, and answers your last question again over the new range.
 
@@ -250,11 +256,11 @@ Once Chat has read text from outside your workspace in a run, it opens another s
 
 ## Why a number changed
 
-Ask Chat why a number moved, such as "Why did ChatGPT visibility drop last week?". By default it compares the last 7 days with the 7 before. It works for the Insights Visibility score, split into its mention, citation and position parts, and for visibility, mention rate, share of voice, citation rate and average position.
+Ask Chat why a number moved, such as "Why did ChatGPT visibility drop last week?". By default it compares the page's period, or your range, with the days before it (on **Last 24 hours**: the last 7 days against the 7 before). It works for the Insights Visibility score and its mention, citation and position parts, visibility, mention rate, share of voice, citation rate and average position.
 
-The answer gives both values and the change, and says first when the change is within the normal swing. It names the day the line broke, and what added or removed prompts explain. Then it ranks the causes found in tracked answers, such as a citation lost to a competitor or a worse Site Audit. Each comes with its share of the change and how sure Chat is. Chat never says a cause made it happen.
+The answer gives both values and the change, first saying when it is within normal swing. It names the day the line broke and what added or removed prompts explain. Then it ranks the causes found in tracked answers, such as a citation lost to a competitor or a worse Site Audit, each with its share of the change and how sure Chat is. Chat never says a cause made it happen.
 
-Everything comes from your scheduled tracking. Chat never asks an AI engine anything new for it.
+It all comes from scheduled tracking, never a new AI query.
 
 ## What explains the change
 

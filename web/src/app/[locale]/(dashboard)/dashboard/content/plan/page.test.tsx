@@ -7,6 +7,11 @@ import type { PlanOpportunity, PlanPage } from '@/lib/content/plan';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import ContentPlanPage from './page';
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 const getContentPlan = vi.fn();
 const getContentPlanInsights = vi.fn();
 const setPlanRowPriority = vi.fn();
@@ -867,5 +872,45 @@ describe('the Content plan on a read-only workspace (plan not active)', () => {
       true,
     );
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  const sent = () => chatPage.mock.lastCall![0];
+
+  it('sends its period and once read its rows by opportunity id, else by page address', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?days=7');
+    await renderPage();
+    expect(sent()).toMatchObject({
+      pageName: 'Content plan',
+      dateRange: { from: '7d', to: null, label: 'Last 7 days' },
+      filters: [],
+    });
+    const refs = sent().view.rows.map((row: { ref: string }) => row.ref);
+    expect(refs).toHaveLength(3);
+    expect(refs).toEqual(
+      expect.arrayContaining([
+        'o1',
+        'https://acme.example/guides/coffee-subscriptions',
+        'https://acme.example/guides/espresso',
+      ]),
+    );
+    expect(sent().view.total).toBe(3);
+  });
+
+  it('sends the card picked as a filter, and only its rows', async () => {
+    await renderPage();
+    await act(async () => button('Protect').click());
+    expect(sent().filters).toEqual([{ key: 'card', label: 'Protect', value: 'protect' }]);
+    expect(sent().view).toEqual({
+      rows: [{ ref: 'https://acme.example/guides/espresso', label: expect.any(String) }],
+      total: 1,
+    });
+  });
+
+  it('sends no rows while it reads', async () => {
+    getContentPlan.mockReturnValue(new Promise(() => {}));
+    await renderPage();
+    expect(sent().view).toEqual({});
   });
 });

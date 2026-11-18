@@ -37,6 +37,12 @@ vi.mock('./_report-pdf', () => ({
 // jsdom draws no canvas: the logos here are PNGs, handed over as they are.
 vi.mock('@/lib/white-label/pdf-image', () => ({ pdfImage: async (url: string | null) => url }));
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
+
 const { default: ReportDetailPage } = await import('./page');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -330,5 +336,28 @@ describe('ReportDetailPage › AI-sourced pipeline (#2140)', () => {
     getReport.mockResolvedValue(report);
     await render();
     expect(pipelineCard()).toBeUndefined();
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9's detail pages)", () => {
+  it('holds the saved report open by its id, with the days it covers, and no rows', async () => {
+    await render();
+    expect(chatPage.mock.lastCall![0]).toEqual({
+      pageName: 'October report',
+      dateRange: { from: '2026-10-01', to: '2026-10-31', label: '2026-10-01 – 2026-10-31' },
+      view: { open: { ref: 'r1', label: 'October report' } },
+    });
+  });
+
+  it('says nothing while it reads', async () => {
+    getReport.mockReturnValue(new Promise(() => {}));
+    await render();
+    expect(chatPage.mock.lastCall![0]).toBeNull();
+  });
+
+  it('says nothing for a report it can’t find', async () => {
+    getReport.mockResolvedValue(null);
+    await render();
+    expect(chatPage.mock.lastCall![0]).toBeNull();
   });
 });

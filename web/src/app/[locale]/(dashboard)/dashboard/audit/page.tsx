@@ -83,6 +83,9 @@ import { nextAutoRun } from '@/lib/audit-auto-runs';
 import { cn } from '@/lib/utils';
 import { parseListTab, withListTab, type ListTab } from './_list-tab';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
+import { viewRows } from '@/lib/chat/page-view';
 
 type RangePreset = '7d' | '30d' | '90d' | 'all';
 const RANGE_DAYS: Record<RangePreset, number | null> = { '7d': 7, '30d': 30, '90d': 90, all: null };
@@ -682,6 +685,42 @@ export default function SiteAuditPage() {
     }, RUNNING_POLL_MS);
     return () => clearInterval(timer);
   }, [anyRunning, activeBrandId]);
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its trend's range,
+  // the list open, and once read its rows as the list shows them, each by the Site Audit it
+  // opens (a page not audited yet has none, and no read takes it).
+  const tChatRange = useTranslations('chatPanel.range');
+  useChatPageContext(
+    activeBrandId
+      ? {
+          pageName: t('title'),
+          dateRange: {
+            from: range,
+            to: null,
+            label: rangeChipLabel(range, {}, (key, values) => tChatRange(key, values)),
+          },
+          view: {
+            ...(tab ? { tab } : {}),
+            ...(tab === 'pages' && !loading
+              ? {
+                  rows: viewRows(pages, (page) => ({
+                    ref: page.auditId,
+                    label: page.url,
+                  })),
+                  total: pagesTotal,
+                }
+              : tab === 'opportunities' && !oppsLoading
+                ? {
+                    rows: viewRows(shownOpps, (o) => ({
+                      ref: o.lastAudit?.auditId,
+                      label: o.title || o.url || o.path,
+                    })),
+                  }
+                : {}),
+          },
+        }
+      : null,
+  );
 
   if (!activeBrandId) {
     return (

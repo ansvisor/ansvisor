@@ -6,6 +6,11 @@ import messages from '../../../../../../../messages/en.json';
 import { libraryTabCounts, type ContentDraftListItem } from '@/lib/content/drafts';
 import ContentLibraryPage from './page';
 
+const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useChatPageContext: chatPage,
+}));
 const getContentDrafts = vi.fn();
 const getContentStartOptions = vi.fn();
 const markContentDraftReady = vi.fn();
@@ -1873,5 +1878,47 @@ describe('the Library’s Made in column and filter (00463, W4-10)', () => {
     expect(container.querySelector('[aria-label="Made in"]')!.textContent).toContain(
       'Made in: Chat',
     );
+  });
+});
+
+describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
+  const view = () => chatPage.mock.lastCall![0];
+
+  it('sends the tab, its status as a filter, and once read the drafts listed by id', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({ id: 'd1' }),
+      row({ id: 'd2', title: 'Office coffee guide', status: 'draft' }),
+    ]);
+    await renderPage();
+    expect(view()).toEqual({
+      pageName: 'Library',
+      filters: [],
+      view: {
+        tab: 'all',
+        rows: [
+          { ref: 'd1', label: 'Pipeline forecasting' },
+          { ref: 'd2', label: 'Office coffee guide' },
+        ],
+        total: 2,
+      },
+    });
+    act(() => root.unmount());
+    root = createRoot(container);
+    window.history.replaceState(null, '', '/dashboard/content/library?tab=in_review');
+    await renderPage();
+    expect(view().filters).toEqual([{ key: 'status', label: 'In review', value: 'in_review' }]);
+    expect(view().view).toEqual({
+      tab: 'in_review',
+      rows: [{ ref: 'd1', label: 'Pipeline forecasting' }],
+      total: 1,
+    });
+  });
+
+  it('sends no rows while it reads, and no status for Archived', async () => {
+    getContentDrafts.mockReturnValue(new Promise(() => {}));
+    window.history.replaceState(null, '', '/dashboard/content/library?tab=archived');
+    await renderPage();
+    expect(view().filters).toEqual([]);
+    expect(view().view).toEqual({ tab: 'archived' });
   });
 });

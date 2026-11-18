@@ -23,6 +23,8 @@ import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { viewRows } from '@/lib/chat/page-view';
 
 /**
  * Needs review (AC-010): tasks an agent wrote without the exact page, the
@@ -86,6 +88,26 @@ function ReviewContent({ brandId }: { brandId: string }) {
   useEffect(() => {
     if (canManage) void load();
   }, [canManage, load]);
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): once read, the
+  // tasks waiting for review by id, each with its action's code, and how many.
+  const tTabs = useTranslations('actionCenter.tabs');
+  useChatPageContext({
+    pageName: tTabs('review'),
+    view:
+      canManage && reviews
+        ? {
+            rows: viewRows(reviews, (review) => ({
+              ref: review.id,
+              label:
+                review.actionNo !== null
+                  ? `${actionCode({ ...review, actionNo: review.actionNo })} · ${review.title}`
+                  : review.title,
+            })),
+            total: reviews.length,
+          }
+        : {},
+  });
 
   if (!canManage) {
     return <p className="py-20 text-center text-sm text-muted-foreground">{t('managersOnly')}</p>;

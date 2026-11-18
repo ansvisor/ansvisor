@@ -59,6 +59,7 @@ export function SinceSection({
   zone,
   standing,
   onSummary,
+  onSignals,
 }: {
   /** The changes' read, started with Today's others; null until the day is known. */
   read: Promise<TodayChanges | null> | null;
@@ -67,6 +68,8 @@ export function SinceSection({
   standing: TodayLoad<TodayStanding | null>;
   /** What the header's line says: the window's title and how many changes. */
   onSummary: (summary: { title: string; count: number } | null) => void;
+  /** The changes listed, once read (null till then): Chat's side panel sees them. */
+  onSignals?: (signals: Signal[] | null) => void;
 }) {
   const t = useTranslations('actionCenter.today.since');
   const tToday = useTranslations('actionCenter.today');
@@ -84,6 +87,10 @@ export function SinceSection({
   useEffect(() => {
     onSummary(count === null ? null : { title, count });
   }, [count, title, onSummary]);
+  const items = load.status === 'ready' ? load.data.items : null;
+  useEffect(() => {
+    onSignals?.(items);
+  }, [items, onSignals]);
 
   if (load.status === 'failed') return null;
   const clicked = (signal: Signal | null, target: 'action' | 'signals') =>

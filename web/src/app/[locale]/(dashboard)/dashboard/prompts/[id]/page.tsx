@@ -82,6 +82,9 @@ import { groupByPlatform, type PlatformGroup } from './grouping';
 import { dayRangeBounds, viewerTimeZone } from '@/lib/time-zone';
 import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { rangeChipLabel } from '@/lib/chat/page-context';
+import { viewRows } from '@/lib/chat/page-view';
 
 // ─── Date range (kept in sync with the insights page filter bar) ─────────────
 
@@ -873,6 +876,44 @@ export default function PromptDetailPage() {
   // arrived, a reload from a date change is a "refetch" — the stale content
   // stays visible under the overlay instead of flashing a skeleton (#494).
   const isRefetching = loading && data !== null;
+
+  // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9's detail pages): the
+  // prompt it holds open by its id, its date range, and once read the domains its Top Sources
+  // list first (its first page, unfiltered) and its content opportunities, each by its part.
+  const tChatPanel = useTranslations('chatPanel');
+  useChatPageContext(
+    data && data.prompt.id === promptId
+      ? {
+          pageName: tChatPanel('pageNames.prompt'),
+          dateRange: {
+            from: datePreset === 'custom' ? customFrom : datePreset,
+            to: datePreset === 'custom' ? customTo : null,
+            label: rangeChipLabel(datePreset, { from: customFrom, to: customTo }, (key, values) =>
+              tChatPanel(`range.${key}`, values),
+            ),
+          },
+          view: {
+            open: { ref: promptId, label: data.prompt.text },
+            ...(loading
+              ? {}
+              : {
+                  rows: [
+                    ...viewRows(data.topSources.slice(0, 10), (source) => ({
+                      ref: source.domain,
+                      label: `Top sources: ${source.domain}`,
+                    })),
+                    ...(opportunitiesLoading
+                      ? []
+                      : viewRows(opportunities, (opportunity) => ({
+                          ref: opportunity.id,
+                          label: `Content opportunity: ${opportunity.title}`,
+                        }))),
+                  ],
+                }),
+          },
+        }
+      : null,
+  );
 
   if (loading && !data && !notFound) {
     return (
