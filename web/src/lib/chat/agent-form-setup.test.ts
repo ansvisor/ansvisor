@@ -224,6 +224,55 @@ describe('agentFormSetupFor', () => {
     expect((await setupOf(PEOPLE.manager)).canCallLocked).toBe(true);
   });
 
+  it('offers an AEO Operator its owner’s agents and the workspace’s, on or paused; never an Operator, a sample or another’s private one', async () => {
+    db.tables.chat_agents = [
+      ...db.tables.chat_agents.map((a) => ({ ...a, status: 'active' })),
+      {
+        id: 'a4',
+        organization_id: ORG,
+        name: 'Paused mine',
+        visibility: 'private',
+        owner_id: PEOPLE.manager,
+        status: 'paused',
+      },
+      {
+        id: 'a5',
+        organization_id: ORG,
+        name: 'Draft mine',
+        visibility: 'private',
+        owner_id: PEOPLE.manager,
+        status: 'draft',
+      },
+      {
+        id: 'a6',
+        organization_id: ORG,
+        name: 'An Operator',
+        visibility: 'private',
+        owner_id: PEOPLE.manager,
+        status: 'active',
+        kind: 'operator',
+      },
+      {
+        id: 'a7',
+        organization_id: ORG,
+        name: 'Sample',
+        visibility: 'workspace',
+        owner_id: PEOPLE.admin,
+        status: 'active',
+        demo_brand_id: DEMO,
+      },
+    ];
+    expect((await setupOf(PEOPLE.manager)).operatorAgents).toEqual([
+      { id: 'a2', name: 'My own', mine: true, workspace: false },
+      { id: 'a4', name: 'Paused mine', mine: true, workspace: false },
+      { id: 'a1', name: 'Shared one', mine: false, workspace: true },
+    ]);
+    // An Admin sees the others' private agents, yet an Operator never runs them (decision 4).
+    expect((await setupOf(PEOPLE.admin)).operatorAgents).toEqual([
+      { id: 'a1', name: 'Shared one', mine: true, workspace: true },
+    ]);
+  });
+
   it('locks Full auto below Growth, hides it where Settings › Chat turned it off, and follows Settings › Chat’s defaults', async () => {
     db.tables.organizations = db.tables.organizations.map((org) =>
       org.id === ORG ? { ...org, plan: 'starter' } : org,

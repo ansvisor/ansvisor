@@ -2021,6 +2021,126 @@ describe('the AEO Operator', () => {
     expect(result).toMatchObject({ ok: false, refusal: { code: 'agent_not_found' } });
   });
 
+  it('reads today’s plan for its card and its page, never naming an agent the person can’t see', async () => {
+    const op = await create(PEOPLE.manager, operator());
+    const mine = await create(PEOPLE.manager, { name: 'Mine' });
+    const theirs = await create(PEOPLE.otherManager, { name: 'Their private' });
+    const plan = (id: string, day: string, status: string, over: Record<string, unknown> = {}) => ({
+      id,
+      organization_id: ORG,
+      agent_id: op.id,
+      run_id: `run-${id}`,
+      brand_id: BRAND,
+      plan_day: day,
+      status,
+      budget_share: 0.05,
+      planned_share: 0.04,
+      items: [],
+      passed: [],
+      created_at: `${day}T07:00:00.000Z`,
+      ...over,
+    });
+    const childRun = (id: string, agentId: string, status: string, usage: number) => ({
+      id,
+      organization_id: ORG,
+      agent_id: agentId,
+      brand_id: BRAND,
+      called_by_run_id: 'run-p1',
+      status,
+      usage_share: usage,
+    });
+    db.tables.chat_agent_plans = [
+      plan('p0', '2026-10-28', 'declined'),
+      plan('p1', '2026-10-29', 'dispatched', {
+        items: [
+          {
+            agent_id: mine.id,
+            share: 0.02,
+            cost: 0.012,
+            value: 5,
+            reasons: [
+              { code: 'open_actions', category: 'recover', count: 3 },
+              { code: 'never_ran' },
+            ],
+            child_run_id: 'c1',
+          },
+          {
+            agent_id: theirs.id,
+            share: 0.02,
+            cost: 0.01,
+            value: 3,
+            reasons: [],
+            child_run_id: 'c2',
+          },
+          {
+            agent_id: mine.id,
+            share: 0.01,
+            cost: 0.01,
+            value: 1,
+            reasons: [],
+            child_run_id: null,
+            skipped: 'busy',
+          },
+        ],
+      }),
+      // Another workspace's plan for the same agent id names nothing here.
+      {
+        ...plan('px', '2026-10-29', 'proposed'),
+        organization_id: OTHER_ORG,
+        created_at: '2026-10-29T09:00:00.000Z',
+      },
+    ];
+    db.tables.chat_agent_runs = [
+      ...rows('chat_agent_runs'),
+      {
+        id: 'run-p1',
+        organization_id: ORG,
+        agent_id: op.id,
+        brand_id: BRAND,
+        status: 'done',
+        usage_share: 0.002,
+      },
+      childRun('c1', mine.id, 'done', 0.011),
+      childRun('c2', theirs.id, 'running', 0.004),
+    ];
+    const manager = await ctxOf(PEOPLE.manager);
+    const list = await agents.listAgents(manager, { view: 'mine' }, NOW);
+    expect(list.agents.find((a) => a.id === op.id)?.operator).toEqual({
+      today: { state: 'approved', agents: 3, started: 2, done: 1 },
+    });
+    expect(list.agents.find((a) => a.id === mine.id)?.operator).toBeUndefined();
+
+    const page = (await agents.readAgent(manager, op.id, NOW))!;
+    expect(page.settings?.operator).toEqual({ allowed: null, includeWorkspace: false, maxRuns: 5 });
+    expect(page.operator).toEqual({ today: { state: 'approved', agents: 3, started: 2, done: 1 } });
+    const today = page.operatorDay!.today!;
+    expect(page.operatorDay!.day).toBe('2026-10-29');
+    expect(today).toMatchObject({ state: 'approved', budgetShare: 0.05 });
+    expect(today.usedShare).toBeCloseTo(0.017);
+    expect(today.items).toEqual([
+      {
+        agentId: mine.id,
+        agent: 'Mine',
+        reasons: [{ code: 'open_actions', category: 'recover', count: 3 }, { code: 'never_ran' }],
+        share: 0.02,
+        cost: 0.012,
+        status: 'done',
+        skipped: null,
+        usageShare: 0.011,
+        chatId: null,
+      },
+      // Another manager's private agent: never named.
+      expect.objectContaining({ agentId: null, agent: '', hidden: true, status: 'running' }),
+      expect.objectContaining({ agentId: mine.id, status: null, skipped: 'busy' }),
+    ]);
+    expect(page.operatorDay!.history.map((h) => [h.day, h.state, h.agents])).toEqual([
+      ['2026-10-29', 'approved', 2],
+      ['2026-10-28', 'skipped', 0],
+    ]);
+    // Any other agent has no Operator page.
+    expect((await agents.readAgent(manager, mine.id, NOW))!.operatorDay).toBeUndefined();
+  });
+
   it('copies an Operator as an Operator draft, with its settings', async () => {
     const op = await create(PEOPLE.admin, operator({ operator: { maxRuns: 4 } }));
     const copy = await agents.duplicateAgent(await ctxOf(PEOPLE.admin), op.id, NOW);

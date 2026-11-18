@@ -21,6 +21,10 @@ const tellNeedsYou = vi.fn();
 vi.mock('../lib/chat-notices/needs-you.js', () => ({
   tellNeedsYou: (...args) => tellNeedsYou(...args),
 }));
+const tellAgentPlan = vi.fn();
+vi.mock('../lib/chat-notices/agent-plan.js', () => ({
+  tellAgentPlan: (...args) => tellAgentPlan(...args),
+}));
 vi.mock('../lib/logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 
 const { default: router } = await import('./internal-chat-notices.js');
@@ -146,5 +150,39 @@ describe('POST /api/internal/chat/notices/needs-you', () => {
     expect((await send({ orgId: ORG, agentRunId: 'run-1' })).status).toBe(400);
     expect(tellNeedsYou).not.toHaveBeenCalled();
     expect((await send({ orgId: ORG, agentRunId: RUN })).status).toBe(500);
+  });
+});
+
+describe('POST /api/internal/chat/notices/agent-plan', () => {
+  const PLAN = '55555555-5555-4555-8555-555555555555';
+  const send = (body, secret = 'shh') =>
+    fetch(`${baseUrl}/agent-plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify(body),
+    });
+
+  it('tells the person of an Operator’s summary, only for the web, and says what went out', async () => {
+    tellAgentPlan.mockReset().mockResolvedValue({ notices: 1, emails: 0, slack: 1 });
+    expect((await send({ orgId: ORG, planId: PLAN }, 'nope')).status).toBe(401);
+    expect((await send({ orgId: ORG, planId: PLAN }, '')).status).toBe(401);
+    expect(tellAgentPlan).not.toHaveBeenCalled();
+    const res = await send({ orgId: ORG, planId: PLAN });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, notices: 1, emails: 0, slack: 1 });
+    expect(tellAgentPlan).toHaveBeenCalledExactlyOnceWith({ orgId: ORG, planId: PLAN });
+  });
+
+  it('refuses a body it can’t read, and says so when telling fails', async () => {
+    tellAgentPlan.mockReset().mockRejectedValueOnce(new Error('down'));
+    for (const body of [
+      { orgId: ORG },
+      { orgId: ORG, planId: 'plan-1' },
+      { orgId: 'org', planId: PLAN },
+    ]) {
+      expect((await send(body)).status).toBe(400);
+    }
+    expect(tellAgentPlan).not.toHaveBeenCalled();
+    expect((await send({ orgId: ORG, planId: PLAN })).status).toBe(500);
   });
 });

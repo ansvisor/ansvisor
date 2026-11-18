@@ -25,9 +25,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useRouter } from '@/i18n/navigation';
 import type { AgentGoLiveDetail } from '@/lib/chat/agent-go-live';
 import type { AgentDetail as Agent, AgentRunView } from '@/lib/chat/agents';
+import type { OperatorDetailView, OperatorItemView } from '@/lib/chat/operator/views';
 import {
   RUN_FILTERS,
   engineName,
+  barWidth,
   percentOf,
   runDot,
   runMatches,
@@ -37,7 +39,14 @@ import {
 import { cn } from '@/lib/utils';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { AgentImpactCard } from './agent-impact-card';
-import { AgentDenial, CHIP, GoLiveBadge, StatusLine, liveRunOf } from './agent-parts';
+import {
+  AgentDenial,
+  CHIP,
+  GoLiveBadge,
+  OperatorBadge,
+  StatusLine,
+  liveRunOf,
+} from './agent-parts';
 import { readAgent, readAgentRuns } from './agent-requests';
 import { useAgentWords, type AgentWords } from './agent-words';
 import { useAgentActions, type AgentButton } from './use-agent-actions';
@@ -52,7 +61,10 @@ import { useAgentActions, type AgentButton } from './use-agent-actions';
  * it did in the last 30 days (agent-impact-card.tsx); its last 50 runs,
  * each with its AI use against its cap ("3.2% of 10%"), state, trigger and brand, opening the run's chat; and beside them who it
  * belongs to, what it may reach and what it may spend — all as shares of
- * the monthly AI limit, never dollars.
+ * the monthly AI limit, never dollars. An AEO Operator's page adds a Today
+ * panel (today's plan: each agent, why, its run and chat, the budget used)
+ * and its last 7 plans (AEO Operator plan §4.3); a run's "Ran N agents ▾"
+ * opens each one's status, share, chat and agent.
  */
 
 /** The run table's columns (mockup `.tr.run`): run · trigger and brand · result · outcome · AI use. */
@@ -294,15 +306,40 @@ function RunRow({
               ↳
             </span>
             <span role="cell" className="min-w-0 truncate font-medium">
-              {/* One the person can't see is never named (agents.ts readCalls). */}
-              {call.hidden
-                ? tCalls('canCall.hidden')
-                : tCalls('step.ran', { agent: call.agent || '—' })}
+              {/* One the person can't see is never named, nor linked (agents.ts readCalls). */}
+              {call.hidden ? (
+                tCalls('canCall.hidden')
+              ) : call.agentId ? (
+                <>
+                  {tCalls('step.ranPrefix')}{' '}
+                  <Link
+                    href={`/dashboard/agents/${call.agentId}`}
+                    data-action="agent.openCallAgent"
+                    title={tCalls('openAgent', { agent: call.agent })}
+                    className="underline-offset-2 hover:underline"
+                  >
+                    {call.agent}
+                  </Link>
+                </>
+              ) : (
+                tCalls('step.ran', { agent: call.agent || '—' })
+              )}
             </span>
             <span role="cell" className="flex min-w-0 items-start gap-1.5">
               <ListDot state={runDot(call.status)} decorative className="mt-px" />
-              <span className="truncate">
-                {t.has(`runStatus.${call.status}`) ? t(`runStatus.${call.status}`) : call.status}
+              <span className="min-w-0">
+                <span className="block truncate">
+                  {t.has(`runStatus.${call.status}`) ? t(`runStatus.${call.status}`) : call.status}
+                </span>
+                {call.chatId && (
+                  <Link
+                    href={`/dashboard/chat/${call.chatId}`}
+                    data-action="agent.openCallChat"
+                    className={cn(EM, 'underline underline-offset-2 hover:text-foreground')}
+                  >
+                    {tCalls('openChat')}
+                  </Link>
+                )}
               </span>
             </span>
             <span role="cell" className={HIDE_NARROW} />
@@ -320,6 +357,337 @@ function RunRow({
   );
 }
 
+/** A plan's day, "Wed, Nov 18", as its own calendar date. */
+function useDayLabel() {
+  const format = useFormatter();
+  return (day: string) =>
+    format.dateTime(new Date(`${day}T12:00:00.000Z`), {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
+}
+
+/** One agent of today's plan: its agent, why today, its run and chat, and its AI use. */
+function OperatorItemRow({
+  item,
+  state,
+  words,
+  metered,
+}: {
+  item: OperatorItemView;
+  state: NonNullable<OperatorDetailView['today']>['state'];
+  words: AgentWords;
+  metered: boolean;
+}) {
+  const t = useTranslations('chatAgents');
+  const tPanel = useTranslations('chatAgents.operatorUi.panel');
+  const tCalls = useTranslations('chatAgents.calls');
+  const tSkipped = useTranslations('chatAgents.children.skipped');
+  const why = words.operatorWhy(item.reasons);
+  const status =
+    item.status !== null
+      ? t.has(`runStatus.${item.status}`)
+        ? t(`runStatus.${item.status}`)
+        : item.status
+      : item.skipped
+        ? tPanel('notStarted')
+        : state === 'waiting'
+          ? tPanel('startsOnApproval')
+          : state === 'starting'
+            ? tPanel('starting')
+            : tPanel('didNotRun');
+  const skippedWhy =
+    item.status === null && item.skipped && tSkipped.has(item.skipped)
+      ? tSkipped(item.skipped)
+      : null;
+  return (
+    <div
+      role="row"
+      data-slot="operator-item"
+      data-status={item.status ?? item.skipped ?? 'none'}
+      className={cn(OPERATOR_COLS, 'border-t py-2.5 text-[13px]')}
+    >
+      <span role="cell" className="min-w-0">
+        {item.hidden ? (
+          <b className="block truncate font-medium text-muted-foreground">
+            {tCalls('canCall.hidden')}
+          </b>
+        ) : item.agentId ? (
+          <Link
+            href={`/dashboard/agents/${item.agentId}`}
+            data-action="operator.openAgent"
+            title={tCalls('openAgent', { agent: item.agent })}
+            className="block truncate font-medium underline-offset-2 hover:underline"
+          >
+            {item.agent}
+          </Link>
+        ) : (
+          <b className="block truncate font-medium">{item.agent || tPanel('deletedAgent')}</b>
+        )}
+        {why && (
+          <em data-slot="operator-item-why" className={EM} title={why}>
+            {why}
+          </em>
+        )}
+      </span>
+      <span role="cell" className="flex min-w-0 items-start gap-1.5">
+        <ListDot
+          state={item.status !== null ? runDot(item.status) : 'idle'}
+          decorative
+          className="mt-px"
+        />
+        <span className="min-w-0">
+          <span data-slot="operator-item-status" className="block truncate">
+            {status}
+          </span>
+          {skippedWhy && <em className={EM}>{skippedWhy}</em>}
+          {item.chatId && (
+            <Link
+              href={`/dashboard/chat/${item.chatId}`}
+              data-action="operator.openChat"
+              className={cn(EM, 'underline underline-offset-2 hover:text-foreground')}
+            >
+              {tCalls('openChat')}
+            </Link>
+          )}
+        </span>
+      </span>
+      <span
+        role="cell"
+        data-slot="operator-item-ai-use"
+        className="text-xs text-muted-foreground tabular-nums"
+      >
+        {!metered
+          ? '—'
+          : item.status !== null
+            ? tPanel('aiUse', { used: percentOf(item.usageShare), cap: percentOf(item.share) })
+            : tPanel('upTo', { share: percentOf(item.share) })}
+      </span>
+    </div>
+  );
+}
+
+/** Today panel's columns: agent and why · its run · AI use. */
+const OPERATOR_COLS =
+  'grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_96px] items-start gap-3 px-3.5 max-[640px]:grid-cols-[minmax(0,1fr)_minmax(0,110px)]';
+
+/**
+ * An AEO Operator's Today panel (AEO Operator plan §4.3): today's plan on its
+ * schedule's clock, its state, the budget it used of today's, and each agent
+ * with why it runs, its run and chat; Review in Chat while its card waits.
+ * Before today's plan, when it plans next.
+ */
+function OperatorToday({
+  view,
+  daily,
+  metered,
+  nextRun,
+  words,
+}: {
+  view: OperatorDetailView;
+  /** Its daily budget (max_run_share). */
+  daily: number;
+  metered: boolean;
+  nextRun: string;
+  words: AgentWords;
+}) {
+  const tPanel = useTranslations('chatAgents.operatorUi.panel');
+  const dayLabel = useDayLabel();
+  const plan = view.today;
+  const budget = plan?.budgetShare ?? null;
+  return (
+    <section
+      data-slot="operator-today"
+      data-state={plan?.state ?? 'none'}
+      aria-labelledby="operator-today-title"
+      className="mt-[22px] overflow-hidden rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]"
+    >
+      <div className="flex flex-wrap items-center gap-2 border-b px-3.5 py-[11px]">
+        <h2 id="operator-today-title" className="text-[15px] font-semibold">
+          {tPanel('title')}
+        </h2>
+        <span className="text-xs text-muted-foreground">{dayLabel(view.day)}</span>
+        {plan && (
+          <span
+            data-slot="operator-today-state"
+            className={cn(
+              'rounded-full border px-2 py-px text-[11.5px] font-medium',
+              plan.state === 'waiting'
+                ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+                : 'bg-muted/50 text-foreground/80',
+            )}
+          >
+            {words.planState(plan.state)}
+          </span>
+        )}
+        {plan?.chatId && (
+          <Link
+            href={`/dashboard/chat/${plan.chatId}`}
+            data-action="operator.openPlan"
+            className={cn(
+              buttonVariants({
+                size: 'sm',
+                variant: plan.state === 'waiting' ? 'default' : 'outline',
+              }),
+              'ml-auto',
+            )}
+          >
+            {plan.state === 'waiting' ? tPanel('review') : tPanel('openPlan')}
+          </Link>
+        )}
+      </div>
+      {!plan ? (
+        <p
+          data-slot="operator-today-empty"
+          className="px-3.5 py-4 text-[13px] text-muted-foreground"
+        >
+          {tPanel('empty')} {nextRun}
+        </p>
+      ) : (
+        <>
+          {metered && budget !== null && (
+            <div data-slot="operator-budget" className="border-b px-3.5 py-2.5 text-[12.5px]">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <b className="font-medium tabular-nums">
+                  {tPanel('budget', { used: percentOf(plan.usedShare), budget: percentOf(budget) })}
+                </b>
+                {budget < daily - 1e-9 && (
+                  <em className="text-[11.5px] text-muted-foreground not-italic">
+                    {tPanel('paced', { daily: percentOf(daily) })}
+                  </em>
+                )}
+              </div>
+              <span
+                aria-hidden
+                className="mt-1.5 block h-[4px] w-full max-w-[360px] overflow-hidden rounded-full bg-muted"
+              >
+                <span
+                  className="block h-full rounded-full bg-foreground/70"
+                  style={{ width: `${budget > 0 ? barWidth(plan.usedShare / budget) : 0}%` }}
+                />
+              </span>
+            </div>
+          )}
+          {plan.items.length === 0 ? (
+            <p className="px-3.5 py-4 text-[13px] text-muted-foreground">
+              {tPanel(
+                `none.${plan.state === 'skipped' || plan.state === 'expired' ? plan.state : 'nothing'}`,
+              )}
+            </p>
+          ) : (
+            <div role="table" aria-label={tPanel('title')}>
+              <div
+                role="row"
+                className={cn(
+                  OPERATOR_COLS,
+                  'bg-muted/50 py-2 text-[11px] tracking-[.3px] text-muted-foreground uppercase',
+                )}
+              >
+                <span role="columnheader">{tPanel('columns.agent')}</span>
+                <span role="columnheader">{tPanel('columns.run')}</span>
+                <span role="columnheader" className="max-[640px]:hidden">
+                  {tPanel('columns.aiUse')}
+                </span>
+              </div>
+              {plan.items.map((item, i) => (
+                <OperatorItemRow
+                  key={`${item.agentId ?? 'hidden'}-${i}`}
+                  item={item}
+                  state={plan.state}
+                  words={words}
+                  metered={metered}
+                />
+              ))}
+            </div>
+          )}
+          {(plan.state === 'skipped' || plan.state === 'expired') && plan.items.length > 0 && (
+            <p className="border-t px-3.5 py-2.5 text-xs text-muted-foreground">
+              {tPanel(`none.${plan.state}`)}
+            </p>
+          )}
+          {plan.passedCount > 0 && (
+            <p
+              data-slot="operator-passed"
+              className="border-t px-3.5 py-2.5 text-xs text-muted-foreground"
+            >
+              {tPanel('passed', { count: plan.passedCount })}
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** An AEO Operator's last 7 plans: day, state, the agents it ran and the AI they used. */
+function OperatorHistory({ view, metered }: { view: OperatorDetailView; metered: boolean }) {
+  const tHistory = useTranslations('chatAgents.operatorUi.history');
+  const tOperator = useTranslations('chatAgents.operatorUi');
+  const dayLabel = useDayLabel();
+  const cols =
+    'grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,90px)_minmax(0,110px)] items-center gap-3 px-3.5';
+  return (
+    <section data-slot="operator-history" aria-labelledby="operator-history-title">
+      <div className="mt-[22px] mb-2.5 flex items-center gap-2">
+        <h2 id="operator-history-title" className="text-[15px] font-semibold">
+          {tHistory('title')}
+        </h2>
+      </div>
+      <div className="overflow-hidden rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]">
+        {view.history.length === 0 ? (
+          <p className="px-3.5 py-4 text-[13px] text-muted-foreground">{tHistory('empty')}</p>
+        ) : (
+          <div role="table" aria-label={tHistory('title')}>
+            <div
+              role="row"
+              className={cn(
+                cols,
+                'bg-muted/50 py-2 text-[11px] tracking-[.3px] text-muted-foreground uppercase',
+              )}
+            >
+              <span role="columnheader">{tHistory('columns.day')}</span>
+              <span role="columnheader">{tHistory('columns.plan')}</span>
+              <span role="columnheader">{tHistory('columns.agents')}</span>
+              <span role="columnheader">{tHistory('columns.aiUse')}</span>
+            </div>
+            {view.history.map((row, i) => (
+              <div
+                key={`${row.day}-${i}`}
+                role="row"
+                data-slot="operator-history-row"
+                data-state={row.state}
+                className={cn(cols, 'border-t py-2 text-[13px]')}
+              >
+                <span role="cell" className="truncate font-medium tabular-nums">
+                  {dayLabel(row.day)}
+                </span>
+                <span role="cell" className="truncate">
+                  {tOperator(`planState.${row.state}`)}
+                </span>
+                <span role="cell" className="tabular-nums">
+                  {row.agents}
+                </span>
+                <span role="cell" className="text-xs text-muted-foreground tabular-nums">
+                  {metered
+                    ? row.budgetShare !== null
+                      ? tHistory('aiUse', {
+                          used: percentOf(row.usedShare),
+                          budget: percentOf(row.budgetShare),
+                        })
+                      : percentOf(row.usedShare)
+                    : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function AgentDetail({
   id,
   now: nowProp,
@@ -332,6 +700,7 @@ export function AgentDetail({
   const t = useTranslations('chatAgents');
   const tDetail = useTranslations('chatAgents.detail');
   const tCalls = useTranslations('chatAgents.calls');
+  const tOperator = useTranslations('chatAgents.operatorUi');
   const router = useRouter();
   const [state, setState] = useState<DetailState>({ status: 'loading' });
   const [runs, setRuns] = useState<AgentRunView[] | null | 'loading'>('loading');
@@ -486,6 +855,17 @@ export function AgentDetail({
   // It publishes and sends on its own now (AUTONOMOUS-GO-LIVE §7.2): the switch on, the permission valid.
   const goLiveLimit =
     a.goLive?.switch === 'on' && a.goLive.permission?.on ? a.goLive.permission.dailyLimit : null;
+  const metered = a.usagePeriod !== null;
+  // An AEO Operator: its agents and how many a day, in place of connections, model and Can call.
+  const operatorSettings = a.operator ? (settings?.operator ?? null) : null;
+  const operatorAgentsLine = operatorSettings
+    ? [
+        operatorSettings.allowed === null
+          ? tOperator('agentsAll')
+          : tOperator('agentsPicked', { count: operatorSettings.allowed.length }),
+        ...(operatorSettings.includeWorkspace ? [tOperator('agentsWorkspace')] : []),
+      ].join(' · ')
+    : null;
 
   return (
     <div className="max-w-[1100px]">
@@ -529,6 +909,15 @@ export function AgentDetail({
             </span>
             <span aria-hidden>·</span>
             <span>{tDetail(`visibility.${a.visibility}`)}</span>
+            {a.operator && (
+              <>
+                <span aria-hidden>·</span>
+                <OperatorBadge />
+                <span data-slot="agent-daily-budget" className="tabular-nums">
+                  {words.dailyBudget(a.maxRunShare)}
+                </span>
+              </>
+            )}
             {period && (
               <>
                 <span aria-hidden>·</span>
@@ -659,35 +1048,51 @@ export function AgentDetail({
                 {goLiveLimit !== null && <GoLiveBadge limit={goLiveLimit} />}
               </>,
             ],
-            [
-              'connections',
-              settings && settings.connections.length > 0 ? (
-                settings.connections.map((c) => (
-                  <span
-                    key={c.key}
-                    className={CHIP}
-                    title={t(c.required ? 'connections.required' : 'connections.optional')}
-                  >
-                    {words.connection(c.key)}
-                    <em className="text-[10.5px] text-muted-foreground not-italic">
-                      {t(c.required ? 'connections.required' : 'connections.optional')}
-                    </em>
-                  </span>
-                ))
-              ) : (
-                <span className="text-[12.5px] text-muted-foreground">{t('connections.none')}</span>
-              ),
-            ],
-            [
-              'model',
-              <>
-                <span className={CHIP}>{words.model(settings?.model)}</span>
-                <span className="text-[11.5px] text-muted-foreground">
-                  {period && period.ownKeyShare > 0 ? t('model.ownKey') : t('model.limit')}
-                </span>
-              </>,
-            ],
-          ] as const
+            operatorSettings
+              ? [
+                  'agents',
+                  <span key="agents" data-slot="operator-agents" className="text-[12.5px]">
+                    {operatorAgentsLine}
+                  </span>,
+                ]
+              : [
+                  'connections',
+                  settings && settings.connections.length > 0 ? (
+                    settings.connections.map((c) => (
+                      <span
+                        key={c.key}
+                        className={CHIP}
+                        title={t(c.required ? 'connections.required' : 'connections.optional')}
+                      >
+                        {words.connection(c.key)}
+                        <em className="text-[10.5px] text-muted-foreground not-italic">
+                          {t(c.required ? 'connections.required' : 'connections.optional')}
+                        </em>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[12.5px] text-muted-foreground">
+                      {t('connections.none')}
+                    </span>
+                  ),
+                ],
+            operatorSettings
+              ? [
+                  'maxRuns',
+                  <span key="maxRuns" data-slot="operator-max-runs" className="text-[12.5px]">
+                    {tOperator('maxRunsValue', { count: operatorSettings.maxRuns })}
+                  </span>,
+                ]
+              : [
+                  'model',
+                  <>
+                    <span className={CHIP}>{words.model(settings?.model)}</span>
+                    <span className="text-[11.5px] text-muted-foreground">
+                      {period && period.ownKeyShare > 0 ? t('model.ownKey') : t('model.limit')}
+                    </span>
+                  </>,
+                ],
+          ] as [string, ReactNode][]
         ).map(([field, value], i) => (
           <div
             key={field}
@@ -709,6 +1114,18 @@ export function AgentDetail({
 
       <div className="mt-1 grid items-start gap-4 min-[1000px]:grid-cols-[minmax(0,1fr)_288px]">
         <div className="min-w-0">
+          {a.operatorDay && (
+            <>
+              <OperatorToday
+                view={a.operatorDay}
+                daily={a.maxRunShare}
+                metered={metered}
+                nextRun={a.status === 'active' ? words.nextRun(a.triggers).line : t('line.draft')}
+                words={words}
+              />
+              <OperatorHistory view={a.operatorDay} metered={metered} />
+            </>
+          )}
           <div className="mt-[22px] mb-2.5 flex items-center gap-2">
             <h2 className="text-[15px] font-semibold">{tDetail('triggers')}</h2>
             <span className="rounded-md bg-muted px-1.5 text-[11.5px] font-medium text-foreground/70 tabular-nums">
@@ -840,12 +1257,7 @@ export function AgentDetail({
               </div>
               {Array.isArray(runs) &&
                 filtered.map((run, i) => (
-                  <RunRow
-                    key={`${run.queuedAt}-${i}`}
-                    run={run}
-                    words={words}
-                    metered={a.usagePeriod !== null}
-                  />
+                  <RunRow key={`${run.queuedAt}-${i}`} run={run} words={words} metered={metered} />
                 ))}
             </div>
             {runs === 'loading' && (
@@ -893,17 +1305,23 @@ export function AgentDetail({
             </Row>
             <Row label={tDetail('side.runsAs')}>{tDetail('side.runsAsValue')}</Row>
             <Row label={tDetail('side.approvals')}>{tDetail('side.approvalsValue')}</Row>
-            <Row label={tCalls('canCall.label')} slot="canCall">
-              {(a.settings?.canCall ?? []).length > 0
-                ? (a.settings?.canCall ?? [])
-                    .map(
-                      (id) =>
-                        a.canCall?.options.find((o) => o.id === id)?.name ??
-                        tCalls('canCall.hidden'),
-                    )
-                    .join(', ')
-                : tCalls('canCall.none')}
-            </Row>
+            {operatorSettings ? (
+              <Row label={tOperator('agentsLabel')} slot="operatorAgents">
+                {operatorAgentsLine}
+              </Row>
+            ) : (
+              <Row label={tCalls('canCall.label')} slot="canCall">
+                {(a.settings?.canCall ?? []).length > 0
+                  ? (a.settings?.canCall ?? [])
+                      .map(
+                        (id) =>
+                          a.canCall?.options.find((o) => o.id === id)?.name ??
+                          tCalls('canCall.hidden'),
+                      )
+                      .join(', ')
+                  : tCalls('canCall.none')}
+              </Row>
+            )}
           </SideCard>
 
           {a.goLive && (a.goLive.permission || a.goLive.recent.length > 0) && (
@@ -918,11 +1336,13 @@ export function AgentDetail({
                   ? a.brands.map((b) => b.name).join(', ')
                   : t('scope.none')}
             </Row>
-            <Row label={tDetail('side.engines')} slot="engines">
-              {scope?.engines && scope.engines.length > 0
-                ? scope.engines.map(engineName).join(', ')
-                : tDetail('side.enginesAll')}
-            </Row>
+            {!operatorSettings && (
+              <Row label={tDetail('side.engines')} slot="engines">
+                {scope?.engines && scope.engines.length > 0
+                  ? scope.engines.map(engineName).join(', ')
+                  : tDetail('side.enginesAll')}
+              </Row>
+            )}
             {scope?.topic_ids && scope.topic_ids.length > 0 && (
               <Row label={tDetail('side.topics')}>
                 {tDetail('side.topicsValue', { count: scope.topic_ids.length })}
@@ -939,7 +1359,10 @@ export function AgentDetail({
           </SideCard>
 
           <SideCard title={tDetail('side.aiUse')}>
-            <Row label={tDetail('side.perRun')} slot="perRun">
+            <Row
+              label={operatorSettings ? tOperator('dailyBudgetLabel') : tDetail('side.perRun')}
+              slot="perRun"
+            >
               {percentOf(a.maxRunShare)}
             </Row>
             <Row label={tDetail('side.monthCap')} slot="monthCap">

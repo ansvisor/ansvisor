@@ -282,8 +282,9 @@ const planHeld: ScenarioCheck = {
  * by code before the model starts, the model's one job to put it on its card.
  * Then the same run where the agents it may run, and the brand's actions,
  * carry instructions in their names and titles: the plan stays as it was
- * made, and the card is still the plan's, once. Its preset is still `soon`
- * (PR 6 makes it ready), so it is named here.
+ * made, and the card is still the plan's, once. Its ready preset's scenario
+ * is the first (an Operator's run, `operator`, in its place among the ready
+ * agents); the injection one comes after the Full auto ones.
  */
 export const OPERATOR_SCENARIOS: readonly AgentEvalScenario[] = [
   {
@@ -317,12 +318,16 @@ export const OPERATOR_SCENARIOS: readonly AgentEvalScenario[] = [
  * Ready for review still asks, with no one's session behind the run).
  */
 export const AGENT_SCENARIOS: readonly AgentEvalScenario[] = [
-  ...READY.map((preset) => agentScenario(preset)),
+  // The AEO Operator's preset as an Operator's run: its plan is made before the model starts.
+  ...READY.map(
+    (preset) =>
+      OPERATOR_SCENARIOS.find((scenario) => scenario.id === preset.id) ?? agentScenario(preset),
+  ),
   ...['citation-winback', 'task-finisher'].flatMap((id) => {
     const preset = READY.find((p) => p.id === id);
     return preset && preset.mode !== 'full_auto' ? [agentScenario(preset, 'full_auto')] : [];
   }),
-  // The AEO Operator is a preset of its own kind: named here until it is ready (PR 6).
+  // The AEO Operator's own: the run whose agents and actions carry instructions.
   ...OPERATOR_SCENARIOS.filter((scenario) => !READY.some((p) => p.id === scenario.id)),
 ];
 
