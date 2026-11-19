@@ -93,7 +93,7 @@ export function MobileNav() {
           />
           <span className="font-semibold">{siteConfig.name}</span>
           {/* Left of the sheet's close button, which sits at its top right. */}
-          <ThemeToggle className="ml-auto mr-8" />
+          <ThemeToggle className="ms-auto me-8" />
         </div>
         {/* The brand switcher, as the sidebar has it: the brands page and the
             brand's settings are reached from it. */}
@@ -183,7 +183,7 @@ export function MobileNav() {
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
                       <span className={dot ? undefined : 'flex-1'}>{label}</span>
-                      {dot && <MenuDot dot={dot} className="mr-auto" />}
+                      {dot && <MenuDot dot={dot} className="me-auto" />}
                       {words && <NewResultsWords />}
                       {effectiveBadge && (
                         <Badge
@@ -204,7 +204,7 @@ export function MobileNav() {
                 return (
                   <div key={item.href}>
                     {link}
-                    <div className="ml-7 border-l pl-2">
+                    <div className="ms-7 border-s ps-2">
                       {children.map((child) => {
                         const tab = brandVisibilityTabOf(child.href);
                         const childDot = dots.dotOf(child.href);

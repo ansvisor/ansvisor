@@ -160,7 +160,7 @@ export function SuggestCompetitorsDialog({
                 : t('noCompetitorSuggestions')}
             </p>
           ) : (
-            <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+            <div className="max-h-[50vh] space-y-2 overflow-y-auto pe-1">
               {visibleSuggestions.map((suggestion) => {
                 const key = competitorSuggestionKey(suggestion);
                 const checked = selectedKeys.includes(key);
@@ -202,7 +202,7 @@ export function SuggestCompetitorsDialog({
               disabled={loading || saving}
               onClick={() => void loadSuggestions()}
             >
-              <RefreshCw className="mr-2 h-4 w-4" />
+              <RefreshCw className="me-2 h-4 w-4" />
               {loadError ? t('suggestCompetitorsRetry') : t('refreshCompetitorSuggestions')}
             </Button>
             <Button
@@ -211,9 +211,9 @@ export function SuggestCompetitorsDialog({
               onClick={() => void handleAddSelected()}
             >
               {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
               ) : (
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="me-2 h-4 w-4" />
               )}
               {t('addSelectedCompetitors', { count: selectedSuggestions.length })}
             </Button>

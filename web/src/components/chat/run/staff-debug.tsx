@@ -80,7 +80,7 @@ export function StaffDebug({ runId, status }: { runId: string; status: string })
         data-action="debug.open"
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
-        className="flex w-full items-center gap-1.5 text-left font-semibold"
+        className="flex w-full items-center gap-1.5 text-start font-semibold"
       >
         <ChevronDown
           aria-hidden

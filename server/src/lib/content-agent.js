@@ -13,6 +13,7 @@ import {
   rebuildSources,
 } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { brandFactSources } from './content-brand-facts.js';
 import { bannedPhrasesIn, readBannedPhrases } from './content-rules.js';
 import {
   RESEARCH_RULE,
@@ -61,12 +62,14 @@ import {
   withNamedNumbers,
 } from './content-sources.js';
 import { draftLanguage } from './content-language.js';
+import { fitSources } from './content-query-fit.js';
 import { editSpans } from './edit-spans.js';
 import { getLanguageName } from './languages.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 import { carefulLine, carefulRules } from './content-suggestion-stats.js';
 import { livePageLine, readLivePage } from './content-live-page.js';
 import { factsForPage, pageNames } from './fact-scope.js';
+import { numberedLists } from './content-lists.js';
 import { logger } from './logger.js';
 import { objectOptions } from './structured-output.js';
 
@@ -109,10 +112,18 @@ export const headingLimit = (tag) => (tag === 'h1' ? HEADING_LIMITS.h1 : HEADING
 export const HEADING_RULE = `- A heading stays a heading: one short line, an H1 up to ${HEADING_LIMITS.h1} characters and other headings up to ${HEADING_LIMITS.other}. Never write an answer, a sentence or a FAQ into a heading's replace; to answer under a heading, insert a paragraph after it.`;
 
 /** The fan-outs rule both agent prompts give the model: the ones named, in their words. */
-export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the page's questions. For each fan-out a rule names, in its words ("aeo tracker" → "What is an AEO tracker?"), not questions of your own: fanoutH2 wants an H2, fanoutFaq a question ending in "?" under the FAQ heading. Add it as its own question: after the paragraph that ends an existing answer, insert a heading at the level of the FAQ's other questions (an H3 under an H2 FAQ) and a paragraph that answers it. Reword an existing question into a fan-out's words only when its answer still answers it, replacing that question alone. One question per heading: never add a question to a heading. Call a change a fan-out answer only when it uses a fan-out listed.`;
+/**
+ * How a fan-out goes into a heading or a question (Content test 2026-11-19,
+ * item 3): a search is often a string of keywords, pasted as it is it made
+ * an H2 of 17 words no one would write.
+ */
+export const FANOUT_WORDING = `A fan-out is a search, often a string of keywords: write it as a short, natural heading or question a person would write (about 6 to 12 words), keeping its main terms ("2026 ai seo geo brand monitoring tools platforms pricing features" → "Which AI SEO and GEO brand monitoring tools should you compare in 2026?"). Never paste a fan-out as it is, and never put a word in another language than the page's into a heading.`;
+
+export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the page's questions. For each fan-out a rule names, with its main terms ("aeo tracker" → "What is an AEO tracker?"), not questions of your own: fanoutH2 wants an H2, fanoutFaq a question ending in "?" under the FAQ heading. ${FANOUT_WORDING} Add it as its own question: after the paragraph that ends an existing answer, insert a heading at the level of the FAQ's other questions (an H3 under an H2 FAQ) and a paragraph that answers it. Reword an existing question to carry a fan-out's main terms only when its answer still answers it, replacing that question alone. One question per heading: never add a question to a heading. Call a change a fan-out answer only when it uses a fan-out listed.`;
 
 /** The links rule both agent prompts give the model: only the URLs listed, never invented. */
-export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
+export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.
+- Keep the page's links: a replace whose "before" has linked words keeps each link in "after", to the same URL, on the words it explains (a shorter sentence too).`;
 
 /** What the agent may say of a source, and the names a list keeps (editor test 2026-10-25). */
 export const ATTRIBUTION_RULE = `- Never give a claim to a source that neither the page nor Your input gives ("According to X…", "X says…", "X found that…"): you don't see what a cited page or a link says. A link goes on the words it explains, never as a source for a claim. Keep every name a list has (products, brands, people): never drop one.`;
@@ -194,7 +205,7 @@ export const suggestionsSchema = z.object({
         after: z
           .string()
           .describe(
-            `replace: the new words, as plain text with links only as <a href> to the URLs listed (a heading stays one line: an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}); insert: the blocks to add, as simple HTML (h2, h3, p, ul, ol, li, strong, em, a).`,
+            `replace: the new words, as plain text with links only as <a href> to the URLs listed (a heading stays one line: an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}); insert: the blocks to add, as simple HTML (h2, h3, p, ul, ol, li, table, tr, th, td, strong, em, a).`,
           ),
         reason: z.string().describe('What the change does, in a few words.'),
         rules: z.array(z.string()).describe('The keys of the rules it fixes.'),
@@ -212,7 +223,7 @@ export const SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimi
 Rules for your suggestions:
 - Fix only the rules listed. Each suggestion fixes one or more of them; put their keys in "rules".
 - A replace changes words inside one passage: copy "before" exactly as that passage has it (a phrase or a sentence), and write "after" as plain text that fits in its place, with links only as the links rule below says.
-- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links).
+- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, table, tr, th, td, strong, em, and a for links). Steps in order and rankings go in an <ol>, its items without numbers of their own; a comparison of options by the same criteria in a table, a row per option.
 ${HEADING_RULE}
 ${LINK_RULE}
 ${FANOUT_RULE}
@@ -241,6 +252,94 @@ export function passageKey(text) {
 }
 
 /** The page's passages as the editor reads them: headings and paragraphs, in order. */
+/**
+ * Each passage's links, keyed as passageKey keys its words: the words each
+ * links and where to (Content test 2026-11-19, item 7: a shortened sentence
+ * lost its outbound link).
+ */
+export function passageLinks(html) {
+  const $ = cheerio.load(html || '', null, false);
+  const byPassage = new Map();
+  $('h1, h2, h3, h4, h5, h6, p').each((_, el) => {
+    const links = $(el)
+      .find('a[href]')
+      .toArray()
+      .map((a) => ({ text: $(a).text(), href: String($(a).attr('href') ?? '').trim() }))
+      .filter((link) => link.text.trim() && link.href);
+    if (!links.length) return;
+    const key = passageKey($(el).text());
+    byPassage.set(key, [...(byPassage.get(key) ?? []), ...links]);
+  });
+  return byPassage;
+}
+
+/**
+ * A replace's links with the passage's own kept: each link on the words
+ * `before` changes goes on the same words in `words` when they are still
+ * there; null when one would be lost (its words gone, or linked elsewhere).
+ */
+export function keepPassageLinks(passageText, links, before, words, wordLinks) {
+  const at = passageText.indexOf(before);
+  if (at < 0 || !links?.length) return wordLinks;
+  const end = at + before.length;
+  const kept = [...wordLinks];
+  let from = 0;
+  for (const link of links) {
+    const start = passageText.indexOf(link.text, from);
+    if (start < 0) continue;
+    from = start + link.text.length;
+    // Untouched by the change: the editor keeps it.
+    if (start >= end || start + link.text.length <= at) continue;
+    const key = linkKey(link.href) ?? link.href;
+    if (kept.some((l) => (linkKey(l.href) ?? l.href) === key)) continue;
+    const place = words.indexOf(link.text.trim());
+    const free =
+      place >= 0 && !kept.some((l) => l.start < place + link.text.trim().length && place < l.end);
+    if (!free) return null;
+    kept.push({ start: place, end: place + link.text.trim().length, href: link.href });
+  }
+  return kept.sort((a, b) => a.start - b.start);
+}
+
+const YEAR = /(?<!\d)(?:19|20)\d{2}(?!\d)/g;
+const yearsIn = (text) => String(text ?? '').match(YEAR) ?? [];
+
+/**
+ * The rules whose claim a change's own words can show (Content test
+ * 2026-11-19, item 7: a change named "add dated data point" only took a
+ * placeholder out): a dated point brings a year its words didn't have, a
+ * link rule a link the passage didn't have.
+ */
+const SHOWN_BY_CHANGE = {
+  datedPoint: ({ before, added }) => yearsIn(added).some((year) => !yearsIn(before).includes(year)),
+  outboundLinks: ({ newLinks }) => newLinks > 0,
+  internalLinks: ({ newLinks }) => newLinks > 0,
+  citeInline: ({ newLinks }) => newLinks > 0,
+};
+
+/**
+ * The rules a suggestion's changes show, of those it names: each one
+ * SHOWN_BY_CHANGE reads that its words don't show goes. Null when it named
+ * rules and none is left: its label says what it doesn't do.
+ */
+export function shownRules(rules, change) {
+  const shown = rules.filter((key) => !SHOWN_BY_CHANGE[key] || SHOWN_BY_CHANGE[key](change));
+  return rules.length && !shown.length ? null : shown;
+}
+
+/** The links an agent may write with the page's own added: it may keep each where it is. */
+export function withPageLinks(allow, html) {
+  if (!allow) return allow;
+  const out = new Map(allow);
+  for (const links of passageLinks(html).values()) {
+    for (const link of links) {
+      const key = linkKey(link.href);
+      if (key && !out.has(key)) out.set(key, link.href);
+    }
+  }
+  return out;
+}
+
 export function draftPassages(html) {
   const $ = cheerio.load(html || '', null, false);
   const passages = [];
@@ -259,6 +358,13 @@ const INSERT_TAGS = new Set([
   'ul',
   'ol',
   'li',
+  // A comparison as a table (Content test 2026-11-19, item 12).
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
   'strong',
   'em',
   'b',
@@ -295,7 +401,8 @@ export function cleanInsertHtml(html, links = null) {
     }
     for (const name of Object.keys(el.attribs ?? {})) $(el).removeAttr(name);
   }
-  return $.html().trim();
+  // Numbered paragraphs, or numbers written into a list's items: a numbered list.
+  return numberedLists($.html().trim());
 }
 
 /**
@@ -939,6 +1046,8 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
   // The brand's banned phrases (Content rules): no change brings one in.
   const bannedPhrases = sourcing.bannedPhrases ?? [];
   let droppedBanned = 0;
+  let droppedLinks = 0;
+  let droppedLabels = 0;
   const kept = [];
   const seen = new Set();
   for (const answer of raw) {
@@ -1004,8 +1113,21 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       if (!before || !passage.text.includes(before)) continue;
       const split = splitReplace(s.after, passage.tag, links);
       const { words, blocks } = split;
-      // As many as a suggestion may keep (00240).
-      const wordLinks = split.links.slice(0, MAX_LINKS);
+      // The passage's own links on the words it changes stay, on the same
+      // words; a change that would lose one isn't kept (Content test
+      // 2026-11-19, item 7). As many as a suggestion may keep (00240).
+      const withOwn = keepPassageLinks(
+        passage.text,
+        sourcing.pageLinks?.get(passageKey(passage.text)),
+        before,
+        words,
+        split.links,
+      );
+      if (!withOwn) {
+        droppedLinks += 1;
+        continue;
+      }
+      const wordLinks = withOwn.slice(0, MAX_LINKS);
       // Linking words the passage already has is a change too.
       const changed = words && (words !== before || wordLinks.length > 0);
       // Read in what is kept: the passage's new words, and the blocks after it.
@@ -1054,6 +1176,29 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
     }
     changes = changes.filter(Boolean);
     if (!changes.length || changes.some((c) => seen.has(c.id))) continue;
+    // Its rules as its words show them: a label it doesn't live up to goes,
+    // and the change with it when none is left.
+    const ownHrefs = new Set(
+      (sourcing.pageLinks?.get(passageKey(passage.text)) ?? []).map(
+        (link) => linkKey(link.href) ?? link.href,
+      ),
+    );
+    const hrefsOf = (row) =>
+      row.kind === 'insert'
+        ? [...String(row.after_text).matchAll(/<a\s[^>]*href="([^"]+)"/gi)].map((m) => m[1])
+        : (row.after_links ?? []).map((l) => l.href);
+    const shown = shownRules(rules, {
+      before: s.kind === 'replace' ? s.before : '',
+      added: changes.map((c) => htmlLines(c.row.after_text).join(' ')).join(' '),
+      newLinks: changes
+        .flatMap((c) => hrefsOf(c.row))
+        .filter((href) => !ownHrefs.has(linkKey(href) ?? href)).length,
+    });
+    if (!shown) {
+      droppedLabels += 1;
+      continue;
+    }
+    for (const c of changes) c.row.rule_keys = shown;
     if (kept.length + changes.length > MAX_AGENT_SUGGESTIONS) continue;
     // What it used (v1.1 CE-033), and no number without a source.
     const rows = changes.map((c) => withSources(c.row, s, numbered, known));
@@ -1062,6 +1207,18 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       seen.add(c.id);
       kept.push(rows[i]);
     });
+  }
+  if (droppedLabels) {
+    logger.info(
+      { draftId: sourcing.draftId, labels: droppedLabels },
+      '[content-agent] suggestions not doing what they say dropped',
+    );
+  }
+  if (droppedLinks) {
+    logger.info(
+      { draftId: sourcing.draftId, links: droppedLinks },
+      '[content-agent] suggestions losing a link dropped',
+    );
   }
   // Counted, never the phrases.
   if (droppedBanned) {
@@ -1555,12 +1712,27 @@ async function fixWithRun({
       },
     };
   }
+  // Only the searches in the page's language, and the Search Console
+  // queries about this page (content-query-fit.js).
+  const fitted = fitSources(input.sources, {
+    language: await draftLanguage(draft, brand),
+    focus: [
+      draft.title,
+      ...prompts.map((p) => p.text),
+      draft.brief?.goal,
+      ...(draft.brief?.keywords ?? []),
+    ],
+  });
   const numbered = numberSources({
     prompts,
-    fanouts: input.sources?.fanouts,
+    fanouts: fitted?.fanouts,
     pages: input.sources?.pages,
-    queries: input.sources?.queries,
-    inputs: inputSources(inputRow, brand.name),
+    queries: fitted?.queries,
+    // The brand's approved facts beside Your input.
+    inputs: [
+      ...inputSources(inputRow, brand.name),
+      ...(await brandFactSources({ id: brandId, name: brand.name }, draft)),
+    ],
   });
   // A hand-off's details and the person's and brand's rules are the editor's
   // words: no fact the agent may write. The brand's approved facts are, read here.
@@ -1719,8 +1891,9 @@ async function fixWithRun({
     passages,
     lockedKeys,
     ruleKeys,
-    withFactLinks(linkAllowList(targets), looked.links),
+    withPageLinks(withFactLinks(linkAllowList(targets), looked.links), draft.body_html),
     {
+      pageLinks: passageLinks(draft.body_html),
       numbered,
       known,
       people,

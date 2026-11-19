@@ -399,10 +399,10 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
             total: summary.total,
             platforms: summary.platforms,
           })}
-          <span className="ml-2 text-muted-foreground/70">
+          <span className="ms-2 text-muted-foreground/70">
             {t('generated', { date: formatDateTime(set.generatedAt) })}
           </span>
-          <QuotaNote quota={quota} planId={planId} className="ml-2" />
+          <QuotaNote quota={quota} planId={planId} className="ms-2" />
           {sentLatest && (
             <span className="mt-1 flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
               <CircleCheck className="h-3.5 w-3.5" />

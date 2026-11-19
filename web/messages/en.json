@@ -14,6 +14,16 @@
     "upgrade": "Upgrade",
     "choosePlan": "Choose a plan"
   },
+  "serverErrors": {
+    "invalid": "That didn't go through: something in it isn't valid. Check it and try again.",
+    "too_large": "That's too large. Try something smaller.",
+    "too_long": "That's too long. Shorten it and try again.",
+    "rate_limited": "You're doing that a lot. Wait a few minutes and try again.",
+    "forbidden": "You don't have permission to do this. Ask an Admin.",
+    "duplicate": "That already exists.",
+    "missing_ai_key": "Add an AI provider key in Settings › AI Providers first.",
+    "server_error": "Something went wrong on our side. Try again."
+  },
   "aiUsage": {
     "meter": {
       "ai": "AI",
@@ -686,6 +696,7 @@
     "billing": "Plans & billing",
     "whatsNew": "What’s new",
     "whatsNewUnread": "New updates",
+    "language": "Language",
     "help": "Help",
     "signOut": "Sign out"
   },
@@ -5011,7 +5022,7 @@
       "addedLabel": "Added to an Action Center action",
       "createdNote": "Action Center sets its Priority Score. You close its tasks there.",
       "addedNote": "Added as evidence. Its targets don't change.",
-      "open": "Open in Actions",
+      "open": "Open in Action Center",
       "toastCreated": "Sent to Action Center",
       "toastAdded": "Added to the action in Action Center"
     },
@@ -5369,7 +5380,7 @@
       "save": "Save",
       "inFiles": "In Files",
       "openEditor": "Open in Editor",
-      "sendToActionCenter": "Send to Actions"
+      "sendToActionCenter": "Send to Action Center"
     }
   },
   "chatDeliverable": {
@@ -9163,7 +9174,7 @@
       "pagesSubOther": "+ {count} on other sites",
       "coverageOf": "of {count, plural, one {# site page} other {# site pages}}",
       "coverageSub": "{never} never audited · {stale} not in {days} days",
-      "coverageTip": "Pages of your site with an audit in the last {days} days, of those Ansvisor keeps from your sitemap, Google Analytics and the pages AI cites (up to 500). Pages you exclude in Site Audit settings, and checkout, login and legal pages, aren't counted.",
+      "coverageTip": "Pages of your site with an audit (those not audited in the last {days} days are said beside), of those Ansvisor keeps from your sitemap, Google Analytics and the pages AI cites (up to 500). Pages you exclude in Site Audit settings, and checkout, login and legal pages, aren't counted.",
       "seeNotAudited": "See the {count} not audited →",
       "authority": "Authority · E-E-A-T",
       "authorityTip": "The Authority and E-E-A-T scores, averaged over each page's latest audit, and the signals that fail or warn on the most pages.",
@@ -9269,7 +9280,7 @@
       },
       "list": "{pages}{count, plural, =0 {} other { and # more}}",
       "recent": "Leave out the {count, plural, one {# page} other {# pages}} audited in the last {days} days",
-      "recentPages": "{pages}{count, plural, =0 {} other { and # more}}. A page that hasn't changed scores the same.",
+      "recentPages": "{pages}{count, plural, =0 {} other { and # more}}. Audit them again after a change across the site, such as robots.txt or a template.",
       "recentPage": "{page} on {date}",
       "noLimit": "Your plan has no monthly limit. A page already being audited isn't started twice.",
       "noneLeft": "No audits left this month.",
@@ -9405,7 +9416,7 @@
       "counts": {
         "official": "Government and academic sites: .gov, .edu, .mil and their country forms, such as .gov.tr, .edu.tr, .ac.uk",
         "international": "International bodies: any .int site, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
-        "research": "Reference and research: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
+        "research": "Reference, research, standards and platform docs: wikipedia.org, doi.org, arxiv.org, nature.com, iso.org, w3.org, rfc-editor.org, schema.org, developers.google.com, developer.mozilla.org",
         "news": "Major news: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post",
         "trusted": "Your trusted sources:"
       },
@@ -9445,6 +9456,7 @@
       "firewall": "{count, plural, one {{bots} is} other {{bots} are}} blocked by your CDN or firewall, though robots.txt lets {count, plural, one {it} other {them}} in.",
       "robots": "robots.txt keeps out {bots}.",
       "allLetIn": "Every AI bot tested was let in.",
+      "unnamed": "robots.txt doesn't name the AI bots, so the audit can't confirm they're welcome. Add a group for each (for example \"User-agent: GPTBot\" with \"Allow: /\").",
       "inconclusive": "Your site turned away Ansvisor's own request ({status}), so the bots weren't tested.",
       "note": "Asked once as each bot, from Ansvisor's servers. A firewall that checks a crawler's own addresses can treat the real crawler differently.",
       "cell": {
@@ -10712,6 +10724,7 @@
     },
     "editor": {
       "back": "Back to the Library",
+      "newContent": "New content",
       "closeHere": "Close",
       "untitled": "Untitled",
       "newPage": "New page",
@@ -11181,7 +11194,8 @@
           "attach": "Attach a file"
         },
         "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
-        "counter": "{count} / {target} characters · {words, plural, one {# word} other {# words}}"
+        "counter": "{count} / {target} characters · {words, plural, one {# word} other {# words}}",
+        "counterRange": "{count} / {min}–{max} characters · {words, plural, one {# word} other {# words}}"
       },
       "link": {
         "title": "Add a link",
@@ -12413,6 +12427,7 @@
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
         "tooShortShort": "Too short yet",
         "notScored": "Not scored yet",
+        "needsAuthor": "Scored once the page has an author",
         "site": {
           "label": "Site trust",
           "score": "Site trust {score}/5",
@@ -12691,8 +12706,8 @@
           },
           "avgSentence": {
             "line": "Sentences average {words, number} words",
-            "detail": "Aim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.",
-            "detailShort": "Aim for 15–20 words: join some short ones, so each says one whole thing."
+            "detail": "Aim for 20 words or fewer: shorter sentences read faster, and AI answers quote them whole.",
+            "detailShort": "Under 8 words on average reads choppy: join some short ones, so each says one whole thing."
           },
           "longSentences": {
             "line": "{count, plural, one {# sentence} other {# sentences}} over 35 words",
@@ -13008,11 +13023,12 @@
     "autoGeneratedHint": "Opportunities are generated automatically as your tracking data comes in.",
     "generating": "Generating…",
     "sendToWorkflow": "Send to Workflow",
-    "generateBrief": "Generate Brief",
-    "generatingBrief": "Generating...",
-    "briefGenerated": "Brief Generated",
+    "generateBrief": "Build brief",
+    "generatingBrief": "Building brief…",
+    "briefGenerated": "Brief built",
+    "briefEmpty": "Build an AI-powered content brief with a suggested title, outline, target keywords, and competitor insights.",
     "briefLimitReached": "You've used this month's content briefs",
-    "sendToActions": "Send to Actions",
+    "sendToActions": "Send to Action Center",
     "draftCheckFailed": "Couldn't check for a draft · Retry",
     "sendToEditor": "Send to Editor",
     "writeThis": {
@@ -13027,7 +13043,7 @@
         "draftDetail": "The Content Agent writes the page from the brief, by your rules and the page type's.",
         "draftDetailPage": "The Content Agent suggests changes to {page} from the brief, by your rules and the page type's.",
         "review": "You review it",
-        "reviewDetail": "The editor opens as it writes, with a free estimate of its Site Audit score. Nothing is published."
+        "reviewDetail": "The editor opens as it writes. When you mark it ready, you get a free estimate of its Site Audit score. Nothing is published."
       },
       "usage": "Uses about <b>{estimate}</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
       "usageSmall": "Uses under <b>1%</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
@@ -13051,7 +13067,7 @@
       "word": "Export Word",
       "failed": "Couldn't export this opportunity. Please try again."
     },
-    "openInActions": "Open in Actions",
+    "openInActions": "Open in Action Center",
     "sendAgain": "Send Again",
     "copyAllData": "Copy All Data",
     "copiedToast": "Copied to clipboard",
@@ -13112,7 +13128,9 @@
       "avgScore": "Avg. Score",
       "shown": "{count} shown",
       "opportunities": "opportunities",
+      "opportunitiesAll": "all statuses, done ones too",
       "outOf100": "out of 100",
+      "outOf100All": "out of 100 · all statuses",
       "fromSignals": "from {count, plural, one {# signal} other {# signals}} analyzed"
     },
     "filters": {
@@ -13301,6 +13319,7 @@
       "sentAt": "Sent at {date}",
       "webhookResponse": "Webhook Response",
       "topCompetitor": "Strongest Competitor",
+      "gapPoints": "{gap, number} pts",
       "basketTitle": "Opportunity Basket",
       "basketSummary": "{prompts, plural, one {# prompt} other {# prompts}} · {included} searches included · {excluded} excluded",
       "basketIncluded": "Searches AI engines ran for these prompts",
@@ -14787,6 +14806,7 @@
       "showUsage": "Show usage",
       "hideUsage": "Hide usage",
       "locationsUsed": "{used} / {limit} prompt locations used",
+      "planEnded": "Your plan ended: prompts aren't tracked until you choose a plan",
       "view": {
         "label": "Prompt list",
         "tracked": "Tracked",
@@ -16290,6 +16310,16 @@
       "verifiedLabel": "Verified seller in ChatGPT",
       "verifiedStatus": "Unknown",
       "verifiedDetail": "OpenAI hasn't said how the verified-seller flag is granted, and in early tests shops without it were left out of answers. Until it says more, send a direct product feed."
+    },
+    "page": {
+      "allTime": "All time",
+      "last": "Last {period}",
+      "allPlatforms": "All platforms",
+      "allRegions": "All regions",
+      "noProducts": "No products found matching filters.",
+      "appearances": "{count, plural, one {# appearance} other {# appearances}}",
+      "brandAppearances": "{brand} • {count, plural, one {# appearance} other {# appearances}}",
+      "viewPrompt": "View Prompt Details"
     }
   },
   "reports": {
@@ -16878,6 +16908,17 @@
       "saved": "Time zone saved",
       "saveFailed": "Couldn’t save your time zone. Try again."
     },
+    "language": {
+      "label": "Language",
+      "automatic": "Automatic ({language})",
+      "hint": "The language of Ansvisor’s screens, for you only. Your brands’ content language doesn’t change.",
+      "loading": "Loading languages…",
+      "moreSoon": "More languages are on the way.",
+      "preview": "Staff and test builds also see the languages that have no translation yet, and a test language with longer text. They show English where text is missing.",
+      "testLanguage": "{language} · test",
+      "saved": "Language saved",
+      "saveFailed": "Couldn’t save your language. Try again."
+    },
     "save": "Save changes",
     "saved": "Changes saved!",
     "signOut": "Sign out",
@@ -17368,6 +17409,8 @@
     "integrations_connectForbidden": "Only admins and managers can connect integrations.",
     "integrations_statusFailed": "Couldn't check whether {label} is connected. Try again in a moment.",
     "integrations_statusTimedOut": "Checking {label} took too long. Try again in a moment.",
+    "integrations_propertiesFailed": "Couldn't load {source} properties.",
+    "integrations_propertiesNoAccess": "Google didn't give Ansvisor access to {source}: a box on Google's screen was left unticked. Disconnect it above, then connect again and tick every box.",
     "integrations_propertiesTimedOut": "Reading the properties took too long. Try again in a moment.",
     "integrations_retry": "Try again",
     "integrations_propertyMapping": "Property mapping",

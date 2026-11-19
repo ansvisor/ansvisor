@@ -175,7 +175,7 @@ function RunAgentButton({
   const main = (
     <Button
       size="sm"
-      className={cn(split && 'rounded-r-none')}
+      className={cn(split && 'rounded-e-none')}
       disabled={running || disabled}
       onClick={() => {
         run();
@@ -211,7 +211,7 @@ function RunAgentButton({
             <Button
               size="sm"
               aria-label={t('more')}
-              className="rounded-l-none border-l border-primary-foreground/20 px-1.5"
+              className="rounded-s-none border-s border-primary-foreground/20 px-1.5"
             />
           }
         >
@@ -704,7 +704,7 @@ function TextRuleRow({
         className="h-6 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-xs outline-none hover:border-border focus-visible:border-border focus-visible:ring-2 focus-visible:ring-ring/50"
       />
       <span
-        className="w-20 shrink-0 text-right text-[11px] text-muted-foreground"
+        className="w-20 shrink-0 text-end text-[11px] text-muted-foreground"
         title={t(`text.${check}Hint`)}
       >
         {rule.on ? t(`status.${check}`) : t('status.off')}
@@ -888,7 +888,7 @@ function RuleRow({
         )}
       </div>
       {rule.kind !== 'switch' && (
-        <div className="mt-1 flex items-center gap-1 pl-9">
+        <div className="mt-1 flex items-center gap-1 ps-9">
           {rule.key === 'length' ? (
             <LengthValue rule={rule} name={name} onCommit={(value) => onChange({ value })} />
           ) : (
@@ -897,10 +897,10 @@ function RuleRow({
         </div>
       )}
       {note && rule.on && (
-        <p className="mt-1 pl-9 text-[11px] text-amber-700 dark:text-amber-400">{note}</p>
+        <p className="mt-1 ps-9 text-[11px] text-amber-700 dark:text-amber-400">{note}</p>
       )}
       {why && (
-        <p className="mt-1 pl-9 text-[11px] text-muted-foreground">
+        <p className="mt-1 ps-9 text-[11px] text-muted-foreground">
           {why.text}
           {why.action && (
             <>
@@ -917,12 +917,12 @@ function RuleRow({
         </p>
       )}
       {left && left.shown.length > 0 && (
-        <p className="mt-1 pl-9 text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
+        <p className="mt-1 ps-9 text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
           {t('fanoutsLeft', { list: left.shown.map((f) => `“${f}”`).join(', '), more: left.more })}
         </p>
       )}
       {phrases && phrases.shown.length > 0 && (
-        <p className="mt-1 pl-9 text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
+        <p className="mt-1 ps-9 text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
           {t('bannedFound', {
             list: phrases.shown.map((p) => `“${p}”`).join(', '),
             more: phrases.more,
@@ -980,7 +980,7 @@ function RuleValue({
         }}
         className={cn(
           'h-6 rounded-md border bg-background px-1.5 text-xs tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-          wide ? 'min-w-0 flex-1' : 'w-14 text-right',
+          wide ? 'min-w-0 flex-1' : 'w-14 text-end',
           rule.changed && 'border-primary/50',
         )}
       />
@@ -1044,7 +1044,7 @@ function LengthValue({
         if (e.key === 'Escape') setText(null);
       }}
       className={cn(
-        'h-6 w-14 rounded-md border bg-background px-1.5 text-right text-xs tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+        'h-6 w-14 rounded-md border bg-background px-1.5 text-end text-xs tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
         rule.changed && 'border-primary/50',
       )}
     />
@@ -1094,7 +1094,7 @@ function StatusBadge({
         type="button"
         title={t('noFanoutsHint')}
         onClick={onOpenSources}
-        className="w-20 shrink-0 truncate text-right text-[11px] font-medium text-primary underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="w-20 shrink-0 truncate text-end text-[11px] font-medium text-primary underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         {t('addPrompts')}
       </button>
@@ -1102,7 +1102,7 @@ function StatusBadge({
   }
   if (!on) {
     return (
-      <span className="w-20 shrink-0 text-right text-[11px] text-muted-foreground">{t('off')}</span>
+      <span className="w-20 shrink-0 text-end text-[11px] text-muted-foreground">{t('off')}</span>
     );
   }
   const text = ruleStatusText(t, status);
@@ -1110,7 +1110,7 @@ function StatusBadge({
     <span
       title={ruleStatusDetail(t, status)}
       className={cn(
-        'w-20 shrink-0 truncate text-right text-[11px] font-medium',
+        'w-20 shrink-0 truncate text-end text-[11px] font-medium',
         status.state === 'ok' && 'text-emerald-600 dark:text-emerald-400',
         // Red only for what blocks (editor UX review 2026-11-03): an open rule
         // is amber; one the agent tried, or no run can close, a chip with its note.
@@ -1142,7 +1142,7 @@ function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle:
       <span
         className={cn(
           'absolute top-0.5 h-3 w-3 rounded-full bg-background transition-all',
-          on ? 'left-3.5' : 'left-0.5',
+          on ? 'start-3.5' : 'start-0.5',
         )}
       />
     </button>

@@ -8,7 +8,8 @@ vi.mock('../retry.js', () => ({ withRetry: (fn) => fn() }));
 const logger = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn(), warn: vi.fn() }));
 vi.mock('../logger.js', () => ({ logger, default: logger }));
 
-const { brandFactsFor, generateRecommendations } = await import('./recommendations.js');
+const { brandFactsFor, bylineExpected, generateRecommendations, placeholderInventedLinks } =
+  await import('./recommendations.js');
 const { MAX_COPY_CHARS, sentencesOf } = await import('./recommendation-guard.js');
 
 // The pricing page from the spec's bug report, cut down.
@@ -138,6 +139,22 @@ describe('generateRecommendations', () => {
     expect(prompt).toContain('- Name: Ansvisor');
     expect(prompt).toContain('- Description: AI visibility platform');
     expect(prompt).toContain('- Domains: ansvisor.com');
+  });
+
+  it('tells the model which authority sites the page links to already, never to suggest again', async () => {
+    modelReturns([]);
+    await generateRecommendations(ctx, {
+      results: [
+        {
+          key: 'outbound-authority-links',
+          status: 'warn',
+          evidence: { authorityHosts: ['rfc-editor.org'], count: 1 },
+        },
+      ],
+    });
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain('| already links to: rfc-editor.org');
+    expect(system).toContain('Never suggest a source the page already links to');
   });
 
   it("gives the model the brand's rules on any page it audits, and none without (00450)", async () => {
@@ -320,5 +337,79 @@ describe('brandFactsFor', () => {
     expect(brandFactsFor('https://competitor.com/pricing', row, domains)).toBeNull();
     expect(brandFactsFor('https://ansvisor.com/pricing', row, [])).toBeNull();
     expect(brandFactsFor('https://ansvisor.com/pricing', row, null)).toBeNull();
+  });
+});
+
+describe('guardrails found on ansvisor.com (2026-11-19)', () => {
+  const at = (url, body = '<p>Text</p>', head = '') => ({
+    url,
+    $: cheerio.load(`<html><head>${head}</head><body>${body}</body></html>`),
+    text: 'Text',
+    now: Date.UTC(2026, 10, 19),
+  });
+  const authorFail = [
+    { key: 'author-credentials', status: 'fail', evidence: {} },
+    { key: 'byline-depth', status: 'fail', evidence: {} },
+    { key: 'h1-quality', status: 'fail', evidence: {} },
+  ];
+  const askedKeys = () => generateObject.mock.calls[0][0].prompt;
+
+  it('expects a byline on articles, not on home, pricing, product or legal pages', () => {
+    expect(bylineExpected(at('https://ansvisor.com/blog/chatgpt-business-hub'))).toBe(true);
+    expect(bylineExpected(at('https://ansvisor.com/ai-visibility-glossary/robots-txt'))).toBe(true);
+    for (const url of [
+      'https://ansvisor.com/',
+      'https://ansvisor.com/pricing',
+      'https://ansvisor.com/platform',
+      'https://ansvisor.com/privacy-policy',
+      'https://ansvisor.com/terms',
+    ]) {
+      expect(bylineExpected(at(url))).toBe(false);
+    }
+    expect(
+      bylineExpected(
+        at(
+          'https://shop.example/p/mug',
+          '',
+          '<script type="application/ld+json">{"@type":"Product"}</script>',
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it('asks for no author advice on the home and pricing pages', async () => {
+    modelReturns([]);
+    await generateRecommendations(at('https://ansvisor.com/pricing'), { results: authorFail });
+    expect(askedKeys()).not.toContain('author-credentials');
+    expect(askedKeys()).toContain('h1-quality');
+  });
+
+  it('names only the tracked engines, and sets the rules for prices, claims and addresses', async () => {
+    modelReturns([]);
+    await generateRecommendations(at('https://ansvisor.com/blog/a'), {
+      results: authorFail,
+      engines: ['ChatGPT', 'Gemini'],
+    });
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain(
+      'TRACKED ENGINES (the only AI engines to name in copy): ChatGPT, Gemini',
+    );
+    expect(system).toContain('with its billing period');
+    expect(system).toContain('Never state as fact anything about the brand');
+    expect(system).toContain('use [your author url] or [your page url]');
+  });
+
+  it('turns an address on the brand’s site the page doesn’t have into a placeholder', () => {
+    const page = at('https://ansvisor.com/blog/a', '<a href="/pricing">Pricing</a>');
+    expect(
+      placeholderInventedLinks(
+        '<a href="/authors/cihan-geyik" rel="author">Cihan</a> <a href="/pricing">Plans</a> <a href="https://www.rfc-editor.org/x">RFC</a>',
+        page,
+      ),
+    ).toEqual({
+      text: '<a href="[your author url]" rel="author">Cihan</a> <a href="/pricing">Plans</a> <a href="https://www.rfc-editor.org/x">RFC</a>',
+      hits: 1,
+    });
+    expect(placeholderInventedLinks(null, page)).toEqual({ text: null, hits: 0 });
   });
 });

@@ -10,7 +10,7 @@
  * response-assembly time, so evaluators stay purely about measurement.
  */
 
-import { jsonLd, typesOf, classifyLinks, metaContent } from './helpers.js';
+import { allNodes, jsonLd, typesOf, classifyLinks, metaContent } from './helpers.js';
 import { pageProse } from './readability.js';
 import { NO_JS, botProtectionPage, compareNoJs } from '../no-js.js';
 
@@ -169,8 +169,8 @@ export const jsonLdRelevance = {
 export const faqSchema = {
   key: 'faq-schema',
   evaluate(ctx) {
-    const { nodes } = jsonLd(ctx);
-    const faq = nodes.find((n) => typesOf(n).includes('faqpage'));
+    // Anywhere in the JSON-LD: at the top, in a @graph, or nested (a WebPage's mainEntity).
+    const faq = allNodes(jsonLd(ctx).nodes).find((n) => typesOf(n).includes('faqpage'));
     const qa = faq && Array.isArray(faq.mainEntity) ? faq.mainEntity.length : 0;
     const ok = Boolean(faq) && qa >= 2;
     return {
@@ -264,28 +264,66 @@ export const tables = {
   },
 };
 
+/**
+ * An image marked decorative on purpose: an explicit alt="" (as the fix
+ * asks of a decorative image), role="presentation" or "none", or hidden
+ * from assistive technology. It needs no description, so it's left out.
+ */
+function decorative($img) {
+  const alt = $img.attr('alt');
+  const role = ($img.attr('role') ?? '').trim().toLowerCase();
+  return (
+    (typeof alt === 'string' && alt.trim() === '') ||
+    role === 'presentation' ||
+    role === 'none' ||
+    ($img.attr('aria-hidden') ?? '').trim().toLowerCase() === 'true'
+  );
+}
+
 export const altText = {
   key: 'alt-text',
   evaluate(ctx) {
     const imgs = ctx.$('img');
-    const total = imgs.length;
-    if (total === 0) {
+    if (imgs.length === 0) {
       return { status: 'na', score: null, evidence: { images: 0 } };
     }
+    // Of the images that need a description: those with one. A decorative
+    // image (alt="") is what the fix asks for, never a miss.
+    let meaningful = 0;
+    let decorativeCount = 0;
     let withAlt = 0;
     imgs.each((_, el) => {
-      const alt = ctx.$(el).attr('alt');
-      if (typeof alt === 'string' && alt.trim().length > 0) withAlt += 1;
+      const $img = ctx.$(el);
+      const alt = $img.attr('alt');
+      if (typeof alt === 'string' && alt.trim().length > 0) {
+        meaningful += 1;
+        withAlt += 1;
+      } else if (decorative($img)) {
+        decorativeCount += 1;
+      } else {
+        meaningful += 1;
+      }
     });
-    const ratio = withAlt / total;
+    if (meaningful === 0) {
+      return {
+        status: 'na',
+        score: null,
+        evidence: { images: imgs.length, decorative: decorativeCount },
+      };
+    }
+    const ratio = withAlt / meaningful;
     let status = 'fail';
-    let score = ratio;
     if (ratio >= 0.8) status = 'pass';
     else if (ratio >= 0.5) status = 'warn';
     return {
       status,
-      score: Number(score.toFixed(2)),
-      evidence: { images: total, withAlt, ratio: Number(ratio.toFixed(2)) },
+      score: Number(ratio.toFixed(2)),
+      evidence: {
+        images: imgs.length,
+        decorative: decorativeCount,
+        withAlt,
+        ratio: Number(ratio.toFixed(2)),
+      },
     };
   },
 };

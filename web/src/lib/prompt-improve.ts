@@ -56,7 +56,7 @@ export interface ImproveSend {
 }
 
 export interface ImproveSent {
-  /** The newest live send of the current set; decides "Open in Actions". */
+  /** The newest live send of the current set; decides "Open in Action Center". */
   latest: ImproveSend | null;
   /** Suggestions any live send of this set carried ("Already sent"). */
   sentSuggestionIds: string[];
@@ -191,7 +191,7 @@ function shortUrl(url: string): string {
   }
 }
 
-/** Where "Open in Actions" goes: the Actions tab with this action's panel open. */
+/** Where "Open in Action Center" goes: the Actions tab with this action's panel open. */
 export function actionCenterLink(actionId: string): string {
   return `/dashboard/action-center/actions?action=${actionId}`;
 }

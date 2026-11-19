@@ -67,6 +67,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAiText } from '@/hooks/use-ai-text';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import type { ChatPageFilter } from '@/lib/chat/page-context';
@@ -339,7 +340,7 @@ function OpportunityScope({ opp }: { opp: ContentOpportunity }) {
   return (
     <span
       className={cn(
-        'mr-1.5 inline-flex items-center rounded px-1.5 py-px align-middle text-[11px] font-medium leading-4 ring-1 ring-inset',
+        'me-1.5 inline-flex items-center rounded px-1.5 py-px align-middle text-[11px] font-medium leading-4 ring-1 ring-inset',
         group
           ? 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900'
           : 'bg-muted text-foreground/80 ring-border',
@@ -374,7 +375,7 @@ function OpportunityTextCell({
       <button
         type="button"
         onClick={onOpen}
-        className="block min-w-0 flex-1 text-left hover:underline"
+        className="block min-w-0 flex-1 text-start hover:underline"
       >
         <ClampedText
           handle={handle}
@@ -389,7 +390,7 @@ function OpportunityTextCell({
           {opp.sourceData?.reopened && opp.status === 'new' && (
             <Badge
               variant="outline"
-              className="mr-1.5 border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400"
+              className="me-1.5 border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400"
             >
               {t('newSignal')}
             </Badge>
@@ -398,7 +399,7 @@ function OpportunityTextCell({
           {opp.sourceData?.alternativeOf && (
             <Badge
               variant="outline"
-              className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
+              className="me-1.5 align-middle text-[10px] font-normal text-muted-foreground"
               title={t('alternative.of') + ' ' + opp.sourceData.alternativeOf.title}
             >
               {t('alternative.badge')}
@@ -407,7 +408,7 @@ function OpportunityTextCell({
           {opp.source && opp.source !== 'system' && (
             <Badge
               variant="outline"
-              className="mr-1.5 align-middle text-[10px] font-normal text-muted-foreground"
+              className="me-1.5 align-middle text-[10px] font-normal text-muted-foreground"
               title={t(`sourceHint.${opp.source}`)}
             >
               {t(`source.${opp.source}`)}
@@ -473,6 +474,8 @@ export default function ContentPage() {
 
   const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
   const [total, setTotal] = useState(0);
+  // The open ones among them: "Available" (Content test 2026-11-19, item 10).
+  const [openCount, setOpenCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -567,6 +570,7 @@ export default function ContentPage() {
       if (!activeBrandId) {
         setOpportunities([]);
         setTotal(0);
+        setOpenCount(0);
         setAggregates({
           avgScore: 0,
           highImpactCount: 0,
@@ -588,6 +592,7 @@ export default function ContentPage() {
         if (isCancelled?.()) return;
         setOpportunities(data.opportunities);
         setTotal(data.total);
+        setOpenCount(data.open ?? data.total);
         setAggregates(
           data.aggregates ?? {
             avgScore: 0,
@@ -1136,6 +1141,17 @@ export default function ContentPage() {
     }
   };
 
+  // The rows' titles and reasons in the person's interface language (LOC-010).
+  const aiText = useAiText(
+    'opportunity',
+    opportunities.map((o) => o.id),
+  );
+  const shownText = (opp: ContentOpportunity): ContentOpportunity => ({
+    ...opp,
+    title: aiText(opp.id, 'title', opp.title),
+    description: opp.description ? aiText(opp.id, 'description', opp.description) : opp.description,
+  });
+
   const filtered = opportunities.filter(
     (o) =>
       o.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -1317,14 +1333,15 @@ export default function ContentPage() {
               title={t('kpi.highImpact')}
               icon={Zap}
               value={aggregates.highImpactCount}
-              sub={t('kpi.opportunities')}
+              // All statuses: said, as "Available" counts the open ones only.
+              sub={statusFilter === 'all' ? t('kpi.opportunitiesAll') : t('kpi.opportunities')}
             />
             {/* Two to a row on a phone: the third takes the row's width. */}
             <KpiCard
               title={t('kpi.avgScore')}
               icon={BarChart3}
               value={aggregates.avgScore}
-              sub={t('kpi.outOf100')}
+              sub={statusFilter === 'all' ? t('kpi.outOf100All') : t('kpi.outOf100')}
               className="col-span-2 sm:col-span-1"
             />
           </div>
@@ -1341,17 +1358,17 @@ export default function ContentPage() {
                       variant="outline"
                       className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                     >
-                      {t('available', { count: total })}
+                      {t('available', { count: openCount })}
                     </Badge>
                   </div>
                   <div className="relative w-full max-w-80">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder={t('filters.search')}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       aria-label={t('filters.search')}
-                      className="h-9 pl-9 text-sm"
+                      className="h-9 ps-9 text-sm"
                     />
                   </div>
                 </div>
@@ -1386,7 +1403,7 @@ export default function ContentPage() {
                             <span className="min-w-0 flex-1 truncate" title={o.name}>
                               {o.name}
                             </span>
-                            <span className="ml-2 shrink-0 tabular-nums text-muted-foreground">
+                            <span className="ms-2 shrink-0 tabular-nums text-muted-foreground">
                               {o.count}
                             </span>
                           </SelectItem>
@@ -1417,7 +1434,7 @@ export default function ContentPage() {
                               <ComboboxItem key={item.value} value={item} title={item.label}>
                                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
                                 {item.count !== null && (
-                                  <span className="ml-2 shrink-0 tabular-nums text-muted-foreground">
+                                  <span className="ms-2 shrink-0 tabular-nums text-muted-foreground">
                                     {item.count}
                                   </span>
                                 )}
@@ -1477,13 +1494,23 @@ export default function ContentPage() {
                         }
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    {/* Wider than the 130px trigger so the hints fit; if one is
+                        still too long it wraps instead of being cut off. */}
+                    <SelectContent
+                      align="start"
+                      alignItemWithTrigger={false}
+                      className="w-auto min-w-(--anchor-width) max-w-72"
+                    >
                       <SelectItem value="all">{t('filters.allSources')}</SelectItem>
                       {(['system', 'manual', 'prompt', 'action'] as const).map((value) => (
-                        <SelectItem key={value} value={value}>
+                        <SelectItem
+                          key={value}
+                          value={value}
+                          className="[&>div]:min-w-0 [&>div]:shrink"
+                        >
                           <span className="flex flex-col">
                             <span>{t(`source.${value}`)}</span>
-                            <span className="text-[11px] text-muted-foreground">
+                            <span className="whitespace-normal text-[11px] text-muted-foreground">
                               {t(`sourceHint.${value}`)}
                             </span>
                           </span>
@@ -1496,7 +1523,7 @@ export default function ContentPage() {
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       aria-label={`${t('suggestedRange.label')}: ${t(`suggestedRange.${suggestedRange}`)}, ${t('sort.label')}: ${t(`sort.${sortOrder as OpportunitySort}`)}`}
-                      className="flex h-8 w-fit items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-xs whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50"
+                      className="flex h-8 w-fit items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pe-2 ps-2.5 text-xs whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50"
                     >
                       {t(`suggestedRange.${suggestedRange}`)} ·{' '}
                       {t(`sort.${sortOrder as OpportunitySort}`)}
@@ -1590,7 +1617,7 @@ export default function ContentPage() {
                 <span className="text-xs text-muted-foreground">
                   {t('bulk.selected', { count: selectedIds.size })}
                 </span>
-                <div className="flex items-center gap-1 ml-auto">
+                <div className="flex items-center gap-1 ms-auto">
                   {/* Sending to the webhook, bulk changes, dismissing and deleting are
                       for admins and managers, as the server and the database allow them. */}
                   {canManage && (
@@ -1707,7 +1734,7 @@ export default function ContentPage() {
                   <TableRow>
                     {/* Every bulk action is for admins and managers, so the others
                         get no boxes to tick; the column stays for the layout. */}
-                    <TableHead className="w-10 pl-4">
+                    <TableHead className="w-10 ps-4">
                       {canManage && (
                         <Checkbox
                           checked={filtered.length > 0 && selectedIds.size === filtered.length}
@@ -1724,7 +1751,7 @@ export default function ContentPage() {
                     {/* The other columns are sized to fit their badges and buttons;
                         the action takes what is left, so nothing spills into its
                         neighbour on narrower screens. */}
-                    <TableHead className="pl-6">{t('table.action')}</TableHead>
+                    <TableHead className="ps-6">{t('table.action')}</TableHead>
                     {/* Hidden on narrower screens, where the action column needs the room. */}
                     <TableHead className="hidden w-[112px] whitespace-nowrap xl:table-cell">
                       {t('table.suggested')}
@@ -1733,14 +1760,14 @@ export default function ContentPage() {
                     <TableHead className="w-[88px] text-center">{t('table.impact')}</TableHead>
                     <TableHead className="w-[72px] text-center">{t('table.score')}</TableHead>
                     <TableHead className="w-[136px] text-center">{t('table.status')}</TableHead>
-                    <TableHead className="w-[96px] text-right pr-6">{t('table.actions')}</TableHead>
+                    <TableHead className="w-[96px] text-end pe-6">{t('table.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {Array.from({ length: pendingCount }, (_, i) => (
                     <TableRow key={`pending-${i}`} aria-busy="true">
-                      <TableCell className="w-10 pl-4" />
-                      <TableCell className="pl-6">
+                      <TableCell className="w-10 ps-4" />
+                      <TableCell className="ps-6">
                         <Skeleton className="h-4 w-4/5" />
                         <Skeleton className="mt-1.5 h-3 w-3/5" />
                       </TableCell>
@@ -1766,7 +1793,7 @@ export default function ContentPage() {
                   ))}
                   {filtered.map((opp) => (
                     <TableRow key={opp.id} className="hover:bg-muted/50">
-                      <TableCell className="w-10 pl-4">
+                      <TableCell className="w-10 ps-4">
                         {canManage && (
                           <Checkbox
                             checked={selectedIds.has(opp.id)}
@@ -1779,9 +1806,9 @@ export default function ContentPage() {
                           />
                         )}
                       </TableCell>
-                      <TableCell className="pl-6 max-w-0">
+                      <TableCell className="ps-6 max-w-0">
                         <OpportunityTextCell
-                          opp={opp}
+                          opp={shownText(opp)}
                           handle={fullText}
                           onOpen={() => selectOpportunity(opp.id)}
                         />
@@ -1843,7 +1870,7 @@ export default function ContentPage() {
                           {t(`status.${opp.status}` as `status.${ContentOpportunityStatus}`)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right pr-6">
+                      <TableCell className="text-end pe-6">
                         <OpportunityRowMenu
                           title={opp.title}
                           editor={{

@@ -4,8 +4,8 @@ route: /dashboard/content
 keywords: [opportunity details, source data, why this score, another angle, mark as reviewed, dismiss opportunity, send to actions, new signal detected, write this]
 synonyms: [opportunity panel, opportunity page, act on an opportunity, follow an opportunity]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ On **Opportunities**, click an opportunity's title to open it in a panel beside 
 
 ## What it rests on
 
-**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap**, the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited.
+**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap** in points (the strongest competitor's visibility minus yours), the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited. The description says why the opportunity matters in words; its numbers are the ones shown here.
 
 An opportunity sent from an Action Center task shows that task instead: where, why, how, and when it's done.
 
@@ -32,8 +32,8 @@ An opportunity built for a group of prompts also shows:
 
 ## The panel's buttons
 
-- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.
-- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.
+- **Send to Action Center** makes the opportunity an action in the Action Center. The button then reads **Open in Action Center**.
+- **Build brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief built**.
 - **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.
 - **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.
 - **Export** downloads the opportunity as CSV, Excel or Word.
@@ -44,7 +44,7 @@ An opportunity built for a group of prompts also shows:
 
 1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.
 2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.
-3. The editor opens and shows the agent at work. You review the page there, with a free estimate of its Site Audit score; nothing is published.
+3. The editor opens and shows the agent at work. You review the page there; when you mark it ready, **Before you publish** shows a free estimate of its Site Audit score. Nothing is published.
 
 You can stop it from the editor. If the brief can't be built, the agent writes from what there is.
 
@@ -75,6 +75,6 @@ It counts as one of the month's new opportunities.
 
 ## Follow it to Done
 
-Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.
+Starting a draft for an opportunity (Write this, Send to Editor or New content) sets it **In Progress**. Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.
 
 A done opportunity comes back as **New**, marked **New signal detected**, when its score has risen since, or the visibility its work gained didn't hold.

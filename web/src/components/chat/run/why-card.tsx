@@ -287,7 +287,7 @@ function Share({ share, points }: { share: number | null; points: number }) {
       </b>
       <i className="relative mt-1 block h-1.5 overflow-hidden rounded-full bg-muted">
         <i
-          className="absolute inset-y-0 left-0 rounded-full bg-foreground"
+          className="absolute inset-y-0 start-0 rounded-full bg-foreground"
           style={{ width: `${share ?? 0}%` }}
         />
       </i>
@@ -334,7 +334,7 @@ function CauseRow({
         aria-controls={id}
         onClick={onToggle}
         className={cn(
-          'grid w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left hover:bg-muted/40',
+          'grid w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-start hover:bg-muted/40',
           ROW,
         )}
       >

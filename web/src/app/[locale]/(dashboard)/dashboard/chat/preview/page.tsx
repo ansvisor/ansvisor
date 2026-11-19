@@ -37,7 +37,7 @@ function Section({
     <section className="rounded-[14px] border bg-card p-4 shadow-[0_1px_2px_rgba(10,10,10,.04)]">
       <h2 className="mb-4 text-sm font-semibold">
         {title}
-        {note && <span className="ml-2 font-normal text-muted-foreground">{note}</span>}
+        {note && <span className="ms-2 font-normal text-muted-foreground">{note}</span>}
       </h2>
       <div className="flex flex-wrap items-end gap-x-8 gap-y-5">{children}</div>
     </section>
@@ -137,7 +137,7 @@ function ChatPiecesPreview() {
         <Sample caption={t('onIcon')}>
           <span className="relative inline-flex size-8 items-center justify-center rounded-lg bg-sidebar text-sidebar-foreground">
             <Sparkles aria-hidden className="size-[17px]" />
-            <AttentionDot needsYou={1} className="absolute top-0.5 right-0.5" />
+            <AttentionDot needsYou={1} className="absolute top-0.5 end-0.5" />
           </span>
         </Sample>
         <Sample caption={t('countNeedsYou')}>

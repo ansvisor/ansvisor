@@ -69,6 +69,7 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (col: string, v: unknown) => (call.filters.push(['eq', col, v]), chain),
         in: (col: string, v: unknown) => (call.filters.push(['in', col, v]), chain),
         is: (col: string, v: unknown) => (call.filters.push(['is', col, v]), chain),
+        ilike: (col: string, v: unknown) => (call.filters.push(['ilike', col, v]), chain),
         contains: (col: string, v: unknown) => (call.filters.push(['contains', col, v]), chain),
         order: () => chain,
         limit: () => chain,
@@ -96,7 +97,11 @@ const {
   startDraftFromAction,
 } = await import('./content-drafts');
 
-const inserted = () => calls.find((call) => call.op === 'insert')?.value as Record<string, unknown>;
+const inserted = (table = 'content_drafts') =>
+  calls.find((call) => call.op === 'insert' && call.table === table)?.value as Record<
+    string,
+    unknown
+  >;
 
 beforeEach(() => {
   calls = [];
@@ -404,6 +409,22 @@ describe('createContentDraft', () => {
     expect(inserted()).toMatchObject({ prompt_ids: [PROMPT] });
   });
 
+  it('sets the opportunity In Progress once its draft is started, never back from Sent or Done', async () => {
+    reads = {
+      content_opportunities: { id: OPPORTUNITY, prompt_id: PROMPT, cluster_id: null },
+    };
+    await createContentDraft(BRAND, start({ title: 'CRM for agents' }));
+    const update = calls.find(
+      (call) => call.table === 'content_opportunities' && call.op === 'update',
+    );
+    expect(update?.value).toMatchObject({ status: 'in_progress' });
+    expect(update?.filters).toEqual([
+      ['eq', 'id', OPPORTUNITY],
+      ['eq', 'brand_id', BRAND],
+      ['in', 'status', ['new', 'reviewed']],
+    ]);
+  });
+
   it('takes the one prompt of an opportunity with no clusters', async () => {
     reads = {
       content_opportunities: {
@@ -630,6 +651,73 @@ describe('optimizing an existing page instead (overlap check)', () => {
   });
 });
 
+describe('createContentDraft: the imported page’s author', () => {
+  const AUTHOR = {
+    name: 'Cihan Geyik',
+    title: 'Co-founder at Ansvisor',
+    photoUrl: null,
+    sameAs: ['https://www.linkedin.com/in/cihangeyik/'],
+  };
+  const imported = (over: Partial<DraftStart> = {}): DraftStart => ({
+    method: 'optimize',
+    title: 'AEO vs SEO vs GEO',
+    pageType: 'blog_post',
+    source: { kind: 'content' },
+    bodyHtml: '<h1>AEO vs SEO vs GEO</h1><p>Three acronyms.</p>',
+    sourceUrl: 'https://www.ansvisor.com/blog/aeo-vs-seo-vs-geo',
+    pageAuthor: AUTHOR,
+    ...over,
+  });
+
+  it('is the organization’s author of that name, any case, not the brand’s byline', async () => {
+    reads = { brands: { organization_id: 'org1' }, content_authors: [{ id: 'author-1' }] };
+    await createContentDraft(BRAND, imported());
+    const lookup = calls.find((call) => call.table === 'content_authors')!;
+    expect(lookup.filters).toEqual([
+      ['eq', 'organization_id', 'org1'],
+      ['ilike', 'name', 'Cihan Geyik'],
+    ]);
+    expect(inserted('content_authors')).toBeUndefined();
+    expect(inserted().author_id).toBe('author-1');
+  });
+
+  it('adds the author, as the member, when the organization has none of that name', async () => {
+    reads = { brands: { organization_id: 'org1' }, content_authors: [] };
+    await createContentDraft(BRAND, imported({ pageAuthor: { ...AUTHOR, name: 'Ada_100%' } }));
+    // A name's wildcards are read as themselves.
+    expect(calls.find((call) => call.table === 'content_authors')!.filters).toContainEqual([
+      'ilike',
+      'name',
+      'Ada\\_100\\%',
+    ]);
+    expect(inserted('content_authors')).toEqual({
+      organization_id: 'org1',
+      name: 'Ada_100%',
+      title: 'Co-founder at Ansvisor',
+      photo_url: null,
+      same_as: ['https://www.linkedin.com/in/cihangeyik/'],
+      created_by: 'u1',
+    });
+    expect(inserted().author_id).toBe('new-draft');
+  });
+
+  it('reads no author for content that wasn’t read from a page', async () => {
+    await createContentDraft(BRAND, imported({ sourceUrl: undefined }));
+    expect(calls.some((call) => call.table === 'content_authors')).toBe(false);
+    expect(inserted()).not.toHaveProperty('author_id');
+  });
+
+  it('starts the draft with the brand’s byline when the author can’t be read', async () => {
+    reads = { brands: { organization_id: 'org1' }, content_authors: [] };
+    await createContentDraft(
+      BRAND,
+      imported({ pageAuthor: { ...AUTHOR, sameAs: ['javascript:alert(1)'] } }),
+    );
+    expect(calls.some((call) => call.table === 'content_authors')).toBe(false);
+    expect(inserted()).not.toHaveProperty('author_id');
+  });
+});
+
 describe('importContentPage', () => {
   const answer = (status: number, body: unknown) =>
     vi.fn(async () => new Response(JSON.stringify(body), { status }));
@@ -646,6 +734,7 @@ describe('importContentPage', () => {
         url: 'https://northwind.example/pricing',
         title: 'Pricing',
         html: '<h1>Pricing</h1>',
+        author: null,
       },
     });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
@@ -654,6 +743,31 @@ describe('importContentPage', () => {
     expect(JSON.parse(init.body as string)).toEqual({
       brandId: BRAND,
       url: 'northwind.example/pricing',
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('passes on who the page says it is by, its links https only', async () => {
+    vi.stubGlobal(
+      'fetch',
+      answer(200, {
+        url: 'https://northwind.example/guide',
+        title: 'Guide',
+        html: '<h1>Guide</h1>',
+        author: {
+          name: ' Ada Lovelace ',
+          title: '',
+          photoUrl: 'http://cdn.example/ada.jpg',
+          sameAs: ['https://www.linkedin.com/in/ada', 'javascript:alert(1)', 7],
+        },
+      }),
+    );
+    const read = await importContentPage(BRAND, 'https://northwind.example/guide');
+    expect('page' in read && read.page.author).toEqual({
+      name: 'Ada Lovelace',
+      title: null,
+      photoUrl: null,
+      sameAs: ['https://www.linkedin.com/in/ada'],
     });
     vi.unstubAllGlobals();
   });
@@ -798,6 +912,45 @@ describe('startDraftFromAction', () => {
     calls = [];
     await startDraftFromAction(BRAND, ACTION, TASK, { page: PAGE, title: 'x' });
     expect(calls.some((call) => call.op === 'upsert')).toBe(false);
+  });
+
+  it('makes the page’s draft by the person the page names', async () => {
+    reads = {
+      actions: action({ title: undefined }),
+      action_tasks: { id: TASK, task_key: 'optimize_content', status: 'todo' },
+      content_drafts: [],
+      brands: {
+        organization_id: 'org1',
+        site_type: 'b2b',
+        industry: 'Software',
+        shopping_mode_enabled: false,
+      },
+      prompts: [{ id: PROMPT }],
+      content_opportunities: { id: OPPORTUNITY },
+      content_authors: [{ id: 'author-1' }],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              url: PAGE,
+              title: 'Forecasting',
+              html: '<h1>Forecasting</h1><p>Forecast every deal.</p>',
+              author: { name: 'Ada Lovelace', title: null, photoUrl: null, sameAs: [] },
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+    await start();
+    expect(calls.find((call) => call.table === 'content_authors')!.filters).toEqual([
+      ['eq', 'organization_id', 'org1'],
+      ['ilike', 'name', 'Ada Lovelace'],
+    ]);
+    expect(admin.inserts[0].value.author_id).toBe('author-1');
+    vi.unstubAllGlobals();
   });
 
   it('writes the draft for the page, linked to the action, and starts the task', async () => {

@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -60,6 +63,7 @@ vi.mock('../slack/needs-you.js', () => ({
 }));
 
 const { renderNeedsYouEmail, tellNeedsYou } = await import('./needs-you.js');
+const { forgetMessages } = await import('../i18n.js');
 
 const ORG = 'org-1';
 const BRAND = 'brand-1';
@@ -196,5 +200,36 @@ describe('renderNeedsYouEmail', () => {
     expect(html).toContain('Weekly &lt;brief&gt; stopped on Acme Coffee');
     expect(html).toContain('/dashboard/chat/chat-1');
     expect(html).toContain('Once per run.');
+  });
+
+  it('words the e-mail in the reader’s language, English where it has no text (LOC-008)', () => {
+    const file = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../messages/de.json',
+    );
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        needsYou: {
+          subject: '{agent} braucht Sie',
+          bodyOnBrand: '{agent} hat bei {brand} angehalten.',
+        },
+      }),
+    );
+    forgetMessages();
+    try {
+      const { subject, html } = renderNeedsYouEmail({
+        agent: 'Weekly <brief>',
+        brand: 'Acme Coffee',
+        chatId: 'chat-1',
+        locale: 'de',
+      });
+      expect(subject).toBe('Weekly <brief> braucht Sie');
+      expect(html).toContain('Weekly &lt;brief&gt; hat bei Acme Coffee angehalten.');
+      expect(html).toContain('Open the run');
+    } finally {
+      fs.rmSync(file, { force: true });
+      forgetMessages();
+    }
   });
 });

@@ -15,6 +15,7 @@ import {
   searchCatalogProducts,
   type CatalogProductHit,
 } from '@/lib/actions/shopping-path';
+import { listCatalogSources } from '@/lib/actions/catalog';
 import {
   choicesOf,
   leftOutReason,
@@ -34,6 +35,8 @@ export { priceText };
 type PathState =
   | { status: 'loading' }
   | { status: 'failed' }
+  /** No path kept and no catalog to build one from: nothing to show (Content test 2026-11-19, item 18). */
+  | { status: 'none' }
   | {
       status: 'ready';
       path: ShoppingPath | null;
@@ -81,7 +84,18 @@ export function ShoppingPathSection({
   const load = useCallback(async () => {
     setState({ status: 'loading' });
     try {
-      const read = await getDraftShoppingPath(draftId);
+      // The brand's catalog beside the path: a failed read of it shows the section, as before.
+      const [read, sources] = await Promise.all([
+        getDraftShoppingPath(draftId),
+        listCatalogSources(brandId).catch((err) => {
+          console.error('Failed to read the catalog sources:', err);
+          return null;
+        }),
+      ]);
+      if (read && !read.path && !read.unreadable && sources?.length === 0) {
+        setState({ status: 'none' });
+        return;
+      }
       setState(
         read
           ? { status: 'ready', path: read.path, none: null, unreadable: read.unreadable }
@@ -91,7 +105,7 @@ export function ShoppingPathSection({
       console.error('Failed to read the shopping path:', err);
       setState({ status: 'failed' });
     }
-  }, [draftId]);
+  }, [draftId, brandId]);
 
   useEffect(() => {
     void load();
@@ -212,6 +226,8 @@ export function ShoppingPathSection({
     </div>
   );
 
+  // A brand with no product catalog has no shopping path to pick.
+  if (state.status === 'none') return null;
   if (state.status === 'loading') {
     return (
       <div className="flex justify-center py-4" aria-busy="true">
@@ -327,7 +343,7 @@ export function ShoppingPathSection({
                 <li key={hit.id}>
                   <button
                     type="button"
-                    className="w-full px-2.5 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                    className="w-full px-2.5 py-2 text-start text-sm hover:bg-muted disabled:opacity-50"
                     disabled={busy !== null}
                     aria-label={t('addThis', { title: hit.title })}
                     onClick={() => {

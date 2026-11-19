@@ -720,9 +720,9 @@ describe('runDraftWriting on a new page', () => {
     // The answer is charged to the hold; nothing is left to release after.
     expect(budget.charge).toHaveBeenCalledTimes(1);
     expect(budget.release).toHaveBeenCalled();
-    // The fan-outs a rule names, in their words, on a new page too (B).
+    // The fan-outs a rule names, as natural headings, on a new page too (B).
     expect(generateObject.mock.calls[0][0].system).toContain(
-      'For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.',
+      'For each fan-out a rule names, use it, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq. A fan-out is a search, often a string of keywords',
     );
     expect(rpcCalls).toEqual([
       ['content_draft_snapshot', { p_draft_id: DRAFT, p_origin: 'agent_before' }],
@@ -1615,6 +1615,21 @@ describe('the write prompt', () => {
     expect(prompt(undefined)).not.toContain("The brand's rules");
   });
 
+  it('names the options a page weighing them must cover, and none for other pages', () => {
+    const prompt = (namedCompetitors) =>
+      buildWritePrompt({
+        brand: { ...brand, namedCompetitors },
+        draft: draftRow({ page_type: 'alternatives' }),
+        brief: 'No brief.',
+        input: { sources: { length: 3000 }, rules: [], textRules: [] },
+      });
+    expect(prompt(['Otterly.AI', 'Peec AI'])).toContain(
+      'Options the page must cover, each in its own section or table row, written as here: Otterly.AI, Peec AI. Leave none out.',
+    );
+    expect(prompt([])).not.toContain('Options the page must cover');
+    expect(prompt(undefined)).not.toContain('Options the page must cover');
+  });
+
   it('tells the model the brand’s banned phrases, and nothing without any', () => {
     const prompt = (bannedPhrases) =>
       buildWritePrompt({
@@ -1821,7 +1836,7 @@ describe('the brief rules (2026) in the Content Agent', () => {
     expect(brief).toContain('Goal: Sell beans');
     expect(brief).toContain("TL;DR (what the page's top must say): A 1:16 ratio suits most beans.");
     expect(brief).toContain(
-      '- Ratio — answer first: Name the ratio first.; show as a comparison, the same points for each option in turn; give a fact on: The ratio cafés use (study, look it up with {{find: …}})',
+      '- Ratio — answer first: Name the ratio first.; show as a table: a row per option (its name first), a column per criterion; give a fact on: The ratio cafés use (study, look it up with {{find: …}})',
     );
     expect(brief).toContain(
       'Proof to gather (write it only from Your input; else {{ask: …}}): test: Our cupping notes',

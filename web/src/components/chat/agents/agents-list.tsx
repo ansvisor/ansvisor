@@ -274,7 +274,7 @@ function AgentCard({
             {t('actions.runNow')}
           </Button>
         )}
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ms-auto flex items-center gap-1.5">
           {(can.pause || can.resume) && (
             <Button
               size="sm"
@@ -415,7 +415,7 @@ export function AgentsList({
                 <i
                   data-slot="tab-count"
                   className={cn(
-                    'ml-1 rounded-md px-[5px] text-[11px] font-medium not-italic tabular-nums',
+                    'ms-1 rounded-md px-[5px] text-[11px] font-medium not-italic tabular-nums',
                     tab === view ? 'bg-background/20' : 'bg-foreground/10 text-foreground/80',
                   )}
                 >

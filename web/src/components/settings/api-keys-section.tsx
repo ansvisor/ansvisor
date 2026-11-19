@@ -288,7 +288,7 @@ export function ApiKeysSection() {
               {tCommon('cancel')}
             </DialogClose>
             <Button onClick={handleCreate} disabled={creating || !newName.trim()}>
-              {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {creating && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
               {t('apiKeys_create')}
             </Button>
           </DialogFooter>

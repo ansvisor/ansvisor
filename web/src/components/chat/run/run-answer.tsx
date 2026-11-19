@@ -286,7 +286,7 @@ export function RunAnswer({
         {live && (
           <div data-slot="run-working" className="space-y-1">
             <RunLiveLine words={words} />
-            {parts && <RunParts parts={parts} className="mt-0 pl-3.5" />}
+            {parts && <RunParts parts={parts} className="mt-0 ps-3.5" />}
           </div>
         )}
         <p aria-live="polite" data-slot="run-announce" className="sr-only">

@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j, accepted suggestions, rejected suggestions, read your choices in the editor]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ The Content Editor is where pages are written. It opens from the Library, from t
 
 ## The header
 
-The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.
+Beside the back arrow, **+** (New content) starts another page. The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.
 
 On the right are **Next** (hover it for the step) and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**.
 
@@ -50,6 +50,10 @@ The Content Agent looks up the facts a page needs, such as a price, a plan's lim
 A fact it couldn't look up stays in square brackets for you, as do up to three only your brand has, such as your customer count. Each is tinted amber; **Your input needed** in the toolbar counts them and jumps to the next one, selected so you can type over it.
 
 Ones in alt text, structured data or HTML count too. **Send to CMS** waits until none is left. With Quality on, **Export** offers **Fill now** or **Export without them**, which drops those sentences. One in the title or a heading has to be filled.
+
+## Where looked-up facts come from
+
+A looked-up fact links only to a page that names what its sentence is about. A price, a plan or a product's limits comes only from that product's own site, such as its pricing page, never from another vendor's blog or a comparison article. When no such page has it, the fact stays for you to fill.
 
 ## Health and supplement brands
 
@@ -91,11 +95,17 @@ Building the brief also reads a few of the pages AI cited. Their typical length 
 
 Once the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History.
 
+## Lists and tables the agent writes
+
+The Content Agent writes steps in order and rankings as a numbered list, never as paragraphs starting "1.", "2.", and takes any numbers written into a bulleted list's items out. On a comparison, alternatives or best-of page, the brief plans a section as a table, and the agent writes it with a row for each option and a column for each criterion. Its suggestions and rewrites can add tables too, so a side-by-side table rule can be met.
+
 ## Sources
 
 **Sources** shows what the draft is built from: **Prompts**, **Fan-outs** (the searches AI ran for your prompts), **Cited pages**, which AI quotes today, and **Search Console** queries. Each source shows where the draft uses it.
 
 Uncheck a source to leave it out, or click **Add source** to add a prompt, a page address or a Search Console query. Then click **Rebuild with selection**.
+
+The Content Agent writes only from the searches in the page's language. It uses a Search Console query only when the query is about the page: its title, its prompts and its brief. A fan-out becomes a short, natural heading or question with the search's main terms, never the search pasted as it is. On an alternatives, comparison or best-of page, the agent covers each of your competitors that the title, the prompts or the brief names.
 
 ## Live page
 

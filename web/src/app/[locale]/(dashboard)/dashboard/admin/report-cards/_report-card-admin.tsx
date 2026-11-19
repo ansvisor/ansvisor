@@ -81,7 +81,7 @@ export function ReportCardAdmin({ stats }: { stats: ReportCardStats }) {
               <TableRow>
                 <TableHead>{t('columns.date')}</TableHead>
                 {columns.map((column) => (
-                  <TableHead key={column} className="text-right">
+                  <TableHead key={column} className="text-end">
                     {t(`columns.${column}`)}
                   </TableHead>
                 ))}
@@ -92,7 +92,7 @@ export function ReportCardAdmin({ stats }: { stats: ReportCardStats }) {
                 <TableRow key={day.date}>
                   <TableCell className="tabular-nums">{day.date}</TableCell>
                   {columns.map((column) => (
-                    <TableCell key={column} className="text-right tabular-nums">
+                    <TableCell key={column} className="text-end tabular-nums">
                       {column === 'cost' ? usd(day.costUsd) : formatNumber(day[column])}
                     </TableCell>
                   ))}

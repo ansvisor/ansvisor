@@ -1,6 +1,7 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { API_BASE_URL } from '@/config/api';
+import { inRunLocale } from './run-locale';
 import { chatAgenticEnabled } from './flag';
 import type { ChatKeySource } from './key';
 
@@ -137,7 +138,11 @@ export const SETTLE_TIMEOUT_MS = 5_000;
 /** The wait before settling once more, after no answer or a 502–504. */
 export const SETTLE_RETRY_DELAY_MS = 500;
 
-const t = createTranslator({ locale: 'en', messages, namespace: 'chatBudget' });
+// A refusal ends the run: the person reads it, in the run's language (card-locale.ts).
+const t = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatBudget' }),
+  'chatBudget',
+);
 
 /** A refusal, with its words. */
 function refused(

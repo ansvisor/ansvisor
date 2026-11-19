@@ -95,7 +95,7 @@ export function SuggestionText({
       <p className="min-w-0 flex-1 text-sm font-medium leading-snug break-words">
         {text}
         {edited && (
-          <span className="ml-1.5 align-middle text-[11px] font-normal text-muted-foreground">
+          <span className="ms-1.5 align-middle text-[11px] font-normal text-muted-foreground">
             {t('edited')}
           </span>
         )}

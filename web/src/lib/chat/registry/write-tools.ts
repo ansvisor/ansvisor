@@ -10,6 +10,7 @@ import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { ACCESS_REQUEST_RULES } from '@/lib/chat/access-requests';
 import { escapeHtml } from '@/lib/content/attachments';
 import { refuseBannedPhrases } from '../banned-guard';
+import { refuseChatSentenceTitle } from '../page-title';
 import { refuseMissingFacts } from '../placeholders';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { PAGE_TYPES, type DraftMethod, type DraftStart, type PageType } from '@/lib/content/drafts';
@@ -91,7 +92,12 @@ export const WRITE_TOOLS = [
     inputSchema: z
       .object({
         brand_id: contentUuid.describe('Brand id, from list_brands.'),
-        title: z.string().trim().min(1).max(MAX_TITLE_LENGTH).describe('The page title, its H1.'),
+        title: z
+          .string()
+          .trim()
+          .min(1)
+          .max(MAX_TITLE_LENGTH)
+          .describe('The page title, its H1: a real page title, never a line of the chat.'),
         page_type: z.enum(PAGE_TYPES),
         method: z
           .enum(['create', 'optimize'])
@@ -110,6 +116,7 @@ export const WRITE_TOOLS = [
           .optional()
           .describe('For optimize: the live page.'),
       })
+      .superRefine(refuseChatSentenceTitle)
       .superRefine(refuseMissingFacts),
     run: async (ctx, input) =>
       (await refuseBannedPhrases({ brandId: input.brand_id }, [input.title, input.body_html])) ??

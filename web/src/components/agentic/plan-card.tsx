@@ -171,7 +171,7 @@ export function PlanCard({
               className="mt-1.5 flex flex-wrap items-center gap-2 rounded-[10px] border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12.5px] text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
             >
               {t('missingOptional', { name: c.name })}
-              <span className="ml-auto flex gap-1.5">
+              <span className="ms-auto flex gap-1.5">
                 {onConnect && (
                   <Button
                     data-action="integrations.connect"

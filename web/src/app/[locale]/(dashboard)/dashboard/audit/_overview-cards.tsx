@@ -67,7 +67,7 @@ function HowItWorks({ quota, onOpenSettings }: { quota: AuditQuota; onOpenSettin
       ];
   return (
     <div id="audit-how-it-works" className="rounded-xl border px-4 py-3">
-      <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+      <ol className="list-decimal space-y-1 ps-5 text-sm text-muted-foreground">
         {points.map((point, i) => (
           <li key={i}>{point}</li>
         ))}
@@ -187,7 +187,8 @@ export function AuditOverviewCards({
             label={t('pagesAudited')}
             tooltip={t('coverageTip', { days: staleDays })}
             icon={FileText}
-            value={formatNumber(coverage.audited)}
+            // Every page with an audit, as the site score counts them; out of date ones are said beside.
+            value={formatNumber(coverage.audited + coverage.stale)}
             unit={t('coverageOf', { count: coverage.pages })}
             sub={t('coverageSub', {
               never: coverage.never,

@@ -265,6 +265,30 @@ export function buildOpportunities({
  *
  * @returns {{ pages: number, audited: number, never: number, stale: number }}
  */
+/**
+ * The site's pages Site Audit counts (the sitemap's, item 11): each once,
+ * less those excluded by the brand (a page set excluded, a path pattern or
+ * a path never worth auditing) unless pinned. One set for every "of N" on
+ * the hub: coverage, the site score, the Authority card and the chart.
+ */
+export function sitePageKeys({ sitePages = [], prefs = [], excludePatterns = [] }) {
+  const excludedByPattern = excludePatternMatcher(excludePatterns);
+  const prefsByKey = new Map(prefs.map((p) => [p.page_key, p]));
+  const pinned = new Set(
+    prefs.filter((p) => p.state === 'pinned').map((p) => opportunityKey(p.url)),
+  );
+  const keys = new Set();
+  for (const row of sitePages) {
+    const key = opportunityKey(row.url);
+    if (!key || keys.has(key)) continue;
+    if (prefsByKey.get(key)?.state === 'excluded') continue;
+    const path = pathOf(row.url);
+    if (!pinned.has(key) && (isExcludedPath(path) || excludedByPattern(path))) continue;
+    keys.add(key);
+  }
+  return keys;
+}
+
 export function siteCoverage({
   sitePages = [],
   auditPages = [],
@@ -273,22 +297,10 @@ export function siteCoverage({
   staleDays,
   now = Date.now(),
 }) {
-  const excludedByPattern = excludePatternMatcher(excludePatterns);
   const audits = new Map(auditPages.map((p) => [p.key.toLowerCase(), p]));
-  const prefsByKey = new Map(prefs.map((p) => [p.page_key, p]));
-  const pinned = new Set(
-    prefs.filter((p) => p.state === 'pinned').map((p) => opportunityKey(p.url)),
-  );
   const staleBefore = now - staleDays * DAY_MS;
   const coverage = { pages: 0, audited: 0, never: 0, stale: 0 };
-  const seen = new Set();
-  for (const row of sitePages) {
-    const key = opportunityKey(row.url);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    if (prefsByKey.get(key)?.state === 'excluded') continue;
-    const path = pathOf(row.url);
-    if (!pinned.has(key) && (isExcludedPath(path) || excludedByPattern(path))) continue;
+  for (const key of sitePageKeys({ sitePages, prefs, excludePatterns })) {
     coverage.pages += 1;
     const audit = audits.get(key);
     if (!audit || audit.score === null) coverage.never += 1;

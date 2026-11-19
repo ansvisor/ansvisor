@@ -63,6 +63,8 @@ export interface QualityRead {
   readability: Readability | null;
   /** E-E-A-T from the author, or null before the authors are read. */
   eeat: Score<EeatCheckId> | null;
+  /** No author yet: E-E-A-T asks for one instead of showing a 0 (eeatAwaitsAuthor). */
+  eeatAwaitsAuthor?: boolean;
   /** Trust from the page's figures and links, its score null until a figure or a dated source is read. */
   trust: TrustRead | null;
   /** The page's author, or null for the organization byline. */
@@ -195,7 +197,11 @@ export function QualityTab({
   const { readability, eeat, trust, siteTrust, weightsFor } = quality;
   const siteMissing = siteTrust ? siteTrustMissing(siteTrust) : [];
   const scores: { name: ScoreName; score: number | null; empty: string }[] = [
-    { name: 'eeat', score: eeat?.score ?? null, empty: t('notScored') },
+    // Only the author's checks to score: it waits for one rather than showing a 0.
+    quality.eeatAwaitsAuthor &&
+    (eeat?.checks ?? []).every((c) => c.id === 'byline' || c.id === 'authorBio')
+      ? { name: 'eeat', score: null, empty: t('needsAuthor') }
+      : { name: 'eeat', score: eeat?.score ?? null, empty: t('notScored') },
     { name: 'trust', score: trust?.score ?? null, empty: t('notScored') },
     { name: 'readability', score: readability?.score ?? null, empty: t('tooShortShort') },
   ];
@@ -347,7 +353,7 @@ export function QualityTab({
                     <p className="font-medium [overflow-wrap:anywhere]">
                       {s.line}
                       {s.ai && (
-                        <span className="ml-1.5 inline-block rounded border px-1 align-middle text-[10.5px] font-normal text-muted-foreground">
+                        <span className="ms-1.5 inline-block rounded border px-1 align-middle text-[10.5px] font-normal text-muted-foreground">
                           {t('aiCheck')}
                         </span>
                       )}
@@ -438,7 +444,7 @@ export function QualityTab({
           {siteMissing.length > 0 && (
             <Link
               href={SITE_TRUST_PATH}
-              className="ml-auto font-medium text-foreground underline-offset-2 hover:underline"
+              className="ms-auto font-medium text-foreground underline-offset-2 hover:underline"
             >
               {t('site.fix')}
             </Link>

@@ -189,6 +189,22 @@ afterEach(() => {
   container.remove();
 });
 
+describe('Content Opportunities counters (Content test 2026-11-19, item 10)', () => {
+  it('counts the open ones as Available, and says the cards hold every status', async () => {
+    content.getOpportunities.mockResolvedValue({
+      opportunities: [OPPORTUNITY],
+      total: 265,
+      open: 60,
+      aggregates: { avgScore: 78, highImpactCount: 159, sentCount: 0, signalCount: 0 },
+    });
+    await render(false);
+    expect(container.textContent).toContain('60 Available');
+    expect(container.textContent).not.toContain('265 Available');
+    expect(container.textContent).toContain('all statuses, done ones too');
+    expect(container.textContent).toContain('out of 100 · all statuses');
+  });
+});
+
 describe('Content Opportunities on a read-only workspace', () => {
   it('asks the AI for nothing: New opens the upgrade dialog, not its own', async () => {
     await render(true);
@@ -315,6 +331,28 @@ describe('Content Opportunities on an active plan', () => {
       'Dismiss opportunities?',
     );
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Sources filter', () => {
+  it('shows each hint in full, in a menu wider than its trigger, with nothing truncated', async () => {
+    await render(false);
+    const trigger = container.querySelector<HTMLElement>('[aria-label="Source"]')!;
+    await act(async () => trigger.click());
+    const popup = document.body.querySelector<HTMLElement>('[data-slot="select-content"]')!;
+    expect(popup.className).toContain('w-auto');
+    expect(popup.className).toContain('min-w-(--anchor-width)');
+    for (const hint of [
+      'Suggested automatically as tracking data comes in',
+      'Sent from a task in the Action Center',
+    ]) {
+      const el = [...popup.querySelectorAll<HTMLElement>('span')].find(
+        (e) => e.textContent === hint,
+      )!;
+      expect(el).toBeTruthy();
+      expect(el.className).toContain('whitespace-normal');
+      expect(el.closest('.truncate')).toBeNull();
+    }
   });
 });
 

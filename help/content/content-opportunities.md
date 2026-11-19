@@ -4,14 +4,18 @@ route: /dashboard/content
 keywords: [content opportunities, opportunity score, impact, visibility gap, content ideas, export csv, filter opportunities, bulk actions]
 synonyms: [content optimization, content gaps, what to write, content suggestions]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/content-optimization.mdx, docs/guides/content-editor.mdx]
 ---
 The **Opportunities** page, under **Content** in the sidebar, lists content opportunities: what to write or change so AI answers name you where they don't yet. Ansvisor suggests them on its own as tracking data comes in. An opportunity is built for a group of related prompts that one piece of content can answer, or for a single prompt. From each one you can start writing, plan it, brief it or send it on.
+
+## What the counts count
+
+With **All Statuses**, the cards above the list count done and dismissed opportunities too, and say so. The **Available** count beside **Opportunities** counts only the ones still to do. Pick a status to count that status alone.
 
 ## What each row shows
 
@@ -22,6 +26,10 @@ The **Opportunities** page, under **Content** in the sidebar, lists content oppo
 - its **Status**: New, Reviewed, Sent to Workflow, In Progress, Done, Dismissed or Archived.
 
 Above the list, cards count the **Total Opportunities** and the **High Impact** ones, and give the **Avg. Score**. On plans with monthly limits, **This billing period** shows how many new opportunities and content briefs are left, and when they reset.
+
+## In your language
+
+Ansvisor writes each opportunity's title and reason in English. When your interface language is another, the ones on your screen show in your language: in English for a moment the first time, then translated. Each is translated once and kept, so teammates who use the same language see it at once. Search still matches the English words.
 
 ## Filter, sort and export
 
@@ -81,6 +89,10 @@ Ansvisor never writes the same work twice. When a new opportunity would cover th
 A question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.
 
 For a second take on the same need, use **Another angle** on the opportunity.
+
+## Kept to what you track
+
+A new opportunity whose title says what an open one's says, in other words, isn't added. Nor is one about an AI engine none of your active prompts runs on, such as one you paused. An opportunity's **Keywords** come from its prompts and the searches AI engines ran for them: keyword-tool terms that share no words with them are left out.
 
 ## When fewer come back
 

@@ -901,8 +901,11 @@ app.use((err, req, res, _next) => {
   // Module logger, not req.log: an error thrown before requestIdMiddleware
   // (e.g. in the public traffic routes or body parser) has no req.log.
   logger.error({ err }, 'unhandled error');
-  res.status(err.status || 500).json({
+  const status = err.status || 500;
+  res.status(status).json({
     success: false,
+    // Stable for the web to say in the person's language (LOC-008).
+    ...(status >= 500 ? { code: 'server_error' } : {}),
     message: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error',
   });
 });

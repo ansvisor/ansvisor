@@ -131,7 +131,7 @@ function SinceFirst({ page }: { page: AuditedPage }) {
     <span
       title={t('pages.sinceFirstTip', { date })}
       className={cn(
-        'ml-1.5 text-xs font-medium',
+        'ms-1.5 text-xs font-medium',
         TONE_TEXT[change > 0 ? 'good' : change < 0 ? 'bad' : 'neutral'],
       )}
     >
@@ -145,7 +145,7 @@ function SinceFirst({ page }: { page: AuditedPage }) {
 function PageScoreRange({ page }: { page: AuditedPage }) {
   const range = page.score === null ? null : scoreRange(page.trend);
   if (!range) return null;
-  return <ScoreRangeMark range={range} className="ml-1 text-xs" />;
+  return <ScoreRangeMark range={range} className="ms-1 text-xs" />;
 }
 
 /** An earlier audit of the page; Delete only with `onDelete` (admins and managers, 2026-11-03). */
@@ -181,7 +181,7 @@ function HistoryRun({ run, onDelete }: { run: AuditRun; onDelete?: (id: string) 
               <Button
                 variant="ghost"
                 size="icon"
-                className="ml-auto h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                className="ms-auto h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                 aria-label={t('deleteAudit')}
               />
             }
@@ -273,14 +273,14 @@ export function AuditPagesTable({
             </span>
           </>
         )}
-        {headerAction && <div className="ml-auto">{headerAction}</div>}
+        {headerAction && <div className="ms-auto">{headerAction}</div>}
       </CardHeader>
       <CardContent className="pt-0">
         {toolbar}
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-8 pr-0">
+              <TableHead className="w-8 pe-0">
                 <Checkbox
                   aria-label={t('pages.selectAll')}
                   disabled={selectable.length === 0}
@@ -295,7 +295,7 @@ export function AuditPagesTable({
               <TableHead className="w-full">{t('pages.page')}</TableHead>
               <TableHead>{t('pages.firstScore')}</TableHead>
               <TableHead>{t('pages.currentScore')}</TableHead>
-              <TableHead className="text-right">{t('pages.issues')}</TableHead>
+              <TableHead className="text-end">{t('pages.issues')}</TableHead>
               <TableHead>{t('pages.status')}</TableHead>
               <TableHead>{t('pages.lastAudit')}</TableHead>
             </TableRow>
@@ -327,7 +327,7 @@ export function AuditPagesTable({
                         data-state={selected.has(page.key) ? 'selected' : undefined}
                         onClick={() => router.push(`/dashboard/audit/${page.auditId}`)}
                       >
-                        <TableCell className="w-8 pr-0">
+                        <TableCell className="w-8 pe-0">
                           <Checkbox
                             aria-label={t('pages.select', { page: label })}
                             disabled={page.status === 'running'}
@@ -336,7 +336,7 @@ export function AuditPagesTable({
                             onCheckedChange={(on) => onSelect([page.key], on === true)}
                           />
                         </TableCell>
-                        <TableCell className="w-9 pr-0">
+                        <TableCell className="w-9 pe-0">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -386,7 +386,7 @@ export function AuditPagesTable({
                           <PageScoreRange page={page} />
                           <SinceFirst page={page} />
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-end tabular-nums">
                           {page.issues === null ? '—' : formatNumber(page.issues)}
                         </TableCell>
                         <TableCell>
@@ -397,7 +397,7 @@ export function AuditPagesTable({
                           {page.lastAuditSource === 'auto' && (
                             <Badge
                               variant="outline"
-                              className="ml-1.5 text-[10px]"
+                              className="ms-1.5 text-[10px]"
                               title={t('pages.autoTitle')}
                             >
                               {t('pages.auto')}
@@ -432,7 +432,7 @@ export function AuditPagesTable({
         {pages.length < total && (
           <div className="flex justify-center pt-3">
             <Button variant="outline" size="sm" onClick={onLoadMore} disabled={loadingMore}>
-              {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loadingMore && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
               {t('loadMore')}
             </Button>
           </div>

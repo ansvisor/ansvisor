@@ -4,8 +4,8 @@ route: /dashboard/settings/integrations
 keywords: [google account per brand, use the same account, connect another google account, search console per brand, analytics per brand]
 synonyms: [different gsc account for a brand, client google account, agency google login, switch google account]
 plan: all
-updated: 2026-11-04
-last_checked: 2026-11-04
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -26,3 +26,7 @@ Changing or disconnecting the account clears the brand's property, since it was 
 ## See which brand uses which account
 
 In **Settings › Integrations**, **Google per brand** lists each brand with its Search Console and Analytics account. Click **Change** to open that brand's settings.
+
+## When the properties can't be read
+
+If Google says Ansvisor has no access, a box on Google's sign-in screen was left unticked. Click **Disconnect**, then connect again and tick every box Google shows.

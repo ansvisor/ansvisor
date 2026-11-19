@@ -26,7 +26,9 @@
         "action number",
         "find action by number",
         "action code",
-        "previously"
+        "previously",
+        "translated",
+        "your language"
       ],
       "synonyms": [
         "recommendations",
@@ -43,7 +45,7 @@
         "oldest first"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -90,6 +92,10 @@
           "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
         },
         {
+          "heading": "In your language",
+          "text": "Most of an action's words come from the interface, so they follow your language. Actions sent from Chat or Improve carry a title, a \"why\" and a goal written in English, and an action sent from a content opportunity carries the opportunity's title. When your interface language is another, these show in your language: in English for a moment the first time, then translated. Each is translated once and kept for teammates who use the same language."
+        },
+        {
           "heading": "Run an agent on an action",
           "text": "When Chat is on, Admins and Managers see **Run agent** on each open action: an agent button next to its title in the list, and at the top of the open action.\n\nIt lists your agents that work on the action's brand, the ones used on this kind of action first. Pick one, and Chat starts a run on this action alone and opens it beside the action. **Run with Chat** does the same without an agent, in your default mode. **Create an agent for this kind of action** starts a new agent from a fitting skill.\n\nThe run drafts the work, but closing tasks stays your click. If the action is completed or dismissed, an agent's run stops; a **Run with Chat** run doesn't. The action's **History** shows when a run started and ended, and who started it."
         },
@@ -103,7 +109,7 @@
         },
         {
           "heading": "Send work here from other pages",
-          "text": "Most actions come from signals each night, but you can also send work to the Action Center:\n\n- **Mentions**: select answers, or open one, and click **Send to Action Center**.\n- **Content**: **Send to Actions** on a content opportunity, or **Assign to…** on a Content Plan row.\n- **New content**: send it to a teammate with **Send to Action Center**.\n- **Site Audit**: **Send to Action Center** on a page's audit report.\n- **AI Referral Traffic**: select pages and click **Send to Action Center**.\n- **Visibility**: **Send action** on a topic in Opportunities.\n- **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.\n- **Prompts**: **Send Actions** on a prompt's Improve tab.\n- **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.\n\nSending the same thing twice doesn't create a second action: the page says it is already in the Action Center."
+          "text": "Most actions come from signals each night, but you can also send work to the Action Center:\n\n- **Mentions**: select answers, or open one, and click **Send to Action Center**.\n- **Content**: **Send to Action Center** on a content opportunity, or **Assign to…** on a Content Plan row.\n- **New content**: send it to a teammate with **Send to Action Center**.\n- **Site Audit**: **Send to Action Center** on a page's audit report.\n- **AI Referral Traffic**: select pages and click **Send to Action Center**.\n- **Visibility**: **Send action** on a topic in Opportunities.\n- **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.\n- **Prompts**: **Send Actions** on a prompt's Improve tab.\n- **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.\n\nSending the same thing twice doesn't create a second action: the page says it is already in the Action Center."
         }
       ]
     },
@@ -1603,7 +1609,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-18",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -1679,7 +1685,7 @@
         },
         {
           "heading": "Send a finding to Action Center",
-          "text": "Admins and Managers see **Send to Action Center** under Chat's latest answer. Chat proposes the finding as an action: its title, category, the prompts, pages and competitors it is about, and its tasks. Each task names its page and says when it is done. You approve it on its card, except in **Full auto**. Action Center sets its Priority Score, and **Open in Actions** opens it.\n\nIf an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.\n\nChat can also attach a file or draft to a task, and set a task it finished to **Ready for review**. It never marks a task done: you do that in Action Center. Each change has **Undo** in the **Activity** log."
+          "text": "Admins and Managers see **Send to Action Center** under Chat's latest answer. Chat proposes the finding as an action: its title, category, the prompts, pages and competitors it is about, and its tasks. Each task names its page and says when it is done. You approve it on its card, except in **Full auto**. Action Center sets its Priority Score, and **Open in Action Center** opens it.\n\nIf an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.\n\nChat can also attach a file or draft to a task, and set a task it finished to **Ready for review**. It never marks a task done: you do that in Action Center. Each change has **Undo** in the **Activity** log."
         },
         {
           "heading": "Ask about your actions",
@@ -1856,6 +1862,10 @@
         {
           "heading": "What Chat makes",
           "text": "When Chat makes something for you, such as a page saved as a Content draft, it shows under the answer as a card with its name and type. It is also kept in **Files** for your whole workspace, and the card says **In Files**. From the card, **Copy** copies it, **Download** gives it in the formats it has (for a page: HTML, Markdown, Word or PDF), and **Open in Content Editor** opens the page to keep working on it. When storage is full, the card says it wasn't saved to Files, with **Get more storage** to add a storage pack. Click **Files** in the chat menu to find, copy or download everything kept there.\n\nThe pen button under an answer, **Open in Content Editor**, turns the answer itself into a new Content draft in your brand and opens it."
+        },
+        {
+          "heading": "A page's title from Chat",
+          "text": "A page Chat saves gets a real page title: the answer's first heading, else your question when you asked one, else **Untitled page** for you to name. A line of the answer or a request, such as \"Find content opportunities\", is never saved as a title."
         },
         {
           "heading": "Share a chat with your team",
@@ -3274,7 +3284,7 @@
         "rebuild brief"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3282,7 +3292,7 @@
         },
         {
           "heading": "Generate a brief",
-          "text": "On **Opportunities**, click an opportunity's title. The panel shows its source data and any brief it already has. Admins and managers click **Generate Brief**.\n\nA brief is written once per opportunity: the button then reads **Brief Generated**. Each brief counts toward the month's content briefs, and on plans with monthly limits **This billing period** shows how many are left."
+          "text": "On **Opportunities**, click an opportunity's title. The panel shows its source data and any brief it already has. Admins and managers click **Build brief**.\n\nA brief is written once per opportunity: the button then reads **Brief built**. Each brief counts toward the month's content briefs, and on plans with monthly limits **This billing period** shows how many are left."
         },
         {
           "heading": "What a brief holds",
@@ -3290,7 +3300,7 @@
         },
         {
           "heading": "Write it, or hand it on",
-          "text": "- **Send to Editor** opens **New content** with the opportunity picked; the draft starts with the brief's outline and keywords.\n- **Send to Actions** puts the work in the Action Center.\n- **Send to Workflow** sends it to your workflow tool.\n\nEarned opportunities don't go to the editor: send them to the Action Center or your workflow tool."
+          "text": "- **Send to Editor** opens **New content** with the opportunity picked; the draft starts with the brief's outline and keywords.\n- **Send to Action Center** puts the work in the Action Center.\n- **Send to Workflow** sends it to your workflow tool.\n\nEarned opportunities don't go to the editor: send them to the Action Center or your workflow tool."
         },
         {
           "heading": "A fresh brief in the editor",
@@ -3348,7 +3358,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3356,7 +3366,7 @@
         },
         {
           "heading": "The header",
-          "text": "The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.\n\nOn the right are **Next** (hover it for the step) and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**."
+          "text": "Beside the back arrow, **+** (New content) starts another page. The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.\n\nOn the right are **Next** (hover it for the step) and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**."
         },
         {
           "heading": "AI search readiness (Site Audit estimate)",
@@ -3377,6 +3387,10 @@
         {
           "heading": "Facts and your input",
           "text": "The Content Agent looks up the facts a page needs, such as a price, a plan's limits or a statistic, and links each to the page it came from, never a forum or a social post. A fact no trusted page has is left out of its sentence.\n\nA fact it couldn't look up stays in square brackets for you, as do up to three only your brand has, such as your customer count. Each is tinted amber; **Your input needed** in the toolbar counts them and jumps to the next one, selected so you can type over it.\n\nOnes in alt text, structured data or HTML count too. **Send to CMS** waits until none is left. With Quality on, **Export** offers **Fill now** or **Export without them**, which drops those sentences. One in the title or a heading has to be filled."
+        },
+        {
+          "heading": "Where looked-up facts come from",
+          "text": "A looked-up fact links only to a page that names what its sentence is about. A price, a plan or a product's limits comes only from that product's own site, such as its pricing page, never from another vendor's blog or a comparison article. When no such page has it, the fact stays for you to fill."
         },
         {
           "heading": "Health and supplement brands",
@@ -3403,8 +3417,12 @@
           "text": "Building the brief also reads a few of the pages AI cited. Their typical length shows beside **Length**, and **Cited pages have** lists what Site Audit's checks find on at least half of them, such as an FAQ schema, tables or statistics. The Content Agent then writes the page toward what its text can carry, not its schema, dates or byline, which your site sets. The brief plans no more sections than your Length holds.\n\nOnce the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History."
         },
         {
+          "heading": "Lists and tables the agent writes",
+          "text": "The Content Agent writes steps in order and rankings as a numbered list, never as paragraphs starting \"1.\", \"2.\", and takes any numbers written into a bulleted list's items out. On a comparison, alternatives or best-of page, the brief plans a section as a table, and the agent writes it with a row for each option and a column for each criterion. Its suggestions and rewrites can add tables too, so a side-by-side table rule can be met."
+        },
+        {
           "heading": "Sources",
-          "text": "**Sources** shows what the draft is built from: **Prompts**, **Fan-outs** (the searches AI ran for your prompts), **Cited pages**, which AI quotes today, and **Search Console** queries. Each source shows where the draft uses it.\n\nUncheck a source to leave it out, or click **Add source** to add a prompt, a page address or a Search Console query. Then click **Rebuild with selection**."
+          "text": "**Sources** shows what the draft is built from: **Prompts**, **Fan-outs** (the searches AI ran for your prompts), **Cited pages**, which AI quotes today, and **Search Console** queries. Each source shows where the draft uses it.\n\nUncheck a source to leave it out, or click **Add source** to add a prompt, a page address or a Search Console query. Then click **Rebuild with selection**.\n\nThe Content Agent writes only from the searches in the page's language. It uses a Search Console query only when the query is about the page: its title, its prompts and its brief. A fan-out becomes a short, natural heading or question with the search's main terms, never the search pasted as it is. On an alternatives, comparison or best-of page, the agent covers each of your competitors that the title, the prompts or the brief names."
         },
         {
           "heading": "Live page",
@@ -3512,15 +3530,23 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
           "text": "The **Opportunities** page, under **Content** in the sidebar, lists content opportunities: what to write or change so AI answers name you where they don't yet. Ansvisor suggests them on its own as tracking data comes in. An opportunity is built for a group of related prompts that one piece of content can answer, or for a single prompt. From each one you can start writing, plan it, brief it or send it on."
         },
         {
+          "heading": "What the counts count",
+          "text": "With **All Statuses**, the cards above the list count done and dismissed opportunities too, and say so. The **Available** count beside **Opportunities** counts only the ones still to do. Pick a status to count that status alone."
+        },
+        {
           "heading": "What each row shows",
           "text": "- the action to take, with what it was built for: a topic and its number of prompts, **Single prompt**, or the Action Center action it came from;\n- when it was **Suggested**, with a dot on the rows suggested since your last visit;\n- its **Type**: **Owned** or **Earned**, and, where it applies, what to do with your page: Create, Optimize, Expand, Refresh, Consolidate or Defend;\n- its **Impact**, **High**, **Medium** or **Low**, which Ansvisor rates when it writes the opportunity, and its **Score**, from 0 to 100;\n- its **Status**: New, Reviewed, Sent to Workflow, In Progress, Done, Dismissed or Archived.\n\nAbove the list, cards count the **Total Opportunities** and the **High Impact** ones, and give the **Avg. Score**. On plans with monthly limits, **This billing period** shows how many new opportunities and content briefs are left, and when they reset."
+        },
+        {
+          "heading": "In your language",
+          "text": "Ansvisor writes each opportunity's title and reason in English. When your interface language is another, the ones on your screen show in your language: in English for a moment the first time, then translated. Each is translated once and kept, so teammates who use the same language see it at once. Search still matches the English words."
         },
         {
           "heading": "Filter, sort and export",
@@ -3553,6 +3579,10 @@
         {
           "heading": "No duplicates",
           "text": "Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped.\n\nA question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.\n\nFor a second take on the same need, use **Another angle** on the opportunity."
+        },
+        {
+          "heading": "Kept to what you track",
+          "text": "A new opportunity whose title says what an open one's says, in other words, isn't added. Nor is one about an AI engine none of your active prompts runs on, such as one you paused. An opportunity's **Keywords** come from its prompts and the searches AI engines ran for them: keyword-tool terms that share no words with them are left out."
         },
         {
           "heading": "When fewer come back",
@@ -3661,7 +3691,7 @@
         "let the agent fix the page"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3669,7 +3699,7 @@
         },
         {
           "heading": "The Rules tab",
-          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
+          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. The character counter in the toolbar shows that range. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
         },
         {
           "heading": "Rule sets and page types",
@@ -3693,7 +3723,11 @@
         },
         {
           "heading": "Fix open rules",
-          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**. A suggestion that would break a rule the page meets now says which, in amber under its label; the bar shows an amber sign with how many rules, named when you hover it.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage."
+          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**. A suggestion that would break a rule the page meets now says which, in amber under its label; the bar shows an amber sign with how many, named on hover. When accepting them all meets fewer rules than your page now, **Reject all** is the main button.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage."
+        },
+        {
+          "heading": "What a suggestion keeps",
+          "text": "A suggestion keeps the links of the words it changes: a shorter sentence keeps its link, or the agent doesn't suggest it. Its label only names a rule the change itself meets, so one called a dated point adds a date."
         },
         {
           "heading": "Rules that are yours",
@@ -3701,7 +3735,7 @@
         },
         {
           "heading": "Rewrite the whole page",
-          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published."
+          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open, but not again after a rewrite that met fewer rules than its page. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Its card says how many rules it meets against your page now. When that's fewer, **Reject** is the main button. Your page before it stays in History. It isn't offered once the page is ready or published."
         },
         {
           "heading": "A rewrite and your Length",
@@ -3743,7 +3777,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3751,7 +3785,7 @@
         },
         {
           "heading": "What it rests on",
-          "text": "**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap**, the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited.\n\nAn opportunity sent from an Action Center task shows that task instead: where, why, how, and when it's done.\n\n**Results** lists the Action Center actions sent from the opportunity, with what changed once their work is complete and measured."
+          "text": "**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap** in points (the strongest competitor's visibility minus yours), the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited. The description says why the opportunity matters in words; its numbers are the ones shown here.\n\nAn opportunity sent from an Action Center task shows that task instead: where, why, how, and when it's done.\n\n**Results** lists the Action Center actions sent from the opportunity, with what changed once their work is complete and measured."
         },
         {
           "heading": "For a group of prompts",
@@ -3759,11 +3793,11 @@
         },
         {
           "heading": "The panel's buttons",
-          "text": "- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.\n- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.\n- **Export** downloads the opportunity as CSV, Excel or Word."
+          "text": "- **Send to Action Center** makes the opportunity an action in the Action Center. The button then reads **Open in Action Center**.\n- **Build brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief built**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.\n- **Export** downloads the opportunity as CSV, Excel or Word."
         },
         {
           "heading": "Write this",
-          "text": "**Write this**, on the panel and in a row's **…** menu, takes an owned opportunity to a page to review in one go. First it says what will happen and about how much of your monthly AI usage it takes. Then:\n\n1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.\n2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.\n3. The editor opens and shows the agent at work. You review the page there, with a free estimate of its Site Audit score; nothing is published.\n\nYou can stop it from the editor. If the brief can't be built, the agent writes from what there is."
+          "text": "**Write this**, on the panel and in a row's **…** menu, takes an owned opportunity to a page to review in one go. First it says what will happen and about how much of your monthly AI usage it takes. Then:\n\n1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.\n2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.\n3. The editor opens and shows the agent at work. You review the page there; when you mark it ready, **Before you publish** shows a free estimate of its Site Audit score. Nothing is published.\n\nYou can stop it from the editor. If the brief can't be built, the agent writes from what there is."
         },
         {
           "heading": "The … menu",
@@ -3779,7 +3813,7 @@
         },
         {
           "heading": "Follow it to Done",
-          "text": "Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.\n\nA done opportunity comes back as **New**, marked **New signal detected**, when its score has risen since, or the visibility its work gained didn't hold."
+          "text": "Starting a draft for an opportunity (Write this, Send to Editor or New content) sets it **In Progress**. Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.\n\nA done opportunity comes back as **New**, marked **New signal detected**, when its score has risen since, or the visibility its work gained didn't hold."
         }
       ]
     },
@@ -3811,7 +3845,7 @@
         "regulated page review"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3820,6 +3854,10 @@
         {
           "heading": "The scores",
           "text": "Quality scores the page from 0 to 100 on three things, each card saying what it scores:\n\n- **E-E-A-T**: who stands behind the page, such as its author and their experience.\n- **Trust**: sources, links and dated facts.\n- **Readability**: how easily it reads.\n\n80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nIn **Before you publish**, **AI search readiness (Site Audit estimate)** is about where the page would score in Site Audit. It's a different score from Quality. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
+        },
+        {
+          "heading": "Without an author, and short sentences",
+          "text": "Until the page has an author, the **Quality** chip leaves **E-E-A-T** out. When only the author would score it, **E-E-A-T** says it's scored once the page has one. The author stays one of your to-dos.\n\nFor **Readability**, sentences of 20 words or fewer on average read best. Short ones are fine, unless they average under 8 words."
         },
         {
           "heading": "Your to-dos and what would raise it",
@@ -3953,7 +3991,7 @@
         "improve an existing page"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3965,11 +4003,19 @@
         },
         {
           "heading": "Optimize a page you have",
-          "text": "Pick **Optimize content** to work on an existing page:\n\n- **Page URL**: a page on your brand's site. **Import** brings in its main text, headings, links and schema; menus and footers stay out.\n- **Paste text** from Word, Google Docs or a web page. Headings, lists, links and tables are kept.\n- **Upload file**: Word, Markdown, HTML or text, up to 10 MB."
+          "text": "Pick **Optimize content** to work on an existing page:\n\n- **Page URL**: a page on your brand's site. **Import** brings in its main text, headings, lists, tables, links and schema; menus and footers stay out.\n- **Paste text** from Word, Google Docs or a web page. Headings, lists, links and tables are kept.\n- **Upload file**: Word, Markdown, HTML or text, up to 10 MB.\n\nThe character count shown under the content is the one the editor shows once it opens. Schema isn't counted as text."
+        },
+        {
+          "heading": "What an imported page keeps",
+          "text": "**Import** keeps the page's structure, even when its site builds it from boxes rather than real tables and lists:\n\n- a comparison grid of rows and columns comes in as a table;\n- a list of short items, such as **Key takeaways**, comes in as a bulleted list;\n- a card's title stays on its own line, above its text.\n\nThe draft's author is the person the page names, in its byline or its schema. If your team already has an author of that name in **Authors**, the draft uses them. If not, the author is added there for you to complete. A page that names no one keeps your brand's byline."
         },
         {
           "heading": "Pick the page type",
           "text": "Click **Continue**. Ansvisor picks a **Page type** from the title, the content, the page or the opportunity, and says which. Pick another if it's wrong; you can also change it later in the editor.\n\nThe page types on offer follow the brand's **Site type** in the brand settings: B2B SaaS, E-commerce, B2C or Mobile app. A mobile app, for example, gets **Feature page**, **Pricing** and **Help & FAQ** among its types, and no product or destination pages.\n\nFor a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. Pick **Optimize … instead** on one of those pages to work on it, or **Create a new page**."
+        },
+        {
+          "heading": "How the page type is read",
+          "text": "An opportunity's type carries over: when your site type doesn't write it, the closest one it does is picked, such as **Best-of list** for a buying guide on a B2B SaaS site. A title that lists tools or picks (\"The complete AI SEO tools list\") reads as a **Best-of list** too.\n\nOn an online shop, the brief's **Shopping path** shows only once the brand has a product catalog in **Settings › Integrations**, or a path is already picked."
         },
         {
           "heading": "Choose who does it",
@@ -4977,7 +5023,7 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-18",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -4985,7 +5031,7 @@
         },
         {
           "heading": "Where the page's actions are",
-          "text": "You manage the brand's prompts on this page. Beside the tabs, admins and managers have **Add prompt**. The rest is in the **…** menu (More actions) next to it:\n\n- **Export CSV** downloads the list.\n- **Plan & usage** opens your plan and billing.\n- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, a line under the filters says so, with **Plan & usage**, and the menu says so under **Show usage**.\n\nThe **Location** filter, for a brand tracked in more than one place, sits in the table's filter row, beside **Status** and **Work**."
+          "text": "You manage the brand's prompts on this page. Beside the tabs, admins and managers have **Add prompt**. The rest is in the **…** menu (More actions) next to it:\n\n- **Export CSV** downloads the list.\n- **Plan & usage** opens your plan and billing.\n- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, a line under the filters says so, with **Plan & usage**, and the menu says so under **Show usage**. Once your plan has ended, the line says so instead, since nothing is tracked until you choose a plan.\n\nThe **Location** filter, for a brand tracked in more than one place, sits in the table's filter row, beside **Status** and **Work**."
         },
         {
           "heading": "Prompt statuses",
@@ -5544,7 +5590,7 @@
         "switch google account"
       ],
       "plan": "all",
-      "updated": "2026-11-04",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -5557,6 +5603,10 @@
         {
           "heading": "See which brand uses which account",
           "text": "In **Settings › Integrations**, **Google per brand** lists each brand with its Search Console and Analytics account. Click **Change** to open that brand's settings."
+        },
+        {
+          "heading": "When the properties can't be read",
+          "text": "If Google says Ansvisor has no access, a box on Google's sign-in screen was left unticked. Click **Disconnect**, then connect again and tick every box Google shows."
         }
       ]
     },
@@ -6167,7 +6217,9 @@
         "placeholders",
         "your input needed",
         "send to action center",
-        "re-audit"
+        "re-audit",
+        "translated",
+        "your language"
       ],
       "synonyms": [
         "audit fixes",
@@ -6176,7 +6228,7 @@
         "raise page score"
       ],
       "plan": "all",
-      "updated": "2026-11-07",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6184,11 +6236,15 @@
         },
         {
           "heading": "AI Recommendations",
-          "text": "**AI Recommendations**, right under the score, collects the fixes written for this page, ordered by priority: **high**, **medium** or **low**. Each names the signal and says what to change in one sentence. Where it helps, it gives a ready-to-paste draft, such as a meta description, an H1, an opening paragraph, FAQ questions and answers or sources to cite, and code, such as an FAQ schema block.\n\nMechanical signals, such as HTTPS, the viewport tag, alt text or a video embed, keep their general fix."
+          "text": "**AI Recommendations**, right under the score, collects the fixes written for this page, ordered by priority: **high**, **medium** or **low**. Each names the signal and says what to change in one sentence. Where it helps, it gives a ready-to-paste draft, such as a meta description, an H1, an opening paragraph, FAQ questions and answers or sources to cite, and code, such as an FAQ schema block.\n\nMechanical signals, such as HTTPS, the viewport tag, alt text or a video embed, keep their general fix. Home, pricing, product and legal pages get no author advice: they don't carry a byline. Copy names only the AI engines your brand tracks."
+        },
+        {
+          "heading": "In your language",
+          "text": "Ansvisor writes each recommendation in English. When your interface language is another, its explanation shows in your language: in English for a moment the first time, then translated. Each is translated once and kept for teammates who use the same language. Drafts and code stay as written, because you paste them into your page."
         },
         {
           "heading": "Your input needed",
-          "text": "Recommendations only use facts found on the page, or your brand's name, description and domains when the page is on one of your domains. A number, percentage or date found in neither, such as a statistic, is left out with its sentence, so there is nothing for you to research.\n\nOnly what your brand alone knows is left in square brackets for you, three at most in a recommendation: a customer's name, your price, your own result, such as [customer name], [price] or [your result]. Each is highlighted, marked **Your input needed**. Replace each one before you publish. Search the pasted text for an opening bracket first: a placeholder left in schema code tells AI engines nothing."
+          "text": "Recommendations only use facts found on the page, or your brand's name, description and domains when the page is on one of your domains. A number, percentage or date found in neither, such as a statistic, is left out with its sentence, so there is nothing for you to research. An address on your own site the page doesn't have, such as an author page, becomes [your author url].\n\nOnly what your brand alone knows is left in square brackets for you, three at most in a recommendation: a customer's name, your price, your own result, such as [customer name], [price] or [your result]. Each is highlighted, marked **Your input needed**. Replace each one before you publish. Search the pasted text for an opening bracket first: a placeholder left in schema code tells AI engines nothing."
         },
         {
           "heading": "Copy drafts and code",
@@ -6265,7 +6321,7 @@
         "hidden content"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6313,7 +6369,7 @@
         },
         {
           "heading": "AI bot access",
-          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot robots.txt keeps out, by name or with \"User-agent: *\", fails the check. A bot your CDN or firewall refuses while robots.txt lets it in only warns: the bots are asked from Ansvisor's servers, and a firewall that checks a crawler's own addresses can still let the real one in. A slow or busy answer isn't a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides."
+          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot robots.txt keeps out, by name or with \"User-agent: *\", fails. A bot only your CDN or firewall refuses warns: a firewall that checks a crawler's own addresses can still let the real one in. A slow answer isn't a block. If every bot asked gets in, it passes, even when robots.txt only has \"User-agent: *\". If your site refuses Ansvisor's own request, robots.txt decides, and one that doesn't name the AI bots warns."
         },
         {
           "heading": "Main text without JavaScript",
@@ -6321,7 +6377,7 @@
         },
         {
           "heading": "Authority links",
-          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there."
+          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites, standards and the platforms' own docs (Wikipedia, doi.org, arXiv, rfc-editor.org, schema.org, developers.google.com…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there."
         },
         {
           "heading": "Product pages",
@@ -6350,7 +6406,7 @@
         "AI readiness check"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6370,11 +6426,19 @@
         },
         {
           "heading": "Before a bulk audit",
-          "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\nPages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
+          "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\n**Audit all** leaves out pages audited in the last 7 days; untick **Leave out** to include them. Pages you pick yourself are all audited, recent ones too, since a change across the site, such as robots.txt or a template, moves their scores; tick **Leave out** to skip them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
+        },
+        {
+          "heading": "The Pages list during a bulk audit",
+          "text": "While audits run, the **Pages** list updates in place: each page's status changes on its row, and the rows you loaded with **Load more** stay where they are. Your selection stays too, however many pages it holds. A page leaves the selection only when its audit starts, since a page being audited can't be audited again."
         },
         {
           "heading": "Auditing a page again",
           "text": "A page has one audit running at a time. Starting it again, from any of these places, opens the audit already running and uses no audit, however the address is written: with or without www, a last slash or a tracking parameter.\n\nWhen a page was audited in the last 10 minutes, Site Audit asks first: **Open it** shows that audit, and **Audit again** starts a new one. Pages started together leave those out and say so, with **Audit again**."
+        },
+        {
+          "heading": "Which address is audited",
+          "text": "A page is audited at the address your site itself uses, with or without www. Site Audit follows the page's canonical tag when it names the same page, and keeps to the host your earlier audits showed. The address in the **Pages** list, and in the report, is that one, so a site that answers at www.example.com is audited and shown there, not at example.com. Pages are still one page whichever way they are written."
         },
         {
           "heading": "Your monthly audits",
@@ -6413,7 +6477,7 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6421,7 +6485,7 @@
         },
         {
           "heading": "Summary and cards",
-          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:\n\n- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.\n- **Pages audited**: how many of your site's pages, as your sitemap, Google Analytics and AI citations list them, have an audit from the last 90 days, and how many don't. **See the … not audited** opens those in Opportunities.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
+          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards, the summary line and **Score over time** count the same pages: your site's, as your sitemap, Google Analytics and AI citations list them, less those you exclude.\n\n- **Site score**: the average score of each of those pages' latest audit, and its change from each page's previous audit.\n- **Pages audited**: how many of them have an audit, how many were never audited, and how many weren't in the last 90 days. **See the … not audited** opens those in Opportunities.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
         },
         {
           "heading": "Dots on Auto-audit and Opportunities",
@@ -6429,7 +6493,7 @@
         },
         {
           "heading": "Score over time",
-          "text": "**Score over time** charts your primary domain's audit scores, one point a day from the latest audit that day, over 7d, 30d, 90d or All. The category breakdown of the latest audit sits beside it. The chart needs audits on at least two days.\n\nWith the Content Editor's Quality on, a **Site trust** card, out of 5, reads your site's trust pages. It counts toward Quality's Trust, not the audit score."
+          "text": "**Score over time** charts your site score, the average of each page's latest audit on your primary domain, one point a day, over 7d, 30d, 90d or All. Its latest point is the site score at the top, and the category breakdown beside it averages the same pages. The chart needs audits on at least two days.\n\nWith the Content Editor's Quality on, a **Site trust** card, out of 5, reads your site's trust pages. It counts toward Quality's Trust, not the audit score."
         },
         {
           "heading": "Why a page is in Opportunities",
@@ -6477,7 +6541,7 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6533,7 +6597,7 @@
         },
         {
           "heading": "A weekly review",
-          "text": "1. Set the range to **7d**. Is your Visibility up or down? If it's down, **Why it changed** shows which platforms, topics and prompts moved it.\n2. In **By AI platform**, find the platform with the lowest score or the highlighted biggest drop: that's your next investment.\n3. Look at the suggested topics and prompts in **Opportunities**, and track one to three of them.\n4. From **Opportunities** under **Content** in the sidebar, open the opportunity for the topic that did worst this week and click **Generate Brief**."
+          "text": "1. Set the range to **7d**. Is your Visibility up or down? If it's down, **Why it changed** shows which platforms, topics and prompts moved it.\n2. In **By AI platform**, find the platform with the lowest score or the highlighted biggest drop: that's your next investment.\n3. Look at the suggested topics and prompts in **Opportunities**, and track one to three of them.\n4. From **Opportunities** under **Content** in the sidebar, open the opportunity for the topic that did worst this week and click **Build brief**."
         }
       ]
     },

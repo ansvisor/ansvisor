@@ -40,50 +40,94 @@ describe('parseListPage', () => {
 });
 
 describe('buildTrendPoints', () => {
-  const row = (id, url, createdAt, score = '0.5') => ({
+  const row = (id, url, createdAt, score = '0.5', categories = null) => ({
     id,
     url,
     final_url: null,
     total_score: score,
-    category_scores: null,
+    category_scores: categories,
     created_at: createdAt,
   });
+  const cat = (eeat) => ({ eeat: { score: eeat, evaluated: 4, total: 4 } });
 
-  it('keeps primary-domain audits and returns them oldest first', () => {
+  it('gives the site score after each audit: each page once, through its latest', () => {
     const newestFirst = [
-      row('c', 'https://www.example.com/', '2026-03-03T00:00:00Z'),
-      row('x', 'https://other.com/', '2026-03-02T12:00:00Z'),
-      row('b', 'https://example.com/a', '2026-03-02T00:00:00Z'),
-      row('a', 'https://example.com/', '2026-03-01T00:00:00Z', null),
+      // The home page again: the site moves by its share, not to its 0.9.
+      row('c', 'https://www.example.com/', '2026-03-03T00:00:00Z', '0.9', cat(0.3)),
+      row('x', 'https://other.com/', '2026-03-02T12:00:00Z', '0.1'),
+      row('b', 'https://example.com/a', '2026-03-02T00:00:00Z', '0.4', cat(0.5)),
+      row('a', 'https://example.com/', '2026-03-01T00:00:00Z', '0.6', cat(0.7)),
     ];
     const points = buildTrendPoints(newestFirst, 'example.com');
-    expect(points.map((p) => p.id)).toEqual(['a', 'b', 'c']);
-    expect(points[0]).toEqual({
-      id: 'a',
-      createdAt: '2026-03-01T00:00:00Z',
-      totalScore: null,
-      categoryScores: {},
-    });
-    expect(points[2].totalScore).toBe(0.5);
+    expect(points.map((p) => [p.id, p.totalScore, p.pages])).toEqual([
+      ['a', 0.6, 1],
+      ['b', 0.5, 2],
+      ['c', 0.65, 2],
+    ]);
+    expect(points[2].categoryScores.eeat).toEqual({ score: 0.4, evaluated: 2, total: 2 });
+    expect(points[0]).toMatchObject({ id: 'a', createdAt: '2026-03-01T00:00:00Z' });
   });
 
-  it('matches on final_url before url', () => {
+  it('ends at the Site score card’s number', async () => {
+    const { buildOverview, primaryPages } = await import('./overview.js');
+    const newestFirst = [
+      { ...row('d', 'https://example.com/b', '2026-03-04T00:00:00Z', '0.8'), partial: true },
+      row('c', 'https://example.com/', '2026-03-03T00:00:00Z', '0.7'),
+      row('b', 'https://example.com/a', '2026-03-02T00:00:00Z', '0.4'),
+      row('a', 'https://example.com/', '2026-03-01T00:00:00Z', '0.6'),
+    ].map((r) => ({ ...r, status: 'completed' }));
+    const { own } = primaryPages(buildAuditPages(newestFirst), 'example.com');
+    const card = buildOverview(own, new Map(), []).siteScore;
+    expect(buildTrendPoints(newestFirst, 'example.com').at(-1).totalScore).toBeCloseTo(card, 10);
+  });
+
+  it('counts a page with only partial audits by its latest, and prefers a complete one', () => {
+    const newestFirst = [
+      { ...row('b', 'https://example.com/', '2026-03-02T00:00:00Z', '0.9'), partial: true },
+      row('a', 'https://example.com/', '2026-03-01T00:00:00Z', '0.5'),
+      { ...row('p', 'https://example.com/x', '2026-02-28T00:00:00Z', '0.3'), partial: true },
+    ];
+    const points = buildTrendPoints(newestFirst, 'example.com');
+    // After b: home stays at its complete 0.5; /x at its partial 0.3.
+    expect(points.at(-1).totalScore).toBeCloseTo(0.4, 10);
+  });
+
+  it('matches on final_url before url, and skips unscored or unfinished audits', () => {
     const r = { ...row('a', 'https://old.com/', '2026-03-01T00:00:00Z') };
     r.final_url = 'https://example.com/';
     expect(buildTrendPoints([r], 'example.com')).toHaveLength(1);
+    expect(buildTrendPoints([row('n', 'https://example.com/', 'x', null)], 'example.com')).toEqual(
+      [],
+    );
+    expect(
+      buildTrendPoints(
+        [{ ...row('r', 'https://example.com/', 'x'), status: 'running' }],
+        'example.com',
+      ),
+    ).toEqual([]);
   });
 
-  it('returns nothing without a primary domain', () => {
+  it('counts only the site’s pages when they are known, as the card does', () => {
+    const newestFirst = [
+      row('b', 'https://example.com/not-in-sitemap', '2026-03-02T00:00:00Z', '0.2'),
+      row('a', 'https://example.com/', '2026-03-01T00:00:00Z', '0.8'),
+    ];
+    const points = buildTrendPoints(
+      newestFirst,
+      'example.com',
+      undefined,
+      new Set(['example.com/']),
+    );
+    expect(points.map((p) => [p.id, p.totalScore, p.pages])).toEqual([['a', 0.8, 1]]);
+  });
+
+  it('returns nothing without a primary domain, and the newest points past the limit', () => {
     expect(buildTrendPoints([row('a', 'https://example.com/', 'x')], null)).toEqual([]);
     expect(buildTrendPoints(null, 'example.com')).toEqual([]);
-  });
-
-  it('leaves out a partial audit: its score is never compared', () => {
-    const newestFirst = [
-      { ...row('b', 'https://example.com/', '2026-03-02T00:00:00Z', '0.9'), partial: true },
-      row('a', 'https://example.com/', '2026-03-01T00:00:00Z'),
-    ];
-    expect(buildTrendPoints(newestFirst, 'example.com').map((p) => p.id)).toEqual(['a']);
+    const many = ['c', 'b', 'a'].map((id, i) =>
+      row(id, `https://example.com/${id}`, `2026-03-0${3 - i}T00:00:00Z`),
+    );
+    expect(buildTrendPoints(many, 'example.com', 2).map((p) => p.id)).toEqual(['b', 'c']);
   });
 });
 
@@ -111,6 +155,11 @@ describe('pageStatus', () => {
 
   it('is Good from 70, whatever the previous audit was', () => {
     expect(pageStatus(run('completed'), audit(0.7), audit(0.9))).toBe('good');
+  });
+
+  it('reads the score shown: a 69.6 shown as 70 is Good, a 69.4 shown as 69 isn’t', () => {
+    expect(pageStatus(run('completed'), audit(0.696), null)).toBe('good');
+    expect(pageStatus(run('completed'), audit(0.694), null)).toBe('needs_work');
   });
 
   it('is Improving below 70 when at least a point up on the previous audit', () => {
@@ -447,5 +496,29 @@ describe('pageTrendUpTo', () => {
     expect(pageTrendUpTo(rows, 'running')).toEqual([]);
     expect(pageTrendUpTo(rows, 'missing')).toEqual([]);
     expect(pageTrendUpTo(rows, 'older')).toEqual([0.6]);
+  });
+});
+
+describe('buildAuditPages and analytics placeholders', () => {
+  it('leaves an audited "/(not%20set)" out of the pages', () => {
+    const rows = [
+      {
+        id: 'n',
+        url: 'https://acme.com/(not%20set)',
+        final_url: null,
+        status: 'failed',
+        total_score: null,
+        created_at: '2026-10-22T00:00:00Z',
+      },
+      {
+        id: 'p',
+        url: 'https://acme.com/pricing',
+        final_url: null,
+        status: 'completed',
+        total_score: '0.7',
+        created_at: '2026-10-22T00:00:00Z',
+      },
+    ];
+    expect(buildAuditPages(rows).map((p) => p.path)).toEqual(['/pricing']);
   });
 });

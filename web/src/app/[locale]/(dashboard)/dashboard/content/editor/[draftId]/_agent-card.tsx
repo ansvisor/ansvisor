@@ -59,7 +59,7 @@ export function AgentCardSkeleton() {
         <span className={cn(BONE, 'h-3 w-28')} />
         <span className={cn(BONE, 'h-2.5 w-64 max-w-full')} />
       </span>
-      <span className="ml-auto flex gap-1.5">
+      <span className="ms-auto flex gap-1.5">
         <span className={cn(BONE, 'h-7 w-16')} />
         <span className={cn(BONE, 'h-7 w-20')} />
         <span className={cn(BONE, 'h-7 w-20')} />
@@ -176,7 +176,7 @@ export function AgentTile({
       )}
       <AgentIcon working={tone === 'working'} slow={tone === 'done'} />
       {count > 0 && (
-        <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-muted bg-amber-700 px-1 text-[11px] font-semibold text-white dark:bg-amber-500 dark:text-amber-950">
+        <span className="absolute -top-1.5 -end-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-muted bg-amber-700 px-1 text-[11px] font-semibold text-white dark:bg-amber-500 dark:text-amber-950">
           {count}
         </span>
       )}
@@ -251,7 +251,7 @@ export function RunSteps({
                 {now && moving && <StepSweep />}
                 {done && <Check aria-hidden className="h-3 w-3 shrink-0" />}
                 {t(key, count === undefined ? {} : { count })}
-                {now && moving && <WorkingDots className="ml-0.5" />}
+                {now && moving && <WorkingDots className="ms-0.5" />}
               </span>
             </li>
           );
@@ -396,6 +396,9 @@ export function AgentCard({
   // From the page as it is now when checked so: never a count a beat behind it.
   const from = rules.after?.now ?? rules.met;
   const after = rules.after?.met ?? rulesAfter(suggestions, rules);
+  // A result that meets fewer rules than the page now: Reject is the button
+  // to press, not Accept (Content test 2026-11-19, item 7).
+  const fewer = after < from;
   // Rules met now that accepting it would break: said, never left to find after.
   const breaks = rules.after?.breaks ? (
     <span className="text-amber-700 dark:text-amber-400">
@@ -725,14 +728,14 @@ export function AgentCard({
       </div>
       {/* Working, only Stop: it drops whatever the run had. */}
       {working && onStop && run && (
-        <span className="ml-auto flex shrink-0 items-center">
+        <span className="ms-auto flex shrink-0 items-center">
           <Button variant="outline" size="sm" disabled={stopping} onClick={onStop}>
             {t('stop')}
           </Button>
         </span>
       )}
       {!working && (
-        <span className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5">
+        <span className="ms-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5">
           {page ? (
             <>
               <Button
@@ -747,14 +750,19 @@ export function AgentCard({
               {page.status === 'open' ? (
                 <>
                   <Button
-                    variant="outline"
+                    variant={fewer ? 'default' : 'outline'}
                     size="sm"
                     disabled={busy}
                     onClick={() => onDecidePage('rejected')}
                   >
                     {tRewrite('reject')}
                   </Button>
-                  <Button size="sm" disabled={busy} onClick={() => onDecidePage('accepted')}>
+                  <Button
+                    variant={fewer ? 'outline' : 'default'}
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => onDecidePage('accepted')}
+                  >
                     {tRewrite('accept')}
                   </Button>
                 </>
@@ -778,10 +786,20 @@ export function AgentCard({
               <Button variant="ghost" size="sm" className={GHOST} onClick={onReview}>
                 {t('review')}
               </Button>
-              <Button variant="outline" size="sm" disabled={busy} onClick={onRejectAll}>
+              <Button
+                variant={fewer ? 'default' : 'outline'}
+                size="sm"
+                disabled={busy}
+                onClick={onRejectAll}
+              >
                 {tSuggestions('rejectAll')}
               </Button>
-              <Button size="sm" disabled={busy} onClick={onAcceptAll}>
+              <Button
+                variant={fewer ? 'outline' : 'default'}
+                size="sm"
+                disabled={busy}
+                onClick={onAcceptAll}
+              >
                 {tSuggestions('acceptAll')}
               </Button>
             </>

@@ -192,8 +192,8 @@ export function ChatMemory() {
           <p className="text-[13px] text-muted-foreground">{t('subtitle')}</p>
         </div>
         {list && !hidden && (
-          <div className="ml-auto flex items-center gap-2.5 text-[13px]">
-            <span className="text-right">
+          <div className="ms-auto flex items-center gap-2.5 text-[13px]">
+            <span className="text-end">
               {t('useMemory')}
               <span className="block text-xs text-muted-foreground">{t('useMemoryNote')}</span>
             </span>
@@ -252,14 +252,14 @@ export function ChatMemory() {
               >
                 {tabLabel(scope)}
                 {list && (
-                  <i className="ml-1 rounded-md bg-foreground/10 px-[5px] text-[11px] font-medium not-italic text-foreground/80 tabular-nums">
+                  <i className="ms-1 rounded-md bg-foreground/10 px-[5px] text-[11px] font-medium not-italic text-foreground/80 tabular-nums">
                     {count(scope)}
                   </i>
                 )}
               </button>
             ))}
             {list && (tab !== 'brand' || list.brand) && (
-              <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+              <span className="ms-auto text-xs text-muted-foreground tabular-nums">
                 {t('used', {
                   used: list.used[tab].toLocaleString('en-US'),
                   max: list.limits.scope.toLocaleString('en-US'),
@@ -337,7 +337,7 @@ export function ChatMemory() {
                               max: MAX_MEMORY_LINE,
                             })}
                           </span>
-                          <span className="ml-auto flex gap-1.5">
+                          <span className="ms-auto flex gap-1.5">
                             <Button
                               size="sm"
                               variant="outline"

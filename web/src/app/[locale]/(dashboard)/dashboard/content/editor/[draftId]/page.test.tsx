@@ -501,7 +501,7 @@ describe('the content editor', () => {
 
     // The page's text, against a feature page's 3,000-character target.
     expect(container.querySelector('[role="toolbar"]')!.textContent).toContain(
-      '35 / 3,000 characters · 5 words',
+      '35 / 2,400–3,600 characters · 5 words',
     );
     for (const name of ['Heading 1', 'Bold', 'Link', 'Numbered list', 'Insert a table']) {
       expect(button(name)).toBeDefined();
@@ -584,7 +584,7 @@ describe('the content editor', () => {
     expect(header.textContent).toContain('Product page · New page');
     expect(header.querySelector('h1')!.textContent).toBe('Untitled');
     expect(container.querySelector('[role="toolbar"]')!.textContent).toContain(
-      '0 / 1,200 characters · 0 words',
+      '0 / 960–1,440 characters · 0 words',
     );
   });
 
@@ -3256,7 +3256,7 @@ describe('the side panel', () => {
     expect(hide.getAttribute('aria-pressed')).toBe('true');
     expect(hide.title).toBe('Hide side panel');
     expect(tags.lastElementChild).toBe(hide);
-    expect(hide.className).toContain('ml-auto');
+    expect(hide.className).toContain('ms-auto');
     const tabRow = panel()!.querySelector('[role="tablist"]')!.parentElement!;
     expect([...tabRow.children].map((el) => el.getAttribute('role'))).toEqual(['tablist']);
     expect(panel()!.querySelector('[aria-label="Hide side panel"]')).toBeNull();
@@ -5995,7 +5995,10 @@ describe('the side panel', () => {
           .click(),
       );
       const scores = panel()!.querySelector('[aria-label="Quality scores"]')!;
-      expect(scores.textContent).toContain('Who stands behind the page0Needs work');
+      // No author: E-E-A-T asks for one rather than showing a 0 (Content test 2026-11-19, item 8).
+      expect(scores.textContent).toContain(
+        'Who stands behind the pageScored once the page has an author',
+      );
       expect(scores.textContent).toContain('Sources, links and dated factsNot scored yet');
 
       const pick = [...panel()!.querySelectorAll<HTMLButtonElement>('button')].find(
@@ -9868,6 +9871,8 @@ describe('the editor embedded in Chat', () => {
 
     expect(container.querySelector('[role="status"]')).not.toBeNull();
     expect(libraryLink()).toBeNull();
+    // Beside Chat, no New content: the pane closes instead.
+    expect(container.querySelector('header a[aria-label="New content"]')).toBeNull();
     await act(async () => closeButton()!.click());
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -9877,6 +9882,9 @@ describe('the editor embedded in Chat', () => {
     await renderSurface();
 
     expect(libraryLink()!.getAttribute('aria-label')).toBe('Back to the Library');
+    // A new page from the editor too (Content test 2026-11-19, item 21).
+    const newContent = container.querySelector('header a[aria-label="New content"]');
+    expect(newContent!.getAttribute('href')).toContain('/dashboard/content/library?new=1');
     expect(closeButton()).toBeNull();
     const tabs = [...panel()!.querySelectorAll('[role="tab"]')].map(tabName);
     expect(tabs).toEqual(['Chat', 'Instructions', 'Sources', 'Live page']);

@@ -202,12 +202,12 @@ export default function SimilarTopicsPage() {
                   )}
                 </div>
                 <div className="relative w-full sm:w-60">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Search topics..."
-                    className="h-8 pl-8 text-xs"
+                    className="h-8 ps-8 text-xs"
                   />
                 </div>
               </div>
@@ -216,9 +216,9 @@ export default function SimilarTopicsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6">Topic</TableHead>
-                    <TableHead className="text-right">Google Vol.</TableHead>
-                    <TableHead className="text-right">Est. AI Vol.</TableHead>
+                    <TableHead className="ps-6">Topic</TableHead>
+                    <TableHead className="text-end">Google Vol.</TableHead>
+                    <TableHead className="text-end">Est. AI Vol.</TableHead>
                     <TableHead className="text-center">Prompts</TableHead>
                     <TableHead>Top Prompt</TableHead>
                   </TableRow>
@@ -231,16 +231,16 @@ export default function SimilarTopicsPage() {
 
                       return (
                         <TableRow key={cluster.keyword.toLowerCase()}>
-                          <TableCell className="pl-6">
+                          <TableCell className="ps-6">
                             <div className="flex items-center gap-2">
                               <Layers className="h-4 w-4 text-muted-foreground" />
                               <span className="font-medium">{cluster.keyword}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">
+                          <TableCell className="text-end font-medium tabular-nums">
                             {formatCompactNumber(cluster.volume)}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-end">
                             <EstimateRange
                               estimate={keywordVolumeEstimate(
                                 cluster.volume,
@@ -293,14 +293,14 @@ export default function SimilarTopicsPage() {
 function TopicRowsSkeleton() {
   return Array.from({ length: 5 }).map((_, i) => (
     <TableRow key={i} data-topics-pending>
-      <TableCell className="pl-6">
+      <TableCell className="ps-6">
         <Skeleton className="h-4 w-40" />
       </TableCell>
       <TableCell>
-        <Skeleton className="ml-auto h-4 w-12" />
+        <Skeleton className="ms-auto h-4 w-12" />
       </TableCell>
       <TableCell>
-        <Skeleton className="ml-auto h-4 w-20" />
+        <Skeleton className="ms-auto h-4 w-20" />
       </TableCell>
       <TableCell>
         <Skeleton className="mx-auto h-5 w-8" />

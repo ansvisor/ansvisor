@@ -59,6 +59,7 @@ import {
   type DraftMethod,
   type DraftSource,
   type DraftStartOptions,
+  type ImportedAuthor,
   type OverlapPage,
   type PageImportError,
   type PageType,
@@ -106,6 +107,8 @@ interface BroughtContent extends ContentSummary {
   fileName?: string;
   /** The page's address, for content read from a URL. */
   sourceUrl?: string;
+  /** Who the page read from a URL says it is by. */
+  author?: ImportedAuthor | null;
   imagesRemoved: number;
 }
 
@@ -123,6 +126,8 @@ interface StartChoice {
   bodyHtml?: string;
   /** The page the content was read from, for content brought by URL. */
   sourceUrl?: string;
+  /** Who that page says it is by: the draft's author. */
+  pageAuthor?: ImportedAuthor | null;
   pageType: PageType;
   detectedFrom: DetectedFrom;
   /** The person picked the type from the chips; otherwise it follows the page. */
@@ -312,11 +317,17 @@ export function NewContentDialog({
   // source.
   const startSource = start?.source;
   const overlapKey = startSource && startSource.kind !== 'content' ? sourceKey(startSource) : null;
+  // The source as it was when its key changed: read once per source (and per
+  // Try again), never again because Start's object was rebuilt (content test
+  // 2026-11-19: one Try again sent five reads).
+  const sourceRef = useRef(startSource);
+  sourceRef.current = startSource;
   useEffect(() => {
-    if (!startSource || startSource.kind === 'content') return;
-    const key = sourceKey(startSource);
+    const source = sourceRef.current;
+    if (!overlapKey || !source || source.kind === 'content') return;
+    const key = overlapKey;
     let cancelled = false;
-    getContentOverlap(brandId, startSource)
+    getContentOverlap(brandId, source)
       .then((overlap) => {
         if (cancelled) return;
         setOverlapRead({ key, overlap, failed: false });
@@ -333,7 +344,7 @@ export function NewContentDialog({
     return () => {
       cancelled = true;
     };
-  }, [brandId, startSource, siteType, overlapAttempt]);
+  }, [brandId, overlapKey, siteType, overlapAttempt]);
 
   const reset = () => {
     presetApplied.current = false;
@@ -373,7 +384,12 @@ export function NewContentDialog({
   const bring = (
     incoming: string,
     imagesRemoved: number,
-    origin: { fileName?: string; sourceUrl?: string; title?: string } = {},
+    origin: {
+      fileName?: string;
+      sourceUrl?: string;
+      title?: string;
+      author?: ImportedAuthor | null;
+    } = {},
   ) => {
     // One H1 per page, its title, whichever way the page comes in.
     const html = oneH1Html(incoming);
@@ -401,6 +417,7 @@ export function NewContentDialog({
       bring(cleaned.html, cleaned.imagesRemoved, {
         sourceUrl: read.page.url,
         title: read.page.title,
+        author: read.page.author,
       });
     } finally {
       setReading(false);
@@ -493,6 +510,7 @@ export function NewContentDialog({
       source: { kind: 'content' },
       bodyHtml: brought.html,
       sourceUrl,
+      pageAuthor: 'author' in brought ? brought.author : undefined,
       ...newPageType,
       newPageType,
       choice: { kind: 'create' },
@@ -512,10 +530,13 @@ export function NewContentDialog({
       // An existing page Start chose to optimize brings its live text; if it
       // can't be read, the draft starts with its title, and says so.
       let bodyHtml = start.bodyHtml;
+      let pageAuthor = existing ? undefined : start.pageAuthor;
       if (existing) {
         const read = await importContentPage(brandId, existing.url);
-        if ('page' in read) bodyHtml = cleanHtml(read.page.html, { keepImages: true }).html;
-        else {
+        if ('page' in read) {
+          bodyHtml = cleanHtml(read.page.html, { keepImages: true }).html;
+          pageAuthor = read.page.author;
+        } else {
           bodyHtml = undefined;
           toast.warning(t('start.pageUnread', { page: pagePath(existing.url) }));
         }
@@ -528,6 +549,7 @@ export function NewContentDialog({
         source: start.source,
         bodyHtml,
         sourceUrl: existing?.url ?? start.sourceUrl,
+        pageAuthor,
       });
       if (who === 'team') {
         await sendToTeam(id);
@@ -643,7 +665,7 @@ export function NewContentDialog({
         {start ? (
           <>
             <DialogHeader>
-              <DialogTitle className="truncate pr-8" title={startTitle}>
+              <DialogTitle className="truncate pe-8" title={startTitle}>
                 {t(startMethod === 'create' ? 'start.titleCreate' : 'start.titleOptimize', {
                   title: startTitle || t('start.untitled'),
                 })}
@@ -710,7 +732,7 @@ export function NewContentDialog({
                     aria-checked={who === value}
                     onClick={() => setWho(value)}
                     className={cn(
-                      'flex items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+                      'flex items-start gap-2 rounded-xl border px-3 py-2.5 text-start transition-colors hover:bg-muted/50',
                       who === value && 'border-foreground ring-1 ring-inset ring-foreground',
                     )}
                   >
@@ -813,7 +835,7 @@ export function NewContentDialog({
                   aria-checked={method === value}
                   onClick={() => setMethod(value)}
                   className={cn(
-                    'rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+                    'rounded-xl border px-3 py-2.5 text-start transition-colors hover:bg-muted/50',
                     method === value && 'border-foreground ring-1 ring-inset ring-foreground',
                   )}
                 >
@@ -867,7 +889,7 @@ export function NewContentDialog({
                       title={picked?.label}
                     >
                       {options ? (
-                        <span className="min-w-0 flex-1 truncate text-left">
+                        <span className="min-w-0 flex-1 truncate text-start">
                           <ComboboxValue placeholder={t(`sources.${kind}.placeholder`)} />
                         </span>
                       ) : (
@@ -1180,7 +1202,7 @@ function OverlapCheck({
             aria-checked={chosen}
             onClick={() => onChoose(option.choice)}
             className={cn(
-              'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50',
+              'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-start transition-colors hover:bg-muted/50',
               chosen && 'border-foreground ring-1 ring-inset ring-foreground',
             )}
           >
@@ -1229,34 +1251,32 @@ function OverlapCheck({
                 <table className="mt-2 w-full table-fixed text-xs">
                   <thead className="text-[11px] tracking-wide whitespace-nowrap text-muted-foreground uppercase">
                     <tr>
-                      <th className="py-1 text-left font-medium">{t('columns.page')}</th>
-                      <th className="w-28 py-1 pl-3 text-right font-medium">
+                      <th className="py-1 text-start font-medium">{t('columns.page')}</th>
+                      <th className="w-28 py-1 ps-3 text-end font-medium">
                         {t('columns.prompts')}
                       </th>
-                      <th className="w-28 py-1 pl-3 text-right font-medium">
+                      <th className="w-28 py-1 ps-3 text-end font-medium">
                         {t('columns.citations')}
                       </th>
-                      <th className="w-24 py-1 pl-3 text-right font-medium">
-                        {t('columns.google')}
-                      </th>
+                      <th className="w-24 py-1 ps-3 text-end font-medium">{t('columns.google')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {shown.map((page) => (
                       <tr key={page.url} className="border-t">
-                        <td className="truncate py-1.5 pr-2" title={page.url}>
+                        <td className="truncate py-1.5 pe-2" title={page.url}>
                           {pagePath(page.url)}
                         </td>
-                        <td className="py-1.5 pl-3 text-right tabular-nums">
+                        <td className="py-1.5 ps-3 text-end tabular-nums">
                           {t('promptsValue', {
                             count: page.promptsInCommon,
                             total: overlap.totalPrompts,
                           })}
                         </td>
-                        <td className="py-1.5 pl-3 text-right tabular-nums">
+                        <td className="py-1.5 ps-3 text-end tabular-nums">
                           {formatNumber(page.citations)}
                         </td>
-                        <td className="py-1.5 pl-3 text-right tabular-nums">
+                        <td className="py-1.5 ps-3 text-end tabular-nums">
                           {page.gscPosition == null ? '—' : `#${Math.round(page.gscPosition)}`}
                         </td>
                       </tr>

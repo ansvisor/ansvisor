@@ -43,6 +43,16 @@ vi.mock('@/lib/actions/user-brand-state', () => ({ markSeen: vi.fn(async () => (
 const signOut = vi.fn(async () => ({}));
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({ auth: { signOut } }) }));
 vi.mock('@/lib/chat/start-chat', () => ({ startChatRun: vi.fn() }));
+// The Language item's list (LOC-005): a customer's, English only.
+vi.mock('@/lib/actions/ui-language', () => ({
+  getUiLanguageState: async () => ({
+    selected: null,
+    automatic: 'en',
+    options: ['en'],
+    preview: false,
+  }),
+  setUiLanguage: vi.fn(),
+}));
 
 const { UserProfileNavItem } = await import('./user-profile-nav-item');
 
@@ -124,6 +134,7 @@ describe('UserProfileNavItem', () => {
       'Integrations',
       'API & MCP',
       'Plans & billing',
+      'Language',
       'Help',
       'Send feedback',
       'Sign out',
@@ -179,7 +190,7 @@ describe('UserProfileNavItem', () => {
     await render('analyst', true);
     expect(container.querySelector('a')).toBeNull();
     expect(trigger().textContent).toContain('Ayşe Kaya, account menu');
-    expect((await openMenu()).length).toBe(9);
+    expect((await openMenu()).length).toBe(10);
   });
 
   it("opens the chat What's new starts as soon as it has its id", async () => {
