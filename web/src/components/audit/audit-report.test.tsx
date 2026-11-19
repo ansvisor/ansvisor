@@ -405,6 +405,33 @@ describe('AI bot access (SA-008)', () => {
       li.className.includes('destructive'),
     ]);
 
+  it('says why it warns when nothing is blocked: robots.txt doesn’t name the bots', () => {
+    render([], {
+      signals: [
+        access(
+          {
+            liveTest: 'inconclusive',
+            control: 403,
+            aiBotsMentioned: [],
+            blocked: false,
+            bots: bots({
+              gptbot: { http: null, live: 'inconclusive' },
+              'oai-searchbot': { http: null, live: 'inconclusive' },
+              'chatgpt-user': { http: null, live: 'inconclusive' },
+              perplexitybot: { http: null, live: 'inconclusive' },
+              claudebot: { http: null, live: 'inconclusive' },
+            }),
+          },
+          'warn',
+        ),
+      ],
+    });
+    open();
+    expect(panel()?.textContent).toContain(
+      "robots.txt doesn't name the AI bots, so the audit can't confirm they're welcome.",
+    );
+  });
+
   it('lists each bot with its answer, and names a CDN or firewall block', () => {
     render([], {
       signals: [

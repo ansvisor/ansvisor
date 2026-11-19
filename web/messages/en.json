@@ -9445,6 +9445,7 @@
       "firewall": "{count, plural, one {{bots} is} other {{bots} are}} blocked by your CDN or firewall, though robots.txt lets {count, plural, one {it} other {them}} in.",
       "robots": "robots.txt keeps out {bots}.",
       "allLetIn": "Every AI bot tested was let in.",
+      "unnamed": "robots.txt doesn't name the AI bots, so the audit can't confirm they're welcome. Add a group for each (for example \"User-agent: GPTBot\" with \"Allow: /\").",
       "inconclusive": "Your site turned away Ansvisor's own request ({status}), so the bots weren't tested.",
       "note": "Asked once as each bot, from Ansvisor's servers. A firewall that checks a crawler's own addresses can treat the real crawler differently.",
       "cell": {
