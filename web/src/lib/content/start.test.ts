@@ -8,7 +8,8 @@ describe('summarizeContent', () => {
     ).toEqual({
       title: 'Returns policy',
       headings: 2,
-      characters: 'Intro Returns policy 30 days. Refunds'.length,
+      // As the editor's counter counts: no space between blocks.
+      characters: 'IntroReturns policy30 days.Refunds'.length,
     });
   });
 
@@ -22,10 +23,16 @@ describe('summarizeContent', () => {
     expect(long.length).toBeLessThanOrEqual(81);
   });
 
-  it('keeps words from running together across blocks', () => {
-    expect(summarizeContent('<p>One</p><ul><li>two</li><li>three</li></ul>').characters).toBe(
-      'One two three'.length,
-    );
+  it('counts characters as the editor will, its schema JSON-LD as one', () => {
+    const html =
+      '<p>One</p><ul><li>two</li><li>three</li></ul>' +
+      '<script type="application/ld+json">{"@type":"Organization","name":"Ansvisor"}</script>';
+    // The import test of 2026-11-19: 18,075 here where the editor said 11,058.
+    expect(summarizeContent(html).characters).toBe('Onetwothree'.length + 1);
+  });
+
+  it('counts nothing for content with no words', () => {
+    expect(summarizeContent('<p> </p>').characters).toBe(0);
   });
 });
 

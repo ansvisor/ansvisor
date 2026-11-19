@@ -1,5 +1,7 @@
 'use client';
 
+import { ADD_TRACKING_HREF } from '@/lib/billing/add-on-links';
+import { track } from '@/lib/analytics';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { ChevronUp, RotateCw } from 'lucide-react';
@@ -108,6 +110,7 @@ export type PromptUsageState =
   | { status: 'ready'; usage: PromptUsageSummary };
 
 const PLAN_PAGE = '/dashboard/settings?tab=billing';
+const ctaHref = (cta: string) => (cta === 'add_more' ? ADD_TRACKING_HREF : PLAN_PAGE);
 
 /**
  * The cards' data for a brand. Bump `version` after a change to the brand's
@@ -294,7 +297,8 @@ export function PromptUsageCards({
       </a>
     ) : plan?.cta ? (
       <Link
-        href={PLAN_PAGE}
+        href={ctaHref(plan.cta)}
+        onClick={() => plan.cta === 'add_more' && track('add_on_entry', { source: 'usage_cards' })}
         className={cn(
           'relative z-10 underline underline-offset-2',
           tone === 'full' ? 'font-semibold text-red-600 dark:text-red-500' : 'text-foreground',

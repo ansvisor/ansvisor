@@ -2,15 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
+import { scoreBand } from '@/components/audit/audit-report';
 
 export type TrendDatum = { date: string; score: number };
 
 // Chart color follows the same score bands as the rest of Site Audit
 // (green ≥70 / amber 40–69 / red <40). Driven by the overall (latest) score.
 function scoreHex(score: number | null): string {
-  if (score === null) return '#6366f1';
-  if (score >= 0.7) return '#16a34a'; // green-600
-  if (score >= 0.4) return '#f59e0b'; // amber-500
+  const band = scoreBand(score);
+  if (band === null) return '#6366f1';
+  if (band === 'good') return '#16a34a'; // green-600
+  if (band === 'needsWork') return '#f59e0b'; // amber-500
   return '#dc2626'; // red-600
 }
 

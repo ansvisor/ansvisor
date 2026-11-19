@@ -11,7 +11,7 @@ import type { Database } from '@/types/supabase';
  */
 
 /** Where the Slots left card sends the user: billing to upgrade, or sales. */
-export type PromptUsageCta = 'upgrade_growth' | 'upgrade' | 'contact' | 'choose_plan';
+export type PromptUsageCta = 'upgrade_growth' | 'add_more' | 'upgrade' | 'contact' | 'choose_plan';
 
 export interface PromptUsageSummary {
   plan: {
@@ -34,7 +34,8 @@ export interface PromptUsageSummary {
 const PLAN_CTA: Record<PlanId, PromptUsageCta | null> = {
   self_hosted: null,
   starter: 'upgrade_growth',
-  growth: 'upgrade',
+  // Growth buys more tracking on Billing's add-ons card (00546).
+  growth: 'add_more',
   // Ansvisor sets each Enterprise customer's limit (plan_overrides).
   enterprise: 'contact',
 };

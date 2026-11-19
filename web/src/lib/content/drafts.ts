@@ -336,6 +336,26 @@ export interface DraftStart {
   origin?: DraftOrigin;
   /** The chat it is made in (Chat's create_draft). */
   conversationId?: string | null;
+  /**
+   * Who the page brought in by its URL says it is by: the draft's author
+   * (CE-038), the organization's of that name or a new one. None: the
+   * brand's default author, else its byline ("{Brand} Team").
+   */
+  pageAuthor?: ImportedAuthor | null;
+}
+
+/**
+ * The person a page brought in by its URL is by, as its Person schema or
+ * its byline names them (server/src/lib/page-structure.js): what a new
+ * author in Settings › Authors starts with.
+ */
+export interface ImportedAuthor {
+  name: string;
+  /** Their job title ("Co-founder at Ansvisor"). */
+  title: string | null;
+  photoUrl: string | null;
+  /** Profile links (LinkedIn, X…), https only. */
+  sameAs: string[];
 }
 
 /** A page of the brand's brought in by its URL (CE-003): main content, title and schema. */
@@ -344,6 +364,23 @@ export interface ImportedPage {
   url: string;
   title: string;
   html: string;
+  /** Who the page says it is by; null when it names nobody. */
+  author: ImportedAuthor | null;
+}
+
+/** The author the API read from a page, or null for anything that isn't one. */
+export function importedAuthor(value: unknown): ImportedAuthor | null {
+  if (!value || typeof value !== 'object') return null;
+  const { name, title, photoUrl, sameAs } = value as Record<string, unknown>;
+  if (typeof name !== 'string' || !name.trim()) return null;
+  const https = (link: unknown): link is string =>
+    typeof link === 'string' && /^https:\/\/\S+$/i.test(link);
+  return {
+    name: name.trim(),
+    title: typeof title === 'string' && title.trim() ? title.trim() : null,
+    photoUrl: https(photoUrl) ? photoUrl : null,
+    sameAs: Array.isArray(sameAs) ? sameAs.filter(https) : [],
+  };
 }
 
 /** Why a page couldn't be brought in, as the API names it ('failed' for anything else). */
