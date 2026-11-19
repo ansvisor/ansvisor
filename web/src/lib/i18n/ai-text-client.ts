@@ -11,7 +11,7 @@ import { createClient } from '@/lib/supabase/client';
  */
 
 /** The kinds of AI-written text the API translates (its TRANSLATABLE). */
-export type AiTextKind = 'opportunity';
+export type AiTextKind = 'opportunity' | 'action';
 
 /** The most rows one request asks for (the API's MAX_ROWS). */
 export const AI_TEXT_MAX_ROWS = 50;

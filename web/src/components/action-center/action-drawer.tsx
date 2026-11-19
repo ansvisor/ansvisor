@@ -128,6 +128,7 @@ import { cn } from '@/lib/utils';
 import { useDotViewer } from '@/components/layout/menu-dot';
 import { PageDot } from '@/components/layout/page-dot';
 import { actionDots, localDay, pickDot } from '@/lib/page-dots';
+import { useActionAiText } from '@/hooks/use-action-ai-text';
 
 type DrawerTab = 'overview' | 'affected' | 'tasks' | 'signals' | 'history';
 const TABS: DrawerTab[] = ['overview', 'tasks', 'signals', 'history'];
@@ -271,6 +272,9 @@ export function ActionDrawer({
 
   // The signals the action rests on, what they affect, their prompts' demand
   // and the Why and Goal they tell (AC-003), as the History drawer reads them.
+  // Its written title, "why" and goal in the reader's language (LOC-010).
+  const shownAction = useActionAiText([action]);
+
   const { affected, volumes, story, ready } = useActionStory(
     brandId,
     action,
@@ -279,7 +283,7 @@ export function ActionDrawer({
   );
 
   if (!action) return null;
-  const texts = actionTexts(action, tTexts);
+  const texts = actionTexts(shownAction(action), tTexts);
   const tags = actionContextTags(action, t);
   const tabs = affected && affectedTotal(affected) > 0 ? TABS_WITH_AFFECTED : TABS;
   // Once the detail is in, each count opens the list behind it (AC-003).
@@ -747,7 +751,7 @@ export function ActionDrawer({
               <section>
                 <p className="text-xs font-medium text-muted-foreground">{t('drawer.goal')}</p>
                 <p className="mt-1">
-                  {story?.goal ?? actionGoal(action.kind, tTexts, action.payload)}
+                  {story?.goal ?? actionGoal(action.kind, tTexts, shownAction(action).payload)}
                 </p>
               </section>
               <Separator />

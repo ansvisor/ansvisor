@@ -42,7 +42,7 @@ export function translatesAiText(locale: string): boolean {
 export function useAiText(kind: AiTextKind, ids: readonly string[]) {
   const locale = useLocale();
   const active = translatesAiText(locale);
-  const [, landed] = useReducer((n: number) => n + 1, 0);
+  const [revision, landed] = useReducer((n: number) => n + 1, 0);
 
   useEffect(() => {
     listeners.add(landed);
@@ -82,7 +82,9 @@ export function useAiText(kind: AiTextKind, ids: readonly string[]) {
   return useCallback(
     (id: string, field: string, english: string): string =>
       active ? (translations.get(keyOf(kind, locale, id))?.[field] ?? english) : english,
-    // `landed` re-renders the hook's owner when translations arrive.
-    [active, kind, locale],
+    // A new function once translations land, so what was worked out from it
+    // (a memo, a list) is worked out again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `revision` is the point
+    [active, kind, locale, revision],
   );
 }

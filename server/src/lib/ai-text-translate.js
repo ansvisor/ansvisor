@@ -7,8 +7,8 @@ import { logger } from './logger.js';
 
 /**
  * AI-written text in the reader's language (LOC-010). Ansvisor writes some
- * text once, in English (an opportunity's title and reason, an action, a
- * recommendation). A person whose interface language is another reads it
+ * text once, in English (an opportunity's title and reason, the title and
+ * "why" of an action sent from Chat, a recommendation). A person whose interface language is another reads it
  * translated: the rows on their screen are translated on first view, in
  * batches, and each field's translation is kept (ai_text_translations,
  * 00550) for the next viewer in that language. The text is never written
@@ -22,14 +22,39 @@ import { logger } from './logger.js';
  */
 
 /**
- * The text that is translated, by kind: its table and fields, and the
- * column holding its brand. A kind is added here, with no migration.
+ * The payload fields of an action that hold written text, by the action's
+ * kind: a finding sent from Chat and an Improve action carry their own title,
+ * "why" and goal; one sent from a content opportunity, the opportunity's
+ * title. Every other kind is worded by the interface's own copy.
+ */
+export const ACTION_TEXT_FIELDS = {
+  chat_finding: ['title', 'why', 'goal'],
+  prompt_improve: ['title', 'why', 'goal'],
+  content_opportunity: ['title'],
+};
+
+/**
+ * The text that is translated, by kind: its table, the column holding its
+ * brand, the columns read, its fields, and how a row's field is read (a
+ * column of the same name unless `textOf` says otherwise). A kind is added
+ * here, with no migration.
  */
 export const TRANSLATABLE = {
   opportunity: {
     table: 'content_opportunities',
-    fields: ['title', 'description'],
     brandColumn: 'brand_id',
+    columns: ['title', 'description'],
+    fields: ['title', 'description'],
+  },
+  action: {
+    table: 'actions',
+    brandColumn: 'brand_id',
+    columns: ['kind', 'payload', 'deleted_at'],
+    fields: ['title', 'why', 'goal'],
+    textOf: (row, field) =>
+      !row.deleted_at && ACTION_TEXT_FIELDS[row.kind]?.includes(field)
+        ? row.payload?.[field]
+        : null,
   },
 };
 
@@ -201,7 +226,7 @@ export async function translatedTexts({ kind, ids, locale, userId }) {
   // The rows as stored, never the request's words; only the caller's brands'.
   const { data: rows, error } = await supabaseAdmin
     .from(source.table)
-    .select(['id', source.brandColumn, ...source.fields].join(', '))
+    .select(['id', source.brandColumn, ...source.columns].join(', '))
     .in('id', wanted);
   if (error) throw new Error(error.message);
   const readable = await readableBrandIds(
@@ -212,7 +237,8 @@ export async function translatedTexts({ kind, ids, locale, userId }) {
   for (const row of rows ?? []) {
     if (!readable.has(row[source.brandColumn])) continue;
     for (const field of source.fields) {
-      const text = typeof row[field] === 'string' ? row[field].trim() : '';
+      const value = source.textOf ? source.textOf(row, field) : row[field];
+      const text = typeof value === 'string' ? value.trim() : '';
       if (text)
         items.push({ id: `${row.id}:${field}`, rowId: row.id, field, text, hash: hashText(text) });
     }
