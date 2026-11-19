@@ -1,3 +1,4 @@
+import { editorCharacters } from './doc-text';
 import type { PageType } from './drafts';
 import { SITE_PAGE_TYPES, detectPageType, type SiteType } from './page-types';
 
@@ -15,7 +16,8 @@ const BLOCKS = 'p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, div, br';
 /**
  * What pasted or uploaded content holds (CE-003): its title (the first
  * heading, else the file's name, else its first paragraph), how many
- * headings and how much text. Read in the browser, from HTML already cleaned.
+ * headings and how much text, as the editor's counter will count it (its
+ * schema JSON-LD isn't text). Read in the browser, from HTML already cleaned.
  */
 export function summarizeContent(html: string, fallbackTitle = ''): ContentSummary {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -27,7 +29,7 @@ export function summarizeContent(html: string, fallbackTitle = ''): ContentSumma
   return {
     title: heading || fallbackTitle || openingWords(firstBlock || text),
     headings: doc.querySelectorAll('h1, h2, h3').length,
-    characters: text.length,
+    characters: text ? editorCharacters(html) : 0,
   };
 }
 

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 import { insertOrganization } from '@/lib/organization-insert';
+import { ensureOrganization } from '@/lib/onboarding/organization';
 import { assertWritable } from '@/lib/subscription-guard';
 import { isTimeZone } from '@/lib/time-zone';
 
@@ -215,6 +216,45 @@ export async function createOrganization(name: string) {
 
   revalidatePath('/dashboard');
   return org;
+}
+
+/**
+ * The signed-in person's organization, made now when they have none
+ * (ensureOrganization), from the server: onboarding's first choice (the
+ * trial's Checkout, or the sample brand) used to make it from the browser,
+ * which fails outright ("Failed to fetch") where a network blocks the
+ * database's own address. Named `name` when made.
+ */
+export async function ensureMyOrganization(
+  name: string,
+): Promise<{ id: string; created: boolean }> {
+  await assertWritable({ onboarding: true });
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+  return ensureOrganization(supabase, user.id, name);
+}
+
+/**
+ * Onboarding is done for the signed-in person (the sample brand from the
+ * first screen opens the dashboard on the demo), from the server for the
+ * same reason. False when it couldn't be written.
+ */
+export async function markMyOnboardingCompleted(): Promise<boolean> {
+  await assertWritable({ onboarding: true });
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { error } = await supabase
+    .from('profiles')
+    .update({ onboarding_completed: true })
+    .eq('id', user.id);
+  if (error) console.error('Could not mark onboarding completed:', error);
+  return !error;
 }
 
 export async function getMyProfile() {

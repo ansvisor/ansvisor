@@ -334,6 +334,28 @@ describe('Content Opportunities on an active plan', () => {
   });
 });
 
+describe('the Sources filter', () => {
+  it('shows each hint in full, in a menu wider than its trigger, with nothing truncated', async () => {
+    await render(false);
+    const trigger = container.querySelector<HTMLElement>('[aria-label="Source"]')!;
+    await act(async () => trigger.click());
+    const popup = document.body.querySelector<HTMLElement>('[data-slot="select-content"]')!;
+    expect(popup.className).toContain('w-auto');
+    expect(popup.className).toContain('min-w-(--anchor-width)');
+    for (const hint of [
+      'Suggested automatically as tracking data comes in',
+      'Sent from a task in the Action Center',
+    ]) {
+      const el = [...popup.querySelectorAll<HTMLElement>('span')].find(
+        (e) => e.textContent === hint,
+      )!;
+      expect(el).toBeTruthy();
+      expect(el.className).toContain('whitespace-normal');
+      expect(el.closest('.truncate')).toBeNull();
+    }
+  });
+});
+
 describe('Content Opportunities for an analyst or an agency partner', () => {
   const labels = () =>
     [...document.body.querySelectorAll('button, [role="menuitem"]')].map((el) =>

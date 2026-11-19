@@ -1482,13 +1482,23 @@ export default function ContentPage() {
                         }
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    {/* Wider than the 130px trigger so the hints fit; if one is
+                        still too long it wraps instead of being cut off. */}
+                    <SelectContent
+                      align="start"
+                      alignItemWithTrigger={false}
+                      className="w-auto min-w-(--anchor-width) max-w-72"
+                    >
                       <SelectItem value="all">{t('filters.allSources')}</SelectItem>
                       {(['system', 'manual', 'prompt', 'action'] as const).map((value) => (
-                        <SelectItem key={value} value={value}>
+                        <SelectItem
+                          key={value}
+                          value={value}
+                          className="[&>div]:min-w-0 [&>div]:shrink"
+                        >
                           <span className="flex flex-col">
                             <span>{t(`source.${value}`)}</span>
-                            <span className="text-[11px] text-muted-foreground">
+                            <span className="whitespace-normal text-[11px] text-muted-foreground">
                               {t(`sourceHint.${value}`)}
                             </span>
                           </span>

@@ -2,6 +2,8 @@ import type Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isSubscriptionActive } from '@/config/plans';
 import { isAddOnPrice, loadStripe, type PriceLike } from './add-ons';
+import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-row';
+import { waitOverCapacity } from '@/lib/prompt-capacity';
 
 /**
  * Growth's recurring add-ons (00546) live as items on the plan's Stripe
@@ -98,4 +100,30 @@ export async function syncAddOns(subscriptionId: string): Promise<void> {
     .update({ add_on_prompts: totals.prompts, add_on_brands: totals.brands })
     .eq('stripe_subscription_id', subscription.id);
   if (error) throw new Error(error.message);
+
+  // Tracking that shrank (an add-on removed or refunded, a smaller plan):
+  // the newest prompts past the new limit wait for a spot. Only while the
+  // plan runs; an ended plan is read-only and keeps its prompts as they are.
+  if (isSubscriptionActive(subscription.status)) {
+    try {
+      await trimToPlan(subscription.id);
+    } catch (err) {
+      console.error('[add-ons] Prompts past the limit not set waiting:', err);
+    }
+  }
+}
+
+/** The subscription's organization: its prompts past its plan's limit wait. */
+async function trimToPlan(subscriptionId: string): Promise<void> {
+  const { data: org, error } = await supabaseAdmin
+    .from('organizations')
+    .select(`id, ${ORG_PLAN_COLUMNS}`)
+    .eq('stripe_subscription_id', subscriptionId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!org) return;
+  const plan = planFromOrgRow(org);
+  const waiting = await waitOverCapacity((org as { id: string }).id, plan.limits.maxPrompts);
+  if (waiting)
+    console.log(`[add-ons] ${waiting} prompt(s) past the plan's limit now wait for a spot`);
 }

@@ -187,7 +187,8 @@ export function AuditOverviewCards({
             label={t('pagesAudited')}
             tooltip={t('coverageTip', { days: staleDays })}
             icon={FileText}
-            value={formatNumber(coverage.audited)}
+            // Every page with an audit, as the site score counts them; out of date ones are said beside.
+            value={formatNumber(coverage.audited + coverage.stale)}
             unit={t('coverageOf', { count: coverage.pages })}
             sub={t('coverageSub', {
               never: coverage.never,

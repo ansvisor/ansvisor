@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by, trusted sources]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist, content reviewer, regulated page review]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -26,6 +26,12 @@ Quality scores the page from 0 to 100 on three things, each card saying what it 
 In **Before you publish**, **AI search readiness (Site Audit estimate)** is about where the page would score in Site Audit. It's a different score from Quality. See the Content Editor article.
 
 At the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing.
+
+## Without an author, and short sentences
+
+Until the page has an author, the **Quality** chip leaves **E-E-A-T** out. When only the author would score it, **E-E-A-T** says it's scored once the page has one. The author stays one of your to-dos.
+
+For **Readability**, sentences of 20 words or fewer on average read best. Short ones are fine, unless they average under 8 words.
 
 ## Your to-dos and what would raise it
 
