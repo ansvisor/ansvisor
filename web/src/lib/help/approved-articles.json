@@ -4977,7 +4977,7 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -4985,7 +4985,7 @@
         },
         {
           "heading": "Where the page's actions are",
-          "text": "You manage the brand's prompts on this page. Beside the tabs, admins and managers have **Add prompt**. The rest is in the **…** menu (More actions) next to it:\n\n- **Export CSV** downloads the list.\n- **Plan & usage** opens your plan and billing.\n- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, a line under the filters says so, with **Plan & usage**, and the menu says so under **Show usage**.\n\nThe **Location** filter, for a brand tracked in more than one place, sits in the table's filter row, beside **Status** and **Work**."
+          "text": "You manage the brand's prompts on this page. Beside the tabs, admins and managers have **Add prompt**. The rest is in the **…** menu (More actions) next to it:\n\n- **Export CSV** downloads the list.\n- **Plan & usage** opens your plan and billing.\n- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, a line under the filters says so, with **Plan & usage**, and the menu says so under **Show usage**. Once your plan has ended, the line says so instead, since nothing is tracked until you choose a plan.\n\nThe **Location** filter, for a brand tracked in more than one place, sits in the table's filter row, beside **Status** and **Work**."
         },
         {
           "heading": "Prompt statuses",

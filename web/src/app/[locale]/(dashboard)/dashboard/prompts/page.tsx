@@ -26,6 +26,7 @@ import {
   countByStatus,
   locationQuotaFromUsage,
   locationsWarning,
+  planEnded,
   matchesStatusFilter,
   newFirst,
   planUsageHref,
@@ -37,6 +38,7 @@ import {
 import {
   LocationFilter,
   LocationsWarningLine,
+  PlanEndedLine,
   NotAnalyzedLine,
   PromptsListSwitch,
   PromptsMoreMenu,
@@ -2384,6 +2386,7 @@ export default function PromptsPage() {
                     {usageWarning && (
                       <LocationsWarningLine warning={usageWarning} planHref={planHref} />
                     )}
+                    {planEnded(usageState) && <PlanEndedLine planHref={planHref} />}
                     {!loading && volumesState === 'ready' && unanalyzedCount > 0 && (
                       <NotAnalyzedLine
                         count={unanalyzedCount}
