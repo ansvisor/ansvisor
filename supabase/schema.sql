@@ -68490,26 +68490,20 @@ create index if not exists translation_suggestions_user_idx
 
 alter table public.translation_suggestions enable row level security;
 
--- A person adds a suggestion as themselves, for their own organization.
-create policy "translation_suggestions: insert own"
-  on public.translation_suggestions for insert to authenticated
-  with check (
-    user_id = (select auth.uid())
-    and organization_id = (
-      select p.organization_id from public.profiles p where p.id = (select auth.uid())
-    )
-    and status = 'new'
-  );
+-- No insert policy: the app adds a suggestion with the service role after its
+-- checks (signed in, writable workspace, the daily limit), so no one signed in
+-- can insert around them through the API.
 
--- ... and reads their own, and no one else's.
+-- A person reads their own suggestions, and no one else's.
 create policy "translation_suggestions: read own"
   on public.translation_suggestions for select to authenticated
   using (user_id = (select auth.uid()));
 
--- No update or delete for anyone signed in: review is staff's, through the service role.
-revoke update, delete on public.translation_suggestions from anon, authenticated;
+-- No insert, update or delete for anyone signed in: adding is the app's and review
+-- is staff's, both through the service role.
+revoke insert, update, delete on public.translation_suggestions from anon, authenticated;
 revoke all on public.translation_suggestions from anon;
 
 comment on table public.translation_suggestions is
-  'Suggested better translations of the interface (LOC-009): a person''s own rows by RLS; staff review with the service role. Accepting only marks the row; messages/<locale>.json and the glossary are changed by hand.';
+  'Suggested better translations of the interface (LOC-009): a person reads their own rows by RLS; the app inserts after its checks and staff review with the service role. Accepting only marks the row; messages/<locale>.json and the glossary are changed by hand.';
 

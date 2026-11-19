@@ -35,14 +35,27 @@ vi.mock('@/lib/supabase/server', () => ({
           data: org ? { organization_id: org } : null,
           error: null,
         }),
-        insert: async (row: Record<string, unknown>) => {
-          inserted.push(row);
-          return { error: insertError };
+        insert: async () => {
+          throw new Error('the signed-in client has no insert: the service role adds it');
         },
       };
       return chain;
     },
   }),
+}));
+// The row is added with the service role, only after the checks (00551 has no insert policy).
+vi.mock('@/lib/supabase/admin', () => ({
+  supabaseAdmin: {
+    from: (table: string) => {
+      expect(table).toBe('translation_suggestions');
+      return {
+        insert: async (row: Record<string, unknown>) => {
+          inserted.push(row);
+          return { error: insertError };
+        },
+      };
+    },
+  },
 }));
 
 const { submitTranslationSuggestion } = await import('./translation-suggestions');
