@@ -2047,12 +2047,12 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
  */
 export async function getLastPageRewrite(
   id: string,
-): Promise<(LastRewrite & { html: string }) | null> {
+): Promise<(LastRewrite & { html: string; beforeHtml: string | null }) | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_draft_suggestions')
-    .select('after_text, after_chars, length_target, kept_chars')
+    .select('after_text, before_html, after_chars, length_target, kept_chars')
     .eq('draft_id', id)
     .eq('kind', 'page')
     .order('created_at', { ascending: false })
@@ -2065,6 +2065,8 @@ export async function getLastPageRewrite(
     target: data.length_target,
     kept: data.kept_chars,
     html: data.after_text,
+    // The page it rewrote, for whether it met fewer rules (rewriteAdvice).
+    beforeHtml: data.before_html ?? null,
   };
 }
 

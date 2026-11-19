@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab, brand rules, banned phrases]
 synonyms: [writing rules, style guide rules, apply rules with agent, rewrite page, let the agent fix the page]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -39,9 +39,13 @@ When a brand has banned phrases in the **Content rules** of its settings, the **
 
 ## Fix open rules
 
-**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**. A suggestion that would break a rule the page meets now says which, in amber under its label; the bar shows an amber sign with how many rules, named when you hover it.
+**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**. A suggestion that would break a rule the page meets now says which, in amber under its label; the bar shows an amber sign with how many, named on hover. When accepting them all meets fewer rules than your page now, **Reject all** is the main button.
 
 A decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage.
+
+## What a suggestion keeps
+
+A suggestion keeps the links of the words it changes: a shorter sentence keeps its link, or the agent doesn't suggest it. Its label only names a rule the change itself meets, so one called a dated point adds a date.
 
 ## Rules that are yours
 
@@ -49,9 +53,9 @@ An open rule shows its status in amber; red is kept for what blocks. Once you've
 
 ## Rewrite the whole page
 
-The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.
+The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open, but not again after a rewrite that met fewer rules than its page. Picked, the button reads **Rewrite page**.
 
-A rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published.
+A rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Its card says how many rules it meets against your page now. When that's fewer, **Reject** is the main button. Your page before it stays in History. It isn't offered once the page is ready or published.
 
 ## A rewrite and your Length
 

@@ -2057,7 +2057,9 @@ export function DraftEditor({
   // The page's last rewrite, from any run (00285), read on opening and again
   // whenever the rewrite shown changes: a Length it missed isn't a rewrite's to reach
   // (rules.ts RewriteReach). A later Fix run's batch doesn't hide it.
-  const [lastRewrite, setLastRewrite] = useState<(LastRewrite & { html: string }) | null>(null);
+  const [lastRewrite, setLastRewrite] = useState<
+    (LastRewrite & { html: string; beforeHtml: string | null }) | null
+  >(null);
   const shownRewriteId = pageSuggestion?.id ?? null;
   // The rewrite shown when it was last read (or failed to be): the Length's
   // state waits for the read for the rewrite shown now.
@@ -2098,9 +2100,17 @@ export function DraftEditor({
         target: lastRewrite.target,
         kept: lastRewrite.kept,
         chars: lastRewrite.html ? htmlChars(lastRewrite.html) : lastRewrite.chars,
+        // Met fewer rules than the page it rewrote: no rewrite is recommended again.
+        lowered:
+          !!lastRewrite.beforeHtml &&
+          !!lastRewrite.html &&
+          rules.ready &&
+          rulesMet(rules.checkHtml(lastRewrite.html, htmlChars(lastRewrite.html))).met <
+            rulesMet(rules.checkHtml(lastRewrite.beforeHtml, htmlChars(lastRewrite.beforeHtml)))
+              .met,
       },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- its page, once
-    [lastRewrite, editor],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- its pages, once the rules are read
+    [lastRewrite, editor, rules.ready],
   );
   const reach: RewriteReach = { kept: keptChars, floor: keptChars, last: lastCounted };
   // The rules' count stands once My rules and the fan-outs (the fan-out

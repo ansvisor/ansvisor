@@ -1268,6 +1268,17 @@ describe('rewriteAdvice', () => {
     expect(rewriteAdvice(statuses(60_001))).toBeNull();
   });
 
+  it('recommends no rewrite again after one met fewer rules than its page', () => {
+    // Content test 2026-11-19: the Recommended rewrite took 10 of 15 met to 9.
+    const open = statuses(8_000, ['faq', 'summary', 'h2Answer', 'keywords']);
+    const last = { chars: 8_000, target: 8_000, kept: 0 };
+    expect(rewriteAdvice(open, { kept: 0, floor: 0, last })).toMatchObject({ reason: 'open' });
+    expect(rewriteAdvice(open, { kept: 0, floor: 0, last: { ...last, lowered: true } })).toBeNull();
+    expect(
+      rewriteAdvice(statuses(19_203), { kept: 0, floor: 0, last: { ...last, lowered: true } }),
+    ).toBeNull();
+  });
+
   it("doesn't recommend shortening a page a rewrite can't bring under its Length", () => {
     const page = statuses(6_877, [], '4000');
     // The least a rewrite comes to (kept + headings + least answers) past the band's top (4,800).

@@ -39,6 +39,7 @@ describe('getLastPageRewrite', () => {
   it('reads the latest page rewrite: its numbers and its page, for the editor to count', async () => {
     row = {
       after_text: '<h1>Plan</h1><p>Teams forecast.</p>',
+      before_html: '<h1>Plan</h1><p>Teams forecast deals.</p>',
       after_chars: 5_468,
       length_target: 4_000,
       kept_chars: 3_125,
@@ -48,8 +49,10 @@ describe('getLastPageRewrite', () => {
       target: 4_000,
       kept: 3_125,
       html: '<h1>Plan</h1><p>Teams forecast.</p>',
+      // The page it rewrote: the editor checks whether it met fewer rules.
+      beforeHtml: '<h1>Plan</h1><p>Teams forecast deals.</p>',
     });
-    expect(selected).toBe('after_text, after_chars, length_target, kept_chars');
+    expect(selected).toBe('after_text, before_html, after_chars, length_target, kept_chars');
     expect(filters).toEqual([
       ['draft_id', DRAFT],
       ['kind', 'page'],
@@ -66,6 +69,7 @@ describe('getLastPageRewrite', () => {
       target: null,
       kept: 900,
       html: '<p>New.</p>',
+      beforeHtml: null,
     });
     await expect(getLastPageRewrite('nope')).rejects.toThrow('invalid');
   });
