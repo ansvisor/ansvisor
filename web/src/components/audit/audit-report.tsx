@@ -45,18 +45,43 @@ export function pct(score: number | null): number | null {
   return score === null ? null : Math.round(score * 100);
 }
 
+/**
+ * A score's band, from the number shown (out of 100, rounded): Good from 70,
+ * Needs work from 40, else Poor. Never the raw score, so a 69.6 shown as 70
+ * reads Good like any other 70.
+ */
+export function scoreBand(score: number | null): 'good' | 'needsWork' | 'poor' | null {
+  const shown = pct(score);
+  if (shown === null) return null;
+  if (shown >= 70) return 'good';
+  if (shown >= 40) return 'needsWork';
+  return 'poor';
+}
+
+/** One class per band; null for no score. */
+function byBand<T>(
+  score: number | null,
+  none: T,
+  classes: Record<'good' | 'needsWork' | 'poor', T>,
+): T {
+  const band = scoreBand(score);
+  return band === null ? none : classes[band];
+}
+
 export function scoreColor(score: number | null): string {
-  if (score === null) return 'text-muted-foreground';
-  if (score >= 0.7) return 'text-green-600';
-  if (score >= 0.4) return 'text-amber-500';
-  return 'text-destructive';
+  return byBand(score, 'text-muted-foreground', {
+    good: 'text-green-600',
+    needsWork: 'text-amber-500',
+    poor: 'text-destructive',
+  });
 }
 
 export function barColor(score: number | null): string {
-  if (score === null) return 'bg-muted';
-  if (score >= 0.7) return 'bg-green-600';
-  if (score >= 0.4) return 'bg-amber-500';
-  return 'bg-destructive';
+  return byBand(score, 'bg-muted', {
+    good: 'bg-green-600',
+    needsWork: 'bg-amber-500',
+    poor: 'bg-destructive',
+  });
 }
 
 const STATUS_ICON = {
@@ -82,10 +107,7 @@ const STATUS_COLOR = {
 } as const;
 
 function gradeKey(score: number | null): 'good' | 'needsWork' | 'poor' | null {
-  if (score === null) return null;
-  if (score >= 0.7) return 'good';
-  if (score >= 0.4) return 'needsWork';
-  return 'poor';
+  return scoreBand(score);
 }
 
 /** The score out of 100 on a ring, with its range ("64 ± 2") when it has one. */
@@ -100,14 +122,11 @@ export function ScoreGauge({
   const radius = 52;
   const circ = 2 * Math.PI * radius;
   const dash = (p / 100) * circ;
-  const stroke =
-    score === null
-      ? 'stroke-muted-foreground'
-      : score >= 0.7
-        ? 'stroke-green-600'
-        : score >= 0.4
-          ? 'stroke-amber-500'
-          : 'stroke-destructive';
+  const stroke = byBand(score, 'stroke-muted-foreground', {
+    good: 'stroke-green-600',
+    needsWork: 'stroke-amber-500',
+    poor: 'stroke-destructive',
+  });
   return (
     <div className="relative h-32 w-32 shrink-0">
       <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">

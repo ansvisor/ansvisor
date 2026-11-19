@@ -1055,6 +1055,15 @@ const lengthBound = (text: string): number | null => {
  * a Length no rewrite hits exactly), met within it and aimed at its
  * middle. Null for neither (no value, 0, or something else).
  */
+/** The Length rule's range while it is on, for the toolbar's counter; null with it off. */
+export function lengthRangeOf(
+  rules: { rule: { key: string; on: boolean; current: string } }[],
+): { min: number; max: number } | null {
+  const rule = rules.find(({ rule }) => rule.key === 'length' && rule.on)?.rule;
+  const span = rule ? lengthSpan(rule.current) : null;
+  return span ? { min: span.min, max: span.max } : null;
+}
+
 export function lengthSpan(value: string): { target: number; min: number; max: number } | null {
   const range = value.split(/[-–—]/);
   if (range.length === 2) {
@@ -1204,6 +1213,12 @@ export interface LastRewrite {
   target: number | null;
   /** The characters it kept word for word. */
   kept: number;
+  /**
+   * It met fewer rules than the page it rewrote, checked as the editor
+   * checks a page: no rewrite is recommended again (Content test 2026-11-19,
+   * item 7).
+   */
+  lowered?: boolean;
 }
 
 /**
@@ -1344,13 +1359,15 @@ export type RewriteAdvice =
  * Apply rules with Agent's few edits a run: the page more than 30% off its
  * Length (one a rewrite can reach, given what it keeps and what the last
  * one came to: never again after one missed it), or 4 rules or more open
- * that the agent can fix. Null otherwise.
+ * that the agent can fix. Null otherwise, and after a rewrite that met fewer
+ * rules than its page: one more is no recommendation.
  */
 export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
   reach: RewriteReach = NO_REACH,
   held: ReadonlySet<string> = NO_HELD,
 ): RewriteAdvice | null {
+  if (reach.last?.lowered) return null;
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
   const target = length ? (lengthSpan(length.rule.current)?.target ?? NaN) : NaN;
   const status = length?.status;

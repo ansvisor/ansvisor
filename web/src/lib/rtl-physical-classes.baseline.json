@@ -1,7 +1,7 @@
 {
   "app/[locale]/(dashboard)/dashboard/(brand-visibility)/insights/_charts.tsx": 2,
   "app/[locale]/(dashboard)/dashboard/content/page.tsx": 1,
-  "app/[locale]/(dashboard)/dashboard/traffic/_charts.tsx": 2,
+  "app/[locale]/(dashboard)/dashboard/traffic/_charts.tsx": 1,
   "components/providers/menu-access-provider.tsx": 1,
   "components/settings/menu-access-section.tsx": 1,
   "components/ui/avatar.tsx": 1,

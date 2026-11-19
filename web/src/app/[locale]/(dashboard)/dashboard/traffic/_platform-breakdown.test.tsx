@@ -52,7 +52,7 @@ describe('the platform breakdown', () => {
       );
     });
     // Shares of all visits: ChatGPT's 75% includes its Shopping 15%.
-    expect(container.textContent).toBe('ChatGPT75%Shopping15%Claude25%');
+    expect(container.textContent).toBe('ChatGPT75%ChatGPT Shopping15%Claude25%');
     expect(container.querySelector('[title]')?.getAttribute('title')).toContain(
       "part of ChatGPT's visits",
     );

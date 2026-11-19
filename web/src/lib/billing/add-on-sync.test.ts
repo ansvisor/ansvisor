@@ -14,6 +14,8 @@ vi.mock('@/lib/supabase/admin', async () => ({
 
 const stripeApi = vi.hoisted(() => ({ retrieve: vi.fn() }));
 vi.mock('@/lib/stripe', () => ({ stripe: { subscriptions: { retrieve: stripeApi.retrieve } } }));
+const capacity = vi.hoisted(() => ({ waitOverCapacity: vi.fn() }));
+vi.mock('@/lib/prompt-capacity', () => capacity);
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
@@ -96,7 +98,15 @@ describe('syncAddOns', () => {
     db.log = [];
     db.tables = {
       organizations: [
-        { id: ORG, stripe_subscription_id: 'sub_1', add_on_prompts: 250, add_on_brands: 1 },
+        {
+          id: ORG,
+          stripe_subscription_id: 'sub_1',
+          plan: 'growth',
+          subscription_status: 'active',
+          plan_overrides: null,
+          add_on_prompts: 250,
+          add_on_brands: 1,
+        },
         // A workspace on another subscription is never touched.
         { id: OTHER, stripe_subscription_id: 'sub_2', add_on_prompts: 100, add_on_brands: 0 },
       ],
@@ -153,6 +163,30 @@ describe('syncAddOns', () => {
     db.failures = { organizations: { message: 'down' } };
     await expect(syncAddOns('sub_1')).rejects.toThrow('down');
     expect(org(ORG)?.add_on_prompts).toBe(250);
+  });
+
+  it('makes prompts past the new limit wait, only while the plan runs', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    capacity.waitOverCapacity.mockResolvedValue(3);
+    stripeApi.retrieve.mockResolvedValue(subscription('active', [planItem, trackingItem(100)]));
+    await syncAddOns('sub_1');
+    // Growth's 200 locations plus the 100 the add-on now adds.
+    expect(capacity.waitOverCapacity).toHaveBeenCalledWith(ORG, 300);
+
+    capacity.waitOverCapacity.mockClear();
+    stripeApi.retrieve.mockResolvedValue(subscription('canceled', [planItem]));
+    await syncAddOns('sub_1');
+    expect(capacity.waitOverCapacity).not.toHaveBeenCalled();
+  });
+
+  it('only logs when the prompts can’t be set waiting: the add-ons are written', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    capacity.waitOverCapacity.mockRejectedValue(new Error('down'));
+    stripeApi.retrieve.mockResolvedValue(subscription('active', [planItem]));
+    await expect(syncAddOns('sub_1')).resolves.toBeUndefined();
+    expect(org(ORG)?.add_on_prompts).toBe(0);
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 
   it('throws without Stripe', async () => {

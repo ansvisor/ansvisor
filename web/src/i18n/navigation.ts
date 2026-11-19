@@ -1,9 +1,5 @@
-import {
-  redirect as nextRedirect,
-  usePathname as useNextPathname,
-  useRouter,
-} from 'next/navigation';
-import { routing } from './routing';
+import { redirect as nextRedirect } from 'next/navigation';
+import { stripLocalePrefix } from './strip-locale';
 
 /**
  * Navigation that doesn't depend on the interface language.
@@ -16,20 +12,10 @@ import { routing } from './routing';
  */
 export { default as Link } from 'next/link';
 
-export { useRouter };
-
-/** The path without a locale prefix: "/en/dashboard" and "/dashboard" are both "/dashboard". */
-export function stripLocalePrefix(pathname: string): string {
-  for (const locale of routing.locales) {
-    if (pathname === `/${locale}`) return '/';
-    if (pathname.startsWith(`/${locale}/`)) return pathname.slice(locale.length + 1);
-  }
-  return pathname;
-}
-
-export function usePathname(): string {
-  return stripLocalePrefix(useNextPathname());
-}
+// The hooks live in a client module, so a server component can import Link
+// and redirect from here without pulling client-only hooks into its bundle.
+export { usePathname, useRouter } from './navigation-client';
+export { stripLocalePrefix };
 
 /** Redirects to `href` (the locale, when given, is ignored: addresses carry none). */
 export function redirect({ href }: { href: string; locale?: string }): never {
