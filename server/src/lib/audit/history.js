@@ -155,7 +155,8 @@ const points = (score) => Math.round(score * 100);
 export function pageStatus(latestRun, current, previous) {
   if (latestRun?.status === 'running') return 'running';
   if (!current) return 'failed';
-  if (current.totalScore >= GOOD_SCORE) return 'good';
+  // From the score shown (rounded out of 100), so a 69.6 shown as 70 is Good like any 70.
+  if (points(current.totalScore) >= points(GOOD_SCORE)) return 'good';
   if (previous && points(current.totalScore) > points(previous.totalScore)) return 'improving';
   return 'needs_work';
 }
