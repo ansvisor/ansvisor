@@ -4,8 +4,8 @@ route: /dashboard/action-center/actions
 keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number, action code, previously]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work, order actions, newest first, oldest first]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -116,7 +116,7 @@ Inside an action, **Copy Data** gives the whole action as Markdown to paste into
 Most actions come from signals each night, but you can also send work to the Action Center:
 
 - **Mentions**: select answers, or open one, and click **Send to Action Center**.
-- **Content**: **Send to Actions** on a content opportunity, or **Assign to…** on a Content Plan row.
+- **Content**: **Send to Action Center** on a content opportunity, or **Assign to…** on a Content Plan row.
 - **New content**: send it to a teammate with **Send to Action Center**.
 - **Site Audit**: **Send to Action Center** on a page's audit report.
 - **AI Referral Traffic**: select pages and click **Send to Action Center**.

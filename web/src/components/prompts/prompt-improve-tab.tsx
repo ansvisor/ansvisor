@@ -452,7 +452,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
               href={actionCenterLink(sentLatest.actionId)}
               className={buttonVariants({ size: 'sm' })}
             >
-              Open in Actions
+              Open in Action Center
               <ArrowUpRight />
             </Link>
           ) : (

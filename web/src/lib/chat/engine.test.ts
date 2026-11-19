@@ -6612,7 +6612,7 @@ describe('Send to Action Center (CHAT-09 §E, CHAT-20 §12)', () => {
     expectClean(events);
   });
 
-  it('lists its tasks on the card, then sends it as the person approved it, with Open in Actions', async () => {
+  it('lists its tasks on the card, then sends it as the person approved it, with Open in Action Center', async () => {
     useModels([READY], [calls(sendCall), text('Sent.')]);
     const runId = await turn(ADMIN, 'Send this to Action Center', 'auto');
     const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;

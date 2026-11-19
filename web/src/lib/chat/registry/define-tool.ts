@@ -235,7 +235,7 @@ export interface ToolResultCard {
   actionNo: number;
   brandNo?: number | null;
   title: string;
-  /** Open in Actions. */
+  /** Open in Action Center. */
   href: `/dashboard/${string}`;
 }
 

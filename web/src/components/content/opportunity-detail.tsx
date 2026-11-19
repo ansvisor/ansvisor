@@ -980,10 +980,7 @@ export function OpportunityDetail({
                 <>
                   <Sparkles className="h-10 w-10 text-muted-foreground/40 mb-3" />
                   <h3 className="text-sm font-medium mb-1">No Content Brief Yet</h3>
-                  <p className="text-xs text-muted-foreground mb-4 max-w-sm">
-                    Generate an AI-powered content brief with a suggested title, outline, target
-                    keywords, and competitor insights.
-                  </p>
+                  <p className="text-xs text-muted-foreground mb-4 max-w-sm">{t('briefEmpty')}</p>
                   {canManage ? (
                     <Button
                       onClick={guard(handleGenerateBrief, { action: tActions('generateBrief') })}
@@ -991,7 +988,7 @@ export function OpportunityDetail({
                       className="gap-2"
                     >
                       {generatingBrief ? <LoadingDots /> : <Sparkles className="h-4 w-4" />}
-                      {generatingBrief ? 'Generating...' : 'Generate Content Brief'}
+                      {generatingBrief ? t('generatingBrief') : t('generateBrief')}
                     </Button>
                   ) : (
                     <p className="text-xs text-muted-foreground">{tManagers('generateBrief')}</p>
