@@ -98,7 +98,7 @@ function PromptsTable({
             <TableRow>
               <TableHead className="text-xs">{t('prompt')}</TableHead>
               {show.volume && (
-                <TableHead className="text-right text-xs">
+                <TableHead className="text-end text-xs">
                   {/* The column's estimates as one total, so its badge says
                       what they are and where they come from. */}
                   <span className="inline-flex items-center gap-1.5">
@@ -159,7 +159,7 @@ function PromptsTable({
                     </div>
                   </TableCell>
                   {show.volume && (
-                    <TableCell className="text-right align-top text-xs tabular-nums">
+                    <TableCell className="text-end align-top text-xs tabular-nums">
                       {volume !== null ? (
                         <EstimateRange estimate={volume} handle={volumeNote} />
                       ) : (
@@ -226,7 +226,7 @@ function PagesTable({ rows, total }: { rows: AffectedPage[]; total: number }) {
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs">{t('page')}</TableHead>
-              {show.visits && <TableHead className="text-right text-xs">{t('visits')}</TableHead>}
+              {show.visits && <TableHead className="text-end text-xs">{t('visits')}</TableHead>}
               {show.from && <TableHead className="text-xs">{t('from')}</TableHead>}
               {show.issues && <TableHead className="text-xs">{t('issues')}</TableHead>}
             </TableRow>
@@ -238,7 +238,7 @@ function PagesTable({ rows, total }: { rows: AffectedPage[]; total: number }) {
                   <Urls urls={[row.url]} />
                 </TableCell>
                 {show.visits && (
-                  <TableCell className="whitespace-nowrap text-right align-top text-xs tabular-nums">
+                  <TableCell className="whitespace-nowrap text-end align-top text-xs tabular-nums">
                     {row.sessions === null
                       ? '—'
                       : row.before === null

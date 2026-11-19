@@ -36,7 +36,7 @@ export function RangeChip({ running = false }: { running?: boolean }) {
       data-slot="composer-range"
       className={
         words
-          ? 'inline-flex h-[22px] items-center gap-0.5 rounded-[7px] border bg-muted/60 pr-1 text-[11.5px] text-foreground/80'
+          ? 'inline-flex h-[22px] items-center gap-0.5 rounded-[7px] border bg-muted/60 pe-1 text-[11.5px] text-foreground/80'
           : 'inline-flex'
       }
     >
@@ -47,7 +47,7 @@ export function RangeChip({ running = false }: { running?: boolean }) {
           title={t('lineTitle')}
           className={
             words
-              ? 'inline-flex h-full items-center gap-1 rounded-l-[7px] pl-[7px] whitespace-nowrap hover:text-foreground'
+              ? 'inline-flex h-full items-center gap-1 rounded-s-[7px] ps-[7px] whitespace-nowrap hover:text-foreground'
               : 'inline-flex h-[22px] items-center gap-1 rounded-[7px] border border-dashed px-[7px] text-[11.5px] whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted'
           }
         >

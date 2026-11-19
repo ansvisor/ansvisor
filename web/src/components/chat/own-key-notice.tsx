@@ -43,8 +43,8 @@ export function AgentsKeyBanner({ failing }: { failing: FailingKey }) {
       <AlertTriangle className="size-4 text-amber-600 dark:text-amber-500" aria-hidden />
       <div className="min-w-0">
         <b className="font-semibold">{t('banner', { provider })}</b>
-        <span className="ml-1.5">{why}</span>
-        {!canAdmin && <span className="ml-1.5">{t('askAdmin')}</span>}
+        <span className="ms-1.5">{why}</span>
+        {!canAdmin && <span className="ms-1.5">{t('askAdmin')}</span>}
       </div>
       {canAdmin && (
         <Link

@@ -60,7 +60,7 @@ function strip({ label, byline, initials, photoUrl }: PageInfo): HTMLElement {
   // Spans and divs, not paragraphs: nothing that looks for the page's paragraphs finds it.
   box.append(
     el('span', 'text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]', byline),
-    el('span', 'ml-auto text-[11px] text-muted-foreground/80', label),
+    el('span', 'ms-auto text-[11px] text-muted-foreground/80', label),
   );
   return box;
 }

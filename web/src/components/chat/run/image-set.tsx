@@ -185,7 +185,7 @@ export function ImageSet({
                 className="aspect-square w-full object-cover"
               />
               {selected && (
-                <span className="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                <span className="absolute top-1.5 end-1.5 flex items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
                   <Check className="size-3" aria-hidden />
                   {t('selected')}
                 </span>

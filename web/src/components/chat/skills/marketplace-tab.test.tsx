@@ -158,7 +158,7 @@ describe('MarketplaceTab', () => {
     const seo = container.querySelector<HTMLElement>('[data-topic="seo"]')!;
     expect(seo.className).toEqual(expect.stringContaining('inline-flex h-8 items-center'));
     expect(seo.className).toEqual(expect.stringContaining('justify-center gap-1'));
-    expect(seo.querySelector('span')!.className).not.toContain('ml-1');
+    expect(seo.querySelector('span')!.className).not.toContain('ms-1');
     expect(container.querySelector('[data-slot="library-meta"]')!.textContent).toBe(
       '35 skills · MIT license',
     );

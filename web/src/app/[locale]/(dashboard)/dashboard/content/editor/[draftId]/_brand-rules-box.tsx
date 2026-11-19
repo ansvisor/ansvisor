@@ -26,7 +26,7 @@ export function BrandRulesBox({ rules, brandName }: { rules: string[]; brandName
         </span>
         <Link
           href="/dashboard/settings/content"
-          className="ml-auto text-xs text-muted-foreground underline-offset-2 hover:underline"
+          className="ms-auto text-xs text-muted-foreground underline-offset-2 hover:underline"
         >
           {t('edit')}
         </Link>

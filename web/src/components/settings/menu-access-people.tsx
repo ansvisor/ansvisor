@@ -148,7 +148,9 @@ export function MenuManagersCard({ settings, onChange, onFailed }: Props) {
                   <span
                     className={cn(
                       'pointer-events-none block h-3.5 w-3.5 rounded-full bg-background shadow-lg transition-transform',
-                      member.canManageMenus ? 'translate-x-4' : 'translate-x-0.5',
+                      member.canManageMenus
+                        ? 'translate-x-4 rtl:-translate-x-4' // rtl-ok
+                        : 'translate-x-0.5 rtl:-translate-x-0.5', // rtl-ok: the thumb flips
                     )}
                   />
                 </button>

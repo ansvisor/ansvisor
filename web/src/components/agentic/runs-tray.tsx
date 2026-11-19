@@ -159,7 +159,7 @@ export function RunsTrayView({
           <PopoverTitle className="text-xs font-normal text-muted-foreground">
             {t('title')}
           </PopoverTitle>
-          {runs.length > 0 && <span className="ml-auto">{summary}</span>}
+          {runs.length > 0 && <span className="ms-auto">{summary}</span>}
         </div>
         {load === 'error' && runs.length === 0 ? (
           <p role="alert" className="m-0 px-3 py-4 text-[13px] text-muted-foreground">

@@ -79,7 +79,7 @@ export function OpportunityContext({
         <p className="mt-1 font-medium">{opportunity.title}</p>
         {opportunity.decision && (
           <p className="mt-1 text-xs text-muted-foreground">
-            <Badge variant="secondary" className="mr-1.5 text-[10px]">
+            <Badge variant="secondary" className="me-1.5 text-[10px]">
               {tContent(`decision.${opportunity.decision}`)}
             </Badge>
             {tContent(`decisionHint.${opportunity.decision}`)}
@@ -124,7 +124,7 @@ export function OpportunityContext({
                     {i + 1}. {section.heading}
                   </p>
                   {section.keyPoints.length > 0 && (
-                    <ul className="ml-4 list-disc text-muted-foreground">
+                    <ul className="ms-4 list-disc text-muted-foreground">
                       {section.keyPoints.map((point, j) => (
                         <li key={j}>{point}</li>
                       ))}

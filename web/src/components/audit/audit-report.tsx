@@ -181,13 +181,13 @@ function DraftBlock({ text, copyLabel }: { text: string; copyLabel: string }) {
       <Button
         variant="ghost"
         size="icon"
-        className="absolute right-1 top-1 h-7 w-7"
+        className="absolute end-1 top-1 h-7 w-7"
         onClick={copy}
         aria-label={copyLabel}
       >
         <Copy className="h-3.5 w-3.5" />
       </Button>
-      <pre className="whitespace-pre-wrap pr-8 text-xs leading-relaxed text-foreground">
+      <pre className="whitespace-pre-wrap pe-8 text-xs leading-relaxed text-foreground">
         {text.split(PLACEHOLDER).map((part, i) =>
           i % 2 === 1 ? (
             <mark
@@ -238,7 +238,7 @@ function ReadingFinding({ evidence }: { evidence: ReadingEvidence }) {
             })
           : t('evidence.readingNoFormula', { language })}
       </p>
-      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+      <ul className="mt-1 list-disc space-y-0.5 ps-5">
         <li>{t('evidence.sentences', { words: evidence.wordsPerSentence })}</li>
         <li>
           {evidence.syllablesPerWord !== null
@@ -312,7 +312,7 @@ function SignalRow({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 py-3 text-left hover:bg-muted/40"
+        className="flex w-full items-center gap-3 py-3 text-start hover:bg-muted/40"
         aria-expanded={open}
         aria-controls={`signal-panel-${signal.key}`}
       >
@@ -338,7 +338,7 @@ function SignalRow({
       {open && (
         <div
           id={`signal-panel-${signal.key}`}
-          className="space-y-2 pb-4 pl-7 text-sm text-muted-foreground"
+          className="space-y-2 pb-4 ps-7 text-sm text-muted-foreground"
         >
           <Finding signal={signal} />
           {signal.key === AUTHORITY_SIGNAL ? (
@@ -448,7 +448,7 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
       <Card>
         <CardContent className="flex flex-col items-center gap-6 py-6 sm:flex-row sm:items-center">
           <ScoreGauge score={audit.totalScore} range={range} />
-          <div className="flex-1 space-y-2 text-center sm:text-left">
+          <div className="flex-1 space-y-2 text-center sm:text-start">
             <div className="text-sm font-medium break-all">{audit.finalUrl || audit.url}</div>
             {grade && (
               <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">

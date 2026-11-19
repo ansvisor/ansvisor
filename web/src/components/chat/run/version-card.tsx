@@ -143,7 +143,7 @@ export function VersionDetails({
       {(changed || placeholders.length > 0) && (
         <div data-slot="version-changes">
           <p className="text-xs font-semibold">{t('whatChanged')}</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+          <ul className="mt-1 list-disc space-y-0.5 ps-4 text-muted-foreground">
             {version.n > 1 &&
               shortened.map((s) => (
                 <li key={`s-${s.heading}`}>
@@ -199,7 +199,7 @@ export function VersionDetails({
             data-action="version.undo"
             disabled={busy || undone}
             onClick={guard(() => void undo(), { action: tReadOnly('restoreVersion') })}
-            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60"
+            className="ms-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60"
           >
             <Undo2 className="size-3.5" aria-hidden />
             {undone ? t('undoneShort', { n: version.n - 1 }) : t('undo', { n: version.n - 1 })}

@@ -103,7 +103,7 @@ export function PlanTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-10 pl-6">#</TableHead>
+          <TableHead className="w-10 ps-6">#</TableHead>
           {/* Narrow windows: two lines, and the score without its level's name. */}
           <TableHead className="w-16 whitespace-normal leading-tight xl:w-auto xl:whitespace-nowrap">
             {t('columns.score')}
@@ -116,7 +116,7 @@ export function PlanTable({
           <TableHead>
             <span className="sr-only">{t('columns.start')}</span>
           </TableHead>
-          <TableHead className="w-8 pl-0 pr-3">
+          <TableHead className="w-8 ps-0 pe-3">
             <span className="sr-only">{t('columns.menu')}</span>
           </TableHead>
         </TableRow>
@@ -124,7 +124,7 @@ export function PlanTable({
       <TableBody>
         {rows.map((row, i) => (
           <TableRow key={row.key}>
-            <TableCell className="pl-6 tabular-nums text-muted-foreground">{i + 1}</TableCell>
+            <TableCell className="ps-6 tabular-nums text-muted-foreground">{i + 1}</TableCell>
             <TableCell>
               <ScoreBadge row={row} />
             </TableCell>
@@ -160,7 +160,7 @@ export function PlanTable({
             </TableCell>
             <TableCell className="min-w-[200px] max-w-[320px] whitespace-normal">
               <WhyText why={row.why} />
-              <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              <span className="ms-1.5 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                 {t(`sources.${row.source}`)}
               </span>
             </TableCell>
@@ -187,7 +187,7 @@ export function PlanTable({
                 '—'
               )}
             </TableCell>
-            <TableCell className="text-right">
+            <TableCell className="text-end">
               {row.draft ? (
                 <Link
                   href={contentEditorPath(row.draft.id)}
@@ -205,7 +205,7 @@ export function PlanTable({
                 </Button>
               )}
             </TableCell>
-            <TableCell className="pl-0 pr-3">
+            <TableCell className="ps-0 pe-3">
               <RowMenu
                 row={row}
                 canManage={canManage}

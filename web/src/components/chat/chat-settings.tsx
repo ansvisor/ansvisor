@@ -86,7 +86,7 @@ function Switch({
         aria-hidden
         className={cn(
           'absolute top-0.5 size-3.5 rounded-full bg-background transition-[left] duration-200 motion-reduce:transition-none',
-          checked ? 'left-[14px]' : 'left-0.5',
+          checked ? 'start-[14px]' : 'start-0.5',
         )}
       />
     </button>

@@ -167,7 +167,7 @@ function WhereValueView({ value }: { value: WhereValue }) {
           {value.id && (
             <Link
               href={`/dashboard/prompts/${value.id}`}
-              className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-medium underline-offset-2 hover:underline"
+              className="ms-1.5 inline-flex items-center gap-0.5 text-xs font-medium underline-offset-2 hover:underline"
             >
               {t('drawer.viewPrompt')}
               <ArrowUpRight className="h-3 w-3" />
@@ -405,7 +405,7 @@ function WhereValueView({ value }: { value: WhereValue }) {
                   .join(' · ')}
               </span>
               {m.excerpt && (
-                <blockquote className="mt-1 border-l-2 pl-2 text-xs text-muted-foreground italic">
+                <blockquote className="mt-1 border-s-2 ps-2 text-xs text-muted-foreground italic">
                   “{m.excerpt}”
                   {m.excerptPlatform && m.excerptAt && (
                     <span className="mt-0.5 block not-italic">

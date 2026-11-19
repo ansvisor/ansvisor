@@ -329,7 +329,7 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
                           {row.status === 'undo_conflict' && conflictHref && (
                             <Link
                               href={conflictHref}
-                              className="ml-1 inline-flex items-center gap-0.5 font-medium text-foreground underline-offset-2 hover:underline"
+                              className="ms-1 inline-flex items-center gap-0.5 font-medium text-foreground underline-offset-2 hover:underline"
                             >
                               {t('openToUndo')}
                               <ArrowUpRight className="h-3 w-3" />

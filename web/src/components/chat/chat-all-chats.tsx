@@ -201,7 +201,7 @@ export function ChatAllChats({
     <div className="max-w-[1100px]">
       <div className="mb-3.5 flex items-center gap-3">
         <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title')}</h1>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2">
           <Button
             variant="outline"
             data-action={
@@ -237,7 +237,7 @@ export function ChatAllChats({
           >
             {t(`tabs.${view}`)}
             {lists.status === 'ready' && (
-              <i className="ml-1 rounded-md bg-foreground/10 px-[5px] text-[11px] font-medium not-italic text-foreground/80 tabular-nums">
+              <i className="ms-1 rounded-md bg-foreground/10 px-[5px] text-[11px] font-medium not-italic text-foreground/80 tabular-nums">
                 {(view === 'active' ? lists.total : lists.archivedCount).toLocaleString('en-US')}
               </i>
             )}
@@ -271,7 +271,7 @@ export function ChatAllChats({
             >
               {t(`filters.${f}`)}
               {count > 0 && (
-                <i className="ml-1 rounded-md bg-foreground/10 px-[5px] text-[11px] font-medium not-italic text-foreground/80 tabular-nums">
+                <i className="ms-1 rounded-md bg-foreground/10 px-[5px] text-[11px] font-medium not-italic text-foreground/80 tabular-nums">
                   {count}
                 </i>
               )}
