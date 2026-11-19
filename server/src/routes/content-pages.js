@@ -78,11 +78,16 @@ router.post('/import', async (req, res) => {
     if (!onBrandDomain(page.url, brandDomains)) {
       return res.status(422).json({ error: 'The page redirects off the site', code: 'off_site' });
     }
-    const content = extractPageContent(page.html, page.url);
+    const content = extractPageContent(page.html, page.url, { forEditor: true });
     if (content.html.length > MAX_CONTENT_LENGTH) {
       return res.status(422).json({ error: 'The page is too large', code: 'too_large' });
     }
-    return res.json({ url: page.url, title: content.title, html: content.html });
+    return res.json({
+      url: page.url,
+      title: content.title,
+      html: content.html,
+      author: content.author ?? null,
+    });
   } catch (err) {
     if (err instanceof PageFetchError) {
       return res

@@ -960,7 +960,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                             key={`${row.platform}|${row.surface ?? ''}`}
                             className="hover:bg-muted/50"
                           >
-                            <TableCell className={row.surface ? 'pl-10' : 'pl-6'}>
+                            <TableCell className="pl-6">
                               {row.surface ? (
                                 // Part of its platform's row above (#1283).
                                 <span

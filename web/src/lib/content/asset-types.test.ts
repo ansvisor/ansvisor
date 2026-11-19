@@ -54,6 +54,16 @@ describe('opportunityPageType', () => {
     expect(opportunityPageType('product_page', 'b2b')).toBe('feature_page');
   });
 
+  it('is the closest type the site writes for one it doesn’t (Content test 2026-11-19)', () => {
+    // The "Buying guide" directory opportunity on a software site opened as a blog post.
+    expect(opportunityPageType('buying_guide', 'b2b')).toBe('best_of');
+    expect(opportunityPageType('buying_guide', 'ecommerce')).toBe('buying_guide');
+    expect(opportunityPageType('docs_faq', 'app')).toBe('help_faq');
+    expect(opportunityPageType('help_faq', 'b2b')).toBe('docs_faq');
+    // A shop's own type has none close: the title tells instead.
+    expect(opportunityPageType('sizing_guide', 'b2b')).toBeNull();
+  });
+
   it('is null for earned work, a type the site no longer writes, or none', () => {
     expect(opportunityPageType('backlink', 'b2b')).toBeNull();
     // The older default: the page or its title tells more.
