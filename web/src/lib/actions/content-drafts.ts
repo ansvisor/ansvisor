@@ -14,6 +14,7 @@ import {
   agentStateOf,
   draftConversationOf,
   draftOriginOf,
+  importedAuthor,
   libraryTabCounts,
   type ContentDraft,
   type ContentDraftListItem,
@@ -141,6 +142,7 @@ import {
   insertDraft,
   isDraftId,
   keepVersion,
+  pageAuthorId,
   promptsFor,
   saveDraft,
   startInput,
@@ -728,6 +730,7 @@ export async function importContentPage(
         url: String(body.url),
         title: String(body.title ?? ''),
         html: String(body.html ?? ''),
+        author: importedAuthor(body.author),
       },
     };
   } catch (err) {
@@ -1067,11 +1070,16 @@ export async function startDraftFromAction(
     let pageTitle: string | null = null;
     let bodyHtml: string | undefined;
     let importFailed = false;
+    let authorId: string | null = null;
     if (page) {
       const imported = await importContentPage(brandId, page);
       if ('page' in imported) {
         bodyHtml = imported.page.html;
         pageTitle = imported.page.title;
+        // The person the page says it is by, as the member: their organization's author.
+        if (imported.page.author) {
+          authorId = await pageAuthorId(supabase, brandId, user.id, imported.page.author);
+        }
       } else {
         importFailed = true;
       }
@@ -1181,6 +1189,7 @@ export async function startDraftFromAction(
         body_html: body,
         opportunity_id: opportunityRow?.id ?? null,
         source_url: page,
+        ...(authorId ? { author_id: authorId } : {}),
         prompt_ids: [...new Set(prompts.map((p) => p.id))],
         action_id: actionId,
         // A page brought in to optimize aims at its own length, not a new page's.
