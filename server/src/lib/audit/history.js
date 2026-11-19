@@ -4,8 +4,6 @@
  * tested.
  */
 
-import { normHost } from './host.js';
-
 /** How many recent completed audits the trend endpoint reads. */
 export const TREND_LIMIT = 500;
 
@@ -34,23 +32,64 @@ export function parseListPage(query = {}) {
 }
 
 /**
- * Turn completed audit rows read NEWEST first into the chart's points: keep
- * only audits of the primary domain (host of final_url, else url) and return
- * them oldest → newest so the chart ends at the latest audit. A partial audit
- * (its AI-judged signals didn't run) isn't a point: its score isn't compared.
+ * The Score over time chart's points: the SITE score after each completed
+ * audit of the primary domain, as the Site score card reads it (overview.js
+ * over buildAuditPages): each page counts once, through its latest complete
+ * audit (else its latest scored partial one), averaged over the pages. The
+ * categories average the same way. So the last point is the card's number,
+ * and a page's repeat audit moves the line by its share, not to its own
+ * score. Rows are read NEWEST first; points come back oldest → newest, the
+ * newest `limit` of them.
  */
-export function buildTrendPoints(rowsNewestFirst, primaryHost) {
+export function buildTrendPoints(rowsNewestFirst, primaryHost, limit = TREND_LIMIT) {
   if (!primaryHost) return [];
-  return (rowsNewestFirst ?? [])
-    .filter((r) => r.partial !== true)
-    .filter((r) => (normHost(r.final_url) ?? normHost(r.url)) === primaryHost)
-    .map((r) => ({
+  const seen = new Set();
+  const rows = [];
+  for (const r of rowsNewestFirst ?? []) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    if (r.status !== undefined && r.status !== 'completed') continue;
+    if (r.total_score === null || r.total_score === undefined) continue;
+    const page = pageIdentityForAudit(r);
+    if (page.host !== primaryHost) continue;
+    rows.push({ ...r, pageKey: page.key });
+  }
+  rows.reverse();
+
+  // Each page's latest complete audit, and its latest scored one.
+  const pages = new Map();
+  const points = [];
+  for (const r of rows) {
+    const at = pages.get(r.pageKey) ?? { complete: null, any: null };
+    at.any = r;
+    if (r.partial !== true) at.complete = r;
+    pages.set(r.pageKey, at);
+
+    const current = [...pages.values()].map((p) => p.complete ?? p.any);
+    const average = (values) =>
+      values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : null;
+    const categoryScores = {};
+    for (const key of new Set(current.flatMap((c) => Object.keys(c.category_scores ?? {})))) {
+      const scores = current
+        .map((c) => c.category_scores?.[key]?.score)
+        .filter((v) => typeof v === 'number');
+      if (scores.length) {
+        categoryScores[key] = {
+          score: average(scores),
+          evaluated: scores.length,
+          total: current.length,
+        };
+      }
+    }
+    points.push({
       id: r.id,
       createdAt: r.created_at,
-      totalScore: r.total_score === null ? null : Number(r.total_score),
-      categoryScores: r.category_scores ?? {},
-    }))
-    .reverse();
+      totalScore: average(current.map((c) => Number(c.total_score))),
+      categoryScores,
+      pages: current.length,
+    });
+  }
+  return points.slice(-limit);
 }
 
 /** Score at or above which a page reads as Good (70/100). */

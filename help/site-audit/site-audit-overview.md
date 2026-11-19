@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [site score, pages audited, audit opportunities, audited pages, score over time, first score, current score, not audited, audit coverage, score range]
 synonyms: [audit overview, audit history, which pages to audit, audit priority]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -33,7 +33,7 @@ Red and yellow are for admins and managers.
 
 ## Score over time
 
-**Score over time** charts your primary domain's audit scores, one point a day from the latest audit that day, over 7d, 30d, 90d or All. The category breakdown of the latest audit sits beside it. The chart needs audits on at least two days.
+**Score over time** charts your site score, the average of each page's latest audit on your primary domain, one point a day, over 7d, 30d, 90d or All. Its latest point is the site score at the top, and the category breakdown beside it averages the same pages. The chart needs audits on at least two days.
 
 With the Content Editor's Quality on, a **Site trust** card, out of 5, reads your site's trust pages. It counts toward Quality's Trust, not the audit score.
 
