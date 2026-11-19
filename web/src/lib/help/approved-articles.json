@@ -3348,7 +3348,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3404,7 +3404,7 @@
         },
         {
           "heading": "Sources",
-          "text": "**Sources** shows what the draft is built from: **Prompts**, **Fan-outs** (the searches AI ran for your prompts), **Cited pages**, which AI quotes today, and **Search Console** queries. Each source shows where the draft uses it.\n\nUncheck a source to leave it out, or click **Add source** to add a prompt, a page address or a Search Console query. Then click **Rebuild with selection**."
+          "text": "**Sources** shows what the draft is built from: **Prompts**, **Fan-outs** (the searches AI ran for your prompts), **Cited pages**, which AI quotes today, and **Search Console** queries. Each source shows where the draft uses it.\n\nUncheck a source to leave it out, or click **Add source** to add a prompt, a page address or a Search Console query. Then click **Rebuild with selection**.\n\nThe Content Agent writes only from the searches in the page's language. It uses a Search Console query only when the query is about the page: its title, its prompts and its brief. A fan-out becomes a short, natural heading or question with the search's main terms, never the search pasted as it is. On an alternatives, comparison or best-of page, the agent covers each of your competitors that the title, the prompts or the brief names."
         },
         {
           "heading": "Live page",
