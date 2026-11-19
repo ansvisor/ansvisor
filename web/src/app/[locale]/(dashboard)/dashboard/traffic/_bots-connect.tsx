@@ -115,7 +115,7 @@ function SetupSteps({ created }: { created: NewBotConnection }) {
         <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         {t('secretOnce')}
       </p>
-      <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+      <ol className="list-decimal space-y-1 ps-5 text-xs text-muted-foreground">
         {(t.raw(`steps.${kind}`) as string[]).map((step) => (
           <li key={step}>{step}</li>
         ))}
@@ -462,7 +462,7 @@ export function BotsDialog({
                     aria-checked={kind === k}
                     onClick={() => setKind(k)}
                     className={cn(
-                      'rounded-md border px-3 py-2 text-left transition-colors',
+                      'rounded-md border px-3 py-2 text-start transition-colors',
                       kind === k ? 'border-primary bg-primary/5' : 'hover:bg-muted/50',
                     )}
                   >

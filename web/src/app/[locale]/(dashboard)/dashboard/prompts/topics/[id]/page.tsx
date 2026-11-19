@@ -101,7 +101,7 @@ function KpiCard({
           <div className="text-2xl font-semibold tabular-nums">
             {value}
             {suffix && (
-              <span className="text-sm font-normal text-muted-foreground ml-0.5">{suffix}</span>
+              <span className="text-sm font-normal text-muted-foreground ms-0.5">{suffix}</span>
             )}
           </div>
           {change !== null && change !== undefined && change !== 0 && (
@@ -116,9 +116,9 @@ function KpiCard({
               )}
             >
               {change > 0 ? (
-                <TrendingUp className="h-3 w-3 mr-0.5" />
+                <TrendingUp className="h-3 w-3 me-0.5" />
               ) : change < 0 ? (
-                <TrendingDown className="h-3 w-3 mr-0.5" />
+                <TrendingDown className="h-3 w-3 me-0.5" />
               ) : null}
               {change > 0 ? '+' : ''}
               {change}
@@ -291,9 +291,9 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
             variant="ghost"
             size="sm"
             onClick={() => router.push('/dashboard/prompts/topics')}
-            className="mb-2 -ml-2 text-muted-foreground"
+            className="mb-2 -ms-2 text-muted-foreground"
           >
-            <ArrowLeft className="h-4 w-4 mr-1" />
+            <ArrowLeft className="h-4 w-4 me-1" />
             Topics
           </Button>
           {loading && !topic ? (
@@ -409,20 +409,20 @@ export default function TopicDetailPage({ params }: { params: Promise<{ id: stri
                     )}
                     title={`Appeared in ${c.visiblePrompts} of ${c.promptCount} prompts · avg score ${c.avgVisibilityScore}%`}
                   >
-                    <span className="w-5 text-xs text-muted-foreground tabular-nums text-right">
+                    <span className="w-5 text-xs text-muted-foreground tabular-nums text-end">
                       {i + 1}
                     </span>
                     <span className="flex-1 text-sm font-medium truncate">
                       {c.name}
                       {c.isOwnBrand && (
-                        <span className="ml-1.5 text-[10px] font-medium text-primary">YOU</span>
+                        <span className="ms-1.5 text-[10px] font-medium text-primary">YOU</span>
                       )}
                     </span>
-                    <span className="text-sm tabular-nums w-10 text-right">{c.score ?? '—'}</span>
+                    <span className="text-sm tabular-nums w-10 text-end">{c.score ?? '—'}</span>
                     {c.scoreChange !== null && (
                       <span
                         className={cn(
-                          'text-xs tabular-nums w-12 text-right',
+                          'text-xs tabular-nums w-12 text-end',
                           c.scoreChange > 0
                             ? 'text-emerald-600 dark:text-emerald-400'
                             : c.scoreChange < 0

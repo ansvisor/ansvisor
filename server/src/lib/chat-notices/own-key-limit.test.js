@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -57,6 +60,7 @@ vi.mock('../../config/supabase.js', () => ({
 vi.mock('../email.js', () => ({ deliverEmail }));
 vi.mock('../logger.js', () => ({ default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
+const { forgetMessages } = await import('../i18n.js');
 const { forgetOwnKeyLimitWarnings, limitLevel, renderOwnKeyLimitEmail, warnOwnKeyLimit } =
   await import('./own-key-limit.js');
 
@@ -216,5 +220,43 @@ describe('renderOwnKeyLimitEmail', () => {
       workspace: 'Acme',
     });
     expect(warning.html).toContain('about $205 of the $250.50');
+  });
+
+  it('writes in the Admin’s language, with their number and date format (LOC-008)', async () => {
+    const file = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../messages/de.json',
+    );
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ ownKeyLimit: { title80: 'Ihre Agenten haben 80 % genutzt' } }),
+    );
+    forgetMessages();
+    try {
+      const german = renderOwnKeyLimitEmail({
+        level: 80,
+        usedUsd: 205,
+        capUsd: 250.5,
+        renewsAt: NEXT,
+        workspace: 'Acme',
+        locale: 'de',
+      });
+      expect(german.subject).toBe('Ihre Agenten haben 80 % genutzt');
+      // Not translated yet: English words, German amounts.
+      expect(german.html).toMatch(/about 205\s\$ of the 250,50\s\$/);
+      // The same e-mail with no language is the English it was.
+      expect(
+        renderOwnKeyLimitEmail({
+          level: 80,
+          usedUsd: 205,
+          capUsd: 250,
+          renewsAt: NEXT,
+          workspace: 'A',
+        }).subject,
+      ).toBe('Your agents have used 80% of their monthly limit on your AI key');
+    } finally {
+      fs.rmSync(file, { force: true });
+      forgetMessages();
+    }
   });
 });

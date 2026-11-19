@@ -183,12 +183,12 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
     >
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="font-medium [overflow-wrap:anywhere]">
-          <span className="mr-1.5 text-xs font-normal text-muted-foreground">
+          <span className="me-1.5 text-xs font-normal text-muted-foreground">
             {t(`kinds.${fact.kind}`)}
           </span>
           {fact.kind === 'claim' ? t('quoted', { quote: fact.quote }) : valueOf(fact)}
           {fact.gone && (
-            <Badge variant="outline" className="ml-2 align-middle text-[11px] font-normal">
+            <Badge variant="outline" className="ms-2 align-middle text-[11px] font-normal">
               {t('gone')}
             </Badge>
           )}

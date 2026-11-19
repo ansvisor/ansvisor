@@ -395,7 +395,7 @@ function TokenForm({
       <ol
         id={`webflow-token-steps-${brandId}`}
         aria-label={t('tokenSteps.label')}
-        className="list-decimal space-y-0.5 pl-4 text-xs text-muted-foreground"
+        className="list-decimal space-y-0.5 ps-4 text-xs text-muted-foreground"
       >
         {TOKEN_STEPS.map((step) => (
           <li key={step}>{t(`tokenSteps.${step}`)}</li>
@@ -696,7 +696,7 @@ function WebflowMapping({
           {map.jsonLd && <p className="text-xs text-muted-foreground">{t('jsonLdHint')}</p>}
           {map.date && <p className="text-xs text-muted-foreground">{t('dateHint')}</p>}
           {problems.length > 0 && (
-            <ul role="alert" className="list-disc space-y-1 pl-5 text-xs text-destructive">
+            <ul role="alert" className="list-disc space-y-1 ps-5 text-xs text-destructive">
               {problems.map((p) => (
                 <li key={p}>{problemText(p)}</li>
               ))}

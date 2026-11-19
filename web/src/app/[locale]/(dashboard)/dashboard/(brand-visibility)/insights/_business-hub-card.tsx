@@ -72,7 +72,7 @@ function Metric({
           <span
             title={changeTitle ?? undefined}
             className={cn(
-              'w-12 text-right text-[11.5px] font-medium',
+              'w-12 text-end text-[11.5px] font-medium',
               TONE_TEXT[change > 0 ? 'good' : change < 0 ? 'bad' : 'neutral'],
             )}
           >

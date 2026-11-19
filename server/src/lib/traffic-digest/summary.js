@@ -17,6 +17,7 @@
 
 import { createRequire } from 'module';
 import { ENGINE_THRESHOLDS } from '../../config/action-engine.js';
+import { DEFAULT_LOCALE, formatNumberIn, formatPercentIn, translate } from '../i18n.js';
 
 // The AI Traffic page's names (web/src/lib/traffic-platforms.ts); a web test
 // keeps the two the same.
@@ -45,8 +46,7 @@ export const isNamedPlatform = (key) =>
   key !== 'unknown' && Object.hasOwn(PLATFORM_NAMES, String(key ?? ''));
 
 const n = (value) => Number(value) || 0;
-const formatNumber = (value) => Math.round(value).toLocaleString('en-US');
-const plural = (count, one, other) => (count === 1 ? one : other);
+const formatNumber = (value, locale = DEFAULT_LOCALE) => formatNumberIn(locale, Math.round(value));
 
 /**
  * The week a digest reports: the last whole Monday-to-Sunday week (UTC)
@@ -99,13 +99,13 @@ export function visitChangePct(current, previous) {
   return pct === 0 ? null : pct;
 }
 
-/** "0.8%" of all traffic, as the page's KPI writes it. */
-export function formatShare(part, whole) {
+/** "0.8%" of all traffic, as the page's KPI writes it ("%0,8" in Turkish). */
+export function formatShare(part, whole, locale = DEFAULT_LOCALE) {
   if (whole <= 0) return null;
   const pct = (part / whole) * 100;
-  if (pct > 0 && pct < 0.1) return '<0.1%';
+  if (pct > 0 && pct < 0.1) return `<${formatPercentIn(locale, 0.1)}`;
   const rounded = pct < 10 ? Math.round(pct * 10) / 10 : Math.round(pct);
-  return `${rounded.toLocaleString('en-US')}%`;
+  return formatPercentIn(locale, rounded);
 }
 
 /** The platform whose visitors convert best, when two or more can be compared. */
@@ -122,25 +122,26 @@ export function bestConvertingPlatform(value = []) {
 }
 
 /**
- * The summary line's sentences, in the page's words.
+ * The summary line's sentences, in the page's words, in `locale` (the
+ * reader's interface language, LOC-008; English when none).
  *
  * @param {{ visits: number, prevVisits: number, platforms: {platform: string, visits: number}[],
  *   gaSessions: number | null, platformValue: object[] | null, citedNotClicked: number,
  *   untrackedQueries: number }} input
+ * @param {string} [locale]
  */
-export function summarySentences(input) {
+export function summarySentences(input, locale = DEFAULT_LOCALE) {
+  const t = (key, values) => translate(locale, `trafficDigest.summary.${key}`, values);
   const visits = n(input.visits);
-  if (visits === 0) return ['Last week: no AI-referred visits.'];
+  if (visits === 0) return [t('none')];
 
   const sentences = [];
-  const first = [
-    `Last week: ${formatNumber(visits)} ${plural(visits, 'AI-referred visit', 'AI-referred visits')}`,
-  ];
-  const share = input.gaSessions !== null ? formatShare(visits, n(input.gaSessions)) : null;
-  if (share) first.push(`${share} of all traffic`);
+  const first = [t('lastWeek', { count: Math.round(visits) })];
+  const share = input.gaSessions !== null ? formatShare(visits, n(input.gaSessions), locale) : null;
+  if (share) first.push(t('shareOf', { share }));
   const change = visitChangePct(visits, n(input.prevVisits));
   if (change !== null) {
-    first.push(`${change > 0 ? 'up' : 'down'} ${Math.abs(change)}% on the week before`);
+    first.push(t(change > 0 ? 'up' : 'down', { pct: formatPercentIn(locale, Math.abs(change)) }));
   }
   sentences.push(`${first.join(', ')}.`);
 
@@ -148,37 +149,23 @@ export function summarySentences(input) {
     .filter((p) => n(p.visits) > 0 && isNamedPlatform(p.platform))
     .sort((a, b) => n(b.visits) - n(a.visits))[0];
   const best = input.gaSessions !== null ? bestConvertingPlatform(input.platformValue ?? []) : null;
-  const rate = best ? `${best.rate.toLocaleString('en-US')}%` : '';
+  const rate = best ? formatPercentIn(locale, best.rate) : '';
+  const visitsOf = (p) => formatNumber(n(p.visits), locale);
   if (top && best && best.platform === top.platform) {
     sentences.push(
-      `${platformName(top.platform)} sent the most (${formatNumber(n(top.visits))}), and its visitors convert best (${rate} of their visits had a key event).`,
+      t('topAndBest', { platform: platformName(top.platform), visits: visitsOf(top), rate }),
     );
   } else {
     const second = [];
-    if (top)
-      second.push(`${platformName(top.platform)} sent the most (${formatNumber(n(top.visits))})`);
-    if (best) {
-      second.push(
-        `${platformName(best.platform)} visitors convert best (${rate} of their visits had a key event)`,
-      );
-    }
+    if (top) second.push(t('top', { platform: platformName(top.platform), visits: visitsOf(top) }));
+    if (best) second.push(t('best', { platform: platformName(best.platform), rate }));
     if (second.length) sentences.push(`${second.join('; ')}.`);
   }
 
   const cited = n(input.citedNotClicked);
-  if (cited > 0) {
-    sentences.push(
-      cited === 1
-        ? '1 page is cited in AI answers but gets no clicks.'
-        : `${formatNumber(cited)} pages are cited in AI answers but get no clicks.`,
-    );
-  }
+  if (cited > 0) sentences.push(t('cited', { count: Math.round(cited) }));
   const untracked = n(input.untrackedQueries);
-  if (untracked > 0) {
-    sentences.push(
-      `${formatNumber(untracked)} Google ${plural(untracked, 'query', 'queries')} with clicks ${plural(untracked, "isn't", "aren't")} tracked as prompts.`,
-    );
-  }
+  if (untracked > 0) sentences.push(t('untracked', { count: Math.round(untracked) }));
   return sentences;
 }
 
@@ -287,23 +274,28 @@ export function topChanges({ cur, prev, broken, knownPages }, limit = TOP_CHANGE
   return [...changes, ...moved].slice(0, limit);
 }
 
-/** One change as the e-mail says it. */
-export function changeText(change) {
+/** One change as the e-mail says it, in `locale` (LOC-008; English when none). */
+export function changeText(change, locale = DEFAULT_LOCALE) {
+  const t = (key, values) => translate(locale, `trafficDigest.change.${key}`, values);
   if (change.type === 'broken') {
-    const pages =
-      change.count === 1
-        ? '1 page AI visitors landed on doesn’t exist'
-        : `${formatNumber(change.count)} pages AI visitors landed on don’t exist`;
-    if (!change.page) return `${pages}.`;
-    const redirect = change.target ? `, redirect to ${change.target}` : '';
-    return `${pages}: ${change.page}${redirect}.`;
+    const pages = t('broken', { count: Math.round(n(change.count)) });
+    if (!change.page) return t('brokenOnly', { pages });
+    return change.target
+      ? t('brokenRedirect', { pages, page: change.page, target: change.target })
+      : t('brokenPage', { pages, page: change.page });
   }
-  const subject = change.type === 'platform' ? platformName(change.name) : change.name;
-  const verb = change.type === 'platform' ? 'sent' : 'got';
+  const platform = change.type === 'platform';
+  const name = platform ? platformName(change.name) : change.name;
+  const count = Math.round(n(change.now));
+  const kind = platform ? 'platform' : 'page';
   if (change.before === 0) {
     // Not "its first": a page or platform may be coming back after a quiet week.
-    return `${subject} ${verb} ${formatNumber(change.now)} AI ${plural(change.now, 'visit', 'visits')}, none the week before.`;
+    return t(`${kind}New`, { name, count });
   }
-  const direction = change.now > change.before ? 'up' : 'down';
-  return `${subject} ${verb} ${formatNumber(change.now)} AI ${plural(change.now, 'visit', 'visits')}, ${direction} from ${formatNumber(change.before)}.`;
+  const direction = change.now > change.before ? 'Up' : 'Down';
+  return t(`${kind}${direction}`, {
+    name,
+    count,
+    before: formatNumber(change.before, locale),
+  });
 }

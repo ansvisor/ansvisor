@@ -18,7 +18,7 @@ function PageLink({ page }: { page: CitedPageRead }) {
         className="break-all underline-offset-2 hover:underline"
       >
         {shown}
-        <ArrowUpRight className="ml-0.5 inline h-3 w-3" />
+        <ArrowUpRight className="ms-0.5 inline h-3 w-3" />
       </a>
       <span className="text-muted-foreground">
         {[

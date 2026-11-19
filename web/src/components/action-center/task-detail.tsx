@@ -267,7 +267,7 @@ export function TaskDetailView({
                   className="break-all underline-offset-2 hover:underline"
                 >
                   {details.url}
-                  <ArrowUpRight className="ml-0.5 inline h-3 w-3" />
+                  <ArrowUpRight className="ms-0.5 inline h-3 w-3" />
                 </a>
               ) : (
                 details.url
@@ -292,7 +292,7 @@ export function TaskDetailView({
                       {state !== undefined && (
                         <span
                           className={cn(
-                            'ml-1',
+                            'ms-1',
                             state
                               ? 'text-emerald-700 dark:text-emerald-400'
                               : 'text-amber-700 dark:text-amber-400',
@@ -329,7 +329,7 @@ export function TaskDetailView({
           )}
           {details.how.length > 0 && (
             <Field label={t('how')}>
-              <ol className="list-decimal space-y-0.5 pl-4">
+              <ol className="list-decimal space-y-0.5 ps-4">
                 {details.how.map((step, i) => (
                   <li key={i}>{step}</li>
                 ))}
@@ -745,7 +745,7 @@ function FormField({
     <div className="space-y-1">
       <Label htmlFor={id} className="text-xs text-muted-foreground">
         {label}
-        {hint && <span className="ml-1 font-normal">· {hint}</span>}
+        {hint && <span className="ms-1 font-normal">· {hint}</span>}
       </Label>
       {children}
     </div>

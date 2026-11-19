@@ -228,7 +228,7 @@ function Panel({
 }
 
 const row =
-  'flex w-full items-center gap-2 rounded-[9px] px-2 py-[7px] text-left text-[13px] hover:bg-muted aria-selected:bg-muted';
+  'flex w-full items-center gap-2 rounded-[9px] px-2 py-[7px] text-start text-[13px] hover:bg-muted aria-selected:bg-muted';
 
 /**
  * The / menu: the shortcuts, then the Skills group of the enabled skills
@@ -261,7 +261,7 @@ export function SlashMenu({
     <Panel label={t('label')} anchor={anchor} width={520} active={active}>
       <div className="flex px-2 py-1.5 text-xs font-semibold">
         {t('title')}
-        <span className="ml-auto font-normal text-muted-foreground">{t('keys')}</span>
+        <span className="ms-auto font-normal text-muted-foreground">{t('keys')}</span>
       </div>
       {shortcuts.length === 0 && skills.length === 0 ? (
         <p className="px-2 py-2 text-[13px] text-muted-foreground">

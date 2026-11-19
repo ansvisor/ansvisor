@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
  * One action, by its id or by its number ("AC-1497"): the Actions page with
  * its drawer open (`?action=`), on the action's own brand (`&brand=`) and
  * with no filter, so the drawer opens whatever brand or filter was on before.
- * Chat's Open in Actions links here (CHAT-09 item 19): a link Chat shows is a
+ * Chat's Open in Action Center links here (CHAT-09 item 19): a link Chat shows is a
  * path in the app, without a query. So does an "AC-1497" in a Chat answer.
  * The lookup reads with the person's own access, so a number finds only an
  * action of their own workspace. An action the person can't read, or a number

@@ -451,18 +451,18 @@ export default function CitationUrlDetailPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6 text-xs">{t('columns.date')}</TableHead>
+                    <TableHead className="ps-6 text-xs">{t('columns.date')}</TableHead>
                     <TableHead className="text-xs">{t('columns.platform')}</TableHead>
                     <TableHead className="text-xs">{t('columns.prompt')}</TableHead>
                     <TableHead className="text-xs">{t('columns.sentiment')}</TableHead>
                     <TableHead className="text-xs">{t('columns.brandMentioned')}</TableHead>
-                    <TableHead className="pr-6 text-xs">{t('columns.position')}</TableHead>
+                    <TableHead className="pe-6 text-xs">{t('columns.position')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pageOccurrences.map((o) => (
                     <TableRow key={o.resultId}>
-                      <TableCell className="pl-6 text-xs tabular-nums whitespace-nowrap">
+                      <TableCell className="ps-6 text-xs tabular-nums whitespace-nowrap">
                         {formatDate(o.createdAt)}
                       </TableCell>
                       <TableCell>
@@ -487,7 +487,7 @@ export default function CitationUrlDetailPage() {
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="pr-6">
+                      <TableCell className="pe-6">
                         {/* Where in the answer the URL's first citation sits. */}
                         <PositionLabel rank={o.rank} total={o.totalSources} />
                       </TableCell>
@@ -520,12 +520,10 @@ export default function CitationUrlDetailPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="pl-6 text-xs">{t('columns.prompt')}</TableHead>
-                        <TableHead className="text-right text-xs">{t('columns.answers')}</TableHead>
-                        <TableHead className="text-right text-xs">
-                          {t('columns.citations')}
-                        </TableHead>
-                        <TableHead className="pr-6 text-right text-xs">
+                        <TableHead className="ps-6 text-xs">{t('columns.prompt')}</TableHead>
+                        <TableHead className="text-end text-xs">{t('columns.answers')}</TableHead>
+                        <TableHead className="text-end text-xs">{t('columns.citations')}</TableHead>
+                        <TableHead className="pe-6 text-end text-xs">
                           {t('columns.lastSeen')}
                         </TableHead>
                       </TableRow>
@@ -533,7 +531,7 @@ export default function CitationUrlDetailPage() {
                     <TableBody>
                       {pagePromptGroups.map((g) => (
                         <TableRow key={g.promptId}>
-                          <TableCell className="pl-6 max-w-[520px]">
+                          <TableCell className="ps-6 max-w-[520px]">
                             <Link
                               href={`/dashboard/prompts/${g.promptId}`}
                               className="block truncate text-sm hover:underline"
@@ -542,13 +540,13 @@ export default function CitationUrlDetailPage() {
                               {g.promptText}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-right text-xs tabular-nums">
+                          <TableCell className="text-end text-xs tabular-nums">
                             {g.answers}
                           </TableCell>
-                          <TableCell className="text-right text-xs tabular-nums">
+                          <TableCell className="text-end text-xs tabular-nums">
                             {g.citations}
                           </TableCell>
-                          <TableCell className="pr-6 text-right text-xs tabular-nums whitespace-nowrap">
+                          <TableCell className="pe-6 text-end text-xs tabular-nums whitespace-nowrap">
                             {formatDate(g.lastSeen)}
                           </TableCell>
                         </TableRow>
@@ -578,7 +576,7 @@ function BackLink() {
   return (
     <Link
       href="/dashboard/citations"
-      className="-ml-2 inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      className="-ms-2 inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
     >
       <ArrowLeft className="h-4 w-4" />
       {t('back')}

@@ -143,7 +143,7 @@ export function LibraryTable({
       <TableHeader>
         <TableRow>
           {selection && (
-            <TableHead className="w-10 pl-4 pr-0">
+            <TableHead className="w-10 ps-4 pe-0">
               <Checkbox
                 aria-label={t('bulk.selectAll')}
                 checked={picked === 0 ? false : picked === ids.length ? true : 'indeterminate'}
@@ -151,7 +151,7 @@ export function LibraryTable({
               />
             </TableHead>
           )}
-          <TableHead className={selection ? 'pl-2' : 'pl-6'}>{t('columns.content')}</TableHead>
+          <TableHead className={selection ? 'ps-2' : 'ps-6'}>{t('columns.content')}</TableHead>
           <TableHead>{t('columns.type')}</TableHead>
           <TableHead>{t('columns.method')}</TableHead>
           <TableHead>{t('columns.by')}</TableHead>
@@ -161,7 +161,7 @@ export function LibraryTable({
           {shopping && <TableHead>{t('columns.shopping')}</TableHead>}
           <TableHead>{t('columns.created')}</TableHead>
           <TableHead>{t('columns.updated')}</TableHead>
-          <TableHead className="w-8 pl-0 pr-4">
+          <TableHead className="w-8 ps-0 pe-4">
             <span className="sr-only">{t('columns.menu')}</span>
           </TableHead>
         </TableRow>
@@ -172,7 +172,7 @@ export function LibraryTable({
           return (
             <TableRow key={draft.id}>
               {selection && (
-                <TableCell className="w-10 pl-4 pr-0">
+                <TableCell className="w-10 ps-4 pe-0">
                   <Checkbox
                     aria-label={t('bulk.selectRow', { title: draft.title.trim() || t('untitled') })}
                     checked={selection.selected.has(draft.id)}
@@ -181,7 +181,7 @@ export function LibraryTable({
                 </TableCell>
               )}
               <TableCell
-                className={`max-w-[180px] xl:max-w-[320px] ${selection ? 'pl-2' : 'pl-6'}`}
+                className={`max-w-[180px] xl:max-w-[320px] ${selection ? 'ps-2' : 'ps-6'}`}
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <Link
@@ -258,7 +258,7 @@ export function LibraryTable({
                   {tableDate(draft.updatedAt)}
                 </time>
               </TableCell>
-              <TableCell className="pl-0 pr-4">
+              <TableCell className="ps-0 pe-4">
                 <RowMenu draft={draft} sent={sent} actions={actions} />
               </TableCell>
             </TableRow>

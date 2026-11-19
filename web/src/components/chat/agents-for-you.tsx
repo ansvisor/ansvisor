@@ -67,7 +67,7 @@ export function AgentsForYou({
             track('chat_agents_for_you_hidden', { count: agents.length });
             onHide();
           }}
-          className="ml-auto flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="ms-auto flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <X className="size-3.5" aria-hidden />
         </button>
@@ -88,7 +88,7 @@ export function AgentsForYou({
                   onClick={() =>
                     track('chat_agents_for_you_opened', { preset: agent.id, fit: agent.fit })
                   }
-                  className="flex w-full flex-col gap-1 rounded-xl border bg-card px-3 py-2.5 text-left outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  className="flex w-full flex-col gap-1 rounded-xl border bg-card px-3 py-2.5 text-start outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
                   {body(agent, name)}
                   <span className="mt-0.5 inline-flex items-center gap-0.5 text-[12px] font-medium text-foreground">

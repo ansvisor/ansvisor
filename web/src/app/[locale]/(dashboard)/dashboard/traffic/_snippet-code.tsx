@@ -273,7 +273,7 @@ export function SnippetBanner({
                 : t('snippetCheck.titleNoDomain')}
           </p>
           {check && (
-            <ol className="mb-2 list-decimal space-y-0.5 pl-5 text-xs text-muted-foreground">
+            <ol className="mb-2 list-decimal space-y-0.5 ps-5 text-xs text-muted-foreground">
               <li>{t('snippetCheck.stepCopy')}</li>
               <li>
                 {t.rich('snippetCheck.stepPaste', {

@@ -112,7 +112,7 @@ export default function BrandDetailLayout({
               </div>
             </div>
           )}
-          <div className="ml-auto self-start">
+          <div className="ms-auto self-start">
             <WorkspaceSettingsMenu />
           </div>
         </div>
@@ -144,7 +144,7 @@ export default function BrandDetailLayout({
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
-                {leaves && <ArrowUpRight className="-ml-1 h-3.5 w-3.5" aria-hidden="true" />}
+                {leaves && <ArrowUpRight className="-ms-1 h-3.5 w-3.5" aria-hidden="true" />}
               </span>
             </Link>
           );

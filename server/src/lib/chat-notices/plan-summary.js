@@ -5,8 +5,12 @@
  * defensively, and the words the e-mail (chat-notices/agent-plan.js) and
  * the Slack message (slack/blocks/agent-plan.js) share. Its only words not
  * the app's own are the names of the agents the person sees; never an
- * action's title or a page's content. Pure.
+ * action's title or a page's content. The e-mail passes its reader's
+ * interface language (LOC-008); the Slack message, to a channel, is
+ * English. Pure.
  */
+
+import { DEFAULT_LOCALE, formatLocale, formatPercentIn, translate } from '../i18n.js';
 
 const STATES = ['done', 'failed', 'stopped', 'waiting', 'working', 'not_started'];
 const WHYS = ['done', 'deadline'];
@@ -14,22 +18,13 @@ const COUNTS = ['drafts', 'findings', 'tasks', 'shipped'];
 /** Agents one plan starts at most (00545's backstop). */
 const MAX_CHILDREN = 10;
 
-const STATE_WORDS = {
-  done: 'Done',
-  failed: 'Failed',
-  stopped: 'Stopped',
-  waiting: 'Waits for you',
-  working: 'Still working',
-  not_started: 'Not started',
-};
-
-const plural = (count, one, many) => (count === 1 ? one : `${count} ${many}`);
-
-const COUNT_WORDS = {
-  drafts: (n) => plural(n, '1 draft saved', 'drafts saved'),
-  findings: (n) => plural(n, '1 Action Center finding', 'Action Center findings'),
-  tasks: (n) => plural(n, '1 task ready for review', 'tasks ready for review'),
-  shipped: (n) => plural(n, '1 page sent or published', 'pages sent or published'),
+const STATE_KEYS = {
+  done: 'done',
+  failed: 'failed',
+  stopped: 'stopped',
+  waiting: 'waiting',
+  working: 'working',
+  not_started: 'notStarted',
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -102,61 +97,77 @@ export function tally(summary) {
   };
 }
 
-/** A share of the monthly AI limit in words: "5%", "1.2%". */
-export const percent = (share) => `${Math.round(share * 1000) / 10}%`;
+/** A share of the monthly AI limit in words: "5%", "1.2%" ("%1,2" in Turkish). */
+export const percent = (share, locale = DEFAULT_LOCALE) => formatPercentIn(locale, share * 100);
 
 /** A plan's day in words: "Nov 18". */
-export function dayWords(day) {
+export function dayWords(day, locale = DEFAULT_LOCALE) {
   const at = new Date(`${day}T00:00:00.000Z`);
   return Number.isNaN(at.getTime())
     ? String(day)
-    : at.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    : at.toLocaleDateString(formatLocale(locale), {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
 }
 
 /** An agent as the person may see it: its name, "An agent you can't see", or "An agent". */
-export const childName = (child) =>
-  child.hidden ? 'An agent you can’t see' : (child.name ?? 'An agent');
+export const childName = (child, locale = DEFAULT_LOCALE) =>
+  child.hidden
+    ? translate(locale, 'planSummary.hiddenAgent')
+    : (child.name ?? translate(locale, 'planSummary.anAgent'));
 
 /**
  * One agent's line after its name: where it is, what it did, its AI.
  * "Done · 2 drafts saved · 1 Action Center finding · 0.8% of its 1.5%".
  */
-export function childLine(child) {
-  const parts = [STATE_WORDS[child.state]];
+export function childLine(child, locale = DEFAULT_LOCALE) {
+  const t = (key, values) => translate(locale, `planSummary.${key}`, values);
+  const parts = [t(`state.${STATE_KEYS[child.state]}`)];
   if (!child.hidden && child.state !== 'not_started') {
     const work = COUNTS.filter((key) => child.counts[key] > 0).map((key) =>
-      COUNT_WORDS[key](child.counts[key]),
+      t(`count.${key}`, { count: child.counts[key] }),
     );
-    parts.push(work.length ? work.join(' · ') : 'No changes');
+    parts.push(work.length ? work.join(' · ') : t('noChanges'));
   }
   if (child.used !== null && child.share !== null) {
-    parts.push(`${percent(child.used)} of its ${percent(child.share)}`);
+    parts.push(
+      t('usedOf', { used: percent(child.used, locale), share: percent(child.share, locale) }),
+    );
   }
   return parts.join(' · ');
 }
 
 /** What the plan used of the day's budget; null with no AI limit. */
-export function totalLine(summary) {
+export function totalLine(summary, locale = DEFAULT_LOCALE) {
   return summary.budget === null || summary.used === null
     ? null
-    : `AI used: ${percent(summary.used)} of the day’s ${percent(summary.budget)} budget, the plan’s own run included.`;
+    : translate(locale, 'planSummary.total', {
+        used: percent(summary.used, locale),
+        budget: percent(summary.budget, locale),
+      });
 }
 
 /** The headline: "3 of 4 agents done · 1 waits for you", or that none was started. */
-export function headline(summary) {
+export function headline(summary, locale = DEFAULT_LOCALE) {
   const n = tally(summary);
-  if (n.total === 0) return 'No agent was started';
-  const waiting = n.waiting ? ` · ${n.waiting} ${n.waiting === 1 ? 'waits' : 'wait'} for you` : '';
-  return `${n.done} of ${n.total} ${n.total === 1 ? 'agent' : 'agents'} done${waiting}`;
+  if (n.total === 0) return translate(locale, 'planSummary.noneStarted');
+  const done = translate(locale, 'planSummary.headline', { done: n.done, total: n.total });
+  return n.waiting
+    ? `${done} · ${translate(locale, 'planSummary.waiting', { count: n.waiting })}`
+    : done;
 }
 
 /** Why it came now, in a sentence. */
-export function whyLine(summary, { operator, brand, day }) {
-  const plan = `the agents ${operator} started on ${brand} for ${dayWords(day)}`;
-  if (summary.partial) {
-    return `What ${plan} did couldn’t be read, so this says only where each one is.`;
-  }
-  return summary.why === 'done'
-    ? `Every one of ${plan} has finished, or waits for you.`
-    : `Some of ${plan} are still working: this is where each one is now. They carry on.`;
+export function whyLine(summary, { operator, brand, day }, locale = DEFAULT_LOCALE) {
+  const plan = translate(locale, 'planSummary.plan', {
+    operator,
+    brand,
+    day: dayWords(day, locale),
+  });
+  if (summary.partial) return translate(locale, 'planSummary.partial', { plan });
+  return translate(locale, summary.why === 'done' ? 'planSummary.done' : 'planSummary.deadline', {
+    plan,
+  });
 }

@@ -98,7 +98,7 @@ export const CHAT_SEARCH_PAGES: ChatSearchPage[] = [
 
 /** The menus' look (mockup `.pop2`, `.mi2`): opaque, 14px corners, soft shadow. */
 const ITEM =
-  'flex w-full min-w-0 items-center gap-2 rounded-[9px] px-2 py-[7px] text-left text-[13px] text-foreground outline-none hover:bg-accent';
+  'flex w-full min-w-0 items-center gap-2 rounded-[9px] px-2 py-[7px] text-start text-[13px] text-foreground outline-none hover:bg-accent';
 const HEAD = 'px-2 pt-2 pb-1 text-[11px] tracking-[.4px] text-muted-foreground uppercase';
 
 type PaletteItem =
