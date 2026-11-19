@@ -138,7 +138,7 @@ export function MergeCompetitorsDialog({
           <DialogDescription>{t('description')}</DialogDescription>
         </DialogHeader>
 
-        <ul className="max-h-72 space-y-1 overflow-y-auto pr-1" aria-label={t('pickLabel')}>
+        <ul className="max-h-72 space-y-1 overflow-y-auto pe-1" aria-label={t('pickLabel')}>
           {competitors.map((c) => {
             const on = selected.includes(c.id);
             const checkboxId = `${groupName}-pick-${c.id}`;
@@ -189,7 +189,7 @@ export function MergeCompetitorsDialog({
                 kept: kept.name,
               })}
             </p>
-            <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            <ul className="list-disc space-y-1 ps-5 text-xs text-muted-foreground">
               <li>{t('summaryCount', { kept: kept.name })}</li>
               <li>{t('summaryKeeps', { kept: kept.name })}</li>
               <li className="font-medium text-foreground">{t('summaryHistory')}</li>
@@ -305,7 +305,7 @@ export function MergedCompetitorsSection({
     <section className="border-t pt-3">
       <button
         type="button"
-        className="flex w-full items-center gap-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+        className="flex w-full items-center gap-2 text-start text-xs font-medium text-muted-foreground hover:text-foreground"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((on) => !on)}

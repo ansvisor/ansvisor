@@ -518,10 +518,10 @@ function HighFrequencyView({
               <TableRow>
                 <TableHead>Sub-query</TableHead>
                 <TableHead className="w-[160px]">Engine</TableHead>
-                <TableHead className="w-[120px] text-right">Times searched</TableHead>
+                <TableHead className="w-[120px] text-end">Times searched</TableHead>
                 <TableHead className="w-[220px]">Sourced prompts</TableHead>
                 <TableHead className="w-[130px]">Intent</TableHead>
-                <TableHead className="w-[64px] text-right">Track</TableHead>
+                <TableHead className="w-[64px] text-end">Track</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -533,14 +533,14 @@ function HighFrequencyView({
                     <TableCell>
                       <PlatformsCell models={sq.engines} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{sq.timesSearched}</TableCell>
+                    <TableCell className="text-end tabular-nums">{sq.timesSearched}</TableCell>
                     <TableCell>
                       <SourcedPrompts prompts={sq.sourcedPrompts} />
                     </TableCell>
                     <TableCell>
                       <IntentBadge intent={intents[key]} />
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       <TrackCell sq={sq} adding={addingKey === key} onTrack={onTrack} />
                     </TableCell>
                   </TableRow>
@@ -573,12 +573,12 @@ function FanoutSearchInput({
 }) {
   return (
     <div className="relative w-60">
-      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+      <Search className="absolute start-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
       <Input
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="pl-8 h-8 text-xs"
+        className="ps-8 h-8 text-xs"
       />
     </div>
   );
@@ -643,8 +643,8 @@ function ByPromptView({
                 <TableHead className="w-[150px]" title={t('enginesLegend')}>
                   {t('engines')}
                 </TableHead>
-                <TableHead className="w-[170px] text-right">Answers with fan-out</TableHead>
-                <TableHead className="w-[110px] text-right">Sub-queries</TableHead>
+                <TableHead className="w-[170px] text-end">Answers with fan-out</TableHead>
+                <TableHead className="w-[110px] text-end">Sub-queries</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -660,7 +660,7 @@ function ByPromptView({
                         className={cn(expandable && 'cursor-pointer select-none')}
                         onClick={expandable ? () => toggle(prompt.id) : undefined}
                       >
-                        <TableCell className="pr-0">
+                        <TableCell className="pe-0">
                           {expandable && (
                             // The whole row is clickable for the mouse, but a
                             // <tr> can't carry button semantics without breaking
@@ -692,13 +692,13 @@ function ByPromptView({
                             fanoutPlatforms={fanoutPlatforms}
                           />
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-end">
                           <FanoutCoverageCell
                             totalRuns={totalRuns}
                             runsWithFanout={runsWithFanout}
                           />
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-end">
                           <Badge variant="secondary" className="tabular-nums text-[10px]">
                             {subQueries.length}
                           </Badge>
@@ -714,11 +714,11 @@ function ByPromptView({
                                   <TableRow>
                                     <TableHead>Sub-query</TableHead>
                                     <TableHead className="w-[160px]">Engine</TableHead>
-                                    <TableHead className="w-[120px] text-right">
+                                    <TableHead className="w-[120px] text-end">
                                       Times searched
                                     </TableHead>
-                                    <TableHead className="w-[130px] pl-6">Intent</TableHead>
-                                    <TableHead className="w-[64px] text-right">Track</TableHead>
+                                    <TableHead className="w-[130px] ps-6">Intent</TableHead>
+                                    <TableHead className="w-[64px] text-end">Track</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -732,13 +732,13 @@ function ByPromptView({
                                         <TableCell className="align-middle">
                                           <PlatformsCell models={sq.engines} />
                                         </TableCell>
-                                        <TableCell className="align-middle text-right tabular-nums">
+                                        <TableCell className="align-middle text-end tabular-nums">
                                           {sq.timesSearched}
                                         </TableCell>
-                                        <TableCell className="align-middle pl-6">
+                                        <TableCell className="align-middle ps-6">
                                           <IntentBadge intent={intents[key]} />
                                         </TableCell>
-                                        <TableCell className="align-middle text-right">
+                                        <TableCell className="align-middle text-end">
                                           <TrackCell
                                             sq={sq}
                                             adding={addingKey === key}

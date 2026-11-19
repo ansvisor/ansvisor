@@ -58,7 +58,7 @@ export function YourPlanCard({ plan, isAdmin }: { plan: PlanCard; isAdmin: boole
           <p className="text-base font-semibold">
             {plan.isTrial ? `${t('trial')} · ${plan.planName}` : plan.planName}
             {!plan.isTrial && (
-              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+              <span className="ms-1.5 text-xs font-normal text-muted-foreground">
                 {plan.priceMonthly !== null
                   ? t('perMonth', { price: money(plan.priceMonthly) })
                   : t('custom')}
@@ -84,7 +84,7 @@ export function YourPlanCard({ plan, isAdmin }: { plan: PlanCard; isAdmin: boole
         </ul>
         <div className="flex items-center gap-4">
           {usage?.percentUsed !== null && usage?.percentUsed !== undefined && (
-            <div className="text-right">
+            <div className="text-end">
               <p className="text-xs text-muted-foreground">{t('aiLimit')}</p>
               <p className="text-sm font-medium tabular-nums">
                 {/* The trial credit names no share (trial AI credit, 2026-10-29). */}

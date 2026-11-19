@@ -151,7 +151,7 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
 
           {!collapsed && (
             <>
-              <span className="flex-1 truncate text-left text-sm font-medium">
+              <span className="flex-1 truncate text-start text-sm font-medium">
                 {activeBrand?.name ?? t('selectBrand')}
               </span>
               <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

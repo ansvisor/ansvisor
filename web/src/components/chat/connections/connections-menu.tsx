@@ -101,11 +101,11 @@ export function ConnectionsMenu({
               autoComplete="off"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              className="mt-0.5 mb-1 ml-2 block w-[calc(100%-8px)] rounded-lg border bg-background px-2.5 py-1 text-[12px] outline-none placeholder:text-muted-foreground focus:border-foreground/30 [&::-webkit-search-cancel-button]:hidden"
+              className="mt-0.5 mb-1 ms-2 block w-[calc(100%-8px)] rounded-lg border bg-background px-2.5 py-1 text-[12px] outline-none placeholder:text-muted-foreground focus:border-foreground/30 [&::-webkit-search-cancel-button]:hidden"
             />
           )}
           {read.status === 'loading' && read.connections.length === 0 ? (
-            <div className="flex flex-col gap-1.5 py-1 pl-2" aria-hidden>
+            <div className="flex flex-col gap-1.5 py-1 ps-2" aria-hidden>
               {[0, 1, 2].map((i) => (
                 <Skeleton key={i} className="h-5 w-full" />
               ))}
@@ -160,7 +160,7 @@ function MenuRow({
     <li
       data-connection={row.key}
       data-status={row.status}
-      className="flex h-7 items-center gap-2 rounded-lg pr-1 pl-2 text-[12.5px] text-foreground/80"
+      className="flex h-7 items-center gap-2 rounded-lg pe-1 ps-2 text-[12.5px] text-foreground/80"
     >
       <ConnectionDot status={row.status} />
       <span className="min-w-0 flex-1 truncate" title={name}>

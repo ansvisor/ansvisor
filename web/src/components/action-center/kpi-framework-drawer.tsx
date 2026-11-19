@@ -269,7 +269,7 @@ export function KpiFrameworkDrawer({
                         setDraft((prev) => templateDraft(key, prev));
                       }}
                       className={cn(
-                        'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
+                        'flex w-full items-start gap-3 rounded-lg border p-3 text-start transition-colors',
                         isSelected
                           ? 'border-foreground bg-muted/60 ring-1 ring-foreground'
                           : 'hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50',
@@ -361,9 +361,9 @@ export function KpiFrameworkDrawer({
                               [key]: { ...prev[key], target: e.target.value },
                             }))
                           }
-                          className={cn('h-9 pr-7 text-sm', isInvalid && 'border-destructive')}
+                          className={cn('h-9 pe-7 text-sm', isInvalid && 'border-destructive')}
                         />
-                        <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground">
+                        <span className="pointer-events-none absolute inset-y-0 end-2.5 flex items-center text-xs text-muted-foreground">
                           {UNIT_SUFFIX[KPI_REGISTRY[key].unit]}
                         </span>
                       </div>

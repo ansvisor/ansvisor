@@ -269,7 +269,7 @@ export default function ReportsPage() {
                     <TableHead>{t('columns.title')}</TableHead>
                     <TableHead>{t('columns.period')}</TableHead>
                     <TableHead>{t('columns.created')}</TableHead>
-                    <TableHead className="w-[140px] text-right">{t('columns.actions')}</TableHead>
+                    <TableHead className="w-[140px] text-end">{t('columns.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -290,7 +290,7 @@ export default function ReportsPage() {
                       <TableCell className="text-muted-foreground">
                         {formatDate(report.createdAt)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-end">
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             size="sm"
@@ -346,7 +346,7 @@ export default function ReportsPage() {
                       }}
                     >
                       {deletingId === pendingConfirm && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="me-2 h-4 w-4 animate-spin" />
                       )}
                       {tc('delete')}
                     </Button>
@@ -376,7 +376,7 @@ export default function ReportsPage() {
                     onClick={() => selectTemplate(tpl.id)}
                     disabled={generating}
                     className={cn(
-                      'rounded-lg border p-3 text-left transition-colors',
+                      'rounded-lg border p-3 text-start transition-colors',
                       template === tpl.id
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-muted-foreground/40',
@@ -442,7 +442,7 @@ export default function ReportsPage() {
                       onClick={() => toggleSection(s)}
                       disabled={generating || locked}
                       className={cn(
-                        'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors',
+                        'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-start text-xs transition-colors',
                         on
                           ? 'border-primary bg-primary/5'
                           : 'border-border text-muted-foreground hover:border-muted-foreground/40',
@@ -460,7 +460,7 @@ export default function ReportsPage() {
                       </span>
                       {t(`sections.${s}`)}
                       {locked && (
-                        <span className="ml-auto inline-flex items-center gap-0.5 rounded border px-1 text-[10px] font-medium">
+                        <span className="ms-auto inline-flex items-center gap-0.5 rounded border px-1 text-[10px] font-medium">
                           <Crown aria-hidden className="h-2.5 w-2.5" />
                           {requiredPlanFor('crm_integrations')}
                         </span>

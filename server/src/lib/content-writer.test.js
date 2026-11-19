@@ -1836,7 +1836,7 @@ describe('the brief rules (2026) in the Content Agent', () => {
     expect(brief).toContain('Goal: Sell beans');
     expect(brief).toContain("TL;DR (what the page's top must say): A 1:16 ratio suits most beans.");
     expect(brief).toContain(
-      '- Ratio — answer first: Name the ratio first.; show as a comparison, the same points for each option in turn; give a fact on: The ratio cafés use (study, look it up with {{find: …}})',
+      '- Ratio — answer first: Name the ratio first.; show as a table: a row per option (its name first), a column per criterion; give a fact on: The ratio cafés use (study, look it up with {{find: …}})',
     );
     expect(brief).toContain(
       'Proof to gather (write it only from Your input; else {{ask: …}}): test: Our cupping notes',

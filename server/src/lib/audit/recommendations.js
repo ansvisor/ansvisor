@@ -95,6 +95,80 @@ const rewriteSchema = z.object({
   ),
 });
 
+/** The author signals: a recommendation about bylines, only where a page has an author. */
+export const AUTHOR_SIGNALS = new Set(['author-byline', 'author-credentials', 'byline-depth']);
+
+/**
+ * Whether the page is one that carries a byline: not a home page, a pricing
+ * page, a product or feature page, or a legal page (2026-11-19: home and
+ * pricing were told to add an author). Read from its address and its
+ * structured data.
+ */
+export function bylineExpected(ctx) {
+  let path = '/';
+  try {
+    path = new URL(ctx.url).pathname.replace(/\/+$/, '').toLowerCase() || '/';
+  } catch {
+    return true;
+  }
+  if (path === '/') return false;
+  if (/(^|\/)(pricing|plans|prices)(\/|$)/.test(path)) return false;
+  if (/(^|\/)(privacy|terms|legal|cookies?|imprint|gdpr|dpa|security)([-\w]*)?(\/|$)/.test(path))
+    return false;
+  if (/(^|\/)(features?|platform|product|products|solutions?|integrations?)(\/|$)/.test(path))
+    return false;
+  const types = ctx.$
+    ? ctx
+        .$('script[type="application/ld+json"]')
+        .map((_, el) => ctx.$(el).text())
+        .get()
+        .join(' ')
+    : '';
+  return !/"@type"\s*:\s*"(Product|SoftwareApplication)"/.test(types);
+}
+
+/**
+ * A link on the brand's own site in the model's draft or code that the page
+ * doesn't have: an address it made up (an /authors/… page). It becomes a
+ * placeholder, as the brand alone knows its addresses.
+ */
+export function placeholderInventedLinks(text, ctx) {
+  if (!text) return { text, hits: 0 };
+  let host = '';
+  try {
+    host = new URL(ctx.url).host;
+  } catch {
+    return { text, hits: 0 };
+  }
+  const known = new Set();
+  if (ctx.$) {
+    ctx.$('a[href]').each((_, el) => {
+      try {
+        known.add(new URL(ctx.$(el).attr('href'), ctx.url).href.replace(/\/$/, ''));
+      } catch {
+        /* not an address */
+      }
+    });
+  }
+  let hits = 0;
+  const out = text.replace(/href=(["'])([^"']+)\1/g, (whole, quote, href) => {
+    if (href.startsWith('[') || href.startsWith('#') || /^(mailto|tel):/i.test(href)) return whole;
+    let url;
+    try {
+      url = new URL(href, ctx.url);
+    } catch {
+      return whole;
+    }
+    if (url.host !== host || known.has(url.href.replace(/\/$/, ''))) return whole;
+    hits += 1;
+    const placeholder = /author|team|about/i.test(url.pathname)
+      ? '[your author url]'
+      : '[your page url]';
+    return `href=${quote}${placeholder}${quote}`;
+  });
+  return { text: out, hits };
+}
+
 const FACTS_RULE = `Facts: use only facts that appear in the PAGE TEXT or the BRAND DATA. Never invent customers, testimonials, case studies, statistics, percentages, prices, dates, awards or quotes. A fact anyone could look up that the page doesn't have (a statistic, a study, a date, a source's address) is never a placeholder: write the sentence without it, or name the kind of source in words ("Google's structured data documentation", "a recent industry survey"). Only a fact the brand alone knows may be a placeholder in square brackets, starting with "your": [your customer name], [your price], [your result]. At most ${MAX_INPUT_PLACEHOLDERS} in a recommendation.`;
 
 const LENGTH_RULE = `Length: "recommendation" is one imperative sentence of at most ${MAX_COPY_CHARS} characters, specific to this page. Every sentence in "draft" is at most ${MAX_COPY_CHARS} characters.`;
@@ -119,6 +193,8 @@ When the fix is content the user can paste, put the ready-to-use text in "draft"
 Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length limit; a value only the brand knows is a placeholder there too, e.g. "price": "[your price]".
 
 When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist. Never suggest a source the page already links to ("already links to"): suggest others.
+
+A price or a plan fact is quoted only as the page states it, with its billing period ("$249 a month", "$199 a month billed yearly"); when unsure, use [your price]. Never state as fact anything about the brand that the PAGE TEXT or BRAND DATA doesn't say (what it's built on, its methods, partners, guidelines it follows): write it as a [your …] placeholder or leave it out. Never invent an address on the brand's own site (an author page, a bio, a product page): use [your author url] or [your page url]. When TRACKED ENGINES are given, name only those AI engines in any copy.
 
 When BRAND RULES are given, every recommendation, draft and code follows them: a recommendation a rule forbids is left out, never written against it.
 
@@ -214,10 +290,14 @@ async function rewriteTooLong(model, items) {
  */
 export async function generateRecommendations(
   ctx,
-  { results, brand = null, rules = [], auditId } = {},
+  { results, brand = null, rules = [], auditId, engines = [] } = {},
 ) {
+  const byline = bylineExpected(ctx);
   const failing = (results || []).filter(
-    (r) => RECOMMENDABLE_SIGNALS.has(r.key) && (r.status === 'fail' || r.status === 'warn'),
+    (r) =>
+      RECOMMENDABLE_SIGNALS.has(r.key) &&
+      (r.status === 'fail' || r.status === 'warn') &&
+      (byline || !AUTHOR_SIGNALS.has(r.key)),
   );
   if (failing.length === 0) return [];
 
@@ -266,7 +346,11 @@ export async function generateRecommendations(
 PAGE URL: ${ctx.url}
 
 Improve THIS page for its own topic/intent (infer it from the content below). Never introduce subject matter the page isn't already about.
-${brandBlock(brand)}${rulesBlock(rules)}
+${brandBlock(brand)}${rulesBlock(rules)}${
+            engines.length
+              ? `\nTRACKED ENGINES (the only AI engines to name in copy): ${engines.join(', ')}\n`
+              : ''
+          }
 FAILING SIGNALS TO FIX:
 ${issues}
 
@@ -294,7 +378,10 @@ Return prioritized, page-specific recommendations.`,
     const guard = (r) => {
       const out = guardFacts(r, known);
       facts += out.hits;
-      return out.rec;
+      const draft = placeholderInventedLinks(out.rec.draft, ctx);
+      const code = placeholderInventedLinks(out.rec.code, ctx);
+      facts += draft.hits + code.hits;
+      return { ...out.rec, draft: draft.text, code: code.text };
     };
 
     let items = (object.recommendations || [])

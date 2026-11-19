@@ -75,7 +75,7 @@ export function GoLiveSection({
             )}
           </span>
           {blocked && !view.on ? (
-            <span className="inline-flex max-w-56 items-center gap-1 text-right text-xs text-muted-foreground">
+            <span className="inline-flex max-w-56 items-center gap-1 text-end text-xs text-muted-foreground">
               <Lock className="h-3 w-3 shrink-0" aria-hidden />
               {lockedOn !== null ? t('locked', { current: lockedOn }) : t('qualityOff')}
             </span>

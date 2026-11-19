@@ -35,7 +35,7 @@ export function AskChatButton({ className }: { className?: string }) {
       {t('askChat')}
       <kbd
         className={cn(
-          'ml-0.5 rounded-[4px] border px-1 font-sans text-[11px] font-normal',
+          'ms-0.5 rounded-[4px] border px-1 font-sans text-[11px] font-normal',
           panel.open
             ? 'border-primary-foreground/30 text-primary-foreground/80'
             : 'text-muted-foreground',

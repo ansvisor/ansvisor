@@ -161,7 +161,7 @@ export function PublishDialog({
             {t('cancel')}
           </Button>
           <Button disabled={saving || !url?.trim()} onClick={() => void save()}>
-            {saving && <LoadingDots className="mr-1" />}
+            {saving && <LoadingDots className="me-1" />}
             {t('save')}
           </Button>
         </DialogFooter>

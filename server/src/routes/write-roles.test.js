@@ -50,6 +50,8 @@ const OPEN = {
   'POST /api/content-drafts/wix-status': 'Reads where a page stands in Wix.',
   'POST /api/content-drafts/hubspot-status': 'Reads where a page stands in HubSpot.',
   'POST /api/content-pages/import': 'Imports a page into the editor.',
+  'POST /api/ai-text/translate':
+    "Reads AI-written text in the person's interface language (LOC-010): any member reads it.",
   'POST /api/content-pages/links': "Reads the draft's links.",
   'POST /api/content-pages/source-classes': "Classifies the draft's sources.",
   'POST /api/content-pages/claims': "Reads the draft's claims for Trust.",

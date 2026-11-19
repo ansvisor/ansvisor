@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const languages = [];
 const emails = {
   all1: 'ana@acme.test',
   all2: 'bo@acme.test',
@@ -8,6 +12,14 @@ const emails = {
 };
 vi.mock('../../config/supabase.js', () => ({
   default: {
+    from: () => ({
+      select: () => ({
+        in: async (_col, ids) => ({
+          data: languages.filter((r) => ids.includes(r.id)),
+          error: null,
+        }),
+      }),
+    }),
     auth: { admin: { getUserById: async (id) => ({ data: { user: { email: emails[id] } } }) } },
   },
 }));
@@ -17,6 +29,7 @@ const sendEmail = vi.hoisted(() => vi.fn());
 vi.mock('../email.js', () => ({ sendEmail }));
 
 const { renderAutoAuditEmail, sendAutoAuditEmail } = await import('./auto-audit-email.js');
+const { forgetMessages } = await import('../i18n.js');
 
 describe('renderAutoAuditEmail', () => {
   it('sums up the run, with the next run date', () => {
@@ -117,5 +130,59 @@ describe('sendAutoAuditEmail', () => {
     ]);
     sendEmail.mockResolvedValueOnce(false);
     expect(await sendAutoAuditEmail('org-1', run)).toBe(false);
+  });
+});
+
+describe('in each reader’s language (LOC-008)', () => {
+  const file = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../../messages/de.json',
+  );
+  const run = {
+    brands: [{ id: 'coffee', name: 'Acme Coffee', pages: 3, completed: 3, criticalIssues: 1 }],
+    nextRunAt: '2026-11-01T00:00:00.000Z',
+  };
+  beforeEach(() => {
+    sendEmail.mockReset().mockResolvedValue(true);
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        autoAudit: {
+          title: 'Auto-Audit abgeschlossen',
+          summary:
+            '{pages, plural, one {# Seite} other {# Seiten}} geprüft · {issues, plural, one {# kritisches Problem} other {# kritische Probleme}}',
+        },
+      }),
+    );
+    forgetMessages();
+  });
+  afterEach(() => {
+    languages.length = 0;
+    fs.rmSync(file, { force: true });
+    forgetMessages();
+  });
+
+  it('renders the German copy, plurals and all, and keeps English for what has no text', () => {
+    const { subject, html } = renderAutoAuditEmail(run, 'de');
+    expect(subject).toBe('Site Audit: 3 Seiten geprüft · 1 kritisches Problem');
+    expect(html).toContain('Auto-Audit abgeschlossen');
+    expect(html).toContain('Open Site Audit');
+  });
+
+  it('sends the same brands in one e-mail per language, to the same people', async () => {
+    languages.push({ id: 'all2', ui_language: 'de' });
+    readers.map = new Map([
+      ['all1', new Set(['coffee'])],
+      ['all2', new Set(['coffee'])],
+    ]);
+    expect(await sendAutoAuditEmail('org-1', run)).toBe(true);
+    const mails = sendEmail.mock.calls.map(([mail]) => mail);
+    expect(mails).toHaveLength(2);
+    expect(mails.find((mail) => mail.to[0] === 'ana@acme.test').subject).toBe(
+      'Site Audit: 3 pages audited · 1 critical issue',
+    );
+    expect(mails.find((mail) => mail.to[0] === 'bo@acme.test').subject).toBe(
+      'Site Audit: 3 Seiten geprüft · 1 kritisches Problem',
+    );
   });
 });

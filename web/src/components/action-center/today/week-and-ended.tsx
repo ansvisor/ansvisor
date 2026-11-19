@@ -255,7 +255,7 @@ export function EndedAside({
         </TodaySection>
       )}
       <TodaySection part="plan" title={t('plan.title')}>
-        <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+        <ul className="list-disc space-y-1 ps-5 text-sm text-muted-foreground">
           <li>{t('plan.tracking')}</li>
           <li>{t('plan.waiting')}</li>
           <li>{t('plan.agents')}</li>

@@ -608,7 +608,7 @@ export function BeforePublish({
                       <p className="font-medium">
                         {row.title}
                         {row.pill && (
-                          <span className="ml-1.5 inline-flex rounded-full bg-emerald-50 px-1.5 py-px align-[1px] text-[11px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                          <span className="ms-1.5 inline-flex rounded-full bg-emerald-50 px-1.5 py-px align-[1px] text-[11px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                             {row.pill}
                           </span>
                         )}

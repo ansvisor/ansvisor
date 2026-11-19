@@ -1,5 +1,6 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../../messages/en.json';
+import { inRunLocale } from '../run-locale';
 import type { ChatConfirmForm } from '../events';
 import type { CardFormContext, CardFormValues } from '../registry/define-tool';
 import {
@@ -30,8 +31,15 @@ import { brandNameOf, readMemoryViewer, scopeWords, visibleMemoryLine } from './
  * and against the row's schema (card-form.ts). Server only.
  */
 
-const cardT = createTranslator({ locale: 'en', messages, namespace: 'chatMemory.card' });
-const toolT = createTranslator({ locale: 'en', messages, namespace: 'chatTools' });
+// The card's and its step's words, in the run's language (card-locale.ts).
+const cardT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatMemory.card' }),
+  'chatMemory.card',
+);
+const toolT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatTools' }),
+  'chatTools',
+);
 const memoryT = createTranslator({ locale: 'en', messages, namespace: 'chatMemory' });
 
 /** save_memory's input, as its card reads and makes it. */

@@ -85,7 +85,7 @@ export function PlatformVolumeChart({
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
-            tickFormatter={formatCompactNumber}
+            tickFormatter={(value: number) => formatCompactNumber(value)}
           />
           <YAxis
             type="category"

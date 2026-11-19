@@ -1,5 +1,6 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { deliverEmail } from '../email.js';
+import { DEFAULT_LOCALE, translate, translator, uiLanguagesOf } from '../i18n.js';
 import logger from '../logger.js';
 
 /**
@@ -25,20 +26,13 @@ const PROVIDER_NAMES = {
 };
 
 /** Why the key fails, in words (web: chatAgents.ownKey.why). */
-export function keyWhy(provider, failureClass) {
+export function keyWhy(provider, failureClass, locale = DEFAULT_LOCALE) {
   const name = PROVIDER_NAMES[provider] ?? provider;
-  switch (failureClass) {
-    case 'invalid':
-      return `${name} turned down your workspace's key.`;
-    case 'no_credit':
-      return `Your ${name} account is out of credit.`;
-    case 'model':
-      return `${name} can't reach the model set for your key.`;
-    case 'unreadable':
-      return `Your saved ${name} key can't be read any more.`;
-    default:
-      return `Your ${name} key isn't working.`;
-  }
+  const key =
+    { invalid: 'invalid', no_credit: 'noCredit', model: 'model', unreadable: 'unreadable' }[
+      failureClass
+    ] ?? 'other';
+  return translate(locale, `ownKey.why.${key}`, { provider: name });
 }
 
 /** The dashboard's origin, for the e-mail's link. */
@@ -61,30 +55,59 @@ export function escapeHtml(value) {
 
 /**
  * The e-mail (AGENT-OWN-KEY §5.3's words).
- * @param {{ provider: string, failureClass: string, workspace: string, reminder?: boolean }} input
+ * @param {{ provider: string, failureClass: string, workspace: string, reminder?: boolean, locale?: string }} input
+ *   `locale`: the reader's interface language (LOC-008), English when none.
  * @returns {{ subject: string, html: string }}
  */
-export function renderOwnKeyEmail({ provider, failureClass, workspace, reminder = false }) {
+export function renderOwnKeyEmail({
+  provider,
+  failureClass,
+  workspace,
+  reminder = false,
+  locale = DEFAULT_LOCALE,
+}) {
+  const t = translator(locale);
   const url = `${appOrigin()}/dashboard/settings/ai-providers`;
-  const why = escapeHtml(keyWhy(provider, failureClass));
+  const why = escapeHtml(keyWhy(provider, failureClass, locale));
   const name = escapeHtml(workspace);
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-  <h1 style="font-size:18px;color:#111827;margin:0 0 8px 0;">Your AI key for Ansvisor isn't working</h1>
-  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${why} Chat and agents in ${name} run on this key, so agents that use it are paused. None of their runs moved to your plan's AI limit.</p>
-  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">Open Settings › AI Providers to replace or test the key. Agents paused for this start again by themselves once the key works.</p>
+  <h1 style="font-size:18px;color:#111827;margin:0 0 8px 0;">${t('ownKey.title')}</h1>
+  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${t('ownKey.body', { why, workspace: name })}</p>
+  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${t('ownKey.fix')}</p>
   <div style="margin:24px 0;">
-    <a href="${escapeHtml(url)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">Open AI Providers</a>
+    <a href="${escapeHtml(url)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">${t('ownKey.button')}</a>
   </div>
   <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">
-    ${reminder ? 'A reminder: the key has not worked for 3 days. We send one.' : "You get this as an Admin of the workspace, by your Chat settings' Notify me when an agent needs me."}
+    ${reminder ? t('ownKey.reminderFooter') : t('ownKey.footer')}
   </p>
 </div>`;
   return {
-    subject: reminder
-      ? "Reminder: your AI key for Ansvisor still isn't working"
-      : "Your AI key for Ansvisor isn't working",
+    subject: reminder ? t('ownKey.reminderSubject') : t('ownKey.title'),
     html,
   };
+}
+
+/**
+ * Sends one notice e-mail to each of `admins` (those wanting it), in each
+ * one's own language: `render(locale)` makes the { subject, html } once per
+ * language. Returns how many went out; one that isn't 'sent' or 'skipped'
+ * is logged with `context`.
+ */
+export async function sendToAdmins({ admins, told, render, context }) {
+  const wanted = admins.filter((admin) => wantsEmail(admin.notifyVia) && told.has(admin.id));
+  const languages = await uiLanguagesOf(wanted.map((admin) => admin.id));
+  const rendered = new Map();
+  let emails = 0;
+  for (const admin of wanted) {
+    const to = await emailOf(admin.id);
+    if (!to) continue;
+    const locale = languages.get(admin.id) ?? DEFAULT_LOCALE;
+    if (!rendered.has(locale)) rendered.set(locale, render(locale));
+    const outcome = await deliverEmail({ to: [to], ...rendered.get(locale) });
+    if (outcome === 'sent') emails += 1;
+    else if (outcome !== 'skipped') logger.warn({ ...context, outcome }, 'notice e-mail not sent');
+  }
+  return emails;
 }
 
 /**
@@ -194,21 +217,19 @@ export async function notifyOwnKeyFailure(
     .select('name')
     .eq('id', orgId)
     .maybeSingle();
-  const { subject, html } = renderOwnKeyEmail({
-    provider,
-    failureClass: key.failure_class,
-    workspace: org?.name ?? 'your workspace',
-    reminder,
+  // Inbox only sends no e-mail; Inbox + Slack does for this notice, which Slack doesn't carry.
+  const emails = await sendToAdmins({
+    admins,
+    told,
+    context: { orgId, notice: 'own_key' },
+    render: (locale) =>
+      renderOwnKeyEmail({
+        provider,
+        failureClass: key.failure_class,
+        workspace: org?.name ?? translate(locale, 'ownKey.fallbackWorkspace'),
+        reminder,
+        locale,
+      }),
   });
-  let emails = 0;
-  for (const admin of admins) {
-    // Inbox only sends no e-mail; Inbox + Slack does for this notice, which Slack doesn't carry.
-    if (!wantsEmail(admin.notifyVia) || !told.has(admin.id)) continue;
-    const to = await emailOf(admin.id);
-    if (!to) continue;
-    const outcome = await deliverEmail({ to: [to], subject, html });
-    if (outcome === 'sent') emails += 1;
-    else if (outcome !== 'skipped') logger.warn({ orgId, outcome }, 'own key e-mail not sent');
-  }
   return { notices: told.size, emails };
 }

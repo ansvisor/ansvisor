@@ -3,6 +3,7 @@ import { getPlan, hasFeature } from '../config/plans.js';
 import { brandReaders } from './access.js';
 import { chatAgenticEnabled } from './chat-flag.js';
 import { deliverEmailWithId } from './email.js';
+import { DEFAULT_LOCALE, translator, uiLanguagesOf } from './i18n.js';
 import { logger } from './logger.js';
 import { applyPlanOverrides } from './plan-guard.js';
 
@@ -35,6 +36,8 @@ import { applyPlanOverrides } from './plan-guard.js';
  *     covers it.
  *
  * Through Resend (email.js): a silent no-op where it isn't configured.
+ * The e-mail's own words (not the job's title or the answer) are in each
+ * person's interface language (LOC-008), English when none.
  */
 
 /** The largest report attached: a bigger one goes as the link (Wave 3 decision 3). */
@@ -168,49 +171,65 @@ const button = (href, label, primary = true) =>
       : 'background:#ffffff;color:#111827;border:1px solid #d1d5db;'
   }text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;margin:0 8px 8px 0;">${escapeHtml(label)}</a>`;
 
-const footer = (sender) =>
-  `<p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">You get this because this scheduled job in ${escapeHtml(sender)} sends its results by e-mail. Pause the job, or change who gets it, on its page.</p>`;
+const footer = (sender, t) =>
+  `<p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">${t('schedule.footer', { sender: escapeHtml(sender) })}</p>`;
 
 /**
  * A run's result (CHAT-12 item 19).
- * @param {{ title: string, summary: string[], sender: string, chatUrl: string, jobUrl: string, attached: boolean }} input
+ * @param {{ title: string, summary: string[], sender: string, chatUrl: string, jobUrl: string, attached: boolean, locale?: string }} input
+ *   `locale`: the reader's interface language (LOC-008), English when none.
  */
-export function renderScheduleResultEmail({ title, summary, sender, chatUrl, jobUrl, attached }) {
+export function renderScheduleResultEmail({
+  title,
+  summary,
+  sender,
+  chatUrl,
+  jobUrl,
+  attached,
+  locale = DEFAULT_LOCALE,
+}) {
+  const t = translator(locale);
   const lines = summary.length
     ? `<ul style="font-size:14px;color:#111827;margin:0 0 16px 0;padding-left:20px;">${summary
         .map((line) => `<li style="margin:0 0 6px 0;">${escapeHtml(line)}</li>`)
         .join('')}</ul>`
     : '';
-  const file = attached
-    ? 'The report is attached as a PDF.'
-    : 'Open it in Chat to read it all and download it.';
+  const file = attached ? t('schedule.attached') : t('schedule.openToRead');
   const html = box(`
   <h1 style="font-size:18px;color:#111827;margin:0 0 8px 0;">${escapeHtml(title)}</h1>
-  <p style="font-size:14px;color:#4b5563;margin:0 0 16px 0;">Your scheduled job ran. Here is what it found.</p>
+  <p style="font-size:14px;color:#4b5563;margin:0 0 16px 0;">${t('schedule.ran')}</p>
   ${lines}
   <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${file}</p>
-  <div style="margin:24px 0;">${button(chatUrl, 'Open in Chat')}${button(jobUrl, 'Pause this job', false)}</div>
-  ${footer(sender)}`);
-  return { subject: `${title}: your scheduled results`, html };
+  <div style="margin:24px 0;">${button(chatUrl, t('schedule.openInChat'))}${button(jobUrl, t('schedule.pause'), false)}</div>
+  ${footer(sender, t)}`);
+  return { subject: t('schedule.subject', { title }), html };
 }
 
 /**
  * A run that didn't run after its retry, or a job that turned itself off
  * (CHAT-12 items 16, 26–27): why, in plain words.
- * @param {{ kind: 'failed' | 'paused', title: string, reason: string, sender: string, chatUrl: string, jobUrl: string }} input
+ * @param {{ kind: 'failed' | 'paused', title: string, reason: string, sender: string, chatUrl: string, jobUrl: string, locale?: string }} input
+ *   `reason` comes as the caller words it; `locale` words the rest (LOC-008).
  */
-export function renderScheduleProblemEmail({ kind, title, reason, sender, chatUrl, jobUrl }) {
-  const head = kind === 'failed' ? `${title} didn't run` : `${title} is paused`;
-  const next =
-    kind === 'failed'
-      ? 'It runs again at its next time. To try now, open the job and click Run now.'
-      : 'It stays off until it is turned on again on its page.';
+export function renderScheduleProblemEmail({
+  kind,
+  title,
+  reason,
+  sender,
+  chatUrl,
+  jobUrl,
+  locale = DEFAULT_LOCALE,
+}) {
+  const t = translator(locale);
+  const failed = kind === 'failed';
+  const head = t(failed ? 'schedule.failedTitle' : 'schedule.pausedTitle', { title });
+  const next = failed ? t('schedule.failedNext') : t('schedule.pausedNext');
   const html = box(`
   <h1 style="font-size:18px;color:#111827;margin:0 0 8px 0;">${escapeHtml(head)}</h1>
   <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${escapeHtml(reason)}</p>
   <p style="font-size:14px;color:#4b5563;margin:0 0 16px 0;">${next}</p>
-  <div style="margin:24px 0;">${button(jobUrl, kind === 'failed' ? 'Retry' : 'Open the job')}${button(chatUrl, 'Open in Chat', false)}</div>
-  ${footer(sender)}`);
+  <div style="margin:24px 0;">${button(jobUrl, failed ? t('schedule.retry') : t('schedule.openJob'))}${button(chatUrl, t('schedule.openInChat'), false)}</div>
+  ${footer(sender, t)}`);
   return { subject: head, html };
 }
 
@@ -395,28 +414,37 @@ export async function sendScheduleEmail({
   const chatUrl = job.conversation_id ? `${origin}/dashboard/chat/${job.conversation_id}` : jobUrl;
   const sender = await senderNameOf(orgId);
 
-  let message;
-  let files = [];
-  if (kind === 'result') {
-    files = file ? [file] : [];
-    message = renderScheduleResultEmail({
-      title: job.title,
-      summary: summaryLines(markdown),
-      sender,
-      chatUrl,
-      jobUrl,
-      attached: files.length > 0,
-    });
-  } else {
-    message = renderScheduleProblemEmail({
-      kind,
-      title: job.title,
-      reason: String(reason).slice(0, 200),
-      sender,
-      chatUrl,
-      jobUrl,
-    });
-  }
+  const files = kind === 'result' && file ? [file] : [];
+  // Each person's own language (LOC-008), the e-mail made once per language.
+  const languages = await uiLanguagesOf(recipients.map((recipient) => recipient.id));
+  const messages = new Map();
+  const messageIn = (locale) => {
+    if (!messages.has(locale)) {
+      messages.set(
+        locale,
+        kind === 'result'
+          ? renderScheduleResultEmail({
+              title: job.title,
+              summary: summaryLines(markdown),
+              sender,
+              chatUrl,
+              jobUrl,
+              attached: files.length > 0,
+              locale,
+            })
+          : renderScheduleProblemEmail({
+              kind,
+              title: job.title,
+              reason: String(reason).slice(0, 200),
+              sender,
+              chatUrl,
+              jobUrl,
+              locale,
+            }),
+      );
+    }
+    return messages.get(locale);
+  };
 
   let sent = 0;
   let tried = 0;
@@ -424,7 +452,7 @@ export async function sendScheduleEmail({
   for (const recipient of recipients) {
     const outcome = await deliverEmailWithId({
       to: [recipient.email],
-      ...message,
+      ...messageIn(languages.get(recipient.id) ?? DEFAULT_LOCALE),
       fromName: sender,
       ...(files.length ? { attachments: files } : {}),
     });

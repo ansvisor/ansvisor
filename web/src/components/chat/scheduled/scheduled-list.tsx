@@ -195,7 +195,7 @@ function Header({ list }: { list: ScheduleListRead }) {
         <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title')}</h1>
         <p className="text-[13px] text-muted-foreground">{t('subtitle')}</p>
       </div>
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ms-auto flex items-center gap-3">
         {list.ok && list.limit !== null && (
           <span className="text-xs text-muted-foreground tabular-nums">
             {t('limit', { active: list.active, limit: list.limit })}

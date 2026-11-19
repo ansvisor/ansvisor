@@ -167,7 +167,7 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
             type="button"
             onClick={toggleExpanded}
             aria-expanded={expanded}
-            className="flex items-center gap-2 text-left"
+            className="flex items-center gap-2 text-start"
           >
             {expanded ? (
               <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />

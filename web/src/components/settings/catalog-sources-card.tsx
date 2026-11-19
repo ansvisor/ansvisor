@@ -349,7 +349,7 @@ export function CatalogSourcesCard({
                         <summary className="cursor-pointer">
                           {t('skipped', { count: source.lastCounts!.skipped })}
                         </summary>
-                        <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                        <ul className="mt-1 list-disc space-y-0.5 ps-4">
                           {source.lastCounts!.errors.map((error) => (
                             <li key={error}>{error}</li>
                           ))}
@@ -412,7 +412,7 @@ export function CatalogSourcesCard({
                     onChange={(e) => setUrl(e.target.value)}
                   />
                   <Button type="submit" disabled={!url.trim() || busy !== null}>
-                    {busy === 'add' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {busy === 'add' && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                     {t('addFeed')}
                   </Button>
                 </form>
@@ -435,9 +435,9 @@ export function CatalogSourcesCard({
                     }}
                   >
                     {busy === 'upload' ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <Upload className="mr-2 h-4 w-4" />
+                      <Upload className="me-2 h-4 w-4" />
                     )}
                     {t('uploadFile')}
                   </Button>
@@ -465,7 +465,7 @@ export function CatalogSourcesCard({
                                 { action: tActions('connectStores') },
                               )}
                             >
-                              <Store className="mr-2 h-4 w-4" />
+                              <Store className="me-2 h-4 w-4" />
                               {t('stores.connect', { store: connector.label })}
                             </Button>
                           ))}

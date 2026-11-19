@@ -24,6 +24,7 @@ import {
   PlanLimitError,
 } from '../lib/plan-guard.js';
 import { buildAuditContext, normalizeUrl } from '../lib/audit/context.js';
+import { preferredAuditUrl } from '../lib/audit/audit-address.js';
 import { normStoredDomain } from '../lib/audit/host.js';
 import {
   AUDIT_RUN_TIMEOUT_MS,
@@ -35,6 +36,7 @@ import {
   parseListPage,
 } from '../lib/audit/history.js';
 import { readAllRpcRows } from '../lib/rpc-pages.js';
+import { IMPROVE_PLATFORM_LABELS } from '../lib/prompt-improve.js';
 import { AUTHORITY_CATEGORIES, buildOverview, primaryPages } from '../lib/audit/overview.js';
 import {
   aiVisitsByPage,
@@ -109,6 +111,34 @@ function assembleAudit(audit, signalRows) {
     signals,
     recommendations: audit.recommendations ?? [],
   };
+}
+
+/**
+ * The AI engines the brand's active prompts are tracked on, by name, for the
+ * recommendations' copy. Empty when they can't be read: the copy then names
+ * no engine list.
+ */
+async function trackedEngineNames(brandId) {
+  try {
+    const { data: sets } = await supabaseAdmin
+      .from('prompt_sets')
+      .select('id')
+      .eq('brand_id', brandId);
+    const ids = (sets ?? []).map((s) => s.id);
+    if (ids.length === 0) return [];
+    const { data: prompts } = await supabaseAdmin
+      .from('prompts')
+      .select('platforms')
+      .in('prompt_set_id', ids)
+      .eq('is_active', true)
+      .limit(1000);
+    const platforms = new Set((prompts ?? []).flatMap((p) => p.platforms ?? []));
+    return Object.entries(IMPROVE_PLATFORM_LABELS)
+      .filter(([id]) => platforms.has(id))
+      .map(([, name]) => name);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -210,6 +240,30 @@ async function readAuditBrand(brandId) {
 /** site_audits/site_audit_usage.source for a run's audits; a user's are the column default. */
 const sourceColumn = (source) => (source === 'auto' ? { source } : {});
 
+/** How many of the brand's latest audits tell which host its site answers at. */
+const KNOWN_URLS_AUDITS = 30;
+
+/**
+ * The addresses the brand's site gave its own pages in the brand's latest
+ * completed audits (final_url, which is the page's canonical address), newest
+ * first. Empty when they can't be read: the audit then fetches the address
+ * asked for.
+ */
+async function knownAuditUrls(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('site_audits')
+    .select('final_url')
+    .eq('brand_id', brandId)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(KNOWN_URLS_AUDITS);
+  if (error) {
+    logger.warn({ err: error, brandId }, 'known audit addresses unreadable');
+    return [];
+  }
+  return (data ?? []).flatMap((row) => (row.final_url ? [row.final_url] : []));
+}
+
 /**
  * Run the full audit (fetch → deterministic + LLM + Wikidata → score →
  * persist) for an already-created `running` row. Runs detached from the
@@ -227,7 +281,14 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
       supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
     ]);
 
-    const ctx = await buildAuditContext(url);
+    // The page is fetched at the host its site answers at (www or not), not
+    // at the one a sitemap inventory or a typed address happened to use.
+    const ctx = await buildAuditContext(
+      preferredAuditUrl(url, [
+        ...(await knownAuditUrls(brandId)),
+        ...(domainRows ?? []).map((d) => d.domain),
+      ]),
+    );
     // The sites the brand trusts count as authority links (00449).
     ctx.trustedSources = brandRow?.trusted_sources ?? [];
 
@@ -266,6 +327,8 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
       // The brand's rules (00450) shape what's recommended on any page it audits.
       rules: await readBrandRules(brandId),
       auditId,
+      // Copy names only the engines this brand tracks (a paused one never).
+      engines: await trackedEngineNames(brandId),
     });
 
     const { error: completeErr } = await supabaseAdmin

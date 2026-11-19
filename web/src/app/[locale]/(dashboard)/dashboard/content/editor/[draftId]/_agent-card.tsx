@@ -59,7 +59,7 @@ export function AgentCardSkeleton() {
         <span className={cn(BONE, 'h-3 w-28')} />
         <span className={cn(BONE, 'h-2.5 w-64 max-w-full')} />
       </span>
-      <span className="ml-auto flex gap-1.5">
+      <span className="ms-auto flex gap-1.5">
         <span className={cn(BONE, 'h-7 w-16')} />
         <span className={cn(BONE, 'h-7 w-20')} />
         <span className={cn(BONE, 'h-7 w-20')} />
@@ -176,7 +176,7 @@ export function AgentTile({
       )}
       <AgentIcon working={tone === 'working'} slow={tone === 'done'} />
       {count > 0 && (
-        <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-muted bg-amber-700 px-1 text-[11px] font-semibold text-white dark:bg-amber-500 dark:text-amber-950">
+        <span className="absolute -top-1.5 -end-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-muted bg-amber-700 px-1 text-[11px] font-semibold text-white dark:bg-amber-500 dark:text-amber-950">
           {count}
         </span>
       )}
@@ -251,7 +251,7 @@ export function RunSteps({
                 {now && moving && <StepSweep />}
                 {done && <Check aria-hidden className="h-3 w-3 shrink-0" />}
                 {t(key, count === undefined ? {} : { count })}
-                {now && moving && <WorkingDots className="ml-0.5" />}
+                {now && moving && <WorkingDots className="ms-0.5" />}
               </span>
             </li>
           );
@@ -728,14 +728,14 @@ export function AgentCard({
       </div>
       {/* Working, only Stop: it drops whatever the run had. */}
       {working && onStop && run && (
-        <span className="ml-auto flex shrink-0 items-center">
+        <span className="ms-auto flex shrink-0 items-center">
           <Button variant="outline" size="sm" disabled={stopping} onClick={onStop}>
             {t('stop')}
           </Button>
         </span>
       )}
       {!working && (
-        <span className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5">
+        <span className="ms-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5">
           {page ? (
             <>
               <Button

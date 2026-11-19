@@ -83,6 +83,7 @@ import {
 } from '@/lib/action-center/sort';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
+import { useActionAiText } from '@/hooks/use-action-ai-text';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 type IconComponent = React.ComponentType<{ className?: string }>;
@@ -233,7 +234,7 @@ export function AssigneeAvatar({ assignee }: { assignee: ActionItem['assignee'] 
  * Opaque, with the row's hover tint, so it covers what scrolls under it.
  */
 const MENU_CELL =
-  'sticky right-0 z-[5] w-10 bg-card [tr:hover>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))]';
+  'sticky end-0 z-[5] w-10 bg-card [tr:hover>&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))]';
 
 /** The statuses the row menu sets, in its order. */
 const MENU_STATUSES = [
@@ -440,6 +441,8 @@ export function ActionTable({
   const t = useTranslations('actionCenter.actionsPage');
   const withMenu = Boolean(onStatusChange && onDelete);
   const tTexts = useTranslations('actionCenter.actionTexts');
+  // Written titles in the reader's language (LOC-010).
+  const shownAction = useActionAiText(actions);
   const tCategories = useTranslations('actionCenter.actionCategories');
   const tCommon = useTranslations('common');
   const viewer = useDotViewer();
@@ -475,7 +478,7 @@ export function ActionTable({
         </TableHeader>
         <TableBody>
           {actions.map((action) => {
-            const texts = actionTexts(action, tTexts);
+            const texts = actionTexts(shownAction(action), tTexts);
             const tags = actionContextTags(action, t);
             return (
               <TableRow key={action.id} className="cursor-pointer" onClick={() => onSelect(action)}>

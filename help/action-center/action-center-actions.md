@@ -1,11 +1,11 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number, action code, previously]
+keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number, action code, previously, translated, your language]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work, order actions, newest first, oldest first]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -93,6 +93,10 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 - **Signals**: the evidence. Click one to open it on the Signals tab.
 - **History**: every change, from status and assignee changes to tasks updated or sent.
 
+## In your language
+
+Most of an action's words come from the interface, so they follow your language. Actions sent from Chat or Improve carry a title, a "why" and a goal written in English, and an action sent from a content opportunity carries the opportunity's title. When your interface language is another, these show in your language: in English for a moment the first time, then translated. Each is translated once and kept for teammates who use the same language.
+
 ## Run an agent on an action
 
 When Chat is on, Admins and Managers see **Run agent** on each open action: an agent button next to its title in the list, and at the top of the open action.
@@ -116,7 +120,7 @@ Inside an action, **Copy Data** gives the whole action as Markdown to paste into
 Most actions come from signals each night, but you can also send work to the Action Center:
 
 - **Mentions**: select answers, or open one, and click **Send to Action Center**.
-- **Content**: **Send to Actions** on a content opportunity, or **Assign to…** on a Content Plan row.
+- **Content**: **Send to Action Center** on a content opportunity, or **Assign to…** on a Content Plan row.
 - **New content**: send it to a teammate with **Send to Action Center**.
 - **Site Audit**: **Send to Action Center** on a page's audit report.
 - **AI Referral Traffic**: select pages and click **Send to Action Center**.

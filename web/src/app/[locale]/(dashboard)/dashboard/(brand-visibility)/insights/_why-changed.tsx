@@ -62,7 +62,7 @@ export function WhyChanged({
                   type="button"
                   onClick={() => onOpenBreakdown(TAB_OF[d.kind])}
                   title={t('open', { name })}
-                  className="-mx-1.5 flex w-[calc(100%+0.75rem)] items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="-mx-1.5 flex w-[calc(100%+0.75rem)] items-center gap-2.5 rounded-md px-1.5 py-1 text-start transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span className="w-[58px] shrink-0 rounded bg-muted py-0.5 text-center text-[10.5px] font-medium text-muted-foreground">
                     {t(`kind.${d.kind}`)}
@@ -78,7 +78,7 @@ export function WhyChanged({
                   </span>
                   <span
                     className={cn(
-                      'w-11 shrink-0 text-right text-[12.5px] font-semibold tabular-nums',
+                      'w-11 shrink-0 text-end text-[12.5px] font-semibold tabular-nums',
                       TONE_TEXT[d.impact > 0 ? 'good' : 'bad'],
                     )}
                   >
