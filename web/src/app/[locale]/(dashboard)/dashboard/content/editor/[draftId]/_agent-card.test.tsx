@@ -427,6 +427,23 @@ describe('AgentCard', () => {
     );
   });
 
+  it('makes Reject the button to press when the result meets fewer rules (Content test 2026-11-19)', async () => {
+    const primary = (label: string) =>
+      [...container.querySelectorAll('button')].find((b) => b.textContent === label)!.className;
+    const page = suggestion({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>Long.</p>',
+      afterText: '<h1>New</h1><p>Short.</p>',
+      reason: 'rewrote the page',
+    });
+    await render([page], false, { rules: { ...rules, after: { now: 10, met: 9, breaks: null } } });
+    const [reject, accept] = [primary('Reject'), primary('Accept')];
+    await render([page], false, { rules: { ...rules, after: { now: 9, met: 10, breaks: null } } });
+    // The same two buttons, their looks swapped.
+    expect(reject).toBe(primary('Accept'));
+    expect(accept).toBe(primary('Reject'));
+  });
+
   it('keeps one line however long the reason, only the reason cut short, never under the buttons (the owner, 2026-11-14)', async () => {
     const reason = `shorten intro to one sentence, dropping the unsourced statistic${' and more'.repeat(30)}`;
     const names = 'Max sentence length and Outbound links to trusted sources (anchor text)';

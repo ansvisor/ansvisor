@@ -373,7 +373,8 @@ describe('New content', () => {
     await act(async () => box.dispatchEvent(paste));
 
     expect(document.body.textContent).toContain('Returns policy');
-    expect(document.body.textContent).toContain('1 heading · 23 characters');
+    // As the editor's counter counts: no space between blocks.
+    expect(document.body.textContent).toContain('1 heading · 22 characters');
     await click(button('Continue'));
     expect(document.body.textContent).toContain('Optimize: Returns policy');
     expect(checkedType()).toBe('Policy');
@@ -774,16 +775,26 @@ describe('New content', () => {
     }
 
     it('reads a page of the brand’s, cleaned, and starts from its address', async () => {
+      const author = {
+        name: 'Ada Lovelace',
+        title: 'Head of pricing',
+        photoUrl: null,
+        sameAs: ['https://www.linkedin.com/in/ada'],
+      };
       importContentPage.mockResolvedValue({
         page: {
           url: 'https://northwind.example/pricing',
           title: 'Pricing',
-          html: '<h1>Pricing</h1><p onclick="x()">Plans</p><script>track()</script>',
+          html:
+            '<h1>Pricing</h1><p onclick="x()">Plans</p><script>track()</script>' +
+            '<script type="application/ld+json">{"@type":"WebPage","name":"Northwind pricing"}</script>',
+          author,
         },
       });
       await importUrl('northwind.example/pricing');
       expect(importContentPage).toHaveBeenCalledWith('b1', 'northwind.example/pricing');
-      expect(document.body.textContent).toContain('/pricing · 1 heading');
+      // The editor's count: its words and the schema block, not the schema's text.
+      expect(document.body.textContent).toContain('/pricing · 1 heading · 13 characters');
 
       await click(button('Continue'));
       expect(document.body.textContent).toContain('Optimize: Pricing');
@@ -799,8 +810,12 @@ describe('New content', () => {
         pageType: 'pricing',
         typePicked: false,
         source: { kind: 'content' },
-        bodyHtml: '<h1>Pricing</h1><p>Plans</p>',
+        bodyHtml: expect.stringMatching(
+          /^<h1>Pricing<\/h1><p>Plans<\/p><script type="application\/ld\+json">/,
+        ),
         sourceUrl: 'https://northwind.example/pricing',
+        // The page's own author, not the brand's byline (Content test 2026-11-19).
+        pageAuthor: author,
       });
     });
 
@@ -929,6 +944,22 @@ describe('New content', () => {
         pageType: 'comparison',
         sourceUrl: undefined,
       });
+    });
+
+    it('reads once from Send to Editor, and once per Try again, though Start is rebuilt', async () => {
+      // Content test 2026-11-19: one Try again sent five reads.
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentOverlap.mockRejectedValue(new Error('down'));
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o2',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+      expect(getContentOverlap).toHaveBeenCalledTimes(1);
+      await click(button('Try again'));
+      await act(async () => {});
+      expect(getContentOverlap).toHaveBeenCalledTimes(2);
     });
 
     it('lets the page start when the read fails, and tries again', async () => {

@@ -227,10 +227,10 @@ describe('ChoosePlanDialog', () => {
     expect(dialog().querySelector('[data-slot="card-note"]')?.textContent).toBe('Card required.');
 
     const custom = card('custom').textContent;
-    expect(custom).toContain('Starting at$499/mo');
+    expect(custom).toContain('Starting at$1,999/mo');
     expect(custom).toContain('Contact us');
     expect(custom).toContain('Custom AI usage, from 10x');
-    expect(custom).toContain('SSO / SAML and custom feature requests');
+    expect(custom).toContain('SSO / SAML, priority support and an SLA');
     expect(card('custom').querySelector('a')?.getAttribute('href')).toBe(
       'https://www.ansvisor.com/contact-us',
     );
@@ -441,7 +441,7 @@ describe('ChoosePlanDialog', () => {
     expect(layers('starter')[1].textContent).toContain(
       'For small teams getting started with AI visibility',
     );
-    expect(layers('custom')[1].textContent).toContain('SSO / SAML and custom feature requests');
+    expect(layers('custom')[1].textContent).toContain('SSO / SAML, priority support and an SLA');
 
     await press(toggle());
     expect(toggle().textContent).toBe('Hide plan details');

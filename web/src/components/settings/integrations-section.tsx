@@ -523,6 +523,18 @@ interface BrandPropertyRow {
   domains: string[];
 }
 
+/**
+ * Google answered that the connection lacks access to this product: the
+ * account was connected, but a box on Google's consent screen was left
+ * unticked (403 ACCESS_TOKEN_SCOPE_INSUFFICIENT). Connecting again, with
+ * every box ticked, gives it.
+ */
+export function isGoogleAccessMissing(message: string): boolean {
+  return /ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficient authentication scopes|insufficientPermissions/i.test(
+    message,
+  );
+}
+
 function PropertyMapping({
   sourceName,
   description,
@@ -619,9 +631,15 @@ function PropertyMapping({
   if (loadFailed) {
     return (
       <div className="rounded-lg border bg-card p-4 text-sm">
-        <p className="text-muted-foreground">Couldn&apos;t load {sourceName} properties.</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {loadFailed === 'timeout' ? t('integrations_propertiesTimedOut') : loadFailed.message}
+        <p className="text-muted-foreground">
+          {t('integrations_propertiesFailed', { source: sourceName })}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground" data-load-failed>
+          {loadFailed === 'timeout'
+            ? t('integrations_propertiesTimedOut')
+            : isGoogleAccessMissing(loadFailed.message)
+              ? t('integrations_propertiesNoAccess', { source: sourceName })
+              : loadFailed.message}
         </p>
         <Button variant="outline" size="sm" className="mt-3" onClick={load}>
           {t('integrations_retry')}

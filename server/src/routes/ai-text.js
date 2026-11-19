@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { MAX_ROWS, TRANSLATABLE, translatedTexts } from '../lib/ai-text-translate.js';
+import { aiTextLimiter } from '../middleware/rate-limiter.js';
 
 /**
  * AI-written text in the reader's language (LOC-010): the web app asks for
@@ -20,7 +21,7 @@ const translateBody = z.object({
     .regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/),
 });
 
-router.post('/translate', async (req, res) => {
+router.post('/translate', aiTextLimiter, async (req, res) => {
   const parsed = translateBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {

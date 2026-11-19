@@ -42,6 +42,7 @@ const generateText = vi.hoisted(() => vi.fn());
 vi.mock('ai', () => ({ generateText }));
 
 const {
+  forgetFailedTranslations,
   hashText,
   makeBatches,
   parseJsonReply,
@@ -56,6 +57,7 @@ const O2 = '22222222-2222-4222-8222-222222222222';
 const reply = (items) => ({ text: JSON.stringify({ items }) });
 
 beforeEach(() => {
+  forgetFailedTranslations();
   db.rows = [
     {
       id: O1,
@@ -199,6 +201,21 @@ describe('translatedTexts', () => {
     expect(await ask()).toEqual({ [O1]: { title: '2026 için takipçileri karşılaştırın' } });
     generateText.mockRejectedValueOnce(new Error('down'));
     expect(await ask()).toEqual({});
+  });
+
+  it('doesn’t ask the model again for a field that failed lately, until its English changes', async () => {
+    generateText.mockRejectedValueOnce(new Error('down'));
+    expect(await ask()).toEqual({});
+    expect(generateText).toHaveBeenCalledTimes(1);
+    // The same English again: no model call.
+    expect(await ask()).toEqual({});
+    expect(generateText).toHaveBeenCalledTimes(1);
+    // Its English changed: asked again, that field only.
+    db.rows[0].title = 'Compare AI trackers for 2026';
+    generateText.mockResolvedValueOnce(reply([{ id: `${O1}:title`, text: 'Başlık 2026' }]));
+    expect((await ask())[O1]).toEqual({ title: 'Başlık 2026' });
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(generateText.mock.calls[1][0].prompt).not.toContain('Competitors lead');
   });
 
   it('translates nothing in English, an unknown language or kind, or for no readable row', async () => {

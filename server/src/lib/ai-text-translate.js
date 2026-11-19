@@ -142,6 +142,36 @@ export const KEEP_IN_ENGLISH = [
 ];
 
 /** A text's hash, as the kept translation records its source. */
+/**
+ * Fields whose translation failed (the model refused, errored, or broke the
+ * rules), by kind, language, field and the English's hash: not sent to the
+ * model again for FAILED_FOR_MS, so text that always fails can't make every
+ * view pay for a model call. Per server process, at most FAILED_MAX entries.
+ */
+const FAILED_FOR_MS = 6 * 60 * 60 * 1000;
+const FAILED_MAX = 20_000;
+const failed = new Map();
+
+const failedKey = (kind, locale, item) => `${kind}:${locale}:${item.id}:${item.hash}`;
+
+function failedRecently(key, now = Date.now()) {
+  const until = failed.get(key);
+  if (until === undefined) return false;
+  if (until > now) return true;
+  failed.delete(key);
+  return false;
+}
+
+function markFailed(key, now = Date.now()) {
+  if (failed.size >= FAILED_MAX) failed.delete(failed.keys().next().value);
+  failed.set(key, now + FAILED_FOR_MS);
+}
+
+/** For tests: forget the failed fields. */
+export function forgetFailedTranslations() {
+  failed.clear();
+}
+
 export function hashText(text) {
   return createHash('sha1').update(String(text)).digest('hex').slice(0, 16);
 }
@@ -299,7 +329,8 @@ export async function translatedTexts({ kind, ids, locale, userId }) {
   for (const item of items) {
     const hit = keptBy.get(item.id);
     if (hit && hit.source_hash === item.hash) put(item, hit.text);
-    else missing.push(item);
+    // Failed lately: stays in English without asking the model again.
+    else if (!failedRecently(failedKey(kind, locale, item))) missing.push(item);
   }
   if (!missing.length) return out;
 
@@ -313,11 +344,15 @@ export async function translatedTexts({ kind, ids, locale, userId }) {
         { err: { name: err?.name, message: err?.message }, kind, locale, items: batch.length },
         '[ai-text] a batch could not be translated; it stays in English',
       );
+      for (const item of batch) markFailed(failedKey(kind, locale, item));
       continue;
     }
     for (const item of batch) {
       const text = answered.get(item.id);
-      if (text === undefined || translationProblems(item.text, text).length) continue;
+      if (text === undefined || translationProblems(item.text, text).length) {
+        markFailed(failedKey(kind, locale, item));
+        continue;
+      }
       put(item, text);
       fresh.push({
         source_kind: kind,

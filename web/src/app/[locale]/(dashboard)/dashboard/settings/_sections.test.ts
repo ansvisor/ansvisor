@@ -42,13 +42,10 @@ describe('Authors (CE-037)', () => {
 describe('Content (CE-051)', () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("is there with Content Editor Quality's phase 2, as its hand-off is", () => {
-    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '1');
-    expect(hasSettingsSection('content', selfHost)).toBe(false);
-    expect(resolveSettingsSection('content', cloud)).toBe('account');
-    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '2');
+  it('is always there: Site Audit and Chat link to its trusted sources and rules (2026-11-19)', () => {
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '0');
     expect(hasSettingsSection('content', selfHost)).toBe(true);
-    expect(resolveSettingsSection('content', selfHost)).toBe('content');
+    expect(resolveSettingsSection('content', cloud)).toBe('content');
   });
 });
 
