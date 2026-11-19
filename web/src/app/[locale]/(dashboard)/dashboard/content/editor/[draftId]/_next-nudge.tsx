@@ -145,7 +145,7 @@ export function NextNudge({
         <div
           role="group"
           aria-label={t('label')}
-          className="absolute right-4 bottom-4 z-20 flex max-w-[min(440px,calc(100%-2rem))] items-center gap-2 rounded-2xl bg-foreground py-1.5 pr-1.5 pl-3.5 text-xs text-background shadow-lg"
+          className="absolute end-4 bottom-4 z-20 flex max-w-[min(440px,calc(100%-2rem))] items-center gap-2 rounded-2xl bg-foreground py-1.5 pe-1.5 ps-3.5 text-xs text-background shadow-lg"
         >
           <span aria-hidden className="min-w-0 flex-1 [overflow-wrap:anywhere]">
             {text}

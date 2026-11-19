@@ -14,7 +14,9 @@ import {
   formatMoney,
   formatMonthDay,
   formatNumber,
+  getFormatLocale,
   percentChange,
+  setFormatLocale,
 } from './format.js';
 
 const toLocaleString = Number.prototype.toLocaleString;
@@ -93,4 +95,47 @@ test('percentChange is the whole % change, or null with nothing before (#2140)',
   expect(percentChange(50, 100)).toBe(-50);
   expect(percentChange(5, 0)).toBeNull();
   expect(percentChange(5, null)).toBeNull();
+});
+
+test('numbers, money and dates follow the interface language once it is set (LOC-002)', () => {
+  const iso = '2026-10-17T11:05:00.000Z';
+  try {
+    setFormatLocale('de');
+    expect(formatNumber(1234.5)).toBe('1.234,5');
+    expect(formatMoney(12000.5, 'EUR')).toMatch(/^12\.001\s€$/);
+    expect(formatDate(iso)).toBe('17. Okt. 2026');
+    expect(formatCompactNumber(1_500_000)).toMatch(/1,5\sMio\./);
+
+    setFormatLocale('fr');
+    expect(formatNumber(1234.5)).toMatch(/^1\s234,5$/);
+
+    setFormatLocale('pt-BR');
+    expect(formatNumber(1234.5)).toBe('1.234,5');
+
+    // English, and the test language, keep en-US.
+    setFormatLocale('en');
+    expect(formatNumber(1234.5)).toBe('1,234.5');
+    setFormatLocale('en-XA');
+    expect(getFormatLocale()).toBe('en-US');
+    expect(formatCompactNumber(1232)).toBe('1.2k');
+  } finally {
+    setFormatLocale('en');
+  }
+});
+
+test('the server never keeps a language: concurrent requests would share it', () => {
+  vi.stubGlobal('window', undefined);
+  try {
+    setFormatLocale('de');
+    expect(getFormatLocale()).toBe('en-US');
+    expect(formatNumber(1234.5)).toBe('1,234.5');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test('a locale passed in beats the one the page set', () => {
+  expect(formatNumber(1234.5, 'de')).toBe('1.234,5');
+  expect(formatDate('2026-10-17T11:05:00.000Z', 'de')).toBe('17. Okt. 2026');
+  expect(formatMonthDay('2026-10-17T11:05:00.000Z', 'UTC', 'de')).toBe('17. Okt.');
 });

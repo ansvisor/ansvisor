@@ -147,17 +147,17 @@ export function ShoppingOpportunitiesView({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-6">{t('columns.page')}</TableHead>
+                  <TableHead className="ps-6">{t('columns.page')}</TableHead>
                   <TableHead>{t('columns.why')}</TableHead>
                   <TableHead>{t('columns.category')}</TableHead>
                   <TableHead>{t('columns.score')}</TableHead>
-                  <TableHead className="pr-6 text-right">{t('columns.action')}</TableHead>
+                  <TableHead className="pe-6 text-end">{t('columns.action')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((row) => (
                   <TableRow key={row.key}>
-                    <TableCell className="min-w-[160px] max-w-[200px] whitespace-normal pl-6 xl:max-w-[260px]">
+                    <TableCell className="min-w-[160px] max-w-[200px] whitespace-normal ps-6 xl:max-w-[260px]">
                       <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                         {t(`kinds.${row.kind}`)}
                         <Badge
@@ -189,7 +189,7 @@ export function ShoppingOpportunitiesView({
                         levelClassName="hidden xl:inline"
                       />
                     </TableCell>
-                    <TableCell className="pr-6 text-right">
+                    <TableCell className="pe-6 text-end">
                       {row.draft ? (
                         <Link
                           href={contentEditorPath(row.draft.id)}

@@ -109,6 +109,22 @@ export const linkCheckLimiter = rateLimit({
   },
 });
 
+// AI-written text in the reader's language (LOC-010): asked on views of
+// opportunities, Action Center and Site Audit; a new translation costs a
+// model call, so a person has a bucket of their own.
+export const aiTextLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    code: 'rate_limited',
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // The Content Editor's Quality checks read by AI (CE-046 part b on): the
 // editor asks a few seconds after a save. Each ask can cost model calls
 // (a call a site, MAX_SOURCE_SITES at most), so it has its own bucket,

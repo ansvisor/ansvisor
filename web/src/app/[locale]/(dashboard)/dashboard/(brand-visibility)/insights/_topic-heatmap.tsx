@@ -54,7 +54,7 @@ export function TopicHeatmap({
         <table className="w-full min-w-[520px] table-fixed text-sm" aria-label={t('tableLabel')}>
           <thead>
             <tr className="border-b text-[11px] uppercase tracking-wide text-muted-foreground">
-              <th className="w-[30%] py-2 pr-3 text-left font-medium">{t('topic')}</th>
+              <th className="w-[30%] py-2 pe-3 text-start font-medium">{t('topic')}</th>
               {columns.map((c) => (
                 <th key={c.key} className="px-1 py-2 text-center font-medium">
                   <span className="block truncate" title={c.name}>
@@ -62,13 +62,13 @@ export function TopicHeatmap({
                   </span>
                 </th>
               ))}
-              <th className="w-24 py-2 pl-2 text-right font-medium">{t('gap')}</th>
+              <th className="w-24 py-2 ps-2 text-end font-medium">{t('gap')}</th>
             </tr>
           </thead>
           <tbody>
             {shown.map((row) => (
               <tr key={row.topicId} className="border-b last:border-b-0">
-                <td className="truncate py-1.5 pr-3 font-medium" title={row.name}>
+                <td className="truncate py-1.5 pe-3 font-medium" title={row.name}>
                   <Link
                     href={`/dashboard/prompts/topics/${row.topicId}`}
                     className="hover:underline"
@@ -96,7 +96,7 @@ export function TopicHeatmap({
                 ))}
                 <td
                   className={cn(
-                    'whitespace-nowrap py-1.5 pl-2 text-right font-semibold tabular-nums',
+                    'whitespace-nowrap py-1.5 ps-2 text-end font-semibold tabular-nums',
                     row.status === 'lead'
                       ? TONE_TEXT.good
                       : row.status === 'behind'

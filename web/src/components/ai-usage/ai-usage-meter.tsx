@@ -259,7 +259,7 @@ export function AiUsageMeter({
               {/* As wide as "99.9%": the button keeps its width as the tenths move. */}
               <span
                 aria-hidden
-                className={cn('inline-block min-w-9 tabular-nums', !compact && 'text-right')}
+                className={cn('inline-block min-w-9 tabular-nums', !compact && 'text-end')}
               >
                 {used}
               </span>

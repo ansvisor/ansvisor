@@ -42,6 +42,8 @@ const OPEN_ACTIONS: Record<string, string> = {
   'organization.ts:updateAccountName': "the person's own profile",
   'organization.ts:updateAccountTimeZone':
     "the person's own profile: the time zone their own times are read in, nothing that costs",
+  'ui-language.ts:setUiLanguage':
+    "the person's own profile: the language of their own screens (00549), nothing that costs",
   'chat-notices.ts:markChatNoticesRead':
     "the person's own record of seeing a notice (00441), nothing that runs or costs",
   'chat-notices.ts:closeChatNotice':

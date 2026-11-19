@@ -240,7 +240,7 @@ export function OpportunitiesTable({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-8 pr-0">
+                  <TableHead className="w-8 pe-0">
                     <Checkbox
                       aria-label={t('selectAll')}
                       disabled={selectable.length === 0}
@@ -259,7 +259,7 @@ export function OpportunitiesTable({
                   {/* The page column takes the room left, and long paths truncate in it. */}
                   <TableHead className="w-full">{t('page')}</TableHead>
                   <TableHead>{t('why')}</TableHead>
-                  <TableHead className="text-right">{t('aiVisits')}</TableHead>
+                  <TableHead className="text-end">{t('aiVisits')}</TableHead>
                   <TableHead>{t('lastAudit')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -269,7 +269,7 @@ export function OpportunitiesTable({
                     key={row.key}
                     data-state={selected.has(row.key) ? 'selected' : undefined}
                   >
-                    <TableCell className="w-8 pr-0">
+                    <TableCell className="w-8 pe-0">
                       <Checkbox
                         aria-label={t('select', { page: row.path })}
                         disabled={row.running}
@@ -309,7 +309,7 @@ export function OpportunitiesTable({
                     <TableCell className="min-w-[18rem] whitespace-normal">
                       <ReasonChips row={row} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell className="text-end tabular-nums">
                       {row.aiVisits === null ? '—' : formatNumber(row.aiVisits)}
                     </TableCell>
                     <TableCell className="text-muted-foreground">

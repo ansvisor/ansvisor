@@ -214,7 +214,7 @@ export function ChoosePlanDialog({
       {/* Sized to show everything at once on a laptop (1024×768 and up): the
           plans' details open inside the cards, never below them. */}
       <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-5 sm:max-w-[min(62.5rem,calc(100%-2rem))] sm:p-6">
-        <DialogHeader className="gap-1 pr-8">
+        <DialogHeader className="gap-1 pe-8">
           <span
             data-slot="upgrade-action"
             className="mb-1.5 inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"
@@ -272,7 +272,7 @@ export function ChoosePlanDialog({
             (offer ? (
               <span
                 data-slot="promo-applied"
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 pr-1 pl-2.5 text-xs font-medium text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 pe-1 ps-2.5 text-xs font-medium text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400"
               >
                 <Tag className="size-3.5" aria-hidden />
                 {tPlans('promo.applied', offerValues(offer))}

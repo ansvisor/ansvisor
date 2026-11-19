@@ -293,7 +293,7 @@ function ChoiceQuestionCard({ ask, status = 'pending', error, onAnswer }: Questi
                 disabled={busy}
                 onClick={() => pick(i)}
                 className={cn(
-                  'grid min-h-[44px] w-full grid-cols-[22px_minmax(0,1fr)_auto_auto] items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left text-[13px] outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50',
+                  'grid min-h-[44px] w-full grid-cols-[22px_minmax(0,1fr)_auto_auto] items-center gap-2.5 rounded-xl border px-2.5 py-2 text-start text-[13px] outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50',
                   on && 'border-foreground bg-muted/40',
                 )}
               >
@@ -309,7 +309,7 @@ function ChoiceQuestionCard({ ask, status = 'pending', error, onAnswer }: Questi
                 <span className="min-w-0 [overflow-wrap:anywhere]">
                   <span className="font-medium">{option.label}</span>
                   {option.recommended && (
-                    <span className="ml-1.5 inline-flex rounded-full bg-green-100 px-[7px] py-px align-[1px] text-[10.5px] leading-[14px] font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
+                    <span className="ms-1.5 inline-flex rounded-full bg-green-100 px-[7px] py-px align-[1px] text-[10.5px] leading-[14px] font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
                       {t('recommended')}
                     </span>
                   )}

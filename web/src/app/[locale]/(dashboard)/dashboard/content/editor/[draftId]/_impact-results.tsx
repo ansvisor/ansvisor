@@ -72,19 +72,19 @@ export function ImpactResults({ results }: { results: ContentResults }) {
           <caption className="sr-only">{t('bySource')}</caption>
           <thead>
             <tr className="border-b text-muted-foreground">
-              <th scope="col" className="py-1.5 text-left font-medium">
+              <th scope="col" className="py-1.5 text-start font-medium">
                 {t('columns.source')}
               </th>
-              <th scope="col" className="py-1.5 text-right font-medium">
+              <th scope="col" className="py-1.5 text-end font-medium">
                 {t('columns.visits')}
               </th>
               {results.analytics && (
-                <th scope="col" className="py-1.5 text-right font-medium">
+                <th scope="col" className="py-1.5 text-end font-medium">
                   {t('columns.keyEvents')}
                 </th>
               )}
               {revenue && (
-                <th scope="col" className="py-1.5 text-right font-medium">
+                <th scope="col" className="py-1.5 text-end font-medium">
                   {t('columns.revenue')}
                 </th>
               )}
@@ -93,15 +93,15 @@ export function ImpactResults({ results }: { results: ContentResults }) {
           <tbody className="tabular-nums">
             {rows.map((row) => (
               <tr key={row.name ?? 'other'} className="border-b last:border-b-0">
-                <th scope="row" className="py-1.5 text-left font-normal">
+                <th scope="row" className="py-1.5 text-start font-normal">
                   {row.name ?? t('other')}
                 </th>
-                <td className="py-1.5 text-right">{formatNumber(row.visits)}</td>
+                <td className="py-1.5 text-end">{formatNumber(row.visits)}</td>
                 {results.analytics && (
-                  <td className="py-1.5 text-right">{formatNumber(row.keyEvents)}</td>
+                  <td className="py-1.5 text-end">{formatNumber(row.keyEvents)}</td>
                 )}
                 {revenue && (
-                  <td className="py-1.5 text-right">{formatNumber(Math.round(row.revenue))}</td>
+                  <td className="py-1.5 text-end">{formatNumber(Math.round(row.revenue))}</td>
                 )}
               </tr>
             ))}

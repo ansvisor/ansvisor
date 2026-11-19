@@ -67,7 +67,7 @@ export function FormulaDialog() {
                 <br />
                 {t('visibility.confidence', { support: POSITION_SUPPORT_ANSWERS })}
               </Formula>
-              <ul className="list-disc pl-5 space-y-1">
+              <ul className="list-disc ps-5 space-y-1">
                 <li>{t.rich('visibility.mentionRate', { b, pct: PCT.mention })}</li>
                 <li>{t.rich('visibility.citationRate', { b, pct: PCT.citation })}</li>
                 <li>{t.rich('visibility.positionFactor', { b, pct: PCT.position })}</li>

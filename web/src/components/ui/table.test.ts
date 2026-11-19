@@ -31,7 +31,7 @@ describe('stickyTableClasses', () => {
     expect(c.sticky).toBe(true);
     expect(c.container).toContain('overflow-auto');
     expect(c.table).toContain('[&_tr>*:first-child]:sticky');
-    expect(c.table).toContain('[&_tr>*:first-child]:left-0');
+    expect(c.table).toContain('[&_tr>*:first-child]:start-0');
     expect(c.table).not.toContain('[&_thead_th]:sticky');
   });
 

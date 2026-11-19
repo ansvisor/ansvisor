@@ -113,7 +113,7 @@ export function EditorPanelRail({
   return (
     <nav
       aria-label={t('label')}
-      className="flex w-9 shrink-0 flex-col items-center gap-1 border-l bg-card py-2"
+      className="flex w-9 shrink-0 flex-col items-center gap-1 border-s bg-card py-2"
     >
       {onShow && (
         <Button
@@ -502,11 +502,11 @@ export function EditorSidePanel({
       className={
         bar
           ? 'flex max-h-[60%] shrink-0 flex-col border-t bg-card'
-          : 'flex w-[440px] shrink-0 flex-col border-l bg-card'
+          : 'flex w-[440px] shrink-0 flex-col border-s bg-card'
       }
     >
       {bar ? (
-        <div hidden={!barOpen} className="flex items-center gap-2 border-b py-1 pr-2 pl-4">
+        <div hidden={!barOpen} className="flex items-center gap-2 border-b py-1 pe-2 ps-4">
           <h2 className="min-w-0 flex-1 truncate text-[13px] font-medium">{barName}</h2>
           <Button
             variant="ghost"
@@ -804,7 +804,7 @@ export function EditorSidePanel({
                     <>
                       <span
                         aria-hidden
-                        className="ml-auto rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground"
+                        className="ms-auto rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground"
                       >
                         {formatNumber(sourcesInUse)}
                       </span>
