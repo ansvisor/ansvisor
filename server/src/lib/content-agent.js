@@ -61,6 +61,7 @@ import {
   withNamedNumbers,
 } from './content-sources.js';
 import { draftLanguage } from './content-language.js';
+import { fitSources } from './content-query-fit.js';
 import { editSpans } from './edit-spans.js';
 import { getLanguageName } from './languages.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
@@ -109,7 +110,14 @@ export const headingLimit = (tag) => (tag === 'h1' ? HEADING_LIMITS.h1 : HEADING
 export const HEADING_RULE = `- A heading stays a heading: one short line, an H1 up to ${HEADING_LIMITS.h1} characters and other headings up to ${HEADING_LIMITS.other}. Never write an answer, a sentence or a FAQ into a heading's replace; to answer under a heading, insert a paragraph after it.`;
 
 /** The fan-outs rule both agent prompts give the model: the ones named, in their words. */
-export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the page's questions. For each fan-out a rule names, in its words ("aeo tracker" → "What is an AEO tracker?"), not questions of your own: fanoutH2 wants an H2, fanoutFaq a question ending in "?" under the FAQ heading. Add it as its own question: after the paragraph that ends an existing answer, insert a heading at the level of the FAQ's other questions (an H3 under an H2 FAQ) and a paragraph that answers it. Reword an existing question into a fan-out's words only when its answer still answers it, replacing that question alone. One question per heading: never add a question to a heading. Call a change a fan-out answer only when it uses a fan-out listed.`;
+/**
+ * How a fan-out goes into a heading or a question (Content test 2026-11-19,
+ * item 3): a search is often a string of keywords, pasted as it is it made
+ * an H2 of 17 words no one would write.
+ */
+export const FANOUT_WORDING = `A fan-out is a search, often a string of keywords: write it as a short, natural heading or question a person would write (about 6 to 12 words), keeping its main terms ("2026 ai seo geo brand monitoring tools platforms pricing features" → "Which AI SEO and GEO brand monitoring tools should you compare in 2026?"). Never paste a fan-out as it is, and never put a word in another language than the page's into a heading.`;
+
+export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the page's questions. For each fan-out a rule names, with its main terms ("aeo tracker" → "What is an AEO tracker?"), not questions of your own: fanoutH2 wants an H2, fanoutFaq a question ending in "?" under the FAQ heading. ${FANOUT_WORDING} Add it as its own question: after the paragraph that ends an existing answer, insert a heading at the level of the FAQ's other questions (an H3 under an H2 FAQ) and a paragraph that answers it. Reword an existing question to carry a fan-out's main terms only when its answer still answers it, replacing that question alone. One question per heading: never add a question to a heading. Call a change a fan-out answer only when it uses a fan-out listed.`;
 
 /** The links rule both agent prompts give the model: only the URLs listed, never invented. */
 export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
@@ -1555,11 +1563,22 @@ async function fixWithRun({
       },
     };
   }
+  // Only the searches in the page's language, and the Search Console
+  // queries about this page (content-query-fit.js).
+  const fitted = fitSources(input.sources, {
+    language: await draftLanguage(draft, brand),
+    focus: [
+      draft.title,
+      ...prompts.map((p) => p.text),
+      draft.brief?.goal,
+      ...(draft.brief?.keywords ?? []),
+    ],
+  });
   const numbered = numberSources({
     prompts,
-    fanouts: input.sources?.fanouts,
+    fanouts: fitted?.fanouts,
     pages: input.sources?.pages,
-    queries: input.sources?.queries,
+    queries: fitted?.queries,
     inputs: inputSources(inputRow, brand.name),
   });
   // A hand-off's details and the person's and brand's rules are the editor's
