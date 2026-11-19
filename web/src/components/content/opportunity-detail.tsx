@@ -760,6 +760,16 @@ export function OpportunityDetail({
         </div>
       )}
 
+      {/* An opportunity on a page of the brand's, from before groups of prompts
+          (no cluster): its page here too, as Write this opens it (Content
+          test 2026-11-19, item 17: the target URL showed only in Write this). */}
+      {!opportunity.clusterId &&
+        opportunity.decision &&
+        opportunity.decision !== 'create' &&
+        (sd.targetPages ?? []).some((p) => p?.url) && (
+          <TargetPagesCard decision={opportunity.decision} sourceData={sd} />
+        )}
+
       {opportunity.clusterId && (
         <div className="grid grid-cols-1 gap-4 @5xl:grid-cols-3">
           <div className="space-y-4 @5xl:col-span-2">

@@ -4,8 +4,8 @@ route: /dashboard/content
 keywords: [opportunity details, source data, why this score, another angle, mark as reviewed, dismiss opportunity, send to actions, new signal detected, write this]
 synonyms: [opportunity panel, opportunity page, act on an opportunity, follow an opportunity]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -20,6 +20,8 @@ On **Opportunities**, click an opportunity's title to open it in a panel beside 
 An opportunity sent from an Action Center task shows that task instead: where, why, how, and when it's done.
 
 **Results** lists the Action Center actions sent from the opportunity, with what changed once their work is complete and measured.
+
+An opportunity on one of your pages (optimize, expand, refresh and the like) shows that page under **Your Site**, with its AI citations and sessions over 30 days, as **Write this** opens it.
 
 ## For a group of prompts
 
