@@ -3980,6 +3980,10 @@
           "text": "Click **Continue**. Ansvisor picks a **Page type** from the title, the content, the page or the opportunity, and says which. Pick another if it's wrong; you can also change it later in the editor.\n\nThe page types on offer follow the brand's **Site type** in the brand settings: B2B SaaS, E-commerce, B2C or Mobile app. A mobile app, for example, gets **Feature page**, **Pricing** and **Help & FAQ** among its types, and no product or destination pages.\n\nFor a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. Pick **Optimize … instead** on one of those pages to work on it, or **Create a new page**."
         },
         {
+          "heading": "How the page type is read",
+          "text": "An opportunity's type carries over: when your site type doesn't write it, the closest one it does is picked, such as **Best-of list** for a buying guide on a B2B SaaS site. A title that lists tools or picks (\"The complete AI SEO tools list\") reads as a **Best-of list** too.\n\nOn an online shop, the brief's **Shopping path** shows only once the brand has a product catalog in **Settings › Integrations**, or a path is already picked."
+        },
+        {
           "heading": "Choose who does it",
           "text": "- **Me**, the default: **Open editor** opens the draft for you to write.\n- **Agent**: **Start the agent**, and the Content Agent writes a new page, or suggests changes to an existing one, in the background. The editor shows it at work. You can leave: the draft waits in the Library under **In review**. It uses this month's AI usage.\n- **Team**: **Send to Action Center** saves the draft in the Library and sends it to the Action Center as an action. Pick a teammate in **Assign to**, or leave it unassigned."
         },

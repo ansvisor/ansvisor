@@ -256,6 +256,12 @@ const TITLE_SIGNS: [RegExp, BySite][] = [
   [/\bfaqs?\b|\bfrequently asked\b/i, FAQ],
   [/\bbuying guide\b|\bhow to choose\b/i, BUYING_GUIDE],
   [/^(the\s+)?(\d+\s+)?best\b(?!\s+(time|way|practices?)\b)|\btop\s+\d+\b/i, BEST_OF],
+  // A list of tools or picks (Content test 2026-11-19, item 13: "Definitive
+  // Software List for AI SEO…" opened as a blog post), not a checklist.
+  [
+    /\b(complete|definitive|ultimate|full)\s+([\w-]+\s+){0,3}list\b|\blist of\s+(the\s+)?(\d+\s+)?(best\s+)?([\w-]+\s+){0,4}(tools?|software|apps?|platforms?|products?|brands?|options?|alternatives?)\b|\b(tools?|software|apps?|platforms?)\s+list\b/i,
+    BEST_OF,
+  ],
   // "What is single-origin coffee?", not "What is the best …" (NOT_DEFINED).
   [
     new RegExp(
