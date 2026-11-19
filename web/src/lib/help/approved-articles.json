@@ -26,7 +26,9 @@
         "action number",
         "find action by number",
         "action code",
-        "previously"
+        "previously",
+        "translated",
+        "your language"
       ],
       "synonyms": [
         "recommendations",
@@ -88,6 +90,10 @@
         {
           "heading": "Inside an action",
           "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
+        },
+        {
+          "heading": "In your language",
+          "text": "Most of an action's words come from the interface, so they follow your language. Actions sent from Chat or Improve carry a title, a \"why\" and a goal written in English, and an action sent from a content opportunity carries the opportunity's title. When your interface language is another, these show in your language: in English for a moment the first time, then translated. Each is translated once and kept for teammates who use the same language."
         },
         {
           "heading": "Run an agent on an action",

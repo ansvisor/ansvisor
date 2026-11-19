@@ -225,4 +225,63 @@ describe('translatedTexts', () => {
     expect(await ask()).toEqual({});
     expect(generateText).not.toHaveBeenCalled();
   });
+
+  it('translates only the written fields of an action: Chat’s and Improve’s, an opportunity’s title', async () => {
+    const A1 = '33333333-3333-4333-8333-333333333333';
+    const A2 = '44444444-4444-4444-8444-444444444444';
+    const A3 = '55555555-5555-4555-8555-555555555555';
+    const A4 = '66666666-6666-4666-8666-666666666666';
+    db.rows = [
+      {
+        id: A1,
+        brand_id: 'b1',
+        kind: 'chat_finding',
+        deleted_at: null,
+        payload: { title: 'Win the pricing prompts', why: 'Rivals lead on 3 prompts.', goal: '' },
+      },
+      {
+        id: A2,
+        brand_id: 'b1',
+        kind: 'content_opportunity',
+        deleted_at: null,
+        payload: { title: 'Compare trackers', why: 'Not shown' },
+      },
+      // Worded by the interface's copy: nothing to translate.
+      {
+        id: A3,
+        brand_id: 'b1',
+        kind: 'visibility_drop',
+        deleted_at: null,
+        payload: { title: 'x' },
+      },
+      // Deleted: never translated.
+      {
+        id: A4,
+        brand_id: 'b1',
+        kind: 'chat_finding',
+        deleted_at: '2026-11-01T00:00:00Z',
+        payload: { title: 'Gone' },
+      },
+    ];
+    generateText.mockResolvedValue(
+      reply([
+        { id: `${A1}:title`, text: 'Fiyat promptlarını kazanın' },
+        { id: `${A1}:why`, text: 'Rakipler 3 prompt’ta önde.' },
+        { id: `${A2}:title`, text: 'Takipçileri karşılaştırın' },
+      ]),
+    );
+    const out = await translatedTexts({
+      kind: 'action',
+      ids: [A1, A2, A3, A4],
+      locale: 'tr',
+      userId: 'u1',
+    });
+    expect(out).toEqual({
+      [A1]: { title: 'Fiyat promptlarını kazanın', why: 'Rakipler 3 prompt’ta önde.' },
+      [A2]: { title: 'Takipçileri karşılaştırın' },
+    });
+    const sent = JSON.parse(generateText.mock.calls[0][0].prompt).items.map((item) => item.id);
+    expect(sent).toEqual([`${A1}:title`, `${A1}:why`, `${A2}:title`]);
+    expect(db.reads[0]).toMatchObject({ table: 'actions' });
+  });
 });
