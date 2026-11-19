@@ -9269,7 +9269,7 @@
       },
       "list": "{pages}{count, plural, =0 {} other { and # more}}",
       "recent": "Leave out the {count, plural, one {# page} other {# pages}} audited in the last {days} days",
-      "recentPages": "{pages}{count, plural, =0 {} other { and # more}}. A page that hasn't changed scores the same.",
+      "recentPages": "{pages}{count, plural, =0 {} other { and # more}}. Audit them again after a change across the site, such as robots.txt or a template.",
       "recentPage": "{page} on {date}",
       "noLimit": "Your plan has no monthly limit. A page already being audited isn't started twice.",
       "noneLeft": "No audits left this month.",
