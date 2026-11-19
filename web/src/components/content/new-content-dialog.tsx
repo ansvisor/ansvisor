@@ -312,11 +312,17 @@ export function NewContentDialog({
   // source.
   const startSource = start?.source;
   const overlapKey = startSource && startSource.kind !== 'content' ? sourceKey(startSource) : null;
+  // The source as it was when its key changed: read once per source (and per
+  // Try again), never again because Start's object was rebuilt (content test
+  // 2026-11-19: one Try again sent five reads).
+  const sourceRef = useRef(startSource);
+  sourceRef.current = startSource;
   useEffect(() => {
-    if (!startSource || startSource.kind === 'content') return;
-    const key = sourceKey(startSource);
+    const source = sourceRef.current;
+    if (!overlapKey || !source || source.kind === 'content') return;
+    const key = overlapKey;
     let cancelled = false;
-    getContentOverlap(brandId, startSource)
+    getContentOverlap(brandId, source)
       .then((overlap) => {
         if (cancelled) return;
         setOverlapRead({ key, overlap, failed: false });
@@ -333,7 +339,7 @@ export function NewContentDialog({
     return () => {
       cancelled = true;
     };
-  }, [brandId, startSource, siteType, overlapAttempt]);
+  }, [brandId, overlapKey, siteType, overlapAttempt]);
 
   const reset = () => {
     presetApplied.current = false;
