@@ -51,7 +51,7 @@ export function LanguageField() {
         data-locale={locale ?? 'automatic'}
         onClick={() => void choose(locale)}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60',
+          'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-start text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60',
           on && 'border-primary bg-accent',
         )}
       >

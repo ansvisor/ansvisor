@@ -227,7 +227,7 @@ function NewOpportunitiesForm({
                     <SelectItem key={tp.value} value={tp.value}>
                       <span className="min-w-0 flex-1 truncate">{tp.label}</span>
                       {availability && (
-                        <span className="ml-2 shrink-0 text-muted-foreground">
+                        <span className="ms-2 shrink-0 text-muted-foreground">
                           {counts?.open
                             ? t('topicOpen', { count: counts.open })
                             : counts?.angles
@@ -259,7 +259,7 @@ function NewOpportunitiesForm({
                       <ComboboxItem key={item.value} value={item} title={item.label}>
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
                         {availability?.promptOpportunity[item.value] && (
-                          <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                          <span className="ms-2 shrink-0 text-xs text-muted-foreground">
                             {t('promptHasOne')}
                           </span>
                         )}

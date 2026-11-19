@@ -55,7 +55,7 @@ function EventRow({ event }: { event: CompetitorPageEvent }) {
           className="break-all text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
         >
           {shown}
-          <ArrowUpRight className="ml-0.5 inline h-3 w-3" />
+          <ArrowUpRight className="ms-0.5 inline h-3 w-3" />
         </a>
         {detail && <span className="block text-muted-foreground">{detail}</span>}
       </span>

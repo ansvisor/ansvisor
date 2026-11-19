@@ -6,7 +6,7 @@ import type { ChatNextMove } from '@/lib/chat/events';
 import { cn } from '@/lib/utils';
 
 const MOVE =
-  'rounded-[14px] border bg-card px-3 py-2.5 text-left text-[13px] shadow-[0_1px_2px_rgba(10,10,10,.04)] transition-[transform,box-shadow] duration-200 ease-out outline-none [overflow-wrap:anywhere] hover:-translate-y-px hover:shadow-[0_4px_14px_rgba(10,10,10,.06)] focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0';
+  'rounded-[14px] border bg-card px-3 py-2.5 text-start text-[13px] shadow-[0_1px_2px_rgba(10,10,10,.04)] transition-[transform,box-shadow] duration-200 ease-out outline-none [overflow-wrap:anywhere] hover:-translate-y-px hover:shadow-[0_4px_14px_rgba(10,10,10,.06)] focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0';
 
 /**
  * Next moves under the latest answer (CHAT-07 §C, mockup `#s-done` "Next

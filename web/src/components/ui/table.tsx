@@ -30,7 +30,7 @@ export function stickyTableClasses({
       stickyHeader &&
         '[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_var(--border)] data-[scrolled-y]:[&_thead_th]:shadow-[inset_0_-1px_0_var(--border),0_2px_4px_-2px_rgb(0_0_0/0.12)]',
       stickyFirstColumn &&
-        '[&_tr>*:first-child]:sticky [&_tr>*:first-child]:left-0 [&_tr>*:first-child]:z-[5] [&_tr>*:first-child]:bg-card [&_tbody_tr:hover>*:first-child]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))] data-[scrolled-x]:[&_tbody_tr>*:first-child]:shadow-[inset_-1px_0_0_var(--border)]',
+        '[&_tr>*:first-child]:sticky [&_tr>*:first-child]:start-0 [&_tr>*:first-child]:z-[5] [&_tr>*:first-child]:bg-card [&_tbody_tr:hover>*:first-child]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))] data-[scrolled-x]:[&_tbody_tr>*:first-child]:shadow-[inset_-1px_0_0_var(--border)]',
       stickyHeader && stickyFirstColumn && '[&_thead_th:first-child]:z-20',
     ),
   };
@@ -108,7 +108,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
     <th
       data-slot="table-head"
       className={cn(
-        'h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0',
+        'h-10 px-2 text-start align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pe-0',
         className,
       )}
       {...props}
@@ -120,7 +120,7 @@ function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
   return (
     <td
       data-slot="table-cell"
-      className={cn('p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0', className)}
+      className={cn('p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pe-0', className)}
       {...props}
     />
   );

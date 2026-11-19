@@ -4,6 +4,7 @@ import { MANAGER_ROLES, brandReaders } from './access.js';
 import { chatAgenticEnabled } from './chat-flag.js';
 import { OUTBOUND_BUCKET, escapeHtml, senderNameOf } from './chat-schedule-email.js';
 import { deliverEmailWithId } from './email.js';
+import { DEFAULT_LOCALE, translate, translator, uiLanguageOf } from './i18n.js';
 import { logger } from './logger.js';
 
 /**
@@ -70,23 +71,33 @@ export function outsidePlanRefusal(org) {
 /**
  * The e-mail an outside reader gets: the job's title, the answer's first
  * lines, a line about the PDF when one is attached, and the footer. No
- * link, no button: nothing asks them to sign in.
- * @param {{ title: string, summary: string[], person: string, workspace: string, attached: boolean }} input
+ * link, no button: nothing asks them to sign in. The reader has no
+ * Ansvisor language, so its own words are in that of the person who
+ * clicks Send (LOC-008), English when none.
+ * @param {{ title: string, summary: string[], person: string, workspace: string, attached: boolean, locale?: string }} input
  */
-export function renderOutsideEmail({ title, summary, person, workspace, attached }) {
+export function renderOutsideEmail({
+  title,
+  summary,
+  person,
+  workspace,
+  attached,
+  locale = DEFAULT_LOCALE,
+}) {
+  const t = translator(locale);
   const lines = summary.length
     ? `<ul style="font-size:14px;color:#111827;margin:0 0 16px 0;padding-left:20px;">${summary
         .map((line) => `<li style="margin:0 0 6px 0;">${escapeHtml(line)}</li>`)
         .join('')}</ul>`
     : '';
   const file = attached
-    ? '<p style="font-size:14px;color:#111827;margin:0 0 16px 0;">The full report is attached as a PDF.</p>'
+    ? `<p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${t('outside.attached')}</p>`
     : '';
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
   <h1 style="font-size:18px;color:#111827;margin:0 0 16px 0;">${escapeHtml(title)}</h1>
   ${lines}
   ${file}
-  <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">Sent by ${escapeHtml(person)} from ${escapeHtml(workspace)} via Ansvisor</p>
+  <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">${t('outside.sentBy', { person: escapeHtml(person), workspace: escapeHtml(workspace) })}</p>
 </div>`;
   return { subject: title, html };
 }
@@ -305,17 +316,22 @@ export async function sendOutsideEmail({ userId, id, now = new Date() }) {
     await release(row.id, FAILED_WORDS.file);
     return refused('send_failed', 502, FAILED_WORDS.file);
   }
-  const [replyTo, sender] = await Promise.all([
+  const [replyTo, sender, locale] = await Promise.all([
     emailOf(caller.id),
     senderNameOf(job.organization_id),
+    uiLanguageOf(caller.id),
   ]);
-  const person = caller.full_name?.trim() || replyTo?.split('@')[0] || 'A teammate';
+  const person =
+    caller.full_name?.trim() ||
+    replyTo?.split('@')[0] ||
+    translate(locale, 'outside.fallbackPerson');
   const message = renderOutsideEmail({
     title: row.subject,
     summary: String(row.summary).split('\n').filter(Boolean),
     person,
-    workspace: org?.name?.trim() || 'their workspace',
+    workspace: org?.name?.trim() || translate(locale, 'outside.fallbackWorkspace'),
     attached: attachments.length > 0,
+    locale,
   });
   const outcome = await deliverEmailWithId({
     to: [row.to_address],

@@ -40,7 +40,7 @@ import type { AgentWords } from './agent-words';
 
 /** The mockup's `.opt`, in both themes. */
 export const OPT =
-  'relative flex min-w-0 flex-col gap-[3px] rounded-xl border bg-card px-3 py-2.5 text-left text-[13px] outline-none transition-[border-color,box-shadow] hover:border-foreground/25 focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none';
+  'relative flex min-w-0 flex-col gap-[3px] rounded-xl border bg-card px-3 py-2.5 text-start text-[13px] outline-none transition-[border-color,box-shadow] hover:border-foreground/25 focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none';
 export const OPT_ON = 'border-foreground ring-1 ring-foreground hover:border-foreground';
 export const OPT_OFF =
   'cursor-not-allowed bg-muted/50 hover:border-border [&_b]:text-muted-foreground';
@@ -122,7 +122,7 @@ export function SectionTitle({
           {count}
         </span>
       )}
-      {children && <div className="ml-auto flex items-center gap-2">{children}</div>}
+      {children && <div className="ms-auto flex items-center gap-2">{children}</div>}
     </div>
   );
 }
@@ -163,7 +163,7 @@ export function FormSwitch({
         aria-hidden
         className={cn(
           'absolute top-0.5 size-3.5 rounded-full bg-background transition-[left] duration-200 motion-reduce:transition-none',
-          checked ? 'left-[14px]' : 'left-0.5',
+          checked ? 'start-[14px]' : 'start-0.5',
         )}
       />
     </button>
@@ -437,7 +437,7 @@ export function TriggerStep({
                 aria-pressed={d.key === selected}
                 title={t('trigger.select')}
                 onClick={() => onSelect(d.key)}
-                className="min-w-0 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="min-w-0 rounded-md text-start outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <b className="block truncate font-medium">
                   {input ? words.trigger(input) : tAgents(`trigger.types.${d.kind}`)}

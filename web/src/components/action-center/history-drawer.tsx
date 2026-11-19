@@ -148,7 +148,7 @@ export function HistoryDrawer({
   return (
     <Sheet open={Boolean(item)} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
-        <SheetHeader className="border-b px-6 py-4 pr-12">
+        <SheetHeader className="border-b px-6 py-4 pe-12">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="text-[10px]">
               {tTypes(item.type)}
@@ -157,7 +157,7 @@ export function HistoryDrawer({
               <PriorityBadge score={item.priorityScore} level={item.priorityLevel} />
             )}
             <HistoryStatusBadge status={item.status} />
-            <span className="ml-auto text-muted-foreground">{actionCode(item)}</span>
+            <span className="ms-auto text-muted-foreground">{actionCode(item)}</span>
           </div>
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/40">

@@ -143,7 +143,7 @@ export function AcceptInvitationCard({
           <Button onClick={handleSwitchAccount} disabled={isSwitching} className="w-full">
             {isSwitching ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 Switching...
               </>
             ) : (
@@ -198,7 +198,7 @@ export function AcceptInvitationCard({
           <Button type="submit" disabled={isAccepting} className="w-full">
             {isAccepting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 Joining...
               </>
             ) : (

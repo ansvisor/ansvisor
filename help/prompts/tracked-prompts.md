@@ -4,8 +4,8 @@ route: /dashboard/prompts/tracked
 keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume, track now, no answers yet]
 synonyms: [prompt list, my prompts, prompt table, tracked queries]
 plan: all
-updated: 2026-11-18
-last_checked: 2026-11-18
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -19,7 +19,7 @@ You manage the brand's prompts on this page. Beside the tabs, admins and manager
 
 - **Export CSV** downloads the list.
 - **Plan & usage** opens your plan and billing.
-- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, a line under the filters says so, with **Plan & usage**, and the menu says so under **Show usage**.
+- **Show usage** opens cards with this brand's active and total prompts, and your account's prompt locations and slots left. Click a brand card to filter the table; **Hide** folds them away. When your prompt locations are nearly or fully used, a line under the filters says so, with **Plan & usage**, and the menu says so under **Show usage**. Once your plan has ended, the line says so instead, since nothing is tracked until you choose a plan.
 
 The **Location** filter, for a brand tracked in more than one place, sits in the table's filter row, beside **Status** and **Work**.
 

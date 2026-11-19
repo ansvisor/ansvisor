@@ -84,7 +84,7 @@ export function AgentCenter({
       <Lock className="size-4 text-muted-foreground" aria-hidden />
       <div className="min-w-0">
         <b className="font-semibold">{tList('readOnly.title', { role: tRoles(role) })}</b>
-        <em className="ml-1.5 text-muted-foreground not-italic">{tList('readOnly.detail')}</em>
+        <em className="ms-1.5 text-muted-foreground not-italic">{tList('readOnly.detail')}</em>
       </div>
       <AskAdminButton asked={tList('readOnly.asked')} ruleKind="role" />
     </div>

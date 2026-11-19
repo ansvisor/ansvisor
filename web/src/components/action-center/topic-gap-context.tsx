@@ -47,7 +47,7 @@ export function TopicGapContext({ payload }: { payload: Record<string, unknown> 
           <p className="mt-1 tabular-nums">
             {t('you')} {you.toFixed(1)} · {competitor} {them.toFixed(1)}
             {gap !== null && (
-              <span className="ml-2 text-xs text-muted-foreground">
+              <span className="ms-2 text-xs text-muted-foreground">
                 {t('gap', { gap: gap.toFixed(1) })}
               </span>
             )}

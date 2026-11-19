@@ -56,7 +56,7 @@ export function MentionsTable({
     <Table stickyHeader stickyFirstColumn aria-label={t('tableLabel')}>
       <TableHeader>
         <TableRow>
-          <TableHead className="min-w-[240px] pl-4">
+          <TableHead className="min-w-[240px] ps-4">
             <span className="flex items-center gap-3">
               <Checkbox
                 aria-label={tActions('selectAll')}
@@ -78,7 +78,7 @@ export function MentionsTable({
           <TableHead>{t('columns.position')}</TableHead>
           <TableHead className="min-w-[140px]">{t('columns.coMentioned')}</TableHead>
           <TableHead>{t('columns.topic')}</TableHead>
-          <TableHead className="pr-4">{t('columns.date')}</TableHead>
+          <TableHead className="pe-4">{t('columns.date')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -91,7 +91,7 @@ export function MentionsTable({
                 <TableRow className="hover:bg-transparent">
                   <TableCell
                     colSpan={columns}
-                    className="bg-muted/60 py-1.5 pl-4 text-xs font-medium text-muted-foreground"
+                    className="bg-muted/60 py-1.5 ps-4 text-xs font-medium text-muted-foreground"
                   >
                     {t('groupRow', {
                       label: group === 'prompt' ? row.promptText : platform,
@@ -114,7 +114,7 @@ export function MentionsTable({
                   }
                 }}
               >
-                <TableCell className="max-w-[280px] pl-4 whitespace-normal">
+                <TableCell className="max-w-[280px] ps-4 whitespace-normal">
                   <span className="flex items-start gap-3">
                     <Checkbox
                       aria-label={tActions('selectRow', { prompt: row.promptText, platform })}
@@ -168,7 +168,7 @@ export function MentionsTable({
                 <TableCell className="max-w-[180px] whitespace-normal">
                   <span className="line-clamp-2 text-xs">{row.topicName ?? '—'}</span>
                 </TableCell>
-                <TableCell className="whitespace-nowrap pr-4 text-xs text-muted-foreground">
+                <TableCell className="whitespace-nowrap pe-4 text-xs text-muted-foreground">
                   {day(row.createdAt)}
                 </TableCell>
               </TableRow>

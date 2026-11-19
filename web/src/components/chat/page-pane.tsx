@@ -36,7 +36,7 @@ export function PagePaneSkeleton() {
       <div className="flex items-center gap-2.5 border-b px-4 py-3">
         <Skeleton className="size-7" />
         <Skeleton className="h-4 w-40" />
-        <Skeleton className="ml-auto h-7 w-28" />
+        <Skeleton className="ms-auto h-7 w-28" />
       </div>
       <div className="border-b px-3 py-2">
         <Skeleton className="h-6 w-2/3" />

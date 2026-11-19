@@ -123,7 +123,7 @@ export function EditorChat({
                 data-action="editorChat.openFull"
                 aria-label={t('openFull')}
                 title={t('openFull')}
-                className="ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-muted hover:text-foreground"
+                className="ms-auto inline-flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-muted hover:text-foreground"
               >
                 <Maximize2 className="size-3.5" aria-hidden />
               </Link>

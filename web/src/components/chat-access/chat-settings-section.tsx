@@ -139,7 +139,7 @@ export function ChatSettingsSection({ heading = 'chat' }: { heading?: 'chat' | '
           <Info className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           <span className="font-medium">{t('readOnly')}</span>
           <span className="text-muted-foreground">{t('readOnlyNote')}</span>
-          <span className="ml-auto">
+          <span className="ms-auto">
             <AskAdminButton
               asked={tAccess('askAdmin.defaults.role')}
               ruleKind="policy"
@@ -248,7 +248,7 @@ export function ChatSettingsSection({ heading = 'chat' }: { heading?: 'chat' | '
             <Button
               size="sm"
               variant="outline"
-              className="ml-auto"
+              className="ms-auto"
               disabled={saving || view.rows.every((row) => !row.changed)}
               onClick={() => change(resetToolPolicies, t('policy.resetDone'))}
             >

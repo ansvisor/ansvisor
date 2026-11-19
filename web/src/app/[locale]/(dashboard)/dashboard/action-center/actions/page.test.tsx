@@ -337,7 +337,7 @@ describe('the actions list', () => {
     }
   });
 
-  /** Chat's Open in Actions (actions/[id]) names the action's brand, so its drawer opens. */
+  /** Chat's Open in Action Center (actions/[id]) names the action's brand, so its drawer opens. */
   it('switches to the brand a link names, once, when it is one of the person’s', async () => {
     setActiveBrand.mockClear();
     window.history.replaceState(null, '', '/?action=a1&brand=other-brand');

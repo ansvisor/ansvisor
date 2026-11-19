@@ -103,7 +103,7 @@ function FilterMenu({
         data-filter={filter}
         data-picked={picked ?? undefined}
         className={cn(
-          'inline-flex h-7 max-w-full items-center gap-1 rounded-full border bg-card pr-2 pl-2.5 text-[12.5px] outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-popup-open:bg-accent',
+          'inline-flex h-7 max-w-full items-center gap-1 rounded-full border bg-card pe-2 ps-2.5 text-[12.5px] outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-popup-open:bg-accent',
           picked &&
             'border-foreground bg-foreground text-background hover:bg-foreground/90 data-popup-open:bg-foreground/90',
         )}

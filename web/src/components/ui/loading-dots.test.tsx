@@ -28,10 +28,10 @@ describe('LoadingDots', () => {
   });
 
   it('says its label as a status, the dots still hidden', () => {
-    const html = renderToStaticMarkup(<LoadingDots label="Sending..." className="mr-1" />);
+    const html = renderToStaticMarkup(<LoadingDots label="Sending..." className="me-1" />);
     const root = new DOMParser().parseFromString(html, 'text/html').body.firstElementChild!;
     expect(root.getAttribute('role')).toBe('status');
-    expect(root.className).toContain('mr-1');
+    expect(root.className).toContain('me-1');
     expect(root.querySelector('[aria-hidden="true"]')!.children).toHaveLength(3);
     expect(root.querySelector('.sr-only')!.textContent).toBe('Sending...');
     expect(root.textContent).toBe('Sending...');
