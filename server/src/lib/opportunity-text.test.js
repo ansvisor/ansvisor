@@ -4,7 +4,9 @@ import {
   cleanStoredOpportunity,
   distance,
   fixCompetitorNames,
+  resolvePageList,
   resolveReferences,
+  withoutPanelFigures,
 } from './opportunity-text.js';
 
 // CONTENT-005: internal indexes and misspelled competitor names must not
@@ -163,5 +165,50 @@ describe('cleanStoredOpportunity', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('an opportunity’s copy beside its panel (Content test 2026-11-19, item 10)', () => {
+  const pages = [
+    { title: 'AI rank tracker' },
+    { title: 'Best AI SEO tools' },
+    { title: null, h1: 'GEO guide', url: 'https://acme.example/geo' },
+  ];
+
+  it('names the pages an unbracketed list of indexes stood for', () => {
+    expect(resolvePageList('Merging P2, P1, and P0 into one guide.', pages)).toBe(
+      'Merging "GEO guide", "Best AI SEO tools" and "AI rank tracker" into one guide.',
+    );
+    // Stored text has no pages to name.
+    expect(resolvePageList('Merging P2, P6, and P0 into one guide.')).toBe(
+      'Merging these pages into one guide.',
+    );
+    expect(resolvePageList('Expand page P1 with pricing.', pages)).toBe(
+      'Expand page "Best AI SEO tools" with pricing.',
+    );
+    // A lone "P0" may be a priority: left alone.
+    expect(resolvePageList('A P0 fix for the tracker.')).toBe('A P0 fix for the tracker.');
+  });
+
+  it('leaves out the sentences stating the panel’s figures', () => {
+    expect(
+      withoutPanelFigures(
+        'Buyers compare trackers before they buy. It draws 37,185 monthly searches. Competitors lead by 153%.',
+      ),
+    ).toBe('Buyers compare trackers before they buy.');
+    expect(withoutPanelFigures('About 13k searches a month ask this.')).toBe('');
+    expect(withoutPanelFigures('Answers name rivals 3.5k/mo.')).toBe('');
+    // Words, a year or a count of pages: kept.
+    const kept = 'Three pages split this need in 2026, and AI cites none of them.';
+    expect(withoutPanelFigures(kept)).toBe(kept);
+  });
+
+  it('reads a stored description so', () => {
+    const row = cleanStoredOpportunity({
+      title: 'Merge the tracker pages',
+      description: 'Merging P2, P6, and P0 helps. It gets 155,305 monthly searches.',
+      source_data: {},
+    });
+    expect(row.description).toBe('Merging these pages helps.');
   });
 });

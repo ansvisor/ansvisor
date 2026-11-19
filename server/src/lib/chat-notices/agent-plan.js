@@ -1,5 +1,6 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { brandReaders } from '../access.js';
+import { DEFAULT_LOCALE, translator } from '../i18n.js';
 import { postAgentPlan } from '../slack/agent-plan.js';
 import { BUTTON, frame, membersOf, one, tell } from './go-live.js';
 import { appOrigin, emailOf, escapeHtml } from './own-key.js';
@@ -46,44 +47,55 @@ const LINK = 'color:#111827;';
 /**
  * The e-mail of an Operator's summary.
  * @param {{ operator: string, brand: string, day: string, agentId: string,
- *   chatId: string|null, summary: NonNullable<ReturnType<typeof readPlanSummary>> }} input
+ *   chatId: string|null, summary: NonNullable<ReturnType<typeof readPlanSummary>>,
+ *   locale?: string }} input `locale`: the reader's interface language (LOC-008).
  */
-export function renderAgentPlanEmail({ operator, brand, day, agentId, chatId, summary }) {
-  const head = headline(summary);
-  const subject = `${operator} on ${brand}: ${head}`;
+export function renderAgentPlanEmail({
+  operator,
+  brand,
+  day,
+  agentId,
+  chatId,
+  summary,
+  locale = DEFAULT_LOCALE,
+}) {
+  const t = translator(locale);
+  const head = headline(summary, locale);
+  const subject = t('agentPlan.subject', { operator, brand, headline: head });
   const lines = [
-    escapeHtml(whyLine(summary, { operator, brand, day })),
+    escapeHtml(whyLine(summary, { operator, brand, day }, locale)),
     ...summary.children.map(
       (child) =>
-        `<strong>${escapeHtml(childName(child))}</strong> · ${escapeHtml(childLine(child))}${
+        `<strong>${escapeHtml(childName(child, locale))}</strong> · ${escapeHtml(childLine(child, locale))}${
           child.chatId
-            ? ` · <a href="${escapeHtml(chatUrlOf(child.chatId))}" style="${LINK}">Open its chat</a>`
+            ? ` · <a href="${escapeHtml(chatUrlOf(child.chatId))}" style="${LINK}">${t('agentPlan.openChat')}</a>`
             : ''
         }`,
     ),
   ];
-  const total = totalLine(summary);
+  const total = totalLine(summary, locale);
   if (total) lines.push(escapeHtml(total));
   const { waiting } = tally(summary);
   if (waiting) {
     lines.push(
-      `<strong>Waits for you:</strong> ${waiting === 1 ? '1 agent' : `${waiting} agents`}. Open each from its chat${
-        summary.approveAll ? ', or approve the changes to the same draft at once in the Inbox' : ''
-      }.`,
+      `<strong>${t('agentPlan.waitsLabel')}</strong> ${t(
+        summary.approveAll ? 'agentPlan.waitsApproveAll' : 'agentPlan.waits',
+        { count: waiting },
+      )}`,
     );
   }
   const html = frame(
     escapeHtml(subject),
     lines,
     [
-      `<a href="${escapeHtml(summaryUrlOf(chatId, agentId))}" style="${BUTTON}">Open the summary</a>`,
+      `<a href="${escapeHtml(summaryUrlOf(chatId, agentId))}" style="${BUTTON}">${t('agentPlan.openSummary')}</a>`,
       ...(summary.approveAll
         ? [
-            `<a href="${escapeHtml(approveAllUrlOf())}" style="${BUTTON}">Approve all in the Inbox</a>`,
+            `<a href="${escapeHtml(approveAllUrlOf())}" style="${BUTTON}">${t('agentPlan.approveAll')}</a>`,
           ]
         : []),
     ],
-    "You get this as the person the agent runs for, by your Chat settings' Notify me when an agent needs me. Once per plan.",
+    t('agentPlan.footer'),
   );
   return { subject, html };
 }
@@ -166,7 +178,7 @@ export async function tellAgentPlan({ orgId, planId }) {
     brandId: plan.brand_id,
     dedupe: `agent_plan_summary:${plan.id}`,
     payload: noticePayload({ ...facts, agentId: plan.agent_id, planId: plan.id, chatId }),
-    email: renderAgentPlanEmail({ ...facts, agentId: plan.agent_id, chatId }),
+    email: (locale) => renderAgentPlanEmail({ ...facts, agentId: plan.agent_id, chatId, locale }),
     // Inbox + Slack: the brand's channel, mentioning them; the e-mail where it doesn't post.
     slack: (ids) =>
       postAgentPlan(

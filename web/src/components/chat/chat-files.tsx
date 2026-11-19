@@ -274,7 +274,7 @@ export function ChatFiles() {
           <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title')}</h1>
           <p className="text-[13px] text-muted-foreground">{t('subtitle')}</p>
         </div>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ms-auto flex items-center gap-3">
           {list.storage && <StorageMeter storage={list.storage} />}
           <Button
             variant="outline"
@@ -336,7 +336,7 @@ export function ChatFiles() {
           >
             {t(`filters.${f}`)}
             {f === 'all' && list.storage && list.storage.fileCount > 0 && (
-              <i className="ml-1 rounded-md bg-foreground/10 px-[5px] text-[11px] font-medium not-italic text-foreground/80 tabular-nums">
+              <i className="ms-1 rounded-md bg-foreground/10 px-[5px] text-[11px] font-medium not-italic text-foreground/80 tabular-nums">
                 {list.storage.fileCount.toLocaleString('en-US')}
               </i>
             )}

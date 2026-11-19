@@ -292,6 +292,10 @@ export const DEMO_GUARDED = [
 /** The write routes left open on a demo brand, and why. */
 export const DEMO_OPEN = [
   open(
+    'POST /ai-text/translate',
+    "AI-written text in the reader's language (LOC-010): reads rows the caller may see and keeps their translations, changing no sample data; each row and language is translated once.",
+  ),
+  open(
     'PATCH /ads/settings',
     "The organization's own Ads thresholds, changed by its Admins: names no brand, changes no sample data and costs nothing.",
   ),

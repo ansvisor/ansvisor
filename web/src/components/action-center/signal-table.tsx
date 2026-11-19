@@ -254,7 +254,7 @@ export function SignalWhereLine({
           aria-hidden="true"
           className={cn(
             'min-w-0 truncate text-xs text-muted-foreground',
-            engines.size > 0 && 'ml-1',
+            engines.size > 0 && 'ms-1',
           )}
         >
           {locations.join(' · ')}
@@ -512,7 +512,7 @@ export function SignalTable({
                     onClick={() => onSelect(signal)}
                   >
                     <TableCell className="max-w-[360px]">
-                      <p className="truncate pl-11 text-xs">
+                      <p className="truncate ps-11 text-xs">
                         {topic ? t('grouped.topic', { topic }) : t('grouped.noTopic')}
                       </p>
                     </TableCell>

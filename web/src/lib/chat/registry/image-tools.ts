@@ -96,7 +96,7 @@ export const IMAGE_WRITES = [
     run: (ctx, input) => makeChatImages(ctx, input),
     precheck: (ctx, input) => imagePrecheck(ctx, input),
     // The card's line: how many images, on which model, and their share of the AI limit.
-    target: (input) => imageCostLine(input.brand_id, input.model, input.count),
+    target: (input, run) => imageCostLine(input.brand_id, input.model, input.count, run.locale),
     // The set, filed as it was made: its card shows the images to pick from.
     deliverable: (input, output) => {
       const made = output as { ok?: unknown; file_id?: unknown; title?: unknown; format?: unknown };

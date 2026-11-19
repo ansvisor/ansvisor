@@ -88,7 +88,7 @@ function HtmlBlockView({ node, updateAttributes, deleteNode, selected }: NodeVie
           <Code2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
           <span className="font-medium">{t('label')}</span>
           <span className="text-muted-foreground">{t('lines', { count: lines.length })}</span>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ms-auto flex items-center gap-1">
             <Button variant="ghost" size="xs" onClick={() => setEditing(true)}>
               {t('edit')}
             </Button>
@@ -169,7 +169,7 @@ export function HtmlBlockDialog({
         />
         <p
           className={cn(
-            'text-right text-xs tabular-nums text-muted-foreground',
+            'text-end text-xs tabular-nums text-muted-foreground',
             tooLong && 'text-destructive',
           )}
         >
@@ -184,7 +184,7 @@ export function HtmlBlockDialog({
           {onRemove && (
             <Button
               variant="ghost"
-              className="mr-auto text-muted-foreground hover:text-destructive"
+              className="me-auto text-muted-foreground hover:text-destructive"
               onClick={() => {
                 onRemove();
                 onClose();

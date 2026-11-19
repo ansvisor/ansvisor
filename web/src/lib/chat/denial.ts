@@ -2,6 +2,7 @@ import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { PLANS, type PlanId } from '@/config/plans';
+import { inRunLocale } from './run-locale';
 import type { NextPlan, PlanFacts } from './plan-facts';
 import type { ToolDenial } from './precedence';
 import type { ChatTool } from './registry/define-tool';
@@ -16,7 +17,7 @@ import type { ChatTool } from './registry/define-tool';
  * It names nothing outside the person's scope: a brand they can't access
  * gets "I can only see the brands shared with you", without the brand's
  * name, the call's target or a word on whether it exists. Words from
- * messages/en.json, in English as the rest of what the server writes.
+ * messages, in the run's language (card-locale.ts), English outside a run.
  */
 
 /** The rule behind a denial: §4c's role, plan and policy, and the workspace's own states. */
@@ -58,9 +59,19 @@ export interface DenialInput {
   target?: string | null;
 }
 
-const t = createTranslator({ locale: 'en', messages, namespace: 'chatDenial' });
-const toolT = createTranslator({ locale: 'en', messages, namespace: 'chatTools' });
-const roleT = createTranslator({ locale: 'en', messages, namespace: 'settings' });
+// In the run's language for its card (card-locale.ts); the engine builds the model's copy inEnglish.
+const t = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatDenial' }),
+  'chatDenial',
+);
+const toolT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatTools' }),
+  'chatTools',
+);
+const roleT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'settings' }),
+  'settings',
+);
 
 const roleName = (role: TeamRole) => roleT(`team_role_${role}`);
 const planName = (id: PlanId) => PLANS[id].name;

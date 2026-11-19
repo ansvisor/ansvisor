@@ -367,7 +367,7 @@ function PickPrompts({
                 {waits[i] && (
                   <span
                     data-waits
-                    className="ml-2 inline-flex h-5 items-center rounded-full border border-amber-500/40 px-1.5 align-middle text-[11px] font-medium text-amber-700 dark:text-amber-400"
+                    className="ms-2 inline-flex h-5 items-center rounded-full border border-amber-500/40 px-1.5 align-middle text-[11px] font-medium text-amber-700 dark:text-amber-400"
                   >
                     {t('waits')}
                   </span>

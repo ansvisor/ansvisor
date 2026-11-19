@@ -170,7 +170,7 @@ export function ScheduleDetail({
     <div className="max-w-[860px]">
       <div className="mb-3.5 flex flex-wrap items-center gap-3">
         <h1 className="min-w-0 truncate text-2xl font-bold tracking-[-.6px]">{job.title}</h1>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2">
           {job.canManage && (
             <FormSwitch
               checked={job.enabled}
@@ -301,7 +301,7 @@ export function ScheduleDetail({
                 {outside.map((address) => (
                   <li
                     key={address}
-                    className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pr-1 pl-2.5 text-[12px]"
+                    className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pe-1 ps-2.5 text-[12px]"
                   >
                     {address}
                     {editable && (
@@ -381,7 +381,7 @@ export function ScheduleDetail({
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5">
           <span className="text-xs text-muted-foreground">{tDetail('model')}</span>
-          <div className="ml-auto flex flex-wrap gap-1.5">
+          <div className="ms-auto flex flex-wrap gap-1.5">
             {job.canManage && (
               <Button
                 variant="outline"
@@ -423,7 +423,7 @@ export function ScheduleDetail({
           <span>{tDetail('columns.date')}</span>
           <span>{tDetail('columns.status')}</span>
           <span>{tDetail('columns.result')}</span>
-          <span className="text-right">{tDetail('columns.usage')}</span>
+          <span className="text-end">{tDetail('columns.usage')}</span>
         </div>
         {runs.length === 0 && (
           <p className="border-t px-3.5 py-6 text-center text-[13px] text-muted-foreground">
@@ -472,7 +472,7 @@ export function ScheduleDetail({
                   <span className="text-muted-foreground">—</span>
                 )}
               </span>
-              <span className="text-right tabular-nums">{percentOf(run.usageShare)}</span>
+              <span className="text-end tabular-nums">{percentOf(run.usageShare)}</span>
             </div>
           );
         })}

@@ -57,7 +57,7 @@ export function AgentWorkGear() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         title={t('gearHint')}
-        className="ml-auto inline-flex h-7 shrink-0 items-center gap-1.5 self-center rounded-lg border px-2 text-xs text-muted-foreground outline-none hover:bg-muted/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="ms-auto inline-flex h-7 shrink-0 items-center gap-1.5 self-center rounded-lg border px-2 text-xs text-muted-foreground outline-none hover:bg-muted/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <Settings2 className="h-3.5 w-3.5" aria-hidden />
         {t('gear')}

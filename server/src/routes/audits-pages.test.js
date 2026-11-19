@@ -53,6 +53,7 @@ function query(table) {
     },
     lt: () => builder,
     gte: () => builder,
+    limit: () => builder,
     range: (from, to) => {
       range = [from, to];
       return builder;
@@ -154,6 +155,8 @@ const audit = (id, url, day, score, status = 'completed') => ({
   total_score: score,
   created_at: `2026-10-${String(day).padStart(2, '0')}T09:00:00Z`,
 });
+
+const www = (url) => url.replace('//acme.com', '//www.acme.com');
 
 beforeEach(async () => {
   signalQueries = [];
@@ -355,7 +358,8 @@ describe('POST /api/audits/bulk', () => {
 
     // All five are running rows; three fetch their page, two wait.
     expect(inserted).toHaveLength(5);
-    expect(pagesFetched).toEqual(urls.slice(0, 3));
+    // The brand's domain is www.acme.com: its pages are fetched there.
+    expect(pagesFetched).toEqual(urls.slice(0, 3).map(www));
   });
 
   it('refuses a request without URLs, with too many, or with something that is not a URL', async () => {
@@ -425,14 +429,14 @@ describe('startAutoAudits', () => {
     ]);
     await new Promise((resolve) => setTimeout(resolve, 20));
     // Two at a time, and a user's bulk audit doesn't wait behind them.
-    expect(pagesFetched).toEqual(urls.slice(0, 2));
+    expect(pagesFetched).toEqual(urls.slice(0, 2).map(www));
     await fetch(`${baseUrl}/bulk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brandId, urls: ['https://acme.com/mine'] }),
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(pagesFetched).toEqual([...urls.slice(0, 2), 'https://acme.com/mine']);
+    expect(pagesFetched).toEqual([...urls.slice(0, 2), 'https://acme.com/mine'].map(www));
     // A user's audit row keeps the column default.
     expect(inserted.at(-1).source).toBeUndefined();
   });

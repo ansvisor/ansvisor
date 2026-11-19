@@ -101,7 +101,7 @@ export function RunPreview() {
           data-action="preview.playRun"
           size="sm"
           variant="outline"
-          className="ml-auto"
+          className="ms-auto"
           onClick={play}
         >
           {t('play')}

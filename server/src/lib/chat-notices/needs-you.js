@@ -1,5 +1,6 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { brandReaders } from '../access.js';
+import { DEFAULT_LOCALE, translator } from '../i18n.js';
 import { postNeedsYou } from '../slack/needs-you.js';
 import { BUTTON, frame, membersOf, one, tell } from './go-live.js';
 import { appOrigin, emailOf, escapeHtml } from './own-key.js';
@@ -25,19 +26,22 @@ const runUrlOf = (chatId) =>
 
 /**
  * The e-mail for an agent's run that waits for its person.
- * @param {{ agent: string, brand: string | null, chatId: string | null }} input
+ * @param {{ agent: string, brand: string | null, chatId: string | null, locale?: string }} input
+ *   `locale`: the reader's interface language (LOC-008), English when none.
  */
-export function renderNeedsYouEmail({ agent, brand, chatId }) {
-  const subject = `${agent} needs you`;
-  const where = brand ? ` on ${escapeHtml(brand)}` : '';
+export function renderNeedsYouEmail({ agent, brand, chatId, locale = DEFAULT_LOCALE }) {
+  const t = translator(locale);
+  const subject = t('needsYou.subject', { agent });
   const html = frame(
     escapeHtml(subject),
     [
-      `${escapeHtml(agent)} stopped${where} to ask you something or to wait for your OK on a change. It goes on once you answer.`,
-      'Nothing was changed or sent while it waits.',
+      brand
+        ? t('needsYou.bodyOnBrand', { agent: escapeHtml(agent), brand: escapeHtml(brand) })
+        : t('needsYou.body', { agent: escapeHtml(agent) }),
+      t('needsYou.nothingChanged'),
     ],
-    [`<a href="${escapeHtml(runUrlOf(chatId))}" style="${BUTTON}">Open the run</a>`],
-    "You get this as the person the agent runs for, by your Chat settings' Notify me when an agent needs me. Once per run.",
+    [`<a href="${escapeHtml(runUrlOf(chatId))}" style="${BUTTON}">${t('needsYou.button')}</a>`],
+    t('needsYou.footer'),
   );
   return { subject, html };
 }
@@ -86,7 +90,8 @@ export async function tellNeedsYou({ orgId, agentRunId }) {
     brandId: run.brand_id ?? null,
     dedupe: `agent_needs_you:${run.id}`,
     payload: { agent: agent.name, agentId: run.agent_id, runId: run.id, chatId },
-    email: renderNeedsYouEmail({ agent: agent.name, brand: brand?.name ?? null, chatId }),
+    email: (locale) =>
+      renderNeedsYouEmail({ agent: agent.name, brand: brand?.name ?? null, chatId, locale }),
     // Inbox + Slack: the brand's channel, mentioning them; the e-mail where it doesn't post.
     slack: brand
       ? (ids) =>

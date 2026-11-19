@@ -124,7 +124,7 @@ export function ImpactTab({
         <div
           role="group"
           aria-label={t('periodLabel')}
-          className="ml-auto flex rounded-lg border p-0.5"
+          className="ms-auto flex rounded-lg border p-0.5"
         >
           {IMPACT_PERIODS.map((days) => (
             <button
@@ -320,7 +320,7 @@ function ImpactBody({
               disabled={rebuilding || blocked !== null}
               onClick={() => onUseLostPrompts(lostPrompts.map((p) => p.id))}
             >
-              {rebuilding && <WorkingDots className="ml-0" />}
+              {rebuilding && <WorkingDots className="ms-0" />}
               {t('prompts.useLost', { count: lostPrompts.length })}
             </Button>
           )}

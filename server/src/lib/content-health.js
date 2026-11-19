@@ -315,7 +315,9 @@ export function healthEdits(guard, stats = null) {
 export function healthPage(page, guard, editPage, stats = null) {
   if (!guard) return page;
   const words = (section) =>
-    [...section.paragraphs, ...section.bullets].some((t) => String(t ?? '').trim());
+    [...section.paragraphs, ...section.bullets, ...(section.table?.rows ?? []).flat()].some((t) =>
+      String(t ?? '').trim(),
+    );
   const edited = editPage(page, healthEdits(guard, stats));
   return {
     ...edited,

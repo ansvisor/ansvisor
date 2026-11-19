@@ -460,12 +460,12 @@ export default function ActionCenterHistoryPage() {
                   allLabel={t('sort.newest')}
                 />
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={t('filters.search')}
-                    className="h-8 w-56 pl-8 text-xs"
+                    className="h-8 w-56 ps-8 text-xs"
                   />
                 </div>
                 {hasActiveFilters && (

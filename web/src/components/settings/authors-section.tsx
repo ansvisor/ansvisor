@@ -181,7 +181,7 @@ export function AuthorsSection() {
                       <p className="text-sm font-medium [overflow-wrap:anywhere]">
                         {author.name}
                         {author.userId === me && (
-                          <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                          <span className="ms-1.5 text-xs font-normal text-muted-foreground">
                             {t('you')}
                           </span>
                         )}
@@ -345,7 +345,7 @@ export function AuthorsSection() {
               disabled={busy}
               onClick={() => removing && void remove(removing)}
             >
-              {busy && <LoadingDots className="mr-1.5" />}
+              {busy && <LoadingDots className="me-1.5" />}
               {t('remove')}
             </Button>
           </DialogFooter>
@@ -560,7 +560,7 @@ function AuthorDialog({
               {t('fields.isMe')}
             </label>
             {(someoneElse || meTaken) && (
-              <p className="pl-6 text-xs text-muted-foreground">
+              <p className="ps-6 text-xs text-muted-foreground">
                 {someoneElse ? t('fields.isSomeoneElse') : t('fields.isMeTaken')}
               </p>
             )}
@@ -571,7 +571,7 @@ function AuthorDialog({
             {tCommon('cancel')}
           </DialogClose>
           <Button onClick={() => void save()} disabled={invalid}>
-            {saving && <LoadingDots className="mr-1.5" />}
+            {saving && <LoadingDots className="me-1.5" />}
             {t('save')}
           </Button>
         </DialogFooter>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isExcludedPath } from './page-paths.js';
+import { isPlaceholderPath, isExcludedPath } from './page-paths.js';
 
 /**
  * Page scope (#705, #719).
@@ -59,5 +59,23 @@ describe('isExcludedPath', () => {
   it('ignores a query string when deciding', () => {
     expect(isExcludedPath('/checkout?step=2')).toBe(true);
     expect(isExcludedPath('/pricing?ref=ai')).toBe(false);
+  });
+});
+
+describe('analytics placeholders (2026-11-19)', () => {
+  it('reads "(not set)" as no page however it is written', () => {
+    for (const p of [
+      '(not set)',
+      '/(not set)',
+      '/(not%20set)',
+      '(other)',
+      '/(none)',
+      'https://acme.com/(not%20set)',
+    ]) {
+      expect(isPlaceholderPath(p)).toBe(true);
+      expect(isExcludedPath(p)).toBe(true);
+    }
+    expect(isPlaceholderPath('/pricing')).toBe(false);
+    expect(isPlaceholderPath('/blog/not-set-up')).toBe(false);
   });
 });

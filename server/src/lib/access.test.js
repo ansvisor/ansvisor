@@ -131,6 +131,7 @@ const {
   MANAGER_ROLES,
   NOT_IN_WORKSPACE,
   NO_BRAND_ACCESS,
+  readableBrandIds,
 } = await import('./access.js');
 const { requestScope } = await import('./request-scope.js');
 
@@ -318,6 +319,28 @@ describe('assertAllBrands', () => {
     });
     state.profile.role = 'admin';
     await expect(assertAllBrands('u1')).resolves.toMatchObject({ role: 'admin' });
+  });
+});
+
+describe('readableBrandIds (LOC-010)', () => {
+  const brandRow = (id, extra = {}) => ({ id, organization_id: 'org-1', is_demo: false, ...extra });
+
+  it('keeps the brands the caller reads, leaving others out rather than refusing', async () => {
+    state.brands = [
+      brandRow('b1'),
+      brandRow('b2'),
+      brandRow('demo', { is_demo: true }),
+      { ...brandRow('x'), organization_id: 'org-2' },
+    ];
+    expect(await readableBrandIds('u1', ['b1', 'b2', 'demo', 'x', 'gone', null])).toEqual(
+      new Set(['b1', 'b2', 'demo']),
+    );
+    state.profile.brand_scope = 'selected';
+    state.grants = ['b1'];
+    expect(await inRequest(() => readableBrandIds('u1', ['b1', 'b2', 'demo']))).toEqual(
+      new Set(['b1', 'demo']),
+    );
+    expect(await readableBrandIds('u1', [])).toEqual(new Set());
   });
 });
 

@@ -1,0 +1,20 @@
+{
+  "app/[locale]/(dashboard)/dashboard/(brand-visibility)/insights/_charts.tsx": 2,
+  "app/[locale]/(dashboard)/dashboard/content/page.tsx": 1,
+  "app/[locale]/(dashboard)/dashboard/traffic/_charts.tsx": 1,
+  "components/providers/menu-access-provider.tsx": 1,
+  "components/settings/menu-access-section.tsx": 1,
+  "components/ui/avatar.tsx": 1,
+  "components/ui/dialog.tsx": 2,
+  "components/ui/sheet.tsx": 4,
+  "i18n/locales.ts": 1,
+  "lib/actions/menu-access.ts": 1,
+  "lib/brand-prompts-link.ts": 1,
+  "lib/chat/fit.ts": 1,
+  "lib/chat/runs-tray.ts": 1,
+  "lib/content/shopping-check.ts": 1,
+  "lib/content/shopping-path.ts": 1,
+  "lib/menu-access.ts": 1,
+  "lib/onboarding-prompt-picks.ts": 1,
+  "lib/report-card/copy.ts": 1
+}

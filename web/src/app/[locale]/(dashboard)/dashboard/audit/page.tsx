@@ -61,6 +61,7 @@ import { frictionFlow } from '@/lib/friction-events';
 import { SiteTrustCard } from './_site-trust-card';
 import { ScoreTrendChart } from './_charts';
 import { AuditPagesTable } from './_pages-table';
+import { mergePages, pruneSelection } from '@/lib/audit/merge-pages';
 import { AuditBulkBar, ExportMenu } from './_bulk-bar';
 import { AuditOverviewCards } from './_overview-cards';
 import {
@@ -109,6 +110,9 @@ function TabCount({ count }: { count: number }) {
 
 /** While audits run, the Pages list and the quota are read again this often. */
 const RUNNING_POLL_MS = 10_000;
+
+/** The most pages one read returns (the server's limit). */
+const HUB_PAGES_MAX = 100;
 
 function barClass(score: number | null): string {
   return barColor(score);
@@ -470,29 +474,43 @@ export default function SiteAuditPage() {
     }
   };
 
-  // Read the pages shown (up to the server's 100), the quota and the trend
-  // again, in place: the table stays up with its open histories. Selected
-  // pages that are gone or now running are dropped from the selection.
+  // Read the pages shown, the quota and the trend again, in place: the table
+  // stays up with its open histories and every row loaded so far, the rows
+  // patched where they are (by page key) rather than the list replaced. The
+  // selection is kept by key, outside the paged rows; only pages now running
+  // (or gone) leave it.
   const shownRef = useRef(0);
   useEffect(() => {
     shownRef.current = pages.length;
   }, [pages.length]);
   const reloadInPlace = async (brandId: string) => {
-    const hub = await getAuditHub(
-      brandId,
-      Math.min(Math.max(shownRef.current, 50), 100),
-      sinceRef.current,
-    );
+    const shown = Math.max(shownRef.current, 50);
+    const since = sinceRef.current;
+    const hub = await getAuditHub(brandId, Math.min(shown, HUB_PAGES_MAX), since);
     const data = hub.pages;
-    setPages(data.pages);
+    // The hub reads the first rows only; the rest of what's shown is read in chunks.
+    let fresh = data.pages;
+    while (shown > HUB_PAGES_MAX && fresh.length < Math.min(shown, data.total)) {
+      const more = await getAuditPages(
+        brandId,
+        fresh.length,
+        Math.min(HUB_PAGES_MAX, shown - fresh.length),
+        since,
+      );
+      if (more.pages.length === 0) break;
+      fresh = [...fresh, ...more.pages];
+    }
+    // With This batch on, the read covers the batch only, so it can't say a
+    // page outside it is gone: rows and selection are kept as they are.
+    const complete = !since && fresh.length >= data.total;
+    setPages((current) => mergePages(current, fresh, complete));
     setPagesTotal(data.total);
     setPrimaryHost(data.primaryHost);
     applyRunning(data.running);
     setQuota(hub.quota);
     setTrend(hub.trend);
     setOverview(hub.overview);
-    const selectable = new Set(data.pages.filter((p) => p.status !== 'running').map((p) => p.key));
-    setSelected((prev) => new Set([...prev].filter((key) => selectable.has(key))));
+    setSelected((prev) => pruneSelection(prev, fresh, complete));
 
     const { opportunities: op, latestRun: run } = await getAuditHubExtras(brandId);
     setOpps(op);
@@ -856,12 +874,12 @@ export default function SiteAuditPage() {
             <Button onClick={handleRun} disabled={running || quotaExhausted} className="shrink-0">
               {running ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
                   {t('running')}
                 </>
               ) : (
                 <>
-                  <Search className="mr-2 h-4 w-4" />
+                  <Search className="me-2 h-4 w-4" />
                   {t('runAudit')}
                 </>
               )}
@@ -1042,7 +1060,7 @@ export default function SiteAuditPage() {
             <div className="text-base font-semibold">{t('failed')}</div>
             <p className="max-w-md text-sm text-muted-foreground">{error}</p>
             <Button variant="outline" size="sm" onClick={refetch}>
-              <RefreshCw className="mr-2 h-4 w-4" />
+              <RefreshCw className="me-2 h-4 w-4" />
               {t('retry')}
             </Button>
           </CardContent>
@@ -1115,7 +1133,7 @@ export default function SiteAuditPage() {
                       filterShown === 'notAudited' && (
                         <Button
                           size="sm"
-                          className="ml-2 h-7 rounded-full px-3 text-xs"
+                          className="ms-2 h-7 rounded-full px-3 text-xs"
                           disabled={startingBulk}
                           onClick={guard(() => confirmOpps(shownOpps, 'notAudited'), {
                             action: tActions('auditPages'),

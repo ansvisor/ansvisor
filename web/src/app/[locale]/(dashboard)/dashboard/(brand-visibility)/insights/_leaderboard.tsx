@@ -144,7 +144,7 @@ export function Leaderboard({
                       })}
                     </span>
                   </span>
-                  <span className="shrink-0 text-right">
+                  <span className="shrink-0 text-end">
                     <span
                       className="block text-sm font-semibold tabular-nums"
                       title={t('scoreDetail', {
@@ -169,7 +169,7 @@ export function Leaderboard({
                   </span>
                 </div>
                 {entry.isOwnBrand && callout && (
-                  <p className="ml-7 mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-100 px-2 py-0.5 text-[11.5px] text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                  <p className="ms-7 mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-100 px-2 py-0.5 text-[11.5px] text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
                     <ArrowUp className="h-3 w-3 shrink-0" aria-hidden />
                     <span>
                       {callout.gap === 0

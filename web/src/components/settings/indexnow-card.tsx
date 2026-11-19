@@ -168,7 +168,7 @@ export function IndexNowCard() {
             disabled={busy !== null}
             onClick={guard(() => void run('on'), { action: tActions('setUpIndexNow') })}
           >
-            {busy === 'on' && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+            {busy === 'on' && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
             {t('setUp')}
           </Button>
         ) : (
@@ -177,7 +177,7 @@ export function IndexNowCard() {
       ) : (
         <div className="space-y-3">
           {waiting ? (
-            <ol className="list-decimal space-y-2 pl-5 text-sm">
+            <ol className="list-decimal space-y-2 ps-5 text-sm">
               <li>
                 {t('stepFile', { file: `${state.key}.txt` })}
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -207,7 +207,7 @@ export function IndexNowCard() {
                 disabled={busy !== null}
                 onClick={guard(() => void run('check'), { action: tActions('setUpIndexNow') })}
               >
-                {busy === 'check' && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                {busy === 'check' && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
                 {busy === 'check' ? t('checking') : t('check')}
               </Button>
             )}
@@ -215,7 +215,7 @@ export function IndexNowCard() {
               <DialogTrigger
                 render={<Button variant="outline" size="sm" disabled={busy !== null} />}
               >
-                {busy === 'off' && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                {busy === 'off' && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
                 {t('turnOff')}
               </DialogTrigger>
               <DialogContent className="sm:max-w-sm">

@@ -47,11 +47,19 @@ While a bulk audit runs, a bar above the lists shows **12 of 235 done · about 7
 
 Click **This batch** to list only the pages in the bulk audit on **Pages**, and **All pages** to go back. When every audit is done the bar says so until you dismiss it.
 
+## The Pages list during a bulk audit
+
+While audits run, the **Pages** list updates in place: each page's status changes on its row, and the rows you loaded with **Load more** stay where they are. Your selection stays too, however many pages it holds. A page leaves the selection only when its audit starts, since a page being audited can't be audited again.
+
 ## Auditing a page again
 
 A page has one audit running at a time. Starting it again, from any of these places, opens the audit already running and uses no audit, however the address is written: with or without www, a last slash or a tracking parameter.
 
 When a page was audited in the last 10 minutes, Site Audit asks first: **Open it** shows that audit, and **Audit again** starts a new one. Pages started together leave those out and say so, with **Audit again**.
+
+## Which address is audited
+
+A page is audited at the address your site itself uses, with or without www. Site Audit follows the page's canonical tag when it names the same page, and keeps to the host your earlier audits showed. The address in the **Pages** list, and in the report, is that one, so a site that answers at www.example.com is audited and shown there, not at example.com. Pages are still one page whichever way they are written.
 
 ## Your monthly audits
 

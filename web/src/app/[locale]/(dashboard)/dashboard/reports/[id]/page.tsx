@@ -483,7 +483,7 @@ export default function ReportDetailPage() {
                         style={{ width: `${Math.min((p.sov / maxSov) * 100, 100)}%` }}
                       />
                     </div>
-                    <span className="w-14 shrink-0 text-right text-sm font-medium">{p.sov}%</span>
+                    <span className="w-14 shrink-0 text-end text-sm font-medium">{p.sov}%</span>
                   </div>
                 ))
               )}
@@ -504,14 +504,14 @@ export default function ReportDetailPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t('columns.brand')}</TableHead>
-                      <TableHead className="text-right">
+                      <TableHead className="text-end">
                         {hasCompetitorVisibilityRate
                           ? t('kpi.visibilityRate')
                           : t('kpi.visibility')}
                       </TableHead>
-                      <TableHead className="text-right">{t('columns.change')}</TableHead>
-                      <TableHead className="text-right">{t('kpi.mentions')}</TableHead>
-                      <TableHead className="text-right">{t('kpi.citations')}</TableHead>
+                      <TableHead className="text-end">{t('columns.change')}</TableHead>
+                      <TableHead className="text-end">{t('kpi.mentions')}</TableHead>
+                      <TableHead className="text-end">{t('kpi.citations')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -520,10 +520,10 @@ export default function ReportDetailPage() {
                         <TableCell className={cn('font-medium', c.isOwnBrand && 'text-primary')}>
                           {c.name}
                           {c.isOwnBrand && (
-                            <span className="ml-2 text-xs text-muted-foreground">{t('you')}</span>
+                            <span className="ms-2 text-xs text-muted-foreground">{t('you')}</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-end">
                           {typeof c.score === 'number' ? (
                             <>
                               <div>{c.score}</div>
@@ -548,11 +548,11 @@ export default function ReportDetailPage() {
                             `${c.avgVisibilityScore}%`
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-end">
                           <Delta value={c.change} />
                         </TableCell>
-                        <TableCell className="text-right">{c.totalMentions}</TableCell>
-                        <TableCell className="text-right">{c.totalCitations}</TableCell>
+                        <TableCell className="text-end">{c.totalMentions}</TableCell>
+                        <TableCell className="text-end">{c.totalCitations}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -572,11 +572,11 @@ export default function ReportDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('columns.topic')}</TableHead>
-                    <TableHead className="w-28 text-right">
+                    <TableHead className="w-28 text-end">
                       {hasTopicVisibilityRate ? t('kpi.visibilityRate') : t('kpi.visibility')}
                     </TableHead>
-                    <TableHead className="w-24 text-right">{t('columns.change')}</TableHead>
-                    <TableHead className="w-24 text-right">{t('columns.results')}</TableHead>
+                    <TableHead className="w-24 text-end">{t('columns.change')}</TableHead>
+                    <TableHead className="w-24 text-end">{t('columns.results')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -585,19 +585,17 @@ export default function ReportDetailPage() {
                       <TableCell className="max-w-[280px] truncate font-medium">
                         {tp.name}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-end">
                         {typeof tp.score === 'number'
                           ? tp.score
                           : typeof tp.visibilityRate === 'number'
                             ? `${tp.visibilityRate}%`
                             : `${tp.avgVisibility}/100`}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-end">
                         <Delta value={tp.change} />
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {tp.results}
-                      </TableCell>
+                      <TableCell className="text-end text-muted-foreground">{tp.results}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -627,12 +625,12 @@ export default function ReportDetailPage() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>{t('columns.prompt')}</TableHead>
-                              <TableHead className="w-24 text-right">
+                              <TableHead className="w-24 text-end">
                                 {hasPromptVisibilityRate
                                   ? t('kpi.visibilityRate')
                                   : t('kpi.visibility')}
                               </TableHead>
-                              <TableHead className="w-16 text-right">{t('columns.runs')}</TableHead>
+                              <TableHead className="w-16 text-end">{t('columns.runs')}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -641,14 +639,14 @@ export default function ReportDetailPage() {
                                 <TableCell className="max-w-[280px] truncate font-medium">
                                   {p.text}
                                 </TableCell>
-                                <TableCell className="text-right">
+                                <TableCell className="text-end">
                                   {typeof p.score === 'number'
                                     ? p.score
                                     : typeof p.visibilityRate === 'number'
                                       ? `${p.visibilityRate}%`
                                       : `${p.avgVisibility}/100`}
                                 </TableCell>
-                                <TableCell className="text-right text-muted-foreground">
+                                <TableCell className="text-end text-muted-foreground">
                                   {p.runs}
                                 </TableCell>
                               </TableRow>
@@ -730,7 +728,7 @@ export default function ReportDetailPage() {
                   <TableRow>
                     <TableHead>{t('columns.query')}</TableHead>
                     <TableHead>{t('columns.engines')}</TableHead>
-                    <TableHead className="w-32 text-right">{t('columns.timesSearched')}</TableHead>
+                    <TableHead className="w-32 text-end">{t('columns.timesSearched')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -742,7 +740,7 @@ export default function ReportDetailPage() {
                       <TableCell className="text-muted-foreground">
                         {q.engines.map((e) => PLATFORM_LABELS[e] ?? e).join(', ')}
                       </TableCell>
-                      <TableCell className="text-right">{q.timesSearched}</TableCell>
+                      <TableCell className="text-end">{q.timesSearched}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1017,8 +1015,8 @@ export default function ReportDetailPage() {
                     <TableRow>
                       <TableHead>{t('columns.domain')}</TableHead>
                       <TableHead>{t('columns.sourceType')}</TableHead>
-                      <TableHead className="text-right">{t('columns.citations')}</TableHead>
-                      <TableHead className="text-right">{t('columns.usage')}</TableHead>
+                      <TableHead className="text-end">{t('columns.citations')}</TableHead>
+                      <TableHead className="text-end">{t('columns.usage')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1028,8 +1026,8 @@ export default function ReportDetailPage() {
                         <TableCell className="capitalize text-muted-foreground">
                           {d.category}
                         </TableCell>
-                        <TableCell className="text-right">{d.totalCitations}</TableCell>
-                        <TableCell className="text-right">{d.usagePct}%</TableCell>
+                        <TableCell className="text-end">{d.totalCitations}</TableCell>
+                        <TableCell className="text-end">{d.usagePct}%</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1050,7 +1048,7 @@ export default function ReportDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('columns.url')}</TableHead>
-                    <TableHead className="w-24 text-right">{t('columns.citations')}</TableHead>
+                    <TableHead className="w-24 text-end">{t('columns.citations')}</TableHead>
                     <TableHead className="w-[280px]">{t('columns.citedIn')}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1071,7 +1069,7 @@ export default function ReportDetailPage() {
                           {c.domain}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">{c.totalCitations}</TableCell>
+                      <TableCell className="text-end">{c.totalCitations}</TableCell>
                       <TableCell className="whitespace-normal text-xs text-muted-foreground">
                         {c.sourcedPrompts.join(' · ')}
                       </TableCell>

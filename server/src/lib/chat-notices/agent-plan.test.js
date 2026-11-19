@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -61,6 +64,7 @@ vi.mock('../slack/agent-plan.js', () => ({
 
 const { renderAgentPlanEmail, tellAgentPlan } = await import('./agent-plan.js');
 const { readPlanSummary } = await import('./plan-summary.js');
+const { forgetMessages } = await import('../i18n.js');
 
 const ORG = 'org-1';
 const BRAND = 'brand-1';
@@ -260,6 +264,42 @@ describe('renderAgentPlanEmail', () => {
     });
     expect(html).not.toContain('AI used');
     expect(html).toContain('/dashboard/agents/op-1');
+  });
+
+  it('words the summary in the reader’s language, numbers and day included (LOC-008)', () => {
+    const file = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../messages/de.json',
+    );
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        agentPlan: { subject: '{operator} für {brand}: {headline}' },
+        planSummary: {
+          state: { done: 'Fertig' },
+          usedOf: '{used} von {share}',
+          plan: 'die Agenten, die {operator} am {day} für {brand} gestartet hat',
+        },
+      }),
+    );
+    forgetMessages();
+    try {
+      const { subject, html } = renderAgentPlanEmail({
+        ...facts,
+        chatId: 'chat-op',
+        summary,
+        locale: 'de',
+      });
+      expect(subject).toBe('AEO Operator für Trailpeak: 1 of 3 agents done · 1 waits for you');
+      expect(html).toContain('<strong>Citation &lt;Win-back&gt;</strong> · Fertig');
+      expect(html).toContain('0,8 % von 1,5 %');
+      expect(html).toContain('die Agenten, die AEO Operator am 18. Nov. für Trailpeak');
+      // English where German has no text.
+      expect(html).toContain('Approve all in the Inbox');
+    } finally {
+      fs.rmSync(file, { force: true });
+      forgetMessages();
+    }
   });
 });
 

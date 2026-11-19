@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { useRouter } from '@/i18n/navigation';
 import { saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
 import { DRAFT_CHIP } from '@/lib/chat/editor-page';
@@ -279,6 +280,7 @@ export function ChatThreadView({
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
+  const serverError = useServerErrorText();
   const tRun = useTranslations('agentic.runSteps');
   // A page open beside the chat on its own page (Open here, W4-15c): its chip
   // is the box's, sent from the page's editor as the Content Editor's Chat
@@ -652,7 +654,7 @@ export function ChatThreadView({
       setTurns((all) => all.filter((turn) => turn.key !== answerKey && turn.key !== questionKey));
       // A read-only workspace, or a chat on the demo brand: the plans.
       if (body?.code === 'subscription_inactive' || body?.code === 'demo_brand') openUpgrade();
-      else toast.error(body?.error ?? t('sendFailed'));
+      else toast.error(serverError(body, body?.error ?? t('sendFailed'), res?.status));
       return false;
     }
     const chatId = res.headers.get('x-chat-conversation');

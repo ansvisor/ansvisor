@@ -213,43 +213,43 @@ export function ProductsTable({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">{t('columns.product')}</TableHead>
-                <TableHead className="text-right">{t('columns.shelves')}</TableHead>
-                <TableHead className="text-right">{t('columns.winRate')}</TableHead>
-                <TableHead className="text-right">{t('columns.avgRank')}</TableHead>
-                <TableHead className="text-right">{t('columns.aiVisits')}</TableHead>
-                <TableHead className="text-right">{t('columns.orders')}</TableHead>
-                <TableHead className="text-right">{t('columns.revenue')}</TableHead>
-                <TableHead className="pr-4 text-right">{t('columns.readiness')}</TableHead>
+                <TableHead className="ps-4">{t('columns.product')}</TableHead>
+                <TableHead className="text-end">{t('columns.shelves')}</TableHead>
+                <TableHead className="text-end">{t('columns.winRate')}</TableHead>
+                <TableHead className="text-end">{t('columns.avgRank')}</TableHead>
+                <TableHead className="text-end">{t('columns.aiVisits')}</TableHead>
+                <TableHead className="text-end">{t('columns.orders')}</TableHead>
+                <TableHead className="text-end">{t('columns.revenue')}</TableHead>
+                <TableHead className="pe-4 text-end">{t('columns.readiness')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.slice(0, shown).map((row) => (
                 <TableRow key={row.product.id}>
-                  <TableCell className="max-w-[180px] pl-4 xl:max-w-[360px]">
+                  <TableCell className="max-w-[180px] ps-4 xl:max-w-[360px]">
                     <ProductCell row={row} />
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="text-end tabular-nums">
                     {formatNumber(row.shelves)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="text-end tabular-nums">
                     {row.winRate === null ? '—' : `${Math.round(row.winRate * 100)}%`}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="text-end tabular-nums">
                     {row.avgRank === null ? '—' : row.avgRank.toFixed(1)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="text-end tabular-nums">
                     {formatNumber(row.aiVisits)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="text-end tabular-nums">
                     {formatNumber(row.orders)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="text-end tabular-nums">
                     {row.orders && row.revenue !== null
                       ? priceText(Math.round(row.revenue), row.currency)
                       : '—'}
                   </TableCell>
-                  <TableCell className="pr-4 text-right">
+                  <TableCell className="pe-4 text-end">
                     <Readiness row={row} />
                   </TableCell>
                 </TableRow>

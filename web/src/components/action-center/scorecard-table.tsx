@@ -72,11 +72,11 @@ export function ScorecardTable({ rows, by = 'kind' }: { rows: ScorecardRow[]; by
               <TableHead className="text-xs">
                 {t(by === 'play' ? 'columns.play' : 'columns.kind')}
               </TableHead>
-              <TableHead className="text-right text-xs">{t('columns.completed')}</TableHead>
+              <TableHead className="text-end text-xs">{t('columns.completed')}</TableHead>
               <TableHead className="text-xs">{t('columns.results')}</TableHead>
-              <TableHead className="text-right text-xs">{t('columns.successRate')}</TableHead>
-              <TableHead className="text-right text-xs">{t('columns.medianChange')}</TableHead>
-              <TableHead className="text-right text-xs">{t('columns.dismissed')}</TableHead>
+              <TableHead className="text-end text-xs">{t('columns.successRate')}</TableHead>
+              <TableHead className="text-end text-xs">{t('columns.medianChange')}</TableHead>
+              <TableHead className="text-end text-xs">{t('columns.dismissed')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -88,7 +88,7 @@ export function ScorecardTable({ rows, by = 'kind' }: { rows: ScorecardRow[]; by
               return (
                 <TableRow key={row.kind}>
                   <TableCell className="text-sm font-medium">{nameOf(row.kind)}</TableCell>
-                  <TableCell className="text-right text-sm tabular-nums">{row.completed}</TableCell>
+                  <TableCell className="text-end text-sm tabular-nums">{row.completed}</TableCell>
                   <TableCell>
                     {results.length > 0 ? (
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
@@ -104,7 +104,7 @@ export function ScorecardTable({ rows, by = 'kind' }: { rows: ScorecardRow[]; by
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     {rate == null ? (
                       <span className="text-xs text-muted-foreground">{t('tooFew')}</span>
                     ) : (
@@ -113,7 +113,7 @@ export function ScorecardTable({ rows, by = 'kind' }: { rows: ScorecardRow[]; by
                   </TableCell>
                   <TableCell
                     className={cn(
-                      'text-right text-sm tabular-nums',
+                      'text-end text-sm tabular-nums',
                       change == null || change === 0
                         ? 'text-muted-foreground'
                         : change > 0
@@ -123,7 +123,7 @@ export function ScorecardTable({ rows, by = 'kind' }: { rows: ScorecardRow[]; by
                   >
                     {change == null ? '—' : signedPercent(change)}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <p className="text-sm tabular-nums">{row.dismissed}</p>
                     {reason && (
                       <p className="text-[11px] text-muted-foreground">

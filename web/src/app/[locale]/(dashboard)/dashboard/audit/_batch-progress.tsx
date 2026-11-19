@@ -53,7 +53,7 @@ export function BatchProgress({
               </>
             )}
           </p>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ms-auto flex items-center gap-1">
             <Button
               variant={thisBatch ? 'secondary' : 'outline'}
               size="sm"
