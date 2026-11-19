@@ -95,6 +95,10 @@ Building the brief also reads a few of the pages AI cited. Their typical length 
 
 Once the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History.
 
+## Lists and tables the agent writes
+
+The Content Agent writes steps in order and rankings as a numbered list, never as paragraphs starting "1.", "2.", and takes any numbers written into a bulleted list's items out. On a comparison, alternatives or best-of page, the brief plans a section as a table, and the agent writes it with a row for each option and a column for each criterion. Its suggestions and rewrites can add tables too, so a side-by-side table rule can be met.
+
 ## Sources
 
 **Sources** shows what the draft is built from: **Prompts**, **Fan-outs** (the searches AI ran for your prompts), **Cited pages**, which AI quotes today, and **Search Console** queries. Each source shows where the draft uses it.
