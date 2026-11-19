@@ -34,6 +34,7 @@ import { formatDate, formatMoney, percentChange } from '@/lib/format';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { withInter } from '@/lib/pdf-font';
 import { auditScoreView } from '@/lib/reports/audit-score';
+import { shownMentionEvidence } from '@/lib/reports/mention-evidence';
 import type { ScoreRange } from '@/lib/audit/score-range';
 import { reportLook, type ReportBranding } from '@/lib/white-label/kit';
 
@@ -580,7 +581,7 @@ export function ReportPdfDocument({
               <Text style={[styles.tableHeaderCell, { width: 50 }]}>Date</Text>
               <Text style={[styles.tableHeaderCell, { flex: 1 }]}>How you were mentioned</Text>
             </View>
-            {payload.mentionEvidence.map((m, idx) => (
+            {shownMentionEvidence(payload.mentionEvidence).map((m, idx) => (
               <View key={`${m.promptText}-${idx}`} style={styles.tableRow}>
                 <Text style={[styles.cell, { width: 130, paddingRight: 6 }]}>{m.promptText}</Text>
                 <Text style={[styles.cell, { width: 60, color: MUTED }]}>{m.platform}</Text>

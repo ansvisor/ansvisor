@@ -42,6 +42,7 @@ import { ScoreRangeMark, useScoreRangeTip } from '@/components/audit/score-range
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
+import { shownMentionEvidence } from '@/lib/reports/mention-evidence';
 
 const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
 
@@ -664,7 +665,9 @@ export default function ReportDetailPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t('mentionEvidence')}</CardTitle>
-              <p className="text-sm text-muted-foreground">{t('mentionEvidenceDescription')}</p>
+              <p className="text-sm text-muted-foreground">
+                {t('mentionEvidenceDescription')} {t('newestFirst')}
+              </p>
             </CardHeader>
             <CardContent>
               <Table>
@@ -677,7 +680,7 @@ export default function ReportDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payload.mentionEvidence.map((m, idx) => (
+                  {shownMentionEvidence(payload.mentionEvidence).map((m, idx) => (
                     <TableRow key={`${m.promptText}-${idx}`}>
                       <TableCell className="max-w-[220px] truncate font-medium">
                         {m.promptText}

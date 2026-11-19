@@ -1,11 +1,11 @@
 ---
 title: Generate visibility reports
 route: /dashboard/reports
-keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score]
+keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score, mention evidence, newest first]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss, score range, plus or minus]
 plan: all
-updated: 2026-11-10
-last_checked: 2026-11-05
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -31,6 +31,10 @@ The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts
 ## Read a report
 
 A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it; **Site Audit Score** is the exception. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards.
+
+## Mention Evidence
+
+Mention Evidence lists the answers that mentioned you most in the period, newest first. Each row shows the prompt, the platform, the date and the passage around your name, as plain text without the answer's formatting. Reports made earlier read the same way.
 
 ## Site Audit Score
 
