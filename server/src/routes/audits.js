@@ -24,6 +24,7 @@ import {
   PlanLimitError,
 } from '../lib/plan-guard.js';
 import { buildAuditContext, normalizeUrl } from '../lib/audit/context.js';
+import { preferredAuditUrl } from '../lib/audit/audit-address.js';
 import { normStoredDomain } from '../lib/audit/host.js';
 import {
   AUDIT_RUN_TIMEOUT_MS,
@@ -239,6 +240,30 @@ async function readAuditBrand(brandId) {
 /** site_audits/site_audit_usage.source for a run's audits; a user's are the column default. */
 const sourceColumn = (source) => (source === 'auto' ? { source } : {});
 
+/** How many of the brand's latest audits tell which host its site answers at. */
+const KNOWN_URLS_AUDITS = 30;
+
+/**
+ * The addresses the brand's site gave its own pages in the brand's latest
+ * completed audits (final_url, which is the page's canonical address), newest
+ * first. Empty when they can't be read: the audit then fetches the address
+ * asked for.
+ */
+async function knownAuditUrls(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('site_audits')
+    .select('final_url')
+    .eq('brand_id', brandId)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(KNOWN_URLS_AUDITS);
+  if (error) {
+    logger.warn({ err: error, brandId }, 'known audit addresses unreadable');
+    return [];
+  }
+  return (data ?? []).flatMap((row) => (row.final_url ? [row.final_url] : []));
+}
+
 /**
  * Run the full audit (fetch → deterministic + LLM + Wikidata → score →
  * persist) for an already-created `running` row. Runs detached from the
@@ -256,7 +281,14 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
       supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', brandId),
     ]);
 
-    const ctx = await buildAuditContext(url);
+    // The page is fetched at the host its site answers at (www or not), not
+    // at the one a sitemap inventory or a typed address happened to use.
+    const ctx = await buildAuditContext(
+      preferredAuditUrl(url, [
+        ...(await knownAuditUrls(brandId)),
+        ...(domainRows ?? []).map((d) => d.domain),
+      ]),
+    );
     // The sites the brand trusts count as authority links (00449).
     ctx.trustedSources = brandRow?.trusted_sources ?? [];
 
