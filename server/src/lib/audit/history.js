@@ -39,9 +39,15 @@ export function parseListPage(query = {}) {
  * categories average the same way. So the last point is the card's number,
  * and a page's repeat audit moves the line by its share, not to its own
  * score. Rows are read NEWEST first; points come back oldest → newest, the
- * newest `limit` of them.
+ * newest `limit` of them. `onlyKeys`: the site's pages the card counts
+ * (sitePageKeys), when the site's pages are known.
  */
-export function buildTrendPoints(rowsNewestFirst, primaryHost, limit = TREND_LIMIT) {
+export function buildTrendPoints(
+  rowsNewestFirst,
+  primaryHost,
+  limit = TREND_LIMIT,
+  onlyKeys = null,
+) {
   if (!primaryHost) return [];
   const seen = new Set();
   const rows = [];
@@ -52,6 +58,8 @@ export function buildTrendPoints(rowsNewestFirst, primaryHost, limit = TREND_LIM
     if (r.total_score === null || r.total_score === undefined) continue;
     const page = pageIdentityForAudit(r);
     if (page.host !== primaryHost) continue;
+    // The site's pages, as the card counts them (sitePageKeys), when known.
+    if (onlyKeys && !onlyKeys.has(page.key.toLowerCase())) continue;
     rows.push({ ...r, pageKey: page.key });
   }
   rows.reverse();

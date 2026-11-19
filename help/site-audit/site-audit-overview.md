@@ -15,10 +15,10 @@ The **Site Audit** page sums up your audits: a summary line, four cards and a ch
 
 ## Summary and cards
 
-A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:
+A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards, the summary line and **Score over time** count the same pages: your site's, as your sitemap, Google Analytics and AI citations list them, less those you exclude.
 
-- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.
-- **Pages audited**: how many of your site's pages, as your sitemap, Google Analytics and AI citations list them, have an audit from the last 90 days, and how many don't. **See the … not audited** opens those in Opportunities.
+- **Site score**: the average score of each of those pages' latest audit, and its change from each page's previous audit.
+- **Pages audited**: how many of them have an audit, how many were never audited, and how many weren't in the last 90 days. **See the … not audited** opens those in Opportunities.
 - **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.
 - **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs.
 

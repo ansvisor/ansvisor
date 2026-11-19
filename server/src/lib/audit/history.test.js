@@ -107,6 +107,20 @@ describe('buildTrendPoints', () => {
     ).toEqual([]);
   });
 
+  it('counts only the site’s pages when they are known, as the card does', () => {
+    const newestFirst = [
+      row('b', 'https://example.com/not-in-sitemap', '2026-03-02T00:00:00Z', '0.2'),
+      row('a', 'https://example.com/', '2026-03-01T00:00:00Z', '0.8'),
+    ];
+    const points = buildTrendPoints(
+      newestFirst,
+      'example.com',
+      undefined,
+      new Set(['example.com/']),
+    );
+    expect(points.map((p) => [p.id, p.totalScore, p.pages])).toEqual([['a', 0.8, 1]]);
+  });
+
   it('returns nothing without a primary domain, and the newest points past the limit', () => {
     expect(buildTrendPoints([row('a', 'https://example.com/', 'x')], null)).toEqual([]);
     expect(buildTrendPoints(null, 'example.com')).toEqual([]);
