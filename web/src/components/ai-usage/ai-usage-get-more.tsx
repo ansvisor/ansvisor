@@ -78,7 +78,12 @@ export function AiUsageGetMore({
       ) : (
         plan !== 'enterprise' && (
           <Link
-            href="/dashboard/settings/billing"
+            // Growth buys AI usage top-ups on Billing's add-ons card (00546).
+            href={
+              plan === 'growth'
+                ? '/dashboard/settings/billing#plan-add-ons'
+                : '/dashboard/settings/billing'
+            }
             onClick={onFollow}
             className={buttonVariants({ variant: primary ? 'default' : 'outline', size: 'sm' })}
           >

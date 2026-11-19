@@ -83,7 +83,8 @@ describe('readability', () => {
     });
     expect(result.checks.find((c) => c.id === 'longSentences')).toMatchObject({ count: 0 });
     expect(result.checks.find((c) => c.id === 'answerFirst')!.points).toBe(15);
-    expect(result.score).toBe(77);
+    // Its short sentences cost nothing: 8 words or more on average is fine (SENTENCE_WORDS).
+    expect(result.score).toBe(90);
   });
 
   it('scores the page Site Audit’s test reads, as Site Audit does', () => {

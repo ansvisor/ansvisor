@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  eeatAwaitsAuthor,
   BAND_BAR_CLASSES,
   BAND_CLASSES,
   BAND_TEXT_CLASSES,
@@ -43,5 +44,14 @@ describe('quality', () => {
     expect(qualityPhase()).toBe(3);
     process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = 'yes';
     expect(qualityPhase()).toBe(0);
+  });
+});
+
+describe('eeatAwaitsAuthor (Content test 2026-11-19, item 8)', () => {
+  it('waits for an author: none picked, none confirmed from the site', () => {
+    expect(eeatAwaitsAuthor(null)).toBe(true);
+    expect(eeatAwaitsAuthor(null, { real: false })).toBe(true);
+    expect(eeatAwaitsAuthor(null, { real: true })).toBe(false);
+    expect(eeatAwaitsAuthor({ id: 'a1' })).toBe(false);
   });
 });
