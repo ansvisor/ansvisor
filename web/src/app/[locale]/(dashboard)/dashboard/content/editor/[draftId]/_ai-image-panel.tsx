@@ -247,7 +247,7 @@ export function AiImagePanel({
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div role="group" aria-label={t('style')} className="flex flex-wrap items-center gap-1">
-          <span className="mr-1 text-xs text-muted-foreground">{t('style')}</span>
+          <span className="me-1 text-xs text-muted-foreground">{t('style')}</span>
           {DRAFT_IMAGE_STYLES.map((s) => (
             <button
               key={s}
@@ -262,7 +262,7 @@ export function AiImagePanel({
           ))}
         </div>
         <div role="group" aria-label={t('ratio')} className="flex flex-wrap items-center gap-1">
-          <span className="mr-1 text-xs text-muted-foreground">{t('ratio')}</span>
+          <span className="me-1 text-xs text-muted-foreground">{t('ratio')}</span>
           {DRAFT_IMAGE_RATIOS.map((r) => (
             <button
               key={r}
@@ -295,7 +295,7 @@ export function AiImagePanel({
               data-model={m.id}
               onClick={() => setModel(m.id)}
               className={cn(
-                'flex w-full items-start justify-between gap-2 rounded-lg border px-3 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                'flex w-full items-start justify-between gap-2 rounded-lg border px-3 py-2 text-start outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
                 model === m.id ? 'border-foreground bg-muted/40' : 'bg-card hover:bg-muted/40',
               )}
             >
@@ -327,7 +327,7 @@ export function AiImagePanel({
 
       <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label={t('count')} className="flex items-center gap-1">
-          <span className="mr-1 text-xs text-muted-foreground">{t('count')}</span>
+          <span className="me-1 text-xs text-muted-foreground">{t('count')}</span>
           {COUNTS.map((n) => (
             <button
               key={n}
@@ -345,7 +345,7 @@ export function AiImagePanel({
           type="button"
           size="sm"
           variant={images.length ? 'outline' : 'default'}
-          className="ml-auto gap-1.5"
+          className="ms-auto gap-1.5"
           data-action="ai-image.generate"
           disabled={!model || busy !== null || prompt.trim().length < 3}
           onClick={() => void generate()}
@@ -358,7 +358,7 @@ export function AiImagePanel({
               : t('generate', { count })}
         </Button>
       </div>
-      {share && <p className="text-right text-xs text-muted-foreground">{share}</p>}
+      {share && <p className="text-end text-xs text-muted-foreground">{share}</p>}
 
       {failure && (
         <p
@@ -395,7 +395,7 @@ export function AiImagePanel({
                 {/* eslint-disable-next-line @next/next/no-img-element -- an option just stored, by its address */}
                 <img src={image.url} alt="" className="aspect-video w-full object-cover" />
                 {selected === i && (
-                  <span className="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                  <span className="absolute top-1.5 end-1.5 flex items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
                     <Check className="size-3" aria-hidden />
                     {t('selected')}
                   </span>

@@ -93,7 +93,7 @@ function FoldButton({
       onClick={onClick}
       className={cn(
         FOLD_ARROW,
-        'ml-auto outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'ms-auto outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
       )}
     >
       {folded ? '▾' : '▴'}
@@ -162,7 +162,7 @@ function MenuItem({
       onClick={onNavigate}
       className={cn(
         MENU_ROW,
-        sub && 'h-7 pl-[23px] text-[12.5px] leading-[18px]',
+        sub && 'h-7 ps-[23px] text-[12.5px] leading-[18px]',
         active && 'bg-sidebar-accent font-medium text-foreground',
       )}
     >
@@ -202,7 +202,7 @@ function SettingsMenu({
         className={MENU_ROW}
       >
         {t('settings')}
-        <span aria-hidden className={cn(FOLD_ARROW, 'ml-auto')}>
+        <span aria-hidden className={cn(FOLD_ARROW, 'ms-auto')}>
           {open ? '▴' : '▾'}
         </span>
       </button>
@@ -374,7 +374,7 @@ export function ChatMenuView({
         >
           <span aria-hidden>＋</span>
           {t('newChat')}
-          <kbd className="ml-auto font-sans text-[11px] text-muted-foreground">
+          <kbd className="ms-auto font-sans text-[11px] text-muted-foreground">
             {shortcutLabel('new', isMac)}
           </kbd>
         </button>
@@ -389,7 +389,7 @@ export function ChatMenuView({
             aria-label={inboxLabel}
             title={inboxLabel}
             onClick={onNavigate}
-            className="ml-auto inline-flex items-center gap-1 rounded-md bg-foreground/10 px-1.5 text-[10.5px] leading-4 tracking-normal text-foreground/80 normal-case outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="ms-auto inline-flex items-center gap-1 rounded-md bg-foreground/10 px-1.5 text-[10.5px] leading-4 tracking-normal text-foreground/80 normal-case outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             {needsYou > 0 && (
               <span aria-hidden className="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400" />
@@ -424,7 +424,7 @@ export function ChatMenuView({
           >
             {t('inbox')}
             {inbox > 0 && (
-              <span className="ml-auto inline-flex items-center gap-1.5">
+              <span className="ms-auto inline-flex items-center gap-1.5">
                 {needsYou > 0 && (
                   <span
                     aria-hidden
@@ -479,7 +479,7 @@ export function ChatMenuView({
           >
             {t('scheduled')}
             {scheduled > 0 && (
-              <span className="ml-auto min-w-[22px] rounded-md bg-foreground/10 px-1.5 text-center text-[11px] leading-[18px] text-foreground/80 tabular-nums">
+              <span className="ms-auto min-w-[22px] rounded-md bg-foreground/10 px-1.5 text-center text-[11px] leading-[18px] text-foreground/80 tabular-nums">
                 {scheduled}
               </span>
             )}
@@ -500,7 +500,7 @@ export function ChatMenuView({
           <SectionHead>
             {t('atWork')}
             <Count value={atWork.length} />
-            <DotLegend dots="menu" className="ml-0.5" />
+            <DotLegend dots="menu" className="ms-0.5" />
             <FoldButton
               folded={folded.atWork}
               label={t('toggleAtWork')}
@@ -521,7 +521,7 @@ export function ChatMenuView({
                   aria-expanded={allRuns}
                   aria-controls="chat-menu-at-work"
                   onClick={() => setAllRuns((was) => !was)}
-                  className="block w-full rounded-lg py-[5px] pr-2 pl-[33px] text-left text-xs text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  className="block w-full rounded-lg py-[5px] pe-2 ps-[33px] text-start text-xs text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
                   {allRuns ? t('showLess') : t('seeAll', { count: atWork.length })}
                 </button>

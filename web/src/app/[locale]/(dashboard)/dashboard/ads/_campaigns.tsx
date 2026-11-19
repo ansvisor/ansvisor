@@ -49,7 +49,7 @@ function PlanStrip() {
         {full ? t('full') : t('readOnly', { plan: PLANS.enterprise.name })}
       </span>
       {!full && (
-        <span className="ml-auto flex gap-2">
+        <span className="ms-auto flex gap-2">
           {upgrade?.isLocked ? (
             <Button
               variant="outline"
@@ -116,7 +116,7 @@ export function AdsCampaigns() {
           <CardDescription>{t('safety.note')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <ul className="list-disc space-y-1 pl-5 text-sm">
+          <ul className="list-disc space-y-1 ps-5 text-sm">
             {SAFETY.map((rule) => (
               <li key={rule}>{t(`safety.${rule}`)}</li>
             ))}

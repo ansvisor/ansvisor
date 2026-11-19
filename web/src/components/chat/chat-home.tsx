@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { Link, useRouter } from '@/i18n/navigation';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -182,7 +183,7 @@ function NewForYou({
               track('chat_focus_new_clicked', { area: pick.area, skill: pick.skill });
               onAsk(`/${pick.skill}`);
             }}
-            className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-xl border bg-card px-3 py-2.5 text-left outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+            className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-xl border bg-card px-3 py-2.5 text-start outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
           >
             <span className="rounded-md border px-1.5 py-px text-[10.5px] tracking-[.05em] text-muted-foreground uppercase">
               {t('skill')}
@@ -241,7 +242,7 @@ function StartWithQuestion({
                 track('chat_starter_clicked', { area: pick.area, index });
                 onAsk(question);
               }}
-              className="flex items-start gap-2 rounded-xl border bg-card px-3 py-2.5 text-left text-[13px] leading-[1.4] outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+              className="flex items-start gap-2 rounded-xl border bg-card px-3 py-2.5 text-start text-[13px] leading-[1.4] outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
             >
               <span aria-hidden="true" className="text-muted-foreground">
                 ›
@@ -297,7 +298,7 @@ function SinceBlock({
       <small className="mb-1 flex items-baseline gap-1.5 text-[11px] tracking-[.4px] text-muted-foreground uppercase">
         {label}
         <span
-          className="ml-auto tracking-normal normal-case"
+          className="ms-auto tracking-normal normal-case"
           title={t('lastVisit', { date: lastVisit })}
         >
           {t('when', { day })}
@@ -314,7 +315,7 @@ function SinceBlock({
         </span>
         <span
           className={cn(
-            'inline-flex items-center gap-[3px] rounded-full py-1 pr-[9px] pl-1.5 text-[13px] leading-none font-semibold tabular-nums',
+            'inline-flex items-center gap-[3px] rounded-full py-1 pe-[9px] ps-1.5 text-[13px] leading-none font-semibold tabular-nums',
             kind === 'drop'
               ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400'
               : 'bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400',
@@ -540,6 +541,7 @@ export function ChatHome({
   newMember?: boolean;
 }) {
   const t = useTranslations('chatShell.home');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const welcome = useChatWelcome(audience);
   const tour = useChatTour();
@@ -714,7 +716,7 @@ export function ChatHome({
       setStarting(false);
       // A read-only workspace, or a chat on the demo brand: the plans.
       if (started.code === 'subscription_inactive' || started.code === 'demo_brand') openUpgrade();
-      else toast.error(started.error ?? t('startFailed'));
+      else toast.error(serverError(started, started.error ?? t('startFailed')));
       return;
     }
     // The run goes on without this page: the chat picks up its stream.

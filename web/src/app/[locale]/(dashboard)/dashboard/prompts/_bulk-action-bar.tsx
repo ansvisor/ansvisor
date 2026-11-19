@@ -101,7 +101,7 @@ export function BulkActionBar({
     >
       <span className="text-xs font-medium">{count} selected</span>
       {progress}
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+      <div className="ms-auto flex flex-wrap items-center justify-end gap-1">
         {onTrackNow && trackNowCount > 0 && (
           <Button
             variant="outline"

@@ -1,8 +1,8 @@
-import { createTranslator } from 'next-intl';
 import { z } from 'zod';
-import messages from '../../../../messages/en.json';
+import type { UiLocale } from '@/i18n/locales';
 import { getAuditQuota, startSiteAudits } from '@/lib/actions/audits';
 import { contentUuid, isHttpUrl } from '@/lib/mcp/content-schemas';
+import { costLinesFor } from '../card-locale';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 import { listWords } from './targets';
 
@@ -16,8 +16,6 @@ import { listWords } from './targets';
  */
 
 const BRAND = FIXTURE_IDS.brand;
-
-const costT = createTranslator({ locale: 'en', messages, namespace: 'chatEngine.costs' });
 
 /**
  * The pages a start audits, as the API counts them (routes/audits.js
@@ -39,8 +37,12 @@ export function auditPages(urls: readonly string[]): string[] {
 }
 
 /** What a start uses of the month's audits, for its card; null when the plan has no limit. */
-export async function auditCost(urls: readonly string[]): Promise<string | null> {
+export async function auditCost(
+  urls: readonly string[],
+  locale?: UiLocale,
+): Promise<string | null> {
   const count = auditPages(urls).length;
+  const costT = await costLinesFor(locale);
   // Unread, the card still says it uses some: the API checks the quota when it starts.
   const quota = await getAuditQuota().catch(() => null);
   if (!quota) return costT('siteAuditUnknown', { count });
@@ -90,10 +92,10 @@ export const AUDIT_TOOLS = [
       input.force
         ? startSiteAudits(input.brand_id, input.urls, { force: true })
         : startSiteAudits(input.brand_id, input.urls),
-    target: async (input) => {
+    target: async (input, run) => {
       const pages = listWords(auditPages(input.urls));
       // What the card's Approve uses of the month's audits.
-      return [pages, await auditCost(input.urls)].filter(Boolean).join(' · ') || null;
+      return [pages, await auditCost(input.urls, run.locale)].filter(Boolean).join(' · ') || null;
     },
     fixture: { input: { brand_id: BRAND, urls: ['https://acme.example/pricing'] } },
   }),

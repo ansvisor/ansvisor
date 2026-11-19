@@ -48,6 +48,28 @@ export function jsonLd(ctx) {
   return { nodes, total, valid };
 }
 
+/**
+ * Every typed node, the nested ones too: a FAQPage set as a WebPage's
+ * mainEntity, as Webflow writes it (2026-11-19), sits inside another node,
+ * not at the top of the @graph. Each node once, depth-first.
+ */
+export function allNodes(nodes) {
+  const out = [];
+  const seen = new Set();
+  const walk = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+    if (!value || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    if (value['@type']) out.push(value);
+    Object.values(value).forEach(walk);
+  };
+  walk(nodes);
+  return out;
+}
+
 /** Normalize a node's @type into a lowercase string array. */
 export function typesOf(node) {
   const t = node?.['@type'];

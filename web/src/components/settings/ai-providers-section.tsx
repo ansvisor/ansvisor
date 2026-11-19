@@ -420,7 +420,7 @@ export function AiProvidersSection() {
                         </div>
 
                         {canAdmin && editing !== provider && (
-                          <div className="flex shrink-0 items-center gap-2 pl-13 @lg:pl-0">
+                          <div className="flex shrink-0 items-center gap-2 ps-13 @lg:ps-0">
                             {row && !row.active && !locked && (
                               <Button
                                 variant="outline"
@@ -431,7 +431,7 @@ export function AiProvidersSection() {
                                 })}
                               >
                                 {switching === provider && (
-                                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                  <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />
                                 )}
                                 {t('agent_useForChat')}
                               </Button>
@@ -447,7 +447,7 @@ export function AiProvidersSection() {
                                 })}
                               >
                                 {testing === provider && (
-                                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                  <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />
                                 )}
                                 {testing === provider ? t('agent_testing') : t('agent_test')}
                               </Button>
@@ -538,7 +538,7 @@ export function AiProvidersSection() {
                     if (confirmRemove) void handleRemove(confirmRemove);
                   }}
                 >
-                  {removing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {removing && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                   {t('remove')}
                 </Button>
               </DialogFooter>
@@ -741,7 +741,7 @@ function ProviderKeyForm({
           {tCommon('cancel')}
         </Button>
         <Button type="submit" size="sm" disabled={saving || !apiKey.trim()}>
-          {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+          {saving && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
           {tCommon('save')}
         </Button>
       </div>

@@ -162,7 +162,7 @@ export function ChatPanelPage({
     <div
       className={cn(
         className,
-        'transition-[padding] duration-200 min-[1100px]:pr-(--chat-panel-push)',
+        'transition-[padding] duration-200 min-[1100px]:pe-(--chat-panel-push)',
       )}
       style={{ '--chat-panel-push': `${push}px` } as CSSProperties}
     >

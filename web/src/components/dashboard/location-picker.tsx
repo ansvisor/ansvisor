@@ -151,7 +151,7 @@ export function LocationPicker({
     <div>
       <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
         {label}
-        <span className="ml-1 font-normal">
+        <span className="ms-1 font-normal">
           {maxSelectable === null
             ? `· ${value.length} ${countNoun}`
             : `· ${value.length} of ${maxSelectable} available`}

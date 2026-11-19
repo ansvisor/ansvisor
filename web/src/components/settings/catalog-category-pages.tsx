@@ -125,7 +125,7 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
         <div className="relative overflow-x-auto rounded-md border bg-card">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-muted-foreground">
+              <tr className="text-start text-xs text-muted-foreground">
                 <th className="px-3 py-2 font-medium">{t('category')}</th>
                 <th className="px-3 py-2 font-medium">{t('productsHeading')}</th>
                 <th className="px-3 py-2 font-medium">{t('pageHeading')}</th>
@@ -167,7 +167,7 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
                         />
                         <div className="flex flex-wrap gap-2">
                           <Button type="submit" size="sm" disabled={busy || !url.trim()}>
-                            {busy && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                            {busy && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
                             {t('save')}
                           </Button>
                           <Button
@@ -226,7 +226,7 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
                     )}
                   </td>
                   {canManage && open !== category.name && (
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2 text-end">
                       <Button
                         size="sm"
                         variant="outline"

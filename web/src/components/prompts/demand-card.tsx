@@ -110,7 +110,7 @@ function PaidState({ demand, signal }: { demand: PromptDemand; signal: PaidDeman
   }
   return (
     <StateText>
-      {state === 'pending' && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
+      {state === 'pending' && <Loader2 className="me-1 inline h-3 w-3 animate-spin" />}
       {t(state)}
     </StateText>
   );

@@ -1486,6 +1486,29 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
   });
 });
 
+describe('a draft needs a real page title', () => {
+  it('create_draft and update_draft refuse a line of the chat, with words for the model', () => {
+    const create = chatTool('create_draft')!;
+    const base = INPUTS.create_draft as object;
+    expect(create.inputSchema.safeParse(base).success).toBe(true);
+    for (const title of [
+      'Here are the opportunities from the last 30 …',
+      'Here are the opportunities from the last 30 days',
+    ]) {
+      const result = create.inputSchema.safeParse({ ...base, title });
+      expect(result.success).toBe(false);
+      expect(JSON.stringify(result.error?.issues)).toMatch(/not a page title/);
+    }
+    const update = chatTool('update_draft')!;
+    expect(
+      update.inputSchema.safeParse({ draft_id: DRAFT, title: 'Sure, here is a new title' }).success,
+    ).toBe(false);
+    expect(update.inputSchema.safeParse({ draft_id: DRAFT, title: 'Pricing FAQ' }).success).toBe(
+      true,
+    );
+  });
+});
+
 describe('saving a skill, by role and mode (W3-06, CHAT-20 §9 row 75)', () => {
   const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';
   async function decide(userId: string, mode: ChatMode, tainted = false) {

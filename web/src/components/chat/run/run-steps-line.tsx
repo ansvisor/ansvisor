@@ -132,7 +132,7 @@ export function RunStepsLine({
           aria-expanded={open}
           aria-controls={listId}
           onClick={() => setOpen(!open)}
-          className="flex max-w-full items-start gap-1.5 rounded-md text-left text-[13px] text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="flex max-w-full items-start gap-1.5 rounded-md text-start text-[13px] text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {line}
           <ChevronRight
@@ -145,7 +145,7 @@ export function RunStepsLine({
         </button>
       )}
       {listed.length > 0 && (
-        <div id={listId} hidden={!open} className="mt-1 ml-[6px] border-l pl-3">
+        <div id={listId} hidden={!open} className="mt-1 ms-[6px] border-s ps-3">
           <ul aria-label={t('list')} className="m-0 list-none space-y-0.5 p-0">
             {listed.map((step) => (
               <StepItem
@@ -223,7 +223,7 @@ function StepItem({
           data-action="answer.openStep"
           aria-expanded={opened}
           onClick={onToggle}
-          className="flex max-w-full items-start gap-1.5 rounded-md py-0.5 text-left hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="flex max-w-full items-start gap-1.5 rounded-md py-0.5 text-start hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           <StepMark state={step.status} className="mt-px" />
           <span className="min-w-0 [overflow-wrap:anywhere]">{words}</span>
@@ -235,11 +235,11 @@ function StepItem({
         </p>
       )}
       {((detail && opened) || reason) && (
-        <p className="pb-0.5 pl-5 text-muted-foreground/90 [overflow-wrap:anywhere]">
+        <p className="pb-0.5 ps-5 text-muted-foreground/90 [overflow-wrap:anywhere]">
           {detail && opened ? detail : reason}
         </p>
       )}
-      {step.parts && step.parts.length > 0 && <RunParts parts={step.parts} className="pl-5" />}
+      {step.parts && step.parts.length > 0 && <RunParts parts={step.parts} className="ps-5" />}
     </li>
   );
 }

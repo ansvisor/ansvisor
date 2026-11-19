@@ -243,7 +243,7 @@ export function AiPipelineSection({
           {t('needs')}
         </span>
         <span className="text-xs text-muted-foreground">{t('subtitle')}</span>
-        <Badge variant="outline" className="ml-auto text-xs">
+        <Badge variant="outline" className="ms-auto text-xs">
           {rangeLabel}
         </Badge>
       </div>
@@ -326,27 +326,27 @@ function Figures({ result }: { result: TrafficAiPipeline }) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="pl-6">{t('columns.engine')}</TableHead>
-                      <TableHead className="text-right">{t('columns.contacts')}</TableHead>
-                      <TableHead className="text-right">{t('columns.deals')}</TableHead>
-                      <TableHead className="text-right">{t('columns.wonRevenue')}</TableHead>
-                      <TableHead className="pr-6 text-right">{t('columns.openPipeline')}</TableHead>
+                      <TableHead className="ps-6">{t('columns.engine')}</TableHead>
+                      <TableHead className="text-end">{t('columns.contacts')}</TableHead>
+                      <TableHead className="text-end">{t('columns.deals')}</TableHead>
+                      <TableHead className="text-end">{t('columns.wonRevenue')}</TableHead>
+                      <TableHead className="pe-6 text-end">{t('columns.openPipeline')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {result.byEngine.map((row) => (
                       <TableRow key={row.source} className="hover:bg-muted/50">
-                        <TableCell className="pl-6 text-sm font-medium">
+                        <TableCell className="ps-6 text-sm font-medium">
                           {getPlatformName(row.source)}
                         </TableCell>
-                        <TableCell className="text-right text-sm font-semibold">
+                        <TableCell className="text-end text-sm font-semibold">
                           {num(row.contacts)}
                         </TableCell>
-                        <TableCell className="text-right text-sm">{num(row.deals)}</TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">
+                        <TableCell className="text-end text-sm">{num(row.deals)}</TableCell>
+                        <TableCell className="text-end text-sm tabular-nums">
                           {row.wonRevenue ? money(row.wonRevenue, currency) : '—'}
                         </TableCell>
-                        <TableCell className="pr-6 text-right text-sm tabular-nums">
+                        <TableCell className="pe-6 text-end text-sm tabular-nums">
                           {row.openPipeline ? money(row.openPipeline, currency) : '—'}
                         </TableCell>
                       </TableRow>
@@ -368,17 +368,17 @@ function Figures({ result }: { result: TrafficAiPipeline }) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="pl-6">{t('columns.page')}</TableHead>
-                      <TableHead className="text-right">{t('columns.contacts')}</TableHead>
-                      <TableHead className="text-right">{t('columns.deals')}</TableHead>
-                      <TableHead className="text-right">{t('columns.wonRevenue')}</TableHead>
-                      <TableHead className="pr-6">{t('columns.topEngine')}</TableHead>
+                      <TableHead className="ps-6">{t('columns.page')}</TableHead>
+                      <TableHead className="text-end">{t('columns.contacts')}</TableHead>
+                      <TableHead className="text-end">{t('columns.deals')}</TableHead>
+                      <TableHead className="text-end">{t('columns.wonRevenue')}</TableHead>
+                      <TableHead className="pe-6">{t('columns.topEngine')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {result.byPage.map((row) => (
                       <TableRow key={row.page} className="hover:bg-muted/50">
-                        <TableCell className="max-w-[260px] pl-6">
+                        <TableCell className="max-w-[260px] ps-6">
                           <span
                             className="line-clamp-1 font-mono text-xs text-muted-foreground"
                             title={row.page}
@@ -386,14 +386,14 @@ function Figures({ result }: { result: TrafficAiPipeline }) {
                             {pathOf(row.page)}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right text-sm font-semibold">
+                        <TableCell className="text-end text-sm font-semibold">
                           {num(row.contacts)}
                         </TableCell>
-                        <TableCell className="text-right text-sm">{num(row.deals)}</TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">
+                        <TableCell className="text-end text-sm">{num(row.deals)}</TableCell>
+                        <TableCell className="text-end text-sm tabular-nums">
                           {row.wonRevenue ? money(row.wonRevenue, currency) : '—'}
                         </TableCell>
-                        <TableCell className="pr-6 text-sm">
+                        <TableCell className="pe-6 text-sm">
                           {row.topSource ? getPlatformName(row.topSource) : '—'}
                         </TableCell>
                       </TableRow>

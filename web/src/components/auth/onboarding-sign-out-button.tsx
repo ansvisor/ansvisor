@@ -30,7 +30,7 @@ export function OnboardingSignOutButton() {
       type="button"
       onClick={handleSignOut}
       disabled={isSigningOut}
-      className="fixed bottom-6 right-6 z-50 flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+      className="fixed bottom-6 end-6 z-50 flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
     >
       <LogOut className="h-3.5 w-3.5" />
       {tAuth('signOut')}

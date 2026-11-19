@@ -90,9 +90,9 @@ afterEach(() => {
 });
 
 describe('OpportunityActions', () => {
-  it('puts Send to Actions, Generate Brief and Send to Editor in front, in that order', async () => {
+  it('puts Send to Action Center, Build brief and Send to Editor in front, in that order', async () => {
     await render(props());
-    expect(front()).toEqual(['Send to Actions', 'Generate Brief', 'Send to Editor', 'Export']);
+    expect(front()).toEqual(['Send to Action Center', 'Build brief', 'Send to Editor', 'Export']);
     await act(async () => button('Send to Editor').click());
     expect(handlers.start).toHaveBeenCalled();
   });
@@ -101,8 +101,8 @@ describe('OpportunityActions', () => {
     const writeThis = vi.fn();
     await render(props({ content: { ...props().content, onWriteThis: writeThis } }));
     expect(front()).toEqual([
-      'Send to Actions',
-      'Generate Brief',
+      'Send to Action Center',
+      'Build brief',
       'Send to Editor',
       'Write this',
       'Export',
@@ -113,7 +113,7 @@ describe('OpportunityActions', () => {
     expect(handlers.start).not.toHaveBeenCalled();
     // Open draft takes both places once a draft is being written.
     await render(props({ content: { ...props().content, onWriteThis: writeThis, draftId: 'd7' } }));
-    expect(front()).toEqual(['Send to Actions', 'Generate Brief', 'Open draft', 'Export']);
+    expect(front()).toEqual(['Send to Action Center', 'Build brief', 'Open draft', 'Export']);
   });
 
   it('shows each one done in its place', async () => {
@@ -124,7 +124,7 @@ describe('OpportunityActions', () => {
         content: { ...props().content, draftId: 'd7' },
       }),
     );
-    expect(front()).toEqual(['Open in Actions', 'Brief Generated', 'Open draft', 'Export']);
+    expect(front()).toEqual(['Open in Action Center', 'Brief built', 'Open draft', 'Export']);
     expect(container.querySelector('a')!.getAttribute('href')).toBe(
       '/dashboard/action-center/actions?action=a7',
     );
@@ -136,7 +136,7 @@ describe('OpportunityActions', () => {
     await render(props({ content: { ...props().content, draftId: undefined } }));
     expect(button('Send to Editor').disabled).toBe(true);
     await render(props({ content: { ...props().content, canStart: false } }));
-    expect(front()).toEqual(['Send to Actions', 'Generate Brief', 'Export']);
+    expect(front()).toEqual(['Send to Action Center', 'Build brief', 'Export']);
   });
 
   it('offers Export CSV, Excel and Word, one under the other', async () => {
@@ -161,8 +161,8 @@ describe('OpportunityActions', () => {
       props({ content: { ...props().content, lookupFailed: true, onRetry: handlers.retry } }),
     );
     expect(front()).toEqual([
-      'Send to Actions',
-      'Generate Brief',
+      'Send to Action Center',
+      'Build brief',
       "Couldn't check for a draft · Retry",
       'Export',
     ]);

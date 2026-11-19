@@ -216,7 +216,7 @@ export function AgentDenial({ denial, onClose }: { denial: ChatDenialCard; onClo
         data-action="denial.close"
         aria-label={t('closeDenial')}
         onClick={onClose}
-        className="absolute top-0 right-0 z-10 flex size-7 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="absolute top-0 end-0 z-10 flex size-7 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <X className="size-4" aria-hidden />
       </button>

@@ -2,6 +2,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { readAllRpcRows } from '../rpc-pages.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
+import { addressesByLanguage } from '../i18n.js';
 import { appUrl, resolveRecipients } from '../pulse/engine.js';
 import { untrackedGoogleQueries } from '../untracked-queries.js';
 import {
@@ -165,31 +166,55 @@ export async function readDigestData(brandId, week) {
   };
 }
 
-/** What the e-mail says and shows, from the numbers. */
+/**
+ * The words of the digest that depend on the reader's language (LOC-008):
+ * the summary line and the share of traffic. English when none.
+ */
+export function digestWords(data, locale) {
+  const visits = Number(data.cur.visits) || 0;
+  return {
+    share: data.gaSessions ? formatShare(visits, data.gaSessions, locale) : null,
+    sentences: summarySentences(
+      {
+        visits,
+        prevVisits: Number(data.prev.visits) || 0,
+        platforms: data.cur.platforms ?? [],
+        gaSessions: data.gaSessions ?? null,
+        platformValue: data.platformValue ?? null,
+        citedNotClicked: data.citedNotClicked ?? 0,
+        untrackedQueries: data.untrackedQueries ?? 0,
+      },
+      locale,
+    ),
+  };
+}
+
+/** What the e-mail says and shows, from the numbers (the record keeps it in English). */
 export function digestContent(data, week) {
   const visits = Number(data.cur.visits) || 0;
   const prevVisits = Number(data.prev.visits) || 0;
   const platforms = topPlatforms(data.cur.platforms ?? []);
+  const { share, sentences } = digestWords(data);
   return {
     visits,
     prevVisits,
     change: visitChangePct(visits, prevVisits),
     // The cards and charts (the summary line says the same in words).
-    share: data.gaSessions ? formatShare(visits, data.gaSessions) : null,
+    share,
     citedNotClicked: data.citedNotClicked ?? 0,
     platforms,
     days: dailyVisits(week, data.cur.days ?? []),
-    sentences: summarySentences({
-      visits,
-      prevVisits,
-      platforms: data.cur.platforms ?? [],
-      gaSessions: data.gaSessions ?? null,
-      platformValue: data.platformValue ?? null,
-      citedNotClicked: data.citedNotClicked ?? 0,
-      untrackedQueries: data.untrackedQueries ?? 0,
-    }),
+    sentences,
     changes: topChanges(data),
   };
+}
+
+/** One outcome for the sends of all languages: an unknown one stands (it may have gone), then sent, then refused. */
+function combine(outcomes) {
+  for (const outcome of ['unknown', 'sent', 'refused']) {
+    if (outcomes.includes(outcome)) return outcome;
+  }
+  return 'skipped';
 }
 
 /**
@@ -260,21 +285,36 @@ export async function sendTrafficDigestForBrand(
   let recipients;
   // Nothing to send to, or Resend isn't set up: the week is done all the same.
   let outcome = 'skipped';
+  // Those whose language's send went.
+  let reached = 0;
   try {
     recipients = await resolveRecipients(brand.organization_id, settings, brandId);
     if (recipients.length) {
       const settingsUrl = `${appUrl()}/dashboard/settings?tab=notifications`;
-      const { subject, html } = renderTrafficDigestEmail({
-        brandName: brand.name,
-        week,
-        ...content,
-        trafficUrl: `${appUrl()}/dashboard/traffic`,
-        settingsUrl,
-      });
+      // Each in their own language (LOC-008): one send per language.
+      const groups = await addressesByLanguage(brand.organization_id, recipients);
       // Marked sent before it goes. When this fails, nothing went out.
       await updateDigest(row.id, { sent_at: new Date().toISOString() }, retryWaitMs);
-      outcome = await sendTrafficDigestEmail({ to: recipients, subject, html, settingsUrl });
-      // Resend answered with an error: nothing went out.
+      const outcomes = [];
+      for (const [locale, to] of groups) {
+        const { subject, html } = renderTrafficDigestEmail({
+          brandName: brand.name,
+          week,
+          ...content,
+          ...digestWords(data, locale),
+          trafficUrl: `${appUrl()}/dashboard/traffic`,
+          settingsUrl,
+          locale,
+        });
+        const sent = await sendTrafficDigestEmail({ to, subject, html, settingsUrl });
+        outcomes.push(sent);
+        if (sent === 'sent') reached += to.length;
+        else if (sent === 'refused' && groups.length > 1) {
+          logger.warn({ brandId, locale }, '[traffic-digest] Resend refused one language');
+        }
+      }
+      outcome = combine(outcomes);
+      // Resend answered with an error for every language: nothing went out.
       if (outcome === 'refused') throw new Error('Resend refused the digest');
     }
   } catch (err) {
@@ -294,7 +334,7 @@ export async function sendTrafficDigestForBrand(
       row.id,
       {
         email_sent: emailSent,
-        email_recipient_count: emailSent ? recipients.length : 0,
+        email_recipient_count: emailSent ? reached : 0,
         sent_at: new Date().toISOString(),
       },
       retryWaitMs,

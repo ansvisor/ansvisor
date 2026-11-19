@@ -37,9 +37,9 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 
 /**
  * The opportunity panel's actions (the user's spec): in front, in this
- * order: Send to Actions, Generate Brief, Send to Editor, and Write this
+ * order: Send to Action Center, Build brief, Send to Editor, and Write this
  * (customer priorities item 9) as the main one. Each turns into its state in
- * place once done (Open in Actions, Brief generated, Open draft, which
+ * place once done (Open in Action Center, Brief built, Open draft, which
  * takes both Send to Editor's and Write this's place). The rest sit in the
  * "…" menu on the right.
  */
@@ -57,9 +57,9 @@ export function OpportunityActions({
   onRestore,
   onDismiss,
 }: {
-  /** The Action Center action it was sent to: Open in Actions takes Send's place. */
+  /** The Action Center action it was sent to: Open in Action Center takes Send's place. */
   actionId: string | null;
-  /** Send to Actions, when the opportunity can still go there; `sending` while it does. */
+  /** Send to Action Center, when the opportunity can still go there; `sending` while it does. */
   sendToActions: { sending: boolean; disabled: boolean; onSend: () => void } | null;
   brief: {
     generated: boolean;
@@ -186,7 +186,7 @@ export function OpportunityActions({
 
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={<Button variant="outline" size="sm" className="ml-auto gap-2" />}
+          render={<Button variant="outline" size="sm" className="ms-auto gap-2" />}
         >
           <Download className="h-4 w-4" />
           {t('exportOne.button')}

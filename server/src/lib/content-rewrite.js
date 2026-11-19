@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { HEADING_LIMITS, passageKey } from './content-agent.js';
 import { HEALTH_RULE } from './content-health.js';
 import { RESEARCH_RULE } from './content-research.js';
+import { numberedLists } from './content-lists.js';
 import { linkKey } from './content-links.js';
 import { sourcesField } from './content-sources.js';
 import { textLength } from './page-content.js';
@@ -42,6 +43,13 @@ const PAGE_TAGS = new Set([
   'ul',
   'ol',
   'li',
+  // A comparison as a table (Content test 2026-11-19, item 12).
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
   'strong',
   'em',
   'b',
@@ -72,7 +80,8 @@ ${HEALTH_RULE}
 - Headings are one short line: an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}. Never put a sentence or an answer in a heading.
 - Each kept line, e.g. <p>[[KEEP 1]]</p>, stands for a block kept word for word: a passage AI assistants quote today, a table, an image, an HTML block or a quote, described under the page. Write it exactly as <p>[[KEEP n]]</p>, on its own, outside lists and paragraphs, once each, where it fits the page; never change, split, merge or drop one, and don't repeat what it says.
 - Keep the page's links on the words they explain. Link only to a URL the page already links to or one listed for you to link to, copied exactly, as <a href="URL">the words</a>. Never invent a URL, and never link a heading.
-- HTML only: h1, h2, h3, p, ul, ol, li, strong, em and a. No Markdown, no code fences, no classes, styles or other tags.
+- Steps in order and rankings as an <ol>, its items without numbers of their own: never paragraphs starting "1.", "2.". A comparison of options by the same criteria as a table, a row per option, the first column its name.
+- HTML only: h1, h2, h3, p, ul, ol, li, table, tr, th, td, strong, em and a. No Markdown, no code fences, no classes, styles or other tags.
 - "reason" says in one short sentence what you changed, e.g. "cut to about 8,000 characters and answered each heading first".
 - Write in the page's own language.`;
 
@@ -256,7 +265,8 @@ export function cleanPageHtml(html, links, { h1Kept = false, originalH1 = null }
   }
   if (run.length) flush(null);
   if (!h1Kept && !$('h1').length && originalH1) root.prepend(originalH1);
-  return $.html().trim();
+  // Numbered paragraphs, or numbers written into a list's items: a numbered list.
+  return numberedLists($.html().trim());
 }
 
 /** Whether the model's answer is a page in HTML, not Markdown or plain text. */

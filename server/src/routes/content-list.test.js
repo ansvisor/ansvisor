@@ -11,6 +11,7 @@ import express from 'express';
  */
 
 let orders;
+let ins;
 let server;
 let baseUrl;
 
@@ -39,7 +40,13 @@ async function startApp() {
       {},
       {
         get: (_t, op) => {
-          if (op === 'then') return (resolve) => resolve({ data: [], error: null, count: 0 });
+          if (op === 'then') return (resolve) => resolve({ data: [], error: null, count: 7 });
+          if (op === 'in') {
+            return (column, values) => {
+              ins.push([column, values]);
+              return chain;
+            };
+          }
           if (op === 'order') {
             return (column, options) => {
               orders.push([column, options?.ascending]);
@@ -79,6 +86,7 @@ const list = (query = '') => fetch(`${baseUrl}/brand/b1${query}`);
 
 beforeEach(async () => {
   orders = [];
+  ins = [];
   await startApp();
 });
 
@@ -113,5 +121,19 @@ describe('GET /brand/:brandId order', () => {
       ['opportunity_score', false],
       ['id', true],
     ]);
+  });
+});
+
+describe('GET /brand/:brandId open count (Content test 2026-11-19, item 10)', () => {
+  it('counts the open ones apart from all statuses, for "Available"', async () => {
+    const res = await list();
+    expect(ins).toContainEqual(['status', ['new', 'reviewed', 'sent', 'in_progress']]);
+    await expect(res.json()).resolves.toMatchObject({ total: 7, open: 7 });
+  });
+
+  it('counts a status picked as its own list', async () => {
+    const res = await list('?status=done');
+    expect(ins.some(([column]) => column === 'status')).toBe(false);
+    await expect(res.json()).resolves.toMatchObject({ total: 7, open: 7 });
   });
 });

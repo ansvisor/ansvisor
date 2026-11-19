@@ -13,6 +13,10 @@ sources: [docs/guides/content-optimization.mdx, docs/guides/content-editor.mdx]
 ---
 The **Opportunities** page, under **Content** in the sidebar, lists content opportunities: what to write or change so AI answers name you where they don't yet. Ansvisor suggests them on its own as tracking data comes in. An opportunity is built for a group of related prompts that one piece of content can answer, or for a single prompt. From each one you can start writing, plan it, brief it or send it on.
 
+## What the counts count
+
+With **All Statuses**, the cards above the list count done and dismissed opportunities too, and say so. The **Available** count beside **Opportunities** counts only the ones still to do. Pick a status to count that status alone.
+
 ## What each row shows
 
 - the action to take, with what it was built for: a topic and its number of prompts, **Single prompt**, or the Action Center action it came from;
@@ -22,6 +26,10 @@ The **Opportunities** page, under **Content** in the sidebar, lists content oppo
 - its **Status**: New, Reviewed, Sent to Workflow, In Progress, Done, Dismissed or Archived.
 
 Above the list, cards count the **Total Opportunities** and the **High Impact** ones, and give the **Avg. Score**. On plans with monthly limits, **This billing period** shows how many new opportunities and content briefs are left, and when they reset.
+
+## In your language
+
+Ansvisor writes each opportunity's title and reason in English. When your interface language is another, the ones on your screen show in your language: in English for a moment the first time, then translated. Each is translated once and kept, so teammates who use the same language see it at once. Search still matches the English words.
 
 ## Filter, sort and export
 

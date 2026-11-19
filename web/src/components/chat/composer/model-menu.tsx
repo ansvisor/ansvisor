@@ -123,7 +123,7 @@ export function ModelMenu({
   const updated = ready?.menu.updatedAt;
   const today = updated ? new Date(updated).toDateString() === new Date().toDateString() : false;
   const row =
-    'flex w-full items-center gap-2 rounded-[9px] px-2 py-[7px] text-left text-[13px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent';
+    'flex w-full items-center gap-2 rounded-[9px] px-2 py-[7px] text-start text-[13px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent';
 
   const pick = (model: string) => {
     onChange({ model, effort: choice.effort });
@@ -136,7 +136,7 @@ export function ModelMenu({
       role="dialog"
       aria-label={t('label')}
       data-slot="model-menu"
-      className="absolute left-0 bottom-full z-30 mb-2 w-[min(340px,calc(100vw-2rem))] rounded-[14px] border bg-popover p-1.5 text-popover-foreground shadow-[0_12px_32px_rgba(10,10,10,.12)]"
+      className="absolute start-0 bottom-full z-30 mb-2 w-[min(340px,calc(100vw-2rem))] rounded-[14px] border bg-popover p-1.5 text-popover-foreground shadow-[0_12px_32px_rgba(10,10,10,.12)]"
     >
       <div className="px-2 pt-1 pb-1.5 text-xs font-semibold">{t('title')}</div>
       {loaded.state === 'loading' && (
@@ -195,7 +195,7 @@ export function ModelMenu({
                 <span className="min-w-0 flex-1">
                   {offeredModel(model.id)?.label ?? model.name}
                   {model.yourKey && (
-                    <i className="ml-1.5 rounded-[5px] border px-1 text-[10px] text-muted-foreground not-italic">
+                    <i className="ms-1.5 rounded-[5px] border px-1 text-[10px] text-muted-foreground not-italic">
                       {t('yourKey')}
                     </i>
                   )}
@@ -225,7 +225,7 @@ export function ModelMenu({
           <div className="border-t px-2 pt-2 pb-1.5">
             <div className="mb-1 flex items-center text-xs font-semibold">
               {t('effortTitle')}
-              <span className="ml-auto font-normal text-muted-foreground">{t('effortHint')}</span>
+              <span className="ms-auto font-normal text-muted-foreground">{t('effortHint')}</span>
             </div>
             <span
               role="radiogroup"
@@ -261,7 +261,7 @@ export function ModelMenu({
               <div className="flex items-center gap-2">
                 <span className="font-medium">{t('ownKey')}</span>
                 {ready.access.ownKeys.state === 'locked' ? (
-                  <span className="ml-auto text-right text-muted-foreground">
+                  <span className="ms-auto text-end text-muted-foreground">
                     {t('ownKeyLocked', { plan: ready.access.planName ?? '' })}
                   </span>
                 ) : onOpenKeys ? (
@@ -272,7 +272,7 @@ export function ModelMenu({
                       onClose();
                       onOpenKeys();
                     }}
-                    className="ml-auto text-right text-foreground underline underline-offset-2"
+                    className="ms-auto text-end text-foreground underline underline-offset-2"
                   >
                     {ready.access.ownKeys.state === 'kept' && ready.access.ownKeys.until
                       ? t('ownKeyUntil', { date: formatMonthDay(ready.access.ownKeys.until) })
@@ -282,7 +282,7 @@ export function ModelMenu({
                   <Link
                     data-action="model.ownKeys"
                     href={AI_PROVIDERS_HREF}
-                    className="ml-auto text-right text-foreground underline underline-offset-2"
+                    className="ms-auto text-end text-foreground underline underline-offset-2"
                   >
                     {ready.access.ownKeys.state === 'kept' && ready.access.ownKeys.until
                       ? t('ownKeyUntil', { date: formatMonthDay(ready.access.ownKeys.until) })
@@ -302,7 +302,7 @@ export function ModelMenu({
                 <Link
                   data-action="model.seePlans"
                   href={BILLING_HREF}
-                  className="ml-auto text-foreground underline underline-offset-2"
+                  className="ms-auto text-foreground underline underline-offset-2"
                 >
                   {t('seePlans')}
                 </Link>
@@ -316,7 +316,7 @@ export function ModelMenu({
         <div data-slot="model-usage" className="border-t px-2 pt-2 pb-1.5 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-medium">{t('usage')}</span>
-            <span className="ml-auto text-muted-foreground tabular-nums">
+            <span className="ms-auto text-muted-foreground tabular-nums">
               {usage.periodEnd
                 ? t('usageLine', {
                     percent: percentLabel(usage.percentUsed),

@@ -13,6 +13,7 @@ import {
   rebuildSources,
 } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { brandFactSources } from './content-brand-facts.js';
 import { bannedPhrasesIn, readBannedPhrases } from './content-rules.js';
 import {
   RESEARCH_RULE,
@@ -68,6 +69,7 @@ import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 import { carefulLine, carefulRules } from './content-suggestion-stats.js';
 import { livePageLine, readLivePage } from './content-live-page.js';
 import { factsForPage, pageNames } from './fact-scope.js';
+import { numberedLists } from './content-lists.js';
 import { logger } from './logger.js';
 import { objectOptions } from './structured-output.js';
 
@@ -203,7 +205,7 @@ export const suggestionsSchema = z.object({
         after: z
           .string()
           .describe(
-            `replace: the new words, as plain text with links only as <a href> to the URLs listed (a heading stays one line: an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}); insert: the blocks to add, as simple HTML (h2, h3, p, ul, ol, li, strong, em, a).`,
+            `replace: the new words, as plain text with links only as <a href> to the URLs listed (a heading stays one line: an H1 up to ${HEADING_LIMITS.h1} characters, others up to ${HEADING_LIMITS.other}); insert: the blocks to add, as simple HTML (h2, h3, p, ul, ol, li, table, tr, th, td, strong, em, a).`,
           ),
         reason: z.string().describe('What the change does, in a few words.'),
         rules: z.array(z.string()).describe('The keys of the rules it fixes.'),
@@ -221,7 +223,7 @@ export const SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimi
 Rules for your suggestions:
 - Fix only the rules listed. Each suggestion fixes one or more of them; put their keys in "rules".
 - A replace changes words inside one passage: copy "before" exactly as that passage has it (a phrase or a sentence), and write "after" as plain text that fits in its place, with links only as the links rule below says.
-- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links).
+- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, table, tr, th, td, strong, em, and a for links). Steps in order and rankings go in an <ol>, its items without numbers of their own; a comparison of options by the same criteria in a table, a row per option.
 ${HEADING_RULE}
 ${LINK_RULE}
 ${FANOUT_RULE}
@@ -356,6 +358,13 @@ const INSERT_TAGS = new Set([
   'ul',
   'ol',
   'li',
+  // A comparison as a table (Content test 2026-11-19, item 12).
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
   'strong',
   'em',
   'b',
@@ -392,7 +401,8 @@ export function cleanInsertHtml(html, links = null) {
     }
     for (const name of Object.keys(el.attribs ?? {})) $(el).removeAttr(name);
   }
-  return $.html().trim();
+  // Numbered paragraphs, or numbers written into a list's items: a numbered list.
+  return numberedLists($.html().trim());
 }
 
 /**
@@ -1718,7 +1728,11 @@ async function fixWithRun({
     fanouts: fitted?.fanouts,
     pages: input.sources?.pages,
     queries: fitted?.queries,
-    inputs: inputSources(inputRow, brand.name),
+    // The brand's approved facts beside Your input.
+    inputs: [
+      ...inputSources(inputRow, brand.name),
+      ...(await brandFactSources({ id: brandId, name: brand.name }, draft)),
+    ],
   });
   // A hand-off's details and the person's and brand's rules are the editor's
   // words: no fact the agent may write. The brand's approved facts are, read here.

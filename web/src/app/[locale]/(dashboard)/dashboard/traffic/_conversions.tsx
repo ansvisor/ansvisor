@@ -169,7 +169,7 @@ export function ConversionsSection({
           {ranked}
           {result?.widened && ` · ${t('widened')}`}
         </span>
-        <Badge variant="outline" className="ml-auto text-xs">
+        <Badge variant="outline" className="ms-auto text-xs">
           {result?.widened ? t('last30Days') : rangeLabel}
         </Badge>
       </div>
@@ -200,20 +200,20 @@ export function ConversionsSection({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6">{t('columns.page')}</TableHead>
-                    <TableHead className="text-right">{t('columns.aiVisits')}</TableHead>
-                    <TableHead className="text-right">{t('columns.keyEvents')}</TableHead>
+                    <TableHead className="ps-6">{t('columns.page')}</TableHead>
+                    <TableHead className="text-end">{t('columns.aiVisits')}</TableHead>
+                    <TableHead className="text-end">{t('columns.keyEvents')}</TableHead>
                     {revenueColumn && (
-                      <TableHead className="text-right">{t('columns.revenue')}</TableHead>
+                      <TableHead className="text-end">{t('columns.revenue')}</TableHead>
                     )}
-                    <TableHead className="text-right">{t('columns.rate')}</TableHead>
-                    <TableHead className="pr-6">{t('columns.bestPlatform')}</TableHead>
+                    <TableHead className="text-end">{t('columns.rate')}</TableHead>
+                    <TableHead className="pe-6">{t('columns.bestPlatform')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {result?.pages.map((row) => (
                     <TableRow key={row.page} className="hover:bg-muted/50">
-                      <TableCell className="pl-6 max-w-[180px] xl:max-w-[240px]">
+                      <TableCell className="ps-6 max-w-[180px] xl:max-w-[240px]">
                         <span
                           className="font-mono text-xs text-muted-foreground line-clamp-1"
                           title={row.page}
@@ -221,19 +221,19 @@ export function ConversionsSection({
                           {row.page}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right text-sm">{num(row.aiVisits)}</TableCell>
-                      <TableCell className="text-right text-sm font-semibold">
+                      <TableCell className="text-end text-sm">{num(row.aiVisits)}</TableCell>
+                      <TableCell className="text-end text-sm font-semibold">
                         {num(row.keyEvents)}
                       </TableCell>
                       {revenueColumn && (
-                        <TableCell className="text-right text-sm">
+                        <TableCell className="text-end text-sm">
                           {num(Math.round(row.revenue))}
                         </TableCell>
                       )}
-                      <TableCell className="text-right text-sm">
+                      <TableCell className="text-end text-sm">
                         <RateCell figures={row} />
                       </TableCell>
-                      <TableCell className="pr-6 text-sm">
+                      <TableCell className="pe-6 text-sm">
                         {row.bestPlatform ? getPlatformName(row.bestPlatform) : '—'}
                       </TableCell>
                     </TableRow>
@@ -253,33 +253,33 @@ export function ConversionsSection({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6">{t('columns.platform')}</TableHead>
+                    <TableHead className="ps-6">{t('columns.platform')}</TableHead>
                     <TableHead>{t('columns.topic')}</TableHead>
-                    <TableHead className="text-right">{t('columns.keyEvents')}</TableHead>
+                    <TableHead className="text-end">{t('columns.keyEvents')}</TableHead>
                     {revenueColumn && (
-                      <TableHead className="text-right">{t('columns.revenue')}</TableHead>
+                      <TableHead className="text-end">{t('columns.revenue')}</TableHead>
                     )}
-                    <TableHead className="pr-6 text-right">{t('columns.rate')}</TableHead>
+                    <TableHead className="pe-6 text-end">{t('columns.rate')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {result?.answers.map((row) => (
                     <TableRow key={`${row.platform}|${row.topicId}`} className="hover:bg-muted/50">
-                      <TableCell className="pl-6 text-sm">
+                      <TableCell className="ps-6 text-sm">
                         {getPlatformName(row.platform)}
                       </TableCell>
                       <TableCell className="min-w-28 whitespace-normal text-sm">
                         {row.topic}
                       </TableCell>
-                      <TableCell className="text-right text-sm font-semibold">
+                      <TableCell className="text-end text-sm font-semibold">
                         {num(row.keyEvents)}
                       </TableCell>
                       {revenueColumn && (
-                        <TableCell className="text-right text-sm">
+                        <TableCell className="text-end text-sm">
                           {num(Math.round(row.revenue))}
                         </TableCell>
                       )}
-                      <TableCell className="pr-6 text-right text-sm">
+                      <TableCell className="pe-6 text-end text-sm">
                         <RateCell figures={row} />
                       </TableCell>
                     </TableRow>
