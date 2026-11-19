@@ -68,12 +68,12 @@ export function TermsCard({
                 const share = shareOf(term.answers, mentions);
                 return (
                   <tr key={term.term} className="border-b last:border-b-0">
-                    <td className="py-1.5 pr-3 font-medium">{term.term}</td>
+                    <td className="py-1.5 pe-3 font-medium">{term.term}</td>
                     <td className="w-[40%] px-2 py-1.5">
                       <Bar value={term.answers} max={max} />
                     </td>
                     <td
-                      className="w-24 px-2 py-1.5 text-right text-xs text-muted-foreground tabular-nums"
+                      className="w-24 px-2 py-1.5 text-end text-xs text-muted-foreground tabular-nums"
                       title={
                         share === null
                           ? undefined
@@ -82,7 +82,7 @@ export function TermsCard({
                     >
                       {t('responses', { count: term.answers })}
                     </td>
-                    <td className="w-14 py-1.5 pl-2 text-right text-xs tabular-nums">
+                    <td className="w-14 py-1.5 ps-2 text-end text-xs tabular-nums">
                       <Change now={term.answers} before={term.previousAnswers} />
                     </td>
                   </tr>
@@ -124,7 +124,7 @@ export function HeatmapCard({
           <table className="w-full min-w-[420px] text-sm" aria-label={t('tableLabel')}>
             <thead>
               <tr className="border-b text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="py-2 pr-3 text-left font-medium">{t('attribute')}</th>
+                <th className="py-2 pe-3 text-start font-medium">{t('attribute')}</th>
                 {perception.entities.map((e) => (
                   <th key={e.entity} className="px-2 py-2 text-center font-medium">
                     <span className="line-clamp-2 normal-case tracking-normal">
@@ -137,7 +137,7 @@ export function HeatmapCard({
             <tbody>
               {rows.map((row) => (
                 <tr key={row.term} className="border-b last:border-b-0">
-                  <td className="py-1.5 pr-3 font-medium">{row.term}</td>
+                  <td className="py-1.5 pe-3 font-medium">{row.term}</td>
                   {row.shares.map((share, i) => (
                     <td
                       key={perception.entities[i].entity}
@@ -194,14 +194,14 @@ export function CoMentionsCard({
             <tbody>
               {shown.map((c) => (
                 <tr key={c.competitorId} className="border-b last:border-b-0">
-                  <td className="py-1.5 pr-3 font-medium">{c.name}</td>
+                  <td className="py-1.5 pe-3 font-medium">{c.name}</td>
                   <td className="w-[45%] px-2 py-1.5">
                     <Bar value={c.coMentions} max={max} />
                   </td>
-                  <td className="w-24 px-2 py-1.5 text-right text-xs text-muted-foreground tabular-nums">
+                  <td className="w-24 px-2 py-1.5 text-end text-xs text-muted-foreground tabular-nums">
                     {t('responses', { count: c.coMentions })}
                   </td>
-                  <td className="w-14 py-1.5 pl-2 text-right text-xs tabular-nums">
+                  <td className="w-14 py-1.5 ps-2 text-end text-xs tabular-nums">
                     <Change now={c.coMentions} before={c.previousCoMentions} />
                   </td>
                 </tr>

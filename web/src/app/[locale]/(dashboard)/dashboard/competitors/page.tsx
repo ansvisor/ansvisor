@@ -181,7 +181,7 @@ function PlanGateOverlay() {
           <h3 className="text-lg font-semibold">{t('upgradeTitle')}</h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm">{t('upgradeDescription')}</p>
           <Badge variant="outline" className="mt-4">
-            <Crown className="mr-1 h-3 w-3" />
+            <Crown className="me-1 h-3 w-3" />
             {t('upgradeRequiredPlan')}
           </Badge>
         </CardContent>
@@ -333,7 +333,7 @@ function AddCompetitorDialog({
               {t('cancel')}
             </Button>
             <Button type="submit" disabled={saving || !name.trim() || !competitorTypeIsValid(type)}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {saving && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
               {t('add')}
             </Button>
           </DialogFooter>
@@ -449,7 +449,7 @@ function CompetitorCard({
       <div className="flex items-center gap-3 shrink-0">
         {stats ? (
           <div
-            className="text-right"
+            className="text-end"
             title={`Mentioned in ${stats.mentionAnswers} answers · cited in ${stats.citationAnswers}${
               stats.positionFactor !== null
                 ? ` · position factor ${stats.positionFactor.toFixed(2)}`
@@ -462,7 +462,7 @@ function CompetitorCard({
             </div>
           </div>
         ) : (
-          <div className="text-right">
+          <div className="text-end">
             <span className="text-xs text-muted-foreground">{t('noData')}</span>
           </div>
         )}
@@ -543,7 +543,7 @@ function PlatformBreakdown({
                       style={{ width: `${(row.brandScore / max) * 100}%` }}
                     />
                   </div>
-                  <span className="text-[10px] tabular-nums w-8 text-right font-medium">
+                  <span className="text-[10px] tabular-nums w-8 text-end font-medium">
                     {row.brandScore}%
                   </span>
                 </div>
@@ -554,7 +554,7 @@ function PlatformBreakdown({
                       style={{ width: `${(row.competitorScore / max) * 100}%` }}
                     />
                   </div>
-                  <span className="text-[10px] tabular-nums w-8 text-right font-medium">
+                  <span className="text-[10px] tabular-nums w-8 text-end font-medium">
                     {row.competitorScore}%
                   </span>
                 </div>
@@ -714,22 +714,22 @@ function ModelSubGroup({
               {group.region}
             </Badge>
           )}
-          <span className="text-[10px] text-muted-foreground tabular-nums ml-1">
+          <span className="text-[10px] text-muted-foreground tabular-nums ms-1">
             {group.runs} run{group.runs !== 1 ? 's' : ''}
           </span>
         </div>
         <div className="flex items-center gap-4 shrink-0">
-          <div className="text-right">
+          <div className="text-end">
             <p className="text-[10px] text-muted-foreground">{t('h2h.you')}</p>
             <p className="text-xs font-semibold tabular-nums">{Math.round(group.brandScore)}%</p>
           </div>
-          <div className="text-right">
+          <div className="text-end">
             <p className="text-[10px] text-muted-foreground">{t('h2h.them')}</p>
             <p className="text-xs font-semibold tabular-nums">
               {Math.round(group.competitorScore)}%
             </p>
           </div>
-          <div className="text-right min-w-[48px]">
+          <div className="text-end min-w-[48px]">
             <p className="text-[10px] text-muted-foreground">{t('h2h.diff')}</p>
             <DiffBadge diff={Math.round(group.brandScore) - Math.round(group.competitorScore)} />
           </div>
@@ -881,7 +881,7 @@ function PromptComparisonGrouped({
                   toggle(group.promptId);
                 }
               }}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors cursor-pointer select-none"
+              className="flex w-full items-center gap-3 px-4 py-3 text-start hover:bg-muted/50 transition-colors cursor-pointer select-none"
             >
               <ChevronDown
                 className={cn(
@@ -905,15 +905,15 @@ function PromptComparisonGrouped({
                 </div>
               </div>
               <div className="flex items-center gap-4 shrink-0">
-                <div className="text-right">
+                <div className="text-end">
                   <p className="text-[10px] text-muted-foreground">{t('h2h.you')}</p>
                   <p className="text-sm font-semibold tabular-nums">{group.avgBrandScore}%</p>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <p className="text-[10px] text-muted-foreground">{t('h2h.them')}</p>
                   <p className="text-sm font-semibold tabular-nums">{group.avgCompetitorScore}%</p>
                 </div>
-                <div className="text-right min-w-[48px]">
+                <div className="text-end min-w-[48px]">
                   <p className="text-[10px] text-muted-foreground">{t('h2h.diff')}</p>
                   <DiffBadge diff={group.avgDiff} />
                 </div>
@@ -2001,7 +2001,7 @@ export default function CompetitorsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="ml-auto gap-2"
+                  className="ms-auto gap-2"
                   onClick={exportHeadToHead}
                   disabled={h2hLoading || !h2hData?.groups.length}
                 >
@@ -2169,8 +2169,8 @@ function ConfirmDeleteCompetitorDialog({
             disabled={deleting}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <Trash2 className="mr-1.5 h-4 w-4" />
+            {deleting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+            <Trash2 className="me-1.5 h-4 w-4" />
             {t('confirmDeleteAction')}
           </Button>
         </DialogFooter>

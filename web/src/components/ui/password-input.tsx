@@ -15,14 +15,14 @@ export function PasswordInput({ className, ...props }: PasswordInputProps) {
       {/* Left out of session replays while shown as text too. */}
       <Input
         type={visible ? 'text' : 'password'}
-        className={cn('ph-no-capture pr-10', className)}
+        className={cn('ph-no-capture pe-10', className)}
         {...props}
       />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
         aria-label={visible ? 'Hide password' : 'Show password'}
-        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
         tabIndex={-1}
       >
         {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

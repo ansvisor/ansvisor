@@ -158,14 +158,14 @@ export function BusinessHubImport({
           )}
           <div className="max-h-56 overflow-auto rounded-md border">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-muted text-left text-muted-foreground">
+              <thead className="sticky top-0 bg-muted text-start text-muted-foreground">
                 <tr>
                   <th className="px-2 py-1 font-medium">{t('columns.row')}</th>
                   <th className="px-2 py-1 font-medium">{t('columns.lastDay')}</th>
                   <th className="px-2 py-1 font-medium">{t('columns.days')}</th>
-                  <th className="px-2 py-1 text-right font-medium">{t('columns.mentions')}</th>
-                  <th className="px-2 py-1 text-right font-medium">{t('columns.clicks')}</th>
-                  <th className="px-2 py-1 text-right font-medium">{t('columns.views')}</th>
+                  <th className="px-2 py-1 text-end font-medium">{t('columns.mentions')}</th>
+                  <th className="px-2 py-1 text-end font-medium">{t('columns.clicks')}</th>
+                  <th className="px-2 py-1 text-end font-medium">{t('columns.views')}</th>
                   <th className="px-2 py-1 font-medium">{t('columns.status')}</th>
                 </tr>
               </thead>
@@ -175,13 +175,13 @@ export function BusinessHubImport({
                     <td className="px-2 py-1 tabular-nums">{row.row}</td>
                     <td className="px-2 py-1 tabular-nums">{row.entry?.periodEnd ?? '—'}</td>
                     <td className="px-2 py-1 tabular-nums">{row.entry?.periodDays ?? '—'}</td>
-                    <td className="px-2 py-1 text-right tabular-nums">
+                    <td className="px-2 py-1 text-end tabular-nums">
                       {count(row.entry?.mentions)}
                     </td>
-                    <td className="px-2 py-1 text-right tabular-nums">
+                    <td className="px-2 py-1 text-end tabular-nums">
                       {count(row.entry?.websiteClicks)}
                     </td>
-                    <td className="px-2 py-1 text-right tabular-nums">
+                    <td className="px-2 py-1 text-end tabular-nums">
                       {count(row.entry?.profileViews)}
                     </td>
                     <td className={cn('px-2 py-1', STATUS_CLASS[row.status])}>{statusText(row)}</td>

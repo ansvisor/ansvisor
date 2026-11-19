@@ -11,7 +11,7 @@ import type { ChatActionSent } from '@/lib/chat/events';
  * Send to Action Center): a new action, "Sent to Action Center · AC-1271",
  * whose Priority Score the Action Center sets; or a finding added to the
  * action that already covered it, "Added to AC-1258 · its targets don't
- * change". Open in Actions opens the action's drawer.
+ * change". Open in Action Center opens the action's drawer.
  */
 export function ActionSentCard({ sent }: { sent: ChatActionSent }) {
   const t = useTranslations('chatRun.actionSent');

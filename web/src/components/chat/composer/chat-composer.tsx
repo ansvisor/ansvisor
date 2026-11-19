@@ -844,7 +844,7 @@ export function ChatComposer({
             <span
               key={chip.key}
               title={shown === chip.label ? undefined : chip.label}
-              className="inline-flex h-[22px] items-center gap-1 rounded-[7px] border bg-muted/60 pr-1 pl-[7px] text-[11.5px] text-foreground/80"
+              className="inline-flex h-[22px] items-center gap-1 rounded-[7px] border bg-muted/60 pe-1 ps-[7px] text-[11.5px] text-foreground/80"
             >
               <ChipIcon chipKey={chip.key} />
               {shown}
@@ -858,7 +858,7 @@ export function ChatComposer({
                     box.current?.focus();
                   }}
                   aria-label={t('removeChip', { label: chip.label })}
-                  className="-ml-0.5 inline-flex size-4 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="-ms-0.5 inline-flex size-4 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   ×
                 </button>
@@ -930,7 +930,7 @@ export function ChatComposer({
                   data-status={entry.status}
                   title={entry.file.name}
                   className={cn(
-                    'inline-flex h-[22px] max-w-[220px] items-center gap-1 rounded-[7px] border bg-muted/60 pr-1 pl-1.5 text-[11.5px] text-foreground/80',
+                    'inline-flex h-[22px] max-w-[220px] items-center gap-1 rounded-[7px] border bg-muted/60 pe-1 ps-1.5 text-[11.5px] text-foreground/80',
                     entry.status === 'failed' &&
                       'border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
                   )}
@@ -1023,7 +1023,7 @@ export function ChatComposer({
                 className="pointer-events-auto flex min-w-0 cursor-pointer items-center text-muted-foreground/70"
               >
                 <span className="truncate">{ghost}</span>
-                <kbd className="ml-1.5 shrink-0 rounded-[4px] border px-1 font-sans text-[11px] text-muted-foreground">
+                <kbd className="ms-1.5 shrink-0 rounded-[4px] border px-1 font-sans text-[11px] text-muted-foreground">
                   {t('tab')}
                 </kbd>
               </span>
@@ -1033,7 +1033,7 @@ export function ChatComposer({
         {/* One row under the text: ＋ / @ on the left, the microphone and Send on the right. */}
         <div
           data-slot="composer-controls"
-          className="flex items-center gap-1 pt-1.5 pr-2 pb-2 pl-2"
+          className="flex items-center gap-1 pt-1.5 pe-2 pb-2 ps-2"
         >
           <button
             type="button"
@@ -1074,7 +1074,7 @@ export function ChatComposer({
           </button>
           <div
             data-slot="composer-send-group"
-            className="ml-auto flex shrink-0 items-center gap-1.5"
+            className="ms-auto flex shrink-0 items-center gap-1.5"
           >
             <VoiceButton onText={addSpoken} onDeniedChange={setMicDenied} disabled={disabled} />
             {(running || answering) && (

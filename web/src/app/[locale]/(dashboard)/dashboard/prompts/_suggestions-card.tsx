@@ -718,12 +718,12 @@ export function SuggestionsCard({
               </Select>
 
               <div className="relative w-52">
-                <SearchIcon className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <SearchIcon className="absolute start-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="Search prompts…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-8 pl-8 text-xs"
+                  className="h-8 ps-8 text-xs"
                 />
               </div>
 

@@ -515,7 +515,7 @@ function ShoppingModeCard({
               <p className="text-xs text-muted-foreground">{t('settings.shopping.managersOnly')}</p>
             )}
           </div>
-          {saving && <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />}
+          {saving && <Loader2 className="ms-auto h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
       </CardContent>
     </Card>
@@ -1128,7 +1128,7 @@ function TrackingTab({ brand }: { brand: Brand }) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute top-2 right-2 h-7 w-7"
+                    className="absolute top-2 end-2 h-7 w-7"
                     onClick={() => copyToClipboard(snippet, 'snippet')}
                     aria-label="Copy tracking script"
                   >
@@ -1145,7 +1145,7 @@ function TrackingTab({ brand }: { brand: Brand }) {
             {/* How it works */}
             <div className="rounded-lg border p-4 space-y-2">
               <p className="text-sm font-medium">How it works</p>
-              <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc ps-4">
                 <li>
                   The script detects visitors coming from AI platforms (ChatGPT, Perplexity, Claude,
                   Gemini, Copilot, etc.)

@@ -289,7 +289,7 @@ describe('ChatMenuView', () => {
       ]);
       // Indented under the row, as Connections' list.
       for (const link of items()!.querySelectorAll('a'))
-        expect(link.className).toContain('pl-[23px]');
+        expect(link.className).toContain('ps-[23px]');
       // Home is the page shown: none of Settings' items is marked.
       expect(items()!.querySelector('[aria-current]')).toBeNull();
 

@@ -486,6 +486,9 @@ async function clusterScope(brandId, promptId, topicId) {
   };
 }
 
+/** An opportunity's statuses while it is still to do. */
+const OPEN_OPPORTUNITY_STATUSES = ['new', 'reviewed', 'sent', 'in_progress'];
+
 /**
  * GET /api/content/brand/:brandId
  * List opportunities for a brand with optional filters.
@@ -600,11 +603,21 @@ router.get('/brand/:brandId', async (req, res) => {
       p_created_to: toBound,
     });
 
+    // The ones still open (not done, dismissed or archived), for the list's
+    // "Available" count: every status otherwise counts its own (Content test
+    // 2026-11-19, item 10: "265 Available" held 205 done or dismissed).
+    const openQuery = status
+      ? Promise.resolve({ count: null, error: null })
+      : applyFilters(
+          supabaseAdmin.from('content_opportunities').select('id', { count: 'exact', head: true }),
+        ).in('status', OPEN_OPPORTUNITY_STATUSES);
+
     const [
       { data, error: dataError, count },
       { data: aggregateData, error: aggregateError },
       competitors,
-    ] = await Promise.all([dataQuery, aggregateQuery, competitorNames(brandId)]);
+      { count: openCount, error: openError },
+    ] = await Promise.all([dataQuery, aggregateQuery, competitorNames(brandId), openQuery]);
 
     if (dataError) {
       throw new Error(dataError.message);
@@ -612,6 +625,10 @@ router.get('/brand/:brandId', async (req, res) => {
 
     if (aggregateError) {
       throw new Error(aggregateError.message);
+    }
+
+    if (openError) {
+      throw new Error(openError.message);
     }
 
     const aggregates = aggregateData?.[0] ?? {
@@ -625,6 +642,8 @@ router.get('/brand/:brandId', async (req, res) => {
       opportunities: (data || []).map((row) => mapOpportunityRow(row, competitors)),
 
       total: count || 0,
+      // With a status picked, its own count is the list's.
+      open: status ? count || 0 : openCount || 0,
 
       aggregates: {
         avgScore: Math.round(Number(aggregates.avg_score) || 0),

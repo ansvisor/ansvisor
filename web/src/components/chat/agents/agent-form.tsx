@@ -447,7 +447,7 @@ function ReadOnlyNote({
       <Lock className="size-4 text-muted-foreground" aria-hidden />
       <div className="min-w-0">
         <b className="font-semibold">{title}</b>
-        <em className="ml-1.5 text-muted-foreground not-italic">{detail}</em>
+        <em className="ms-1.5 text-muted-foreground not-italic">{detail}</em>
       </div>
       {asked ? <AskAdminButton asked={asked} ruleKind="role" /> : <span />}
     </div>
@@ -497,7 +497,7 @@ export function AgentForm({
       <h1 className="min-w-0 truncate text-2xl font-bold tracking-[-.4px]" title={agent?.name}>
         {title}
       </h1>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ms-auto flex items-center gap-2">
         <Link
           href={back}
           data-action="agentNew.cancel"
@@ -970,7 +970,7 @@ function AgentFormBody({
         className={ALERT}
       >
         <span data-slot="agent-form-refusal" className="min-w-0 flex-1">
-          {server.savedDraft && <b className="mr-1 font-semibold">{t('savedNotOn')}</b>}
+          {server.savedDraft && <b className="me-1 font-semibold">{t('savedNotOn')}</b>}
           {server.message}
         </span>
         {server.code === 'version_conflict' && (
@@ -1193,7 +1193,7 @@ function AgentFormBody({
         className="mb-4 flex overflow-hidden rounded-xl border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]"
       >
         {AGENT_FORM_STEPS.map((name, i) => (
-          <li key={name} className={cn('min-w-0 flex-1', i > 0 && 'border-l')}>
+          <li key={name} className={cn('min-w-0 flex-1', i > 0 && 'border-s')}>
             <button
               type="button"
               data-action="agentNew.step"
@@ -1243,7 +1243,7 @@ function AgentFormBody({
                   <code className="font-mono text-xs text-muted-foreground">/{OPERATOR_SKILL}</code>
                   <b className="text-[14px] font-semibold">{skillTitle(OPERATOR_SKILL)}</b>
                 </div>
-                <ul className="mt-2 grid list-disc gap-1.5 pl-4 text-[13px] text-foreground/90">
+                <ul className="mt-2 grid list-disc gap-1.5 ps-4 text-[13px] text-foreground/90">
                   {(['picks', 'card', 'approve', 'brand'] as const).map((line) => (
                     <li key={line}>{t(`operator.intro.${line}`)}</li>
                   ))}
@@ -1380,7 +1380,7 @@ function AgentFormBody({
                             data-action="agentNew.removeSkill"
                             aria-label={t('skill.removeSkill', { skill: id })}
                             onClick={() => setSkills(state.skills.filter((s) => s !== id))}
-                            className="ml-0.5 rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            className="ms-0.5 rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                           >
                             ×
                           </button>
@@ -1986,7 +1986,7 @@ function AgentFormBody({
               Each button its own (keyed): Next never turns into Save under the
               focus, so Enter pressed again can't save past the last step unseen.
             */}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ms-auto flex items-center gap-2">
               {step < LAST_STEP ? (
                 <Button key="next" data-action="agentNew.next" onClick={next}>
                   {t('next')}

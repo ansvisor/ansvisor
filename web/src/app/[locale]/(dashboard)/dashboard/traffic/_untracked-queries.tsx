@@ -175,27 +175,27 @@ export function UntrackedQueriesCard({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="pl-6">{t('columns.query')}</TableHead>
-          <TableHead className="text-right">{t('columns.clicks')}</TableHead>
-          <TableHead className="text-right">{t('columns.impressions')}</TableHead>
-          <TableHead className="pr-6" />
+          <TableHead className="ps-6">{t('columns.query')}</TableHead>
+          <TableHead className="text-end">{t('columns.clicks')}</TableHead>
+          <TableHead className="text-end">{t('columns.impressions')}</TableHead>
+          <TableHead className="pe-6" />
         </TableRow>
       </TableHeader>
       <TableBody>
         {result.rows.map((row) => (
           <TableRow key={row.query} className="hover:bg-muted/50">
-            <TableCell className="pl-6 max-w-[200px] xl:max-w-[280px]">
+            <TableCell className="ps-6 max-w-[200px] xl:max-w-[280px]">
               <span className="line-clamp-1 text-sm" title={row.query}>
                 {row.query}
               </span>
             </TableCell>
-            <TableCell className="text-right text-sm font-semibold tabular-nums">
+            <TableCell className="text-end text-sm font-semibold tabular-nums">
               {formatNumber(row.clicks)}
             </TableCell>
-            <TableCell className="text-right text-sm tabular-nums">
+            <TableCell className="text-end text-sm tabular-nums">
               {formatNumber(row.impressions)}
             </TableCell>
-            <TableCell className="pr-6 text-right">
+            <TableCell className="pe-6 text-end">
               {/* A span carries the tooltip: a disabled button gets no hover. */}
               <span title={trackTitle}>
                 <Button

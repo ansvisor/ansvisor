@@ -98,7 +98,7 @@ function TabCount({ count }: { count: number }) {
 
 function PageCell({ page }: { page: string }) {
   return (
-    <TableCell className="pl-6 max-w-[180px] xl:max-w-[280px]">
+    <TableCell className="ps-6 max-w-[180px] xl:max-w-[280px]">
       <span className="font-mono text-xs text-muted-foreground line-clamp-1" title={page}>
         {page}
       </span>
@@ -116,18 +116,18 @@ function BrokenLinksTable({ rows }: { rows: TrafficBrokenLink[] }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="pl-6">{t('columns.page')}</TableHead>
-          <TableHead className="whitespace-normal text-right">{t('columns.aiVisits')}</TableHead>
+          <TableHead className="ps-6">{t('columns.page')}</TableHead>
+          <TableHead className="whitespace-normal text-end">{t('columns.aiVisits')}</TableHead>
           <TableHead className="whitespace-normal">{t('columns.platforms')}</TableHead>
-          <TableHead className="whitespace-normal text-right">{t('columns.citations')}</TableHead>
+          <TableHead className="whitespace-normal text-end">{t('columns.citations')}</TableHead>
           <TableHead className="whitespace-normal">{t('columns.lastVisit')}</TableHead>
-          <TableHead className="pr-6">{t('columns.redirectTo')}</TableHead>
+          <TableHead className="pe-6">{t('columns.redirectTo')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {rows.map((row) => (
           <TableRow key={row.page} className="hover:bg-muted/50">
-            <TableCell className="pl-6 min-w-36 max-w-[180px] whitespace-normal xl:max-w-[280px]">
+            <TableCell className="ps-6 min-w-36 max-w-[180px] whitespace-normal xl:max-w-[280px]">
               <span className="font-mono text-xs break-all line-clamp-2" title={row.page}>
                 {row.page}
               </span>
@@ -135,15 +135,15 @@ function BrokenLinksTable({ rows }: { rows: TrafficBrokenLink[] }) {
                 {t(`broken.status.${row.status}`)}
               </div>
             </TableCell>
-            <TableCell className="text-right font-semibold text-sm">{num(row.visits)}</TableCell>
+            <TableCell className="text-end font-semibold text-sm">{num(row.visits)}</TableCell>
             <TableCell className="min-w-24 whitespace-normal text-sm text-muted-foreground">
               {row.platforms.length ? row.platforms.map(getPlatformName).join(', ') : '—'}
             </TableCell>
-            <TableCell className="text-right text-sm">{num(row.citations)}</TableCell>
+            <TableCell className="text-end text-sm">{num(row.citations)}</TableCell>
             <TableCell className="text-sm text-muted-foreground">
               {formatRelative(row.lastVisit, tCommon)}
             </TableCell>
-            <TableCell className="pr-6 min-w-36 max-w-[200px] whitespace-normal xl:max-w-[360px]">
+            <TableCell className="pe-6 min-w-36 max-w-[200px] whitespace-normal xl:max-w-[360px]">
               {row.target ? (
                 <>
                   <span
@@ -436,64 +436,64 @@ export function PagesCard({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-6">{t('columns.page')}</TableHead>
+                <TableHead className="ps-6">{t('columns.page')}</TableHead>
                 {tab === 'noAiTraffic' && (
                   <>
                     <TableHead className="whitespace-normal">{t('columns.aiVisibility')}</TableHead>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.sessions')}
                     </TableHead>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {tReason(`signals.${signal}.column`)}
                     </TableHead>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {tReason('rank', { by: tReason(`signals.${signal}.by`) })}
                     </TableHead>
                   </>
                 )}
                 {tab === 'citedNotClicked' && (
                   <>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.citations')}
                     </TableHead>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.prompts')}
                     </TableHead>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.sessions')}
                     </TableHead>
                   </>
                 )}
                 {tab === 'trafficNoPrompt' && (
                   <>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.aiVisits')}
                     </TableHead>
                     <TableHead className="whitespace-normal">{t('columns.platforms')}</TableHead>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.keyEvents')}
                     </TableHead>
                   </>
                 )}
                 {tab === 'all' && (
                   <>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.aiVisits')}
                     </TableHead>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.keyEvents')}
                     </TableHead>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.citations')}
                     </TableHead>
                     <TableHead className="whitespace-normal">{t('columns.platforms')}</TableHead>
-                    <TableHead className="whitespace-normal text-right">
+                    <TableHead className="whitespace-normal text-end">
                       {t('columns.prompts')}
                     </TableHead>
-                    <TableHead className="pr-6">{t('columns.status')}</TableHead>
+                    <TableHead className="pe-6">{t('columns.status')}</TableHead>
                   </>
                 )}
-                {tab !== 'all' && <TableHead className="pr-6" />}
+                {tab !== 'all' && <TableHead className="pe-6" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -520,8 +520,8 @@ export function PagesCard({
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right text-sm">{num(row.sessions)}</TableCell>
-                      <TableCell className="text-right font-semibold text-sm">
+                      <TableCell className="text-end text-sm">{num(row.sessions)}</TableCell>
+                      <TableCell className="text-end font-semibold text-sm">
                         {signal === 'revenue'
                           ? num(Math.round(row.revenue))
                           : signal === 'transactions'
@@ -532,10 +532,10 @@ export function PagesCard({
                                   minutes: formatNumber(Math.round(row.engagementSeconds / 60)),
                                 })}
                       </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                      <TableCell className="text-end text-sm text-muted-foreground tabular-nums">
                         {row.valueRank === null ? '—' : `#${row.valueRank}`}
                       </TableCell>
-                      <TableCell className="pr-6 text-right">
+                      <TableCell className="pe-6 text-end">
                         {rowActions(row, reasonAction(row), 'no_ai_traffic', {
                           addPrompts: citationState(row) !== 'not_targeted',
                         })}
@@ -544,46 +544,44 @@ export function PagesCard({
                   )}
                   {tab === 'citedNotClicked' && (
                     <>
-                      <TableCell className="text-right font-semibold text-sm">
+                      <TableCell className="text-end font-semibold text-sm">
                         {num(row.citations)}
                       </TableCell>
-                      <TableCell className="text-right text-sm">
+                      <TableCell className="text-end text-sm">
                         {num(row.targetingPrompts)}
                       </TableCell>
-                      <TableCell className="text-right text-sm">{num(row.sessions)}</TableCell>
-                      <TableCell className="pr-6 text-right">
+                      <TableCell className="text-end text-sm">{num(row.sessions)}</TableCell>
+                      <TableCell className="pe-6 text-end">
                         {rowActions(row, auditButton(row.page), 'cited_not_clicked')}
                       </TableCell>
                     </>
                   )}
                   {tab === 'trafficNoPrompt' && (
                     <>
-                      <TableCell className="text-right font-semibold text-sm">
+                      <TableCell className="text-end font-semibold text-sm">
                         {num(row.aiVisits)}
                       </TableCell>
                       <TableCell className="min-w-24 whitespace-normal text-sm text-muted-foreground">
                         {platforms(row)}
                       </TableCell>
-                      <TableCell className="text-right text-sm">{num(row.aiKeyEvents)}</TableCell>
-                      <TableCell className="pr-6 text-right">
-                        {addPromptsButton(row.page)}
-                      </TableCell>
+                      <TableCell className="text-end text-sm">{num(row.aiKeyEvents)}</TableCell>
+                      <TableCell className="pe-6 text-end">{addPromptsButton(row.page)}</TableCell>
                     </>
                   )}
                   {tab === 'all' && (
                     <>
-                      <TableCell className="text-right font-semibold text-sm">
+                      <TableCell className="text-end font-semibold text-sm">
                         {num(row.aiVisits)}
                       </TableCell>
-                      <TableCell className="text-right text-sm">{num(row.aiKeyEvents)}</TableCell>
-                      <TableCell className="text-right text-sm">{num(row.citations)}</TableCell>
+                      <TableCell className="text-end text-sm">{num(row.aiKeyEvents)}</TableCell>
+                      <TableCell className="text-end text-sm">{num(row.citations)}</TableCell>
                       <TableCell className="min-w-24 whitespace-normal text-sm text-muted-foreground">
                         {platforms(row)}
                       </TableCell>
-                      <TableCell className="text-right text-sm">
+                      <TableCell className="text-end text-sm">
                         {num(row.targetingPrompts)}
                       </TableCell>
-                      <TableCell className="pr-6">
+                      <TableCell className="pe-6">
                         <div className="flex flex-wrap gap-1 text-sm text-muted-foreground">
                           {pageStatuses(row).map((status) => (
                             <Badge key={status} variant="outline" className="text-[10px]">

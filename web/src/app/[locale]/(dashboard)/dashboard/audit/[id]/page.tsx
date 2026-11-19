@@ -283,7 +283,7 @@ export default function AuditDetailPage() {
               {audit.status === 'completed' && failing > 0 && (
                 <Button
                   variant="outline"
-                  className="mr-1 gap-1.5"
+                  className="me-1 gap-1.5"
                   disabled={sendingToAction}
                   onClick={() => void handleSendToAction()}
                 >
@@ -364,7 +364,7 @@ export default function AuditDetailPage() {
             <div className="text-base font-semibold">{t('loadFailed')}</div>
             <p className="max-w-md text-sm text-muted-foreground">{error}</p>
             <Button variant="outline" size="sm" onClick={() => void loadAndPoll()}>
-              <RefreshCw className="mr-2 h-4 w-4" />
+              <RefreshCw className="me-2 h-4 w-4" />
               {t('retry')}
             </Button>
           </CardContent>

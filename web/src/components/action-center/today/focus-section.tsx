@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TodaySection } from './today-parts';
 import { useTodayPart, type TodayVisit } from './use-today';
+import { useActionAiText } from '@/hooks/use-action-ai-text';
 
 /** Where a focus card's button goes: its action, open in the Actions list's drawer. */
 export const actionHref = (id: string) =>
@@ -156,7 +157,9 @@ function FocusRow({
   const tTasks = useTranslations('actionCenter.actionTasks');
   const tPriority = useTranslations('actionCenter.actionsPage.priority');
   const { action } = card;
-  const texts = actionTexts(action, tTexts);
+  // Its written title and "why" in the reader's language (LOC-010).
+  const shownAction = useActionAiText([action]);
+  const texts = actionTexts(shownAction(action), tTexts);
   const why = action.priorityReason
     ? priorityReasonText(action.priorityReason, tPriority)
     : texts.description;

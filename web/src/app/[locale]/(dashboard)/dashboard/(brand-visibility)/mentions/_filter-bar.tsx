@@ -101,13 +101,13 @@ export function MentionsFilterBar({
           {t('search')}
         </label>
         <div className="relative">
-          <Search className="absolute top-2.5 left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="absolute top-2.5 start-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             id="mentions-search"
             value={filters.q}
             onChange={(e) => onChange({ q: e.target.value })}
             placeholder={searchPlaceholder ?? t('searchPlaceholder')}
-            className="h-8 pl-8 text-xs"
+            className="h-8 ps-8 text-xs"
           />
         </div>
       </div>

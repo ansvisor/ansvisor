@@ -485,7 +485,7 @@ export function ExportDialog({
                 aria-expanded={platformsOpen}
                 aria-controls={platformsId}
                 onClick={() => setPlatformsOpen((open) => !open)}
-                className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset"
+                className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-start transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset"
               >
                 <span id={`${platformsId}-title`}>{t('platforms')}</span>
                 {/* Folded, the platform picked is still named. */}
@@ -494,7 +494,7 @@ export function ExportDialog({
                     {t(`destinations.${destination}`)}
                   </span>
                 )}
-                <span className="ml-auto flex items-center gap-1 text-foreground group-hover:underline">
+                <span className="ms-auto flex items-center gap-1 text-foreground group-hover:underline">
                   {platformsOpen ? t('hide') : t('show')}
                   <ChevronDown
                     aria-hidden

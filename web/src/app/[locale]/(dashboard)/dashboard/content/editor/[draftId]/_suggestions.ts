@@ -378,7 +378,7 @@ function markButton(
   labels: SuggestionLabels,
   open: OpenSource,
 ): HTMLElement {
-  const sup = el('sup', 'ml-0.5');
+  const sup = el('sup', 'ms-0.5');
   const mark = button(
     'rounded-sm px-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-950/40',
     String(n),
@@ -488,7 +488,7 @@ function basedOn(
   open: OpenSource,
 ): HTMLElement {
   const line = el('div', 'mt-1.5 flex flex-wrap items-center gap-1 text-xs');
-  line.append(el('span', 'mr-0.5 text-muted-foreground', labels.basedOn));
+  line.append(el('span', 'me-0.5 text-muted-foreground', labels.basedOn));
   sources.forEach((source, i) => {
     const chip = button(
       'inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-[11px] text-foreground hover:bg-muted',
@@ -529,7 +529,7 @@ function head(s: DraftSuggestion, labels: SuggestionLabels, controls: HTMLElemen
   const line = el('div', 'flex items-center gap-2 text-xs text-muted-foreground');
   const who = fromChat(s) && labels.agentFromChat ? labels.agentFromChat : labels.agent;
   line.append(el('span', 'min-w-0 truncate', `${who} · ${s.reason}`));
-  const right = el('span', 'ml-auto flex shrink-0 items-center gap-1.5');
+  const right = el('span', 'ms-auto flex shrink-0 items-center gap-1.5');
   right.append(...controls);
   line.append(right);
   return line;
@@ -610,7 +610,7 @@ function card(
   } else {
     const added = el(
       'div',
-      'rounded-md bg-emerald-50 px-2 py-1 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 [&_li]:ml-4 [&_li]:list-disc [&_p]:my-1',
+      'rounded-md bg-emerald-50 px-2 py-1 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 [&_li]:ms-4 [&_li]:list-disc [&_p]:my-1',
     );
     added.innerHTML = cleanHtml(s.afterText, { keepImages: false }).html;
     // Shown, not followed: a click on the card mustn't leave the editor.

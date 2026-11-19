@@ -203,7 +203,7 @@ export function MarketplaceTab() {
         <div className="relative w-full max-w-[260px]">
           <Search
             aria-hidden
-            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute top-1/2 start-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
           />
           <Input
             value={query}
@@ -212,7 +212,7 @@ export function MarketplaceTab() {
             aria-label={t('search')}
             maxLength={200}
             data-action="skills.library.search"
-            className="h-8 pl-8 text-[13px]"
+            className="h-8 ps-8 text-[13px]"
           />
         </div>
         <div role="group" aria-label={t('topicsLabel')} className="flex flex-wrap gap-1.5">
@@ -244,7 +244,7 @@ export function MarketplaceTab() {
         <span data-slot="library-meta" className="tabular-nums">
           {page && page !== 'failed' ? t('meta', { count: page.total }) : ' '}
         </span>
-        <label className="ml-auto flex items-center gap-1.5">
+        <label className="ms-auto flex items-center gap-1.5">
           <span className="sr-only">{t('sortLabel')}</span>
           <select
             value={sort}
@@ -441,7 +441,7 @@ function LibraryCard({
         <span title={card.repo} className="min-w-0 truncate text-[11.5px] text-muted-foreground">
           {t('owner', { owner })}
         </span>
-        <span className="ml-auto">
+        <span className="ms-auto">
           <AddOrState card={card} can={can} adding={adding} onAdd={onAdd} t={t} />
         </span>
       </div>

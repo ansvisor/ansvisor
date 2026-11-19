@@ -88,7 +88,7 @@ export function AssignDialog({
       {/* One column no wider than the dialog: a long title wraps, clear of the close button. */}
       <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="pr-6 leading-snug [overflow-wrap:anywhere]">
+          <DialogTitle className="pe-6 leading-snug [overflow-wrap:anywhere]">
             {t('title', { title: row?.title ?? '' })}
           </DialogTitle>
           <DialogDescription>{t('description')}</DialogDescription>

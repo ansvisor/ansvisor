@@ -126,7 +126,7 @@ export function AddKeyCard({
           data-action="addKey.close"
           aria-label={t('close')}
           onClick={onClose}
-          className="ml-auto inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="ms-auto inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <X className="size-3.5" aria-hidden />
         </button>

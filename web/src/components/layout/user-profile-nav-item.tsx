@@ -51,7 +51,7 @@ import { SettingsDotMark, useSettingsDotWords, useSettingsDots } from './setting
 const SETTINGS_HREF = '/dashboard/settings';
 
 /** Where the dot sits on the avatar and the gear. */
-const CORNER_DOT = 'absolute -right-0.5 -top-0.5 ring-2 ring-sidebar';
+const CORNER_DOT = 'absolute -end-0.5 -top-0.5 ring-2 ring-sidebar';
 
 const isMac = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -252,7 +252,7 @@ export function UserProfileNavItem({
             <button
               type="button"
               className={cn(
-                'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 data-[popup-open]:bg-sidebar-accent',
+                'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 data-[popup-open]:bg-sidebar-accent',
                 collapsed && 'justify-center px-0',
               )}
             />

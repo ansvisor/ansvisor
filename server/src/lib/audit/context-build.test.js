@@ -102,6 +102,28 @@ describe('buildAuditContext', () => {
     expect(readPage).not.toHaveBeenCalled();
   });
 
+  it('audits the page at its canonical address when the site redirects to it (www), and tests that one', async () => {
+    probeAnswer = tested;
+    html = '<link rel="canonical" href="https://www.acme.com/pricing"><h1>Pricing</h1>';
+    const ctx = await buildAuditContext('https://acme.com/pricing');
+    expect(ctx.url).toBe('https://www.acme.com/pricing');
+    expect(ctx.origin).toBe('https://www.acme.com');
+    // The bot test asks the page, not the redirect.
+    expect(probeCalls).toEqual(['https://www.acme.com/pricing']);
+    expect(ctx.canonicalTarget).toMatchObject({ state: 'self' });
+  });
+
+  it('keeps the address asked for when its canonical tag names another page', async () => {
+    html = '<link rel="canonical" href="https://www.acme.com/plans"><h1>Pricing</h1>';
+    readPage.mockResolvedValue({
+      url: 'https://www.acme.com/plans',
+      status: 200,
+      html: '<h1>x</h1>',
+    });
+    const ctx = await buildAuditContext('https://acme.com/pricing');
+    expect(ctx.url).toBe('https://acme.com/pricing');
+  });
+
   it('leaves the check to robots.txt when the test fails', async () => {
     probeAnswer = new Error('boom');
     const ctx = await buildAuditContext('https://acme.com/pricing');

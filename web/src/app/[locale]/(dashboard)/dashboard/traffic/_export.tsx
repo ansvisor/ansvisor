@@ -120,14 +120,14 @@ export function ExportMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuItem onClick={() => void exporter.run('xlsx')}>
-          <FileSpreadsheet className="mr-2 h-4 w-4 shrink-0" />
+          <FileSpreadsheet className="me-2 h-4 w-4 shrink-0" />
           <div className="min-w-0">
             <div className="text-sm font-medium">{t('excel')}</div>
             <div className="text-xs text-muted-foreground">{t('excelHint')}</div>
           </div>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => void exporter.run('zip')}>
-          <FileArchive className="mr-2 h-4 w-4 shrink-0" />
+          <FileArchive className="me-2 h-4 w-4 shrink-0" />
           <div className="min-w-0">
             <div className="text-sm font-medium">{t('csv')}</div>
             <div className="text-xs text-muted-foreground">{t('csvHint')}</div>

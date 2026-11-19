@@ -491,7 +491,7 @@ export function BulkSendDialog({
                 {t('cancel')}
               </Button>
               <Button disabled={busy || ready.length === 0 || !target} onClick={() => void send()}>
-                {phase.kind === 'sending' && <LoadingDots className="mr-1" />}
+                {phase.kind === 'sending' && <LoadingDots className="me-1" />}
                 {phase.kind === 'sending' ? t('sending') : t('send', { count: ready.length })}
               </Button>
             </>
@@ -541,7 +541,7 @@ function ItemState({
   if (delivery.status === 'failed') {
     return (
       <span
-        className="shrink-0 text-right text-xs text-red-700 dark:text-red-400"
+        className="shrink-0 text-end text-xs text-red-700 dark:text-red-400"
         title={delivery.error ?? undefined}
       >
         {/* What the webhook answered when it refused the page; a workflow's

@@ -230,19 +230,19 @@ function BreakdownBody({
         <TabsList className="w-full">
           <TabsTrigger value="prompts">
             Prompts
-            <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
+            <Badge variant="secondary" className="ms-1.5 h-5 px-1.5 text-[10px]">
               {data.byPrompt.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="platforms">
             Platforms
-            <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
+            <Badge variant="secondary" className="ms-1.5 h-5 px-1.5 text-[10px]">
               {data.byPlatform.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="topics">
             Topics
-            <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
+            <Badge variant="secondary" className="ms-1.5 h-5 px-1.5 text-[10px]">
               {data.byTopic.length}
             </Badge>
           </TabsTrigger>
@@ -321,10 +321,10 @@ function BreakdownTable({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
-            <th className="text-left font-medium px-3 py-2">Name</th>
-            {comparable && <th className="text-right font-medium px-2 py-2 w-16">Prev</th>}
-            <th className="text-right font-medium px-2 py-2 w-16">Cur</th>
-            {comparable && <th className="text-right font-medium px-2 py-2 w-24">Change</th>}
+            <th className="text-start font-medium px-3 py-2">Name</th>
+            {comparable && <th className="text-end font-medium px-2 py-2 w-16">Prev</th>}
+            <th className="text-end font-medium px-2 py-2 w-16">Cur</th>
+            {comparable && <th className="text-end font-medium px-2 py-2 w-24">Change</th>}
           </tr>
         </thead>
         <tbody>
@@ -348,7 +348,7 @@ function BreakdownTable({
               {/* A window without answers for the row is "No data", never a 0
                   to change from; a score on under 20 answers is a low sample (VIS-005). */}
               {comparable && (
-                <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                <td className="px-2 py-2 text-end tabular-nums text-muted-foreground">
                   {r.prev === null ? (
                     '—'
                   ) : r.prevRuns === 0 ? (
@@ -360,7 +360,7 @@ function BreakdownTable({
               )}
               <td
                 className={cn(
-                  'px-2 py-2 text-right tabular-nums',
+                  'px-2 py-2 text-end tabular-nums',
                   r.curRuns === 0 && 'text-muted-foreground',
                 )}
               >
@@ -371,7 +371,7 @@ function BreakdownTable({
                 )}
               </td>
               {comparable && (
-                <td className="px-2 py-2 text-right">
+                <td className="px-2 py-2 text-end">
                   {r.prevRuns === 0 || r.curRuns === 0 ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : metric === 'visibility' &&

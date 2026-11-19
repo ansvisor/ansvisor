@@ -125,7 +125,7 @@ export function ProductPagesContext({
               disabled={!editable || busy}
               onClick={() => void pick(option)}
               className={cn(
-                'px-2.5 py-1 text-xs tabular-nums first:rounded-l-md last:rounded-r-md disabled:cursor-not-allowed',
+                'px-2.5 py-1 text-xs tabular-nums first:rounded-s-md last:rounded-e-md disabled:cursor-not-allowed',
                 option === size
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted',

@@ -39,7 +39,7 @@ export function WhatsNewCards({ entries }: { entries: readonly ChatWhatsNewEntry
           <div className="mb-1 flex items-center gap-2">
             <Sparkles aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
             <b className="min-w-0 truncate text-[13.5px] font-semibold">{entry.feature}</b>
-            <span className="ml-auto rounded-md border px-1.5 py-px text-[10.5px] tracking-[.05em] text-muted-foreground uppercase">
+            <span className="ms-auto rounded-md border px-1.5 py-px text-[10.5px] tracking-[.05em] text-muted-foreground uppercase">
               {t('tag')}
             </span>
           </div>

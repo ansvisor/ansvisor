@@ -40,7 +40,7 @@ export function ReadyByLine({
         href={readyBy.href}
         aria-label={t('changeLabel')}
         data-action="readyBy.change"
-        className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'ml-auto')}
+        className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'ms-auto')}
       >
         {t('change')}
       </Link>

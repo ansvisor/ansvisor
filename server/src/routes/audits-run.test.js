@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 let writes;
 let llm;
 let nextId;
+let fetchedUrls;
+let knownFinalUrls;
 
 const BRAND = '33333333-3333-3333-3333-333333333333';
 const PAGE = 'https://acme.com/pricing';
@@ -33,6 +35,10 @@ function query(table) {
     then: (resolve, reject) =>
       Promise.resolve()
         .then(() => {
+          // The brand's earlier audits, for the host its site answers at.
+          if (op === 'select' && table === 'site_audits' && !one) {
+            return { data: knownFinalUrls.map((final_url) => ({ final_url })), error: null };
+          }
           if (op === 'select') return { data: one ? null : [], error: null };
           writes.push({ table, op, values });
           if (op === 'update') return { data: null, error: null };
@@ -60,7 +66,7 @@ async function loadAudits() {
   }));
   vi.doMock('../lib/audit/context.js', async (importOriginal) => ({
     ...(await importOriginal()),
-    buildAuditContext: async (url) => ({ url }),
+    buildAuditContext: async (url) => (fetchedUrls.push(url), { url }),
   }));
   vi.doMock('../lib/audit/engine.js', () => ({ runSignals: async () => [] }));
   vi.doMock('../lib/audit/llm-signals.js', () => ({
@@ -100,6 +106,8 @@ async function runAudit() {
 beforeEach(() => {
   writes = [];
   nextId = 0;
+  fetchedUrls = [];
+  knownFinalUrls = [];
 });
 
 describe('an audit run and the monthly quota', () => {
@@ -118,5 +126,20 @@ describe('an audit run and the monthly quota', () => {
 
     expect(completed.partial).toBe(true);
     expect(charged).toHaveLength(0);
+  });
+});
+
+describe('the address an audit fetches', () => {
+  it('is the host the brand’s site answers at, from its earlier audits, not the one asked for', async () => {
+    llm = { results: [], partial: false };
+    knownFinalUrls = ['https://www.acme.com/about'];
+    await runAudit();
+    expect(fetchedUrls).toEqual(['https://www.acme.com/pricing']);
+  });
+
+  it('is the address asked for when nothing says otherwise', async () => {
+    llm = { results: [], partial: false };
+    await runAudit();
+    expect(fetchedUrls).toEqual([PAGE]);
   });
 });

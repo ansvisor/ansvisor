@@ -347,15 +347,15 @@ const DOCUMENT_CLASS = cn(
   // A weak source's amber wavy line takes the place of its link's (CE-046).
   'prose-a:has-[.quality-weak-source]:no-underline!',
   'prose-h1:text-3xl prose-h1:tracking-tight prose-h2:tracking-tight',
-  '[&_table]:my-4 [&_table]:w-full [&_table]:table-fixed [&_td]:border [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left',
+  '[&_table]:my-4 [&_table]:w-full [&_table]:table-fixed [&_td]:border [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-start',
   // Cells and list items hold paragraphs; their margins would pad every row.
   '[&_td>p]:my-0 [&_th>p]:my-0 [&_li>p]:my-0 prose-li:my-1',
   '[&_.selectedCell]:bg-primary/10 [&_img]:rounded-md [&_.ProseMirror-selectednode]:ring-2 [&_.ProseMirror-selectednode]:ring-ring/50',
   // Locked passages (CE-018): a green line, and what quotes them above.
-  '[&_.cited-passage]:rounded-r-md [&_.cited-passage]:border-l-[3px] [&_.cited-passage]:border-emerald-300 [&_.cited-passage]:bg-emerald-50/70 [&_.cited-passage]:py-1 [&_.cited-passage]:pr-2 [&_.cited-passage]:pl-3 dark:[&_.cited-passage]:border-emerald-700 dark:[&_.cited-passage]:bg-emerald-950/30',
+  '[&_.cited-passage]:rounded-e-md [&_.cited-passage]:border-s-[3px] [&_.cited-passage]:border-emerald-300 [&_.cited-passage]:bg-emerald-50/70 [&_.cited-passage]:py-1 [&_.cited-passage]:pe-2 [&_.cited-passage]:ps-3 dark:[&_.cited-passage]:border-emerald-700 dark:[&_.cited-passage]:bg-emerald-950/30',
   '[&_.cited-passage]:before:mb-0.5 [&_.cited-passage]:before:block [&_.cited-passage]:before:text-[11.5px] [&_.cited-passage]:before:leading-snug [&_.cited-passage]:before:font-medium [&_.cited-passage]:before:tracking-normal [&_.cited-passage]:before:text-emerald-700 [&_.cited-passage]:before:content-[attr(data-cited-label)] dark:[&_.cited-passage]:before:text-emerald-400',
   // An accepted agent suggestion (CE-018): a thin green line, the words it put in underlined.
-  '[&_.agent-accepted]:border-l-2 [&_.agent-accepted]:border-emerald-300 [&_.agent-accepted]:pl-2.5 dark:[&_.agent-accepted]:border-emerald-700',
+  '[&_.agent-accepted]:border-s-2 [&_.agent-accepted]:border-emerald-300 [&_.agent-accepted]:ps-2.5 dark:[&_.agent-accepted]:border-emerald-700',
   '[&_.agent-accepted-text]:underline [&_.agent-accepted-text]:decoration-emerald-300 [&_.agent-accepted-text]:decoration-2 [&_.agent-accepted-text]:underline-offset-4 dark:[&_.agent-accepted-text]:decoration-emerald-700',
   '[&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:h-0 [&_.is-editor-empty:first-child]:before:text-muted-foreground [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]',
 );
@@ -4122,7 +4122,7 @@ export function DraftEditor({
                 type="button"
                 onClick={renameInPage}
                 title={t('header.rename', { title: title.trim() || t('untitled') })}
-                className="block max-w-full truncate rounded-sm text-left hover:underline hover:underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                className="block max-w-full truncate rounded-sm text-start hover:underline hover:underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
               >
                 {title.trim() || t('untitled')}
               </button>
@@ -4143,7 +4143,7 @@ export function DraftEditor({
           <div
             className={cn(
               'flex shrink-0 items-center gap-1.5 sm:gap-2.5',
-              embedded && 'ml-auto min-w-0 shrink flex-wrap justify-end gap-y-1.5',
+              embedded && 'ms-auto min-w-0 shrink flex-wrap justify-end gap-y-1.5',
             )}
           >
             {qualityOn && (
@@ -4292,7 +4292,7 @@ export function DraftEditor({
           </div>
         </div>
         {/* Lined up under the title (the back button's 28px and the 10px gap). */}
-        <div className="mt-3 flex flex-wrap items-center gap-2 pl-[38px]">
+        <div className="mt-3 flex flex-wrap items-center gap-2 ps-[38px]">
           <PageTypeMenu
             brandId={draft.brandId}
             siteType={siteType}
@@ -4448,7 +4448,7 @@ export function DraftEditor({
               aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
               title={panelOpen ? t('panel.hide') : t('panel.show')}
               onClick={togglePanel}
-              className={cn('-my-1 ml-auto shrink-0', panelOpen && 'bg-muted')}
+              className={cn('-my-1 ms-auto shrink-0', panelOpen && 'bg-muted')}
             >
               <PanelRight className="h-4 w-4" />
             </Button>
@@ -4483,7 +4483,7 @@ export function DraftEditor({
                   title={aiUsedUp ?? undefined}
                   onClick={() => void (failedRewrite ? rewritePage() : startAgent())}
                 >
-                  {(starting || rewriting) && <WorkingDots className="ml-0" />}
+                  {(starting || rewriting) && <WorkingDots className="ms-0" />}
                   {t('agentFailed.retry')}
                 </Button>
                 <Button
@@ -4615,7 +4615,7 @@ export function DraftEditor({
                 <span className="font-medium text-foreground">{t('html.title')}</span> ·{' '}
                 {t('html.hint', { marker: '<!-- html-block -->' })}
               </span>
-              <Button size="sm" className="ml-auto h-7" onClick={applyHtmlView}>
+              <Button size="sm" className="ms-auto h-7" onClick={applyHtmlView}>
                 {t('html.back')}
               </Button>
             </div>

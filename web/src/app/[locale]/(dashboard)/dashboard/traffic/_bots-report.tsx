@@ -42,16 +42,16 @@ function TypesTable({ types }: { types: BotTypeRow[] }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="pl-6">{t('columns.type')}</TableHead>
-          <TableHead className="text-right">{t('columns.hits')}</TableHead>
-          <TableHead className="text-right">{t('columns.pages')}</TableHead>
-          <TableHead className="pr-6 text-right">{t('columns.lastSeen')}</TableHead>
+          <TableHead className="ps-6">{t('columns.type')}</TableHead>
+          <TableHead className="text-end">{t('columns.hits')}</TableHead>
+          <TableHead className="text-end">{t('columns.pages')}</TableHead>
+          <TableHead className="pe-6 text-end">{t('columns.lastSeen')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {types.map((row) => (
           <TableRow key={row.type}>
-            <TableCell className="pl-6 text-sm whitespace-normal">
+            <TableCell className="ps-6 text-sm whitespace-normal">
               <span className="font-medium">{t(`types.${row.type}`)}</span>
               {row.bots.length > 0 && (
                 <span className="text-muted-foreground">
@@ -59,13 +59,13 @@ function TypesTable({ types }: { types: BotTypeRow[] }) {
                 </span>
               )}
             </TableCell>
-            <TableCell className="text-right text-sm font-semibold tabular-nums">
+            <TableCell className="text-end text-sm font-semibold tabular-nums">
               {formatNumber(row.hits)}
             </TableCell>
-            <TableCell className="text-right text-sm tabular-nums">
+            <TableCell className="text-end text-sm tabular-nums">
               {formatNumber(row.pages)}
             </TableCell>
-            <TableCell className="pr-6 text-right text-sm text-muted-foreground">
+            <TableCell className="pe-6 text-end text-sm text-muted-foreground">
               {row.lastSeen ? formatRelative(row.lastSeen, tCommon) : '—'}
             </TableCell>
           </TableRow>
@@ -85,17 +85,17 @@ function PagesTable({ report }: { report: TrafficBots }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="pl-6">{t('columns.page')}</TableHead>
-            <TableHead className="text-right">{t('columns.hits')}</TableHead>
-            <TableHead className="text-right">{t('types.training')}</TableHead>
-            <TableHead className="text-right">{t('types.search')}</TableHead>
-            <TableHead className="pr-6 text-right">{t('types.user')}</TableHead>
+            <TableHead className="ps-6">{t('columns.page')}</TableHead>
+            <TableHead className="text-end">{t('columns.hits')}</TableHead>
+            <TableHead className="text-end">{t('types.training')}</TableHead>
+            <TableHead className="text-end">{t('types.search')}</TableHead>
+            <TableHead className="pe-6 text-end">{t('types.user')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {report.pages.map((row) => (
             <TableRow key={row.page}>
-              <TableCell className="pl-6 max-w-[180px] xl:max-w-[320px]">
+              <TableCell className="ps-6 max-w-[180px] xl:max-w-[320px]">
                 <span
                   className="font-mono text-xs text-muted-foreground line-clamp-1"
                   title={row.page}
@@ -103,16 +103,16 @@ function PagesTable({ report }: { report: TrafficBots }) {
                   {row.page}
                 </span>
               </TableCell>
-              <TableCell className="text-right text-sm font-semibold tabular-nums">
+              <TableCell className="text-end text-sm font-semibold tabular-nums">
                 {formatNumber(row.hits)}
               </TableCell>
-              <TableCell className="text-right text-sm text-muted-foreground">
+              <TableCell className="text-end text-sm text-muted-foreground">
                 {when(row.trainingLast)}
               </TableCell>
-              <TableCell className="text-right text-sm text-muted-foreground">
+              <TableCell className="text-end text-sm text-muted-foreground">
                 {when(row.searchLast)}
               </TableCell>
-              <TableCell className="pr-6 text-right text-sm text-muted-foreground">
+              <TableCell className="pe-6 text-end text-sm text-muted-foreground">
                 {when(row.userLast)}
               </TableCell>
             </TableRow>
@@ -153,7 +153,7 @@ function UncrawledAlert({ report }: { report: TrafficBots }) {
         <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
         {t('uncrawled', { count: report.uncrawledCount })}
       </p>
-      <ul className="mt-1 space-y-0.5 pl-5">
+      <ul className="mt-1 space-y-0.5 ps-5">
         {(report.uncrawled ?? []).map((row) => (
           <li key={row.page} className="flex justify-between gap-3">
             <span className="min-w-0 truncate font-mono" title={row.page}>
@@ -164,7 +164,7 @@ function UncrawledAlert({ report }: { report: TrafficBots }) {
         ))}
       </ul>
       {report.uncrawledCount > (report.uncrawled?.length ?? 0) && (
-        <p className="mt-1 pl-5">
+        <p className="mt-1 ps-5">
           {t('moreUncrawled', {
             count: report.uncrawledCount - (report.uncrawled?.length ?? 0),
           })}
@@ -361,7 +361,7 @@ export function BotsReportSection({
         {preview && state === 'off' && (
           <span className="text-xs text-muted-foreground">{t('sampleNote')}</span>
         )}
-        <Badge variant="outline" className="ml-auto text-xs">
+        <Badge variant="outline" className="ms-auto text-xs">
           {/* "All time" covers the last 90 days here (00185). */}
           {dateWindow.dateFrom ? rangeLabel : t('allTimeCapped')}
         </Badge>

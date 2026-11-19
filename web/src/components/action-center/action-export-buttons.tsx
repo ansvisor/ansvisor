@@ -226,11 +226,11 @@ export function ActionExportButtons({
           {/* Wider than its trigger, so "Export Excel" stays on one line. */}
           <DropdownMenuContent align="end" className="w-36">
             <DropdownMenuItem onClick={() => void run(downloadCsv)}>
-              <FileDown className="mr-2 h-4 w-4" />
+              <FileDown className="me-2 h-4 w-4" />
               {tExport('csv')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => void run(downloadExcel)}>
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              <FileSpreadsheet className="me-2 h-4 w-4" />
               {tExport('excel')}
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -248,7 +248,7 @@ export function ActionExportButtons({
               readOnly
               aria-label={tExport('copyAll')}
               value={preview?.text ?? ''}
-              className="h-80 w-full resize-none rounded-md border bg-muted/40 p-3 pr-12 font-mono text-xs"
+              className="h-80 w-full resize-none rounded-md border bg-muted/40 p-3 pe-12 font-mono text-xs"
             />
             <Button
               variant="ghost"
@@ -256,7 +256,7 @@ export function ActionExportButtons({
               aria-label={justCopied ? tExport('preview.copied') : tExport('preview.copy')}
               title={justCopied ? tExport('preview.copied') : tExport('preview.copy')}
               onClick={() => void copyAll()}
-              className="absolute top-2 right-2 h-8 w-8 bg-background/80"
+              className="absolute top-2 end-2 h-8 w-8 bg-background/80"
             >
               {justCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             </Button>

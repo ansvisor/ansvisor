@@ -726,7 +726,7 @@ export default function NewBrandPage() {
             <div className="space-y-2">
               <Label htmlFor="website">{t('step1.website')}</Label>
               <div className="flex">
-                <span className="inline-flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-sm text-muted-foreground">
+                <span className="inline-flex items-center rounded-s-md border border-e-0 bg-muted px-3 text-sm text-muted-foreground">
                   {t('step1.protocol')}
                 </span>
                 <Input
@@ -734,7 +734,7 @@ export default function NewBrandPage() {
                   placeholder={t('step1.websitePlaceholder')}
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
-                  className="rounded-l-none"
+                  className="rounded-s-none"
                 />
               </div>
             </div>
@@ -752,7 +752,7 @@ export default function NewBrandPage() {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
               />
-              <ul className="text-xs text-muted-foreground space-y-1 list-disc ml-4">
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc ms-4">
                 <li>{t('step1.hintIndustry')}</li>
                 <li>{t('step1.hintAudience')}</li>
               </ul>
@@ -862,7 +862,7 @@ export default function NewBrandPage() {
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
                   {t('step2.settingUp')}
                 </>
               ) : (
@@ -936,7 +936,7 @@ export default function NewBrandPage() {
                         key={topic}
                         onClick={() => toggleTopic(topic)}
                         className={cn(
-                          'flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors',
+                          'flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-start text-sm transition-colors',
                           isSelected
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-muted-foreground/30',
@@ -985,7 +985,7 @@ export default function NewBrandPage() {
               >
                 {loadingPrompts ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     {t('step3.generating')}
                   </>
                 ) : (
@@ -1100,7 +1100,7 @@ export default function NewBrandPage() {
           >
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 {t('step4.saving')}
               </>
             ) : (
@@ -1248,7 +1248,7 @@ export default function NewBrandPage() {
               <Button className="w-full" onClick={handleFinish} disabled={savingCompetitors}>
                 {savingCompetitors ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     {t('step5.finishing')}
                   </>
                 ) : selectedCompetitorCount > 0 ? (

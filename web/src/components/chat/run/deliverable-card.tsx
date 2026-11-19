@@ -365,7 +365,7 @@ function TaskControls({
     return (
       <span
         data-slot="task-done"
-        className="ml-auto inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300"
+        className="ms-auto inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300"
       >
         <Check className="size-3" aria-hidden />
         {fileStatus === 'done' ? t('doneAttached') : t('doneInActionCenter')}
@@ -374,7 +374,7 @@ function TaskControls({
   }
   if (!canChange) return null;
   return (
-    <div className="ml-auto flex items-center gap-1">
+    <div className="ms-auto flex items-center gap-1">
       <button
         type="button"
         data-action="deliverable.attachAndMarkDone"

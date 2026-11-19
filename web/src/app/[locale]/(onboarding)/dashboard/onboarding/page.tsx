@@ -1507,7 +1507,7 @@ export default function OnboardingPage() {
               <div className="space-y-2">
                 <Label htmlFor="website">Website</Label>
                 <div className="flex">
-                  <span className="inline-flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center rounded-s-md border border-e-0 bg-muted px-3 text-sm text-muted-foreground">
                     https://
                   </span>
                   <Input
@@ -1515,7 +1515,7 @@ export default function OnboardingPage() {
                     placeholder="example.com"
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
-                    className="rounded-l-none"
+                    className="rounded-s-none"
                   />
                 </div>
               </div>
@@ -1531,7 +1531,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
                 />
-                <ul className="text-xs text-muted-foreground space-y-1 list-disc ml-4">
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc ms-4">
                   <li>What industry are you in?</li>
                   <li>Who is your target audience?</li>
                 </ul>
@@ -1650,7 +1650,7 @@ export default function OnboardingPage() {
               <Button className="w-full" onClick={handleCreateOrgAndBrand} disabled={isLoading}>
                 {isLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     {tSetup('setup.settingUp')}
                   </>
                 ) : (
@@ -1732,7 +1732,7 @@ export default function OnboardingPage() {
                           key={topic}
                           onClick={() => toggleTopic(topic)}
                           className={cn(
-                            'flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors',
+                            'flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-start text-sm transition-colors',
                             isSelected
                               ? 'border-primary bg-primary/5'
                               : 'border-border hover:border-muted-foreground/30',
@@ -1787,7 +1787,7 @@ export default function OnboardingPage() {
                 >
                   {loadingPrompts ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" />
                       {tSetup('setup.generatingPrompts')}
                     </>
                   ) : (
@@ -1918,7 +1918,7 @@ export default function OnboardingPage() {
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
                   {tSetup('setup.savingPrompts')}
                 </>
               ) : (
@@ -2093,7 +2093,7 @@ export default function OnboardingPage() {
                 >
                   {savingCompetitors ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" />
                       {tSetup('setup.finishingSetup')}
                     </>
                   ) : hasSelectedCompetitors ? (

@@ -835,9 +835,9 @@ export default function PromptsPage() {
                   className="w-full"
                 >
                   {isAddingManual ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <Plus className="mr-2 h-4 w-4" />
+                    <Plus className="me-2 h-4 w-4" />
                   )}
                   Add Prompt
                 </Button>
@@ -904,12 +904,12 @@ export default function PromptsPage() {
                 >
                   {isGenerating ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" />
                       Generating...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="mr-2 h-4 w-4" />
+                      <Sparkles className="me-2 h-4 w-4" />
                       Generate Prompts
                     </>
                   )}
@@ -956,9 +956,9 @@ export default function PromptsPage() {
                 disabled={isSaving}
               >
                 {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <Save className="mr-2 h-4 w-4" />
+                  <Save className="me-2 h-4 w-4" />
                 )}
                 Save Selected ({suggestions.filter((s) => s.isActive).length})
               </Button>
@@ -968,9 +968,9 @@ export default function PromptsPage() {
                 disabled={isGenerating}
               >
                 {isGenerating ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <Sparkles className="mr-2 h-4 w-4" />
+                  <Sparkles className="me-2 h-4 w-4" />
                 )}
                 Regenerate
               </Button>
@@ -997,7 +997,7 @@ export default function PromptsPage() {
                     variant="outline"
                     onClick={guard(openBulkDialog, { action: tActions('changeLocations') })}
                   >
-                    <Globe className="mr-2 h-3.5 w-3.5" />
+                    <Globe className="me-2 h-3.5 w-3.5" />
                     Locations
                   </Button>
                   <Button
@@ -1005,10 +1005,10 @@ export default function PromptsPage() {
                     variant={unanalyzedPrompts.length > 0 ? 'default' : 'outline'}
                     onClick={guard(openAnalyzeDialog, { action: tActions('analyzePrompts') })}
                   >
-                    <Search className="mr-2 h-3.5 w-3.5" />
+                    <Search className="me-2 h-3.5 w-3.5" />
                     Analyze Prompts
                     {unanalyzedPrompts.length > 0 && (
-                      <Badge variant="secondary" className="ml-2 text-[10px]">
+                      <Badge variant="secondary" className="ms-2 text-[10px]">
                         {unanalyzedPrompts.length} new
                       </Badge>
                     )}
@@ -1172,9 +1172,9 @@ export default function PromptsPage() {
                 disabled={isAnalyzing || selectedAnalyzeIds.size === 0}
               >
                 {isAnalyzing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <Play className="mr-2 h-4 w-4" />
+                  <Play className="me-2 h-4 w-4" />
                 )}
                 Analyze ({selectedAnalyzeIds.size})
               </Button>
@@ -1322,7 +1322,7 @@ export default function PromptsPage() {
               onClick={handleBulkApply}
               disabled={isBulkSaving || bulkPlan.changes.length === 0}
             >
-              {isBulkSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isBulkSaving && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
               {bulkAction === 'add' ? 'Add' : 'Remove'} ({bulkPlan.changes.length})
             </Button>
           </DialogFooter>

@@ -382,7 +382,7 @@ function ImpactTable({
   onOpen: (row: ImpactRow) => void;
 }) {
   const t = useTranslations('reports.impact');
-  const head = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
+  const head = 'px-3 py-2 text-start text-xs font-medium text-muted-foreground';
   return (
     <div className="overflow-x-auto rounded-xl border">
       <table className="w-full min-w-[880px] text-sm">
@@ -432,7 +432,7 @@ function ImpactTableRow({ row, onOpen }: { row: ImpactRow; onOpen: (row: ImpactR
           type="button"
           data-action="impact.openEvidence"
           onClick={() => onOpen(row)}
-          className="text-left font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="text-start font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           {row.title}
         </button>
@@ -645,7 +645,7 @@ function Evidence({ row }: { row: ImpactRow }) {
   ];
   return (
     <div className="flex h-full flex-col overflow-y-auto" data-slot="impact-evidence">
-      <SheetHeader className="pr-12">
+      <SheetHeader className="pe-12">
         <SheetTitle>{row.title}</SheetTitle>
         <p className="text-xs text-muted-foreground">
           {t('shipped', { date: dayOf(row.shippedAt) })}
