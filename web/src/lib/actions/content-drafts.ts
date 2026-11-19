@@ -1392,7 +1392,17 @@ export async function getContentOverlap(
     p_brand_id: brandId,
     p_prompt_ids: prompts,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Production hides a server action's error from the browser (React #441):
+    // said here, with what was read, so the server's log shows why.
+    console.error('[content] pages cited for the prompts not read:', {
+      brandId,
+      source: parsed.data,
+      prompts: prompts.length,
+      error: error.message,
+    });
+    throw new Error(error.message);
+  }
   return {
     totalPrompts: prompts.length,
     pages: (data ?? []).map((row) => ({

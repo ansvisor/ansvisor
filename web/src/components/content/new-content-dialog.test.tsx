@@ -931,6 +931,22 @@ describe('New content', () => {
       });
     });
 
+    it('reads once from Send to Editor, and once per Try again, though Start is rebuilt', async () => {
+      // Content test 2026-11-19: one Try again sent five reads.
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentOverlap.mockRejectedValue(new Error('down'));
+      await render('b2b', {
+        kind: 'opportunity',
+        id: 'o2',
+        page: { url: 'https://northwind.example/pricing', title: 'Pricing' },
+      });
+      await act(async () => {});
+      expect(getContentOverlap).toHaveBeenCalledTimes(1);
+      await click(button('Try again'));
+      await act(async () => {});
+      expect(getContentOverlap).toHaveBeenCalledTimes(2);
+    });
+
     it('lets the page start when the read fails, and tries again', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
       getContentOverlap.mockRejectedValueOnce(new Error('down'));
