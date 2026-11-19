@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { ArrowLeft } from 'lucide-react';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ const STATUS_TONE: Record<Review['status'], string> = {
  */
 export function SkillReview({ id }: { id: string }) {
   const t = useTranslations('chatSkills.reviewPage');
+  const serverError = useServerErrorText();
   const format = useFormatter();
   const router = useRouter();
   const [review, setReview] = useState<Review | null | 'failed' | 'missing'>(null);
@@ -95,7 +97,7 @@ export function SkillReview({ id }: { id: string }) {
     const body = (await res?.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
     setBusy(false);
     if (!res?.ok || !body?.ok) {
-      toast.error(body?.error ?? t('failed'));
+      toast.error(serverError(body, body?.error ?? t('failed'), res?.status));
       return;
     }
     toast.success(t(decision === 'approve' ? 'approved' : 'rejected', { name: review.name }));

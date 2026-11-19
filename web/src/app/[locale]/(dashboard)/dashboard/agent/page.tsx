@@ -26,6 +26,7 @@ import { Markdown } from '@/components/ui/markdown';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import {
   Check,
   Copy,
@@ -155,6 +156,8 @@ function AgentChat(props: {
   // A chat turn is an action: a read-only workspace gets the upgrade dialog.
   const { isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
+  const tServer = useTranslations('serverErrors');
 
   // Ref mirrors activeId for prepareSendMessagesRequest. Reading the
   // state directly from the transport closure gives us a stale snapshot —
@@ -285,7 +288,7 @@ function AgentChat(props: {
         return;
       }
 
-      toast.error(body?.error ?? 'Failed to create chat');
+      toast.error(serverError(body, body?.error ?? tServer('server_error'), res.status));
       return;
     }
     const { conversation } = (await res.json()) as { conversation: ConversationRow };
@@ -300,7 +303,7 @@ function AgentChat(props: {
     if (!res.ok) {
       const body = await res.json().catch(() => null);
 
-      toast.error(body?.error ?? 'Failed to delete conversation');
+      toast.error(serverError(body, body?.error ?? tServer('server_error'), res.status));
       return;
     }
     setConversations((prev) => prev.filter((c) => c.id !== id));
@@ -338,7 +341,7 @@ function AgentChat(props: {
           return;
         }
 
-        toast.error(body?.error ?? 'Failed to create conversation');
+        toast.error(serverError(body, body?.error ?? tServer('server_error'), res.status));
         return;
       }
       const { conversation } = (await res.json()) as { conversation: ConversationRow };

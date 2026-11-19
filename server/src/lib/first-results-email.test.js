@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -22,6 +25,8 @@ const db = vi.hoisted(() => ({
   readersError: null,
   claimed: { data: [], error: null },
   emails: {},
+  /** profiles.ui_language rows (id, ui_language). */
+  languages: [],
   updates: [],
 }));
 const deliverEmail = vi.hoisted(() => vi.fn());
@@ -62,8 +67,14 @@ vi.mock('../config/supabase.js', () => ({
         };
         return chain;
       }
-      // profiles: the claim (update … in … is null … select) or its release (update … in).
+      // profiles: the languages (select … in), the claim (update … in … is null … select) or its release (update … in).
       return {
+        select: () => ({
+          in: async (_column, ids) => ({
+            data: db.languages.filter((row) => ids.includes(row.id)),
+            error: null,
+          }),
+        }),
         update: (values) => {
           const update = { values, filters: [] };
           db.updates.push(update);
@@ -100,6 +111,7 @@ vi.mock('./email.js', () => ({ deliverEmail }));
 vi.mock('./logger.js', () => ({ default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const { renderFirstResultsEmail, sendFirstResultsEmail } = await import('./first-results-email.js');
+const { forgetMessages } = await import('./i18n.js');
 
 const sees = (...brands) => new Set(brands);
 
@@ -121,6 +133,7 @@ beforeEach(() => {
   db.readerCalls = [];
   db.readersError = null;
   db.claimed = { data: [{ id: 'u1' }, { id: 'u2' }], error: null };
+  db.languages = [];
   db.emails = { u1: 'ana@acme.test', u2: 'bo@acme.test', u3: 'cy@acme.test' };
   db.updates = [];
   deliverEmail.mockReset().mockResolvedValue('sent');
@@ -252,6 +265,52 @@ describe('sendFirstResultsEmail', () => {
     deliverEmail.mockResolvedValue('skipped');
     expect(await sendFirstResultsEmail('brand-1')).toBe('skipped');
     expect(db.updates[1].values).toEqual({ first_results_emailed_at: null });
+  });
+
+  it("sends each person's e-mail in their own language, one send per language (LOC-008)", async () => {
+    const file = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../messages/de.json',
+    );
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ firstResults: { subject: 'Ihre ersten Ergebnisse: {brand}' } }),
+    );
+    forgetMessages();
+    try {
+      db.languages = [{ id: 'u2', ui_language: 'de' }];
+      expect(await sendFirstResultsEmail('brand-1')).toBe('sent');
+      expect(deliverEmail).toHaveBeenCalledTimes(2);
+      const mails = deliverEmail.mock.calls.map(([mail]) => mail);
+      // Same people, same moment: u1 has no language set (English), u2 chose German.
+      expect(mails.find((mail) => mail.to[0] === 'ana@acme.test').subject).toBe(
+        'Your first results are ready: Acme Coffee',
+      );
+      expect(mails.find((mail) => mail.to[0] === 'bo@acme.test').subject).toBe(
+        'Ihre ersten Ergebnisse: Acme Coffee',
+      );
+    } finally {
+      fs.rmSync(file, { force: true });
+      forgetMessages();
+    }
+  });
+
+  it('gives back only the claim of the language whose send was refused', async () => {
+    const file = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../messages/de.json',
+    );
+    fs.writeFileSync(file, JSON.stringify({}));
+    forgetMessages();
+    try {
+      db.languages = [{ id: 'u2', ui_language: 'de' }];
+      deliverEmail.mockResolvedValueOnce('sent').mockResolvedValueOnce('refused');
+      expect(await sendFirstResultsEmail('brand-1')).toBe('sent');
+      expect(db.updates[1].filters).toEqual([['in', 'id', ['u2']]]);
+    } finally {
+      fs.rmSync(file, { force: true });
+      forgetMessages();
+    }
   });
 
   it('keeps the claim when Resend may have sent it', async () => {

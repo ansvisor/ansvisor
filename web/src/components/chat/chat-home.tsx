@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { Link, useRouter } from '@/i18n/navigation';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -540,6 +541,7 @@ export function ChatHome({
   newMember?: boolean;
 }) {
   const t = useTranslations('chatShell.home');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const welcome = useChatWelcome(audience);
   const tour = useChatTour();
@@ -714,7 +716,7 @@ export function ChatHome({
       setStarting(false);
       // A read-only workspace, or a chat on the demo brand: the plans.
       if (started.code === 'subscription_inactive' || started.code === 'demo_brand') openUpgrade();
-      else toast.error(started.error ?? t('startFailed'));
+      else toast.error(serverError(started, started.error ?? t('startFailed')));
       return;
     }
     // The run goes on without this page: the chat picks up its stream.
