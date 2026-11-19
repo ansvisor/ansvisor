@@ -11,6 +11,7 @@ import {
 import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
+import type { UiLocale } from '@/i18n/locales';
 import { personTimeZone } from '@/lib/account-time-zone';
 import type { AiProvider } from '@/lib/agent/providers';
 import { hasBrandAccess } from '@/lib/brand-access';
@@ -19,6 +20,7 @@ import { platformName } from '@/lib/signals/names';
 import { SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { cardLocaleOf } from './card-locale';
+import { inEnglish, inRunLocale, runLocale, withRunLocale } from './run-locale';
 import type { Json } from '@/types/supabase';
 import type { UserRole } from '@/types';
 import { recordAccessDenied } from './access-log';
@@ -398,12 +400,26 @@ import { replayFrame, replayableThinking, tagThinking } from './thinking-replay'
  * (`approval_mismatch`).
  */
 
-const t = createTranslator({ locale: 'en', messages, namespace: 'chatEngine' });
-const rangeT = createTranslator({ locale: 'en', messages, namespace: 'chatRange' });
+// The engine's words for the person, in the run's language (run-locale.ts withRunLocale);
+// what a model reads, or other code compares, goes through inEnglish.
+const t = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatEngine' }),
+  'chatEngine',
+);
+const rangeT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatRange' }),
+  'chatRange',
+);
 /** A range in words (range.ts rangeWords), with the chatRange messages. */
 const rangeSay: RangeT = (key, values) => rangeT(key as never, values as never);
-const toolT = createTranslator({ locale: 'en', messages, namespace: 'chatTools' });
-const settingsT = createTranslator({ locale: 'en', messages, namespace: 'settings' });
+const toolT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatTools' }),
+  'chatTools',
+);
+const settingsT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'settings' }),
+  'settings',
+);
 
 /** What a row's card says under it, when it has words for that (chatTools.{key}.note). */
 function toolNote(tool: Pick<ChatTool, 'labelKey'>): string | null {
@@ -425,7 +441,13 @@ let shownNames: ToolNames | null = null;
  * row's as its Settings name, the engine's own with no words (they go).
  */
 function answerToolNames(): ToolNames {
-  shownNames ??= toolNamesOf([
+  // Settings' English names, kept once: never a run's language.
+  shownNames ??= inEnglish(() => englishToolNames());
+  return shownNames;
+}
+
+function englishToolNames(): ToolNames {
+  return toolNamesOf([
     ...CHAT_TOOLS.map(
       (tool) =>
         [
@@ -437,7 +459,6 @@ function answerToolNames(): ToolNames {
       (name) => [name, null] as const,
     ),
   ]);
-  return shownNames;
 }
 
 // ─── Who, and what can go wrong ─────────────────────────────────────────────
@@ -896,6 +917,15 @@ export async function startChatRun(
    */
   options: { tainted?: boolean; scopeUntrusted?: boolean } = {},
 ): Promise<StartRunResult> {
+  // A refusal in the person's language.
+  return withRunLocale(await cardLocaleOf(actor.userId), () => startChatRunIn(actor, raw, options));
+}
+
+async function startChatRunIn(
+  actor: ChatActor,
+  raw: unknown,
+  options: { tainted?: boolean; scopeUntrusted?: boolean },
+): Promise<StartRunResult> {
   const parsed = startRunInput.safeParse(raw);
   if (!parsed.success) return failure(400, 'invalid', t('error.failed'));
   const input = parsed.data;
@@ -1253,6 +1283,8 @@ interface RunContext {
   memory: RunMemory;
   /** The person's default date range (range-store.ts), read once a request when a read needs it. */
   savedRange?: SavedRange;
+  /** The language the person reads Chat in (card-locale.ts), read once a request. */
+  locale: UiLocale;
 }
 
 /** No session of the run's person is behind it: an agent run on its own, or in another's request. */
@@ -1279,10 +1311,22 @@ export async function driveRun(
   actor: ChatActor,
   runId: string,
   resume?: ResumeAction,
+  options: { sessionUserId?: string | null; onCard?: (made: boolean) => void } = {},
+): Promise<void> {
+  // Its steps, cards and notices in the person's language, read once a request.
+  return withRunLocale(await cardLocaleOf(actor.userId), () =>
+    driveRunIn(actor, runId, resume, options),
+  );
+}
+
+async function driveRunIn(
+  actor: ChatActor,
+  runId: string,
+  resume: ResumeAction | undefined,
   {
     sessionUserId = actor.userId,
     onCard,
-  }: { sessionUserId?: string | null; onCard?: (made: boolean) => void } = {},
+  }: { sessionUserId?: string | null; onCard?: (made: boolean) => void },
 ): Promise<void> {
   let carded = false;
   const cardSettled = (made: boolean) => {
@@ -1575,6 +1619,8 @@ async function openContext(
       planNote: playbook ? playbookPlanNote(playbook, refused, ctx.plan.planName) : null,
     },
     memory: await runMemory(actor, brand),
+    // driveRun read it for the request (withRunLocale).
+    locale: runLocale(),
   };
 }
 
@@ -2844,7 +2890,11 @@ function workspaceBlock(
   if (phase === 'write' && rc.refused.length > 0) {
     lines.push(
       `Not available to this person, with the reason the app gives (call ${EXPLAIN_TOOL} with the capability when they ask for one): ${rc.refused
-        .map((r) => `${r.tool.labelKey} = "${toolWords(r.tool, 'name')}" (${r.denial.code})`)
+        // In English (inEnglish), whatever the person's language: the model reads it.
+        .map(
+          (r) =>
+            `${r.tool.labelKey} = "${inEnglish(() => toolWords(r.tool, 'name'))}" (${r.denial.code})`,
+        )
         .join('; ')}.`,
     );
   }
@@ -3800,12 +3850,15 @@ async function deny(
   denial: ToolDenial,
   input: Record<string, unknown>,
 ) {
-  const answer = buildDenial(denial, {
+  const asked = {
     tool,
     role: ctx?.role ?? null,
     plan: ctx?.plan ?? null,
     target: targetOf(input),
-  });
+  };
+  // The card in the person's language; the model is told in English.
+  const answer = buildDenial(denial, asked);
+  const told = inEnglish(() => buildDenial(denial, asked));
   const card: ChatDenialCard = {
     asked: answer.asked,
     rule: answer.rule,
@@ -3829,9 +3882,9 @@ async function deny(
   );
   return {
     code: denial.code,
-    asked: answer.asked,
-    rule: answer.rule.detail,
-    whoCan: answer.whoCan,
+    asked: told.asked,
+    rule: told.rule.detail,
+    whoCan: told.whoCan,
   };
 }
 
@@ -3992,12 +4045,12 @@ async function cardTarget(
   input: Record<string, unknown>,
   brandId: string | null,
   actor: ChatActor,
+  locale: UiLocale,
 ) {
   let own: string | null = null;
   if (tool.target) {
     try {
       // The card's own words (its cost line) in the person's language.
-      const locale = await cardLocaleOf(actor.userId);
       own = await tool.target(input as never, { organizationId: actor.organizationId, locale });
     } catch (err) {
       console.error('[chat/engine] could not name a card’s target:', err);
@@ -4042,7 +4095,7 @@ async function openCard(
 ): Promise<CallOutcome> {
   const n = ++rc.progress.steps;
   const execute = decision.kind === 'click';
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor, rc.locale);
   const row = await insertStep(rc.run.id, {
     position: n,
     kind: execute ? 'execute' : (tool.stepKind ?? 'write'),
@@ -4569,7 +4622,7 @@ async function readCall(
     if (refused) return result(call, refused, true);
     pageSites = siteRules(sites);
   }
-  const source = page ?? toolWords(tool, 'step').replace(/^Read /, '');
+  const source = page ?? inEnglish(() => toolWords(tool, 'step')).replace(/^Read /, '');
   const scoped = await scopeRead(tool, asked, {
     question: rc.progress.question,
     ...(await runRange(rc)),
@@ -4596,7 +4649,9 @@ async function readCall(
   }
   const input = scoped.input;
   const n = ++rc.progress.steps;
-  const scope: ChatStepScope = page !== null ? { subject: page } : scopeOf(tool, input, scoped);
+  // A step's scope stays English: a saved skill reads its range back (save-steps.ts RELATIVE_RANGE).
+  const scope: ChatStepScope =
+    page !== null ? { subject: page } : inEnglish(() => scopeOf(tool, input, scoped));
   const started = Date.now();
   let row = await insertStep(rc.run.id, {
     position: n,
@@ -5009,7 +5064,7 @@ async function writeCall(
   /** A step an allowed agent takes live on its own: its slot and page (goLiveCall). */
   goLive?: WriteRequest['goLive'],
 ): Promise<CallOutcome> {
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor, rc.locale);
   let row;
   if (cardStepId) {
     row = await updateStep(cardStepId, { status: 'running' });
@@ -5696,6 +5751,18 @@ export async function prepareResume(
   kind: 'approve' | 'skip' | 'answer',
   raw: unknown,
 ): Promise<{ ok: true; resume: ResumeAction } | EngineFailure> {
+  // A refusal, and a card shown again, in the person's language.
+  return withRunLocale(await cardLocaleOf(actor.userId), () =>
+    prepareResumeIn(actor, runId, kind, raw),
+  );
+}
+
+async function prepareResumeIn(
+  actor: ChatActor,
+  runId: string,
+  kind: 'approve' | 'skip' | 'answer',
+  raw: unknown,
+): Promise<{ ok: true; resume: ResumeAction } | EngineFailure> {
   const parsed =
     kind === 'approve'
       ? approveInput.safeParse(raw)
@@ -5741,7 +5808,7 @@ export async function prepareResume(
       sink.emit('confirm.required', {
         n: pending.n,
         action: toolWords(tool, 'name'),
-        target: await cardTarget(brand, tool, input, brand?.id ?? null, actor),
+        target: await cardTarget(brand, tool, input, brand?.id ?? null, actor, runLocale()),
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
         ...cardNotes(tool),
@@ -6355,7 +6422,10 @@ export async function endHeldRun(
   const run = await loadRun(runId);
   if (!run || run.status !== from) return false;
   if (!(await moveRun(runId, [from], 'stopped', { finished: true }))) return false;
-  await finishStopped(run, new RunEventSink(runId, run.lastSeq), reason, run.workingMs);
+  // Its stopped steps' words in its person's language.
+  await withRunLocale(await cardLocaleOf(run.userId), () =>
+    finishStopped(run, new RunEventSink(runId, run.lastSeq), reason, run.workingMs),
+  );
   publishRunEnd(runId);
   return true;
 }
@@ -6374,6 +6444,15 @@ export async function stopChatRun(
    * another request, ends it with those words.
    */
   why: Extract<ChatStopReason, 'person' | 'action_closed'> = 'person',
+): Promise<{ ok: true } | EngineFailure> {
+  // Its stopped steps' words in the person's language.
+  return withRunLocale(await cardLocaleOf(actor.userId), () => stopChatRunIn(actor, runId, why));
+}
+
+async function stopChatRunIn(
+  actor: ChatActor,
+  runId: string,
+  why: Extract<ChatStopReason, 'person' | 'action_closed'>,
 ): Promise<{ ok: true } | EngineFailure> {
   const run = await loadRun(runId);
   if (!run || run.userId !== actor.userId || run.organizationId !== actor.organizationId) {

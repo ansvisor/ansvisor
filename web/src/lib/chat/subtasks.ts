@@ -5,6 +5,7 @@ import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { ASK_TOOL } from './asks';
+import { inRunLocale } from './run-locale';
 import type { ChatModels } from './engine-model';
 import {
   clientStep,
@@ -62,8 +63,14 @@ import { partOf, partsEnded } from './subtask-parts';
  * Server only.
  */
 
+// What the model reads (the read's source, a refusal) stays English.
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatEngine.subtasks' });
-const stepT = createTranslator({ locale: 'en', messages, namespace: 'chatEngine.step' });
+// The step's words, in the run's language (card-locale.ts).
+const shownT = inRunLocale(t, 'chatEngine.subtasks');
+const stepT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatEngine.step' }),
+  'chatEngine.step',
+);
 
 export const SUBTASKS_TOOL = 'run_subtasks';
 export const MIN_PARTS = 2;
@@ -400,8 +407,8 @@ export async function runSubtasks(
     position: ++progress.steps,
     kind: 'read',
     status: 'running',
-    label: t('label', { count }),
-    detail: t('progress', { ended: 0, count }),
+    label: shownT('label', { count }),
+    detail: shownT('progress', { ended: 0, count }),
     scope: { unit: 'parts' },
     rowCount: count,
     tool: SUBTASKS_TOOL,
@@ -437,7 +444,7 @@ export async function runSubtasks(
       if (JSON.stringify(parts) !== JSON.stringify(shown)) {
         shown = parts;
         row = await updateStep(row.id, {
-          detail: t('progress', { ended: partsEnded(parts), count }),
+          detail: shownT('progress', { ended: partsEnded(parts), count }),
         });
         sink.emit('step.updated', { step: { ...clientStep(row), parts } });
       }
@@ -472,7 +479,7 @@ export async function runSubtasks(
   const done = parts.filter((part) => part.status === 'done').length;
   await finishStep({
     status: done > 0 ? 'done' : 'error',
-    detail: t('progress', { ended: partsEnded(parts), count }),
+    detail: shownT('progress', { ended: partsEnded(parts), count }),
   });
   const value = toJson({
     parts: parts.map((part, i) =>
