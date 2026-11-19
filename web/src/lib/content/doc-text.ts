@@ -79,6 +79,17 @@ export function openSpotPlaces(doc: PmNode, spots: readonly ProofSpot[]): Placed
 }
 
 /**
+ * A page's characters as the editor's counter counts them (its toolbar,
+ * CharacterCount): the document's text, no space between its blocks, an
+ * image or a schema block as one. Read before the page is in the editor (New
+ * content), so the number there is the editor's.
+ */
+export function editorCharacters(html: string): number {
+  const doc = pageDoc(html);
+  return doc.textBetween(0, doc.content.size, undefined, ' ').length;
+}
+
+/**
  * A page's HTML as the editor's document, with the nodes that shape it (its
  * marks and decorations aside), for the server's go-live gate. Needs a DOM:
  * withContentDom's on the server.

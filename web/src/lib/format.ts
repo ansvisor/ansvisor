@@ -4,8 +4,9 @@
 // The language is the person's own, set once per page by <FormatLocale> (the
 // layout) so these plain functions need no hook. Pass `locale` to say it
 // outright (a test, or a server component that asks next-intl's getLocale()).
-// Not safe to rely on for server rendering across requests of different
-// languages; the numbers a page loads show in the browser, where it is right.
+// Only the browser keeps the language: on the server this module is shared by
+// concurrent requests in different languages, so server rendering formats in
+// en-US unless `locale` is passed, and the browser re-renders in the person's.
 let formatLocale = 'en-US';
 
 /** The Intl locale for an interface language ("en" is en-US; the test language en-XA too). */
@@ -14,6 +15,8 @@ export function intlLocaleOf(uiLocale: string): string {
 }
 
 export function setFormatLocale(uiLocale: string): void {
+  // Never on the server: one request's language would leak into another's.
+  if (typeof window === 'undefined') return;
   formatLocale = intlLocaleOf(uiLocale);
 }
 

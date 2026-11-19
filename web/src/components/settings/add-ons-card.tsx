@@ -128,7 +128,12 @@ function AddOnsBody({
   onChange: () => void;
 }) {
   const t = useTranslations('settings.addOns');
-  const [tab, setTab] = useState<AddOnKind>('ai');
+  // The old AI packs left the sale (00547; Growth's top-ups are on Add more
+  // to your plan): a tab with nothing on it isn't shown, nor opened on.
+  const kinds = (['ai', 'storage'] as const).filter((kind) =>
+    addOns.packs.some((p) => p.kind === kind),
+  );
+  const [tab, setTab] = useState<AddOnKind>(() => kinds[0] ?? 'storage');
   // The pack picked on each tab; its Most picked one to start with.
   const [picked, setPicked] = useState<Record<AddOnKind, string | null>>(() => ({
     ai: firstPick(addOns.packs, 'ai'),
@@ -165,7 +170,7 @@ function AddOnsBody({
           aria-label={t('tabs.label')}
           className="inline-flex rounded-lg border bg-muted/40 p-0.5"
         >
-          {(['ai', 'storage'] as const).map((kind) => (
+          {kinds.map((kind) => (
             <button
               key={kind}
               type="button"

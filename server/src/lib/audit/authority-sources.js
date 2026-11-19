@@ -54,6 +54,14 @@ const RESEARCH_DOMAINS = [
   'rfc-editor.org',
   'iso.org',
   'whatwg.org',
+  // Standards and the platforms' own documentation (2026-11-19): what a page
+  // about robots.txt, schema or an AI crawler cites first.
+  'schema.org',
+  'developer.mozilla.org',
+  'developers.google.com',
+  'support.google.com',
+  'platform.openai.com',
+  'docs.anthropic.com',
 ];
 
 /** Major news. */

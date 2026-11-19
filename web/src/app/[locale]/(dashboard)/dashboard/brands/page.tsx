@@ -10,16 +10,20 @@ import { AddBrandLink } from '@/components/dashboard/add-brand-link';
 import { Button } from '@/components/ui/button';
 import { Crown, Plus } from 'lucide-react';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { ADD_ONS_HREF } from '@/lib/billing/add-on-links';
 
 function BrandsHeader({
   canManage,
   canAddBrand,
   needsUpgrade,
+  brandAddOn,
 }: {
   /** Admins and managers add brands (brands: admin/manager insert). */
   canManage: boolean;
   canAddBrand: boolean;
   needsUpgrade: boolean;
+  /** Growth at its limit buys an extra brand (00546) instead of upgrading. */
+  brandAddOn: boolean;
 }) {
   const t = useTranslations('brands');
   return (
@@ -36,6 +40,13 @@ function BrandsHeader({
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
                 {t('addBrand')}
+              </Button>
+            </AddBrandLink>
+          ) : needsUpgrade && brandAddOn ? (
+            <AddBrandLink href={ADD_ONS_HREF}>
+              <Button variant="outline" className="gap-2">
+                <Plus className="h-4 w-4" />
+                {t('addBrandAddOn')}
               </Button>
             </AddBrandLink>
           ) : needsUpgrade ? (
@@ -83,7 +94,12 @@ export default async function BrandsPage() {
 
   return (
     <div className="space-y-6">
-      <BrandsHeader canManage={canManage} canAddBrand={canAddBrand} needsUpgrade={needsUpgrade} />
+      <BrandsHeader
+        canManage={canManage}
+        canAddBrand={canAddBrand}
+        needsUpgrade={needsUpgrade}
+        brandAddOn={plan.id === 'growth'}
+      />
       <BrandsClient brands={listed} />
     </div>
   );

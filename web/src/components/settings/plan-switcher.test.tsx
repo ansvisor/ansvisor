@@ -161,20 +161,25 @@ describe('the plan cards', () => {
         '1x AI usage',
         'MCP & API access',
       ],
+      // Growth's brands, prompts and AI usage grow with add-ons (00546).
       Growth: [
-        '4 brands',
+        '4 brands+ add-ons',
         'Unlimited seats',
-        '200 prompts tracked',
+        '200 prompts tracked+ add-ons',
         'ChatGPT, Gemini, Google AI Mode and Google AI Overviews tracking',
         '50 content briefs a month',
         '500 site audits a month',
-        '5x AI usage',
+        '5x AI usage+ add-ons',
         'Multi-region tracking',
         'White-label reports & exports',
         'Looker Studio',
       ],
     });
     expect(container.textContent).not.toContain('8 answer engines');
+    // Starter's lines grow by upgrading, not by add-ons.
+    expect(cards().Starter.some((line: string) => line.includes('+ add-ons'))).toBe(false);
+    const mark = container.querySelector('[data-slot="expandable-mark"]');
+    expect(mark?.getAttribute('title')).toContain('on Settings › Billing');
     // AI usage says what it covers on hover.
     const ai = [...container.querySelectorAll('li span')].find(
       (el) => el.textContent === '5x AI usage',
@@ -192,7 +197,7 @@ describe('the plan cards', () => {
     const { Starter, Growth } = cards();
     expect(Starter.slice(6)).toEqual(['1x AI usage', 'Chat and Agents', 'MCP & API access']);
     expect(Growth.slice(6)).toEqual([
-      '5x AI usage',
+      '5x AI usage+ add-ons',
       'Chat and Agents',
       'Full auto, with agents that publish on their own',
       'Multi-region tracking',
@@ -248,7 +253,7 @@ describe('the plan cards', () => {
     await render('growth');
     expect(container.textContent).toContain('Need a custom plan?');
     expect(container.textContent).toContain(
-      'For large companies and agencies managing AI visibility at scale. Starting at $499/month.',
+      'For large companies and agencies managing AI visibility at scale. Starting at $1,999/month.',
     );
     // Its AI usage is set per customer, from Enterprise's $50 (10x Starter's).
     const ai = [...container.querySelectorAll('li span')].find(
@@ -260,9 +265,10 @@ describe('the plan cards', () => {
     expect(ai?.getAttribute('title')).toContain('Ansvisor sets the amount with you.');
     expect(container.textContent).not.toContain('10x AI usage');
     for (const point of [
-      'Unlimited brands in a custom workspace',
-      'All answer engines, Claude included',
-      'SSO / SAML and custom feature requests',
+      '1 brand and 3,000 prompts to start, more by contract',
+      'Every answer engine, Claude by contract',
+      'SSO / SAML, priority support and an SLA',
+      'Invoice billing and API access',
     ]) {
       expect(container.textContent).toContain(point);
     }
