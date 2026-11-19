@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j, accepted suggestions, rejected suggestions, read your choices in the editor]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -90,6 +90,10 @@ A draft started from an opportunity with a brief starts with that brief's outlin
 Building the brief also reads a few of the pages AI cited. Their typical length shows beside **Length**, and **Cited pages have** lists what Site Audit's checks find on at least half of them, such as an FAQ schema, tables or statistics. The Content Agent then writes the page toward what its text can carry, not its schema, dates or byline, which your site sets. The brief plans no more sections than your Length holds.
 
 Once the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History.
+
+## Lists and tables the agent writes
+
+The Content Agent writes steps in order and rankings as a numbered list, never as paragraphs starting "1.", "2.", and takes any numbers written into a bulleted list's items out. On a comparison, alternatives or best-of page, the brief plans a section as a table, and the agent writes it with a row for each option and a column for each criterion. Its suggestions and rewrites can add tables too, so a side-by-side table rule can be met.
 
 ## Sources
 

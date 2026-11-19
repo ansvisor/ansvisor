@@ -3348,7 +3348,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3401,6 +3401,10 @@
         {
           "heading": "What the brief reads from cited pages",
           "text": "Building the brief also reads a few of the pages AI cited. Their typical length shows beside **Length**, and **Cited pages have** lists what Site Audit's checks find on at least half of them, such as an FAQ schema, tables or statistics. The Content Agent then writes the page toward what its text can carry, not its schema, dates or byline, which your site sets. The brief plans no more sections than your Length holds.\n\nOnce the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History."
+        },
+        {
+          "heading": "Lists and tables the agent writes",
+          "text": "The Content Agent writes steps in order and rankings as a numbered list, never as paragraphs starting \"1.\", \"2.\", and takes any numbers written into a bulleted list's items out. On a comparison, alternatives or best-of page, the brief plans a section as a table, and the agent writes it with a row for each option and a column for each criterion. Its suggestions and rewrites can add tables too, so a side-by-side table rule can be met."
         },
         {
           "heading": "Sources",
