@@ -2924,9 +2924,7 @@
           "summary": "Respostas e buscas de acompanhamento, por prompt.",
           "open": "Abrir Prompts",
           "doneWhen": "Página aberta",
-          "why": [
-            "Veja exatamente o que a IA diz aos seus compradores."
-          ],
+          "why": ["Veja exatamente o que a IA diz aos seus compradores."],
           "how": [
             "Abra Prompts",
             "Abra um prompt",
@@ -2953,48 +2951,31 @@
           "summary": "Menções e tom.",
           "open": "Abrir Menções",
           "doneWhen": "Página aberta",
-          "why": [
-            "Com que frequência a IA menciona você e em qual tom."
-          ],
-          "how": [
-            "Abra Menções",
-            "Verifique sua participação e sentimento"
-          ]
+          "why": ["Com que frequência a IA menciona você e em qual tom."],
+          "how": ["Abra Menções", "Verifique sua participação e sentimento"]
         },
         "citations": {
           "title": "Veja quem a IA cita",
           "summary": "As páginas e sites que a IA usa como fontes.",
           "open": "Abrir Citações",
           "doneWhen": "Página aberta",
-          "why": [
-            "As fontes em que a IA confia. Onde você deveria aparecer."
-          ],
-          "how": [
-            "Abra Citações",
-            "Veja quais sites a IA mais cita"
-          ]
+          "why": ["As fontes em que a IA confia. Onde você deveria aparecer."],
+          "how": ["Abra Citações", "Veja quais sites a IA mais cita"]
         },
         "traffic": {
           "title": "Veja as visitas vindas de IA",
           "summary": "Quais plataformas enviam visitantes e para quais páginas.",
           "open": "Abrir Tráfego de IA",
           "doneWhen": "Página aberta",
-          "why": [
-            "Quais plataformas de IA enviam visitantes e para quais páginas."
-          ],
-          "how": [
-            "Abra o Tráfego de IA",
-            "Verifique suas principais páginas"
-          ]
+          "why": ["Quais plataformas de IA enviam visitantes e para quais páginas."],
+          "how": ["Abra o Tráfego de IA", "Verifique suas principais páginas"]
         },
         "pick_content": {
           "title": "Escolha conteúdos a partir das sugestões",
           "summary": "Escolha de 1 a 3 sugestões.",
           "open": "Abrir Conteúdo",
           "doneWhen": "1 sugestão escolhida",
-          "why": [
-            "As sugestões são criadas a partir dos seus Prompts e pesquisas."
-          ],
+          "why": ["As sugestões são criadas a partir dos seus Prompts e pesquisas."],
           "how": [
             "Abra Conteúdo",
             "Escolha de 1 a 3 sugestões: revise-as, crie um briefing ou envie-as para a Central de ações"
@@ -3005,9 +2986,7 @@
           "summary": "Inicie a nova página mais bem classificada no seu Plano de Conteúdo.",
           "open": "Abrir o Plano",
           "doneWhen": "Uma nova página marcada como pronta ou publicada, ou enviada para o seu CMS",
-          "why": [
-            "O Conteúdo é a principal maneira de aparecer em mais respostas."
-          ],
+          "why": ["O Conteúdo é a principal maneira de aparecer em mais respostas."],
           "how": [
             "Abra o Plano: sua principal nova página será aberta em Iniciar",
             "Escolha quem vai escrever: você, o Agente de Conteúdo ou sua equipe",
@@ -3019,9 +2998,7 @@
           "summary": "Melhore a página que seu Plano de Conteúdo classifica em primeiro lugar para otimizar.",
           "open": "Abrir o Plano",
           "doneWhen": "Uma página otimizada marcada como pronta ou publicada, ou uma página auditada",
-          "why": [
-            "Pequenos ajustes em páginas que a IA já lê podem trazer resultados rápidos."
-          ],
+          "why": ["Pequenos ajustes em páginas que a IA já lê podem trazer resultados rápidos."],
           "how": [
             "Abra o Plano: a principal página a otimizar abre em Início",
             "Melhore-a no editor, com suas regras e fontes",
@@ -3033,12 +3010,8 @@
           "summary": "As ações de IA começarão a aparecer aqui.",
           "open": "Veja o que vem a seguir",
           "doneWhen": "Automático",
-          "why": [
-            "A partir de agora, a IA transforma seus sinais em ações aqui."
-          ],
-          "how": [
-            "Continue verificando a Central de ações toda semana"
-          ]
+          "why": ["A partir de agora, a IA transforma seus sinais em ações aqui."],
+          "how": ["Continue verificando a Central de ações toda semana"]
         }
       },
       "panel": {
@@ -17421,12 +17394,8 @@
       "starter": {
         "tagline": "Para equipes pequenas começando com o monitoramento e a otimização da Visibilidade de IA.",
         "engines": "Rastreamento no ChatGPT e Gemini",
-        "extras": [
-          "Acesso a MCP e API"
-        ],
-        "extrasChat": [
-          "Chat e agentes"
-        ]
+        "extras": ["Acesso a MCP e API"],
+        "extrasChat": ["Chat e agentes"]
       },
       "growth": {
         "tagline": "Para equipes em crescimento que desejam monitorar a visibilidade de IA e otimizar conteúdo para busca de IA.",
@@ -17436,10 +17405,7 @@
           "Relatórios white-label e exportações",
           "Looker Studio"
         ],
-        "extrasChat": [
-          "Chat e agentes",
-          "Totalmente automático, com agentes que publicam sozinhos"
-        ]
+        "extrasChat": ["Chat e agentes", "Totalmente automático, com agentes que publicam sozinhos"]
       },
       "brands": "{count, plural, one {# marca} other {# marcas}}",
       "unlimitedBrands": "Marcas ilimitadas",

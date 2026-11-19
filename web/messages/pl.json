@@ -2835,11 +2835,7 @@
             "Tematy grupują Twoje Prompty i pokazują, gdzie prowadzisz, a gdzie zostajesz w tyle.",
             "Sugestie pochodzą z Twojej witryny i rynku."
           ],
-          "how": [
-            "Otwórz Tematy",
-            "Wybierz 3 tematy odpowiadające Twojej ofercie",
-            "Dodaj je"
-          ]
+          "how": ["Otwórz Tematy", "Wybierz 3 tematy odpowiadające Twojej ofercie", "Dodaj je"]
         },
         "prompts": {
           "title": "Dodaj 3 Prompty na temat",
@@ -2883,11 +2879,7 @@
             "Pokazuje, które wizyty z AI angażują i konwertują.",
             "Wymagane do raportów ruchu i konwersji."
           ],
-          "how": [
-            "Kliknij Połącz",
-            "Wybierz swoją usługę GA4",
-            "Zezwól na dostęp tylko do odczytu"
-          ]
+          "how": ["Kliknij Połącz", "Wybierz swoją usługę GA4", "Zezwól na dostęp tylko do odczytu"]
         },
         "snippet": {
           "title": "Dodaj fragment kodu AI Traffic",
@@ -2924,9 +2916,7 @@
           "summary": "Odpowiedzi i powiązane wyszukiwania dla każdego promptu.",
           "open": "Otwórz Prompts",
           "doneWhen": "Strona otwarta",
-          "why": [
-            "Zobacz dokładnie, co AI mówi Twoim kupującym."
-          ],
+          "why": ["Zobacz dokładnie, co AI mówi Twoim kupującym."],
           "how": [
             "Otwórz Prompts",
             "Otwórz jeden Prompt",
@@ -2953,48 +2943,31 @@
           "summary": "Wzmianki i wydźwięk.",
           "open": "Otwórz Wzmianki",
           "doneWhen": "Strona otwarta",
-          "why": [
-            "Jak często AI wymienia Twoją markę i w jakim tonie."
-          ],
-          "how": [
-            "Otwórz Wzmianki",
-            "Sprawdź swój udział i wydźwięk"
-          ]
+          "why": ["Jak często AI wymienia Twoją markę i w jakim tonie."],
+          "how": ["Otwórz Wzmianki", "Sprawdź swój udział i wydźwięk"]
         },
         "citations": {
           "title": "Zobacz, kogo cytuje AI",
           "summary": "Strony i witryny, których AI używa jako źródeł.",
           "open": "Otwórz Cytowania",
           "doneWhen": "Strona otwarta",
-          "why": [
-            "Źródła, którym ufa AI. Miejsca, w których warto się znaleźć."
-          ],
-          "how": [
-            "Otwórz Cytowania",
-            "Zobacz, które witryny AI cytuje najczęściej"
-          ]
+          "why": ["Źródła, którym ufa AI. Miejsca, w których warto się znaleźć."],
+          "how": ["Otwórz Cytowania", "Zobacz, które witryny AI cytuje najczęściej"]
         },
         "traffic": {
           "title": "Zobacz wizyty z AI",
           "summary": "Które platformy odsyłają użytkowników i na które strony.",
           "open": "Otwórz Ruch z AI",
           "doneWhen": "Strona otwarta",
-          "why": [
-            "Które platformy AI przysyłają użytkowników i na które strony."
-          ],
-          "how": [
-            "Otwórz Ruch z AI",
-            "Sprawdź swoje najpopularniejsze strony"
-          ]
+          "why": ["Które platformy AI przysyłają użytkowników i na które strony."],
+          "how": ["Otwórz Ruch z AI", "Sprawdź swoje najpopularniejsze strony"]
         },
         "pick_content": {
           "title": "Wybierz treści z sugestii",
           "summary": "Wybierz 1–3 sugestie.",
           "open": "Otwórz Treści",
           "doneWhen": "Wybrano 1 sugestię",
-          "why": [
-            "Sugestie powstają na podstawie Twoich promptów i wyszukiwań."
-          ],
+          "why": ["Sugestie powstają na podstawie Twoich promptów i wyszukiwań."],
           "how": [
             "Otwórz Treści",
             "Wybierz 1–3 sugestie: przejrzyj je, stwórz brief lub wyślij do Centrum działań"
@@ -3005,9 +2978,7 @@
           "summary": "Rozpocznij nową stronę, która zajmuje pierwsze miejsce w Twoim Planie treści.",
           "open": "Otwórz Plan",
           "doneWhen": "Nowa strona oznaczona jako gotowa lub opublikowana, albo wysłana do Twojego CMS",
-          "why": [
-            "Treści to główny sposób na pojawianie się w większej liczbie odpowiedzi."
-          ],
+          "why": ["Treści to główny sposób na pojawianie się w większej liczbie odpowiedzi."],
           "how": [
             "Otwórz Plan: jego najważniejsza nowa strona otworzy się w sekcji Rozpocznij",
             "Wybierz, kto ją napisze: Ty, Agent treści czy Twój zespół",
@@ -3019,9 +2990,7 @@
           "summary": "Ulepsz stronę, którą Twój Plan treści wskazuje jako pierwszą do optymalizacji.",
           "open": "Otwórz Plan",
           "doneWhen": "Zoptymalizowana strona oznaczona jako gotowa lub opublikowana, albo strona poddana audytowi",
-          "why": [
-            "Drobne poprawki na stronach, które AI już czyta, mogą szybko przynieść efekty."
-          ],
+          "why": ["Drobne poprawki na stronach, które AI już czyta, mogą szybko przynieść efekty."],
           "how": [
             "Otwórz Plan: najważniejsza strona do optymalizacji otworzy się w sekcji Start",
             "Ulepsz ją w edytorze, korzystając z jej reguł i źródeł",
@@ -3033,12 +3002,8 @@
           "summary": "Działania AI zaczną pojawiać się tutaj.",
           "open": "Zobacz, co dalej",
           "doneWhen": "Automatycznie",
-          "why": [
-            "Od teraz AI przekształca Twoje sygnały w działania w tym miejscu."
-          ],
-          "how": [
-            "Sprawdzaj Centrum działań co tydzień"
-          ]
+          "why": ["Od teraz AI przekształca Twoje sygnały w działania w tym miejscu."],
+          "how": ["Sprawdzaj Centrum działań co tydzień"]
         }
       },
       "panel": {
@@ -17421,12 +17386,8 @@
       "starter": {
         "tagline": "Dla małych zespołów rozpoczynających monitorowanie i optymalizację widoczności w AI.",
         "engines": "Śledzenie w ChatGPT i Gemini",
-        "extras": [
-          "Dostęp do MCP i API"
-        ],
-        "extrasChat": [
-          "Czat i agenci"
-        ]
+        "extras": ["Dostęp do MCP i API"],
+        "extrasChat": ["Czat i agenci"]
       },
       "growth": {
         "tagline": "Dla rozwijających się zespołów, które chcą monitorować widoczność w AI i optymalizować treści pod kątem wyszukiwania AI.",
@@ -17436,10 +17397,7 @@
           "Raporty i eksporty white-label",
           "Looker Studio"
         ],
-        "extrasChat": [
-          "Czat i agenci",
-          "Pełna automatyzacja z agentami publikującymi samodzielnie"
-        ]
+        "extrasChat": ["Czat i agenci", "Pełna automatyzacja z agentami publikującymi samodzielnie"]
       },
       "brands": "{count, plural, one {# marka} few {# marki} many {# marek} other {# marek}}",
       "unlimitedBrands": "Nielimitowane marki",

@@ -35,9 +35,7 @@
     "PostHog",
     "OpenRouter"
   ],
-  "enforceKeep": [
-    "Ansvisor"
-  ],
+  "enforceKeep": ["Ansvisor"],
   "terms": {
     "Action Center": {
       "tr": "Aksiyon Merkezi",

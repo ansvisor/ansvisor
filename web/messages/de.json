@@ -2924,9 +2924,7 @@
           "summary": "Antworten und Folge-Suchanfragen pro Prompt.",
           "open": "Prompts öffnen",
           "doneWhen": "Seite geöffnet",
-          "why": [
-            "Sehen Sie genau, was die KI Ihrer Zielgruppe mitteilt."
-          ],
+          "why": ["Sehen Sie genau, was die KI Ihrer Zielgruppe mitteilt."],
           "how": [
             "Öffnen Sie Prompts",
             "Öffnen Sie einen Prompt",
@@ -2953,48 +2951,31 @@
           "summary": "Erwähnungen und Tonalität.",
           "open": "Erwähnungen öffnen",
           "doneWhen": "Seite geöffnet",
-          "why": [
-            "Wie oft die KI Sie nennt und in welchem Ton."
-          ],
-          "how": [
-            "Erwähnungen öffnen",
-            "Prüfen Sie Ihren Anteil und das Sentiment"
-          ]
+          "why": ["Wie oft die KI Sie nennt und in welchem Ton."],
+          "how": ["Erwähnungen öffnen", "Prüfen Sie Ihren Anteil und das Sentiment"]
         },
         "citations": {
           "title": "Sehen, wen die KI zitiert",
           "summary": "Die Seiten und Websites, die von der KI als Quellen genutzt werden.",
           "open": "Zitierungen öffnen",
           "doneWhen": "Seite geöffnet",
-          "why": [
-            "Die Quellen, denen die KI vertraut. Wo Sie gelistet sein sollten."
-          ],
-          "how": [
-            "Zitierungen öffnen",
-            "Sehen, welche Websites die KI am häufigsten zitiert"
-          ]
+          "why": ["Die Quellen, denen die KI vertraut. Wo Sie gelistet sein sollten."],
+          "how": ["Zitierungen öffnen", "Sehen, welche Websites die KI am häufigsten zitiert"]
         },
         "traffic": {
           "title": "Besuche über KI ansehen",
           "summary": "Welche Plattformen Besucher senden und auf welche Seiten.",
           "open": "KI-Traffic öffnen",
           "doneWhen": "Seite geöffnet",
-          "why": [
-            "Welche KI-Plattformen Besucher senden und auf welche Seiten."
-          ],
-          "how": [
-            "KI-Traffic öffnen",
-            "Ihre Top-Seiten prüfen"
-          ]
+          "why": ["Welche KI-Plattformen Besucher senden und auf welche Seiten."],
+          "how": ["KI-Traffic öffnen", "Ihre Top-Seiten prüfen"]
         },
         "pick_content": {
           "title": "Inhalte aus Vorschlägen auswählen",
           "summary": "Wählen Sie 1–3 Vorschläge aus.",
           "open": "Inhalte öffnen",
           "doneWhen": "1 Vorschlag ausgewählt",
-          "why": [
-            "Vorschläge basieren auf Ihren Prompts und Suchanfragen."
-          ],
+          "why": ["Vorschläge basieren auf Ihren Prompts und Suchanfragen."],
           "how": [
             "Inhalte öffnen",
             "Wählen Sie 1–3 Vorschläge aus: prüfen Sie sie, erstellen Sie ein Briefing oder senden Sie sie an das Aktionszentrum"
@@ -3005,9 +2986,7 @@
           "summary": "Beginnen Sie mit der neuen Seite, die Ihr Content-Plan an erster Stelle führt.",
           "open": "Plan öffnen",
           "doneWhen": "Eine neue Seite als fertig oder veröffentlicht markiert oder an Ihr CMS gesendet",
-          "why": [
-            "Inhalte sind der wichtigste Weg, um in mehr Antworten zu erscheinen."
-          ],
+          "why": ["Inhalte sind der wichtigste Weg, um in mehr Antworten zu erscheinen."],
           "how": [
             "Plan öffnen: Die oberste neue Seite öffnet sich in Start",
             "Wählen Sie, wer sie verfasst: Sie, der Content Agent oder Ihr Team",
@@ -3033,12 +3012,8 @@
           "summary": "Hier werden nun KI-Aktionen angezeigt.",
           "open": "Nächste Schritte ansehen",
           "doneWhen": "Automatisch",
-          "why": [
-            "Ab jetzt wandelt die KI Ihre Signale hier in Aktionen um."
-          ],
-          "how": [
-            "Prüfen Sie das Aktionszentrum wöchentlich"
-          ]
+          "why": ["Ab jetzt wandelt die KI Ihre Signale hier in Aktionen um."],
+          "how": ["Prüfen Sie das Aktionszentrum wöchentlich"]
         }
       },
       "panel": {
@@ -17421,12 +17396,8 @@
       "starter": {
         "tagline": "Für kleine Teams, die mit dem Monitoring und der Optimierung der KI-Sichtbarkeit beginnen.",
         "engines": "Tracking für ChatGPT & Gemini",
-        "extras": [
-          "MCP- & API-Zugriff"
-        ],
-        "extrasChat": [
-          "Chat und Agenten"
-        ]
+        "extras": ["MCP- & API-Zugriff"],
+        "extrasChat": ["Chat und Agenten"]
       },
       "growth": {
         "tagline": "Für wachsende Teams, die die KI-Sichtbarkeit überwachen und Inhalte für die KI-Suche optimieren möchten.",

@@ -2883,11 +2883,7 @@
             "Laat zien welke AI-bezoeken voor betrokkenheid en conversies zorgen.",
             "Nodig voor verkeers- en conversierapporten."
           ],
-          "how": [
-            "Klik op Koppelen",
-            "Kies uw GA4-property",
-            "Geef alleen-lezen toegang"
-          ]
+          "how": ["Klik op Koppelen", "Kies uw GA4-property", "Geef alleen-lezen toegang"]
         },
         "snippet": {
           "title": "Voeg het AI Traffic-codefragment toe",
@@ -2924,9 +2920,7 @@
           "summary": "Antwoorden en vervolgzoekopdrachten, per prompt.",
           "open": "Prompts openen",
           "doneWhen": "Pagina geopend",
-          "why": [
-            "Zie precies wat AI uw kopers vertelt."
-          ],
+          "why": ["Zie precies wat AI uw kopers vertelt."],
           "how": [
             "Open Prompts",
             "Open één prompt",
@@ -2953,48 +2947,31 @@
           "summary": "Vermeldingen en toon.",
           "open": "Vermeldingen openen",
           "doneWhen": "Pagina geopend",
-          "why": [
-            "Hoe vaak AI u noemt en op welke toon."
-          ],
-          "how": [
-            "Vermeldingen openen",
-            "Bekijk uw aandeel en sentiment"
-          ]
+          "why": ["Hoe vaak AI u noemt en op welke toon."],
+          "how": ["Vermeldingen openen", "Bekijk uw aandeel en sentiment"]
         },
         "citations": {
           "title": "Bekijk wie AI citeert",
           "summary": "De pagina's en websites die AI als bronnen gebruikt.",
           "open": "Citaties openen",
           "doneWhen": "Pagina geopend",
-          "why": [
-            "De bronnen die AI vertrouwt. Waar u vermeld zou moeten staan."
-          ],
-          "how": [
-            "Citaties openen",
-            "Bekijk welke websites AI het meest citeert"
-          ]
+          "why": ["De bronnen die AI vertrouwt. Waar u vermeld zou moeten staan."],
+          "how": ["Citaties openen", "Bekijk welke websites AI het meest citeert"]
         },
         "traffic": {
           "title": "Bekijk bezoeken vanuit AI",
           "summary": "Welke platforms bezoekers sturen, naar welke pagina's.",
           "open": "Open AI-verkeer",
           "doneWhen": "Pagina geopend",
-          "why": [
-            "Welke AI-platformen bezoekers sturen en naar welke pagina's."
-          ],
-          "how": [
-            "Open AI-verkeer",
-            "Bekijk uw toppagina's"
-          ]
+          "why": ["Welke AI-platformen bezoekers sturen en naar welke pagina's."],
+          "how": ["Open AI-verkeer", "Bekijk uw toppagina's"]
         },
         "pick_content": {
           "title": "Kies content uit suggesties",
           "summary": "Kies 1–3 suggesties.",
           "open": "Open Content",
           "doneWhen": "1 suggestie gekozen",
-          "why": [
-            "Suggesties worden samengesteld op basis van uw prompts en zoekopdrachten."
-          ],
+          "why": ["Suggesties worden samengesteld op basis van uw prompts en zoekopdrachten."],
           "how": [
             "Open Content",
             "Kies 1–3 suggesties: beoordeel ze, maak een briefing of stuur ze naar het Action Center"
@@ -3005,9 +2982,7 @@
           "summary": "Start de nieuwe pagina die als eerste staat in uw Content Plan.",
           "open": "Open het Plan",
           "doneWhen": "Een nieuwe pagina gemarkeerd als gereed of gepubliceerd, of verzonden naar uw CMS",
-          "why": [
-            "Content is de belangrijkste manier om in meer antwoorden te verschijnen."
-          ],
+          "why": ["Content is de belangrijkste manier om in meer antwoorden te verschijnen."],
           "how": [
             "Open het Plan: de beste nieuwe pagina opent in Start",
             "Kies wie het schrijft: u, de Content Agent of uw team",
@@ -3033,12 +3008,8 @@
           "summary": "AI-acties verschijnen vanaf nu hier.",
           "open": "Bekijk wat de volgende stap is",
           "doneWhen": "Automatisch",
-          "why": [
-            "Vanaf nu zet AI uw signalen hier om in acties."
-          ],
-          "how": [
-            "Controleer wekelijks het Actiecentrum"
-          ]
+          "why": ["Vanaf nu zet AI uw signalen hier om in acties."],
+          "how": ["Controleer wekelijks het Actiecentrum"]
         }
       },
       "panel": {
@@ -17421,12 +17392,8 @@
       "starter": {
         "tagline": "Voor kleine teams die beginnen met het monitoren en optimaliseren van AI-zichtbaarheid.",
         "engines": "ChatGPT- & Gemini-tracking",
-        "extras": [
-          "MCP- en API-toegang"
-        ],
-        "extrasChat": [
-          "Chat en agents"
-        ]
+        "extras": ["MCP- en API-toegang"],
+        "extrasChat": ["Chat en agents"]
       },
       "growth": {
         "tagline": "Voor groeiende teams die AI-zichtbaarheid willen monitoren en content willen optimaliseren voor AI-zoekopdrachten.",

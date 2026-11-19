@@ -2835,11 +2835,7 @@
             "Gli argomenti raggruppano i tuoi prompt e mostrano dove sei in vantaggio o in svantaggio.",
             "I suggerimenti provengono dal tuo sito e dal mercato."
           ],
-          "how": [
-            "Apri Argomenti",
-            "Scegli 3 argomenti in linea con ciò che vendi",
-            "Aggiungili"
-          ]
+          "how": ["Apri Argomenti", "Scegli 3 argomenti in linea con ciò che vendi", "Aggiungili"]
         },
         "prompts": {
           "title": "Aggiungi 3 prompt per argomento",
@@ -2924,9 +2920,7 @@
           "summary": "Risposte e ricerche correlate, per prompt.",
           "open": "Apri Prompts",
           "doneWhen": "Pagina aperta",
-          "why": [
-            "Scopri esattamente cosa dice l'IA ai tuoi acquirenti."
-          ],
+          "why": ["Scopri esattamente cosa dice l'IA ai tuoi acquirenti."],
           "how": [
             "Apri Prompts",
             "Apri un prompt",
@@ -2953,48 +2947,31 @@
           "summary": "Menzioni e tono.",
           "open": "Apri Menzioni",
           "doneWhen": "Pagina aperta",
-          "why": [
-            "Quanto spesso l'IA ti nomina e con quale tono."
-          ],
-          "how": [
-            "Apri Menzioni",
-            "Controlla la tua quota e il sentiment"
-          ]
+          "why": ["Quanto spesso l'IA ti nomina e con quale tono."],
+          "how": ["Apri Menzioni", "Controlla la tua quota e il sentiment"]
         },
         "citations": {
           "title": "Scopri chi cita l'IA",
           "summary": "Le pagine e i siti che l'IA usa come fonti.",
           "open": "Apri Citazioni",
           "doneWhen": "Pagina aperta",
-          "why": [
-            "Le fonti di cui l'IA si fida. Dove dovresti essere presente."
-          ],
-          "how": [
-            "Apri Citazioni",
-            "Scopri quali siti l'IA cita di più"
-          ]
+          "why": ["Le fonti di cui l'IA si fida. Dove dovresti essere presente."],
+          "how": ["Apri Citazioni", "Scopri quali siti l'IA cita di più"]
         },
         "traffic": {
           "title": "Visualizza le visite dall'IA",
           "summary": "Quali piattaforme inviano visitatori e verso quali pagine.",
           "open": "Apri Analisi traffico IA",
           "doneWhen": "Pagina aperta",
-          "why": [
-            "Quali piattaforme IA inviano visitatori e verso quali pagine."
-          ],
-          "how": [
-            "Apri Analisi traffico IA",
-            "Controlla le tue pagine principali"
-          ]
+          "why": ["Quali piattaforme IA inviano visitatori e verso quali pagine."],
+          "how": ["Apri Analisi traffico IA", "Controlla le tue pagine principali"]
         },
         "pick_content": {
           "title": "Scegli contenuti dai suggerimenti",
           "summary": "Scegli 1–3 suggerimenti.",
           "open": "Apri Contenuti",
           "doneWhen": "1 suggerimento scelto",
-          "why": [
-            "I suggerimenti sono generati dai tuoi prompt e dalle tue ricerche."
-          ],
+          "why": ["I suggerimenti sono generati dai tuoi prompt e dalle tue ricerche."],
           "how": [
             "Apri Contenuti",
             "Scegli 1–3 suggerimenti: esaminali, crea un brief o inviali al Centro azioni"
@@ -3005,9 +2982,7 @@
           "summary": "Inizia la nuova pagina posizionata al primo posto nel tuo Piano dei contenuti.",
           "open": "Apri il Piano",
           "doneWhen": "Una nuova pagina contrassegnata come pronta o pubblicata, oppure inviata al tuo CMS",
-          "why": [
-            "I Contenuti sono il modo principale per comparire in più risposte."
-          ],
+          "why": ["I Contenuti sono il modo principale per comparire in più risposte."],
           "how": [
             "Apri il Piano: la pagina principale consigliata si apre in Inizia",
             "Scegli chi scrive: tu, l'Agente Contenuti o il tuo team",
@@ -3033,12 +3008,8 @@
           "summary": "Le azioni IA iniziano a comparire qui.",
           "open": "Scopra i prossimi passi",
           "doneWhen": "Automatico",
-          "why": [
-            "D'ora in poi, l'IA trasforma i suoi segnali in azioni qui."
-          ],
-          "how": [
-            "Controlli regolarmente il Centro azioni ogni settimana"
-          ]
+          "why": ["D'ora in poi, l'IA trasforma i suoi segnali in azioni qui."],
+          "how": ["Controlli regolarmente il Centro azioni ogni settimana"]
         }
       },
       "panel": {
@@ -17421,12 +17392,8 @@
       "starter": {
         "tagline": "Per piccoli team che iniziano con il monitoraggio e l'ottimizzazione della visibilità IA.",
         "engines": "Monitoraggio di ChatGPT e Gemini",
-        "extras": [
-          "Accesso ad API e MCP"
-        ],
-        "extrasChat": [
-          "Chat e agenti"
-        ]
+        "extras": ["Accesso ad API e MCP"],
+        "extrasChat": ["Chat e agenti"]
       },
       "growth": {
         "tagline": "Per team in crescita che desiderano monitorare la Visibilità IA e ottimizzare i Contenuti per la ricerca basata sull'IA.",

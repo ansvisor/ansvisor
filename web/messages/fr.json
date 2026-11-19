@@ -2924,9 +2924,7 @@
           "summary": "Réponses et recherches associées, par prompt.",
           "open": "Ouvrir Prompts",
           "doneWhen": "Page ouverte",
-          "why": [
-            "Découvrez exactement ce que l'IA dit à vos acheteurs."
-          ],
+          "why": ["Découvrez exactement ce que l'IA dit à vos acheteurs."],
           "how": [
             "Ouvrez Prompts",
             "Ouvrez un prompt",
@@ -2953,48 +2951,31 @@
           "summary": "Mentions et tonalité.",
           "open": "Ouvrir les Mentions",
           "doneWhen": "Page ouverte",
-          "why": [
-            "La fréquence à laquelle l'IA vous mentionne, et sur quel ton."
-          ],
-          "how": [
-            "Ouvrir les Mentions",
-            "Consultez votre part et votre tonalité"
-          ]
+          "why": ["La fréquence à laquelle l'IA vous mentionne, et sur quel ton."],
+          "how": ["Ouvrir les Mentions", "Consultez votre part et votre tonalité"]
         },
         "citations": {
           "title": "Découvrez qui l'IA cite",
           "summary": "Les pages et sites que l'IA utilise comme sources.",
           "open": "Ouvrir les Citations",
           "doneWhen": "Page ouverte",
-          "why": [
-            "Les sources de confiance de l'IA. Les endroits où vous devriez apparaître."
-          ],
-          "how": [
-            "Ouvrir les Citations",
-            "Découvrez quels sites l'IA cite le plus"
-          ]
+          "why": ["Les sources de confiance de l'IA. Les endroits où vous devriez apparaître."],
+          "how": ["Ouvrir les Citations", "Découvrez quels sites l'IA cite le plus"]
         },
         "traffic": {
           "title": "Consultez les visites provenant de l'IA",
           "summary": "Quelles plateformes envoient des visiteurs, et vers quelles pages.",
           "open": "Ouvrir Analyse du trafic IA",
           "doneWhen": "Page ouverte",
-          "why": [
-            "Quelles plateformes d'IA envoient des visiteurs, et vers quelles pages."
-          ],
-          "how": [
-            "Ouvrez Analyse du trafic IA",
-            "Consultez vos meilleures pages"
-          ]
+          "why": ["Quelles plateformes d'IA envoient des visiteurs, et vers quelles pages."],
+          "how": ["Ouvrez Analyse du trafic IA", "Consultez vos meilleures pages"]
         },
         "pick_content": {
           "title": "Choisir du contenu parmi les suggestions",
           "summary": "Choisissez 1 à 3 suggestions.",
           "open": "Ouvrir Contenu",
           "doneWhen": "1 suggestion choisie",
-          "why": [
-            "Les suggestions sont générées à partir de vos prompts et de vos recherches."
-          ],
+          "why": ["Les suggestions sont générées à partir de vos prompts et de vos recherches."],
           "how": [
             "Ouvrez Contenu",
             "Choisissez 1 à 3 suggestions : examinez-les, créez un brief ou envoyez-les au Centre d'actions"
@@ -3005,9 +2986,7 @@
           "summary": "Commencez la nouvelle page classée en premier dans votre plan de Contenu.",
           "open": "Ouvrir le Plan",
           "doneWhen": "Une nouvelle page marquée comme prête ou publiée, ou envoyée à votre CMS",
-          "why": [
-            "Le Contenu est le principal moyen d'apparaître dans davantage de réponses."
-          ],
+          "why": ["Le Contenu est le principal moyen d'apparaître dans davantage de réponses."],
           "how": [
             "Ouvrez le Plan : sa meilleure nouvelle page s'ouvre dans Démarrer",
             "Choisissez qui la rédige : vous, l'agent de Contenu ou votre équipe",
@@ -3033,12 +3012,8 @@
           "summary": "Les actions IA commencent à apparaître ici.",
           "open": "Découvrir la suite",
           "doneWhen": "Automatique",
-          "why": [
-            "Désormais, l'IA transforme ici vos signaux en actions."
-          ],
-          "how": [
-            "Consultez le Centre d'actions chaque semaine"
-          ]
+          "why": ["Désormais, l'IA transforme ici vos signaux en actions."],
+          "how": ["Consultez le Centre d'actions chaque semaine"]
         }
       },
       "panel": {
@@ -17421,21 +17396,13 @@
       "starter": {
         "tagline": "Pour les petites équipes qui débutent dans le suivi et l'optimisation de la Visibilité IA.",
         "engines": "Suivi ChatGPT et Gemini",
-        "extras": [
-          "Accès MCP & API"
-        ],
-        "extrasChat": [
-          "Chat et Agents"
-        ]
+        "extras": ["Accès MCP & API"],
+        "extrasChat": ["Chat et Agents"]
       },
       "growth": {
         "tagline": "Pour les équipes en pleine croissance souhaitant surveiller la visibilité IA et optimiser le contenu pour la recherche IA.",
         "engines": "Suivi de ChatGPT, Gemini, Google AI Mode et Google AI Overviews",
-        "extras": [
-          "Suivi multi-régions",
-          "Rapports en marque blanche et exports",
-          "Looker Studio"
-        ],
+        "extras": ["Suivi multi-régions", "Rapports en marque blanche et exports", "Looker Studio"],
         "extrasChat": [
           "Chat et Agents",
           "Entièrement automatique, avec des agents qui publient de manière autonome"
