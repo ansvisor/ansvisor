@@ -1360,7 +1360,7 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     fanouts: fitted.fanouts,
     pages: input.sources.pages,
     queries: fitted.queries,
-    // The brand's own facts (its approved ones and the engines it tracks) beside Your input.
+    // The brand's approved facts beside Your input.
     inputs: [
       ...inputSources(inputRow, brand.name),
       ...(await brandFactSources({ id: draft.brand_id, name: brand.name }, draft)),

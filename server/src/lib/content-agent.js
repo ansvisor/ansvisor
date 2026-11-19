@@ -1719,7 +1719,7 @@ async function fixWithRun({
     fanouts: fitted?.fanouts,
     pages: input.sources?.pages,
     queries: fitted?.queries,
-    // The brand's own facts (its approved ones and the engines it tracks) beside Your input.
+    // The brand's approved facts beside Your input.
     inputs: [
       ...inputSources(inputRow, brand.name),
       ...(await brandFactSources({ id: brandId, name: brand.name }, draft)),

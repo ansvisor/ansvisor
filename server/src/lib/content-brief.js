@@ -582,7 +582,7 @@ export async function rebuildDraftBrief({
   const prompts = (promptsRes.data ?? []).map((p) => p.text);
   // The rules only with the brief rules on: the brief plans to them then, and may say their numbers.
   const planTo = briefRulesOn() ? rules : [];
-  // The brand's own facts (its approved ones and the engines it tracks) beside Your input.
+  // The brand's approved facts beside Your input.
   const inputs = [
     ...inputSources(inputRow, brand.name),
     ...(await brandFactSources({ id: brandId, name: brand.name }, draft)),

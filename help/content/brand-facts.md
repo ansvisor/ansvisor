@@ -15,7 +15,7 @@ sources: [web/messages/en.json, server/src/lib/brand-facts.js, server/src/lib/fa
 
 ## Approve or reject a fact
 
-Each fact shows its value, the words on your site that hold it and the page it came from. Admins and managers **Approve** the right ones and **Reject** the others. Quality's Trust score checks your pages against the approved facts still on your site. Briefs, new drafts, rewrites and the Content Agent write with them, and with the AI engines your brand tracks now, so a page never claims an engine you've paused.
+Each fact shows its value, the words on your site that hold it and the page it came from. Admins and managers **Approve** the right ones and **Reject** the others. Quality's Trust score checks your pages against the approved facts still on your site. Briefs, new drafts, rewrites and the Content Agent write with them.
 
 ## Facts for one destination, operator or route
 
