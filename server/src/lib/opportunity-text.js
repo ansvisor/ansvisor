@@ -140,10 +140,60 @@ export function fixCompetitorNames(text, names = []) {
   return out;
 }
 
+/**
+ * Page indexes the model wrote without their brackets ("Merging P2, P6, and
+ * P0", Content test 2026-11-19, item 10): a list of two or more, or one
+ * after "page". Each becomes the page's title when the run's pages are
+ * known, else the list reads "these pages" (one, "the page"). A lone "P0"
+ * elsewhere may be ordinary writing (a priority) and stays.
+ */
+const PAGE_LIST =
+  /\bP\d{1,2}(?:\s*,\s*P\d{1,2})*,?\s+(?:and|or|&)\s+P\d{1,2}\b|\bP\d{1,2}(?:\s*,\s*P\d{1,2})+\b|\bpages?\s+P\d{1,2}\b/g;
+
+export function resolvePageList(text, pages = []) {
+  if (!text || !/\bP\d/.test(text)) return text;
+  return text.replace(PAGE_LIST, (match) => {
+    const lead = /^pages?\s/i.test(match) ? match.match(/^pages?\s+/i)[0] : '';
+    const titles = [...match.matchAll(/P(\d{1,2})/g)].map((m) => {
+      const page = pages[Number(m[1])];
+      return page ? page.title || page.h1 || page.url : null;
+    });
+    if (titles.length && titles.every(Boolean)) {
+      const quoted = titles.map(quote);
+      const list =
+        quoted.length === 1 ? quoted[0] : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
+      return `${lead}${list}`;
+    }
+    return titles.length > 1 ? 'these pages' : 'the page';
+  });
+}
+
+/**
+ * A sentence that states a figure the opportunity's panel shows from its own
+ * fields: a percentage, or a search volume (Content test 2026-11-19, item
+ * 10: "37,185 monthly searches" beside a panel saying 13–35k/mo, a "153%"
+ * gap). The panel's numbers are the ones to read.
+ */
+const PANEL_FIGURE =
+  /\d[\d,.]*\s?%|%\s?\d|\b\d[\d,.]*\s?[kKmM]?\+?\s+(?:monthly\s+|estimated\s+)*(?:searches|queries|visits|impressions)\b|\b\d[\d,.]*\s?[kKmM]?\s?\/\s?mo\b|\b\d[\d,.]*\s?[kKmM]?\s+(?:searches\s+)?(?:a|per)\s+month\b/;
+
+/** A description without the sentences that state the panel's figures: its words, not numbers that disagree. */
+export function withoutPanelFigures(text) {
+  if (!text || !PANEL_FIGURE.test(text)) return text;
+  return text
+    .split(/(?<=[.!?])\s+(?=[\p{Lu}\d"“])/u)
+    .filter((sentence) => !PANEL_FIGURE.test(sentence))
+    .join(' ')
+    .trim();
+}
+
 /** Both cleanups, references first. */
 export function cleanOpportunityText(text, { competitors = [], ...refs } = {}) {
   if (!text) return text;
-  return fixCompetitorNames(resolveReferences(text, refs), competitors);
+  return fixCompetitorNames(
+    resolvePageList(resolveReferences(text, refs), refs.pages),
+    competitors,
+  );
 }
 
 /**
@@ -170,7 +220,8 @@ export function cleanStoredOpportunity(row, competitors = []) {
   return {
     ...row,
     title: titled(row.title),
-    description: clean(row.description),
+    // Its words; the panel shows its numbers.
+    description: withoutPanelFigures(clean(row.description)),
     source_data: changed
       ? {
           ...sd,

@@ -13,6 +13,10 @@ sources: [docs/guides/content-optimization.mdx, docs/guides/content-editor.mdx]
 ---
 The **Opportunities** page, under **Content** in the sidebar, lists content opportunities: what to write or change so AI answers name you where they don't yet. Ansvisor suggests them on its own as tracking data comes in. An opportunity is built for a group of related prompts that one piece of content can answer, or for a single prompt. From each one you can start writing, plan it, brief it or send it on.
 
+## What the counts count
+
+With **All Statuses**, the cards above the list count done and dismissed opportunities too, and say so. The **Available** count beside **Opportunities** counts only the ones still to do. Pick a status to count that status alone.
+
 ## What each row shows
 
 - the action to take, with what it was built for: a topic and its number of prompts, **Single prompt**, or the Action Center action it came from;

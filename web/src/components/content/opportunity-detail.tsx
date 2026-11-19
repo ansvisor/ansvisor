@@ -835,7 +835,10 @@ export function OpportunityDetail({
                   <StatCard
                     icon={Users}
                     label={t('detail.competitorGap')}
-                    value={`${sd.competitorGap > 0 ? '+' : ''}${Math.round(sd.competitorGap)}%`}
+                    // Points between two visibilities, never a % past 100 (Content test 2026-11-19).
+                    value={`${sd.competitorGap > 0 ? '+' : ''}${t('detail.gapPoints', {
+                      gap: Math.round(Math.max(-100, Math.min(100, sd.competitorGap))),
+                    })}`}
                   />
                 )}
                 {sd.topCompetitorVisibility !== undefined && (
