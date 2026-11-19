@@ -9,6 +9,7 @@ import {
   siteTypeLine,
 } from './content-page-types.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { brandFactSources } from './content-brand-facts.js';
 import { NO_LINK_TARGETS, linkKey, readLinkTargets } from './content-links.js';
 import { logger } from './logger.js';
 import { getLanguageName } from './languages.js';
@@ -582,7 +583,11 @@ export async function rebuildDraftBrief({
   const prompts = (promptsRes.data ?? []).map((p) => p.text);
   // The rules only with the brief rules on: the brief plans to them then, and may say their numbers.
   const planTo = briefRulesOn() ? rules : [];
-  const inputs = inputSources(inputRow, brand.name);
+  // The brand's approved facts beside Your input.
+  const inputs = [
+    ...inputSources(inputRow, brand.name),
+    ...(await brandFactSources({ id: brandId, name: brand.name }, draft)),
+  ];
   // Only the searches in the brief's language, and the Search Console
   // queries about this page (content-query-fit.js).
   sources = fitSources(sources, { language: brand.language, focus: [draft.title, ...prompts] });

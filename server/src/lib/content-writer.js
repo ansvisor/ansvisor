@@ -46,6 +46,7 @@ import {
   withoutHealthFinds,
 } from './content-health.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { brandFactSources } from './content-brand-facts.js';
 import {
   RESEARCH_RULE,
   applyEdits,
@@ -1393,7 +1394,11 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     fanouts: fitted.fanouts,
     pages: input.sources.pages,
     queries: fitted.queries,
-    inputs: inputSources(inputRow, brand.name),
+    // The brand's approved facts beside Your input.
+    inputs: [
+      ...inputSources(inputRow, brand.name),
+      ...(await brandFactSources({ id: draft.brand_id, name: brand.name }, draft)),
+    ],
   });
   const known = withNamedNumbers(
     knownNumbers(
