@@ -4,8 +4,8 @@ route: /dashboard/content/library
 keywords: [new content, create page, optimize page, content agent, import page, page type, site type]
 synonyms: [write a new article, start a draft, new page, improve an existing page]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -27,9 +27,21 @@ Pick **Create from scratch** to write a new page from:
 
 Pick **Optimize content** to work on an existing page:
 
-- **Page URL**: a page on your brand's site. **Import** brings in its main text, headings, links and schema; menus and footers stay out.
+- **Page URL**: a page on your brand's site. **Import** brings in its main text, headings, lists, tables, links and schema; menus and footers stay out.
 - **Paste text** from Word, Google Docs or a web page. Headings, lists, links and tables are kept.
 - **Upload file**: Word, Markdown, HTML or text, up to 10 MB.
+
+The character count shown under the content is the one the editor shows once it opens. Schema isn't counted as text.
+
+## What an imported page keeps
+
+**Import** keeps the page's structure, even when its site builds it from boxes rather than real tables and lists:
+
+- a comparison grid of rows and columns comes in as a table;
+- a list of short items, such as **Key takeaways**, comes in as a bulleted list;
+- a card's title stays on its own line, above its text.
+
+The draft's author is the person the page names, in its byline or its schema. If your team already has an author of that name in **Authors**, the draft uses them. If not, the author is added there for you to complete. A page that names no one keeps your brand's byline.
 
 ## Pick the page type
 

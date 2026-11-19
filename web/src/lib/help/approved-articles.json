@@ -3953,7 +3953,7 @@
         "improve an existing page"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3965,7 +3965,11 @@
         },
         {
           "heading": "Optimize a page you have",
-          "text": "Pick **Optimize content** to work on an existing page:\n\n- **Page URL**: a page on your brand's site. **Import** brings in its main text, headings, links and schema; menus and footers stay out.\n- **Paste text** from Word, Google Docs or a web page. Headings, lists, links and tables are kept.\n- **Upload file**: Word, Markdown, HTML or text, up to 10 MB."
+          "text": "Pick **Optimize content** to work on an existing page:\n\n- **Page URL**: a page on your brand's site. **Import** brings in its main text, headings, lists, tables, links and schema; menus and footers stay out.\n- **Paste text** from Word, Google Docs or a web page. Headings, lists, links and tables are kept.\n- **Upload file**: Word, Markdown, HTML or text, up to 10 MB.\n\nThe character count shown under the content is the one the editor shows once it opens. Schema isn't counted as text."
+        },
+        {
+          "heading": "What an imported page keeps",
+          "text": "**Import** keeps the page's structure, even when its site builds it from boxes rather than real tables and lists:\n\n- a comparison grid of rows and columns comes in as a table;\n- a list of short items, such as **Key takeaways**, comes in as a bulleted list;\n- a card's title stays on its own line, above its text.\n\nThe draft's author is the person the page names, in its byline or its schema. If your team already has an author of that name in **Authors**, the draft uses them. If not, the author is added there for you to complete. A page that names no one keeps your brand's byline."
         },
         {
           "heading": "Pick the page type",

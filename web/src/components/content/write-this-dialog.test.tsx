@@ -181,8 +181,9 @@ describe('WriteThisDialog', () => {
   });
 
   it('reads an existing page first, and has the agent suggest changes to it', async () => {
+    const author = { name: 'Ada Lovelace', title: null, photoUrl: null, sameAs: [] };
     importContentPage.mockResolvedValue({
-      page: { html: '<h1>Espresso guide</h1><p>Our picks.</p>', title: 'Espresso guide' },
+      page: { html: '<h1>Espresso guide</h1><p>Our picks.</p>', title: 'Espresso guide', author },
     });
     await render(
       opportunity({
@@ -205,6 +206,7 @@ describe('WriteThisDialog', () => {
         title: 'Espresso guide',
         bodyHtml: expect.stringContaining('Our picks.'),
         sourceUrl: 'https://acme.example/guides/espresso',
+        pageAuthor: author,
       }),
     );
     expect(startAgentWriting).toHaveBeenCalledWith(
