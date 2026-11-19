@@ -4,7 +4,7 @@ route: /dashboard/reports
 keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss, score range, plus or minus]
 plan: all
-updated: 2026-11-10
+updated: 2026-11-19
 last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
@@ -30,7 +30,7 @@ The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts
 
 ## Read a report
 
-A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it; **Site Audit Score** is the exception. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards.
+A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. Its headline is your **Visibility score**, out of 100 with no % sign, and it calls the share of prompts that named or cited you **Prompts with a mention**. It names AI platforms as the rest of Ansvisor does, such as **Gemini**. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it; **Site Audit Score** is the exception. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards.
 
 ## Site Audit Score
 
