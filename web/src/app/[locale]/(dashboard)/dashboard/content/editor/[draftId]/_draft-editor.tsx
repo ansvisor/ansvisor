@@ -12,6 +12,7 @@ import { TableKit } from '@tiptap/extension-table';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import {
   ArrowLeft,
+  Plus,
   ArrowUpRight,
   Bot,
   Check,
@@ -92,6 +93,7 @@ import type { SiteTrust } from '@/lib/content/site-trust';
 import {
   AGENT_POLL_MS,
   CONTENT_LIBRARY_PATH,
+  CONTENT_NEW_PATH,
   isPageType,
   type ContentDraft,
   type PageType,
@@ -4076,6 +4078,18 @@ export function DraftEditor({
               className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
             >
               <ArrowLeft className="h-4 w-4" />
+            </Link>
+          )}
+          {/* A new page from the editor too (Content test 2026-11-19, item 21):
+              Editor in the sidebar comes back to the last draft (#1477). */}
+          {!embedded && (
+            <Link
+              href={CONTENT_NEW_PATH}
+              aria-label={t('newContent')}
+              title={t('newContent')}
+              className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+            >
+              <Plus className="h-4 w-4" />
             </Link>
           )}
           {/* The title takes the room left (at least ~140px from 1024px, 96px

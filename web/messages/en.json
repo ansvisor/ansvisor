@@ -10713,6 +10713,7 @@
     },
     "editor": {
       "back": "Back to the Library",
+      "newContent": "New content",
       "closeHere": "Close",
       "untitled": "Untitled",
       "newPage": "New page",
