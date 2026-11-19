@@ -99,7 +99,9 @@ export function isAnyUiLocale(value: unknown): value is AnyUiLocale {
 export function normalizeLocale(value: string | null | undefined): AnyUiLocale | null {
   const wanted = value?.trim().toLowerCase();
   if (!wanted) return null;
-  const found = [...LOCALES, PSEUDO_LOCALE].find((code) => code.toLowerCase() === wanted);
+  const found = ([...LOCALES, PSEUDO_LOCALE] as AnyUiLocale[]).find(
+    (code) => code.toLowerCase() === wanted,
+  );
   return found ?? null;
 }
 

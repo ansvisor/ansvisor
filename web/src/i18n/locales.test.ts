@@ -107,7 +107,7 @@ describe('messages, with English as the fallback', () => {
   });
 
   it('makes the test language from English at runtime', async () => {
-    const pseudo = (await loadMessages(PSEUDO_LOCALE)) as typeof english;
+    const pseudo = (await loadMessages(PSEUDO_LOCALE)) as unknown as typeof english;
     expect(pseudo).toEqual(pseudoLocalize(english));
     expect(pseudo.accountMenu.signOut).toMatch(/^\[!! .* !!\]$/);
     expect(pseudo.accountMenu.signOut).not.toBe(english.accountMenu.signOut);
