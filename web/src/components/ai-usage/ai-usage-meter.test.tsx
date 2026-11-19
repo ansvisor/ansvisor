@@ -136,6 +136,15 @@ beforeEach(() => {
   toast.warning.mockReset();
   toast.error.mockReset();
   localStorage.clear();
+  // The first read waits for the browser to be idle: here, it is at once.
+  idle.callbacks = [];
+  idle.atOnce = true;
+  window.requestIdleCallback = ((run: IdleRequestCallback) => {
+    if (idle.atOnce) run({ didTimeout: false, timeRemaining: () => 50 });
+    else idle.callbacks.push(run);
+    return 1;
+  }) as typeof window.requestIdleCallback;
+  window.cancelIdleCallback = () => {};
 });
 
 afterEach(() => {
@@ -143,6 +152,8 @@ afterEach(() => {
   container.remove();
   vi.restoreAllMocks();
 });
+
+const idle = { atOnce: true, callbacks: [] as IdleRequestCallback[] };
 
 describe('AiUsageMeter', () => {
   it('shows the month’s share with a bar, named with what it shows', async () => {
@@ -152,6 +163,16 @@ describe('AiUsageMeter', () => {
     expect(button.getAttribute('aria-label')).toBe('AI 21.4% used this month');
     expect(button.className).toContain('text-foreground');
     expect(button.querySelector<HTMLElement>('[style]')!.style.width).toBe('21.4%');
+  });
+
+  it('reads the month’s usage once the page’s own reads leave the browser idle (Content test 2026-11-19)', async () => {
+    idle.atOnce = false;
+    await render();
+    expect(readAiUsage).not.toHaveBeenCalled();
+    await act(async () =>
+      idle.callbacks.forEach((run) => run({ didTimeout: false, timeRemaining: () => 50 })),
+    );
+    expect(readAiUsage).toHaveBeenCalledTimes(1);
   });
 
   it('keeps its room while the first read runs, from a phone’s width up', async () => {

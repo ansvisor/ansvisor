@@ -561,6 +561,12 @@ export default function ContentPage() {
     sortOrder,
   ]);
 
+  // The brand whose list has been read once (Content test 2026-11-19, item
+  // 9): Next runs a page's server actions one at a time, so the filters'
+  // options and the usage card are read after the list, never ahead of it.
+  const [listReadFor, setListReadFor] = useState<string | null>(null);
+  const listReady = !!activeBrandId && listReadFor === activeBrandId;
+
   const loadData = useCallback(
     async (silent = false, isCancelled?: () => boolean) => {
       if (!urlRead) return;
@@ -604,6 +610,7 @@ export default function ContentPage() {
       } finally {
         if (!isCancelled?.()) {
           setLoading(false);
+          setListReadFor(activeBrandId);
         }
       }
     },
@@ -773,17 +780,21 @@ export default function ContentPage() {
   useEffect(() => {
     let cancelled = false;
     setPromptOptions(null);
-    loadPromptOptions(() => cancelled);
+    // After the list: see listReadFor.
+    if (listReady) loadPromptOptions(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [loadPromptOptions]);
+  }, [loadPromptOptions, listReady]);
+
+  useEffect(() => {
+    setTopicFilter('');
+    setTopicOptions([]);
+  }, [activeBrandId]);
 
   useEffect(() => {
     let cancelled = false;
-    setTopicFilter('');
-    setTopicOptions([]);
-    if (!activeBrandId) return;
+    if (!activeBrandId || !listReady) return;
     getOpportunityTopics(activeBrandId)
       .then((options) => !cancelled && setTopicOptions(options))
       // Like the prompt filter, it just stays hidden without its options.
@@ -791,7 +802,7 @@ export default function ContentPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId]);
+  }, [activeBrandId, listReady]);
 
   // A prompt id from another brand, or one whose prompt was deleted, would
   // filter to nothing while the picker shows "All prompts". Drop it.
@@ -814,6 +825,8 @@ export default function ContentPage() {
   // have used the quota. A failure only hides the card.
   useEffect(() => {
     let cancelled = false;
+    // After the list: see listReadFor.
+    if (!listReady) return;
     getContentUsage().then(
       (usage) => !cancelled && setContentUsage(usage),
       () => !cancelled && setContentUsage(null),
@@ -821,7 +834,7 @@ export default function ContentPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, total, usageVersion]);
+  }, [activeBrandId, total, usageVersion, listReady]);
 
   const pollJob = useCallback(
     (jobId: string, startedAt: number) => {

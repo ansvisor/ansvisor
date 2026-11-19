@@ -10,8 +10,10 @@ vi.mock('next/image', () => ({
 vi.mock('next-themes', () => ({ useTheme: () => ({ resolvedTheme: 'light' }) }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/action-center' }));
+const prefetch = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n/navigation', () => ({
   usePathname: () => nav.pathname,
+  useRouter: () => ({ push: vi.fn(), prefetch }),
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
       {children}
@@ -195,6 +197,26 @@ describe('Sidebar', () => {
     expect(container.textContent).toContain('Execution');
     expect(container.textContent).not.toContain('Analytics');
     expect(container.querySelector('a[href="/dashboard/mentions"]')).toBeNull();
+  });
+
+  it('reads a page ahead only when the pointer or the keyboard reaches its link (Content test 2026-11-19)', async () => {
+    prefetch.mockClear();
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <Sidebar />
+        </NextIntlClientProvider>,
+      );
+    });
+    // Not as the menu shows: none read ahead on its own.
+    expect(prefetch).not.toHaveBeenCalled();
+    const link = container.querySelector<HTMLAnchorElement>('a[href="/dashboard/mentions"]')!;
+    await act(async () => {
+      link.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    });
+    expect(prefetch).toHaveBeenCalledWith('/dashboard/mentions');
+    await act(async () => link.focus());
+    expect(prefetch).toHaveBeenCalledTimes(2);
   });
 
   it('shows the whole menu without a menu to go by', async () => {

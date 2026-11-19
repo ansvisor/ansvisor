@@ -5,7 +5,7 @@ import { useTheme } from 'next-themes';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { usePathname, Link } from '@/i18n/navigation';
+import { usePathname, useRouter, Link } from '@/i18n/navigation';
 import { carriedParams, PROMPTS_BASE } from '@/lib/prompts-routes';
 import { dashboardNav, type NavGroup } from '@/config/dashboard';
 import { saveChatRailOpen } from '@/lib/actions/chat-prefs';
@@ -146,6 +146,16 @@ function handleNavKeys(
 
 export function Sidebar() {
   const pathname = usePathname();
+  // The menu's pages are read ahead only when the pointer or the keyboard
+  // reaches a link, never all at once as they come into view: each read
+  // runs the dashboard's layout on the server, and a dozen at once slowed
+  // the page being opened (Content test 2026-11-19, item 9).
+  const router = useRouter();
+  const prefetchOnIntent = (href: string) => ({
+    prefetch: false as const,
+    onMouseEnter: () => router.prefetch(href),
+    onFocus: () => router.prefetch(href),
+  });
   const { isCollapsed: pinnedClosed, toggleCollapse } = useSidebarStore();
   // On Chat's screens (the new Chat on) the sidebar is the rail unless the
   // person expanded it with the logo, a choice kept on them for every device
@@ -634,6 +644,9 @@ export function Sidebar() {
                                   <li key={child.href}>
                                     <Link
                                       href={`${childLinkHref(child, pathname)}${carry}`}
+                                      {...prefetchOnIntent(
+                                        `${childLinkHref(child, pathname)}${carry}`,
+                                      )}
                                       data-nav-item="child"
                                       aria-current={childActive ? 'page' : undefined}
                                       className={childClass}
@@ -669,6 +682,7 @@ export function Sidebar() {
                       <Link
                         key={item.href}
                         href={linkHref}
+                        {...prefetchOnIntent(linkHref)}
                         data-nav-item="link"
                         aria-current={isActive ? 'page' : undefined}
                         aria-label={iconName}
