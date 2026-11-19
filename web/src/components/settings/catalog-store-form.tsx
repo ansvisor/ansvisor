@@ -61,7 +61,7 @@ export function StoreSignInForm({
       <p className="text-xs text-muted-foreground">{t('kept')}</p>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={!complete || busy}>
-          {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {busy && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
           {submitLabel}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancel}>

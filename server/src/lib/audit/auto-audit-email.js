@@ -1,6 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { brandReaders } from '../access.js';
 import { sendEmail } from '../email.js';
+import { DEFAULT_LOCALE, formatLocale, translator, uiLanguagesOf } from '../i18n.js';
 
 /**
  * The e-mail after an auto-audit run (SA-006), when the org turned it on in
@@ -29,20 +30,23 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-const monthDay = (iso) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-
-/** "25 pages audited · 6 critical issues" */
-function summary({ completed, criticalIssues }) {
-  return `${plural(completed, 'page', 'pages')} audited · ${plural(criticalIssues, 'critical issue', 'critical issues')}`;
-}
+const monthDay = (iso, locale) =>
+  new Date(iso).toLocaleDateString(formatLocale(locale), {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 
 /**
  * @param {{ brands: Array<{ name: string, pages: number, completed: number, criticalIssues: number }>, nextRunAt: string }} run
+ * @param {string} [locale] the reader's interface language (LOC-008), English when none
  * @returns {{ subject: string, html: string }}
  */
-export function renderAutoAuditEmail({ brands, nextRunAt }) {
+export function renderAutoAuditEmail({ brands, nextRunAt }, locale = DEFAULT_LOCALE) {
+  const t = translator(locale);
+  /** "25 pages audited · 6 critical issues" */
+  const summary = ({ completed, criticalIssues }) =>
+    t('autoAudit.summary', { pages: completed, issues: criticalIssues });
   const total = {
     pages: brands.reduce((n, b) => n + b.pages, 0),
     completed: brands.reduce((n, b) => n + b.completed, 0),
@@ -58,29 +62,29 @@ export function renderAutoAuditEmail({ brands, nextRunAt }) {
       ? `<ul style="margin:0 0 16px 0;padding-left:20px;">${brands
           .map(
             (b) =>
-              `<li style="margin:0 0 6px 0;color:#374151;font-size:14px;">${escapeHtml(b.name)}: ${escapeHtml(summary(b))}</li>`,
+              `<li style="margin:0 0 6px 0;color:#374151;font-size:14px;">${escapeHtml(t('autoAudit.brandLine', { brand: b.name, summary: summary(b) }))}</li>`,
           )
           .join('')}</ul>`
       : '';
   const failedNote = failed
-    ? `<p style="font-size:13px;color:#6b7280;margin:0 0 16px 0;">${escapeHtml(plural(failed, "page couldn't", "pages couldn't"))} be audited; they're left to the next run.</p>`
+    ? `<p style="font-size:13px;color:#6b7280;margin:0 0 16px 0;">${escapeHtml(t('autoAudit.failed', { count: failed }))}</p>`
     : '';
 
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-  <h1 style="font-size:18px;color:#111827;margin:0 0 8px 0;">Auto-audit finished</h1>
-  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${escapeHtml(summary(total))} · next run ${escapeHtml(monthDay(nextRunAt))}</p>
+  <h1 style="font-size:18px;color:#111827;margin:0 0 8px 0;">${t('autoAudit.title')}</h1>
+  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${escapeHtml(t('autoAudit.headline', { summary: summary(total), date: monthDay(nextRunAt, locale) }))}</p>
   ${brandItems}
   ${failedNote}
   <div style="margin:24px 0;">
-    <a href="${escapeHtml(url)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">Open Site Audit</a>
+    <a href="${escapeHtml(url)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">${t('autoAudit.button')}</a>
   </div>
   <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">
-    You're receiving this because auto-audit e-mails are on in Site Audit settings.
-    <a href="${escapeHtml(settingsUrl)}" style="color:#6b7280;">Change them</a>
+    ${t('autoAudit.footer')}
+    <a href="${escapeHtml(settingsUrl)}" style="color:#6b7280;">${t('autoAudit.change')}</a>
   </p>
 </div>`;
 
-  return { subject: `Site Audit: ${summary(total)}`, html };
+  return { subject: t('autoAudit.subject', { summary: summary(total) }), html };
 }
 
 /**
@@ -92,6 +96,7 @@ async function recipientGroups(orgId, brands) {
     orgId,
     brands.map((brand) => brand.id),
   );
+  const languages = await uiLanguagesOf([...readers.keys()]);
   const groups = new Map();
   for (const [id, seen] of readers) {
     const key = brands
@@ -100,12 +105,20 @@ async function recipientGroups(orgId, brands) {
       .join(',');
     const { data } = await supabaseAdmin.auth.admin.getUserById(id);
     if (!data?.user?.email) continue;
-    groups.set(key, [...(groups.get(key) ?? []), data.user.email]);
+    // One e-mail per brand set and language (LOC-008).
+    const locale = languages.get(id) ?? DEFAULT_LOCALE;
+    const groupKey = `${locale}|${key}`;
+    groups.set(groupKey, [...(groups.get(groupKey) ?? []), data.user.email]);
   }
-  return [...groups].map(([key, to]) => ({
-    brands: brands.filter((brand) => key.split(',').includes(brand.id)),
-    to,
-  }));
+  return [...groups].map(([groupKey, to]) => {
+    const bar = groupKey.indexOf('|');
+    const ids = groupKey.slice(bar + 1).split(',');
+    return {
+      locale: groupKey.slice(0, bar),
+      brands: brands.filter((brand) => ids.includes(brand.id)),
+      to,
+    };
+  });
 }
 
 /**
@@ -117,7 +130,7 @@ export async function sendAutoAuditEmail(orgId, run) {
   if (groups.length === 0) return false;
   let accepted = true;
   for (const group of groups) {
-    const { subject, html } = renderAutoAuditEmail({ ...run, brands: group.brands });
+    const { subject, html } = renderAutoAuditEmail({ ...run, brands: group.brands }, group.locale);
     if (!(await sendEmail({ to: group.to, subject, html }))) accepted = false;
   }
   return accepted;

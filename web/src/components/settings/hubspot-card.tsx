@@ -830,7 +830,7 @@ function ConsentDialog({
           {!contacts && !pages && <p className="text-xs text-muted-foreground">{t('pickOne')}</p>}
         </div>
         <DialogFooter className="items-center">
-          {!accountId && <span className="mr-auto text-xs text-muted-foreground">{t('next')}</span>}
+          {!accountId && <span className="me-auto text-xs text-muted-foreground">{t('next')}</span>}
           <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
           <Button
             disabled={(!contacts && !pages) || busy}
@@ -870,7 +870,7 @@ function ConsentOption({
         <label htmlFor={id} className="text-sm font-medium">
           {title}
         </label>
-        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+        <ul className="mt-1 list-disc space-y-0.5 ps-4 text-xs text-muted-foreground">
           {children}
         </ul>
       </div>

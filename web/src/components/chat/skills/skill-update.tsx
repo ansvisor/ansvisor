@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -39,6 +40,7 @@ const short = (sha: string | null) => (sha ? sha.slice(0, 7) : '—');
  */
 export function SkillUpdate({ id }: { id: string }) {
   const t = useTranslations('chatSkills.update');
+  const serverError = useServerErrorText();
   const tReview = useTranslations('chatSkills.reviewPage');
   const router = useRouter();
   const [update, setUpdate] = useState<Update | null | 'failed' | 'missing'>(null);
@@ -81,7 +83,7 @@ export function SkillUpdate({ id }: { id: string }) {
     const body = (await res?.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
     setBusy(false);
     if (!res?.ok || !body?.ok) {
-      toast.error(body?.error ?? t('failed'));
+      toast.error(serverError(body, body?.error ?? t('failed'), res?.status));
       return;
     }
     toast.success(t('approved', { name: update.name }));
@@ -131,7 +133,7 @@ export function SkillUpdate({ id }: { id: string }) {
         <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title', { name: update.name })}</h1>
         <span
           data-slot="update-badge"
-          className="ml-auto rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-950/60 dark:text-sky-300"
+          className="ms-auto rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-950/60 dark:text-sky-300"
         >
           {t('badge')}
         </span>
@@ -218,7 +220,7 @@ export function SkillUpdate({ id }: { id: string }) {
               {update.removed.length === 0 ? (
                 <p className="text-muted-foreground">{tReview('nothingRemoved')}</p>
               ) : (
-                <ul className="list-disc space-y-0.5 pl-4">
+                <ul className="list-disc space-y-0.5 ps-4">
                   {update.removed.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
@@ -260,7 +262,7 @@ export function SkillUpdate({ id }: { id: string }) {
               </span>
               {update.can.approve && (
                 <Button
-                  className="ml-auto"
+                  className="ms-auto"
                   data-action="skillUpdate.approve"
                   disabled={busy}
                   onClick={() => void approve()}

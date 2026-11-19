@@ -119,7 +119,7 @@ export function ChatConnections() {
             {brand ? t('page.subtitle', { brand: brand.name }) : t('page.subtitleNoBrand')}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2">
           <a
             href={CONTACT_SALES_URL}
             target="_blank"
@@ -182,7 +182,7 @@ export function ChatConnections() {
             <div className="relative w-full max-w-[260px]">
               <Search
                 aria-hidden
-                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                className="pointer-events-none absolute top-1/2 start-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
               />
               <Input
                 type="search"
@@ -191,7 +191,7 @@ export function ChatConnections() {
                 placeholder={t('page.search')}
                 aria-label={t('page.search')}
                 data-action="integrations.search"
-                className="h-8 pl-8 text-[13px]"
+                className="h-8 ps-8 text-[13px]"
               />
             </div>
             {(['all', ...CATEGORIES] as const).map((key) => (
@@ -447,7 +447,7 @@ function DisconnectDialog({
         {row && row.stops.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
             <p className="font-medium">{t('stops', { count: row.stops.length })}</p>
-            <ul className="mt-1 list-disc pl-5">
+            <ul className="mt-1 list-disc ps-5">
               {row.stops.map((agent) => (
                 <li key={agent}>{agent}</li>
               ))}

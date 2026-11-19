@@ -138,7 +138,7 @@ export function AdsOverview({
                   className={cn('size-2.5 rounded-[3px] ring-1 ring-foreground/10', colour)}
                 />
                 {t(part)}
-                <b className="ml-auto font-semibold tabular-nums">{o.bar[part]}</b>
+                <b className="ms-auto font-semibold tabular-nums">{o.bar[part]}</b>
               </li>
             ))}
           </ul>

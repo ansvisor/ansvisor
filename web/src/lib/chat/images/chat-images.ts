@@ -1,7 +1,9 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../../messages/en.json';
+import type { UiLocale } from '@/i18n/locales';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { fitImages, readImageShares, reserveImages } from '../budget';
+import { costLinesFor } from '../card-locale';
 import { fileChatImages, imageExtension, readChatStorage } from '../file-output';
 import { storageFits } from '../files';
 import { OwnKeyUnreadableError } from '../key';
@@ -28,7 +30,6 @@ import { generateImages } from './provider';
  */
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatEngine.images' });
-const costT = createTranslator({ locale: 'en', messages, namespace: 'chatEngine.costs' });
 
 /** The image model question, ready for ask_question, and each model behind it. */
 export interface ImageModelQuestion {
@@ -113,7 +114,9 @@ export async function imageCostLine(
   brandId: string,
   modelId: string,
   count: number,
+  locale?: UiLocale,
 ): Promise<string> {
+  const costT = await costLinesFor(locale);
   const model = IMAGE_MODELS.find((m) => m.id === modelId)?.label ?? modelId;
   const { data: brand } = await supabaseAdmin
     .from('brands')

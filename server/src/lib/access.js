@@ -232,6 +232,24 @@ function refusalFor(access, brand) {
 
 const refusalError = (refusal) => (refusal === 'organization' ? notInWorkspace() : noBrandAccess());
 
+/**
+ * Of `brandIds`, the ones the caller may read (their organization's, and
+ * with Selected brands the granted ones, or the demo brand), as a Set:
+ * for reads of many rows at once that leave out, rather than refuse, a row
+ * of a brand they can't see.
+ */
+export async function readableBrandIds(userId, brandIds) {
+  const ids = [...new Set(brandIds.filter(Boolean))];
+  if (!ids.length) return new Set();
+  const access = await brandAccessOf(userId);
+  const { data, error } = await supabaseAdmin
+    .from('brands')
+    .select('id, organization_id, is_demo')
+    .in('id', ids);
+  if (error) throw new Error(error.message);
+  return new Set((data ?? []).filter((brand) => !refusalFor(access, brand)).map((b) => b.id));
+}
+
 /** Several brands' refusal: another organization's first, then one not granted. */
 const firstRefusal = (refusals) =>
   refusals.find((r) => r === 'organization') ?? refusals.find((r) => r === 'brand') ?? null;

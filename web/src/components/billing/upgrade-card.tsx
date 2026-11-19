@@ -47,7 +47,7 @@ export function UpgradeCard({
           data-action="plan.upgrade"
           className={buttonVariants({ variant: 'default' })}
         >
-          <Badge variant="secondary" className="mr-2 gap-1">
+          <Badge variant="secondary" className="me-2 gap-1">
             <Crown className="h-3 w-3" />
             {requiredPlanFor(feature)}
           </Badge>

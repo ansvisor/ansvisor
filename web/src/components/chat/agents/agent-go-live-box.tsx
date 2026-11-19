@@ -119,7 +119,7 @@ export function AgentGoLiveBox({
         />
       </div>
       {admin && ticked && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3.5 py-2.5 text-[13px] min-[640px]:pl-[42px]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3.5 py-2.5 text-[13px] min-[640px]:ps-[42px]">
           <label htmlFor={`${id}-limit`} className="font-medium">
             {t('limit')}
           </label>

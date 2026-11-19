@@ -69,14 +69,14 @@ export function PlaceholderNav({
       <div
         role="group"
         aria-label={t('label')}
-        className="flex items-center gap-0.5 rounded-full border border-amber-300 bg-amber-50 py-0.5 pl-2.5 pr-0.5 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
+        className="flex items-center gap-0.5 rounded-full border border-amber-300 bg-amber-50 py-0.5 ps-2.5 pe-0.5 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
       >
         {state.count > 0 ? (
           <>
             <button
               type="button"
               onClick={() => step(1)}
-              className="whitespace-nowrap rounded-full pr-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="whitespace-nowrap rounded-full pe-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               {state.on > 0
                 ? t('onOf', { on: state.on, count: total })
@@ -102,7 +102,7 @@ export function PlaceholderNav({
             </button>
           </>
         ) : (
-          <span className="whitespace-nowrap pr-1">{t('left', { count: total })}</span>
+          <span className="whitespace-nowrap pe-1">{t('left', { count: total })}</span>
         )}
         {hidden > 0 && (
           <>

@@ -478,7 +478,7 @@ export function ShelfRows({
             label: `${t('price.label')}: ${bandLabel(id)}`,
           }))}
         >
-          <SelectTrigger size="sm" className="ml-auto h-7" aria-label={t('price.label')}>
+          <SelectTrigger size="sm" className="ms-auto h-7" aria-label={t('price.label')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent align="end">

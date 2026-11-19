@@ -206,6 +206,18 @@ describe('answerToDraft', () => {
     expect(db.tables.chat_files[0].content_draft_id).toBe(DRAFT);
   });
 
+  it('titles the draft by the answer’s heading, never by a request or a lead-in line', async () => {
+    db.tables.chat_messages[0].content_md = 'Find content opportunities for topics';
+    db.tables.chat_messages[1].content_md = '# Content opportunities, last 30 days\n\nText.\n';
+    await store.answerToDraft(ACTOR, RUN, null);
+    expect(drafts.createContentDraft.mock.calls[0][1].title).toBe(
+      'Content opportunities, last 30 days',
+    );
+    db.tables.chat_messages[1].content_md = 'No heading here.\n';
+    await store.answerToDraft(ACTOR, RUN, null);
+    expect(drafts.createContentDraft.mock.calls[1][1].title).toBe('Untitled page');
+  });
+
   it('keeps an answer’s images as their alt text and its raw HTML as text, as the answer shows them', async () => {
     db.tables.chat_messages[1].content_md =
       'See ![the chart](https://example.com/c.png?d=1) and [the page](https://example.com/p).\n\n<img src="https://example.com/x.png">\n';
