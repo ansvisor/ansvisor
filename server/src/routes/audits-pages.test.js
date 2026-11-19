@@ -208,6 +208,37 @@ describe('GET /api/audits/pages', () => {
     expect(byPath['other.com/blog/x']).toBeNull();
   });
 
+  it('says how many pages have an audit running, and when the oldest started', async () => {
+    const older = new Date(Date.now() - 10 * 60_000).toISOString();
+    const newer = new Date(Date.now() - 5 * 60_000).toISOString();
+    audits.push({ ...audit('r1', 'https://acme.com/a', 20, null, 'running'), created_at: newer });
+    audits.push({ ...audit('r2', 'https://acme.com/b', 18, null, 'running'), created_at: older });
+    const body = await (await fetch(`${baseUrl}/pages?brandId=b1`)).json();
+    expect(body.running).toEqual({ count: 2, since: older });
+
+    audits = audits.filter((a) => a.status !== 'running');
+    const idle = await (await fetch(`${baseUrl}/pages?brandId=b1`)).json();
+    expect(idle.running).toEqual({ count: 0, since: null });
+  });
+
+  it("lists only a batch's pages with since: those audited at or after it", async () => {
+    const started = new Date(Date.now() - 5 * 60_000).toISOString();
+    audits.unshift({
+      ...audit('r1', 'https://acme.com/a', 20, null, 'running'),
+      created_at: started,
+    });
+    const body = await (
+      await fetch(`${baseUrl}/pages?brandId=b1&since=${encodeURIComponent(started)}`)
+    ).json();
+    expect(body.pages.map((p) => p.path)).toEqual(['/a']);
+    expect(body.total).toBe(1);
+    // The running count is the brand's, whatever the filter.
+    expect(body.running.count).toBe(1);
+
+    const junk = await (await fetch(`${baseUrl}/pages?brandId=b1&since=soon`)).json();
+    expect(junk.total).toBe(4);
+  });
+
   it('pages over pages, not audits', async () => {
     const res = await fetch(`${baseUrl}/pages?brandId=b1&limit=1&offset=1`);
     const body = await res.json();

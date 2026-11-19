@@ -9226,6 +9226,17 @@
       "saveFailed": "Couldn't save the settings",
       "loadFailed": "Couldn't load the settings"
     },
+    "batch": {
+      "title": "Bulk audit",
+      "progress": "{done} of {total} done",
+      "timeLeft": "about {minutes} min left",
+      "estimating": "working out the time left…",
+      "finished": "All {total, plural, one {# audit is} other {# audits are}} done",
+      "thisBatch": "This batch",
+      "thisBatchTip": "List only the pages in this bulk audit",
+      "allPages": "All pages",
+      "dismiss": "Dismiss"
+    },
     "autoRun": {
       "label": "Auto-audit",
       "done": "{pages, plural, one {# page} other {# pages}} audited · {issues, plural, one {# critical issue} other {# critical issues}}",

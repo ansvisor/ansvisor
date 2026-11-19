@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audit again, bulk audit, audit all]
 synonyms: [page audit, check my page, scan a page, AI readiness check]
 plan: all
-updated: 2026-11-17
-last_checked: 2026-11-17
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -40,6 +40,12 @@ Audit selected, Audit all and Re-audit ask first. They list the pages and say ho
 Pages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.
 
 When fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month.
+
+## Following a bulk audit
+
+While a bulk audit runs, a bar above the lists shows **12 of 235 done · about 70 min left**. The time left is worked out from how fast the audits have finished since you opened the page, so it appears once the first one is done and settles as more finish. Audits run a few at a time, so a large batch takes a while.
+
+Click **This batch** to list only the pages in the bulk audit on **Pages**, and **All pages** to go back. When every audit is done the bar says so until you dismiss it.
 
 ## Auditing a page again
 

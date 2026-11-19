@@ -6334,7 +6334,7 @@
         "AI readiness check"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6355,6 +6355,10 @@
         {
           "heading": "Before a bulk audit",
           "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\nPages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
+        },
+        {
+          "heading": "Following a bulk audit",
+          "text": "While a bulk audit runs, a bar above the lists shows **12 of 235 done · about 70 min left**. The time left is worked out from how fast the audits have finished since you opened the page, so it appears once the first one is done and settles as more finish. Audits run a few at a time, so a large batch takes a while.\n\nClick **This batch** to list only the pages in the bulk audit on **Pages**, and **All pages** to go back. When every audit is done the bar says so until you dismiss it."
         },
         {
           "heading": "Auditing a page again",
