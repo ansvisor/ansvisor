@@ -15570,7 +15570,7 @@
     "citations": "Citations",
     "trackedCompetitors": "Tracked Competitors",
     "selectToCompare": "Select a competitor to see head-to-head comparison.",
-    "windowLast30Days": "Scores cover the last 30 days.",
+    "windowLastDays": "{days, plural, one {Scores cover the last day.} other {Scores cover the last # days.}}",
     "windowAllTime": "Scores cover all tracked history.",
     "windowSelectedRange": "Scores reflect the selected date range.",
     "selected": "Selected",

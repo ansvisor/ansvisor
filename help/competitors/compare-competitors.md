@@ -4,8 +4,8 @@ route: /dashboard/competitors
 keywords: [competitors, head-to-head, competitor comparison, gaps, strengths, platform breakdown, prompt-by-prompt, competitor types]
 synonyms: [benchmark competitors, how do we compare, competitor visibility, us versus them, competitor score, filter competitors, group competitors]
 plan: all
-updated: 2026-11-17
-last_checked: 2026-11-17
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -22,7 +22,7 @@ The **Tracked Competitors** card lists every competitor with its domain and:
 
 **No data** means no answer in the window was measured for that competitor yet, for example one you've just added.
 
-The **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores. **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
+The **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as "Scores cover the last 7 days." **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
 
 ## Filter and group by type
 
@@ -37,7 +37,7 @@ They only change which cards show and in what order: scores, the date range and 
 
 Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.
 
-The comparison reads every tracked answer, not just the date range. Its scores are each answer's own visibility score from 0 to 100, for your brand and for the competitor.
+The comparison reads the same **Date Range** as the cards: its scores, **Gaps**, **Strengths**, **Prompt-by-Prompt** and the runs you open cover those days, and change with it. Its scores are each answer's own visibility score from 0 to 100, for your brand and for the competitor.
 
 When there's nothing to compare yet, it says **No comparison data**: run tracking for your prompts first.
 
