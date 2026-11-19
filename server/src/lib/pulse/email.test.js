@@ -1,5 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import { forgetMessages } from '../i18n.js';
 import { renderPulseEmail } from './email.js';
 
 const metrics = {
@@ -169,5 +173,57 @@ describe('campaign tags', () => {
     );
     expect(html).toContain('tab=notifications&amp;utm_source=pulse');
     expect(html).toContain('href="https://cited.example.org/a"');
+  });
+});
+
+describe('the Pulse in the reader’s language (LOC-008)', () => {
+  const links = {
+    insightsUrl: 'https://app.example.com/i',
+    settingsUrl: 'https://app.example.com/s',
+  };
+
+  it('reads English exactly as before when no language is given', () => {
+    const { subject, html } = renderPulseEmail({ brandName: 'Acme', metrics, ...links });
+    expect(subject).toBe('Acme Weekly Pulse — visibility 42 (+1.2 pts this week)');
+    expect(html).toContain('How your brand showed up in AI answers over the last 7 days.');
+    expect(html).toContain('>75%<');
+    expect(html).toContain('>4/10<');
+  });
+
+  it('writes the words and numbers in German, English where German has no text', () => {
+    const file = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../messages/de.json',
+    );
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        pulse: {
+          titleWeek: 'Wochen-Pulse',
+          subject: '{brand} {title} — Sichtbarkeit {rate} ({trend} Pkt. diese Woche)',
+          warning: { slipping: 'Sichtbarkeit sinkt: {change} zur Vorwoche' },
+        },
+      }),
+    );
+    forgetMessages();
+    try {
+      const { subject, html } = renderPulseEmail({
+        brandName: 'Acme',
+        metrics: {
+          ...metrics,
+          kpis: { ...metrics.kpis, visibilityRate: 42.5 },
+          warnings: [{ type: 'visibility_slipping', from: 50.5, to: 42.5 }],
+        },
+        ...links,
+        locale: 'de',
+      });
+      expect(subject).toBe('Acme Wochen-Pulse — Sichtbarkeit 42,5 (+1,2 Pkt. diese Woche)');
+      expect(html).toContain('Sichtbarkeit sinkt: <strong>50,5 → 42,5</strong> zur Vorwoche');
+      expect(html).toContain('75 %');
+      expect(html).toContain('Open Visibility');
+    } finally {
+      fs.rmSync(file, { force: true });
+      forgetMessages();
+    }
   });
 });

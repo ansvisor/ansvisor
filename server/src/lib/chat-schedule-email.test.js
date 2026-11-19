@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -46,6 +49,7 @@ vi.mock('./access.js', () => ({ brandReaders: async () => readers.map }));
 vi.mock('./logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const mail = await import('./chat-schedule-email.js');
+const { forgetMessages } = await import('./i18n.js');
 
 const ORG = 'org-1';
 const JOB = 'job-1';
@@ -212,5 +216,52 @@ describe('sendScheduleEmail', () => {
     db.tables.chat_schedules[0].recipient_ids = [];
     await send();
     expect(deliver.mock.calls.map(([m]) => m.to)).toEqual([['creator@acme.test']]);
+  });
+});
+
+describe('the e-mail in each person’s language (LOC-008)', () => {
+  const file = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../messages/de.json');
+  afterEach(() => {
+    fs.rmSync(file, { force: true });
+    forgetMessages();
+  });
+
+  it('words the frame in each one’s language, the job’s title and answer as they are', async () => {
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        schedule: { subject: '{title}: Ihre geplanten Ergebnisse', openInChat: 'In Chat öffnen' },
+      }),
+    );
+    forgetMessages();
+    db.tables.profiles.find((p) => p.id === 'teammate').ui_language = 'de';
+    await send();
+    const mails = deliver.mock.calls.map(([m]) => m);
+    const german = mails.find((m) => m.to[0] === 'teammate@acme.test');
+    expect(german.subject).toBe('Weekly report: Ihre geplanten Ergebnisse');
+    expect(german.html).toContain('In Chat öffnen');
+    expect(german.html).toContain('Citations rose 12% this week.');
+    // What German lacks reads English; the creator has no language set.
+    expect(german.html).toContain('Pause this job');
+    expect(mails.find((m) => m.to[0] === 'creator@acme.test').subject).toBe(
+      'Weekly report: your scheduled results',
+    );
+  });
+
+  it('words a problem e-mail in the language given, the reason as it came', () => {
+    fs.writeFileSync(file, JSON.stringify({ schedule: { pausedTitle: '{title} ist pausiert' } }));
+    forgetMessages();
+    const { subject, html } = mail.renderScheduleProblemEmail({
+      kind: 'paused',
+      title: 'Weekly report',
+      reason: 'The brand was removed.',
+      sender: 'Ansvisor',
+      chatUrl: 'https://app.test/c',
+      jobUrl: 'https://app.test/j',
+      locale: 'de',
+    });
+    expect(subject).toBe('Weekly report ist pausiert');
+    expect(html).toContain('The brand was removed.');
+    expect(html).toContain('Open the job');
   });
 });

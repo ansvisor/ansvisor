@@ -1,12 +1,19 @@
 import { deliverEmail } from '../email.js';
+import {
+  DEFAULT_LOCALE,
+  formatLocale,
+  formatNumberIn,
+  formatPercentIn,
+  translator,
+} from '../i18n.js';
 import { changeText, platformName } from './summary.js';
 
 /**
  * The AI Traffic weekly digest as an e-mail (AT-013, spec §3.8): the week's
  * summary line and its top three changes, laid out with the page's numbers
  * — three cards, the visits by day, the platforms — and a way to the AI
- * Traffic page and to the notification settings. English, like the Daily
- * Pulse.
+ * Traffic page and to the notification settings. In the reader's interface
+ * language (LOC-008), like the Daily Pulse; English when none.
  *
  * Built for mail clients: tables and inline styles only, no images or
  * scripts, so it reads the same in Gmail, Apple Mail and Outlook. A full
@@ -39,11 +46,9 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-const formatNumber = (value) => Math.round(value).toLocaleString('en-US');
-
 /** "Oct 12", or "Mon": calendar days in UTC, so written in UTC. */
-function day(isoDay, options = { month: 'short', day: 'numeric' }) {
-  return new Date(`${isoDay}T00:00:00Z`).toLocaleDateString('en-US', {
+function day(isoDay, locale, options = { month: 'short', day: 'numeric' }) {
+  return new Date(`${isoDay}T00:00:00Z`).toLocaleDateString(formatLocale(locale), {
     ...options,
     timeZone: 'UTC',
   });
@@ -70,31 +75,37 @@ function card(label, value, sub, subColor = MUTED) {
   </td>`;
 }
 
-function cards({ visits, prevVisits, change, platforms, share, citedNotClicked }) {
+function cards(
+  { visits, prevVisits, change, platforms, share, citedNotClicked },
+  { t, locale, formatNumber },
+) {
   const visitsSub =
     change !== null
-      ? `${change > 0 ? '▲' : '▼'} ${Math.abs(change)}% on the week before`
+      ? t('trafficDigest.changeOnWeekBefore', {
+          arrow: change > 0 ? '▲' : '▼',
+          pct: formatPercentIn(locale, Math.abs(change)),
+        })
       : prevVisits > 0
-        ? `${formatNumber(prevVisits)} the week before`
-        : 'none the week before';
+        ? t('trafficDigest.prevWeek', { count: formatNumber(prevVisits) })
+        : t('trafficDigest.noneWeekBefore');
   const visitsColor = change === null ? MUTED : change > 0 ? UP : DOWN;
   const top = platforms[0];
   const third = share
-    ? card('Share of traffic', share, 'of all sessions in Analytics')
+    ? card(t('trafficDigest.share'), share, t('trafficDigest.shareSub'))
     : card(
-        'Cited, not clicked',
+        t('trafficDigest.citedNotClicked'),
         formatNumber(citedNotClicked),
-        citedNotClicked === 1 ? 'page AI answers cite' : 'pages AI answers cite',
+        t('trafficDigest.citedSub', { count: Math.round(citedNotClicked) }),
       );
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 -4px 20px -4px;">
     <tr>
-      ${card('AI visits', formatNumber(visits), visitsSub, visitsColor)}
+      ${card(t('trafficDigest.aiVisits'), formatNumber(visits), visitsSub, visitsColor)}
       ${card(
-        'Top platform',
+        t('trafficDigest.topPlatform'),
         top ? platformName(top.platform) : '—',
         top
-          ? `${formatNumber(top.visits)} ${top.visits === 1 ? 'visit' : 'visits'}`
-          : 'no AI visits',
+          ? t('trafficDigest.visits', { count: Math.round(top.visits) })
+          : t('trafficDigest.noAiVisits'),
       )}
       ${third}
     </tr>
@@ -106,7 +117,7 @@ function section(title, body) {
 }
 
 /** Seven columns, one a day, as tall as its share of the busiest day. */
-function dayBars(days) {
+function dayBars(days, { locale, formatNumber }) {
   const max = Math.max(1, ...days.map((d) => d.visits));
   const height = 72;
   const columns = days
@@ -121,7 +132,7 @@ function dayBars(days) {
   const labels = days
     .map(
       (d) =>
-        `<td align="center" style="padding:6px 3px 0 3px;font-size:11px;color:${MUTED};">${escapeHtml(day(d.day, { weekday: 'short' }))}</td>`,
+        `<td align="center" style="padding:6px 3px 0 3px;font-size:11px;color:${MUTED};">${escapeHtml(day(d.day, locale, { weekday: 'short' }))}</td>`,
     )
     .join('');
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid ${LINE};">
@@ -131,7 +142,7 @@ function dayBars(days) {
 }
 
 /** A row a platform: its name, a bar as long as its share of the top one, its visits. */
-function platformBars(platforms) {
+function platformBars(platforms, { formatNumber }) {
   const max = Math.max(1, ...platforms.map((p) => p.visits));
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${platforms
     .map((p) => {
@@ -151,7 +162,7 @@ function platformBars(platforms) {
     .join('')}</table>`;
 }
 
-function changeRows(changes) {
+function changeRows(changes, { locale }) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${changes
     .map((c) => {
       const mark = changeMark(c);
@@ -159,7 +170,7 @@ function changeRows(changes) {
         <td width="34" valign="top" style="padding:6px 0;">
           <div style="width:24px;height:24px;line-height:24px;border-radius:12px;text-align:center;font-size:12px;font-weight:600;color:${mark.color};background:${mark.background};">${mark.symbol}</div>
         </td>
-        <td valign="top" style="padding:8px 0 6px 0;font-size:14px;line-height:1.5;color:${INK};">${escapeHtml(changeText(c))}</td>
+        <td valign="top" style="padding:8px 0 6px 0;font-size:14px;line-height:1.5;color:${INK};">${escapeHtml(changeText(c, locale))}</td>
       </tr>`;
     })
     .join('')}</table>`;
@@ -170,7 +181,9 @@ function changeRows(changes) {
  *   visits: number, prevVisits?: number, change: number | null, sentences: string[],
  *   changes: object[], share?: string | null, citedNotClicked?: number,
  *   platforms?: { platform: string, visits: number }[], days?: { day: string, visits: number }[],
- *   trafficUrl: string, settingsUrl: string }} digest
+ *   trafficUrl: string, settingsUrl: string, locale?: string }} digest `locale`: the
+ *   reader's interface language (LOC-008), English when none. `sentences`
+ *   and `share` come written in it.
  * @returns {{ subject: string, html: string }}
  */
 export function renderTrafficDigestEmail({
@@ -187,14 +200,21 @@ export function renderTrafficDigestEmail({
   days = [],
   trafficUrl,
   settingsUrl,
+  locale = DEFAULT_LOCALE,
 }) {
-  const range = `${day(week.firstDay)} – ${day(week.lastDay)}`;
-  const count = `${formatNumber(visits)} AI ${visits === 1 ? 'visit' : 'visits'}`;
-  const pct = change === null ? '' : ` (${change > 0 ? '+' : '−'}${Math.abs(change)}%)`;
-  const subject = `${brandName} AI traffic last week: ${count}${pct}`;
+  const t = translator(locale);
+  const formatNumber = (value) => formatNumberIn(locale, Math.round(value));
+  const words = { t, locale, formatNumber };
+  const range = `${day(week.firstDay, locale)} – ${day(week.lastDay, locale)}`;
+  const count = t('trafficDigest.visitCount', { count: Math.round(visits) });
+  const pct =
+    change === null
+      ? ''
+      : ` (${change > 0 ? '+' : '−'}${formatPercentIn(locale, Math.abs(change))})`;
+  const subject = t('trafficDigest.subject', { brand: brandName, count, change: pct });
 
   const html = `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(locale)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -214,25 +234,25 @@ export function renderTrafficDigestEmail({
 <tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:${WHITE};border:1px solid ${LINE};border-radius:16px;overflow:hidden;font-family:${FONT};">
   <tr><td class="pad" style="background:${INK};padding:26px 28px;">
-    <div style="font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:${LINE};">Ansvisor · AI Traffic weekly</div>
+    <div style="font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:${LINE};">${t('trafficDigest.eyebrow')}</div>
     <div style="font-size:26px;font-weight:500;letter-spacing:-0.03em;color:${WHITE};margin:8px 0 4px 0;">${escapeHtml(brandName)}</div>
-    <div style="font-size:14px;color:${SAND};opacity:0.8;">Visits from AI assistants to your site, ${escapeHtml(range)}</div>
+    <div style="font-size:14px;color:${SAND};opacity:0.8;">${t('trafficDigest.intro', { range: escapeHtml(range) })}</div>
   </td></tr>
   <tr><td class="pad" style="padding:24px 28px 8px 28px;">
-    ${cards({ visits, prevVisits, change, platforms, share, citedNotClicked })}
+    ${cards({ visits, prevVisits, change, platforms, share, citedNotClicked }, words)}
     <div style="background:${SAND};border-radius:12px;padding:16px 18px;font-size:15px;line-height:1.6;color:${INK};">${escapeHtml(sentences.join(' '))}</div>
-    ${days.length ? section('AI visits by day', dayBars(days)) : ''}
-    ${platforms.length ? section('By platform', platformBars(platforms)) : ''}
-    ${changes.length ? section('Top changes', changeRows(changes)) : ''}
+    ${days.length ? section(t('trafficDigest.byDay'), dayBars(days, words)) : ''}
+    ${platforms.length ? section(t('trafficDigest.byPlatform'), platformBars(platforms, words)) : ''}
+    ${changes.length ? section(t('trafficDigest.topChanges'), changeRows(changes, words)) : ''}
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 8px 0;">
       <tr><td style="background:${INK};border-radius:100px;">
-        <a href="${escapeHtml(trafficUrl)}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:500;color:${WHITE};text-decoration:none;border-radius:100px;">Open AI Traffic →</a>
+        <a href="${escapeHtml(trafficUrl)}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:500;color:${WHITE};text-decoration:none;border-radius:100px;">${t('trafficDigest.button')}</a>
       </td></tr>
     </table>
   </td></tr>
   <tr><td class="pad" style="padding:18px 28px 24px 28px;border-top:1px solid ${LINE};font-size:12px;line-height:1.6;color:${MUTED};">
-    You're receiving this because the AI Traffic weekly digest is on for ${escapeHtml(brandName)}.
-    <a href="${escapeHtml(settingsUrl)}" style="color:${INK};">Manage notification settings</a>
+    ${t('trafficDigest.footer', { brand: escapeHtml(brandName) })}
+    <a href="${escapeHtml(settingsUrl)}" style="color:${INK};">${t('trafficDigest.manage')}</a>
   </td></tr>
 </table>
 </td></tr>

@@ -1,8 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import supabaseAdmin from '../config/supabase.js';
 import logger from './logger.js';
+
+/**
+ * The database client, loaded when a language is first read: the words and
+ * formats below are pure, and modules that only word things (the Pulse's,
+ * a plan's summary) import them without a database.
+ */
+const database = async () => (await import('../config/supabase.js')).default;
 
 /**
  * The words of e-mails the server sends, in each person's interface
@@ -183,6 +189,7 @@ export async function uiLanguagesOf(ids) {
   const out = new Map(wanted.map((id) => [id, DEFAULT_LOCALE]));
   if (wanted.length === 0) return out;
   try {
+    const supabaseAdmin = await database();
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, ui_language')
@@ -193,6 +200,56 @@ export async function uiLanguagesOf(ids) {
     logger.warn({ err }, 'could not read UI languages for an e-mail, using English');
   }
   return out;
+}
+
+const sameAddress = (address) =>
+  String(address ?? '')
+    .trim()
+    .toLowerCase();
+
+/**
+ * The interface language of each address of a list kept as addresses (a
+ * Pulse's recipients): Map(lowercased address → resolved code). An address
+ * that is a member of `orgId` with a language set gets theirs; any other
+ * (no member, none set, a read that fails) is English. Only members with a
+ * language set are looked up.
+ */
+export async function uiLanguagesOfAddresses(orgId, addresses) {
+  const out = new Map((addresses ?? []).map((address) => [sameAddress(address), DEFAULT_LOCALE]));
+  if (!orgId || out.size === 0) return out;
+  try {
+    const supabaseAdmin = await database();
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id, ui_language')
+      .eq('organization_id', orgId)
+      .not('ui_language', 'is', null);
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      const locale = resolveLocale(row.ui_language);
+      if (locale === DEFAULT_LOCALE) continue;
+      const { data: user } = await supabaseAdmin.auth.admin.getUserById(row.id);
+      const address = sameAddress(user?.user?.email);
+      if (address && out.has(address)) out.set(address, locale);
+    }
+  } catch (err) {
+    logger.warn({ err }, 'could not read UI languages for an e-mail, using English');
+  }
+  return out;
+}
+
+/**
+ * Addresses grouped by their language (uiLanguagesOfAddresses), in the
+ * order first met: [[locale, addresses], …]. One send per language.
+ */
+export async function addressesByLanguage(orgId, addresses) {
+  const languages = await uiLanguagesOfAddresses(orgId, addresses);
+  const groups = new Map();
+  for (const address of addresses ?? []) {
+    const locale = languages.get(sameAddress(address)) ?? DEFAULT_LOCALE;
+    groups.set(locale, [...(groups.get(locale) ?? []), address]);
+  }
+  return [...groups];
 }
 
 /** One person's interface language. */
@@ -209,4 +266,20 @@ export function formatLocale(code) {
   } catch {
     return 'en-US';
   }
+}
+
+/** A number in the language's format: "1,234.5" in English, "1.234,5" in German. */
+export function formatNumberIn(code, value, options = {}) {
+  return new Intl.NumberFormat(formatLocale(code), options).format(Number(value) || 0);
+}
+
+/**
+ * A percentage given as 0–100 (12.5 → "12.5%", "%12,5" in Turkish), to at
+ * most `digits` decimals.
+ */
+export function formatPercentIn(code, value, digits = 1) {
+  return new Intl.NumberFormat(formatLocale(code), {
+    style: 'percent',
+    maximumFractionDigits: digits,
+  }).format((Number(value) || 0) / 100);
 }

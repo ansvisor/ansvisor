@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * language with no file) reads English, never a raw key.
  */
 
-const db = vi.hoisted(() => ({ rows: [], error: null }));
+const db = vi.hoisted(() => ({ rows: [], error: null, emails: {} }));
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: () => ({
@@ -18,15 +18,35 @@ vi.mock('../config/supabase.js', () => ({
           db.error
             ? { data: null, error: db.error }
             : { data: db.rows.filter((row) => ids.includes(row.id)), error: null },
+        // A workspace's members with a language set (uiLanguagesOfAddresses).
+        eq: (_col, orgId) => ({
+          not: async () =>
+            db.error
+              ? { data: null, error: db.error }
+              : {
+                  data: db.rows.filter((row) => row.org === orgId && row.ui_language != null),
+                  error: null,
+                },
+        }),
       }),
     }),
+    auth: {
+      admin: {
+        getUserById: async (id) => ({
+          data: { user: db.emails[id] ? { email: db.emails[id] } : null },
+        }),
+      },
+    },
   },
 }));
 vi.mock('./logger.js', () => ({ default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const {
   DEFAULT_LOCALE,
+  addressesByLanguage,
   forgetMessages,
+  formatNumberIn,
+  formatPercentIn,
   formatLocale,
   formatMessage,
   mergeMessages,
@@ -49,6 +69,7 @@ function addLanguage(code, tree) {
 beforeEach(() => {
   db.rows = [];
   db.error = null;
+  db.emails = {};
   forgetMessages();
 });
 afterEach(() => {
@@ -144,6 +165,46 @@ describe('uiLanguagesOf', () => {
   it('never holds an e-mail back: a failed read is English', async () => {
     db.error = { message: 'down' };
     expect([...(await uiLanguagesOf(['u1']))]).toEqual([['u1', 'en']]);
+  });
+});
+
+describe('addressesByLanguage', () => {
+  it('groups a list of addresses by the language of the member each one is', async () => {
+    addLanguage('de', {});
+    db.rows = [
+      { id: 'u1', org: 'org-1', ui_language: 'de' },
+      { id: 'u2', org: 'org-1', ui_language: 'en' },
+      { id: 'u9', org: 'org-2', ui_language: 'de' },
+    ];
+    db.emails = { u1: 'Ana@Acme.test', u2: 'bo@acme.test', u9: 'cy@other.test' };
+    expect(
+      await addressesByLanguage('org-1', [
+        'ana@acme.test',
+        'bo@acme.test',
+        'client@else.test',
+        'cy@other.test',
+      ]),
+    ).toEqual([
+      ['de', ['ana@acme.test']],
+      ['en', ['bo@acme.test', 'client@else.test', 'cy@other.test']],
+    ]);
+  });
+
+  it('sends everything in English when the languages cannot be read', async () => {
+    db.error = { message: 'down' };
+    expect(await addressesByLanguage('org-1', ['a@acme.test', 'b@acme.test'])).toEqual([
+      ['en', ['a@acme.test', 'b@acme.test']],
+    ]);
+  });
+});
+
+describe('number formats', () => {
+  it('writes numbers and percentages as the language does, English as before', () => {
+    addLanguage('de', {});
+    expect(formatNumberIn('en', 1234.5)).toBe('1,234.5');
+    expect(formatNumberIn('de', 1234.5)).toBe('1.234,5');
+    expect(formatPercentIn('en', 12.5)).toBe('12.5%');
+    expect(formatPercentIn('de', 12.5)).toBe('12,5 %');
   });
 });
 
