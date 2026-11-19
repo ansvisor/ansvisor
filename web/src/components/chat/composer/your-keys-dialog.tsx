@@ -150,7 +150,7 @@ export function YourKeysDialog({ open, onClose }: { open: boolean; onClose: () =
                   {row.health.failingSince && (
                     <span className="text-xs text-red-700 dark:text-red-400">{t('failing')}</span>
                   )}
-                  <span className="ml-auto flex items-center gap-1.5">
+                  <span className="ms-auto flex items-center gap-1.5">
                     {KEY_USES.map((use) => {
                       const on = uses.includes(use);
                       const off = use === 'images' && !makesImages(row.provider);

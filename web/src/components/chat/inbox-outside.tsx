@@ -113,7 +113,7 @@ function OutsideEmailRow({ email, onGone }: { email: OutsideEmail; onGone: () =>
           {t('subject')} <span className="font-medium text-foreground">{email.subject}</span>
         </span>
         {email.summary.length > 0 && (
-          <ul className="mt-1.5 mb-0 list-disc pl-5">
+          <ul className="mt-1.5 mb-0 list-disc ps-5">
             {email.summary.map((line, i) => (
               <li key={i} className="mb-0.5">
                 {line}

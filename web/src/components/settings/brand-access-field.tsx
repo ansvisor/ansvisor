@@ -55,7 +55,7 @@ export function BrandAccessField({
                 onChange({ scope: option, brandIds: option === 'all' ? [] : value.brandIds })
               }
               className={cn(
-                'rounded-lg border bg-card px-3 py-2 text-left transition-colors',
+                'rounded-lg border bg-card px-3 py-2 text-start transition-colors',
                 !locked && !disabled && 'hover:bg-accent/50',
                 locked && 'cursor-not-allowed opacity-50',
                 scope === option && 'border-foreground ring-1 ring-foreground',

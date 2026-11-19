@@ -4,6 +4,8 @@
  * tested.
  */
 
+import { isPlaceholderPath } from '../page-paths.js';
+
 /** How many recent completed audits the trend endpoint reads. */
 export const TREND_LIMIT = 500;
 
@@ -182,6 +184,9 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
     if (seen.has(r.id)) continue;
     seen.add(r.id);
     const { url, ...page } = pageIdentityForAudit(r);
+    // An analytics placeholder audited as a page (an old auto-audit of
+    // "/(not%20set)") is no page: left out of the list and every count.
+    if (isPlaceholderPath(page.path)) continue;
     if (!groups.has(page.key)) groups.set(page.key, { ...page, runs: [] });
     groups.get(page.key).runs.push({
       id: r.id,

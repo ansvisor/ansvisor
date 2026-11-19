@@ -4,8 +4,8 @@ route: /dashboard/insights
 keywords: [brand visibility, overview tab, mentions tab, citations tab, product visibility tab, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
 synonyms: [visibility page, AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
 plan: all
-updated: 2026-11-17
-last_checked: 2026-11-17
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -98,4 +98,4 @@ The filters apply to everything on the tab except **Opportunities**, which lists
 1. Set the range to **7d**. Is your Visibility up or down? If it's down, **Why it changed** shows which platforms, topics and prompts moved it.
 2. In **By AI platform**, find the platform with the lowest score or the highlighted biggest drop: that's your next investment.
 3. Look at the suggested topics and prompts in **Opportunities**, and track one to three of them.
-4. From **Opportunities** under **Content** in the sidebar, open the opportunity for the topic that did worst this week and click **Generate Brief**.
+4. From **Opportunities** under **Content** in the sidebar, open the opportunity for the topic that did worst this week and click **Build brief**.

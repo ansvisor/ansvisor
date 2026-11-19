@@ -36,6 +36,22 @@ import type { GoLiveFacts } from './precedence';
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
 }));
+// A German with two texts, for a person who picked it (the person's language, below).
+vi.mock('@/i18n/messages', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/i18n/messages')>();
+  return {
+    ...actual,
+    loadMessages: async (locale: Parameters<typeof actual.loadMessages>[0]) =>
+      locale === 'de'
+        ? actual.mergeMessages(await actual.loadMessages('en'), {
+            chatEngine: {
+              error: { notFound: 'Diesen Chat gibt es nicht mehr.' },
+              step: { askStopped: 'Frage übersprungen' },
+            },
+          })
+        : actual.loadMessages(locale),
+  };
+});
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
@@ -6612,7 +6628,7 @@ describe('Send to Action Center (CHAT-09 §E, CHAT-20 §12)', () => {
     expectClean(events);
   });
 
-  it('lists its tasks on the card, then sends it as the person approved it, with Open in Actions', async () => {
+  it('lists its tasks on the card, then sends it as the person approved it, with Open in Action Center', async () => {
     useModels([READY], [calls(sendCall), text('Sent.')]);
     const runId = await turn(ADMIN, 'Send this to Action Center', 'auto');
     const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
@@ -10826,5 +10842,34 @@ describe('an AEO Operator’s run', () => {
       'get_agent_plan',
       'run_agent_plan',
     ]);
+  });
+});
+
+describe("the person's language (profiles.ui_language)", () => {
+  const pick = (person: string, language: string | null) => {
+    const profile = db.tables.profiles.find((p) => p.id === person) as Record<string, unknown>;
+    profile.ui_language = language;
+  };
+
+  it('writes the run’s steps and refusals in it, and English with no pick', async () => {
+    const ask = {
+      question: 'Which page?',
+      options: [{ label: '/pricing', recommended: true }, { label: '/features' }],
+    };
+    useModels([READY], [calls(toolCall('q1', ASK_TOOL, ask))]);
+    const runId = await turn(ADMIN, 'Write a FAQ');
+    expect(runRow(runId).status).toBe('waiting');
+    expect(await engine.stopChatRun(ANALYST, runId)).toMatchObject({
+      status: 404,
+      message: "This chat isn't there any more.",
+    });
+    pick(PEOPLE.analyst, 'de');
+    expect(await engine.stopChatRun(ANALYST, runId)).toMatchObject({
+      status: 404,
+      message: 'Diesen Chat gibt es nicht mehr.',
+    });
+    pick(PEOPLE.admin, 'de');
+    expect(await engine.stopChatRun(ADMIN, runId)).toEqual({ ok: true });
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'skipped', label: 'Frage übersprungen' });
   });
 });

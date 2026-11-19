@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Telling people an agent went live on its own (AUTONOMOUS-GO-LIVE §6.4,
@@ -68,6 +71,7 @@ vi.mock('../logger.js', () => ({ default: { warn: vi.fn(), error: vi.fn(), info:
 
 const { renderGoLiveOffEmail, renderWentLiveEmail, tellGoLiveOff, tellWentLive } =
   await import('./go-live.js');
+const { forgetMessages } = await import('../i18n.js');
 
 const ORG = 'org-1';
 const BRAND = 'brand-1';
@@ -313,5 +317,56 @@ describe('tellGoLiveOff', () => {
     expect(renderGoLiveOffEmail({ agent: 'P', agentId: 'agent-1' }).html).toContain(
       '/dashboard/agents/agent-1',
     );
+  });
+});
+
+describe('the e-mails in each person’s language (LOC-008)', () => {
+  const file = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../../messages/de.json',
+  );
+  afterEach(() => {
+    fs.rmSync(file, { force: true });
+    forgetMessages();
+  });
+
+  it('sends each one the e-mail in their own language, English with none set', async () => {
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        goLive: {
+          draftSubject: '{agent} hat „{title}“ als Entwurf an {cms} gesendet',
+          openPage: 'Seite öffnen',
+        },
+      }),
+    );
+    forgetMessages();
+    db.tables.chat_user_prefs = [];
+    db.tables.profiles.find((p) => p.id === 'notify-1').ui_language = 'de';
+    expect(await tellWentLive({ eventId: EVENT })).toMatchObject({ notices: 2, emails: 2 });
+    const mails = deliverEmail.mock.calls.map(([mail]) => mail);
+    const german = mails.find((mail) => mail.to[0] === 'notify-1@acme.test');
+    expect(german.subject).toBe('Publisher hat „Pricing FAQ“ als Entwurf an Webflow gesendet');
+    expect(german.html).toContain('Seite öffnen');
+    // What German lacks reads English.
+    expect(german.html).toContain('Open the run');
+    expect(mails.find((mail) => mail.to[0] === 'owner-1@acme.test').subject).toBe(
+      'Publisher sent “Pricing FAQ” to Webflow as a draft',
+    );
+  });
+
+  it('words the go-live-off e-mail in the language given', () => {
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ goLive: { offSubject: '{agent} veröffentlicht nicht mehr selbst' } }),
+    );
+    forgetMessages();
+    const { subject, html } = renderGoLiveOffEmail({
+      agent: 'P',
+      agentId: 'agent-1',
+      locale: 'de',
+    });
+    expect(subject).toBe('P veröffentlicht nicht mehr selbst');
+    expect(html).toContain('Open the agent');
   });
 });

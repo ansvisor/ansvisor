@@ -471,7 +471,7 @@ export default function ShoppingPage() {
           <TabsTrigger value="categories">
             {t('tabCategories')}
             {Array.isArray(categoriesRead) && (
-              <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">
+              <span className="ms-1.5 text-xs tabular-nums text-muted-foreground">
                 {categoriesRead.length}
               </span>
             )}
@@ -646,7 +646,7 @@ export default function ShoppingPage() {
                         URL.revokeObjectURL(url);
                       }}
                     >
-                      <Download className="mr-2 h-4 w-4" />
+                      <Download className="me-2 h-4 w-4" />
                       {tCommon('exportCsv')}
                     </Button>
                   </div>
@@ -767,7 +767,7 @@ export default function ShoppingPage() {
                         URL.revokeObjectURL(url);
                       }}
                     >
-                      <Download className="mr-2 h-4 w-4" />
+                      <Download className="me-2 h-4 w-4" />
                       {tCommon('exportCsv')}
                     </Button>
                   </div>
@@ -830,12 +830,16 @@ function FilterBar({
       <FilterField label={t('filterDateRange')}>
         <Select value={datePreset} onValueChange={(v) => setDatePreset(v as ShoppingDatePreset)}>
           <SelectTrigger className="h-8 w-32">
-            <SelectValue>{(value) => (value === 'all' ? 'All time' : `Last ${value}`)}</SelectValue>
+            <SelectValue>
+              {(value) =>
+                value === 'all' ? t('page.allTime') : t('page.last', { period: String(value) })
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {DATE_PRESETS.map((p) => (
               <SelectItem key={p} value={p}>
-                {p === 'all' ? 'All time' : `Last ${p}`}
+                {p === 'all' ? t('page.allTime') : t('page.last', { period: p })}
               </SelectItem>
             ))}
           </SelectContent>
@@ -848,13 +852,13 @@ function FilterBar({
             <SelectValue>
               {(value) =>
                 value === 'all' || !value
-                  ? 'All platforms'
+                  ? t('page.allPlatforms')
                   : (PLATFORM_LABELS[String(value)] ?? String(value))
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All platforms</SelectItem>
+            <SelectItem value="all">{t('page.allPlatforms')}</SelectItem>
             {platformOpts.map((p) => (
               <SelectItem key={p} value={p}>
                 {PLATFORM_LABELS[p] ?? p}
@@ -869,12 +873,14 @@ function FilterBar({
           <SelectTrigger className="h-8 w-32">
             <SelectValue>
               {(value) =>
-                value === 'all' || !value ? 'All regions' : formatRegionDisplay(String(value))
+                value === 'all' || !value
+                  ? t('page.allRegions')
+                  : formatRegionDisplay(String(value))
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All regions</SelectItem>
+            <SelectItem value="all">{t('page.allRegions')}</SelectItem>
             {regionOpts.map((r) => (
               <SelectItem key={r} value={r}>
                 {formatRegionDisplay(r)}
@@ -1063,7 +1069,7 @@ function ProductTable({
     return (
       <div className="rounded-xl border border-dashed py-8 text-center bg-card">
         <Layers className="mx-auto h-8 w-8 text-muted-foreground/30" />
-        <p className="mt-2 text-sm text-muted-foreground">No products found matching filters.</p>
+        <p className="mt-2 text-sm text-muted-foreground">{t('page.noProducts')}</p>
       </div>
     );
   }
@@ -1081,10 +1087,10 @@ function ProductTable({
             {showCompetitorName && <TableHead>{t('competitorName')}</TableHead>}
             <TableHead>{t('colPlatforms')}</TableHead>
             <TableHead>{t('colRegions')}</TableHead>
-            <TableHead className="text-right">{t('colImpressions')}</TableHead>
-            <TableHead className="text-right">{t('colLastPrice')}</TableHead>
+            <TableHead className="text-end">{t('colImpressions')}</TableHead>
+            <TableHead className="text-end">{t('colLastPrice')}</TableHead>
             <TableHead>{t('colTopMerchant')}</TableHead>
-            <TableHead className="text-right">{t('colLastSeen')}</TableHead>
+            <TableHead className="text-end">{t('colLastSeen')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -1165,16 +1171,14 @@ function ProductTable({
                     ))}
                   </div>
                 </TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">
+                <TableCell className="text-end font-semibold tabular-nums">
                   {formatNumber(p.impressions)}
                 </TableCell>
-                <TableCell className="text-right font-medium tabular-nums">
-                  {lastPriceStr}
-                </TableCell>
+                <TableCell className="text-end font-medium tabular-nums">{lastPriceStr}</TableCell>
                 <TableCell className="max-w-[140px] truncate text-xs text-muted-foreground">
                   {p.top_merchant || '—'}
                 </TableCell>
-                <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                <TableCell className="text-end text-xs text-muted-foreground tabular-nums">
                   {formattedDate}
                 </TableCell>
               </TableRow>
@@ -1222,7 +1226,7 @@ function CompetitorSummaryList({ t, summaries, loading }: CompetitorSummaryListP
                 <span className="font-semibold text-sm truncate block" title={s.name}>
                   {s.name}
                 </span>
-                <span className="text-[10px] text-muted-foreground truncate ml-1 max-w-[100px]">
+                <span className="text-[10px] text-muted-foreground truncate ms-1 max-w-[100px]">
                   {s.domain}
                 </span>
               </div>
@@ -1235,7 +1239,7 @@ function CompetitorSummaryList({ t, summaries, loading }: CompetitorSummaryListP
                     {s.distinct_products_count}
                   </span>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <span className="text-muted-foreground text-[10px] block">{t('compSov')}</span>
                   <span className="font-bold text-sm tabular-nums">{formatPercent(s.sov)}</span>
                 </div>
@@ -1283,8 +1287,11 @@ function ProductAppearancesDrawer({
           </SheetTitle>
           <SheetDescription className="text-xs">
             {product?.product_brand
-              ? `${product.product_brand} • ${product.impressions} appearances`
-              : `${product?.impressions || 0} appearances`}
+              ? t('page.brandAppearances', {
+                  brand: product.product_brand,
+                  count: product.impressions,
+                })
+              : t('page.appearances', { count: product?.impressions || 0 })}
           </SheetDescription>
         </SheetHeader>
 
@@ -1345,7 +1352,7 @@ function ProductAppearancesDrawer({
                         <Link
                           href={`/dashboard/prompts/${app.prompt_id}`}
                           className="text-sm text-foreground font-medium hover:text-primary hover:underline line-clamp-3 block leading-relaxed"
-                          title="View Prompt Details"
+                          title={t('page.viewPrompt')}
                           onClick={() => onOpenChange(false)}
                         >
                           &quot;{app.prompt_text}&quot;

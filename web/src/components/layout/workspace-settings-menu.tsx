@@ -59,7 +59,7 @@ export function WorkspaceSettingsMenu() {
               key={id}
               onClick={() => router.push(`/dashboard/settings/${section}`)}
             >
-              <Icon className="mr-2 h-4 w-4 text-muted-foreground" />
+              <Icon className="me-2 h-4 w-4 text-muted-foreground" />
               {section === 'roles-access' ? t('teamRolesAccess') : t(id)}
             </DropdownMenuItem>
           );

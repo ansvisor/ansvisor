@@ -91,7 +91,7 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
           aria-describedby={tooSoon ? 'site-trust-recheck' : undefined}
           onClick={guard(() => void load(true), { action: tActions('checkSiteTrust') })}
         >
-          {checking && <LoadingDots className="mr-1.5" />}
+          {checking && <LoadingDots className="me-1.5" />}
           {t('checkAgain')}
         </Button>
       </CardHeader>

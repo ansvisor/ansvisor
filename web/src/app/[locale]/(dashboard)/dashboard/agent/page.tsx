@@ -26,6 +26,7 @@ import { Markdown } from '@/components/ui/markdown';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import {
   Check,
   Copy,
@@ -155,6 +156,8 @@ function AgentChat(props: {
   // A chat turn is an action: a read-only workspace gets the upgrade dialog.
   const { isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
+  const tServer = useTranslations('serverErrors');
 
   // Ref mirrors activeId for prepareSendMessagesRequest. Reading the
   // state directly from the transport closure gives us a stale snapshot —
@@ -285,7 +288,7 @@ function AgentChat(props: {
         return;
       }
 
-      toast.error(body?.error ?? 'Failed to create chat');
+      toast.error(serverError(body, body?.error ?? tServer('server_error'), res.status));
       return;
     }
     const { conversation } = (await res.json()) as { conversation: ConversationRow };
@@ -300,7 +303,7 @@ function AgentChat(props: {
     if (!res.ok) {
       const body = await res.json().catch(() => null);
 
-      toast.error(body?.error ?? 'Failed to delete conversation');
+      toast.error(serverError(body, body?.error ?? tServer('server_error'), res.status));
       return;
     }
     setConversations((prev) => prev.filter((c) => c.id !== id));
@@ -338,7 +341,7 @@ function AgentChat(props: {
           return;
         }
 
-        toast.error(body?.error ?? 'Failed to create conversation');
+        toast.error(serverError(body, body?.error ?? tServer('server_error'), res.status));
         return;
       }
       const { conversation } = (await res.json()) as { conversation: ConversationRow };
@@ -360,7 +363,7 @@ function AgentChat(props: {
 
   return (
     <div className="flex h-[calc(100%+3rem)] -m-6">
-      <aside className="w-72 border-r bg-card flex flex-col">
+      <aside className="w-72 border-e bg-card flex flex-col">
         <div className="p-3 border-b">
           <Button onClick={newChat} variant="outline" className="w-full justify-start gap-2">
             <Plus className="h-4 w-4" />
@@ -389,7 +392,7 @@ function AgentChat(props: {
                 }
               }}
               className={cn(
-                'w-full text-left text-sm rounded-md px-3 py-2 flex items-start gap-2 group hover:bg-accent transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'w-full text-start text-sm rounded-md px-3 py-2 flex items-start gap-2 group hover:bg-accent transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 activeId === c.id && 'bg-accent',
               )}
             >
@@ -568,7 +571,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
             type="button"
             onClick={() => void handleCopy()}
             aria-label={copied ? t('copied') : t('copyMessage')}
-            className="absolute bottom-2 right-2 p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground transition-opacity"
+            className="absolute bottom-2 end-2 p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground transition-opacity"
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
@@ -701,7 +704,7 @@ function ChartToolPart({ part }: { part: UIMessage['parts'][number] }) {
     return (
       <div className="my-2 rounded-md border bg-destructive/10 text-destructive px-2 py-1 text-xs">
         <span className="font-mono">render_chart</span>
-        {toolPart.errorText && <span className="ml-2">{toolPart.errorText}</span>}
+        {toolPart.errorText && <span className="ms-2">{toolPart.errorText}</span>}
       </div>
     );
   }
@@ -731,7 +734,7 @@ function AuditToolPart({ part }: { part: UIMessage['parts'][number] }) {
     return (
       <div className="my-2 rounded-md border bg-destructive/10 px-2 py-1 text-xs text-destructive">
         <span className="font-mono">render_audit</span>
-        {toolPart.errorText && <span className="ml-2">{toolPart.errorText}</span>}
+        {toolPart.errorText && <span className="ms-2">{toolPart.errorText}</span>}
       </div>
     );
   }

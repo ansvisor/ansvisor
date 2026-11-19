@@ -150,16 +150,16 @@ export function GoogleSection({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="pl-6">{t('taking.columns.page')}</TableHead>
-          <TableHead className="text-right">{t('taking.columns.impressions')}</TableHead>
-          <TableHead className="text-right">{t('taking.columns.ctr')}</TableHead>
-          <TableHead className="pr-6 text-right">{t('taking.columns.next')}</TableHead>
+          <TableHead className="ps-6">{t('taking.columns.page')}</TableHead>
+          <TableHead className="text-end">{t('taking.columns.impressions')}</TableHead>
+          <TableHead className="text-end">{t('taking.columns.ctr')}</TableHead>
+          <TableHead className="pe-6 text-end">{t('taking.columns.next')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {result.rows.map((row) => (
           <TableRow key={row.page} className="hover:bg-muted/50">
-            <TableCell className="pl-6 max-w-[180px] xl:max-w-[320px]">
+            <TableCell className="ps-6 max-w-[180px] xl:max-w-[320px]">
               <span
                 className="font-mono text-xs text-muted-foreground line-clamp-1"
                 title={row.url}
@@ -168,7 +168,7 @@ export function GoogleSection({
               </span>
             </TableCell>
             <TableCell
-              className="text-right text-sm tabular-nums"
+              className="text-end text-sm tabular-nums"
               title={t('taking.impressionsTip', {
                 prev: formatNumber(row.prevImpressions),
                 now: formatNumber(row.impressions),
@@ -177,7 +177,7 @@ export function GoogleSection({
               {`+${formatNumber(impressionsRise(row))}%`}
             </TableCell>
             <TableCell
-              className="text-right text-sm tabular-nums text-red-600 dark:text-red-400"
+              className="text-end text-sm tabular-nums text-red-600 dark:text-red-400"
               title={t('taking.ctrTip', {
                 prev: formatNumber(row.prevClicks),
                 now: formatNumber(row.clicks),
@@ -185,7 +185,7 @@ export function GoogleSection({
             >
               {`${ctr(row.prevClicks, row.prevImpressions)} → ${ctr(row.clicks, row.impressions)}`}
             </TableCell>
-            <TableCell className="pr-6 text-right">
+            <TableCell className="pe-6 text-end">
               {row.promptId ? (
                 <Link
                   href={`/dashboard/prompts?positions=${row.promptId}`}
@@ -236,7 +236,7 @@ export function GoogleSection({
           {result?.lastDay &&
             ` · ${t('dataUntil', { day: formatTrafficBucketDate(result.lastDay) })}`}
         </span>
-        <Badge variant="outline" className="ml-auto text-xs">
+        <Badge variant="outline" className="ms-auto text-xs">
           {rangeLabel}
         </Badge>
       </div>

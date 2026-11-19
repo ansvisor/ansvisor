@@ -359,7 +359,7 @@ export function ChatSidePanel() {
         id="chat-side-panel"
         aria-label={t('label')}
         className={cn(
-          'fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l bg-background shadow-xl duration-200 animate-in slide-in-from-right motion-reduce:animate-none min-[760px]:w-(--chat-panel-width)',
+          'fixed inset-y-0 end-0 z-40 flex w-full flex-col border-s bg-background shadow-xl duration-200 animate-in slide-in-from-right rtl:slide-in-from-left motion-reduce:animate-none min-[760px]:w-(--chat-panel-width)',
           size !== 'full' && 'min-[1100px]:shadow-none',
           !open && 'hidden',
         )}
@@ -385,7 +385,7 @@ export function ChatSidePanel() {
           </Button>
           <AgentAvatar size="sm" state="idle" decorative />
           <PanelTitle row={row} />
-          <div className="ml-auto flex items-center gap-0.5">
+          <div className="ms-auto flex items-center gap-0.5">
             <Button
               type="button"
               variant="ghost"
@@ -471,7 +471,7 @@ export function ChatSidePanel() {
                       setDraftFloor(draft?.nonce ?? 0);
                       void openChat(chat.id);
                     }}
-                    className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-muted"
+                    className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-start text-sm hover:bg-muted"
                   >
                     <span className={cn('min-w-0 flex-1 truncate', chat.unread && 'font-semibold')}>
                       {chat.title ?? t('untitled')}
@@ -496,9 +496,9 @@ export function ChatSidePanel() {
             {tourFocus && <TourLabel topic={tourFocus.topic} />}
             {view.kind === 'loading' ? (
               <div role="status" aria-label={t('loading')} className="flex flex-col gap-3 p-4">
-                <Skeleton className="ml-auto h-9 w-3/5" />
+                <Skeleton className="ms-auto h-9 w-3/5" />
                 <Skeleton className="h-16 w-full" />
-                <Skeleton className="ml-auto h-9 w-2/5" />
+                <Skeleton className="ms-auto h-9 w-2/5" />
               </div>
             ) : view.kind === 'unavailable' ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
@@ -563,7 +563,7 @@ export function ChatSidePanel() {
                               type="button"
                               data-action="panel.suggestion"
                               onClick={() => panel.fill(question)}
-                              className="rounded-full border bg-background px-3 py-1.5 text-left text-[13px] hover:bg-muted"
+                              className="rounded-full border bg-background px-3 py-1.5 text-start text-[13px] hover:bg-muted"
                             >
                               {question}
                             </button>

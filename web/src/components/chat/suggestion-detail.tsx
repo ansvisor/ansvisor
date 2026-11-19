@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl';
 import { Check, Inbox } from 'lucide-react';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { Link, useRouter } from '@/i18n/navigation';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { useActionStory } from '@/components/action-center/use-action-story';
@@ -144,7 +145,7 @@ export function SuggestionDetailView({
   const morePages = pages.length - shownPages.length;
 
   const nextCard =
-    'rounded-[14px] border bg-card px-3 py-2.5 text-left text-[13px] shadow-[0_1px_2px_rgba(10,10,10,.04)] transition-[transform,box-shadow] duration-200 ease-out outline-none [overflow-wrap:anywhere] hover:-translate-y-px hover:shadow-[0_4px_14px_rgba(10,10,10,.06)] focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0';
+    'rounded-[14px] border bg-card px-3 py-2.5 text-start text-[13px] shadow-[0_1px_2px_rgba(10,10,10,.04)] transition-[transform,box-shadow] duration-200 ease-out outline-none [overflow-wrap:anywhere] hover:-translate-y-px hover:shadow-[0_4px_14px_rgba(10,10,10,.06)] focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0';
   const chip =
     'inline-flex max-w-full items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-xs text-foreground/80';
 
@@ -200,13 +201,13 @@ export function SuggestionDetailView({
               {closed ? (
                 <span
                   data-slot="closed"
-                  className="ml-auto rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground"
+                  className="ms-auto rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground"
                 >
                   {t(`card.closed.${closed}`)}
                 </span>
               ) : (
                 pick.waitingDays !== null && (
-                  <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                  <span className="ms-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
                     {t('card.waiting', { days: pick.waitingDays })}
                   </span>
                 )
@@ -250,7 +251,7 @@ export function SuggestionDetailView({
                 <span className="text-xs text-muted-foreground">
                   {t('card.mode', { mode: modeLabel })}
                 </span>
-                <div className="ml-auto flex flex-wrap gap-2">
+                <div className="ms-auto flex flex-wrap gap-2">
                   {start && (
                     <button
                       type="button"
@@ -396,6 +397,7 @@ export function ChatSuggestion({
   const tModes = useTranslations('chatComposer.mode');
   const tReadOnly = useTranslations('readOnly.actions');
   const tDrawer = useTranslations('actionCenter.actionsPage.drawer');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const now = useNow();
   const { isLocked, openUpgrade, guard } = useUpgradeGate();
@@ -498,7 +500,7 @@ export function ChatSuggestion({
         error?: string;
       } | null;
       if (body?.code === 'subscription_inactive') openUpgrade(tReadOnly('startChat'));
-      else toast.error(body?.error ?? t('startFailed'));
+      else toast.error(serverError(body, body?.error ?? t('startFailed'), res?.status));
       return;
     }
     // The run goes on without this page: the chat picks up its stream.

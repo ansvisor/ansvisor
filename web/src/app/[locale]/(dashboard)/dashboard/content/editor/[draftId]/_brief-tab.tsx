@@ -183,7 +183,7 @@ export function BriefTab({
             disabled={rebuilding || confirming || blocked !== null}
             onClick={rebuild}
           >
-            {rebuilding && <WorkingDots className="ml-0" />}
+            {rebuilding && <WorkingDots className="ms-0" />}
             {empty ? t('run') : t('rebuild')}
           </Button>
         }
@@ -299,7 +299,7 @@ export function BriefTab({
                   <p className="mt-1 text-xs">{t('answerFirst', { answer: section.answer })}</p>
                 )}
                 {section.keyPoints.length > 0 && (
-                  <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                  <ul className="mt-1 list-disc space-y-0.5 ps-4 text-xs text-muted-foreground">
                     {section.keyPoints.map((point, j) => (
                       <li key={j}>{point}</li>
                     ))}
@@ -410,7 +410,7 @@ export function BriefTab({
               disabled={rewrite.running || rewrite.blocked !== null || rebuilding}
               onClick={guard(() => setConfirmingRewrite(true), { action: tActions('runAgent') })}
             >
-              {rewrite.running ? <WorkingDots className="ml-0" /> : <Bot className="h-3.5 w-3.5" />}
+              {rewrite.running ? <WorkingDots className="ms-0" /> : <Bot className="h-3.5 w-3.5" />}
               {t(`rewrite.button.${method}`)}
             </Button>
             {/* Why it waits, written out (v1.1 CE-031), not only on hover. */}
@@ -519,12 +519,12 @@ function WritingNotes({ brief }: { brief: DraftBrief }) {
           aria-expanded={open}
           aria-controls={id}
           onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset"
+          className="flex w-full items-center gap-2 px-3 py-2 text-start hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset"
         >
           {t('title')}
           <ChevronDown
             aria-hidden
-            className={cn('ml-auto h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')}
+            className={cn('ms-auto h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')}
           />
         </button>
       </h4>
@@ -581,7 +581,7 @@ function WritingNotes({ brief }: { brief: DraftBrief }) {
           <div>
             <dt className="text-muted-foreground">{t('leftOut')}</dt>
             <dd>
-              <ul className="list-disc pl-4 break-words">
+              <ul className="list-disc ps-4 break-words">
                 {leftOut.map((query, i) => (
                   <li key={i}>{query}</li>
                 ))}

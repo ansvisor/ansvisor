@@ -124,7 +124,7 @@ export function TopUpPicker({ onBought }: { onBought?: () => void }) {
               setConfirming(false);
             }}
             className={cn(
-              'rounded-xl border p-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+              'rounded-xl border p-3 text-start text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60',
               picked === o.multiplier ? 'border-foreground bg-accent' : 'hover:bg-accent',
             )}
           >

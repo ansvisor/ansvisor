@@ -9,6 +9,7 @@ import {
   siteTypeLine,
 } from './content-page-types.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { brandFactSources } from './content-brand-facts.js';
 import { NO_LINK_TARGETS, linkKey, readLinkTargets } from './content-links.js';
 import { logger } from './logger.js';
 import { getLanguageName } from './languages.js';
@@ -34,6 +35,7 @@ import {
   stripSourceIds,
   todayText,
 } from './content-sources.js';
+import { TABLE_PAGE_TYPES } from './content-lists.js';
 import { reserveAiBudget } from './plan-guard.js';
 import { fitSources } from './content-query-fit.js';
 import { objectOptions } from './structured-output.js';
@@ -413,7 +415,7 @@ const FORMAT_FOR_WRITER = {
   paragraphs: 'paragraphs',
   list: 'a bulleted list',
   steps: 'numbered steps, in order',
-  table: 'a comparison, the same points for each option in turn',
+  table: 'a table: a row per option (its name first), a column per criterion',
   faq: 'questions, each answered directly',
 };
 
@@ -581,7 +583,11 @@ export async function rebuildDraftBrief({
   const prompts = (promptsRes.data ?? []).map((p) => p.text);
   // The rules only with the brief rules on: the brief plans to them then, and may say their numbers.
   const planTo = briefRulesOn() ? rules : [];
-  const inputs = inputSources(inputRow, brand.name);
+  // The brand's approved facts beside Your input.
+  const inputs = [
+    ...inputSources(inputRow, brand.name),
+    ...(await brandFactSources({ id: brandId, name: brand.name }, draft)),
+  ];
   // Only the searches in the brief's language, and the Search Console
   // queries about this page (content-query-fit.js).
   sources = fitSources(sources, { language: brand.language, focus: [draft.title, ...prompts] });
@@ -799,6 +805,7 @@ function shapeWhole(
   )
     .slice(0, fit.sections)
     .map((section) => ({ ...section, keyPoints: section.keyPoints.slice(0, fit.keyPoints) }));
+  if (v2) withComparisonTable(outline, draft?.page_type);
   return {
     goal: clip(guard.text(words(object.goal)), BRIEF_LIMITS.goal),
     audience: clip(guard.text(words(object.audience)), BRIEF_LIMITS.audience),
@@ -1120,6 +1127,24 @@ export function briefKnown({
     ...competitors,
   ];
   return { given, known: knownNumbers(...given, todayText()), people: knownPeople(...given) };
+}
+
+/** A heading that compares the options: the section a table goes in, when none is planned. */
+const COMPARING =
+  /\b(?:compar\w*|vs\.?|versus|alternatives?|side[- ]by[- ]side|at a glance|overview|which (?:one|tool|option))\b/i;
+
+/**
+ * A page that weighs options plans a table (Content test 2026-11-19, item
+ * 12: no comparison, alternatives or best-of draft had one): with none in
+ * its outline, the section whose heading compares them shows as one, else
+ * its first. Changes `outline` in place.
+ */
+export function withComparisonTable(outline, pageType) {
+  if (!TABLE_PAGE_TYPES.has(pageType) || !outline.length) return outline;
+  if (outline.some((section) => section.format === 'table')) return outline;
+  const section = outline.find((s) => COMPARING.test(s.heading)) ?? outline[0];
+  section.format = 'table';
+  return outline;
 }
 
 /**

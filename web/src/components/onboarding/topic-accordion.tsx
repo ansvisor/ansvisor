@@ -48,7 +48,7 @@ export function TopicAccordion({
       <div className="flex items-center gap-3 py-3 px-1">
         <button
           onClick={() => setOpen(!open)}
-          className="flex items-center gap-2 flex-1 text-left text-sm"
+          className="flex items-center gap-2 flex-1 text-start text-sm"
         >
           {open ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -78,7 +78,7 @@ export function TopicAccordion({
         </DropdownMenu>
       </div>
       {open && (
-        <div className="pl-7 pb-3 space-y-1.5">
+        <div className="ps-7 pb-3 space-y-1.5">
           {data.prompts.map((p, idx) => (
             <label
               key={idx}

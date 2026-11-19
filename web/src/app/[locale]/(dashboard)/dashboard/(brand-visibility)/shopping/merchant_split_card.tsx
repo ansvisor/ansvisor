@@ -89,7 +89,7 @@ export function MerchantSplitCard({
                   </span>
                   <span className="shrink-0 tabular-nums text-muted-foreground">
                     {t('cards', { count: part.cards })}
-                    <span className="ml-2 inline-block w-9 text-right font-medium text-foreground">
+                    <span className="ms-2 inline-block w-9 text-end font-medium text-foreground">
                       {percent(part)}
                     </span>
                   </span>
