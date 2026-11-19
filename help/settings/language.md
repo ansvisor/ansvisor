@@ -9,7 +9,7 @@ last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/components/settings/language-field.tsx]
+sources: [web/messages/en.json, web/src/components/settings/language-field.tsx, web/src/components/settings/suggest-translation.tsx]
 ---
 Each person picks the language of their own Ansvisor screens. Find it in **Settings › Account › Language**, or in the **Language** item of the account menu at the bottom left, so you can change it from any page. It never changes anyone else's screens.
 
@@ -30,3 +30,9 @@ Anything without a translation shows in English, never as a blank or a code.
 ## Your brand's content language
 
 This setting is only for the screens you read. The language your brand's prompts are tracked in and its content is written in is a brand setting, and picking a language here doesn't change it.
+
+## Suggest a better translation
+
+In any language but English, a translation can read wrong. Open **Settings › Account › Language** or the **Language** item of the account menu, and choose **Suggest a better translation**. The form already knows your language and the screen you are on. Type or paste the text as it reads now, or choose **Pick on screen** and click it. Then write your better version, and add a note if you like, such as why it is better. Press **Send suggestion**.
+
+Our team reviews every suggestion. If we use it, the text is updated in a later release. Suggestions are kept with your account and used only to improve translations.

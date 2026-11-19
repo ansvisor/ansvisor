@@ -16803,7 +16803,33 @@
       "preview": "Staff and test builds also see the languages that have no translation yet, and a test language with longer text. They show English where text is missing.",
       "testLanguage": "{language} · test",
       "saved": "Language saved",
-      "saveFailed": "Couldn’t save your language. Try again."
+      "saveFailed": "Couldn’t save your language. Try again.",
+      "suggest": {
+        "link": "Suggest a better translation",
+        "title": "Suggest a better translation",
+        "description": "Tell us what reads wrong and how you would say it. Our team reviews every suggestion.",
+        "language": "Language",
+        "screen": "Screen",
+        "current": "Text as it reads now",
+        "currentPlaceholder": "Type or paste the text, or pick it on the screen",
+        "pick": "Pick on screen",
+        "picking": "Click the text you want to change. Press Esc to cancel.",
+        "better": "Your better version",
+        "note": "Note (optional)",
+        "notePlaceholder": "Why this is better, or where it appears",
+        "cancel": "Cancel",
+        "send": "Send suggestion",
+        "sent": "Thank you. Your suggestion is with our team.",
+        "errors": {
+          "locale": "Suggestions are for languages other than English.",
+          "currentText": "Add the text as it reads now.",
+          "suggestion": "Add your better version.",
+          "same": "Your version is the same as the current text.",
+          "tooLong": "That is too long. Keep each text under 1,000 characters.",
+          "tooMany": "You have sent a lot of suggestions today. Try again tomorrow.",
+          "server": "Couldn’t send your suggestion. Try again."
+        }
+      }
     },
     "save": "Save changes",
     "saved": "Changes saved!",
@@ -18677,6 +18703,26 @@
       "crm": "CRM & revenue",
       "team": "Team & data"
     }
+  },
+  "translationSuggestionsAdmin": {
+    "title": "Translation suggestions",
+    "description": "Ansvisor staff only. Suggestions for better translations of the interface. Accepting only marks it: update the string in the language’s file in web/messages and the glossary by running web/scripts/translate-messages.mjs again. No names or e-mails are shown.",
+    "empty": "No new suggestions.",
+    "columns": {
+      "date": "Date",
+      "language": "Language",
+      "screen": "Screen",
+      "current": "Current text",
+      "suggestion": "Suggestion",
+      "note": "Note",
+      "actions": "Review"
+    },
+    "key": "Key: {key}",
+    "accept": "Accept",
+    "reject": "Reject",
+    "accepted": "Marked as accepted",
+    "rejected": "Rejected",
+    "failed": "Couldn’t save that. It may already be reviewed."
   },
   "reportCardAdmin": {
     "title": "Free report cards",
