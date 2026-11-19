@@ -156,9 +156,9 @@ afterEach(() => {
 describe('the opportunity panel on a read-only workspace', () => {
   it('opens the upgrade dialog from its actions, and runs none', async () => {
     await render(true);
-    await act(async () => buttonNamed('Send to Actions').click());
+    await act(async () => buttonNamed('Send to Action Center').click());
     expect(openUpgrade).toHaveBeenLastCalledWith('Sending actions needs a plan');
-    await act(async () => buttonNamed('Generate Brief').click());
+    await act(async () => buttonNamed('Build brief').click());
     expect(openUpgrade).toHaveBeenLastCalledWith('Generating a brief needs a plan');
     await act(async () => buttonNamed('Send to Editor').click());
     expect(openUpgrade).toHaveBeenLastCalledWith('Creating content needs a plan');
@@ -176,7 +176,7 @@ describe('the opportunity panel on a read-only workspace', () => {
 
   it('generates the brief on an active plan', async () => {
     await render(false);
-    await act(async () => buttonNamed('Generate Brief').click());
+    await act(async () => buttonNamed('Build brief').click());
     expect(content.generateBrief).toHaveBeenCalledWith('o1');
     expect(openUpgrade).not.toHaveBeenCalled();
   });
@@ -190,9 +190,9 @@ describe('the brief quota without an active plan', () => {
     expect(container.textContent).toContain('No active plan');
     expect(container.textContent).not.toContain('Monthly Brief Limit Reached');
     expect(container.textContent).not.toContain('0/0');
-    const generate = buttonNamed('Generate Content Brief');
+    const generate = buttonNamed('Build brief');
     expect(generate.disabled).toBe(false);
-    expect(buttonNamed('Generate Brief').disabled).toBe(false);
+    expect(buttonNamed('Build brief').disabled).toBe(false);
     await act(async () => generate.click());
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Generating a brief needs a plan');
     expect(content.generateBrief).not.toHaveBeenCalled();
@@ -203,7 +203,7 @@ describe('the brief quota without an active plan', () => {
     await render(false);
     expect(container.textContent).toContain('Monthly Brief Limit Reached');
     expect(container.textContent).not.toContain('No active plan');
-    expect(buttonNamed('Generate Brief').disabled).toBe(true);
+    expect(buttonNamed('Build brief').disabled).toBe(true);
   });
 });
 
@@ -215,10 +215,10 @@ describe("the opportunity panel's costly AI work", () => {
   const openMore = () =>
     act(async () => container.querySelector<HTMLElement>('[aria-label="More actions"]')!.click());
 
-  it('offers an admin or a manager Generate Brief and Another angle', async () => {
+  it('offers an admin or a manager Build brief and Another angle', async () => {
     await render(false);
-    expect(labels()).toContain('Generate Brief');
-    expect(labels()).toContain('Generate Content Brief');
+    expect(labels()).toContain('Build brief');
+    expect(labels()).toContain('Build brief');
     await openMore();
     expect(labels()).toContain('Another angle');
   });
@@ -226,8 +226,8 @@ describe("the opportunity panel's costly AI work", () => {
   it('leaves them out for an analyst or an agency partner, saying who generates a brief', async () => {
     viewer.canManage = false;
     await render(false);
-    expect(labels()).not.toContain('Generate Brief');
-    expect(labels()).not.toContain('Generate Content Brief');
+    expect(labels()).not.toContain('Build brief');
+    expect(labels()).not.toContain('Build brief');
     expect(container.textContent).toContain('Ask an admin or a manager to generate a brief.');
     await openMore();
     expect(labels()).not.toContain('Another angle');

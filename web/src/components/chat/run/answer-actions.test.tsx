@@ -118,7 +118,7 @@ describe('AnswerActions', () => {
       'Download',
       'Save',
       'Open in Editor',
-      'Send to Actions',
+      'Send to Action Center',
     ]);
     for (const label of labels) {
       expect(label.className).toMatch(/\bhidden\b.*@lg:inline/);
@@ -131,7 +131,9 @@ describe('AnswerActions', () => {
   it('offers Send to Action Center where the thread gives it, and asks Chat on a click', async () => {
     const send = vi.fn();
     await render(undefined, false, send);
-    expect(button('answer.sendToActionCenter').getAttribute('aria-label')).toBe('Send to Actions');
+    expect(button('answer.sendToActionCenter').getAttribute('aria-label')).toBe(
+      'Send to Action Center',
+    );
     await click(button('answer.sendToActionCenter'));
     expect(send).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();

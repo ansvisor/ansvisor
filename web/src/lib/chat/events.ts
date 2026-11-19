@@ -247,7 +247,7 @@ export interface ChatConfirmForm {
 
 /**
  * What a change sent to the Action Center (CHAT-09 item 19): a new action,
- * or a finding added to one that already covered it, with Open in Actions.
+ * or a finding added to one that already covered it, with Open in Action Center.
  */
 export interface ChatActionSent {
   kind: 'action_created' | 'action_added';

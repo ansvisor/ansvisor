@@ -4,8 +4,8 @@ route: /dashboard/content
 keywords: [opportunity details, source data, why this score, another angle, mark as reviewed, dismiss opportunity, send to actions, new signal detected, write this]
 synonyms: [opportunity panel, opportunity page, act on an opportunity, follow an opportunity]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -32,8 +32,8 @@ An opportunity built for a group of prompts also shows:
 
 ## The panel's buttons
 
-- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.
-- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.
+- **Send to Action Center** makes the opportunity an action in the Action Center. The button then reads **Open in Action Center**.
+- **Build brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief built**.
 - **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.
 - **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.
 - **Export** downloads the opportunity as CSV, Excel or Word.

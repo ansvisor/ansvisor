@@ -130,7 +130,7 @@ export default function ActionCenterActionsPage() {
   const setActiveBrand = useBrandStore((s) => s.setActiveBrand);
   const t = useTranslations('actionCenter.actionsPage');
 
-  // A link to an action on another brand (Chat's Open in Actions, actions/[id]) names
+  // A link to an action on another brand (Chat's Open in Action Center, actions/[id]) names
   // its brand: switch to it once, when it's one of the person's, so its drawer opens.
   // A brand picked afterwards stays picked.
   const brandFromUrl = useRef(false);

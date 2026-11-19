@@ -43,7 +43,7 @@
         "oldest first"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -103,7 +103,7 @@
         },
         {
           "heading": "Send work here from other pages",
-          "text": "Most actions come from signals each night, but you can also send work to the Action Center:\n\n- **Mentions**: select answers, or open one, and click **Send to Action Center**.\n- **Content**: **Send to Actions** on a content opportunity, or **Assign to…** on a Content Plan row.\n- **New content**: send it to a teammate with **Send to Action Center**.\n- **Site Audit**: **Send to Action Center** on a page's audit report.\n- **AI Referral Traffic**: select pages and click **Send to Action Center**.\n- **Visibility**: **Send action** on a topic in Opportunities.\n- **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.\n- **Prompts**: **Send Actions** on a prompt's Improve tab.\n- **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.\n\nSending the same thing twice doesn't create a second action: the page says it is already in the Action Center."
+          "text": "Most actions come from signals each night, but you can also send work to the Action Center:\n\n- **Mentions**: select answers, or open one, and click **Send to Action Center**.\n- **Content**: **Send to Action Center** on a content opportunity, or **Assign to…** on a Content Plan row.\n- **New content**: send it to a teammate with **Send to Action Center**.\n- **Site Audit**: **Send to Action Center** on a page's audit report.\n- **AI Referral Traffic**: select pages and click **Send to Action Center**.\n- **Visibility**: **Send action** on a topic in Opportunities.\n- **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.\n- **Prompts**: **Send Actions** on a prompt's Improve tab.\n- **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.\n\nSending the same thing twice doesn't create a second action: the page says it is already in the Action Center."
         }
       ]
     },
@@ -1603,7 +1603,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -1679,7 +1679,7 @@
         },
         {
           "heading": "Send a finding to Action Center",
-          "text": "Admins and Managers see **Send to Action Center** under Chat's latest answer. Chat proposes the finding as an action: its title, category, the prompts, pages and competitors it is about, and its tasks. Each task names its page and says when it is done. You approve it on its card, except in **Full auto**. Action Center sets its Priority Score, and **Open in Actions** opens it.\n\nIf an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.\n\nChat can also attach a file or draft to a task, and set a task it finished to **Ready for review**. It never marks a task done: you do that in Action Center. Each change has **Undo** in the **Activity** log."
+          "text": "Admins and Managers see **Send to Action Center** under Chat's latest answer. Chat proposes the finding as an action: its title, category, the prompts, pages and competitors it is about, and its tasks. Each task names its page and says when it is done. You approve it on its card, except in **Full auto**. Action Center sets its Priority Score, and **Open in Action Center** opens it.\n\nIf an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.\n\nChat can also attach a file or draft to a task, and set a task it finished to **Ready for review**. It never marks a task done: you do that in Action Center. Each change has **Undo** in the **Activity** log."
         },
         {
           "heading": "Ask about your actions",
@@ -3274,7 +3274,7 @@
         "rebuild brief"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3282,7 +3282,7 @@
         },
         {
           "heading": "Generate a brief",
-          "text": "On **Opportunities**, click an opportunity's title. The panel shows its source data and any brief it already has. Admins and managers click **Generate Brief**.\n\nA brief is written once per opportunity: the button then reads **Brief Generated**. Each brief counts toward the month's content briefs, and on plans with monthly limits **This billing period** shows how many are left."
+          "text": "On **Opportunities**, click an opportunity's title. The panel shows its source data and any brief it already has. Admins and managers click **Build brief**.\n\nA brief is written once per opportunity: the button then reads **Brief built**. Each brief counts toward the month's content briefs, and on plans with monthly limits **This billing period** shows how many are left."
         },
         {
           "heading": "What a brief holds",
@@ -3290,7 +3290,7 @@
         },
         {
           "heading": "Write it, or hand it on",
-          "text": "- **Send to Editor** opens **New content** with the opportunity picked; the draft starts with the brief's outline and keywords.\n- **Send to Actions** puts the work in the Action Center.\n- **Send to Workflow** sends it to your workflow tool.\n\nEarned opportunities don't go to the editor: send them to the Action Center or your workflow tool."
+          "text": "- **Send to Editor** opens **New content** with the opportunity picked; the draft starts with the brief's outline and keywords.\n- **Send to Action Center** puts the work in the Action Center.\n- **Send to Workflow** sends it to your workflow tool.\n\nEarned opportunities don't go to the editor: send them to the Action Center or your workflow tool."
         },
         {
           "heading": "A fresh brief in the editor",
@@ -3743,7 +3743,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3759,7 +3759,7 @@
         },
         {
           "heading": "The panel's buttons",
-          "text": "- **Send to Actions** makes the opportunity an action in the Action Center. The button then reads **Open in Actions**.\n- **Generate Brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief Generated**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.\n- **Export** downloads the opportunity as CSV, Excel or Word."
+          "text": "- **Send to Action Center** makes the opportunity an action in the Action Center. The button then reads **Open in Action Center**.\n- **Build brief** writes a content brief. It's for admins and managers, and once the brief is written the button reads **Brief built**.\n- **Send to Editor** opens **New content** with the opportunity picked: a new page, or the page of yours it names to optimize. Once a draft is being written for it, the button reads **Open draft**. It's offered for owned opportunities that are still open.\n- **Write this**, beside it, has the Content Agent brief and write the page in one go. See below.\n- **Export** downloads the opportunity as CSV, Excel or Word."
         },
         {
           "heading": "Write this",
@@ -6461,7 +6461,7 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6517,7 +6517,7 @@
         },
         {
           "heading": "A weekly review",
-          "text": "1. Set the range to **7d**. Is your Visibility up or down? If it's down, **Why it changed** shows which platforms, topics and prompts moved it.\n2. In **By AI platform**, find the platform with the lowest score or the highlighted biggest drop: that's your next investment.\n3. Look at the suggested topics and prompts in **Opportunities**, and track one to three of them.\n4. From **Opportunities** under **Content** in the sidebar, open the opportunity for the topic that did worst this week and click **Generate Brief**."
+          "text": "1. Set the range to **7d**. Is your Visibility up or down? If it's down, **Why it changed** shows which platforms, topics and prompts moved it.\n2. In **By AI platform**, find the platform with the lowest score or the highlighted biggest drop: that's your next investment.\n3. Look at the suggested topics and prompts in **Opportunities**, and track one to three of them.\n4. From **Opportunities** under **Content** in the sidebar, open the opportunity for the topic that did worst this week and click **Build brief**."
         }
       ]
     },
