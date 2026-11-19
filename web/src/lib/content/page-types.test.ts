@@ -245,6 +245,20 @@ describe('detectPageType from the page', () => {
 
   it('finds nothing when no sign tells', () => {
     expect(detectPageType({ title: 'Pipeline forecasting' }, 'b2b')).toBeNull();
+    // A list of tools is a best-of list (Content test 2026-11-19, item 13).
+    for (const title of [
+      'Definitive Software List for AI SEO and AEO Brand Monitoring',
+      'The Complete AI SEO Tools List (2026): AEO and GEO Tools',
+      'A list of the 25 best AI visibility tools',
+      'AI SEO software list for 2026',
+    ]) {
+      expect(detectPageType({ title }, 'b2b'), title).toBe('best_of');
+    }
+    // A checklist or a list of steps isn't one.
+    expect(detectPageType({ title: 'Our launch checklist' }, 'b2b')).toBeNull();
+    expect(detectPageType({ title: 'Top Profound Alternatives in 2026' }, 'b2b')).toBe(
+      'alternatives',
+    );
     expect(detectPageType({ title: 'Best time to visit Lisbon' }, 'b2c')).toBeNull();
     expect(detectPageType({}, 'b2b')).toBeNull();
   });

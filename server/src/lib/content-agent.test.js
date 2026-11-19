@@ -115,6 +115,10 @@ const {
   fixDraftRules,
   fixRulesInput,
   keepSuggestions,
+  keepPassageLinks,
+  passageLinks,
+  shownRules,
+  withPageLinks,
   growsPastLimit,
   htmlLines,
   HEADING_LIMITS,
@@ -1742,9 +1746,16 @@ describe('links to the pages and sources given', () => {
     expect(
       keep({ after: 'See <a href="https://made-up.example/x">our plans</a> for teams.' }),
     ).toMatchObject([]);
-    const [kept] = keep({ after: 'See <a href="https://made-up.example/x">our team plans</a>.' });
+    const [kept] = keep({
+      after: 'See <a href="https://made-up.example/x">our team plans</a>.',
+      rules: [],
+    });
     expect(kept.after_text).toBe('See our team plans.');
     expect(kept).not.toHaveProperty('after_links');
+    // Named for a link it no longer adds: its label would say what it doesn't do.
+    expect(keep({ after: 'See <a href="https://made-up.example/x">our team plans</a>.' })).toEqual(
+      [],
+    );
   });
 
   it('keeps an insert’s link to a listed source, never one in a heading', () => {
@@ -2983,5 +2994,92 @@ describe('Quality’s hand-off (CE-051)', () => {
       'Leave every [placeholder] exactly as it is',
     );
     expect(buildFixPrompt(args)).not.toContain('Leave every [placeholder]');
+  });
+});
+
+describe('a change keeps the page’s links and does what it says (Content test 2026-11-19, item 7)', () => {
+  const html =
+    '<p>Pew Research found that <a href="https://www.pewresearch.org/short-reads/ai-summary">users clicked less</a> when an AI summary appeared, which changes what you track.</p>';
+  const page = draftPassages(html);
+  const pageLinks = passageLinks(html);
+  const keep = (over) =>
+    keepSuggestions(
+      [
+        suggestion({
+          passage: 1,
+          before:
+            'Pew Research found that users clicked less when an AI summary appeared, which changes what you track.',
+          sources: [],
+          marks: [],
+          rules: ['sentence'],
+          reason: 'shorten the sentence',
+          ...over,
+        }),
+      ],
+      page,
+      new Set(),
+      new Set(['sentence', 'datedPoint', 'outboundLinks']),
+      withPageLinks(new Map(), html),
+      // The year is the brief's, as a number a change may write.
+      { pageLinks, known: knownNumbers(html, 'Pew Research, July 2025') },
+    );
+
+  it('reads each passage’s links, keyed by its words', () => {
+    expect([...pageLinks.values()]).toEqual([
+      [{ text: 'users clicked less', href: 'https://www.pewresearch.org/short-reads/ai-summary' }],
+    ]);
+  });
+
+  it('puts a link back on its words when a shorter sentence keeps them', () => {
+    const [kept] = keep({ after: 'Pew Research found users clicked less with an AI summary.' });
+    const start = kept.after_text.indexOf('users clicked less');
+    expect(kept.after_links).toEqual([
+      {
+        start,
+        end: start + 'users clicked less'.length,
+        href: 'https://www.pewresearch.org/short-reads/ai-summary',
+      },
+    ]);
+  });
+
+  it('keeps no change that would lose a link', () => {
+    // The shortened sentence of the test: its outbound link was gone.
+    expect(keep({ after: 'An AI summary means fewer clicks.' })).toEqual([]);
+  });
+
+  it('keeps a change that relinks the words itself, to the same page', () => {
+    const [kept] = keep({
+      after:
+        'Pew Research found <a href="https://www.pewresearch.org/short-reads/ai-summary">fewer clicks</a> with an AI summary.',
+    });
+    expect(kept.after_links).toHaveLength(1);
+    expect(kept.after_links[0].href).toMatch(/pewresearch\.org/);
+  });
+
+  it('keeps no change named for a dated point that adds no date', () => {
+    // "add dated data point", which only took a placeholder out.
+    const dated = { rules: ['datedPoint'], reason: 'add dated data point' };
+    expect(
+      keep({ ...dated, after: 'Pew Research found that users clicked less with an AI summary.' }),
+    ).toEqual([]);
+    const [kept] = keep({
+      ...dated,
+      after: 'In July 2025, Pew Research found that users clicked less with an AI summary.',
+    });
+    expect(kept.rule_keys).toEqual(['datedPoint']);
+  });
+
+  it('keeps only the rules a change’s words show', () => {
+    const change = { before: 'in 2024', added: 'in 2024, more', newLinks: 0 };
+    expect(shownRules(['sentence', 'datedPoint'], change)).toEqual(['sentence']);
+    expect(shownRules(['datedPoint', 'outboundLinks'], change)).toBeNull();
+    expect(shownRules([], change)).toEqual([]);
+    expect(shownRules(['outboundLinks'], { ...change, newLinks: 1 })).toEqual(['outboundLinks']);
+  });
+
+  it('leaves links the change doesn’t touch to the editor', () => {
+    const text = 'Read the guide. It explains more.';
+    const links = [{ text: 'the guide', href: 'https://acme.example/guide' }];
+    expect(keepPassageLinks(text, links, 'It explains more.', 'It says more.', [])).toEqual([]);
   });
 });

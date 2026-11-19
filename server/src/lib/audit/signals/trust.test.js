@@ -182,6 +182,22 @@ describe('aiBotAccess', () => {
       );
     });
 
+    it('passes when every bot was let in, though robots.txt only has "User-agent: *"', () => {
+      // ansvisor.com (2026-11-19): all five got 200, and robots.txt names none of them.
+      const { status, score, evidence } = aiBotAccess.evaluate({
+        robotsTxt: 'User-agent: *\nAllow: /',
+        botAccess: live(),
+      });
+      expect({ status, score }).toEqual({ status: 'pass', score: 1 });
+      expect(evidence).toMatchObject({ aiBotsMentioned: [], blocked: false, liveTest: 'done' });
+      // Without the live test, unnamed bots can't be told apart: a warning.
+      expect(aiBotAccess.evaluate({ robotsTxt: 'User-agent: *\nAllow: /' }).status).toBe('warn');
+      expect(
+        aiBotAccess.evaluate({ robotsTxt: 'User-agent: *\nAllow: /', botAccess: live({}, false) })
+          .status,
+      ).toBe('warn');
+    });
+
     it('takes no busy, slow or failing answer for a block, so the score holds', () => {
       const { status } = aiBotAccess.evaluate({
         robotsTxt,

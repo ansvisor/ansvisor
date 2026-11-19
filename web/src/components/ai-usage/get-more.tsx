@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle } from 'lucide-react';
 import { AskAdminButton } from '@/components/chat-access/ask-admin-button';
 import { YourPlanCard } from '@/components/chat-access/plan-card';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
@@ -28,12 +27,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { isCloud } from '@/config/plans';
 import { Link } from '@/i18n/navigation';
 import { getGetMore, type GetMoreRead, type GetMoreWindow } from '@/lib/actions/get-more';
-import { packEstimate } from '@/lib/billing/add-on-estimates';
 import { percentLabel } from '@/lib/billing/ai-usage';
 import { gbLabel } from '@/lib/chat/files';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { ownKeyOffered } from './ai-usage-get-more';
+import { TopUpPicker } from './top-up-picker';
 import { GetMoreContext, type GetMoreTab } from './get-more-context';
 
 /**
@@ -223,33 +222,40 @@ function GetMoreBody({
             amount: formatPackPrice(addOns.credit.leftCents, 'usd'),
             date: formatDate(addOns.credit.expiresAt),
           })}
+          <span className="block text-xs font-normal text-muted-foreground">
+            {t('topUp.oldCredits')}
+          </span>
         </p>
       )}
 
-      <div
-        role="radiogroup"
-        aria-label={tAdd('packsLabel', { kind: tab })}
-        className={cn(
-          'grid grid-cols-2 gap-3 pt-2',
-          tab === 'ai' ? 'sm:grid-cols-4' : 'sm:grid-cols-3',
-        )}
-      >
-        {packs.map((pack) => (
-          <PackCard
-            key={pack.id}
-            pack={pack}
-            selected={canBuy && chosen?.id === pack.id}
-            selectable={canBuy}
-            onSelect={() => setPicked((now) => ({ ...now, [tab]: pack.id }))}
-          />
-        ))}
-      </div>
-
-      {tab === 'ai' && packs.length > 0 && (
-        <PackEstimates
-          packs={packs.map((p) => ({ id: p.id, priceCents: p.priceCents, currency: p.currency }))}
-          selected={chosen?.id ?? null}
+      {/* AI: the usage top-ups (00547 retired the credit packs). */}
+      {tab === 'ai' && (
+        <TopUpPicker
+          onBought={() => {
+            later.current = window.setTimeout(() => {
+              refresh();
+              onAdded();
+            }, AFTER_PAYMENT_READ_MS);
+          }}
         />
+      )}
+
+      {tab === 'storage' && (
+        <div
+          role="radiogroup"
+          aria-label={tAdd('packsLabel', { kind: tab })}
+          className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3"
+        >
+          {packs.map((pack) => (
+            <PackCard
+              key={pack.id}
+              pack={pack}
+              selected={canBuy && chosen?.id === pack.id}
+              selectable={canBuy}
+              onSelect={() => setPicked((now) => ({ ...now, [tab]: pack.id }))}
+            />
+          ))}
+        </div>
       )}
       {tab === 'storage' && <p className="text-xs text-muted-foreground">{tAdd('storageNote')}</p>}
 
@@ -319,7 +325,7 @@ function GetMoreBody({
               {t('ownKey')}
             </Link>
           )}
-          {canBuy ? (
+          {canBuy && tab === 'storage' ? (
             <Button
               size="sm"
               data-action="credits.continueToPayment"
@@ -340,55 +346,6 @@ function GetMoreBody({
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-/** "What a pack can cover, roughly": examples on Auto, the picked pack's row marked (CHAT-18 item 3). */
-function PackEstimates({
-  packs,
-  selected,
-}: {
-  packs: { id: string; priceCents: number; currency: string }[];
-  selected: string | null;
-}) {
-  const t = useTranslations('aiUsage.getMoreWindow.estimates');
-  const count = (n: number) => `~${n.toLocaleString('en-US')}`;
-  return (
-    <div className="space-y-2">
-      <div data-slot="pack-estimates" className="overflow-hidden rounded-xl border text-[12.5px]">
-        <p className="bg-muted/50 px-3 py-1.5 font-medium">{t('title')}</p>
-        <div className="grid grid-cols-3 border-t px-3 py-1.5 text-[11.5px] text-muted-foreground">
-          <span>{t('pack')}</span>
-          <span className="text-right">{t('answers')}</span>
-          <span className="text-right">{t('articles')}</span>
-        </div>
-        {packs.map((pack) => {
-          const estimate = packEstimate(pack.priceCents);
-          return (
-            <div
-              key={pack.id}
-              data-selected={pack.id === selected || undefined}
-              className={cn(
-                'grid grid-cols-3 border-t px-3 py-1.5 tabular-nums',
-                pack.id === selected && 'bg-muted font-medium',
-              )}
-            >
-              <span>{formatPackPrice(pack.priceCents, pack.currency)}</span>
-              <span className="text-right">{count(estimate.answers)}</span>
-              <span className="text-right">{count(estimate.articles)}</span>
-            </div>
-          );
-        })}
-      </div>
-      <p className="text-xs text-muted-foreground">{t('examples')}</p>
-      <p className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-        <AlertTriangle
-          className="mt-px size-3.5 shrink-0 text-amber-600 dark:text-amber-500"
-          aria-hidden
-        />
-        {t('warning')}
-      </p>
     </div>
   );
 }

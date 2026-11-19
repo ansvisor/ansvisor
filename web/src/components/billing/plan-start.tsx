@@ -6,6 +6,7 @@ import { Check, ChevronDown, CircleAlert, CirclePlay, Loader2, Lock } from 'luci
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePlanFeatures } from '@/components/settings/plan-features';
+import { ExpandableMark } from '@/components/settings/plan-feature-mark';
 import {
   FIRST_MONTH_OFFER,
   PLANS,
@@ -607,7 +608,7 @@ export function PlanDetailsList({
   points,
 }: {
   tagline: string;
-  points: { text: string; hint?: string }[];
+  points: { text: string; hint?: string; expandable?: boolean }[];
 }) {
   return (
     <div className="space-y-2 text-xs">
@@ -626,6 +627,7 @@ export function PlanDetailsList({
             >
               {point.text}
             </span>
+            {point.expandable && <ExpandableMark />}
           </li>
         ))}
       </ul>
