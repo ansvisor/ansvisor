@@ -152,9 +152,12 @@ describe('AddLocationsDialog', () => {
     const text = await render({ locations: ['TR'] });
     expect(text).toContain('199 → 202 of 200 tracked locations');
     expect(text).toContain('This needs 3 more tracked locations; 1 is left on your Growth plan.');
-    expect(text).toContain('Or contact us for a custom plan.');
+    expect(text).toContain('Or add more tracking to your plan.');
     expect(submit().disabled).toBe(true);
-    expect(document.body.querySelector('a[href*="billing"]')).toBeNull();
+    // Growth's way out: Billing's add-ons card, the next tier picked (00546).
+    expect(document.body.querySelector('a[href*="billing"]')?.getAttribute('href')).toBe(
+      '/dashboard/settings/billing?add=tracking#plan-add-ons',
+    );
   });
 
   it('offers Starter an upgrade', async () => {

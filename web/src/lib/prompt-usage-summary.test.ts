@@ -19,7 +19,7 @@ describe('usagePlan', () => {
       key: 'growth',
       name: 'Growth plan',
       locationLimit: 200,
-      cta: 'upgrade',
+      cta: 'add_more',
     });
   });
 
