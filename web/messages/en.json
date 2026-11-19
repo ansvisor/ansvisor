@@ -10037,6 +10037,114 @@
         "failed": "Couldn't import the file. Nothing was saved.",
         "back": "Back"
       }
+    },
+    "formulas": {
+      "button": "Formulas",
+      "title": "How metrics are calculated",
+      "visibility": {
+        "title": "Visibility (0–100)",
+        "body": "A single score for how visible your brand is across all AI answers matching the current filters. Every answer counts — including ones where you don't appear — so growing the score means showing up more, being cited more, and being named earlier.",
+        "formula": "Visibility = 100 × ({mention} × mention rate + {citation} × citation rate + {position} × position factor × confidence)",
+        "confidence": "confidence = answers mentioning you ÷ (answers mentioning you + {support})",
+        "mentionRate": "<b>Mention rate ({pct}%)</b> — share of AI answers that mention your brand by name.",
+        "citationRate": "<b>Citation rate ({pct}%)</b> — share of answers that cite your website as a source.",
+        "positionFactor": "<b>Position factor ({pct}%)</b> — how early you're named in the answers that mention you: named first = 1, second = 0.5, third = 0.33, and so on, averaged. The confidence factor weights it by how many answers actually mention the brand, so a perfect position in a handful of answers can't outrank brands that consistently show up.",
+        "competitors": "Competitors on the leaderboard are scored with the exact same formula over the same set of answers, so the numbers are directly comparable."
+      },
+      "trend": {
+        "title": "Visibility trend chart",
+        "body": "Each point is the Visibility computed over the selected time window ending on that day (a rolling window). That's why the newest point always matches the Visibility card above. With \"All time\" selected, each point covers everything up to that day."
+      },
+      "mentions": {
+        "title": "Mentions",
+        "body": "Total number of times your brand was referenced by name in AI answers."
+      },
+      "citations": {
+        "title": "Citations",
+        "body": "Total number of times your website was linked as a source in AI answers. Mentions count your name; citations count your domain."
+      },
+      "sentiment": {
+        "title": "Net sentiment",
+        "body": "Of the answers that name you, the share that is positive minus the share that is negative, in points. Answers that only cite your site aren't counted: they are always neutral. Sentiment is shown alongside Visibility but is not part of the score.",
+        "formula": "Net sentiment = positive answers % − negative answers % (of answers naming you, as on the Mentions page)"
+      },
+      "position": {
+        "title": "Avg. position",
+        "body": "Where you're named in the answers that mention you, averaged. Lower is better: #1 means you're usually named first.",
+        "formula": "Avg. position = sum of your positions ÷ answers that name you"
+      },
+      "citationRate": {
+        "title": "Citation rate",
+        "body": "The share of AI answers that link to your website as a source.",
+        "formula": "Citation rate = answers citing your domain ÷ all answers × 100"
+      },
+      "shareOfVoice": {
+        "title": "Share of Voice",
+        "body": "Your slice of the total brand conversation: of all brand mentions in AI answers — yours plus your tracked competitors' — the share that are yours.",
+        "formula": "SOV = your mentions ÷ (your mentions + competitor mentions) × 100"
+      },
+      "coverage": {
+        "title": "Coverage",
+        "body": "The share of tracked prompts where you showed up (named or cited) at least once in the selected period, against all prompts that produced results.",
+        "formula": "Coverage = prompts you appeared in ÷ prompts answered × 100"
+      },
+      "changes": {
+        "title": "Changes",
+        "body": "Each card's change compares the selected period with the period of the same length just before it, over the prompts answered in both periods only, so adding prompts doesn't inflate it; the numbers themselves still cover every prompt. With \"All time\" there is no earlier period, so no change is shown."
+      }
+    },
+    "breakdownSheet": {
+      "title": "{metric, select, mentions {Mentions} other {Visibility}} Breakdown",
+      "compareHint": "Comparing the selected window with the previous equal-length window.",
+      "allTimeHint": "All time. There is no earlier period of the same length to compare.",
+      "lastVsPrevious": "{days, plural, one {Last # day vs previous # day} other {Last # days vs previous # days}}",
+      "loadFailed": "Failed to load breakdown",
+      "allTime": "All time",
+      "current": "Current {days}d",
+      "noSamePrompt": "No prompt was answered in both periods",
+      "samePrompts": "{count, plural, one {Same # prompt:} other {Same # prompts:}}",
+      "vsPrevious": "vs previous",
+      "noData": "no data",
+      "newNotCounted": "{count, plural, one {Not counted in the change: # new prompt this period.} other {Not counted in the change: # new prompts this period.}}",
+      "newIncluded": "{count, plural, one {The change includes # new prompt added this period.} other {The change includes # new prompts added this period.}}",
+      "tabs": {
+        "prompts": "Prompts",
+        "platforms": "Platforms",
+        "topics": "Topics"
+      },
+      "biggest": "{direction, select, down {Biggest drop} other {Biggest gain}}:",
+      "topPlatform": "Top platform {direction, select, down {drop} other {gain}}: {platform}",
+      "empty": "No data in this window yet.",
+      "columns": {
+        "name": "Name",
+        "prev": "Prev",
+        "cur": "Cur",
+        "change": "Change"
+      },
+      "pts": "pts",
+      "signedPts": "{value} pts",
+      "contributionPts": "{direction, select, down {dropped} other {rose}} {value} pts",
+      "contributionMentions": "{direction, select, down {lost} other {gained}} {count, plural, one {# mention} other {# mentions}}"
+    },
+    "page": {
+      "noDataTitle": "No tracking data yet",
+      "noDataBody": "Run your prompts through AI platforms to see how your brand appears in AI-generated responses.",
+      "testSingle": "Or test a single prompt",
+      "noResults": "No results for the {period, select, 24h {last 24 hours} 7d {last 7 days} 30d {last 30 days} 90d {last 90 days} other {selected period}}",
+      "otherPeriods": "There is tracking data available in other time periods. Try a wider range or switch to \"All time\".",
+      "showAll": "Show all data",
+      "noCompetitorsTitle": "No competitors tracked yet",
+      "noCompetitorsBody": "Add competitors to see how you compare in AI answers.",
+      "headToHead": "Head-to-Head Comparison",
+      "loadFailed": "Failed to load insights — please try again",
+      "exportCapped": "Export capped at 50,000 rows to prevent memory issues",
+      "exportFailed": "Failed to export CSV",
+      "noTrend": "No trend data available yet",
+      "yourBrand": "Your Brand",
+      "avgCompetitor": "Avg. Competitor",
+      "noShareOfVoice": "No share of voice data available",
+      "moreInfo": "More information",
+      "overallShareOfVoice": "Overall Share of Voice"
     }
   },
   "topics": {
