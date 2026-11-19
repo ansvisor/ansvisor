@@ -154,6 +154,16 @@ afterEach(() => {
 });
 
 describe('the opportunity panel on a read-only workspace', () => {
+  it('shows the competitor gap in points, never past 100 (Content test 2026-11-19)', async () => {
+    content.getOpportunity.mockResolvedValue({
+      ...OPPORTUNITY,
+      sourceData: { competitorGap: 153.4, topCompetitorVisibility: 100 },
+    });
+    await render(false);
+    expect(container.textContent).toContain('+100 pts');
+    expect(container.textContent).not.toContain('153');
+  });
+
   it('opens the upgrade dialog from its actions, and runs none', async () => {
     await render(true);
     await act(async () => buttonNamed('Send to Actions').click());

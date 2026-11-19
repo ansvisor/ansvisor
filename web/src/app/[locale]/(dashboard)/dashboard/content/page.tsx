@@ -473,6 +473,8 @@ export default function ContentPage() {
 
   const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
   const [total, setTotal] = useState(0);
+  // The open ones among them: "Available" (Content test 2026-11-19, item 10).
+  const [openCount, setOpenCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -567,6 +569,7 @@ export default function ContentPage() {
       if (!activeBrandId) {
         setOpportunities([]);
         setTotal(0);
+        setOpenCount(0);
         setAggregates({
           avgScore: 0,
           highImpactCount: 0,
@@ -588,6 +591,7 @@ export default function ContentPage() {
         if (isCancelled?.()) return;
         setOpportunities(data.opportunities);
         setTotal(data.total);
+        setOpenCount(data.open ?? data.total);
         setAggregates(
           data.aggregates ?? {
             avgScore: 0,
@@ -1317,14 +1321,15 @@ export default function ContentPage() {
               title={t('kpi.highImpact')}
               icon={Zap}
               value={aggregates.highImpactCount}
-              sub={t('kpi.opportunities')}
+              // All statuses: said, as "Available" counts the open ones only.
+              sub={statusFilter === 'all' ? t('kpi.opportunitiesAll') : t('kpi.opportunities')}
             />
             {/* Two to a row on a phone: the third takes the row's width. */}
             <KpiCard
               title={t('kpi.avgScore')}
               icon={BarChart3}
               value={aggregates.avgScore}
-              sub={t('kpi.outOf100')}
+              sub={statusFilter === 'all' ? t('kpi.outOf100All') : t('kpi.outOf100')}
               className="col-span-2 sm:col-span-1"
             />
           </div>
@@ -1341,7 +1346,7 @@ export default function ContentPage() {
                       variant="outline"
                       className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                     >
-                      {t('available', { count: total })}
+                      {t('available', { count: openCount })}
                     </Badge>
                   </div>
                   <div className="relative w-full max-w-80">

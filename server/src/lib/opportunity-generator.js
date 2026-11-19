@@ -37,7 +37,7 @@ import {
   mergeOpportunity,
 } from './opportunity-same-question.js';
 import { loadClusters } from './prompt-clusters.js';
-import { cleanOpportunityText } from './opportunity-text.js';
+import { cleanOpportunityText, withoutPanelFigures } from './opportunity-text.js';
 import { yearRule } from './current-year.js';
 import {
   focusClusters,
@@ -117,7 +117,9 @@ function buildSchema(count, types) {
           title: z.string().describe('A specific, actionable content recommendation'),
           description: z
             .string()
-            .describe('1-2 sentences on why it matters, referencing the metrics'),
+            .describe(
+              '1-2 sentences on why it matters, in words: no search volumes, percentages or gaps (the page shows them)',
+            ),
           type: z.enum(['owned', 'earned']),
           impact: z.enum(['high', 'medium', 'low']),
           decision: z.enum(DECISIONS),
@@ -792,7 +794,8 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
         bare: true,
       });
     opp.title = clean(opp.title);
-    opp.description = clean(opp.description);
+    // The panel shows its numbers: a sentence stating one goes (Content test 2026-11-19, item 10).
+    opp.description = withoutPanelFigures(clean(opp.description));
     opp.supportingAssets = (opp.supportingAssets || []).map((a) => ({
       ...a,
       title: clean(a.title),

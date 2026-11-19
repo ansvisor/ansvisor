@@ -13099,7 +13099,9 @@
       "avgScore": "Avg. Score",
       "shown": "{count} shown",
       "opportunities": "opportunities",
+      "opportunitiesAll": "all statuses, done ones too",
       "outOf100": "out of 100",
+      "outOf100All": "out of 100 · all statuses",
       "fromSignals": "from {count, plural, one {# signal} other {# signals}} analyzed"
     },
     "filters": {
@@ -13288,6 +13290,7 @@
       "sentAt": "Sent at {date}",
       "webhookResponse": "Webhook Response",
       "topCompetitor": "Strongest Competitor",
+      "gapPoints": "{gap, number} pts",
       "basketTitle": "Opportunity Basket",
       "basketSummary": "{prompts, plural, one {# prompt} other {# prompts}} · {included} searches included · {excluded} excluded",
       "basketIncluded": "Searches AI engines ran for these prompts",

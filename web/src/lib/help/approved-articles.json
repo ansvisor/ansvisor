@@ -3512,11 +3512,15 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
           "text": "The **Opportunities** page, under **Content** in the sidebar, lists content opportunities: what to write or change so AI answers name you where they don't yet. Ansvisor suggests them on its own as tracking data comes in. An opportunity is built for a group of related prompts that one piece of content can answer, or for a single prompt. From each one you can start writing, plan it, brief it or send it on."
+        },
+        {
+          "heading": "What the counts count",
+          "text": "With **All Statuses**, the cards above the list count done and dismissed opportunities too, and say so. The **Available** count beside **Opportunities** counts only the ones still to do. Pick a status to count that status alone."
         },
         {
           "heading": "What each row shows",
@@ -3743,7 +3747,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3751,7 +3755,7 @@
         },
         {
           "heading": "What it rests on",
-          "text": "**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap**, the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited.\n\nAn opportunity sent from an Action Center task shows that task instead: where, why, how, and when it's done.\n\n**Results** lists the Action Center actions sent from the opportunity, with what changed once their work is complete and measured."
+          "text": "**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap** in points (the strongest competitor's visibility minus yours), the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited. The description says why the opportunity matters in words; its numbers are the ones shown here.\n\nAn opportunity sent from an Action Center task shows that task instead: where, why, how, and when it's done.\n\n**Results** lists the Action Center actions sent from the opportunity, with what changed once their work is complete and measured."
         },
         {
           "heading": "For a group of prompts",

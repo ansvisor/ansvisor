@@ -4,8 +4,8 @@ route: /dashboard/content
 keywords: [opportunity details, source data, why this score, another angle, mark as reviewed, dismiss opportunity, send to actions, new signal detected, write this]
 synonyms: [opportunity panel, opportunity page, act on an opportunity, follow an opportunity]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ On **Opportunities**, click an opportunity's title to open it in a panel beside 
 
 ## What it rests on
 
-**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap**, the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited.
+**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap** in points (the strongest competitor's visibility minus yours), the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited. The description says why the opportunity matters in words; its numbers are the ones shown here.
 
 An opportunity sent from an Action Center task shows that task instead: where, why, how, and when it's done.
 
