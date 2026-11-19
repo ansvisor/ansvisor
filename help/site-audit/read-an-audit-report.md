@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [audit report, audit score, signals, audit categories, grade, readability, first person, score range, evidence level, formula, llms.txt, AI bot access, robots.txt, firewall, JavaScript, server-side rendering]
 synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed, plus or minus, score margin, strong evidence, likely helps, hygiene, informational, category weights, how the score is calculated, llms.txt score, GPTBot blocked, ClaudeBot blocked, PerplexityBot blocked, Cloudflare blocks AI bots, CDN blocks crawlers, WAF, client-side rendering, JS rendering, SSR, prerender, hidden content]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -83,7 +83,7 @@ A bot robots.txt keeps out, by name or with "User-agent: *", fails the check. A 
 
 ## Authority links
 
-**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there.
+**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites, standards and the platforms' own docs (Wikipedia, doi.org, arXiv, rfc-editor.org, schema.org, developers.google.com…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there.
 
 ## Product pages
 
