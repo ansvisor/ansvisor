@@ -41,6 +41,24 @@ describe('authorityKind', () => {
     expect(authorityKind('bbc.co.uk')).toBe('news');
   });
 
+  it('counts standards bodies and the platforms’ own docs (2026-11-19)', () => {
+    for (const host of [
+      'www.rfc-editor.org',
+      'datatracker.ietf.org',
+      'developers.google.com',
+      'support.google.com',
+      'platform.openai.com',
+      'docs.anthropic.com',
+      'schema.org',
+      'developer.mozilla.org',
+    ]) {
+      expect(authorityKind(host)).toBe('research');
+    }
+    // A vendor's own site stays out: only its docs count.
+    expect(authorityKind('google.com')).toBeNull();
+    expect(authorityKind('openai.com')).toBeNull();
+  });
+
   it('counts the sites a brand trusts, and their pages (00449)', () => {
     const trusted = ['sca.coffee', 'www.NCAusa.org'];
     expect(authorityKind('sca.coffee', trusted)).toBe('trusted');

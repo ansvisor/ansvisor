@@ -39,8 +39,14 @@ export const READABILITY_WEIGHTS: Record<ReadabilityCheckId, number> = {
 
 /** A sentence longer than this is long (spec: "No sentence over 35 words"). */
 export const LONG_SENTENCE_WORDS = 35;
-/** The average a sentence aims for. */
-export const SENTENCE_WORDS = { min: 15, max: 20 } as const;
+/**
+ * The average a sentence aims for: at most 20 words, and short ones are
+ * fine down to 8, where a page starts to read choppy. Short sentences are
+ * what the "Max sentence length" rule asks for and what AI answers quote,
+ * so Readability never asks to lengthen them past that (Content test
+ * 2026-11-19, item 8: "average 11.7 words, aim for 15–20" beside the rule).
+ */
+export const SENTENCE_WORDS = { min: 8, max: 20 } as const;
 /** A paragraph longer than this many sentences is long. */
 export const PARAGRAPH_SENTENCES = 4;
 /** The most words under one heading before the next one is due. */
@@ -426,7 +432,7 @@ export function readability(
   const check = (c: Omit<ReadabilityCheck, 'max'>) =>
     checks.push({ ...c, max: READABILITY_WEIGHTS[c.id] });
 
-  // Average sentence, 15–20 words, over running text: a list's points are no
+  // Average sentence, 8–20 words (SENTENCE_WORDS), over running text: a list's points are no
   // sentences. Full inside, none 10 words outside.
   const running = sentences.filter(({ block }) => isRunning(block));
   const measured = running.length > 0 ? running : sentences;
