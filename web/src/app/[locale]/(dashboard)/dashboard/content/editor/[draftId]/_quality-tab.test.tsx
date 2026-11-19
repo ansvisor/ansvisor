@@ -300,7 +300,7 @@ describe('QualityTab', () => {
     expect(rows).toEqual([
       '+10 ReadabilityReading level 77 (Flesch Reading Ease)Aim for 50–70: the page reads simpler than most readers of it expect. Keep the detail they look for.',
       '+9 Readability3 sentences over 35 wordsSplit each into two. Show goes to the first.Show',
-      '+5 ReadabilitySentences average 22.4 wordsAim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.',
+      '+5 ReadabilitySentences average 22.4 wordsAim for 20 words or fewer: shorter sentences read faster, and AI answers quote them whole.',
     ]);
     // A gain is an estimate, and says so: no exact promise.
     expect(suggestions.querySelector('li [title]')!.getAttribute('title')).toBe(

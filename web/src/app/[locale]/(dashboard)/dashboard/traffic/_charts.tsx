@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import { getPlatformName, type PlatformSurface } from '@/lib/traffic-platforms';
 import { getPlatformColor } from '@/lib/platform-colors';
 import { formatNumber } from '@/lib/format';
-import { cn } from '@/lib/utils';
 import {
   AreaChart,
   Area,
@@ -171,7 +170,7 @@ function PieTooltip({
 function BarList({
   data,
 }: {
-  /** `sub`: a surface's bar, under its platform's (ChatGPT Shopping, #1283). */
+  /** `sub`: a surface's bar, under its platform's (ChatGPT Shopping, #1283), named in full. */
   data: { key: string; name: string; value: number; color: string; sub?: boolean; tip?: string }[];
 }) {
   const max = Math.max(...data.map((d) => d.value), 1);
@@ -179,10 +178,7 @@ function BarList({
     <div className="w-full space-y-2">
       {data.map((item) => (
         <div key={item.key} className="flex items-center gap-2 text-xs">
-          <span
-            className={cn('w-20 shrink-0 text-muted-foreground truncate', item.sub && 'pl-3')}
-            title={item.tip}
-          >
+          <span className="w-28 shrink-0 truncate text-muted-foreground" title={item.tip}>
             {item.name}
           </span>
           <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
@@ -457,7 +453,8 @@ export function PlatformBreakdownChart({
         { key: d.platform, name, value: share(d.visits), color },
         ...(d.surfaces ?? []).map((s) => ({
           key: `${d.platform}|${s.surface}`,
-          name: t(`surfaces.${s.surface}`),
+          // Its own full name ("ChatGPT Shopping"), aligned with the platforms.
+          name: t(`surfaceNames.${s.surface}`, { platform: name }),
           value: share(s.visits),
           color,
           sub: true,
