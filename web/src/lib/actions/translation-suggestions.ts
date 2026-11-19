@@ -3,7 +3,6 @@
 import { loadMessages } from '@/i18n/messages';
 import { isUiLocale } from '@/i18n/locales';
 import { assertWritable } from '@/lib/subscription-guard';
-import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import {
   cleanSuggestion,
@@ -67,6 +66,9 @@ export async function submitTranslationSuggestion(
 
   // The service role adds it, after the checks above: there is no insert policy, so the
   // daily limit and a read-only workspace can't be skipped. The ids are the session's own.
+  // Loaded here, not at module load: the settings screens import this file, and the
+  // admin client needs server-only settings their tests (and the browser) don't have.
+  const { supabaseAdmin } = await import('@/lib/supabase/admin');
   const { error } = await supabaseAdmin.from('translation_suggestions').insert({
     organization_id: profile.organization_id,
     user_id: user.id,
