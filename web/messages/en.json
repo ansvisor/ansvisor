@@ -17302,6 +17302,8 @@
     "integrations_connectForbidden": "Only admins and managers can connect integrations.",
     "integrations_statusFailed": "Couldn't check whether {label} is connected. Try again in a moment.",
     "integrations_statusTimedOut": "Checking {label} took too long. Try again in a moment.",
+    "integrations_propertiesFailed": "Couldn't load {source} properties.",
+    "integrations_propertiesNoAccess": "Google didn't give Ansvisor access to {source}: a box on Google's screen was left unticked. Disconnect it above, then connect again and tick every box.",
     "integrations_propertiesTimedOut": "Reading the properties took too long. Try again in a moment.",
     "integrations_retry": "Try again",
     "integrations_propertyMapping": "Property mapping",

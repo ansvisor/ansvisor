@@ -5544,7 +5544,7 @@
         "switch google account"
       ],
       "plan": "all",
-      "updated": "2026-11-04",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -5557,6 +5557,10 @@
         {
           "heading": "See which brand uses which account",
           "text": "In **Settings › Integrations**, **Google per brand** lists each brand with its Search Console and Analytics account. Click **Change** to open that brand's settings."
+        },
+        {
+          "heading": "When the properties can't be read",
+          "text": "If Google says Ansvisor has no access, a box on Google's sign-in screen was left unticked. Click **Disconnect**, then connect again and tick every box Google shows."
         }
       ]
     },
