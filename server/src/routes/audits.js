@@ -33,7 +33,6 @@ import {
   pageKey,
   pageTrendUpTo,
   parseListPage,
-  TREND_LIMIT,
 } from '../lib/audit/history.js';
 import { readAllRpcRows } from '../lib/rpc-pages.js';
 import { AUTHORITY_CATEGORIES, buildOverview, primaryPages } from '../lib/audit/overview.js';
@@ -673,10 +672,10 @@ router.get('/quota', async (req, res) => {
   }
 });
 
-// GET /api/audits/trend?brandId=… — completed audits of the brand's PRIMARY
-// domain over time (score + category scores), for the hub trend chart. Reads
-// the newest TREND_LIMIT completed audits so the chart always ends at the
-// latest one, then returns the points oldest → newest.
+// GET /api/audits/trend?brandId=… — the brand's PRIMARY domain's site score
+// (and category scores) after each completed audit, for the hub trend chart:
+// the average of each page's latest audit, as the Site score card, so the
+// chart ends at the card's number. Points oldest → newest (buildTrendPoints).
 // Registered before /:id so "trend" isn't matched as an audit id.
 router.get('/trend', async (req, res) => {
   const userId = req.user?.id;
@@ -691,13 +690,19 @@ router.get('/trend', async (req, res) => {
     const primary = await primaryDomainOf(brandId);
     const primaryHost = normStoredDomain(primary);
 
-    const { data: rows } = await supabaseAdmin
-      .from('site_audits')
-      .select('id, url, final_url, total_score, partial, category_scores, created_at')
-      .eq('brand_id', brandId)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(TREND_LIMIT);
+    // Every completed audit, as the Site score card reads them: the chart's
+    // points are the site score after each one, so its last is the card's.
+    const { data: rows, error } = await readAllRpcRows('site_audits', (from, to) =>
+      supabaseAdmin
+        .from('site_audits')
+        .select('id, url, final_url, total_score, partial, category_scores, created_at')
+        .eq('brand_id', brandId)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to),
+    );
+    if (error) throw error;
 
     const points = buildTrendPoints(rows, primaryHost);
 
