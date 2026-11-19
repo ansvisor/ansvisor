@@ -113,6 +113,11 @@ describe('pageStatus', () => {
     expect(pageStatus(run('completed'), audit(0.7), audit(0.9))).toBe('good');
   });
 
+  it('reads the score shown: a 69.6 shown as 70 is Good, a 69.4 shown as 69 isn’t', () => {
+    expect(pageStatus(run('completed'), audit(0.696), null)).toBe('good');
+    expect(pageStatus(run('completed'), audit(0.694), null)).toBe('needs_work');
+  });
+
   it('is Improving below 70 when at least a point up on the previous audit', () => {
     expect(pageStatus(run('completed'), audit(0.65), audit(0.6))).toBe('improving');
     expect(pageStatus(run('completed'), audit(0.654), audit(0.646))).toBe('needs_work');
