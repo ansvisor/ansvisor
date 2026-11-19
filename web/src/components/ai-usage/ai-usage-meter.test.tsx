@@ -546,11 +546,11 @@ describe('HeaderWithAiUsage', () => {
   it('leaves room on the row for a drawer’s close button', async () => {
     await render(
       'admin',
-      <HeaderWithAiUsage banner={false} className="pr-8">
+      <HeaderWithAiUsage banner={false} className="pe-8">
         <h1>Opportunity</h1>
       </HeaderWithAiUsage>,
     );
-    expect(container.firstElementChild!.className).toContain('pr-8');
+    expect(container.firstElementChild!.className).toContain('pe-8');
     expect(container.firstElementChild!.lastElementChild).toBe(trigger());
   });
 

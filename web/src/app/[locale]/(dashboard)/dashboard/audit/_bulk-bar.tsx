@@ -46,11 +46,11 @@ export function ExportMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => onExport('csv')}>
-          <FileDown className="mr-2 h-4 w-4" />
+          <FileDown className="me-2 h-4 w-4" />
           {t('csv')}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onExport('xlsx')}>
-          <FileSpreadsheet className="mr-2 h-4 w-4" />
+          <FileSpreadsheet className="me-2 h-4 w-4" />
           {t('excel')}
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -124,7 +124,7 @@ export function AuditBulkBar({
                 : t('uses', { count: uses, remaining })}
           </span>
         ))}
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+      <div className="ms-auto flex flex-wrap items-center justify-end gap-1">
         <Button
           variant="outline"
           size="sm"

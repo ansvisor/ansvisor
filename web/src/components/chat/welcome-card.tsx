@@ -75,7 +75,7 @@ function Preparing({ run }: { run: FirstRun }) {
       <div className="flex items-center gap-2">
         <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden />
         <span className="font-medium">{t('preparing')}</span>
-        {note && <span className="ml-auto text-xs text-muted-foreground tabular-nums">{note}</span>}
+        {note && <span className="ms-auto text-xs text-muted-foreground tabular-nums">{note}</span>}
       </div>
       <div
         role="progressbar"

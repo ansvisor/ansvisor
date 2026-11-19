@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [chat, ask chat, date range, time range, which time range, default range, last 7d, last 30d, last 24h, custom range, range above the box, add date range, change range, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, page filters, page dates, as on the page, agent, new chat, open a chat, chat menu, governance, open governance, settings in the chat menu, general settings, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion, action number, ac number, action code, what is ac, open action from answer, action link, most important actions, what should i do first, top actions, action title, signal code, what is s-07, look up a prompt, find a prompt, cited domain, cited page, find a draft, find a report, same numbers as the page, top 5 prompts, first ones on the page, ranks like the page, latest tracking run, these, items on screen, rows on screen, my sort, my search, open tab, this one, open competitor, every page, ask about today, today's focus, first focus card, my agents, agent runs, what did my agent do, action history, closed actions, signals summary, this topic, this product, this report, this prompt, topic page, product page, report page]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-11-18
-last_checked: 2026-11-18
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -136,7 +136,7 @@ Each change is in the **Activity** log, with **Undo** for 7 days (30 days for pa
 
 ## Send a finding to Action Center
 
-Admins and Managers see **Send to Action Center** under Chat's latest answer. Chat proposes the finding as an action: its title, category, the prompts, pages and competitors it is about, and its tasks. Each task names its page and says when it is done. You approve it on its card, except in **Full auto**. Action Center sets its Priority Score, and **Open in Actions** opens it.
+Admins and Managers see **Send to Action Center** under Chat's latest answer. Chat proposes the finding as an action: its title, category, the prompts, pages and competitors it is about, and its tasks. Each task names its page and says when it is done. You approve it on its card, except in **Full auto**. Action Center sets its Priority Score, and **Open in Action Center** opens it.
 
 If an open action already covers these prompts, pages or competitors, Chat offers to add the finding to it instead. That action's targets don't change. **Create anyway** is offered only when the new finding covers something the open action doesn't.
 
@@ -419,6 +419,10 @@ Every role can copy, download and save answers it can open.
 When Chat makes something for you, such as a page saved as a Content draft, it shows under the answer as a card with its name and type. It is also kept in **Files** for your whole workspace, and the card says **In Files**. From the card, **Copy** copies it, **Download** gives it in the formats it has (for a page: HTML, Markdown, Word or PDF), and **Open in Content Editor** opens the page to keep working on it. When storage is full, the card says it wasn't saved to Files, with **Get more storage** to add a storage pack. Click **Files** in the chat menu to find, copy or download everything kept there.
 
 The pen button under an answer, **Open in Content Editor**, turns the answer itself into a new Content draft in your brand and opens it.
+
+## A page's title from Chat
+
+A page Chat saves gets a real page title: the answer's first heading, else your question when you asked one, else **Untitled page** for you to name. A line of the answer or a request, such as "Find content opportunities", is never saved as a title.
 
 ## Share a chat with your team
 

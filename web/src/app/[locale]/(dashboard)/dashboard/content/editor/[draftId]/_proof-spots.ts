@@ -67,7 +67,7 @@ function spotView(spot: ProofSpot, meta: ProofSpotsMeta): HTMLElement {
 
   const card = el(
     'span',
-    'absolute right-full mr-5 hidden w-[200px] flex-col gap-1 rounded-lg border border-dashed border-sky-300 bg-sky-50/60 p-2.5 text-left leading-snug select-none @min-[1120px]:flex dark:border-sky-800 dark:bg-sky-950/30',
+    'absolute end-full me-5 hidden w-[200px] flex-col gap-1 rounded-lg border border-dashed border-sky-300 bg-sky-50/60 p-2.5 text-start leading-snug select-none @min-[1120px]:flex dark:border-sky-800 dark:bg-sky-950/30',
   );
   card.append(
     el(
@@ -95,7 +95,7 @@ function spotView(spot: ProofSpot, meta: ProofSpotsMeta): HTMLElement {
 
   const marker = el(
     'button',
-    'absolute right-full mt-1 mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-sky-400 bg-background text-sky-700 hover:bg-sky-50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none @min-[1120px]:hidden dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40',
+    'absolute end-full mt-1 me-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-sky-400 bg-background text-sky-700 hover:bg-sky-50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none @min-[1120px]:hidden dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40',
   );
   marker.type = 'button';
   marker.innerHTML = CAMERA;

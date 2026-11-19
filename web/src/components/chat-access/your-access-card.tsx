@@ -61,8 +61,8 @@ export function YourAccessCard({ access }: { access: ChatAccess }) {
                 <span
                   className={
                     row.value === 'ask_admin' || row.value === 'execute_off'
-                      ? 'text-right text-xs text-muted-foreground'
-                      : 'text-right text-xs font-medium'
+                      ? 'text-end text-xs text-muted-foreground'
+                      : 'text-end text-xs font-medium'
                   }
                 >
                   {value(row)}

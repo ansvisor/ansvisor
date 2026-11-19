@@ -162,7 +162,7 @@ export default function ResultDetailPage() {
           <Button
             variant="ghost"
             size="sm"
-            className="gap-2 -ml-2 text-muted-foreground hover:text-foreground"
+            className="gap-2 -ms-2 text-muted-foreground hover:text-foreground"
             onClick={goBack}
           >
             <ArrowLeft className="h-4 w-4" />

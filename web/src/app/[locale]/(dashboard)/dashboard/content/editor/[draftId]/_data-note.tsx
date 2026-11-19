@@ -87,7 +87,7 @@ export function DataNote() {
       className="relative flex gap-2.5 rounded-xl border bg-muted/50 px-3 py-2.5 text-xs"
     >
       <Database aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1 space-y-0.5 pr-5">
+      <div className="min-w-0 flex-1 space-y-0.5 pe-5">
         <p className="text-[13px] font-semibold">{t('title')}</p>
         <p className="text-muted-foreground">{t('body')}</p>
       </div>
@@ -95,7 +95,7 @@ export function DataNote() {
         type="button"
         aria-label={t('close')}
         onClick={() => void close()}
-        className="absolute top-2 right-2 rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="absolute top-2 end-2 rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         <X className="h-3.5 w-3.5" />
       </button>

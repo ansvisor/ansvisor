@@ -65,7 +65,7 @@ export function AgentWorkPanel({
                 <span className="block font-medium">
                   {t(`choices.${choice}.label`)}
                   {choice === 'approve_first' && (
-                    <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                    <span className="ms-1.5 text-xs font-normal text-muted-foreground">
                       {t('default')}
                     </span>
                   )}

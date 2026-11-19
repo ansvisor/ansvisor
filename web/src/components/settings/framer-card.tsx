@@ -650,7 +650,7 @@ function FramerMapping({
           )}
           {map.jsonLd && <p className="text-xs text-muted-foreground">{t('jsonLdHint')}</p>}
           {problems.length > 0 && (
-            <ul role="alert" className="list-disc space-y-1 pl-5 text-xs text-destructive">
+            <ul role="alert" className="list-disc space-y-1 ps-5 text-xs text-destructive">
               {problems.map((p) => (
                 <li key={p}>{problemText(p)}</li>
               ))}

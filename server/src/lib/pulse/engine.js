@@ -2,6 +2,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { brandOutsiders, brandReaders } from '../access.js';
+import { addressesByLanguage } from '../i18n.js';
 import { dispatchBrandWebhook } from '../webhook-dispatch.js';
 import { computePulseMetrics } from './metrics.js';
 import { renderPulseEmail, sendPulseEmail } from './email.js';
@@ -299,15 +300,23 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
     let emailSent = false;
     let recipientCount = 0;
     if (isCloud()) {
-      recipientCount = recipients.length;
-      if (recipients.length) {
+      // Each in their own language (LOC-008): one send per language. The
+      // count is of those whose send was accepted.
+      const groups = recipients.length
+        ? await addressesByLanguage(brand.organization_id, recipients)
+        : [];
+      for (const [locale, to] of groups) {
         const { subject, html } = renderPulseEmail({
           brandName: brand.name,
           metrics,
           insightsUrl,
           settingsUrl,
+          locale,
         });
-        emailSent = await sendPulseEmail({ to: recipients, subject, html, settingsUrl });
+        if (await sendPulseEmail({ to, subject, html, settingsUrl })) {
+          emailSent = true;
+          recipientCount += to.length;
+        }
       }
     }
 

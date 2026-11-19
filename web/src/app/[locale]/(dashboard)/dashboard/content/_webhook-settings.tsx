@@ -240,7 +240,9 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
               >
                 <span
                   className={`pointer-events-none block h-3.5 w-3.5 rounded-full bg-background shadow-lg transition-transform ${
-                    isActive ? 'translate-x-4' : 'translate-x-0.5'
+                    isActive
+                      ? 'translate-x-4 rtl:-translate-x-4' // rtl-ok
+                      : 'translate-x-0.5 rtl:-translate-x-0.5' // rtl-ok: the thumb flips
                   }`}
                 />
               </button>

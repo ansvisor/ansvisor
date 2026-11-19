@@ -1568,7 +1568,9 @@ describe('briefForWriter', () => {
       `- ${sample.outline[0].heading} — answer first: ${sample.outline[0].answer}`,
     );
     // A table the writer can't make is a comparison set out point by point.
-    expect(text).toContain('show as a comparison, the same points for each option in turn');
+    expect(text).toContain(
+      'show as a table: a row per option (its name first), a column per criterion',
+    );
     // A fact the brief has no source for is looked up (content-research.js), never a placeholder.
     expect(text).toContain('(study, look it up with {{find: …}})');
     expect(text).toContain('(statistic, from Your input "Forecast error by month")');

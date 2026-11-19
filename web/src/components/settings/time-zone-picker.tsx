@@ -91,7 +91,7 @@ export function TimeZonePicker({
       }}
     >
       <ComboboxTrigger id={id} data-action={action} className="w-full" title={picked?.label}>
-        <span className="flex min-w-0 flex-1 items-baseline gap-2 text-left">
+        <span className="flex min-w-0 flex-1 items-baseline gap-2 text-start">
           <span className="truncate">{picked?.label}</span>
           {picked?.offset && (
             <span className="shrink-0 text-xs text-muted-foreground">{picked.offset}</span>

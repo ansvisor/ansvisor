@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -369,5 +372,39 @@ describe('outsidePlanRefusal', () => {
     expect(outside.outsidePlanRefusal({ plan: 'starter', subscription_status: 'trialing' })).toBe(
       null,
     );
+  });
+});
+
+describe('the outside e-mail’s own words (LOC-008)', () => {
+  it('are in the sender’s language, English where it has no text; the title and lines as they are', async () => {
+    const { forgetMessages } = await import('./i18n.js');
+    const file = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../messages/de.json',
+    );
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        outside: { sentBy: 'Gesendet von {person} aus {workspace} über Ansvisor' },
+      }),
+    );
+    forgetMessages();
+    try {
+      const { subject, html } = outside.renderOutsideEmail({
+        title: 'Weekly report',
+        summary: ['Citations rose'],
+        person: 'Ana',
+        workspace: 'Acme',
+        attached: true,
+        locale: 'de',
+      });
+      expect(subject).toBe('Weekly report');
+      expect(html).toContain('Gesendet von Ana aus Acme über Ansvisor');
+      expect(html).toContain('The full report is attached as a PDF.');
+      expect(html).toContain('Citations rose');
+    } finally {
+      fs.rmSync(file, { force: true });
+      forgetMessages();
+    }
   });
 });

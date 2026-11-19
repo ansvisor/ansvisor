@@ -206,6 +206,22 @@ describe('Content Opportunities loading order (Content test 2026-11-19, item 9)'
   });
 });
 
+describe('Content Opportunities counters (Content test 2026-11-19, item 10)', () => {
+  it('counts the open ones as Available, and says the cards hold every status', async () => {
+    content.getOpportunities.mockResolvedValue({
+      opportunities: [OPPORTUNITY],
+      total: 265,
+      open: 60,
+      aggregates: { avgScore: 78, highImpactCount: 159, sentCount: 0, signalCount: 0 },
+    });
+    await render(false);
+    expect(container.textContent).toContain('60 Available');
+    expect(container.textContent).not.toContain('265 Available');
+    expect(container.textContent).toContain('all statuses, done ones too');
+    expect(container.textContent).toContain('out of 100 · all statuses');
+  });
+});
+
 describe('Content Opportunities on a read-only workspace', () => {
   it('asks the AI for nothing: New opens the upgrade dialog, not its own', async () => {
     await render(true);

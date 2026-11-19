@@ -140,7 +140,7 @@ export function OrganizationSection() {
               onClick={guard(handleSave, { action: tActions('renameOrganization') })}
               disabled={saving || !nameInput.trim() || nameInput.trim() === org?.name}
             >
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {saving && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
               {t('save')}
             </Button>
           ) : (

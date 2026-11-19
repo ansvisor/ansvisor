@@ -51,7 +51,7 @@ export function SupportingSignals({
                 <button
                   type="button"
                   onClick={() => onOpenSignal(signal.id)}
-                  className="flex w-full items-baseline gap-2 rounded-md border px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted/40"
+                  className="flex w-full items-baseline gap-2 rounded-md border px-3 py-1.5 text-start text-xs transition-colors hover:bg-muted/40"
                 >
                   <span className="shrink-0 font-medium">
                     {signalTypeLabel(signal, tCategories, tSignals)}

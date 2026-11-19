@@ -221,7 +221,7 @@ export function ChatSkills() {
           <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title')}</h1>
           <p className="text-[13px] text-muted-foreground">{t('subtitle')}</p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2">
           <Link
             href="/dashboard/agents"
             data-action="skills.openAgents"
@@ -322,7 +322,7 @@ export function ChatSkills() {
               </button>
             ))}
             {tab === 'mine' && list.limit.max !== null && (
-              <span className="ml-auto self-center text-xs text-muted-foreground tabular-nums">
+              <span className="ms-auto self-center text-xs text-muted-foreground tabular-nums">
                 {t('limit', { used: list.limit.used, max: list.limit.max })}
               </span>
             )}
@@ -336,7 +336,7 @@ export function ChatSkills() {
                 <div className="relative w-full max-w-[260px]">
                   <Search
                     aria-hidden
-                    className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                    className="pointer-events-none absolute top-1/2 start-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
                   />
                   <Input
                     value={query}
@@ -344,7 +344,7 @@ export function ChatSkills() {
                     placeholder={t('search')}
                     aria-label={t('search')}
                     data-action="skills.search"
-                    className="h-8 pl-8 text-[13px]"
+                    className="h-8 ps-8 text-[13px]"
                   />
                 </div>
                 {tab === 'ansvisor' &&
@@ -454,7 +454,7 @@ function CardHead({ name, badge }: { name: string; badge?: React.ReactNode }) {
   );
 }
 
-const BADGE = 'ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium';
+const BADGE = 'ms-auto shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium';
 
 /** The card's title: it opens the skill's details. */
 function CardTitle({ title, onOpen }: { title: string; onOpen: () => void }) {
@@ -463,7 +463,7 @@ function CardTitle({ title, onOpen }: { title: string; onOpen: () => void }) {
       type="button"
       data-action="skills.details"
       onClick={onOpen}
-      className="text-left text-[14px] font-semibold outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="text-start text-[14px] font-semibold outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       {title}
     </button>
@@ -573,7 +573,7 @@ function LibraryCard({
           {t('createAgent')}
         </Link>
         {canToggle && (
-          <span className="ml-auto">
+          <span className="ms-auto">
             <FormSwitch
               checked={skill.enabled}
               label={t('toggle', { name: skill.name })}
@@ -680,7 +680,7 @@ function OwnCard({
           </Link>
         )}
         {skill.can.toggle && skill.status === 'approved' && (
-          <span className="ml-auto">
+          <span className="ms-auto">
             <FormSwitch
               checked={skill.enabled}
               label={t('toggle', { name: skill.name })}
@@ -798,7 +798,7 @@ function SkillDetails({
         {own && own.warnings.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-[12.5px] dark:border-amber-900 dark:bg-amber-950/30">
             <p className="font-medium">{t('details.warnings')}</p>
-            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+            <ul className="mt-1 list-disc space-y-0.5 ps-4 text-muted-foreground">
               {own.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
