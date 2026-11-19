@@ -449,3 +449,27 @@ describe('pageTrendUpTo', () => {
     expect(pageTrendUpTo(rows, 'older')).toEqual([0.6]);
   });
 });
+
+describe('buildAuditPages and analytics placeholders', () => {
+  it('leaves an audited "/(not%20set)" out of the pages', () => {
+    const rows = [
+      {
+        id: 'n',
+        url: 'https://acme.com/(not%20set)',
+        final_url: null,
+        status: 'failed',
+        total_score: null,
+        created_at: '2026-10-22T00:00:00Z',
+      },
+      {
+        id: 'p',
+        url: 'https://acme.com/pricing',
+        final_url: null,
+        status: 'completed',
+        total_score: '0.7',
+        created_at: '2026-10-22T00:00:00Z',
+      },
+    ];
+    expect(buildAuditPages(rows).map((p) => p.path)).toEqual(['/pricing']);
+  });
+});
