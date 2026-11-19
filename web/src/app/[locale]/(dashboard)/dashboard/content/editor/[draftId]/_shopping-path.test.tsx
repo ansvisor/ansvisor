@@ -16,6 +16,10 @@ vi.mock('@/lib/actions/shopping-path', () => ({
   saveDraftShoppingPath: (...args: unknown[]) => saveDraftShoppingPath(...args),
   searchCatalogProducts: (...args: unknown[]) => searchCatalogProducts(...args),
 }));
+const listCatalogSources = vi.fn();
+vi.mock('@/lib/actions/catalog', () => ({
+  listCatalogSources: (...args: unknown[]) => listCatalogSources(...args),
+}));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
@@ -103,6 +107,7 @@ const button = (label: string) =>
 
 beforeEach(() => {
   getDraftShoppingPath.mockReset().mockResolvedValue({ path: PATH });
+  listCatalogSources.mockReset().mockResolvedValue([{ id: 's1' }]);
   buildDraftShoppingPath.mockReset().mockResolvedValue({ path: PATH });
   stored = PATH;
   saves = 0;
@@ -177,6 +182,29 @@ describe('ShoppingPathSection', () => {
     await render();
     await act(async () => button('Pick from the catalog')!.click());
     expect(container.textContent).toContain("There's no catalog to pick from yet.");
+  });
+
+  it('shows nothing for a brand with no catalog and no path kept (Content test 2026-11-19)', async () => {
+    // A SaaS blog in Shopping mode: no catalog, so no shopping path to pick.
+    getDraftShoppingPath.mockResolvedValue({ path: null });
+    listCatalogSources.mockResolvedValue([]);
+    await render();
+    expect(listCatalogSources).toHaveBeenCalledWith('b1');
+    expect(container.textContent).toBe('');
+
+    // A path kept stays in sight, catalog or not; a failed read of the catalog shows the section.
+    act(() => root.unmount());
+    root = createRoot(container);
+    getDraftShoppingPath.mockResolvedValue({ path: PATH });
+    await render();
+    expect(container.textContent).toContain('Summit GTX Boot');
+    act(() => root.unmount());
+    root = createRoot(container);
+    getDraftShoppingPath.mockResolvedValue({ path: null });
+    listCatalogSources.mockRejectedValue(new Error('down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await render();
+    expect(button('Pick from the catalog')).toBeTruthy();
   });
 
   it('locks a product, removes one, and swaps one for the next best', async () => {

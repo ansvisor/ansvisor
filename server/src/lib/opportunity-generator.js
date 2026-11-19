@@ -38,6 +38,13 @@ import {
 } from './opportunity-same-question.js';
 import { loadClusters } from './prompt-clusters.js';
 import { cleanOpportunityText } from './opportunity-text.js';
+import {
+  opportunityKeywords,
+  sameTitleAs,
+  trackedEngineNames,
+  trackedPlatforms,
+  untrackedEngines,
+} from './opportunity-quality.js';
 import { yearRule } from './current-year.js';
 import {
   focusClusters,
@@ -159,7 +166,12 @@ function sourceData({ clusters, topicName, metrics, components, queries }) {
     topCompetitorVisibility: metrics.topCompetitorVisibility,
     competitorGap: metrics.competitorGap,
     intent: metrics.intent,
-    keywords: metrics.keywords,
+    // Its prompts' and fan-outs' words, not the keyword tool's alone (Content test 2026-11-19, item 16).
+    keywords: opportunityKeywords({
+      keywords: metrics.keywords,
+      prompts: clusters.flatMap((c) => c.promptTexts),
+      queries: (queries?.top ?? []).map((q) => q.query),
+    }),
     competitorsCited: metrics.competitorsCited,
     queries,
     scoreComponents: components,
@@ -733,11 +745,15 @@ ${pages.map(pageLine).join('\n') || 'none found'}${cand.angleOf ? `\n${angleLine
   });
   const types = assetTypes(siteType);
 
+  // The engines the brand's active prompts run on: an opportunity names no other (item 15).
+  const platforms = await trackedPlatforms(brandId).catch(() => null);
+  const engines = trackedEngineNames(platforms);
+
   const userPrompt = `Brand: ${brand.name}
 Industry: ${brand.industry || 'Not specified'}
 Domain: ${(domainsRes.data || []).map((d) => d.domain).join(', ') || 'N/A'}
 Site type: ${SITE_TYPE_NAMES[siteType]}
-${brandRules ? `\n${brandRules}\n` : ''}
+${engines.length ? `AI engines the brand tracks: ${engines.join(', ')}. Name no other engine in a title or description.\n` : ''}${brandRules ? `\n${brandRules}\n` : ''}
 Content types for the brand's site (owned assets):
 ${sitePageTypeLines(siteType)}
 
@@ -774,6 +790,10 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
   const done = new Set();
   const inserts = [];
   let merged = 0;
+  // The titles still to do: a new one saying the same in other words isn't kept.
+  const openTitles = existing
+    .filter((o) => !['done', 'dismissed', 'archived'].includes(o.status))
+    .map((o) => o.title);
 
   for (const opp of object.opportunities) {
     const cand = picked[opp.clusterIndex];
@@ -830,6 +850,22 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
       // A later cluster in this run may name the same target.
       target.related_cluster_ids = ids.slice(1);
       merged += 1;
+      continue;
+    }
+
+    // Not one about an engine the brand doesn't track, nor an open one's
+    // title in other words (Content test 2026-11-19, item 15).
+    const paused = untrackedEngines(`${opp.title} ${opp.description ?? ''}`, platforms);
+    if (paused.length) {
+      logger.info(
+        { brandId, engines: paused },
+        '[opportunities] one on an untracked engine skipped',
+      );
+      continue;
+    }
+    const sameAs = sameTitleAs(opp.title, [...openTitles, ...inserts.map((row) => row.title)]);
+    if (sameAs) {
+      logger.info({ brandId }, '[opportunities] one repeating an open one in other words skipped');
       continue;
     }
 

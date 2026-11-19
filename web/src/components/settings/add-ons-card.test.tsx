@@ -230,6 +230,15 @@ describe('for an Admin', () => {
     expect(getBillingAddOns).toHaveBeenCalledTimes(2);
   });
 
+  it('opens on storage, with no AI tab, once the AI packs have left the sale (00547)', async () => {
+    await render(addOns({ packs: PACKS.filter((p) => p.kind === 'storage') }));
+    expect(buttons().some((b) => b.textContent === 'AI credits')).toBe(false);
+    expect(cards().map((c) => c.textContent)).toEqual([
+      '$5+25 GB of storageMonthlyMost picked',
+      '$15+100 GB of storageMonthly',
+    ]);
+  });
+
   it('shows Stripe’s words when the card is declined', async () => {
     vi.mocked(startAddOnPurchase).mockResolvedValue({
       ok: false,
