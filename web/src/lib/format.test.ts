@@ -123,6 +123,17 @@ test('numbers, money and dates follow the interface language once it is set (LOC
   }
 });
 
+test('the server never keeps a language: concurrent requests would share it', () => {
+  vi.stubGlobal('window', undefined);
+  try {
+    setFormatLocale('de');
+    expect(getFormatLocale()).toBe('en-US');
+    expect(formatNumber(1234.5)).toBe('1,234.5');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 test('a locale passed in beats the one the page set', () => {
   expect(formatNumber(1234.5, 'de')).toBe('1.234,5');
   expect(formatDate('2026-10-17T11:05:00.000Z', 'de')).toBe('17. Okt. 2026');

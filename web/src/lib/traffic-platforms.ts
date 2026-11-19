@@ -45,7 +45,7 @@ export function isNamedPlatform(platform: string): boolean {
  * The surfaces a platform's visits can come through, from the AI source
  * list's `surfaces`: ChatGPT Shopping's product cards (#1283). A surface's
  * visits are part of its platform's, never added to them. Each has a name
- * in en.json's traffic.platforms.surfaces.
+ * in en.json's traffic.platforms.surfaceNames.
  */
 export const PLATFORM_SURFACES = ['shopping'] as const;
 
