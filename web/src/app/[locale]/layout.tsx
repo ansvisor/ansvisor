@@ -1,5 +1,6 @@
 import { NextIntlClientProvider, hasLocale } from 'next-intl';
-import { getMessages } from 'next-intl/server';
+import { getLocale, getMessages } from 'next-intl/server';
+import { FormatLocale } from '@/components/providers/format-locale';
 import { notFound } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
 import { routing } from '@/i18n/routing';
@@ -18,11 +19,14 @@ export default async function LocaleLayout({
     notFound();
   }
 
-  const messages = await getMessages();
+  // The address's locale is always en; the screen's language is the person's
+  // own (i18n/request.ts), and formats follow it.
+  const [messages, uiLocale] = await Promise.all([getMessages(), getLocale()]);
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-      <NextIntlClientProvider messages={messages} locale={locale}>
+      <NextIntlClientProvider messages={messages} locale={uiLocale}>
+        <FormatLocale locale={uiLocale} />
         {children}
         <Toaster richColors position="top-right" />
       </NextIntlClientProvider>

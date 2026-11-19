@@ -45,6 +45,7 @@ import {
   teamSection,
 } from '@/app/[locale]/(dashboard)/dashboard/settings/_sections';
 import { MenuDot } from './menu-dot';
+import { UserMenuLanguage } from './user-menu-language';
 import { SettingsDotMark, useSettingsDotWords, useSettingsDots } from './settings-dots';
 
 const SETTINGS_HREF = '/dashboard/settings';
@@ -145,7 +146,10 @@ export function UserProfileNavItem({
     window.open(href, '_blank', 'noopener,noreferrer');
   };
 
+  // The Language item reads its list when the menu first opens.
+  const [menuOpened, setMenuOpened] = useState(false);
   const onOpenChange = (open: boolean) => {
+    if (open) setMenuOpened(true);
     if (!open || !chatAgentic) return;
     void fetch('/api/chat/whats-new?unread=true&limit=1&days=14')
       .then((res) => res.json())
@@ -308,6 +312,7 @@ export function UserProfileNavItem({
               )}
             </DropdownMenuItem>
           )}
+          <UserMenuLanguage open={menuOpened} />
           <DropdownMenuItem onClick={() => openTab(siteConfig.links.docs)}>
             <CircleHelp className="text-muted-foreground" />
             {tMenu('help')}
