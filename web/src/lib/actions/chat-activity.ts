@@ -6,7 +6,7 @@ import { readMemberAuth } from '@/lib/member-emails';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { parseTeamRole } from '@/lib/chat/precedence';
-import { activitySummary, activityWords } from '@/lib/chat/activity';
+import { activitySummary, activityWords, deniedToolName } from '@/lib/chat/activity';
 import { undoChange } from '@/lib/chat/undo';
 import { CHAT_TOOLS, chatToolByKey } from '@/lib/chat/registry/tools';
 import { asViewer } from '@/lib/chat/viewer-locale';
@@ -304,7 +304,7 @@ export async function exportActivityCsv(
         activityCsv(
           rows
             .map((row) => toRow(row, who, names, now, new Map()))
-            .map((row) => ({ ...row, summaryParams: shownParams(row, activityWords.tool) })),
+            .map((row) => ({ ...row, summaryParams: shownParams(row, deniedToolName) })),
           (key, params) => activitySummary(key, params),
           activityWords,
         ),

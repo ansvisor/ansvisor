@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { ArrowUpRight, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { DEFAULT_LOCALE } from '@/i18n/locales';
 import { Link } from '@/i18n/navigation';
 import { TakeDownDialog } from '@/components/content/take-down-dialog';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
   const tAreas = useTranslations('chatAccess.capabilities.areaNames');
   const tSummary = useTranslations('chatActivity.summary');
   const tTools = useTranslations('chatTools');
+  const locale = useLocale();
   const format = useFormatter();
   const [filters, setFilters] = useState<ActivityFilters>({});
   const [page, setPage] = useState<Page | 'failed' | null>(null);
@@ -154,7 +156,7 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
       // A denial's tool, saved in English with its row, in this person's words.
       return tSummary(
         row.summaryKey,
-        shownParams(row, () => name),
+        shownParams(row, () => (locale === DEFAULT_LOCALE ? '' : name)),
       );
     }
     return name;

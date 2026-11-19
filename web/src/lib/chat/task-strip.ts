@@ -38,8 +38,9 @@ const OPEN_TASKS = ['todo', 'in_progress', 'waiting_approval'];
 
 /**
  * The tasks' words, for the person whose strip it is: their language inside
- * withRunLocale (a run, or the request that reads their chat). A schedule's
- * e-mail reads them in English (schedule/deliver.ts readyByParts).
+ * withRunLocale (a run, or the request that reads their chat). A ready-by
+ * answer, saved with its chat, reads them in English (schedule/deliver.ts
+ * readyByParts).
  */
 const taskT = inRunLocale(
   createTranslator({ locale: 'en', messages, namespace: 'actionCenter.actionTasks' }),

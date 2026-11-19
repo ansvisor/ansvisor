@@ -5,7 +5,8 @@ import type { Json } from '@/types/supabase';
 import type { ActivityWords } from './activity-view';
 import type { ChatMode, ChatSurface, ToolDecision, ToolDenial } from './precedence';
 import type { ChatTool, ToolClass } from './registry/define-tool';
-import { inRunLocale } from './run-locale';
+import { DEFAULT_LOCALE } from '@/i18n/locales';
+import { inRunLocale, runLocale } from './run-locale';
 
 /**
  * The Activity log (CHAT-20 §10a layer 2; chat_activity_log, 00402): one row
@@ -234,6 +235,13 @@ export const activityWords: ActivityWords = {
   approval: (label) => activityT(`approval.${label}`),
   status: (status) => activityT(`status.${status}`),
 };
+
+/**
+ * A denial's tool named again in the viewer's language (activity-view
+ * shownParams); '' in English, which keeps the name saved with the row.
+ */
+export const deniedToolName = (key: string | null): string =>
+  runLocale() === DEFAULT_LOCALE ? '' : activityWords.tool(key);
 
 /** A value for a summary: the text, on one line, at most 120 characters. */
 export function summaryValue(value: unknown): string {

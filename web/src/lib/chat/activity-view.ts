@@ -115,7 +115,8 @@ const ENGLISH_WORDS: ActivityWords = {
 
 /**
  * A row's summary values as the viewer reads them: a denial's tool name,
- * saved with the row in English, named again in `toolName`'s words.
+ * saved with the row in English, named again in `toolName`'s words (none:
+ * the saved name).
  */
 export function shownParams(
   row: Pick<ActivityRow, 'kind' | 'toolKey' | 'summaryParams'>,
