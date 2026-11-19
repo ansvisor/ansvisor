@@ -4,7 +4,7 @@ route: /dashboard/audit
 keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audit again, bulk audit, audit all]
 synonyms: [page audit, check my page, scan a page, AI readiness check]
 plan: all
-updated: 2026-11-17
+updated: 2026-11-19
 last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
@@ -37,7 +37,7 @@ Audits started in bulk run a few at a time.
 
 Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.
 
-Pages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.
+**Audit all** leaves out pages audited in the last 7 days; untick **Leave out** to include them. Pages you pick yourself are all audited, recent ones too, since a change across the site, such as robots.txt or a template, moves their scores; tick **Leave out** to skip them.
 
 When fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month.
 

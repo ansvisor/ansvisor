@@ -107,7 +107,7 @@ describe('AiUsageBanner', () => {
     );
     expect(container.firstElementChild!.className).toContain('bg-red-50');
     expect(links()).toEqual([
-      ['Get more AI usage', '/dashboard/settings/billing'],
+      ['Get more AI usage', '/dashboard/settings/billing#plan-add-ons'],
       ['Use your own key', '/dashboard/settings/ai-providers'],
     ]);
   });
@@ -119,7 +119,7 @@ describe('AiUsageBanner', () => {
     expect(container.textContent).toContain(
       "You've used this month's AI limit. AI features stop until Nov 20; Chat keeps working only where it runs on your workspace's own AI key.",
     );
-    expect(links()).toEqual([['Get more AI usage', '/dashboard/settings/billing']]);
+    expect(links()).toEqual([['Get more AI usage', '/dashboard/settings/billing#plan-add-ons']]);
 
     state.usage = usage({
       plan: 'enterprise',

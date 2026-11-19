@@ -106,14 +106,21 @@ describe('AuditConfirmDialog', () => {
     expect(onConfirm).toHaveBeenCalledWith(pages.map((p) => p.url));
   });
 
-  it('leaves the pages audited this week out unless they are ticked back in', () => {
-    render(PAGES, quota(78));
+  it('leaves the pages audited this week out of Audit all unless they are ticked back in', () => {
+    render(PAGES, quota(78), { mode: 'notAudited' });
     const text = dialog().textContent;
     expect(text).toContain('Leave out the 2 pages audited in the last 7 days');
     expect(text).toContain('/espresso-roast on Oct 29 · /colombia-huila on Oct 30.');
+    expect(text).toContain('Audit them again after a change across the site');
     act(() => button(/^Audit 4 pages$/).click());
     expect(onConfirm).toHaveBeenLastCalledWith(PAGES.slice(2).map((p) => p.url));
     act(() => (dialog().querySelector('[role=checkbox]') as HTMLElement).click());
+    act(() => button(/^Audit 6 pages$/).click());
+    expect(onConfirm).toHaveBeenLastCalledWith(PAGES.map((p) => p.url));
+  });
+
+  it('audits every page someone picked, recent ones too, unless they tick them out (2026-11-19)', () => {
+    render(PAGES, quota(78));
     act(() => button(/^Audit 6 pages$/).click());
     expect(onConfirm).toHaveBeenLastCalledWith(PAGES.map((p) => p.url));
   });

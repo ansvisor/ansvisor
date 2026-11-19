@@ -86,6 +86,10 @@ A question also gets only one open opportunity. When a new one would answer the 
 
 For a second take on the same need, use **Another angle** on the opportunity.
 
+## Kept to what you track
+
+A new opportunity whose title says what an open one's says, in other words, isn't added. Nor is one about an AI engine none of your active prompts runs on, such as one you paused. An opportunity's **Keywords** come from its prompts and the searches AI engines ran for them: keyword-tool terms that share no words with them are left out.
+
 ## When fewer come back
 
 When a run writes fewer than you asked for, or none, the message says why:
