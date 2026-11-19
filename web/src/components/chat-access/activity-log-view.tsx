@@ -17,7 +17,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { exportActivityCsv, listActivity, undoActivity } from '@/lib/actions/chat-activity';
-import { approvalLabel, type ActivityFilters, type ActivityRow } from '@/lib/chat/activity-view';
+import {
+  approvalLabel,
+  shownParams,
+  type ActivityFilters,
+  type ActivityRow,
+} from '@/lib/chat/activity-view';
 import type { ToolArea } from '@/lib/chat/registry/define-tool';
 import { cn } from '@/lib/utils';
 import { ClassBadge } from './class-badge';
@@ -146,7 +151,11 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
     const name =
       row.toolKey && tTools.has(`${row.toolKey}.name`) ? tTools(`${row.toolKey}.name`) : '';
     if (row.summaryKey && tSummary.has(row.summaryKey)) {
-      return tSummary(row.summaryKey, row.summaryParams);
+      // A denial's tool, saved in English with its row, in this person's words.
+      return tSummary(
+        row.summaryKey,
+        shownParams(row, () => name),
+      );
     }
     return name;
   };
