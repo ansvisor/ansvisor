@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j, accepted suggestions, rejected suggestions, read your choices in the editor]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ The Content Editor is where pages are written. It opens from the Library, from t
 
 ## The header
 
-The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.
+Beside the back arrow, **+** (New content) starts another page. The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.
 
 On the right are **Next** (hover it for the step) and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**.
 

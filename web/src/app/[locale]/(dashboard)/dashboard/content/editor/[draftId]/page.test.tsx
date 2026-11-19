@@ -9868,6 +9868,8 @@ describe('the editor embedded in Chat', () => {
 
     expect(container.querySelector('[role="status"]')).not.toBeNull();
     expect(libraryLink()).toBeNull();
+    // Beside Chat, no New content: the pane closes instead.
+    expect(container.querySelector('header a[aria-label="New content"]')).toBeNull();
     await act(async () => closeButton()!.click());
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -9877,6 +9879,9 @@ describe('the editor embedded in Chat', () => {
     await renderSurface();
 
     expect(libraryLink()!.getAttribute('aria-label')).toBe('Back to the Library');
+    // A new page from the editor too (Content test 2026-11-19, item 21).
+    const newContent = container.querySelector('header a[aria-label="New content"]');
+    expect(newContent!.getAttribute('href')).toContain('/dashboard/content/library?new=1');
     expect(closeButton()).toBeNull();
     const tabs = [...panel()!.querySelectorAll('[role="tab"]')].map(tabName);
     expect(tabs).toEqual(['Chat', 'Instructions', 'Sources', 'Live page']);
