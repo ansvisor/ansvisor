@@ -357,7 +357,8 @@ accepts it.
   it rests on; null until scored. Also impact, status and task
   progress. Filters: `status`, `category`; `sort: "updated"` lists the
   most recently updated first.
-- **`get_action`** — one action in full: priority, payload, triggering
+- **`get_action`** — one action in full: priority, payload, `affected`
+  (its prompts by name, pages, competitors and topics), triggering
   signals, tasks and events. Each task has `mode` (system, agent, human,
   human_or_agent) and `permission` (read, write, execute). Its
   `details`, when it has them, say where to act and how:
