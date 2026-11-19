@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j, accepted suggestions, rejected suggestions, read your choices in the editor]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-14
-last_checked: 2026-11-14
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -50,6 +50,10 @@ The Content Agent looks up the facts a page needs, such as a price, a plan's lim
 A fact it couldn't look up stays in square brackets for you, as do up to three only your brand has, such as your customer count. Each is tinted amber; **Your input needed** in the toolbar counts them and jumps to the next one, selected so you can type over it.
 
 Ones in alt text, structured data or HTML count too. **Send to CMS** waits until none is left. With Quality on, **Export** offers **Fill now** or **Export without them**, which drops those sentences. One in the title or a heading has to be filled.
+
+## Where looked-up facts come from
+
+A looked-up fact links only to a page that names what its sentence is about. A price, a plan or a product's limits comes only from that product's own site, such as its pricing page, never from another vendor's blog or a comparison article. When no such page has it, the fact stays for you to fill.
 
 ## Health and supplement brands
 
