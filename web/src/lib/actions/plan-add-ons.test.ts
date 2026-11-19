@@ -59,7 +59,7 @@ vi.mock('@/lib/stripe', () => ({
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { SubscriptionInactiveError } = await import('@/lib/subscription-guard');
-const { applyAddOnChange, previewAddOnChange } = await import('./plan-add-ons');
+const { applyAddOnChange, previewAddOnChange, readPlanAddOns } = await import('./plan-add-ons');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 
@@ -464,6 +464,37 @@ describe('an AI usage top-up', () => {
     expect(purchases()[0]).toMatchObject({ status: 'pending', stripe_invoice_id: 'in_topup' });
   });
 
+  it('from Get more keeps the add-ons Stripe has now, whatever the window read', async () => {
+    // The window read no add-ons; another tab has since bought a tier and 2 brands.
+    stripeApi.retrieve.mockResolvedValue(
+      subscription([
+        planItem(),
+        addOnItem('si_t', 'tracking_100_month'),
+        addOnItem('si_b', 'brand_month', 2),
+      ]),
+    );
+    await expect(
+      applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 5, topUpOnly: true }),
+    ).resolves.toMatchObject({ ok: true, changed: true });
+    // Nothing reverted: no subscription change, only the top-up's own invoice.
+    expect(stripeApi.update).not.toHaveBeenCalled();
+    expect(stripeApi.createInvoiceItem).toHaveBeenCalledWith(
+      expect.objectContaining({ pricing: { price: 'price_ai_topup_5x' } }),
+      expect.anything(),
+    );
+    // And it never adds one: a snapshot ahead of Stripe changes nothing either.
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem()]));
+    await applyAddOnChange({ trackingUnits: 1000, extraBrands: 3, topUp: 5, topUpOnly: true });
+    expect(stripeApi.update).not.toHaveBeenCalled();
+  });
+
+  it('only, without a top-up, is refused', async () => {
+    await expect(
+      applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUpOnly: true }),
+    ).resolves.toMatchObject({ ok: false, failure: 'unavailable' });
+    expect(stripeApi.update).not.toHaveBeenCalled();
+  });
+
   it('can be bought again: no monthly cap', async () => {
     await applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 20 });
     await applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 20 });
@@ -499,5 +530,74 @@ describe('an AI usage top-up', () => {
       applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 5 }),
     ).resolves.toMatchObject({ ok: false, failure: 'not_growth' });
     expect(purchases()).toEqual([]);
+  });
+});
+
+describe('what Billing shows', () => {
+  it('lists the tiers on the plan’s period, the brand price, the top-ups and what is bought', async () => {
+    org().add_on_prompts = 100;
+    org().add_on_brands = 2;
+    org().subscription_ends_at = '2026-11-29T10:00:00.000Z';
+    const read = await readPlanAddOns();
+    expect(read).toMatchObject({
+      ok: true,
+      addOns: {
+        state: 'open',
+        interval: 'month',
+        base: { prompts: 200, brands: 4 },
+        current: { trackingUnits: 100, extraBrands: 2 },
+        tiers: [
+          { units: 100, priceCents: 7500, contactSales: false },
+          { units: 1000, priceCents: 75000, contactSales: false },
+          { units: 5000, priceCents: 375000, contactSales: true },
+        ],
+        brandPriceCents: 2500,
+        topUps: [
+          { multiplier: 5, priceCents: 3900 },
+          { multiplier: 10, priceCents: 6900 },
+          { multiplier: 20, priceCents: 12900 },
+        ],
+        renewsOn: '2026-11-29T10:00:00.000Z',
+      },
+    });
+  });
+
+  it('shows yearly prices on a yearly plan', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem('year')]));
+    const read = await readPlanAddOns();
+    expect(read.ok && read.addOns.interval).toBe('year');
+    expect(read.ok && read.addOns.tiers.map((t) => t.units)).toEqual([1000]);
+  });
+
+  it('shows a yearly plan’s prices in its trial too, and monthly when Stripe can’t say', async () => {
+    org().subscription_status = 'trialing';
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem('year')], { status: 'trialing' }));
+    let read = await readPlanAddOns();
+    expect(read.ok && [read.addOns.state, read.addOns.interval]).toEqual(['trial', 'year']);
+    stripeApi.retrieve.mockRejectedValue(new Error('down'));
+    read = await readPlanAddOns();
+    expect(read.ok && [read.addOns.state, read.addOns.interval]).toEqual(['trial', 'month']);
+  });
+
+  it('says why it can’t be bought', async () => {
+    const stateOf = async () => {
+      const read = await readPlanAddOns();
+      return read.ok ? read.addOns.state : read.failure;
+    };
+    auth.user = { id: 'u_manager' };
+    await expect(stateOf()).resolves.toBe('not_admin');
+    auth.user = { id: 'u_admin' };
+    org().cancel_at_period_end = true;
+    await expect(stateOf()).resolves.toBe('ending');
+    org().subscription_status = 'trialing';
+    await expect(stateOf()).resolves.toBe('trial');
+    org().subscription_status = 'past_due';
+    await expect(stateOf()).resolves.toBe('no_plan');
+    org().plan = 'starter';
+    await expect(stateOf()).resolves.toBe('starter');
+    org().plan = 'enterprise';
+    await expect(stateOf()).resolves.toBe('enterprise');
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    await expect(stateOf()).resolves.toBe('not_cloud');
   });
 });
