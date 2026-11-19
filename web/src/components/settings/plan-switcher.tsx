@@ -32,6 +32,7 @@ import {
   SUBSCRIBABLE_PLANS,
   firstMonthOfferOn,
   type PlanId,
+  CUSTOM_PLAN_STARTING_PRICE,
 } from '@/config/plans';
 import {
   FIRST_MONTH_CODE,
@@ -48,6 +49,7 @@ import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
+import { ExpandableMark } from './plan-feature-mark';
 import { trackCancelOpened, trackReactivated } from '@/lib/billing/cancel-events';
 import {
   aiUsageMultiple,
@@ -438,6 +440,7 @@ export function PlanSwitcher({
                       >
                         {feature.text}
                       </span>
+                      {feature.expandable && <ExpandableMark />}
                     </li>
                   ))}
                 </ul>
@@ -601,7 +604,9 @@ export function PlanSwitcher({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
             <p className="text-sm font-medium">{t('needCustomPlan')}</p>
-            <p className="text-xs text-muted-foreground">{t('customPlanDescription')}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('customPlanDescription', { price: formatNumber(CUSTOM_PLAN_STARTING_PRICE) })}
+            </p>
           </div>
           <a
             href={CONTACT_SALES_URL}
