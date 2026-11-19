@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audit again, bulk audit, audit all]
 synonyms: [page audit, check my page, scan a page, AI readiness check]
 plan: all
-updated: 2026-11-17
-last_checked: 2026-11-17
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -46,6 +46,10 @@ When fewer audits are left than pages, the most valuable go now (on Pages, the f
 A page has one audit running at a time. Starting it again, from any of these places, opens the audit already running and uses no audit, however the address is written: with or without www, a last slash or a tracking parameter.
 
 When a page was audited in the last 10 minutes, Site Audit asks first: **Open it** shows that audit, and **Audit again** starts a new one. Pages started together leave those out and say so, with **Audit again**.
+
+## Which address is audited
+
+A page is audited at the address your site itself uses, with or without www. Site Audit follows the page's canonical tag when it names the same page, and keeps to the host your earlier audits showed. The address in the **Pages** list, and in the report, is that one, so a site that answers at www.example.com is audited and shown there, not at example.com. Pages are still one page whichever way they are written.
 
 ## Your monthly audits
 
