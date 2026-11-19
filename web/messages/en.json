@@ -9474,6 +9474,7 @@
       "tipSame": "This page's last {audits} audits all scored {low}."
     },
     "aiRecommendations": "AI Recommendations",
+    "topRecommendations": "Top recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",
     "allSignals": "All signals",
