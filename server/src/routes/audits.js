@@ -33,7 +33,6 @@ import {
   pageKey,
   pageTrendUpTo,
   parseListPage,
-  TREND_LIMIT,
 } from '../lib/audit/history.js';
 import { readAllRpcRows } from '../lib/rpc-pages.js';
 import { AUTHORITY_CATEGORIES, buildOverview, primaryPages } from '../lib/audit/overview.js';
@@ -47,6 +46,7 @@ import {
   normalizeExcludePattern,
   opportunityKey,
   siteCoverage,
+  sitePageKeys,
 } from '../lib/audit/opportunities.js';
 import { AUTO_AUDIT } from '../lib/audit/auto-audit.js';
 import { rankOpportunities } from '../lib/audit/priority.js';
@@ -109,6 +109,29 @@ function assembleAudit(audit, signalRows) {
     signals,
     recommendations: audit.recommendations ?? [],
   };
+}
+
+/**
+ * The site's pages the hub counts (sitePageKeys): null when the brand's
+ * pages aren't known yet, and then every audited page on the primary domain
+ * counts, as before.
+ */
+async function readSitePageKeys(brandId) {
+  const [sitePages, prefs, excludePatterns] = await Promise.all([
+    supabaseAdmin.from('site_pages').select('url').eq('brand_id', brandId),
+    supabaseAdmin
+      .from('site_audit_page_prefs')
+      .select('page_key, url, state')
+      .eq('brand_id', brandId),
+    readExcludePatterns(brandId),
+  ]);
+  for (const read of [sitePages, prefs]) if (read.error) throw read.error;
+  const keys = sitePageKeys({
+    sitePages: sitePages.data ?? [],
+    prefs: prefs.data ?? [],
+    excludePatterns,
+  });
+  return keys.size > 0 ? keys : null;
 }
 
 /** The brand's primary domain as stored (else its first domain), or null. */
@@ -673,10 +696,10 @@ router.get('/quota', async (req, res) => {
   }
 });
 
-// GET /api/audits/trend?brandId=… — completed audits of the brand's PRIMARY
-// domain over time (score + category scores), for the hub trend chart. Reads
-// the newest TREND_LIMIT completed audits so the chart always ends at the
-// latest one, then returns the points oldest → newest.
+// GET /api/audits/trend?brandId=… — the brand's PRIMARY domain's site score
+// (and category scores) after each completed audit, for the hub trend chart:
+// the average of each page's latest audit, as the Site score card, so the
+// chart ends at the card's number. Points oldest → newest (buildTrendPoints).
 // Registered before /:id so "trend" isn't matched as an audit id.
 router.get('/trend', async (req, res) => {
   const userId = req.user?.id;
@@ -691,15 +714,21 @@ router.get('/trend', async (req, res) => {
     const primary = await primaryDomainOf(brandId);
     const primaryHost = normStoredDomain(primary);
 
-    const { data: rows } = await supabaseAdmin
-      .from('site_audits')
-      .select('id, url, final_url, total_score, partial, category_scores, created_at')
-      .eq('brand_id', brandId)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(TREND_LIMIT);
+    // Every completed audit, as the Site score card reads them: the chart's
+    // points are the site score after each one, so its last is the card's.
+    const { data: rows, error } = await readAllRpcRows('site_audits', (from, to) =>
+      supabaseAdmin
+        .from('site_audits')
+        .select('id, url, final_url, total_score, partial, category_scores, created_at')
+        .eq('brand_id', brandId)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to),
+    );
+    if (error) throw error;
 
-    const points = buildTrendPoints(rows, primaryHost);
+    const points = buildTrendPoints(rows, primaryHost, undefined, await readSitePageKeys(brandId));
 
     return res.json({ success: true, primaryDomain: primary, points });
   } catch (err) {
@@ -772,14 +801,20 @@ router.get('/overview', async (req, res) => {
   try {
     await assertBrandAccess(brandId, userId);
 
-    const [primary, { data: rows, error }] = await Promise.all([
+    const [primary, { data: rows, error }, siteKeys] = await Promise.all([
       primaryDomainOf(brandId),
       readBrandAudits(brandId),
+      readSitePageKeys(brandId),
     ]);
     if (error) throw error;
 
     const primaryHost = normStoredDomain(primary);
-    const { own, otherPages } = primaryPages(buildAuditPages(rows), primaryHost);
+    const primaryAudited = primaryPages(buildAuditPages(rows), primaryHost);
+    // The site's pages only, as coverage's "of N" counts them (one source of truth).
+    const own = siteKeys
+      ? primaryAudited.own.filter((p) => siteKeys.has(p.key.toLowerCase()))
+      : primaryAudited.own;
+    const { otherPages } = primaryAudited;
     const ids = own.map((p) => p.auditId);
 
     const [scoreRows, failingRows] = await Promise.all([

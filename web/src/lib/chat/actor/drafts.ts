@@ -29,7 +29,8 @@ export async function createContentDraftFor(
   // Not theirs before anything else: the demo or plan refusal would say the brand is there.
   if (!(await canAccessBrandFor(actor, brandId))) throw new Error('not_found');
   await assertWritableFor(actor, brandId);
-  return insertDraft(supabaseAdmin, brandId, actor.userId, start);
+  // An author is added only from a page the member read in New content, never from a run's words.
+  return insertDraft(supabaseAdmin, brandId, actor.userId, { ...start, pageAuthor: null });
 }
 
 /**
