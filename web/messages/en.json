@@ -14,6 +14,14 @@
     "upgrade": "Upgrade",
     "choosePlan": "Choose a plan"
   },
+  "metrics": {
+    "promptsAnswered": "{count, plural, one {# prompt with answers in {period}} other {# prompts with answers in {period}}}",
+    "period": {
+      "lastDays": "{days, plural, one {the last day} other {the last # days}}",
+      "all": "all tracked history",
+      "custom": "the selected range"
+    }
+  },
   "serverErrors": {
     "invalid": "That didn't go through: something in it isn't valid. Check it and try again.",
     "too_large": "That's too large. Try something smaller.",
@@ -15573,6 +15581,10 @@
     "windowLast30Days": "Scores cover the last 30 days.",
     "windowAllTime": "Scores cover all tracked history.",
     "windowSelectedRange": "Scores reflect the selected date range.",
+    "card": {
+      "prompts": "{visible}/{count} prompts",
+      "scoreTip": "Mentioned in {mentionAnswers} answers · cited in {citationAnswers} · position factor {position} · {mentions} mentions · {citations} citations"
+    },
     "selected": "Selected",
     "noData": "No data",
     "emptyTitle": "No competitors yet",

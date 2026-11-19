@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { resolveAgentAuth } from '@/lib/agent/auth';
 import { getVisibilitySummaryFor } from '@/lib/mcp/data';
 import { getTrackingWindow } from '@/lib/actions/tracking';
-import { getTrackedPromptCount } from '@/lib/actions/prompt';
+import { getActivePromptCount } from '@/lib/actions/prompt';
 import { getMyOpenActionCount } from '@/lib/actions/action-center-counts';
 import { weekStart } from '@/lib/action-center/today';
 import { standingFrom, type TodayStanding } from '@/lib/action-center/focus';
@@ -56,7 +56,7 @@ export async function getTodayOverview(
 
   const [window, tracked, open, done] = await Promise.allSettled([
     getTrackingWindow(brandId),
-    getTrackedPromptCount(brandId),
+    getActivePromptCount(brandId),
     getMyOpenActionCount(brandId),
     supabase
       .from('actions')

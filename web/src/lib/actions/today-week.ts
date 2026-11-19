@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { resolveAgentAuth } from '@/lib/agent/auth';
 import { getVisibilitySummaryFor } from '@/lib/mcp/data';
 import { runDayWindow } from '@/lib/citations/rollup-window';
-import { getTrackedPromptCount } from '@/lib/actions/prompt';
+import { getActivePromptCount } from '@/lib/actions/prompt';
 import { getMyOpenActionCount } from '@/lib/actions/action-center-counts';
 import { standingFrom, type TodayStanding } from '@/lib/action-center/focus';
 import { hasFullWeek, isMondayIn, lastWeekOf } from '@/lib/action-center/last-week';
@@ -189,7 +189,7 @@ export async function getTodayEnded(brandId: string): Promise<TodayEnded> {
       ]);
       return current ? standingFrom(current, previous) : null;
     })(),
-    getTrackedPromptCount(brandId),
+    getActivePromptCount(brandId),
     count(
       supabase
         .from('competitors')

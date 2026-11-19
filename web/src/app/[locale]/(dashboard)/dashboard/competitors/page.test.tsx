@@ -329,3 +329,36 @@ describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
     expect(chatPage.mock.lastCall![0].view).toEqual({});
   });
 });
+
+describe('the prompt set under each card’s score (UX audit CP-03)', () => {
+  it('names the prompts the count is out of, and the picker’s range', async () => {
+    const tracking = await import('@/lib/actions/tracking');
+    const entry = (name: string, isOwnBrand: boolean, competitorId?: string) => ({
+      name,
+      isOwnBrand,
+      competitorId,
+      avgVisibilityScore: 0,
+      visibilityRate: 0,
+      visiblePrompts: 12,
+      promptCount: 227,
+      change: null,
+      score: 37.4,
+      scoreChange: null,
+      mentionAnswers: 40,
+      citationAnswers: 5,
+      positionFactor: 0.5,
+      totalMentions: 60,
+      totalCitations: 5,
+      resultCount: 300,
+    });
+    vi.mocked(tracking.getCompetitorComparison).mockResolvedValue({
+      brands: [entry('Acme', true), entry('Rival', false, 'c1')],
+      providerRows: [],
+    });
+    await render(false);
+    const count = [...container.querySelectorAll<HTMLElement>('[title]')].find(
+      (el) => el.textContent === '12/227 prompts',
+    );
+    expect(count?.title).toBe('227 prompts with answers in the last 30 days');
+  });
+});

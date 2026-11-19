@@ -81,3 +81,7 @@ Only what Site Audit's checks found and a summary of the page's words are kept, 
 2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on Visibility's **Citations** tab lists the sources AI cites with the competitor and not with you.
 3. Create content for that prompt in **Content**.
 4. Publish it, earn placements on those sources, and watch the prompt in the comparison as new answers are tracked.
+
+## Which prompts a count is out of
+
+Point at a card's prompt count, such as 12/40 prompts, to see which prompts it's out of: "40 prompts with answers in the last 30 days". It counts the prompts that got an AI answer in the date range, so it changes with the range. A report counts its own period, and Today counts the prompts you track now, active ones only, so their numbers can differ from this one.
