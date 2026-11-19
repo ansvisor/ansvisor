@@ -24,6 +24,7 @@ import { WhiteLabelSection } from '@/components/settings/white-label-section';
 import { MenuAccessSection } from '@/components/settings/menu-access-section';
 import { WorkAreasCard } from '@/components/settings/work-areas-card';
 import { TimeZoneField } from '@/components/settings/time-zone-field';
+import { LanguageField } from '@/components/settings/language-field';
 import { useCanManageMenus } from '@/components/providers/menu-access-provider';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { RolesAccessSection } from '@/components/chat-access/roles-access-section';
@@ -295,6 +296,9 @@ export function SettingsView({ section }: { section: SettingsSection }) {
                 <Separator className="my-2" />
                 {/* Saved as it changes, apart from Save changes above. */}
                 <TimeZoneField />
+                <Separator className="my-2" />
+                {/* The language of their own screens (LOC-005), saved as it is picked. */}
+                <LanguageField />
                 <Separator className="my-2" />
                 <Button
                   variant="outline"
