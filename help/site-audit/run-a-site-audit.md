@@ -5,7 +5,7 @@ keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audi
 synonyms: [page audit, check my page, scan a page, AI readiness check]
 plan: all
 updated: 2026-11-19
-last_checked: 2026-11-17
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -40,6 +40,10 @@ Audit selected, Audit all and Re-audit ask first. They list the pages and say ho
 **Audit all** leaves out pages audited in the last 7 days; untick **Leave out** to include them. Pages you pick yourself are all audited, recent ones too, since a change across the site, such as robots.txt or a template, moves their scores; tick **Leave out** to skip them.
 
 When fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month.
+
+## The Pages list during a bulk audit
+
+While audits run, the **Pages** list updates in place: each page's status changes on its row, and the rows you loaded with **Load more** stay where they are. Your selection stays too, however many pages it holds. A page leaves the selection only when its audit starts, since a page being audited can't be audited again.
 
 ## Auditing a page again
 
