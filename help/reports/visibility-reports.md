@@ -4,7 +4,7 @@ route: /dashboard/reports
 keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss, score range, plus or minus]
 plan: all
-updated: 2026-11-10
+updated: 2026-11-19
 last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
@@ -43,3 +43,5 @@ A report opens with its **Executive Summary**: a short account of what changed v
 ## Download a PDF
 
 **Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email. With white label in use, the report and its PDF carry your agency's logo, color, name and footer instead of Ansvisor's, with a "Prepared for" cover.
+
+Counts in a report and its PDF, such as mentions, citations and visits, are written with thousands separators in your interface language: **10,262** in English.
