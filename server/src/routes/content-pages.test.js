@@ -152,7 +152,24 @@ describe('POST /api/content-pages/import', () => {
       url: 'https://northwind.example/pricing',
       title: 'Pricing',
       html: '<h1>Pricing</h1><p>Plans</p>',
+      author: null,
     });
+  });
+
+  it('returns who the page says it is by, and its structure for the editor', async () => {
+    fetchResult = {
+      url: 'https://northwind.example/guide',
+      status: 200,
+      html: `<html><head><meta name="author" content="Ada Lovelace"></head><body><main><h1>Guide</h1>
+        <div class="card"><strong>Fast</strong><span>Loads in a second.</span></div></main></body></html>`,
+    };
+    const res = await importPage('https://northwind.example/guide');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.author).toEqual({ name: 'Ada Lovelace', title: null, photoUrl: null, sameAs: [] });
+    expect(body.html).toContain(
+      '<p><strong>Fast</strong></p><p><span>Loads in a second.</span></p>',
+    );
   });
 
   it('reads no page off the brand’s site', async () => {

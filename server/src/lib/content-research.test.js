@@ -43,6 +43,8 @@ const {
   pageOwn,
   placeholdersIn,
   readFindings,
+  claimNames,
+  sourceFits,
   sentenceSpans,
   settler,
   sweepHtml,
@@ -346,6 +348,10 @@ describe('lookUpFacts', () => {
     expect(webSearchTools).toHaveBeenCalledWith(HAIKU, { maxUses: MAX_RESEARCH_SEARCHES });
     const call = generateText.mock.calls[0][0];
     expect(call.model).toBe(`model:${HAIKU}`);
+    // A price only from the product's own site (Content test 2026-11-19, item 6).
+    expect(call.system).toContain(
+      "A price, a plan or a product's limits only from that product's own site",
+    );
     expect(call.tools).toEqual({ web_search: { id: 'anthropic.web_search_20250305' } });
     expect(call.maxOutputTokens).toBe(16_000);
     expect(call.system).toContain('at most 5 searches in all');
@@ -720,5 +726,102 @@ describe('editHtml', () => {
       text.startsWith('About') ? [{ start: 0, end: text.length, text: '' }] : [],
     );
     expect(out).toBe('<p>Keep this.</p>');
+  });
+});
+
+describe('a source fits its claim (Content test 2026-11-19, item 6)', () => {
+  const brandRadar = {
+    id: 'G1',
+    sentence: "Brand Radar's AI Visibility Index is priced from {{find: Brand Radar price}}.",
+    needs: ['find: Brand Radar AI Visibility Index price per month'],
+  };
+  const profound = {
+    id: 'G1',
+    sentence: 'Profound costs {{find: Profound Starter plan price}}.',
+    needs: ['find: Profound Starter plan price'],
+  };
+  const written = (gap, text) => ({ gap, text });
+
+  it('reads what a claim is about from its names, not its first word or a common one', () => {
+    expect(claimNames(brandRadar)).toEqual(['radar']);
+    expect(claimNames(profound)).toEqual(['profound']);
+    expect(
+      claimNames({
+        sentence: 'About 70% of marketers use AI for social media.',
+        needs: ['check: 70%'],
+      }),
+    ).toEqual([]);
+    expect(
+      claimNames({ sentence: 'ChatGPT answers 2.5 billion prompts a day.', needs: [] }),
+    ).toEqual(['chatgpt']);
+  });
+
+  it('turns down a page about something else, and a price from another vendor’s blog', () => {
+    const { gap, text } = written(
+      brandRadar,
+      "Brand Radar's AI Visibility Index is priced from $199 a month.",
+    );
+    // The test's link: a Profound pricing article, for Brand Radar's price.
+    expect(
+      sourceFits(gap, text, 'https://workduo.ai/blog/profound-ai-pricing', 'Profound AI pricing'),
+    ).toBe(false);
+    // A third-party vendor's blog, even one naming Profound.
+    expect(
+      sourceFits(
+        profound,
+        'Profound costs $499 a month.',
+        'https://zerorank.ai/blog/profound-pricing',
+      ),
+    ).toBe(false);
+  });
+
+  it('takes the vendor’s own page for a price, and any page naming the subject for the rest', () => {
+    expect(
+      sourceFits(profound, 'Profound costs $499 a month.', 'https://www.tryprofound.com/pricing'),
+    ).toBe(true);
+    expect(
+      sourceFits(
+        brandRadar,
+        "Brand Radar's AI Visibility Index is priced from $199 a month.",
+        'https://ahrefs.com/brand-radar',
+        'Brand Radar by Ahrefs',
+      ),
+    ).toBe(true);
+    const feature = {
+      sentence: 'Profound reruns {{find: how often Profound reruns prompts}}.',
+      needs: ['find: how often Profound reruns prompts'],
+    };
+    expect(
+      sourceFits(
+        feature,
+        'Profound reruns every prompt daily.',
+        'https://techcrunch.com/2025/profound-raises',
+      ),
+    ).toBe(true);
+    // A claim that names no one: any trusted page.
+    expect(
+      sourceFits(
+        { sentence: 'About 70% of marketers use AI.', needs: ['check: 70%'] },
+        'About 68% of marketers use AI.',
+        'https://www.census.gov/ai-use',
+      ),
+    ).toBe(true);
+  });
+
+  it('leaves a fact whose page doesn’t fit for the person', () => {
+    const answer = JSON.stringify({
+      facts: [
+        {
+          id: 'G1',
+          text: "Brand Radar's AI Visibility Index is priced from $199 a month.",
+          source: 'https://workduo.ai/blog/profound-ai-pricing',
+          words: '$199 a month',
+        },
+      ],
+    });
+    const sources = [
+      { url: 'https://workduo.ai/blog/profound-ai-pricing', title: 'Profound AI pricing' },
+    ];
+    expect(readFindings(answer, [brandRadar], sources, new Set()).size).toBe(0);
   });
 });

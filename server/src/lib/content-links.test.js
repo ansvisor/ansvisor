@@ -30,15 +30,27 @@ vi.mock('../config/supabase.js', () => ({
   },
 }));
 vi.mock('./logger.js', () => ({ logger: { warn: vi.fn() } }));
+// The canonical host is read through safe-fetch (public addresses only).
+const fetchPage = vi.hoisted(() => vi.fn());
+vi.mock('./safe-fetch.js', () => ({ fetchPage }));
 
-const { linkAllowList, linkHref, linkKey, linkTargetsPrompt, readLinkTargets } =
-  await import('./content-links.js');
+const {
+  linkAllowList,
+  linkHref,
+  linkKey,
+  linkTargetsPrompt,
+  readLinkTargets,
+  resetCanonicalHosts,
+} = await import('./content-links.js');
 
 const LINK_RULES = new Set(['internalLinks', 'outboundLinks']);
 
 beforeEach(() => {
   calls.length = 0;
+  resetCanonicalHosts();
+  fetchPage.mockReset().mockRejectedValue(new Error('offline'));
   reads = {
+    brand_domains: { data: [{ domain: 'acme.example', is_primary: true }], error: null },
     site_pages: {
       data: [
         { url: 'https://acme.example/pricing', title: 'Pricing', h1: 'Plans' },
@@ -103,6 +115,40 @@ describe('linkKey', () => {
 });
 
 describe('readLinkTargets', () => {
+  it("links the brand's pages on the host its site answers on", async () => {
+    fetchPage.mockResolvedValue({ url: 'https://www.acme.example/', status: 200, html: '' });
+    const ask = () =>
+      readLinkTargets({
+        brandId: 'b1',
+        draftId: 'd1',
+        sourceUrl: null,
+        ruleKeys: new Set(['internalLinks']),
+      });
+    expect((await ask()).own.map((p) => p.url)).toEqual([
+      'https://www.acme.example/pricing',
+      'https://www.acme.example/guides/brew',
+    ]);
+    // The allow list keeps that URL, matched by key as before.
+    const links = linkAllowList(await ask());
+    expect(links.get(linkKey('https://acme.example/pricing'))).toBe(
+      'https://www.acme.example/pricing',
+    );
+    // Looked up once, then remembered.
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+    expect(fetchPage.mock.calls[0][0]).toBe('https://acme.example/');
+  });
+
+  it('keeps the stored host when the site is unreachable or redirects elsewhere', async () => {
+    fetchPage.mockResolvedValue({ url: 'https://other.example/', status: 200, html: '' });
+    const targets = await readLinkTargets({
+      brandId: 'b1',
+      draftId: 'd1',
+      sourceUrl: null,
+      ruleKeys: new Set(['internalLinks']),
+    });
+    expect(targets.own[0].url).toBe('https://acme.example/pricing');
+  });
+
   it("offers the brand's pages and the kept sources, never its own or a competitor's", async () => {
     const targets = await readLinkTargets({
       brandId: 'b1',
@@ -146,7 +192,7 @@ describe('readLinkTargets', () => {
       sourceUrl: null,
       ruleKeys: new Set(['internalLinks']),
     });
-    expect(calls).toEqual(['site_pages']);
+    expect(calls).toEqual(['site_pages', 'brand_domains']);
     expect(targets.sources).toEqual([]);
     expect(targets.own).toHaveLength(2);
   });
