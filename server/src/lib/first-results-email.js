@@ -1,6 +1,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { brandReaders } from './access.js';
 import { deliverEmail } from './email.js';
+import { DEFAULT_LOCALE, translator, uiLanguagesOf } from './i18n.js';
 import logger from './logger.js';
 
 /**
@@ -38,26 +39,28 @@ function escapeHtml(value) {
 }
 
 /**
- * @param {{ brandName: string }} brand
+ * @param {{ brandName: string, locale?: string }} brand `locale`: the reader's
+ *   interface language (LOC-008), English when none.
  * @returns {{ subject: string, html: string }}
  */
-export function renderFirstResultsEmail({ brandName }) {
+export function renderFirstResultsEmail({ brandName, locale = DEFAULT_LOCALE }) {
+  const t = translator(locale);
   // Brand Visibility: where the run's results are the moment it stamps.
   const url = `${appOrigin()}/dashboard/insights`;
   const name = escapeHtml(brandName);
 
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-  <h1 style="font-size:18px;color:#111827;margin:0 0 8px 0;">Your first results are ready</h1>
-  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">AI assistants have answered ${name}'s prompts for the first time. See where you stand against your competitors, and the first actions in the Action Center.</p>
+  <h1 style="font-size:18px;color:#111827;margin:0 0 8px 0;">${t('firstResults.title')}</h1>
+  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${t('firstResults.body', { brand: name })}</p>
   <div style="margin:24px 0;">
-    <a href="${escapeHtml(url)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">See your results</a>
+    <a href="${escapeHtml(url)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">${t('firstResults.button')}</a>
   </div>
   <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">
-    We send this once, when your first tracking finishes.
+    ${t('firstResults.footer')}
   </p>
 </div>`;
 
-  return { subject: `Your first results are ready: ${brandName}`, html };
+  return { subject: t('firstResults.subject', { brand: brandName }), html };
 }
 
 /**
@@ -118,13 +121,21 @@ async function releaseRecipients(ids) {
   if (error) logger.warn({ err: error }, 'could not give the first-results e-mail claim back');
 }
 
-async function emailsOf(ids) {
-  const emails = [];
+async function recipientsOf(ids) {
+  const people = [];
   for (const id of ids) {
     const { data } = await supabaseAdmin.auth.admin.getUserById(id);
-    if (data?.user?.email) emails.push(data.user.email);
+    if (data?.user?.email) people.push({ id, email: data.user.email });
   }
-  return emails;
+  return people;
+}
+
+/** One outcome for the lot: an unknown one stands (it may have gone), then sent, then refused. */
+function combine(outcomes) {
+  for (const outcome of ['unknown', 'sent', 'refused']) {
+    if (outcomes.includes(outcome)) return outcome;
+  }
+  return 'skipped';
 }
 
 /**
@@ -156,9 +167,30 @@ export async function sendFirstResultsEmail(brandId) {
   const ids = await claimRecipients(brand.organization_id, due);
   if (ids.length === 0) return 'skipped';
 
-  const to = await emailsOf(ids);
-  const { subject, html } = renderFirstResultsEmail({ brandName: brand.name });
-  const outcome = to.length > 0 ? await deliverEmail({ to, subject, html }) : 'skipped';
-  if (outcome === 'refused' || outcome === 'skipped') await releaseRecipients(ids);
-  return outcome;
+  const people = await recipientsOf(ids);
+  if (people.length === 0) {
+    await releaseRecipients(ids);
+    return 'skipped';
+  }
+  // Each person gets it in their own language: one send per language.
+  const languages = await uiLanguagesOf(people.map((person) => person.id));
+  const groups = new Map();
+  for (const person of people) {
+    const locale = languages.get(person.id) ?? DEFAULT_LOCALE;
+    groups.set(locale, [...(groups.get(locale) ?? []), person]);
+  }
+  const outcomes = [];
+  // Whoever nothing went out for (no address, refused, not set up) gets the claim back.
+  const reached = new Set(people.map((person) => person.id));
+  const giveBack = ids.filter((id) => !reached.has(id));
+  for (const [locale, group] of groups) {
+    const { subject, html } = renderFirstResultsEmail({ brandName: brand.name, locale });
+    const outcome = await deliverEmail({ to: group.map((person) => person.email), subject, html });
+    outcomes.push(outcome);
+    if (outcome === 'refused' || outcome === 'skipped') {
+      giveBack.push(...group.map((person) => person.id));
+    }
+  }
+  if (giveBack.length > 0) await releaseRecipients(giveBack);
+  return combine(outcomes);
 }

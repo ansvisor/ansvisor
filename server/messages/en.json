@@ -1,0 +1,48 @@
+{
+  "firstResults": {
+    "subject": "Your first results are ready: {brand}",
+    "title": "Your first results are ready",
+    "body": "AI assistants have answered {brand}'s prompts for the first time. See where you stand against your competitors, and the first actions in the Action Center.",
+    "button": "See your results",
+    "footer": "We send this once, when your first tracking finishes."
+  },
+  "ownKey": {
+    "title": "Your AI key for Ansvisor isn't working",
+    "reminderSubject": "Reminder: your AI key for Ansvisor still isn't working",
+    "body": "{why} Chat and agents in {workspace} run on this key, so agents that use it are paused. None of their runs moved to your plan's AI limit.",
+    "fix": "Open Settings › AI Providers to replace or test the key. Agents paused for this start again by themselves once the key works.",
+    "button": "Open AI Providers",
+    "footer": "You get this as an Admin of the workspace, by your Chat settings' Notify me when an agent needs me.",
+    "reminderFooter": "A reminder: the key has not worked for 3 days. We send one.",
+    "fallbackWorkspace": "your workspace",
+    "why": {
+      "invalid": "{provider} turned down your workspace's key.",
+      "noCredit": "Your {provider} account is out of credit.",
+      "model": "{provider} can't reach the model set for your key.",
+      "unreadable": "Your saved {provider} key can't be read any more.",
+      "other": "Your {provider} key isn't working."
+    }
+  },
+  "ownKeyLimit": {
+    "title100": "Your agents reached their monthly limit on your AI key",
+    "title80": "Your agents have used 80% of their monthly limit on your AI key",
+    "spent": "about {used} of the {cap}",
+    "body100": "In {workspace}, agents have used {spent} they may spend on your own AI key this month, so the agents that run on it are paused. They start again by themselves when the month renews on {renews}, or when an Admin raises the limit in Settings › AI Providers. Chat you use yourself keeps working.",
+    "body80": "In {workspace}, agents have used {spent} they may spend on your own AI key this month. At the limit they pause until the month renews on {renews}, or until an Admin raises it in Settings › AI Providers.",
+    "estimate": "The amounts are an estimate at the providers' list prices. Your provider's bill is the real one.",
+    "button": "Open AI Providers",
+    "footer": "You get this as an Admin of the workspace, by your Chat settings' Notify me when an agent needs me.",
+    "fallbackWorkspace": "your workspace"
+  },
+  "autoAudit": {
+    "subject": "Site Audit: {summary}",
+    "title": "Auto-audit finished",
+    "summary": "{pages, plural, one {# page} other {# pages}} audited · {issues, plural, one {# critical issue} other {# critical issues}}",
+    "brandLine": "{brand}: {summary}",
+    "headline": "{summary} · next run {date}",
+    "failed": "{count, plural, one {# page couldn't} other {# pages couldn't}} be audited; they're left to the next run.",
+    "button": "Open Site Audit",
+    "footer": "You're receiving this because auto-audit e-mails are on in Site Audit settings.",
+    "change": "Change them"
+  }
+}

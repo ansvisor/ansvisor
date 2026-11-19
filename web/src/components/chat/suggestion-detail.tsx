@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl';
 import { Check, Inbox } from 'lucide-react';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { Link, useRouter } from '@/i18n/navigation';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { useActionStory } from '@/components/action-center/use-action-story';
@@ -396,6 +397,7 @@ export function ChatSuggestion({
   const tModes = useTranslations('chatComposer.mode');
   const tReadOnly = useTranslations('readOnly.actions');
   const tDrawer = useTranslations('actionCenter.actionsPage.drawer');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const now = useNow();
   const { isLocked, openUpgrade, guard } = useUpgradeGate();
@@ -498,7 +500,7 @@ export function ChatSuggestion({
         error?: string;
       } | null;
       if (body?.code === 'subscription_inactive') openUpgrade(tReadOnly('startChat'));
-      else toast.error(body?.error ?? t('startFailed'));
+      else toast.error(serverError(body, body?.error ?? t('startFailed'), res?.status));
       return;
     }
     // The run goes on without this page: the chat picks up its stream.

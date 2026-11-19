@@ -9,7 +9,7 @@ last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/components/settings/language-field.tsx]
+sources: [web/messages/en.json, web/src/components/settings/language-field.tsx, server/messages/en.json]
 ---
 Each person picks the language of their own Ansvisor screens. Find it in **Settings › Account › Language**, or in the **Language** item of the account menu at the bottom left, so you can change it from any page. It never changes anyone else's screens.
 
@@ -26,6 +26,10 @@ Dates and numbers follow your language, for example 1,234.5 in English and 1.234
 ## Text that isn't translated yet
 
 Anything without a translation shows in English, never as a blank or a code.
+
+## E-mails and error messages
+
+E-mails Ansvisor sends you, such as the first-results and Site Audit e-mails and your workspace's AI key warnings, come in your language too, as do the most common messages when something can't be done, such as a plan limit or a read-only workspace. A text that isn't translated yet comes in English. Who gets an e-mail, and when, doesn't change.
 
 ## Your brand's content language
 
