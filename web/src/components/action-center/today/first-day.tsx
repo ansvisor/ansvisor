@@ -306,7 +306,7 @@ function WhileYouWait({ brandId }: { brandId: string }) {
             <button
               type="button"
               onClick={() => void tour!.show('visibility', 'everything')}
-              className="flex w-full justify-between gap-2 text-left hover:underline"
+              className="flex w-full justify-between gap-2 text-start hover:underline"
             >
               <span>{t('tour')}</span>
               <span className="text-muted-foreground">{t('tourMinutes')}</span>

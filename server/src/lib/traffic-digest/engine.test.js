@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -17,6 +20,9 @@ const state = vi.hoisted(() => ({
   rpcFailures: 0,
   updateFailures: 0,
   rpc: {},
+  /** Members with a UI language (profiles), and their sign-in e-mails. */
+  languages: [],
+  emails: {},
 }));
 
 vi.mock('../../config/supabase.js', () => {
@@ -45,6 +51,10 @@ vi.mock('../../config/supabase.js', () => {
               data: table === 'pulse_settings' ? state.settings : state.existing,
             }),
           };
+          // The members with a UI language set (LOC-008).
+          if (table === 'profiles') {
+            chain.not = async () => ({ data: state.languages, error: null });
+          }
           // The sweep reads the active brands a page at a time.
           if (table === 'brands') {
             chain.order = () => chain;
@@ -79,6 +89,13 @@ vi.mock('../../config/supabase.js', () => {
           },
         }),
       }),
+      auth: {
+        admin: {
+          getUserById: async (id) => ({
+            data: { user: state.emails[id] ? { email: state.emails[id] } : null },
+          }),
+        },
+      },
       rpc: (name, params) => {
         state.rpcCalls.push({ name, params });
         // A test may fail the first reads, as a transient error would.
@@ -94,7 +111,7 @@ vi.mock('../../config/supabase.js', () => {
   };
 });
 const logger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }));
-vi.mock('../logger.js', () => ({ logger }));
+vi.mock('../logger.js', () => ({ logger, default: logger }));
 // 'sent', 'refused', 'unknown' or 'skipped', as deliverEmail says.
 const deliverEmail = vi.fn(async () => 'sent');
 vi.mock('../email.js', () => ({ deliverEmail: (...args) => deliverEmail(...args) }));
@@ -126,6 +143,8 @@ beforeEach(() => {
     updateFailures: 0,
     listBrands: null,
     brandFilters: [],
+    languages: [],
+    emails: {},
     rpc: {
       ai_traffic_merged: (p) =>
         p.p_from === '2026-10-12T00:00:00.000Z'
@@ -143,6 +162,50 @@ beforeEach(() => {
 });
 
 describe('sendTrafficDigestForBrand', () => {
+  it('sends each recipient the digest in their own language, one send per language (LOC-008)', async () => {
+    const file = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../messages/de.json',
+    );
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        trafficDigest: {
+          subject: '{brand} KI-Traffic letzte Woche: {count}{change}',
+          visitCount: '{count, plural, one {# KI-Besuch} other {# KI-Besuche}}',
+          change: { platformDown: '{name}: {count} KI-Besuche, vorher {before}.' },
+        },
+      }),
+    );
+    try {
+      const { forgetMessages } = await import('../i18n.js');
+      forgetMessages();
+      state.settings = { recipients: ['ana@acme.example', 'client@else.example'] };
+      state.languages = [{ id: 'u1', ui_language: 'de' }];
+      state.emails = { u1: 'ana@acme.example' };
+      expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toMatchObject({
+        emailSent: true,
+        recipients: 2,
+      });
+      expect(deliverEmail).toHaveBeenCalledTimes(2);
+      const mails = deliverEmail.mock.calls.map(([mail]) => mail);
+      const german = mails.find((mail) => mail.to[0] === 'ana@acme.example');
+      expect(german.to).toEqual(['ana@acme.example']);
+      expect(german.subject).toBe('Acme KI-Traffic letzte Woche: 36 KI-Besuche (−40\u00a0%)');
+      expect(german.html).toContain('<html lang="de">');
+      expect(german.html).toContain('ChatGPT: 36 KI-Besuche, vorher 60.');
+      // What German lacks reads English.
+      expect(german.html).toContain('Open AI Traffic →');
+      const english = mails.find((mail) => mail.to[0] === 'client@else.example');
+      expect(english.subject).toBe('Acme AI traffic last week: 36 AI visits (−40%)');
+      expect(state.updated.at(-1).patch).toMatchObject({ email_recipient_count: 2 });
+    } finally {
+      fs.rmSync(file, { force: true });
+      const { forgetMessages } = await import('../i18n.js');
+      forgetMessages();
+    }
+  });
+
   it("claims the week, then mails last week's line and changes to the pulse's recipients", async () => {
     expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toEqual({
       sent: true,

@@ -54,7 +54,7 @@ export function OpenPageCard({
             data-action={`openPage.${choice}`}
             disabled={saving}
             onClick={() => onChoose(choice, remember)}
-            className="grid min-h-[44px] w-full grid-cols-[22px_minmax(0,1fr)] items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left text-[13px] outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="grid min-h-[44px] w-full grid-cols-[22px_minmax(0,1fr)] items-center gap-2.5 rounded-xl border px-2.5 py-2 text-start text-[13px] outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <kbd
               aria-hidden
@@ -73,7 +73,7 @@ export function OpenPageCard({
           data-action="openPage.chat"
           disabled={saving}
           onClick={() => onChoose('chat', remember)}
-          className="w-fit rounded-md px-1 py-1 text-left text-[13px] outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="w-fit rounded-md px-1 py-1 text-start text-[13px] outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <span className="font-medium">{t('chat')}</span>
           <span className="text-muted-foreground"> · {t('chatDetail')}</span>

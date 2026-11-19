@@ -628,7 +628,7 @@ export default function ContentLibraryPage() {
           </TabsList>
         </Tabs>
         {/* On the tabs' line when they fit, else on their own, on the right. */}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
           {/* Once a page of the brand's was sent, or while the URL names one. */}
           {(anySent || sent !== 'all') && (
             <Select
@@ -726,7 +726,7 @@ export default function ContentLibraryPage() {
                 {t('bulk.tooMany', { max: CMS_PAGES_PER_SEND })}
               </span>
             )}
-            <div className="ml-auto flex items-center gap-1">
+            <div className="ms-auto flex items-center gap-1">
               <Button
                 variant="outline"
                 size="sm"
@@ -853,7 +853,7 @@ export default function ContentLibraryPage() {
       <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="pr-6 leading-snug [overflow-wrap:anywhere]">
+            <DialogTitle className="pe-6 leading-snug [overflow-wrap:anywhere]">
               {t('deleteDialog.title', { title: deleting ? titleOf(deleting) : '' })}
             </DialogTitle>
             <DialogDescription>{t('deleteDialog.description')}</DialogDescription>

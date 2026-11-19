@@ -346,7 +346,7 @@ export function AdsOpportunities({
               <TableHead>{t('columns.prompt')}</TableHead>
               <TableHead>{t('columns.decision')}</TableHead>
               <TableHead>{t('columns.leader')}</TableHead>
-              <TableHead className="text-right">{t('columns.searches')}</TableHead>
+              <TableHead className="text-end">{t('columns.searches')}</TableHead>
               <TableHead>{t('columns.channels')}</TableHead>
               <TableHead>
                 <span className="sr-only">{t('open')}</span>
@@ -383,7 +383,7 @@ export function AdsOpportunities({
                     })}
                   </small>
                 </TableCell>
-                <TableCell className="text-right tabular-nums" data-slot="ads-searches">
+                <TableCell className="text-end tabular-nums" data-slot="ads-searches">
                   {r.volume === null ? (
                     <span className="text-muted-foreground">{t('notMeasured')}</span>
                   ) : (
@@ -410,7 +410,7 @@ export function AdsOpportunities({
                 <TableCell data-slot="ads-channels">
                   <Channels row={r} />
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-end">
                   <Button
                     size="sm"
                     variant="outline"

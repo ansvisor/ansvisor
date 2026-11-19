@@ -129,7 +129,7 @@ export function RegenerateTasks({
       onClick={guard(() => setConfirming(true), { action: tActions('regenerateTasks') })}
       className="mt-2 h-8 w-full text-xs"
     >
-      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+      <RefreshCw className="me-1.5 h-3.5 w-3.5" />
       {t('button')}
     </Button>
   );

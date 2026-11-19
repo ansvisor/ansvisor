@@ -91,7 +91,7 @@ export function ProductDetailView({
               href={product.url}
               target="_blank"
               rel="noopener noreferrer"
-              className={cn(buttonVariants({ variant: 'outline' }), 'ml-auto shrink-0 gap-1.5')}
+              className={cn(buttonVariants({ variant: 'outline' }), 'ms-auto shrink-0 gap-1.5')}
             >
               {t('viewPage')}
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
@@ -142,16 +142,16 @@ export function ProductDetailView({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-6" />
+                  <TableHead className="ps-6" />
                   <TableHead>{t('why.you')}</TableHead>
                   <TableHead>{t('why.winner')}</TableHead>
-                  <TableHead className="pr-6" />
+                  <TableHead className="pe-6" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {detail.comparison.map((row) => (
                   <TableRow key={row.key}>
-                    <TableCell className="pl-6 font-medium">
+                    <TableCell className="ps-6 font-medium">
                       <span className="flex items-center gap-2">
                         {STATE_ICON[row.state]}
                         {t(`why.rows.${row.key}`)}
@@ -166,7 +166,7 @@ export function ProductDetailView({
                     <TableCell className="tabular-nums text-muted-foreground">
                       {row.winner ?? '—'}
                     </TableCell>
-                    <TableCell className="min-w-[140px] whitespace-normal pr-6 text-xs text-muted-foreground">
+                    <TableCell className="min-w-[140px] whitespace-normal pe-6 text-xs text-muted-foreground">
                       {row.note ? t(`notes.${row.note.key}`, row.note.values) : null}
                     </TableCell>
                   </TableRow>
@@ -207,16 +207,16 @@ export function ProductDetailView({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-6">{t('shelves.question')}</TableHead>
+                  <TableHead className="ps-6">{t('shelves.question')}</TableHead>
                   <TableHead>{t('shelves.place')}</TableHead>
-                  <TableHead className="text-right">{t('shelves.match')}</TableHead>
-                  <TableHead className="pr-6">{t('shelves.missing')}</TableHead>
+                  <TableHead className="text-end">{t('shelves.match')}</TableHead>
+                  <TableHead className="pe-6">{t('shelves.missing')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {detail.shelves.map((line) => (
                   <TableRow key={`${line.promptId}:${line.platform}`}>
-                    <TableCell className="max-w-[320px] pl-6">
+                    <TableCell className="max-w-[320px] ps-6">
                       <p className="truncate text-sm" title={line.promptText}>
                         {line.promptText}
                       </p>
@@ -231,8 +231,8 @@ export function ProductDetailView({
                         `#${line.rank}`
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{line.score}</TableCell>
-                    <TableCell className="max-w-[220px] whitespace-normal pr-6 text-xs text-muted-foreground">
+                    <TableCell className="text-end tabular-nums">{line.score}</TableCell>
+                    <TableCell className="max-w-[220px] whitespace-normal pe-6 text-xs text-muted-foreground">
                       <span className="line-clamp-2">
                         {line.missing.slice(0, 6).join(', ') || '—'}
                       </span>

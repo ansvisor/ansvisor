@@ -56,7 +56,7 @@ export function useChatFocus(): ChatFocusValue | null {
 
 /** A card in the picker, and the look of one that is on. */
 const CARD =
-  'flex flex-col items-start gap-1 rounded-[14px] border bg-card p-3.5 text-left text-[13.5px] outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50';
+  'flex flex-col items-start gap-1 rounded-[14px] border bg-card p-3.5 text-start text-[13.5px] outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50';
 const CARD_ON = 'border-foreground shadow-[inset_0_0_0_1px_var(--foreground)]';
 
 function Tick() {
@@ -199,7 +199,7 @@ export function FocusPill({ areas, onEdit }: { areas: readonly FocusArea[]; onEd
     <span
       data-slot="focus-pill"
       title={areas.length ? areas.map((area) => t(`areas.${area}.name`)).join(', ') : undefined}
-      className="mt-2.5 inline-flex items-center gap-2 rounded-full border bg-card py-[3px] pr-1 pl-2.5 text-xs text-muted-foreground"
+      className="mt-2.5 inline-flex items-center gap-2 rounded-full border bg-card py-[3px] pe-1 ps-2.5 text-xs text-muted-foreground"
     >
       {areas.length ? t('pill.focused', { label: label(areas) }) : t('pill.default')}
       <button

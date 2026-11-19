@@ -127,7 +127,7 @@ export function RolesAccessSection({
           <Info className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           <span className="font-medium">{t('roles.readOnly', { role: access.role })}</span>
           <span className="text-muted-foreground">{t('roles.readOnlyNote')}</span>
-          <span className="ml-auto">
+          <span className="ms-auto">
             <AskAdminButton
               asked={t('askAdmin.defaults.role')}
               ruleKind="role"
@@ -183,7 +183,7 @@ function MembersTable({
                 <TableCell>
                   <span className="font-medium">{member.name}</span>
                   {member.isYou && (
-                    <Badge variant="secondary" className="ml-1.5 text-[10px]">
+                    <Badge variant="secondary" className="ms-1.5 text-[10px]">
                       {t('roles.you')}
                     </Badge>
                   )}
@@ -309,7 +309,7 @@ function RoleMatrix({ role }: { role: TeamRole }) {
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">{t('roles.matrix.title')}</h3>
         <span className="text-xs text-muted-foreground">{t('roles.matrix.count')}</span>
-        <span className="ml-auto flex flex-wrap items-center gap-1.5">
+        <span className="ms-auto flex flex-wrap items-center gap-1.5">
           {(['read', 'write', 'execute', 'never'] as const).map((cls) => (
             <ClassBadge key={cls} cls={cls} />
           ))}
@@ -398,7 +398,7 @@ function AdminSwitches({ access }: { access: ChatAccess }) {
     <section className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">{t('title')}</h3>
-        <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <span className="ms-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
           <Lock className="h-3 w-3" aria-hidden />
           {t('onlyAdmins')}
         </span>
@@ -410,7 +410,7 @@ function AdminSwitches({ access }: { access: ChatAccess }) {
               <span className="font-medium">{row.name}</span>
               <span className="block text-xs text-muted-foreground">{row.note}</span>
             </span>
-            <span className="shrink-0 text-right text-xs font-medium">
+            <span className="shrink-0 text-end text-xs font-medium">
               {row.value}
               {setBy && (
                 <span className="block font-normal text-muted-foreground">

@@ -205,13 +205,13 @@ export function DataSourcesPanel({
         type="button"
         onClick={dismiss}
         aria-label="Hide data sources"
-        className="absolute right-3 top-3 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute end-3 top-3 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <X className="h-4 w-4" />
       </button>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,17rem)_1fr]">
-        <div className="flex gap-3 pr-6">
+        <div className="flex gap-3 pe-6">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             <Sparkles className="h-4 w-4 text-primary" />
           </span>

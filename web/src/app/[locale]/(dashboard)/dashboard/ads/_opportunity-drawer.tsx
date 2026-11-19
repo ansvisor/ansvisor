@@ -116,7 +116,7 @@ export function AdsOpportunityDrawer({
         <Dialog.Popup
           data-slot="ads-drawer"
           finalFocus={finalFocus}
-          className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[560px] flex-col border-l bg-card text-sm shadow-lg duration-200 data-closed:animate-out data-closed:slide-out-to-right-10 data-open:animate-in data-open:slide-in-from-right-10"
+          className="fixed inset-y-0 end-0 z-50 flex w-full max-w-[560px] flex-col border-s bg-card text-sm shadow-lg duration-200 data-closed:animate-out data-closed:slide-out-to-right-10 data-open:animate-in data-open:slide-in-from-right-10"
         >
           <div className="flex items-start gap-3 border-b px-5 py-4">
             <div className="min-w-0 flex-1 space-y-2">

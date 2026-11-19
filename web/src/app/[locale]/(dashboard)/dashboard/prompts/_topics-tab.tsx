@@ -719,7 +719,7 @@ export function TopicsTab({
                   setConfirmOpen(false);
                 }}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="me-2 h-4 w-4" />
                 {tDelete('confirm')}
               </Button>
             </DialogFooter>
@@ -818,7 +818,7 @@ export function TopicsTab({
               <p className="text-xs">{t('emptyBody')}</p>
               {canManage && (
                 <Button className="mt-4" onClick={openAddTopic}>
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="me-2 h-4 w-4" />
                   {t('addTopic')}
                 </Button>
               )}
@@ -827,9 +827,9 @@ export function TopicsTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-6">{t('columns.topic')}</TableHead>
+                  <TableHead className="ps-6">{t('columns.topic')}</TableHead>
                   <SortableHead
-                    className="text-right"
+                    className="text-end"
                     sortKey="prompts"
                     activeSort={sortKey}
                     dir={sortDir}
@@ -846,7 +846,7 @@ export function TopicsTab({
                     {t('columns.visibility')}
                   </SortableHead>
                   <SortableHead
-                    className="text-right"
+                    className="text-end"
                     sortKey="sov"
                     activeSort={sortKey}
                     dir={sortDir}
@@ -855,7 +855,7 @@ export function TopicsTab({
                     {t('columns.sov')}
                   </SortableHead>
                   <SortableHead
-                    className="text-right"
+                    className="text-end"
                     sortKey="mentions"
                     activeSort={sortKey}
                     dir={sortDir}
@@ -864,7 +864,7 @@ export function TopicsTab({
                     {t('columns.mentions')}
                   </SortableHead>
                   <SortableHead
-                    className="text-right"
+                    className="text-end"
                     sortKey="citations"
                     activeSort={sortKey}
                     dir={sortDir}
@@ -875,7 +875,7 @@ export function TopicsTab({
                   <TableHead>{t('columns.trend')}</TableHead>
                   <TableHead>{t('columns.topCompetitor')}</TableHead>
                   <SortableHead
-                    className="text-right"
+                    className="text-end"
                     sortKey="lastRun"
                     activeSort={sortKey}
                     dir={sortDir}
@@ -883,13 +883,13 @@ export function TopicsTab({
                   >
                     {t('columns.lastRun')}
                   </SortableHead>
-                  <TableHead className="pr-6 text-right w-[40px]" />
+                  <TableHead className="pe-6 text-end w-[40px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedTopics.map((topic) => (
                   <TableRow key={topic.id} className="group hover:bg-muted/50">
-                    <TableCell className="pl-6 font-medium text-sm">
+                    <TableCell className="ps-6 font-medium text-sm">
                       <Link
                         href={`/dashboard/prompts/topics/${topic.id}`}
                         className="hover:underline"
@@ -897,7 +897,7 @@ export function TopicsTab({
                         {topic.name}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
+                    <TableCell className="text-end tabular-nums text-sm">
                       {topic.promptCount}
                     </TableCell>
                     <TableCell className="min-w-[160px]">
@@ -933,13 +933,13 @@ export function TopicsTab({
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
+                    <TableCell className="text-end tabular-nums text-sm">
                       {topic.shareOfVoice > 0 ? `${topic.shareOfVoice}%` : '—'}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
+                    <TableCell className="text-end tabular-nums text-sm">
                       {formatNumber(topic.totalMentions)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
+                    <TableCell className="text-end tabular-nums text-sm">
                       {formatNumber(topic.totalCitations)}
                     </TableCell>
                     <TableCell>
@@ -960,9 +960,9 @@ export function TopicsTab({
                               )}
                             >
                               {topic.visibilityChange > 0 ? (
-                                <TrendingUp className="h-3 w-3 inline mr-0.5" />
+                                <TrendingUp className="h-3 w-3 inline me-0.5" />
                               ) : (
-                                <TrendingDown className="h-3 w-3 inline mr-0.5" />
+                                <TrendingDown className="h-3 w-3 inline me-0.5" />
                               )}
                               {t('ptsChange', {
                                 value: Math.abs(topic.visibilityChange).toFixed(1),
@@ -986,12 +986,12 @@ export function TopicsTab({
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right text-xs text-muted-foreground">
+                    <TableCell className="text-end text-xs text-muted-foreground">
                       {formatRelative(topic.lastRunAt, common)}
                     </TableCell>
                     {/* The menu's own padding stands in for the cell's, so the
                         table still fits at 1024px. */}
-                    <TableCell className={cn('text-right', canManage ? 'pr-3' : 'pr-6')}>
+                    <TableCell className={cn('text-end', canManage ? 'pe-3' : 'pe-6')}>
                       <div className="flex items-center justify-end">
                         <Link
                           href={`/dashboard/prompts/topics/${topic.id}`}

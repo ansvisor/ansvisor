@@ -445,7 +445,7 @@ function TabbedInboxView({
           >
             {t(`tabs.${name}`)}
             {(ready || name === 'suggestions') && (
-              <span className="ml-[5px] text-muted-foreground tabular-nums">
+              <span className="ms-[5px] text-muted-foreground tabular-nums">
                 {tabCounts[name].toLocaleString('en-US')}
               </span>
             )}

@@ -1,3 +1,4 @@
+import type { UiLocale } from '@/i18n/locales';
 import { z } from 'zod';
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
@@ -209,6 +210,8 @@ export interface ToolCardItem {
 /** The run a card is read for: its workspace, the only one its words may come from. */
 export interface ToolCardRun {
   organizationId: string;
+  /** The language the person reads their cards in (card-locale.ts); English when unset. */
+  locale?: UiLocale;
 }
 
 /** What a card's targets are, by kind: the browser names each kind from en.json. */
@@ -235,7 +238,7 @@ export interface ToolResultCard {
   actionNo: number;
   brandNo?: number | null;
   title: string;
-  /** Open in Actions. */
+  /** Open in Action Center. */
   href: `/dashboard/${string}`;
 }
 

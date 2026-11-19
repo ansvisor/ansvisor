@@ -368,12 +368,12 @@ export function NextStepButton({
         initialFocus={focusOnOpen ? primaryRef : undefined}
       >
         <div className="grid max-h-[calc(100dvh-4rem)] overflow-y-auto md:grid-cols-[15rem_minmax(0,1fr)]">
-          <aside className="space-y-3 border-b bg-muted/40 p-5 md:border-r md:border-b-0">
+          <aside className="space-y-3 border-b bg-muted/40 p-5 md:border-e md:border-b-0">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                 {t('label')}
               </span>
-              <Bars path={path} className="ml-auto" />
+              <Bars path={path} className="ms-auto" />
             </div>
             <p className="text-xs text-muted-foreground">
               {now >= 0
@@ -385,7 +385,7 @@ export function NextStepButton({
             {path_}
           </aside>
 
-          <section className="min-w-0 space-y-4 p-5 pr-12">
+          <section className="min-w-0 space-y-4 p-5 pe-12">
             {working ? (
               <div className="space-y-3">
                 <DialogTitle className="flex items-center text-lg">
@@ -480,7 +480,7 @@ export function NextStepButton({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="ml-auto text-muted-foreground"
+                      className="ms-auto text-muted-foreground"
                       onClick={() => {
                         skipped.current = true;
                         onSkip(step.id);

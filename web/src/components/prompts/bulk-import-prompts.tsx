@@ -300,7 +300,7 @@ export function BulkImportPrompts({
 
           <div className="max-h-64 overflow-auto rounded-md border">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-muted text-left text-muted-foreground">
+              <thead className="sticky top-0 bg-muted text-start text-muted-foreground">
                 <tr>
                   <th className="w-12 px-2 py-1.5 font-medium">Row</th>
                   <th className="px-2 py-1.5 font-medium">Prompt</th>
@@ -368,9 +368,9 @@ export function BulkImportPrompts({
               disabled={importing || preview.counts.valid === 0}
             >
               {importing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
               ) : (
-                <Upload className="mr-2 h-4 w-4" />
+                <Upload className="me-2 h-4 w-4" />
               )}
               Import {preview.counts.valid} prompt{preview.counts.valid === 1 ? '' : 's'}
             </Button>

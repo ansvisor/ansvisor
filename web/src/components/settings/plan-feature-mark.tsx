@@ -13,7 +13,7 @@ export function ExpandableMark() {
     <span
       title={t('expandableHint')}
       data-slot="expandable-mark"
-      className="ml-1.5 inline-flex cursor-help items-center rounded-full border px-1.5 py-px align-middle text-[10px] font-medium whitespace-nowrap text-muted-foreground"
+      className="ms-1.5 inline-flex cursor-help items-center rounded-full border px-1.5 py-px align-middle text-[10px] font-medium whitespace-nowrap text-muted-foreground"
     >
       {t('expandable')}
     </span>

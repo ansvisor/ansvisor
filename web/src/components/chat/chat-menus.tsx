@@ -102,7 +102,7 @@ export function ChatRowMenu({ chat }: { chat: ChatListItem }) {
       <DropdownMenuTrigger
         data-action="chatMenu.rowMore"
         aria-label={t('more', { name: chat.title ?? t('untitled') })}
-        className="absolute top-[5px] right-1 hidden h-[22px] w-6 items-center justify-center rounded-md bg-foreground/10 text-[15px] leading-none text-muted-foreground outline-none group-focus-within/row:flex group-hover/row:flex hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[popup-open]:flex"
+        className="absolute top-[5px] end-1 hidden h-[22px] w-6 items-center justify-center rounded-md bg-foreground/10 text-[15px] leading-none text-muted-foreground outline-none group-focus-within/row:flex group-hover/row:flex hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[popup-open]:flex"
       >
         ⋯
       </DropdownMenuTrigger>
@@ -226,7 +226,7 @@ function DebugItem() {
       data-action="chat.debug"
       checked={debug.on}
       onCheckedChange={debug.toggle}
-      className={cn(ITEM, 'pr-8')}
+      className={cn(ITEM, 'pe-8')}
     >
       <span aria-hidden className="w-3.5 shrink-0 text-center text-foreground">
         ⚙

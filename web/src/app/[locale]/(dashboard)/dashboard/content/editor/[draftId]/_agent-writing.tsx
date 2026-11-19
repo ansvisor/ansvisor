@@ -288,7 +288,7 @@ export function AgentWriting({
                     ) : i === WRITING ? (
                       // No spinning ring (v1.1 §2.4): the agent's dots.
                       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                        <WorkingDots className="ml-0" />
+                        <WorkingDots className="ms-0" />
                       </span>
                     ) : (
                       <Circle aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground/60" />
