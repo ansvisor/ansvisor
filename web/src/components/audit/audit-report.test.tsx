@@ -11,6 +11,13 @@ vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
 }));
 
+// AI-written text in the reader's language (LOC-010): the API, mocked.
+const readAiText = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/i18n/ai-text-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/i18n/ai-text-client')>()),
+  readAiTextTranslations: (...args: unknown[]) => readAiText(...args),
+}));
+
 (
   globalThis as typeof globalThis & {
     IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -540,5 +547,36 @@ describe('main text without JavaScript (SA-009)', () => {
   it('shows no finding for a page it could not compare', () => {
     render([], { signals: [noJs({ compared: false }, 'na')] });
     expect(opened()).not.toContain('Finding');
+  });
+});
+
+describe('AuditReport in the reader’s language', () => {
+  it('shows each recommendation’s explanation translated, its draft as written', async () => {
+    readAiText.mockResolvedValue({ a1: { recommendation_b: 'Yazarı belirtin.' } });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="tr" messages={messages} timeZone="UTC">
+          <AuditReport
+            audit={audit([
+              rec(),
+              rec({
+                signalKey: 'author-byline',
+                label: 'Author byline',
+                recommendation: 'Name the author.',
+                draft: 'By Ada Lovelace',
+              }),
+            ])}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    await act(async () => {});
+
+    expect(readAiText).toHaveBeenCalledWith('audit', ['a1'], 'tr');
+    expect(container.textContent).toContain('Yazarı belirtin.');
+    expect(container.textContent).not.toContain('Name the author.');
+    // Not translated: stays in English.
+    expect(container.textContent).toContain('Add one real customer result next to the plans.');
+    expect(container.querySelector('pre')?.textContent).toBe('By Ada Lovelace');
   });
 });

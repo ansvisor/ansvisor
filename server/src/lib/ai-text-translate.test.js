@@ -45,6 +45,7 @@ const {
   hashText,
   makeBatches,
   parseJsonReply,
+  recommendationField,
   systemPrompt,
   translatedTexts,
   translationProblems,
@@ -266,5 +267,43 @@ describe('translatedTexts', () => {
     const sent = JSON.parse(generateText.mock.calls[0][0].prompt).items.map((item) => item.id);
     expect(sent).toEqual([`${A1}:title`, `${A1}:why`, `${A2}:title`]);
     expect(db.reads[0]).toMatchObject({ table: 'actions' });
+  });
+
+  it('translates each Site Audit recommendation’s explanation, never its draft', async () => {
+    const S1 = '77777777-7777-4777-8777-777777777777';
+    db.rows = [
+      {
+        id: S1,
+        brand_id: 'b1',
+        recommendations: [
+          { signalKey: 'faq-schema', recommendation: 'Add an FAQ block.', draft: 'Q: Why?' },
+          { signalKey: 'h1-quality', recommendation: '', draft: null },
+          { signalKey: 'author-byline', recommendation: 'Name the author.', draft: 'By Ada' },
+        ],
+      },
+    ];
+    generateText.mockResolvedValue(
+      reply([
+        { id: `${S1}:recommendation_a`, text: 'Bir SSS bloğu ekleyin.' },
+        { id: `${S1}:recommendation_c`, text: 'Yazarı belirtin.' },
+      ]),
+    );
+    const out = await translatedTexts({ kind: 'audit', ids: [S1], locale: 'tr', userId: 'u1' });
+    expect(out).toEqual({
+      [S1]: { recommendation_a: 'Bir SSS bloğu ekleyin.', recommendation_c: 'Yazarı belirtin.' },
+    });
+    const prompt = generateText.mock.calls[0][0].prompt;
+    expect(prompt).not.toContain('Q: Why?');
+    expect(prompt).not.toContain('By Ada');
+  });
+
+  it('names a recommendation’s field by its place, in letters', () => {
+    expect([0, 1, 25, 26, 27].map(recommendationField)).toEqual([
+      'recommendation_a',
+      'recommendation_b',
+      'recommendation_z',
+      'recommendation_ba',
+      'recommendation_bb',
+    ]);
   });
 });

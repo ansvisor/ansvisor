@@ -11,7 +11,21 @@ import { createClient } from '@/lib/supabase/client';
  */
 
 /** The kinds of AI-written text the API translates (its TRANSLATABLE). */
-export type AiTextKind = 'opportunity' | 'action';
+export type AiTextKind = 'opportunity' | 'action' | 'audit';
+
+/**
+ * The field a Site Audit recommendation's explanation is translated under:
+ * its place in the audit's list, in letters (the API's recommendationField).
+ */
+export function auditRecommendationField(index: number): string {
+  let letters = '';
+  let n = index;
+  do {
+    letters = String.fromCharCode(97 + (n % 26)) + letters;
+    n = Math.floor(n / 26);
+  } while (n > 0);
+  return `recommendation_${letters}`;
+}
 
 /** The most rows one request asks for (the API's MAX_ROWS). */
 export const AI_TEXT_MAX_ROWS = 50;

@@ -1,11 +1,11 @@
 ---
 title: Fix site audit issues
 route: /dashboard/audit
-keywords: [ai recommendations, fix audit issues, placeholders, your input needed, send to action center, re-audit]
+keywords: [ai recommendations, fix audit issues, placeholders, your input needed, send to action center, re-audit, translated, your language]
 synonyms: [audit fixes, improve audit score, fix failed signals, raise page score]
 plan: all
-updated: 2026-11-07
-last_checked: 2026-11-07
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -18,6 +18,10 @@ An audit report doesn't only score a page: it writes fixes for what failed. Star
 **AI Recommendations**, right under the score, collects the fixes written for this page, ordered by priority: **high**, **medium** or **low**. Each names the signal and says what to change in one sentence. Where it helps, it gives a ready-to-paste draft, such as a meta description, an H1, an opening paragraph, FAQ questions and answers or sources to cite, and code, such as an FAQ schema block.
 
 Mechanical signals, such as HTTPS, the viewport tag, alt text or a video embed, keep their general fix.
+
+## In your language
+
+Ansvisor writes each recommendation in English. When your interface language is another, its explanation shows in your language: in English for a moment the first time, then translated. Each is translated once and kept for teammates who use the same language. Drafts and code stay as written, because you paste them into your page.
 
 ## Your input needed
 

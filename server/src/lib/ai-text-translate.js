@@ -8,7 +8,7 @@ import { logger } from './logger.js';
 /**
  * AI-written text in the reader's language (LOC-010). Ansvisor writes some
  * text once, in English (an opportunity's title and reason, the title and
- * "why" of an action sent from Chat, a recommendation). A person whose interface language is another reads it
+ * "why" of an action sent from Chat, a Site Audit recommendation). A person whose interface language is another reads it
  * translated: the rows on their screen are translated on first view, in
  * batches, and each field's translation is kept (ai_text_translations,
  * 00550) for the next viewer in that language. The text is never written
@@ -33,11 +33,30 @@ export const ACTION_TEXT_FIELDS = {
   content_opportunity: ['title'],
 };
 
+/** The most recommendations of one audit translated. */
+const MAX_AUDIT_RECOMMENDATIONS = 30;
+
+/**
+ * The field a Site Audit recommendation's explanation is kept under: its
+ * place in the audit's list, in letters ("recommendation_a", "_b", …, "_ba"),
+ * as a field name holds no digits. An audit's list is written once, so the
+ * place names the same recommendation for good. The web reads it the same way.
+ */
+export function recommendationField(index) {
+  let letters = '';
+  let n = index;
+  do {
+    letters = String.fromCharCode(97 + (n % 26)) + letters;
+    n = Math.floor(n / 26);
+  } while (n > 0);
+  return `recommendation_${letters}`;
+}
+
 /**
  * The text that is translated, by kind: its table, the column holding its
- * brand, the columns read, its fields, and how a row's field is read (a
- * column of the same name unless `textOf` says otherwise). A kind is added
- * here, with no migration.
+ * brand, the columns read, its fields (or `fieldsOf` a row, when they vary),
+ * and how a row's field is read (a column of the same name unless `textOf`
+ * says otherwise). A kind is added here, with no migration.
  */
 export const TRANSLATABLE = {
   opportunity: {
@@ -55,6 +74,23 @@ export const TRANSLATABLE = {
       !row.deleted_at && ACTION_TEXT_FIELDS[row.kind]?.includes(field)
         ? row.payload?.[field]
         : null,
+  },
+  // A Site Audit's AI fix recommendations: each one's explanation. Its draft
+  // and code are pasted into the page, so they stay in the page's language.
+  audit: {
+    table: 'site_audits',
+    brandColumn: 'brand_id',
+    columns: ['recommendations'],
+    fieldsOf: (row) =>
+      (Array.isArray(row.recommendations) ? row.recommendations : [])
+        .slice(0, MAX_AUDIT_RECOMMENDATIONS)
+        .map((_, index) => recommendationField(index)),
+    textOf: (row, field) => {
+      const index = (Array.isArray(row.recommendations) ? row.recommendations : []).findIndex(
+        (_, i) => recommendationField(i) === field,
+      );
+      return index === -1 ? null : row.recommendations[index]?.recommendation;
+    },
   },
 };
 
@@ -236,7 +272,7 @@ export async function translatedTexts({ kind, ids, locale, userId }) {
   const items = [];
   for (const row of rows ?? []) {
     if (!readable.has(row[source.brandColumn])) continue;
-    for (const field of source.fields) {
+    for (const field of source.fieldsOf ? source.fieldsOf(row) : source.fields) {
       const value = source.textOf ? source.textOf(row, field) : row[field];
       const text = typeof value === 'string' ? value.trim() : '';
       if (text)

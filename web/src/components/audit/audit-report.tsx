@@ -30,6 +30,8 @@ import { ScoreRangeMark, useScoreRangeTip } from './score-range';
 import { ScoreFormula } from './score-formula';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useAiText } from '@/hooks/use-ai-text';
+import { auditRecommendationField } from '@/lib/i18n/ai-text-client';
 
 // Display order + labels for the five rubric categories (keys come from the
 // server's categoryScores). Mirrors the rubric category weights.
@@ -385,7 +387,14 @@ function RecommendationItem({ rec }: { rec: AuditRecommendation }) {
 export function AuditReport({ audit }: { audit: AuditResult }) {
   const t = useTranslations('audit');
   const [onlyIssues, setOnlyIssues] = useState(false);
-  const recBySignal = new Map(audit.recommendations.map((r) => [r.signalKey, r]));
+  // Each recommendation's explanation in the reader's language (LOC-010); its
+  // draft and code stay in the page's. Asked once the audit has them.
+  const aiText = useAiText('audit', audit.recommendations.length ? [audit.id] : []);
+  const recommendations = audit.recommendations.map((rec, index) => ({
+    ...rec,
+    recommendation: aiText(audit.id, auditRecommendationField(index), rec.recommendation),
+  }));
+  const recBySignal = new Map(recommendations.map((r) => [r.signalKey, r]));
 
   const counts = audit.signals.reduce(
     (acc, s) => {
@@ -478,7 +487,7 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
       </Card>
 
       {/* AI fix recommendations */}
-      {audit.recommendations.length > 0 && (
+      {recommendations.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -487,7 +496,7 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            {[...audit.recommendations]
+            {[...recommendations]
               .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
               .map((rec, i) => (
                 <RecommendationItem key={`${rec.signalKey}-${i}`} rec={rec} />
