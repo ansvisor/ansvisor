@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useCaughtErrorText } from '@/hooks/use-server-error';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +44,7 @@ export function OrganizationSection() {
   // A read-only workspace (plan not active): Save opens the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
 
   const loadOrg = useCallback(async () => {
     try {
@@ -68,7 +70,7 @@ export function OrganizationSection() {
       setOrg((prev) => (prev ? { ...prev, name: nameInput.trim() } : prev));
       toast.success(t('saved'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('org_saveFailed'));
+      toast.error(caughtError(err, t('org_saveFailed')));
     } finally {
       setSaving(false);
     }

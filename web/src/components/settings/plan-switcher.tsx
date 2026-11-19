@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { refusalError } from '@/lib/server-error';
+import { useCaughtErrorText } from '@/hooks/use-server-error';
 import { Check, ArrowUp, ArrowDown, Mail, ExternalLink, Repeat, ShoppingCart } from 'lucide-react';
 import {
   PlanDetailsToggle,
@@ -88,6 +90,7 @@ export function PlanSwitcher({
   const t = useTranslations('settings');
   const tCards = useTranslations('settings.planCards');
   const tPlans = useTranslations('readOnly.plans');
+  const caughtError = useCaughtErrorText();
   const planFeatures = usePlanFeatures();
   // Buying or changing the plan charges the organization's card: admins only,
   // as the subscription route checks.
@@ -161,7 +164,7 @@ export function PlanSwitcher({
           });
           return;
         }
-        throw new Error(err.error || 'Failed to change plan');
+        throw refusalError(err, t('changePlanFailed'), res.status);
       }
       const data = await res.json();
       onUpdate(data);
@@ -172,7 +175,7 @@ export function PlanSwitcher({
       );
       setPending(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to change plan');
+      toast.error(caughtError(err, t('changePlanFailed')));
     } finally {
       setLoading(false);
     }
@@ -183,7 +186,7 @@ export function PlanSwitcher({
       const res = await fetch('/api/stripe/subscription', { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to cancel');
+        throw refusalError(err, t('cancelFailed'), res.status);
       }
       const data = await res.json();
       onUpdate({
@@ -196,7 +199,7 @@ export function PlanSwitcher({
       toast.success(t('subscriptionCanceled'));
       return true;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to cancel');
+      toast.error(caughtError(err, t('cancelFailed')));
       return false;
     }
   }
@@ -211,7 +214,7 @@ export function PlanSwitcher({
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to reactivate');
+        throw refusalError(err, t('reactivateFailed'), res.status);
       }
       const data = await res.json();
       onUpdate({
@@ -224,7 +227,7 @@ export function PlanSwitcher({
       trackReactivated({ plan: currentPlanId, interval: currentInterval });
       toast.success(t('subscriptionReactivated'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reactivate');
+      toast.error(caughtError(err, t('reactivateFailed')));
     } finally {
       setLoading(false);
     }
@@ -236,13 +239,13 @@ export function PlanSwitcher({
       const res = await fetch('/api/stripe/portal', { method: 'POST' });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to open billing portal');
+        throw refusalError(err, t('portalFailed'), res.status);
       }
       const { url } = await res.json();
       window.location.href = url;
       // No loading reset — we're navigating away to Stripe.
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to open billing portal');
+      toast.error(caughtError(err, t('portalFailed')));
       setPortalLoading(false);
     }
   }

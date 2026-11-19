@@ -347,7 +347,18 @@ export async function listInvitations(): Promise<TeamInvitation[]> {
   }));
 }
 
-export type InviteMemberResult = { inviteLink: string; emailSent: boolean } | { error: string };
+/** A refusal's stable code, for the browser to say it in the person's language (LOC-008). */
+export type TeamErrorCode =
+  | 'invalid_email'
+  | 'no_brands'
+  | 'already_member'
+  | 'already_invited'
+  | 'admin_all_brands'
+  | 'not_found';
+
+export type InviteMemberResult =
+  | { inviteLink: string; emailSent: boolean }
+  | { error: string; code?: TeamErrorCode };
 
 /**
  * User-facing failures (bad email, existing member, duplicate pending invite,
@@ -366,12 +377,12 @@ export async function inviteMember(
   const normalizedEmail = email.trim().toLowerCase();
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    return { error: 'Invalid email address' };
+    return { error: 'Invalid email address', code: 'invalid_email' };
   }
 
   // The brands it shares, kept by the invitation until it is accepted.
   const access = await checkedChoice(profile.organization_id, role, brands);
-  if (!access) return { error: 'Choose at least one brand' };
+  if (!access) return { error: 'Choose at least one brand', code: 'no_brands' };
 
   const [{ count: memberCount }, { count: inviteCount }] = await Promise.all([
     supabaseAdmin
@@ -404,7 +415,7 @@ export async function inviteMember(
         .eq('id', matched.id)
         .maybeSingle();
       if (matchedProfile?.organization_id === profile.organization_id) {
-        return { error: 'This user is already a member of your team' };
+        return { error: 'This user is already a member of your team', code: 'already_member' };
       }
     }
   }
@@ -447,7 +458,10 @@ export async function inviteMember(
 
   if (insertError) {
     if (insertError.code === '23505') {
-      return { error: 'A pending invitation already exists for this email' };
+      return {
+        error: 'A pending invitation already exists for this email',
+        code: 'already_invited',
+      };
     }
     return { error: insertError.message };
   }
@@ -549,7 +563,9 @@ export async function updateMemberRole(userId: string, role: TeamRole) {
   revalidatePath('/dashboard/settings');
 }
 
-export type SetMemberBrandsResult = { brandAccess: BrandAccessChoice } | { error: string };
+export type SetMemberBrandsResult =
+  | { brandAccess: BrandAccessChoice }
+  | { error: string; code?: TeamErrorCode };
 
 /**
  * An admin's Edit brands (BRAND-ACCESS §3.2, Q2: admins only): All brands,
@@ -564,7 +580,8 @@ export async function setMemberBrands(
 ): Promise<SetMemberBrandsResult> {
   await assertWritable();
   const { user, profile } = await requireAdmin();
-  if (userId === user.id) return { error: 'Admins always have All brands' };
+  if (userId === user.id)
+    return { error: 'Admins always have All brands', code: 'admin_all_brands' };
 
   const { data: member, error: memberError } = await supabaseAdmin
     .from('profiles')
@@ -573,11 +590,13 @@ export async function setMemberBrands(
     .eq('organization_id', profile.organization_id)
     .maybeSingle();
   if (memberError) throw new Error(memberError.message);
-  if (!member) return { error: 'Member not found' };
-  if (member.role === 'admin') return { error: 'Admins always have All brands' };
+  if (!member) return { error: 'Member not found', code: 'not_found' };
+  if (member.role === 'admin') {
+    return { error: 'Admins always have All brands', code: 'admin_all_brands' };
+  }
 
   const access = await checkedChoice(profile.organization_id, member.role as TeamRole, brands);
-  if (!access) return { error: 'Choose at least one brand' };
+  if (!access) return { error: 'Choose at least one brand', code: 'no_brands' };
 
   const { data, error } = await supabaseAdmin.rpc('set_member_brand_access', {
     p_organization_id: profile.organization_id,

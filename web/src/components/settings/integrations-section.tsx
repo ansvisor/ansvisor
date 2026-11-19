@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -337,6 +338,7 @@ function IntegrationCard({
   const demo = isDemo ? demoIntegration(provider) : null;
   const { openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
   const [readStatus, setStatus] = useState<IntegrationStatus | null>(null);
   // Why the last read of the status didn't come back, while there's no status.
   const [failure, setFailure] = useState<IntegrationFailure | null>(null);
@@ -369,7 +371,7 @@ function IntegrationCard({
       setStatus('not_connected');
       toast.success(`${label} disconnected`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to disconnect');
+      toast.error(caughtError(err, t('integrations_disconnectFailed')));
     } finally {
       setDisconnecting(false);
     }
@@ -549,6 +551,8 @@ function PropertyMapping({
   // upgrade dialog instead, and nothing is matched by itself.
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
 
   const load = useCallback(async () => {
     setLoadFailed(null);
@@ -558,7 +562,12 @@ function PropertyMapping({
         setLoadFailed(
           properties.reason === 'timeout'
             ? 'timeout'
-            : { message: properties.error ?? 'Failed to load properties' },
+            : {
+                message: serverError(
+                  properties,
+                  properties.error ?? t('integrations_propertiesLoadFailed'),
+                ),
+              },
         );
         return;
       }
@@ -568,10 +577,10 @@ function PropertyMapping({
       setLoadFailed(
         isTimeout(err)
           ? 'timeout'
-          : { message: err instanceof Error ? err.message : 'Failed to load properties' },
+          : { message: caughtError(err, t('integrations_propertiesLoadFailed')) },
       );
     }
-  }, [loadOptions, loadRows]);
+  }, [loadOptions, loadRows, serverError, caughtError, t]);
 
   useEffect(() => {
     load();
@@ -610,7 +619,7 @@ function PropertyMapping({
       await save(brandId, value);
     } catch (err) {
       setRows(previous);
-      toast.error(err instanceof Error ? err.message : 'Failed to save property');
+      toast.error(caughtError(err, t('integrations_propertySaveFailed')));
     } finally {
       setSavingBrandId(null);
     }

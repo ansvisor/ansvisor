@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { useFailureToast } from '@/hooks/use-failure-toast';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { useSearchParams } from 'next/navigation';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { PROMPTS_BASE, sectionFor, sectionFromPath } from '@/lib/prompts-routes';
@@ -692,6 +693,7 @@ function AddPromptDialog({
   const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
     useAllowedEngines(shoppingEnabled);
   const tCommon = useTranslations('common');
+  const serverError = useServerErrorText();
 
   const [text, setText] = useState('');
   const [category, setCategory] = useState('');
@@ -797,7 +799,7 @@ function AddPromptDialog({
       if ('error' in result) {
         PROMPT_ADD.failed(result.code);
         if (isNoTopics(result)) setNoTopics(true);
-        else setError(result.error);
+        else setError(serverError(result, result.error));
         return;
       }
       const added = result.importedIdx.length;
@@ -1020,6 +1022,8 @@ function EditPromptDialog({
   const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
     useAllowedEngines(shoppingEnabled);
   const tTags = useTranslations('prompts.tags');
+  const tErrors = useTranslations('prompts.errors');
+  const serverError = useServerErrorText();
 
   const [text, setText] = useState('');
   const [category, setCategory] = useState('');
@@ -1082,11 +1086,7 @@ function EditPromptDialog({
       if (isActive !== prompt.isActive) {
         const result = await setPromptActive(prompt.id, isActive);
         if ('error' in result) {
-          setError(
-            result.code === 'plan_limit'
-              ? result.error
-              : 'Failed to update prompt. Please try again.',
-          );
+          setError(serverError(result, tErrors('updateFailed')));
           return;
         }
         activeChanged = true;
@@ -1101,8 +1101,8 @@ function EditPromptDialog({
       onClose();
       toast.success('Prompt updated.');
       onChanged();
-    } catch {
-      setError('Failed to update prompt. Please try again.');
+    } catch (err) {
+      setError(serverError(err, tErrors('updateFailed')));
       // The pause or resume already went through; show it in the table.
       if (activeChanged) onChanged();
     } finally {
@@ -3272,6 +3272,8 @@ function AllPromptsTab({
   const tUsage = useTranslations('prompts.usage');
   const format = useFormatter();
   const tDelete = useTranslations('prompts.bulkDelete');
+  const tErrors = useTranslations('prompts.errors');
+  const serverError = useServerErrorText();
   const tPerformance = useTranslations('prompts.performance');
   const tStatus = useTranslations('prompts.status');
   const tWaiting = useTranslations('prompts.waiting');
@@ -3480,10 +3482,11 @@ function AllPromptsTab({
           }
           // Resuming needs a free slot on the plan; the message says how many.
           toast.error(
-            result.code === 'plan_limit'
-              ? 'Not enough room to resume'
-              : 'Failed to update the prompt.',
-            { description: result.code === 'plan_limit' ? result.error : prompt.text },
+            result.code === 'plan_limit' ? tErrors('noRoomToResume') : tErrors('updateFailed'),
+            {
+              description:
+                result.code === 'plan_limit' ? serverError(result, result.error) : prompt.text,
+            },
           );
           return;
         }
@@ -3496,11 +3499,11 @@ function AllPromptsTab({
           { description: prompt.text },
         );
         onChanged();
-      } catch {
-        toast.error('Failed to update the prompt.');
+      } catch (err) {
+        toast.error(serverError(err, tErrors('updateFailed')));
       }
     },
-    [onChanged, onSwap, tWaiting],
+    [onChanged, onSwap, tWaiting, tErrors, serverError],
   );
 
   // Bulk Pause / Resume: one write for the selected prompts that change.
@@ -3519,8 +3522,8 @@ function AllPromptsTab({
           // Resuming needs free slots on the plan; the message says how many.
           const planLimit = 'code' in result && result.code === 'plan_limit';
           toast.error(
-            planLimit ? 'Not enough room to resume' : `Failed to ${verb} the prompts.`,
-            planLimit ? { description: result.error } : undefined,
+            planLimit ? tErrors('noRoomToResume') : tErrors('bulkFailed', { action: verb }),
+            planLimit ? { description: serverError(result, result.error) } : undefined,
           );
           return;
         }
@@ -3530,14 +3533,20 @@ function AllPromptsTab({
           );
         }
         if (result.updated < ids.length) {
-          toast.error(`${ids.length - result.updated} of ${ids.length} couldn't be ${verb}d.`);
+          toast.error(
+            tErrors('bulkPartial', {
+              action: verb,
+              failed: ids.length - result.updated,
+              total: ids.length,
+            }),
+          );
         }
         onChanged();
       } finally {
         setBulkBusy(false);
       }
     },
-    [onChanged],
+    [onChanged, tErrors, serverError],
   );
 
   // "Suggest content" (PROMPT-006): one content opportunity for a prompt,

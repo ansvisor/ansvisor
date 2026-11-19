@@ -29,6 +29,12 @@ export async function getOrgPlan(organizationId: string): Promise<Plan> {
 
 export class PlanLimitError extends Error {
   public readonly requiredPlan: string;
+  /**
+   * Production masks a server action's thrown message but keeps its digest,
+   * so the browser can still say this refusal in the person's language
+   * (LOC-008, lib/server-error.ts), as SubscriptionInactiveError's does.
+   */
+  readonly digest = 'plan_limit';
 
   constructor(message: string, requiredPlan: string) {
     super(message);

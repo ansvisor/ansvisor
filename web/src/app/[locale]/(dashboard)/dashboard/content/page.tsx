@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useFailureToast } from '@/hooks/use-failure-toast';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import {
   ClampedText,
   ClampedTextPreview,
@@ -463,6 +464,13 @@ export default function ContentPage() {
   const tActions = useTranslations('readOnly.actions');
   const tManagers = useTranslations('managersOnly');
   const tChat = useTranslations('chatPanel.suggest');
+  const serverError = useServerErrorText();
+  const caughtError = useCaughtErrorText();
+  /** A webhook send's refusal in the person's language (LOC-008). */
+  const sendError = (result: { error: string; code?: string; status?: number }) =>
+    result.code === 'no_webhook'
+      ? t('noWorkflowConnected')
+      : serverError(result, result.error, result.status);
   // The bulk bar's Dismiss and Delete ask first: the upgrade dialog instead.
   const confirmUnlessLocked =
     (action: string) => (open: boolean, details: { cancel: () => void }) => {
@@ -1029,7 +1037,7 @@ export default function ContentPage() {
     try {
       const result = await sendToWebhook(id);
       if (result.success === false) {
-        toast.error(result.error);
+        toast.error(sendError(result));
       } else {
         toast.success(t('sentToWorkflow'));
         await loadData(true);
@@ -1070,7 +1078,7 @@ export default function ContentPage() {
     try {
       const result = await bulkSendToWebhook(Array.from(selectedIds));
       if (!result.success) {
-        toast.error(result.error);
+        toast.error(sendError(result));
         return;
       }
       const notes = bulkSendNotes(result);
@@ -1097,7 +1105,7 @@ export default function ContentPage() {
       setSelectedIds(new Set());
       await loadData(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('bulkUpdateError'));
+      toast.error(caughtError(err, t('bulkUpdateError')));
     } finally {
       setBulkSending(false);
     }
@@ -1112,7 +1120,7 @@ export default function ContentPage() {
       setSelectedIds(new Set());
       await loadData(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('bulkDismissError'));
+      toast.error(caughtError(err, t('bulkDismissError')));
     } finally {
       setBulkSending(false);
     }
@@ -1130,7 +1138,7 @@ export default function ContentPage() {
       // here as well would fire a second, competing load.
       await loadData(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('bulkDeleteError'));
+      toast.error(caughtError(err, t('bulkDeleteError')));
     } finally {
       setBulkSending(false);
     }

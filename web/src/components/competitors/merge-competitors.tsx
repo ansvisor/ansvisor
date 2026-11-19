@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { mergeCompetitors, unmergeCompetitor } from '@/lib/actions/competitor';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import type { CompetitorAlias, MergedCompetitor } from '@/lib/competitor-merge';
 import { getFaviconUrl } from '@/lib/favicon';
 import { cn } from '@/lib/utils';
@@ -71,6 +72,7 @@ export function MergeCompetitorsDialog({
 }) {
   const t = useTranslations('competitors.merge');
   const common = useTranslations('competitors');
+  const serverError = useServerErrorText();
   const format = useFormatter();
   const groupName = useId();
   const [selected, setSelected] = useState<string[]>(() =>
@@ -103,7 +105,7 @@ export function MergeCompetitorsDialog({
         others.map((c) => c.id),
       );
       if (!result.ok) {
-        toast.error(result.message || t('error'));
+        toast.error(serverError({ code: result.reason }, result.message || t('error')));
         return;
       }
       if (result.merged.length > 0) toast.success(t('success', { kept: kept.name }));
@@ -381,6 +383,7 @@ export function UnmergeCompetitorDialog({
 }) {
   const t = useTranslations('competitors.unmerge');
   const common = useTranslations('competitors');
+  const serverError = useServerErrorText();
   const merged = useTranslations('competitors.merged');
   const [saving, setSaving] = useState(false);
   const name = competitor?.name ?? '';
@@ -392,7 +395,7 @@ export function UnmergeCompetitorDialog({
     try {
       const result = await unmergeCompetitor(brandId, competitor.id);
       if (!result.ok) {
-        toast.error(result.message || t('error'));
+        toast.error(serverError({ code: result.reason }, result.message || t('error')));
         return;
       }
       toast.success(result.unmerged ? t('success', { name }) : t('notMerged', { name }));

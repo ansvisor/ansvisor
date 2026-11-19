@@ -739,6 +739,32 @@ describe('cancelling', () => {
       interval: 'year',
     });
   });
+
+  it("says a refused reactivation in the UI's words when its code is known, else the server's (LOC-008)", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ error: 'Too many requests', code: 'rate_limited' }, { status: 429 }),
+      ),
+    );
+    await render('growth', { cancelAtPeriodEnd: true });
+    await click('Reactivate Subscription');
+    expect(toast.error).toHaveBeenLastCalledWith(messages.serverErrors.rate_limited);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ error: 'Stripe is unhappy' }, { status: 500 })),
+    );
+    await click('Reactivate Subscription');
+    expect(toast.error).toHaveBeenLastCalledWith('Stripe is unhappy');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({}, { status: 500 })),
+    );
+    await click('Reactivate Subscription');
+    expect(toast.error).toHaveBeenLastCalledWith(messages.settings.reactivateFailed);
+  });
 });
 
 describe('Growth add-ons through a plan change (00546)', () => {
