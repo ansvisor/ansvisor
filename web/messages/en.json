@@ -17095,6 +17095,8 @@
     ],
     "customPlanPointsChat": ["Chat and Agents", "Full auto, with agents that publish on their own"],
     "planCards": {
+      "expandable": "+ add-ons",
+      "expandableHint": "Growth can add more of this any time, on Settings › Billing: extra tracking, extra brands and AI usage top-ups.",
       "starter": {
         "tagline": "For small teams getting started with AI visibility monitoring and optimization.",
         "engines": "ChatGPT & Gemini tracking",

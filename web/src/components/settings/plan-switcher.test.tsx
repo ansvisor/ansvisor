@@ -161,20 +161,25 @@ describe('the plan cards', () => {
         '1x AI usage',
         'MCP & API access',
       ],
+      // Growth's brands, prompts and AI usage grow with add-ons (00546).
       Growth: [
-        '4 brands',
+        '4 brands+ add-ons',
         'Unlimited seats',
-        '200 prompts tracked',
+        '200 prompts tracked+ add-ons',
         'ChatGPT, Gemini, Google AI Mode and Google AI Overviews tracking',
         '50 content briefs a month',
         '500 site audits a month',
-        '5x AI usage',
+        '5x AI usage+ add-ons',
         'Multi-region tracking',
         'White-label reports & exports',
         'Looker Studio',
       ],
     });
     expect(container.textContent).not.toContain('8 answer engines');
+    // Starter's lines grow by upgrading, not by add-ons.
+    expect(cards().Starter.some((line: string) => line.includes('+ add-ons'))).toBe(false);
+    const mark = container.querySelector('[data-slot="expandable-mark"]');
+    expect(mark?.getAttribute('title')).toContain('on Settings › Billing');
     // AI usage says what it covers on hover.
     const ai = [...container.querySelectorAll('li span')].find(
       (el) => el.textContent === '5x AI usage',
@@ -192,7 +197,7 @@ describe('the plan cards', () => {
     const { Starter, Growth } = cards();
     expect(Starter.slice(6)).toEqual(['1x AI usage', 'Chat and Agents', 'MCP & API access']);
     expect(Growth.slice(6)).toEqual([
-      '5x AI usage',
+      '5x AI usage+ add-ons',
       'Chat and Agents',
       'Full auto, with agents that publish on their own',
       'Multi-region tracking',
