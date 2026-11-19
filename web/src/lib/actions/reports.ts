@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
+import { REPORT_TEMPLATE_TITLES } from '@/lib/reports/template-titles';
 import type { Json } from '@/types/supabase';
 import { API_BASE_URL } from '@/config/api';
 import {
@@ -822,14 +823,6 @@ async function getCitationEvidence(
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
-/** English display names used in stored (immutable) report titles. */
-const TEMPLATE_TITLES: Record<ReportTemplateId, string> = {
-  weekly_visibility: 'Weekly Visibility Summary',
-  executive_summary: 'Executive Summary',
-  competitor_benchmark: 'Competitor Benchmark',
-  citation_sources: 'Citation & Sources Report',
-};
-
 export async function createReport(
   brandId: string,
   opts: {
@@ -1033,9 +1026,8 @@ export async function createReport(
   const payload: ReportPayload = { ...snapshot, summaryText: summary };
 
   // 3. Persist the immutable snapshot (RLS scopes the insert to org members).
-  const title =
-    opts.title?.trim() ||
-    `${brandName} — ${TEMPLATE_TITLES[template.id]} (${dateFrom.slice(0, 10)} → ${dateTo.slice(0, 10)})`;
+  // The template's name alone: the period shows beside it (UX audit RP-12).
+  const title = opts.title?.trim() || REPORT_TEMPLATE_TITLES[template.id];
 
   const { data: created, error } = await supabase
     .from('reports')

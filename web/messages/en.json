@@ -16437,6 +16437,7 @@
     "deleteTitle": "Delete report",
     "deleteConfirm": "Delete this report?",
     "deleteFailed": "Failed to delete report",
+    "rowMenuLabel": "More actions for {title}",
     "selectDates": "Pick a start and end date",
     "templateLabel": "Template",
     "templates": {

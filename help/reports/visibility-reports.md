@@ -15,7 +15,7 @@ The **Reports** page makes point-in-time snapshots of your brand's AI visibility
 
 ## Generate a report
 
-Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Generated reports appear under **Generated Reports** on the same page, newest first. Delete a report with the bin icon there.
+Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Without a title, a report is named after its template, such as Weekly Visibility Summary; its period shows beside it. Generated reports appear under **Generated Reports** on the same page, newest first. To delete one, open its **⋯** menu, choose **Delete report** and confirm.
 
 ## Templates
 
