@@ -256,3 +256,22 @@ describe('evaluateLlmSignals', () => {
     });
   });
 });
+
+describe('the body view’s author facts (2026-11-19)', () => {
+  it('sends an author box past the text’s first characters, and the prompt shows it', async () => {
+    const ctx = page({
+      body: `${intro} ${rest}</p><div class="ansvisor-author-box">About the Author: Jane Doe, CTO at Acme, 12 years in search. <a href="https://www.linkedin.com/in/jane/">LinkedIn</a></div><p>`,
+    });
+    expect(viewInputs(ctx).body.author).toContain('Jane Doe, CTO at Acme');
+    modelAnswers();
+    await evaluateLlmSignals(ctx);
+    const prompts = generateObject.mock.calls.map((c) => c[0].prompt);
+    expect(
+      prompts.some((p) => p.includes('AUTHOR FACTS') && p.includes('linkedin.com/in/jane')),
+    ).toBe(true);
+  });
+
+  it('leaves a page with no author as it was, so its kept verdicts still read', () => {
+    expect(viewInputs(page()).body).not.toHaveProperty('author');
+  });
+});

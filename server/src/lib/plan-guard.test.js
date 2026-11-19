@@ -121,8 +121,23 @@ describe('relevance allowance per plan', () => {
     const { PLANS } = await import('../config/plans.js');
     expect(PLANS.starter.limits.relevanceMonthlyBudgetUsd).toBe(0.049);
     expect(PLANS.growth.limits.relevanceMonthlyBudgetUsd).toBe(0.249);
-    expect(PLANS.enterprise.limits.relevanceMonthlyBudgetUsd).toBe(0.499);
+    expect(PLANS.enterprise.limits.relevanceMonthlyBudgetUsd).toBe(1.999);
     expect(PLANS.self_hosted.limits.relevanceMonthlyBudgetUsd).toBe(-1);
+  });
+});
+
+describe('Enterprise defaults (00548)', () => {
+  it('start at 1 brand and 3,000 prompt locations; a contract keeps its own, unlimited included', async () => {
+    const { PLANS } = await import('../config/plans.js');
+    expect(PLANS.enterprise.limits.maxBrands).toBe(1);
+    expect(PLANS.enterprise.limits.maxPrompts).toBe(3000);
+    const { applyPlanOverrides } = await import('./plan-guard.js');
+    const grandfathered = applyPlanOverrides(PLANS.enterprise, {
+      plan: 'enterprise',
+      plan_overrides: { maxBrands: -1, maxPrompts: -1 },
+    });
+    expect(grandfathered.limits.maxBrands).toBe(-1);
+    expect(grandfathered.limits.maxPrompts).toBe(-1);
   });
 });
 

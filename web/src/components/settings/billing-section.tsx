@@ -11,6 +11,7 @@ import { InvoiceList } from '@/components/settings/invoice-list';
 import { AiUsageCard } from '@/components/settings/ai-usage-card';
 import { PLAN_STARTED_EVENT } from '@/lib/billing/plan-started';
 import { AddOnsCard } from '@/components/settings/add-ons-card';
+import { PlanAddOnsCard } from '@/components/settings/plan-add-ons-card';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { createClient } from '@/lib/supabase/client';
@@ -255,6 +256,9 @@ export function BillingSection() {
       </Card>
 
       <AiUsageCard key={planChanges} />
+
+      {/* Growth's extra tracking, brands and AI top-ups (00546), one cart. */}
+      <PlanAddOnsCard key={`plan-add-ons-${planChanges}`} />
 
       {/* AI credit and storage packs (CHAT-18): nothing while Chat is off. */}
       <AddOnsCard />
