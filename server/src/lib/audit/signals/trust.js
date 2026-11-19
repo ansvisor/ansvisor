@@ -100,6 +100,15 @@ export const REPORTED_BOTS = [
   { key: 'google-extended', name: 'Google-Extended' },
 ];
 
+/** The live test ran and let every bot it reached in (nothing refused). */
+function allLetIn(live) {
+  return (
+    Boolean(live?.tested) &&
+    live.bots.some((b) => b.live === 'ok') &&
+    !live.bots.some((b) => b.live === 'blocked')
+  );
+}
+
 export const aiBotAccess = {
   key: 'ai-bot-access',
   evaluate(ctx) {
@@ -142,7 +151,11 @@ export const aiBotAccess = {
     if (blocked) {
       status = 'fail';
       score = 0;
-    } else if (mentioned.length > 0 && wafBlockedBots.length === 0) {
+    } else if (wafBlockedBots.length === 0 && (mentioned.length > 0 || allLetIn(live))) {
+      // Named in robots.txt, or let in when asked as each bot: either way
+      // they get in. A robots.txt with only "User-agent: *" lets them in
+      // too, so naming them is a nicety, not a point lost; an audit whose
+      // live test didn't run can't tell, and warns that they aren't named.
       status = 'pass';
       score = 1;
     }

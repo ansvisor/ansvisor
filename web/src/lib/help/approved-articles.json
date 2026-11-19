@@ -1603,7 +1603,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
@@ -1815,7 +1815,7 @@
         },
         {
           "heading": "AI usage",
-          "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The model button's menu ends with **AI usage this month**: a bar, the share used and when it resets. From 80% a dot on the model button turns amber (red once used up), and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
+          "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The model button's menu ends with **AI usage this month**: a bar, the share used and when it resets. From 80% a dot on the model button turns amber (red once used up), and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and, on Growth, AI usage top-ups; it opens once by itself the first time Chat stops. Admins buy one; others can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
         },
         {
           "heading": "When only part of a job fits",
@@ -3348,7 +3348,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3356,7 +3356,7 @@
         },
         {
           "heading": "The header",
-          "text": "The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.\n\nOn the right are **Next** (hover it for the step) and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**."
+          "text": "Beside the back arrow, **+** (New content) starts another page. The header shows the title, which you can click to rename the page, whether your changes are saved and, after **Saved**, the month's AI usage as a small ring (for example **AI 4.7%**; click it for this page's share). Under them come the page type, the author, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept. A draft from the Action Center ends the row with **From Action AC-…**, which opens its action.\n\nOn the right are **Next** (hover it for the step) and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**."
         },
         {
           "heading": "AI search readiness (Site Audit estimate)",
@@ -3377,6 +3377,10 @@
         {
           "heading": "Facts and your input",
           "text": "The Content Agent looks up the facts a page needs, such as a price, a plan's limits or a statistic, and links each to the page it came from, never a forum or a social post. A fact no trusted page has is left out of its sentence.\n\nA fact it couldn't look up stays in square brackets for you, as do up to three only your brand has, such as your customer count. Each is tinted amber; **Your input needed** in the toolbar counts them and jumps to the next one, selected so you can type over it.\n\nOnes in alt text, structured data or HTML count too. **Send to CMS** waits until none is left. With Quality on, **Export** offers **Fill now** or **Export without them**, which drops those sentences. One in the title or a heading has to be filled."
+        },
+        {
+          "heading": "Where looked-up facts come from",
+          "text": "A looked-up fact links only to a page that names what its sentence is about. A price, a plan or a product's limits comes only from that product's own site, such as its pricing page, never from another vendor's blog or a comparison article. When no such page has it, the fact stays for you to fill."
         },
         {
           "heading": "Health and supplement brands",
@@ -3404,7 +3408,7 @@
         },
         {
           "heading": "Sources",
-          "text": "**Sources** shows what the draft is built from: **Prompts**, **Fan-outs** (the searches AI ran for your prompts), **Cited pages**, which AI quotes today, and **Search Console** queries. Each source shows where the draft uses it.\n\nUncheck a source to leave it out, or click **Add source** to add a prompt, a page address or a Search Console query. Then click **Rebuild with selection**."
+          "text": "**Sources** shows what the draft is built from: **Prompts**, **Fan-outs** (the searches AI ran for your prompts), **Cited pages**, which AI quotes today, and **Search Console** queries. Each source shows where the draft uses it.\n\nUncheck a source to leave it out, or click **Add source** to add a prompt, a page address or a Search Console query. Then click **Rebuild with selection**.\n\nThe Content Agent writes only from the searches in the page's language. It uses a Search Console query only when the query is about the page: its title, its prompts and its brief. A fan-out becomes a short, natural heading or question with the search's main terms, never the search pasted as it is. On an alternatives, comparison or best-of page, the agent covers each of your competitors that the title, the prompts or the brief names."
         },
         {
           "heading": "Live page",
@@ -3512,7 +3516,7 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3553,6 +3557,10 @@
         {
           "heading": "No duplicates",
           "text": "Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped.\n\nA question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.\n\nFor a second take on the same need, use **Another angle** on the opportunity."
+        },
+        {
+          "heading": "Kept to what you track",
+          "text": "A new opportunity whose title says what an open one's says, in other words, isn't added. Nor is one about an AI engine none of your active prompts runs on, such as one you paused. An opportunity's **Keywords** come from its prompts and the searches AI engines ran for them: keyword-tool terms that share no words with them are left out."
         },
         {
           "heading": "When fewer come back",
@@ -3661,7 +3669,7 @@
         "let the agent fix the page"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3669,7 +3677,7 @@
         },
         {
           "heading": "The Rules tab",
-          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
+          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. The character counter in the toolbar shows that range. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
         },
         {
           "heading": "Rule sets and page types",
@@ -3693,7 +3701,11 @@
         },
         {
           "heading": "Fix open rules",
-          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**. A suggestion that would break a rule the page meets now says which, in amber under its label; the bar shows an amber sign with how many rules, named when you hover it.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage."
+          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**. A suggestion that would break a rule the page meets now says which, in amber under its label; the bar shows an amber sign with how many, named on hover. When accepting them all meets fewer rules than your page now, **Reject all** is the main button.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage."
+        },
+        {
+          "heading": "What a suggestion keeps",
+          "text": "A suggestion keeps the links of the words it changes: a shorter sentence keeps its link, or the agent doesn't suggest it. Its label only names a rule the change itself meets, so one called a dated point adds a date."
         },
         {
           "heading": "Rules that are yours",
@@ -3701,7 +3713,7 @@
         },
         {
           "heading": "Rewrite the whole page",
-          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published."
+          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open, but not again after a rewrite that met fewer rules than its page. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Its card says how many rules it meets against your page now. When that's fewer, **Reject** is the main button. Your page before it stays in History. It isn't offered once the page is ready or published."
         },
         {
           "heading": "A rewrite and your Length",
@@ -3743,7 +3755,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3763,7 +3775,7 @@
         },
         {
           "heading": "Write this",
-          "text": "**Write this**, on the panel and in a row's **…** menu, takes an owned opportunity to a page to review in one go. First it says what will happen and about how much of your monthly AI usage it takes. Then:\n\n1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.\n2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.\n3. The editor opens and shows the agent at work. You review the page there, with a free estimate of its Site Audit score; nothing is published.\n\nYou can stop it from the editor. If the brief can't be built, the agent writes from what there is."
+          "text": "**Write this**, on the panel and in a row's **…** menu, takes an owned opportunity to a page to review in one go. First it says what will happen and about how much of your monthly AI usage it takes. Then:\n\n1. The Content Agent builds a brief from the opportunity's prompts, their fan-outs and the pages AI cites for them.\n2. It writes the page from the brief, by your rules and the page type's. For an opportunity on a page you have, it suggests changes to that page instead.\n3. The editor opens and shows the agent at work. You review the page there; when you mark it ready, **Before you publish** shows a free estimate of its Site Audit score. Nothing is published.\n\nYou can stop it from the editor. If the brief can't be built, the agent writes from what there is."
         },
         {
           "heading": "The … menu",
@@ -3779,7 +3791,7 @@
         },
         {
           "heading": "Follow it to Done",
-          "text": "Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.\n\nA done opportunity comes back as **New**, marked **New signal detected**, when its score has risen since, or the visibility its work gained didn't hold."
+          "text": "Starting a draft for an opportunity (Write this, Send to Editor or New content) sets it **In Progress**. Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.\n\nA done opportunity comes back as **New**, marked **New signal detected**, when its score has risen since, or the visibility its work gained didn't hold."
         }
       ]
     },
@@ -3811,7 +3823,7 @@
         "regulated page review"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3820,6 +3832,10 @@
         {
           "heading": "The scores",
           "text": "Quality scores the page from 0 to 100 on three things, each card saying what it scores:\n\n- **E-E-A-T**: who stands behind the page, such as its author and their experience.\n- **Trust**: sources, links and dated facts.\n- **Readability**: how easily it reads.\n\n80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nIn **Before you publish**, **AI search readiness (Site Audit estimate)** is about where the page would score in Site Audit. It's a different score from Quality. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
+        },
+        {
+          "heading": "Without an author, and short sentences",
+          "text": "Until the page has an author, the **Quality** chip leaves **E-E-A-T** out. When only the author would score it, **E-E-A-T** says it's scored once the page has one. The author stays one of your to-dos.\n\nFor **Readability**, sentences of 20 words or fewer on average read best. Short ones are fine, unless they average under 8 words."
         },
         {
           "heading": "Your to-dos and what would raise it",
@@ -3953,7 +3969,7 @@
         "improve an existing page"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3965,11 +3981,19 @@
         },
         {
           "heading": "Optimize a page you have",
-          "text": "Pick **Optimize content** to work on an existing page:\n\n- **Page URL**: a page on your brand's site. **Import** brings in its main text, headings, links and schema; menus and footers stay out.\n- **Paste text** from Word, Google Docs or a web page. Headings, lists, links and tables are kept.\n- **Upload file**: Word, Markdown, HTML or text, up to 10 MB."
+          "text": "Pick **Optimize content** to work on an existing page:\n\n- **Page URL**: a page on your brand's site. **Import** brings in its main text, headings, lists, tables, links and schema; menus and footers stay out.\n- **Paste text** from Word, Google Docs or a web page. Headings, lists, links and tables are kept.\n- **Upload file**: Word, Markdown, HTML or text, up to 10 MB.\n\nThe character count shown under the content is the one the editor shows once it opens. Schema isn't counted as text."
+        },
+        {
+          "heading": "What an imported page keeps",
+          "text": "**Import** keeps the page's structure, even when its site builds it from boxes rather than real tables and lists:\n\n- a comparison grid of rows and columns comes in as a table;\n- a list of short items, such as **Key takeaways**, comes in as a bulleted list;\n- a card's title stays on its own line, above its text.\n\nThe draft's author is the person the page names, in its byline or its schema. If your team already has an author of that name in **Authors**, the draft uses them. If not, the author is added there for you to complete. A page that names no one keeps your brand's byline."
         },
         {
           "heading": "Pick the page type",
           "text": "Click **Continue**. Ansvisor picks a **Page type** from the title, the content, the page or the opportunity, and says which. Pick another if it's wrong; you can also change it later in the editor.\n\nThe page types on offer follow the brand's **Site type** in the brand settings: B2B SaaS, E-commerce, B2C or Mobile app. A mobile app, for example, gets **Feature page**, **Pricing** and **Help & FAQ** among its types, and no product or destination pages.\n\nFor a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. Pick **Optimize … instead** on one of those pages to work on it, or **Create a new page**."
+        },
+        {
+          "heading": "How the page type is read",
+          "text": "An opportunity's type carries over: when your site type doesn't write it, the closest one it does is picked, such as **Best-of list** for a buying guide on a B2B SaaS site. A title that lists tools or picks (\"The complete AI SEO tools list\") reads as a **Best-of list** too.\n\nOn an online shop, the brief's **Shopping path** shows only once the brand has a product catalog in **Settings › Integrations**, or a path is already picked."
         },
         {
           "heading": "Choose who does it",
@@ -4468,7 +4492,7 @@
         "track a search"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
@@ -4496,7 +4520,7 @@
         },
         {
           "heading": "What counts on your plan",
-          "text": "Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor tracks the prompts that fit and saves the rest as **Waiting for a spot**: kept, but not tracked and not counted. A waiting prompt never starts by itself; in **Tracked Prompts**, admins and managers can **Free up a spot** to swap one in."
+          "text": "Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor tracks the prompts that fit and saves the rest as **Waiting for a spot**: kept, but not tracked and not counted. A waiting prompt never starts by itself; in **Tracked Prompts**, admins and managers can **Free up a spot** to swap one in. On Growth, **Add more tracking** opens your plan's add-ons in **Settings › Billing**."
         }
       ]
     },
@@ -4780,7 +4804,7 @@
         "prompts for a topic"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
@@ -4816,7 +4840,7 @@
         },
         {
           "heading": "When your plan's prompts are full",
-          "text": "When your plan's prompt locations run out, **Add All** and **+** still add: the suggestions past the limit become prompts **Waiting for a spot**, kept but not tracked. An amber note above the list says how many were added and how many wait.\n\nA waiting prompt never starts by itself. **Go to Tracked Prompts** opens the list, where admins and managers can **Free up a spot**, or upgrade your plan or ask us to raise your limit."
+          "text": "When your plan's prompt locations run out, **Add All** and **+** still add: the suggestions past the limit become prompts **Waiting for a spot**, kept but not tracked. An amber note above the list says how many were added and how many wait.\n\nA waiting prompt never starts by itself. **Go to Tracked Prompts** opens the list, where admins and managers can **Free up a spot**, or get more room: Starter upgrades, Growth adds more tracking, and Enterprise asks us."
         },
         {
           "heading": "How AI suggestions are written",
@@ -4977,7 +5001,7 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
@@ -4989,7 +5013,7 @@
         },
         {
           "heading": "Prompt statuses",
-          "text": "Each row has a status:\n\n- **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.\n- **Active**: tracked on its schedule.\n- **Paused**: kept, but not tracked.\n- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.\n\nWhile prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them."
+          "text": "Each row has a status:\n\n- **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.\n- **Active**: tracked on its schedule.\n- **Paused**: kept, but not tracked.\n- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. If your plan shrinks, the newest prompts past it wait. It never starts by itself.\n\nWhile prompts wait, a yellow banner says how many, and why; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. On Growth, **Add more tracking** opens your plan's add-ons in **Settings › Billing**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them."
         },
         {
           "heading": "Track new prompts now",
@@ -5294,10 +5318,14 @@
     },
     {
       "id": "settings/add-ons",
-      "title": "Buy AI credits and storage packs",
+      "title": "Add-ons: extra tracking, brands, AI top-ups and packs",
       "route": "/dashboard/settings/billing",
       "keywords": [
         "add-ons",
+        "extra tracking",
+        "extra brands",
+        "AI top-up",
+        "more prompts",
         "AI credits",
         "buy credits",
         "storage pack",
@@ -5307,6 +5335,10 @@
         "storage full"
       ],
       "synonyms": [
+        "add more prompts",
+        "track more prompts",
+        "add a brand",
+        "more brands",
         "get more AI usage",
         "top up credits",
         "more storage",
@@ -5314,15 +5346,23 @@
         "credit pack"
       ],
       "plan": "starter",
-      "updated": "2026-11-06",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
-          "text": "**Add-ons** in **Settings › Billing** sell extra AI credits and storage for when your plan's monthly limits run out. Packs are paid with Stripe and added to your plan only after the payment goes through, and each one shows on your invoice."
+          "text": "**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds extra tracking, extra brands and AI usage top-ups, picked together and paid once. **Add-ons** sells AI credit and storage packs. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice."
         },
         {
-          "heading": "AI credit packs",
-          "text": "Each AI credit pack says what it adds as a share of your plan's monthly AI limit, such as **+20% of the monthly limit** or **+5 monthly limits**, and is valid 12 months from the payment. The monthly limit is your workspace's included AI usage, shared by every seat.\n\nCredits are used only once the month's included AI usage is spent, the oldest pack first, so the monthly reset never wipes them. Usage on your own AI keys never touches them. The line **AI credit: … left · expires …** shows what is left and when the oldest pack ends."
+          "heading": "Add more to your plan (Growth)",
+          "text": "- **Extra tracking:** more prompt locations, tracked on your plan's engines every day. Pick one tier, or **None** to remove it. The largest tiers say **Contact sales**.\n- **Extra brands:** each with its own topics, competitors and white-label reports, at a monthly price per brand.\n- **AI usage top-up:** one payment that adds AI usage, briefs and opportunities until your plan renews. It doesn't renew, and you can buy another any time.\n\nOn a yearly plan, tracking and brands show yearly prices, with 2 months free."
+        },
+        {
+          "heading": "Review and pay",
+          "text": "Pick what you want, then click **Review and pay**. The window shows your new limits, what is **Due today** (the rest of this period for tracking and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. A lower tier or fewer brands leaves a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.\n\nOnly admins of an active Growth plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first."
+        },
+        {
+          "heading": "AI credit packs (no longer sold)",
+          "text": "AI credit packs have been replaced by AI usage top-ups. Packs you already bought stay valid until they expire, 12 months from the payment. Their credits are used only once the month's included AI usage is spent, the oldest pack first, so the monthly reset never wipes them. Usage on your own AI keys never touches them. The line **AI credit: … left · expires …** shows what is left and when the oldest pack ends."
         },
         {
           "heading": "Storage packs",
@@ -5330,15 +5370,15 @@
         },
         {
           "heading": "Get more from where a limit shows",
-          "text": "You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, on an output Chat couldn't save to Files, and on an image upload refused because storage is full. When Chat stops at the AI limit, the window opens once by itself."
+          "text": "You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. Without the new Chat, **Get more AI usage** on Growth goes to **Add more to your plan** in Billing. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, on an output Chat couldn't save to Files, and on an image upload refused because storage is full. When Chat stops at the AI limit, the window opens once by itself."
         },
         {
           "heading": "What the Get more window shows",
-          "text": "The window shows your plan and what the next plan would add, where the limit stands (for example \"AI usage this month: 100% · Growth · resets Nov 1\" or \"Storage 24.6 of 25 GB\"), and the packs on two tabs, **AI credits** and **Storage**. Pick a pack and click **Continue to payment**, as below.\n\nOn AI credits, a table shows roughly how many Chat answers or articles each pack covers. These are only examples: credits work for everything Chat does, and expensive models, long tasks, higher effort and images use more.\n\nOn Enterprise, the window also has **Use your own key**: on the other plans, Chat runs on the plan's AI limit and credit packs."
+          "text": "The window shows your plan and what the next plan would add, and where the limit stands (for example \"AI usage this month: 100% · Growth · resets Nov 1\" or \"Storage 24.6 of 25 GB\"). It has two tabs. On **AI credits**, Growth admins pick a top-up (+5x, +10x or +20x), click **Buy**, then **Pay** to charge the card on file at once; Starter is offered Growth. On **Storage**, pick a pack and click **Continue to payment**, as below.\n\nOn Enterprise, the window also has **Use your own key**: on the other plans, Chat runs on the plan's AI limit and credit packs."
         },
         {
           "heading": "Buy a pack",
-          "text": "1. Open **Settings › Billing** and find **Add-ons**.\n2. Choose **AI credits** or **Storage**, then pick a pack. **Most picked** marks the one most workspaces choose.\n3. Click **Continue to payment**. AI credits open Stripe's secure checkout; storage asks you to confirm with **Add to plan**.\n\nOnce the payment is confirmed, the pack is listed under **Purchases**."
+          "text": "1. Open **Settings › Billing** and find **Add-ons**.\n2. Pick a storage pack. **Most picked** marks the one most workspaces choose.\n3. Click **Continue to payment**, then confirm with **Add to plan**.\n\nOnce the payment is confirmed, the pack is listed under **Purchases**."
         },
         {
           "heading": "Who can buy",
@@ -5528,7 +5568,7 @@
         "switch google account"
       ],
       "plan": "all",
-      "updated": "2026-11-04",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -5541,6 +5581,10 @@
         {
           "heading": "See which brand uses which account",
           "text": "In **Settings › Integrations**, **Google per brand** lists each brand with its Search Console and Analytics account. Click **Change** to open that brand's settings."
+        },
+        {
+          "heading": "When the properties can't be read",
+          "text": "If Google says Ansvisor has no access, a box on Google's sign-in screen was left unticked. Click **Disconnect**, then connect again and tick every box Google shows."
         }
       ]
     },
@@ -6249,7 +6293,7 @@
         "hidden content"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6297,7 +6341,7 @@
         },
         {
           "heading": "AI bot access",
-          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot robots.txt keeps out, by name or with \"User-agent: *\", fails the check. A bot your CDN or firewall refuses while robots.txt lets it in only warns: the bots are asked from Ansvisor's servers, and a firewall that checks a crawler's own addresses can still let the real one in. A slow or busy answer isn't a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides."
+          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot robots.txt keeps out, by name or with \"User-agent: *\", fails. A bot only your CDN or firewall refuses warns: a firewall that checks a crawler's own addresses can still let the real one in. A slow answer isn't a block. If every bot asked gets in, it passes, even when robots.txt only has \"User-agent: *\". If your site refuses Ansvisor's own request, robots.txt decides, and one that doesn't name the AI bots warns."
         },
         {
           "heading": "Main text without JavaScript",
@@ -6305,7 +6349,7 @@
         },
         {
           "heading": "Authority links",
-          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites (Wikipedia, doi.org, arXiv…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there."
+          "text": "**Outbound authority links** passes with links to 2 authority sites and warns at 1. Open it to see which sites counted, other sites the page links to that don't, and **What counts**: government and academic sites (.gov, .edu and their country forms, such as .gov.tr or .ac.uk), international bodies (any .int site, un.org, europa.eu…), reference and research sites, standards and the platforms' own docs (Wikipedia, doi.org, arXiv, rfc-editor.org, schema.org, developers.google.com…), major news, and the sites your brand trusts. Add those in **Settings › Content**; **Edit in Settings** takes you there."
         },
         {
           "heading": "Product pages",
@@ -6334,7 +6378,7 @@
         "AI readiness check"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6354,7 +6398,7 @@
         },
         {
           "heading": "Before a bulk audit",
-          "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\nPages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
+          "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\n**Audit all** leaves out pages audited in the last 7 days; untick **Leave out** to include them. Pages you pick yourself are all audited, recent ones too, since a change across the site, such as robots.txt or a template, moves their scores; tick **Leave out** to skip them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
         },
         {
           "heading": "Auditing a page again",
@@ -6397,7 +6441,7 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6405,7 +6449,7 @@
         },
         {
           "heading": "Summary and cards",
-          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:\n\n- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.\n- **Pages audited**: how many of your site's pages, as your sitemap, Google Analytics and AI citations list them, have an audit from the last 90 days, and how many don't. **See the … not audited** opens those in Opportunities.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
+          "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards, the summary line and **Score over time** count the same pages: your site's, as your sitemap, Google Analytics and AI citations list them, less those you exclude.\n\n- **Site score**: the average score of each of those pages' latest audit, and its change from each page's previous audit.\n- **Pages audited**: how many of them have an audit, how many were never audited, and how many weren't in the last 90 days. **See the … not audited** opens those in Opportunities.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
         },
         {
           "heading": "Dots on Auto-audit and Opportunities",
@@ -6413,7 +6457,7 @@
         },
         {
           "heading": "Score over time",
-          "text": "**Score over time** charts your primary domain's audit scores, one point a day from the latest audit that day, over 7d, 30d, 90d or All. The category breakdown of the latest audit sits beside it. The chart needs audits on at least two days.\n\nWith the Content Editor's Quality on, a **Site trust** card, out of 5, reads your site's trust pages. It counts toward Quality's Trust, not the audit score."
+          "text": "**Score over time** charts your site score, the average of each page's latest audit on your primary domain, one point a day, over 7d, 30d, 90d or All. Its latest point is the site score at the top, and the category breakdown beside it averages the same pages. The chart needs audits on at least two days.\n\nWith the Content Editor's Quality on, a **Site trust** card, out of 5, reads your site's trust pages. It counts toward Quality's Trust, not the audit score."
         },
         {
           "heading": "Why a page is in Opportunities",

@@ -4,8 +4,8 @@ route: /dashboard/prompts/tracked
 keywords: [add prompt, bulk import, track prompts, new prompt, generate by topic, track now]
 synonyms: [add a question, add queries, track a search]
 plan: all
-updated: 2026-11-17
-last_checked: 2026-11-17
+updated: 2026-11-18
+last_checked: 2026-11-18
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -37,4 +37,4 @@ A prompt has no results until it is first asked. **Add prompt**, **Bulk import**
 
 ## What counts on your plan
 
-Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor tracks the prompts that fit and saves the rest as **Waiting for a spot**: kept, but not tracked and not counted. A waiting prompt never starts by itself; in **Tracked Prompts**, admins and managers can **Free up a spot** to swap one in.
+Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor tracks the prompts that fit and saves the rest as **Waiting for a spot**: kept, but not tracked and not counted. A waiting prompt never starts by itself; in **Tracked Prompts**, admins and managers can **Free up a spot** to swap one in. On Growth, **Add more tracking** opens your plan's add-ons in **Settings › Billing**.

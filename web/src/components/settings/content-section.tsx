@@ -14,6 +14,7 @@ import {
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { BrandRulesCard } from './brand-rules-card';
 import { TrustedSourcesCard } from './trusted-sources-card';
+import { qualityPhase } from '@/lib/content/quality';
 
 /**
  * Settings › Content (Quality spec §5, CE-051): per brand, Hand off quality
@@ -74,61 +75,66 @@ export function ContentSection() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('title')}</CardTitle>
-          <CardDescription>{t('description')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {!read && !failed && (
-            <p className="text-sm text-muted-foreground" aria-busy="true">
-              <LoadingDots />
-              <span className="sr-only">{t('loading')}</span>
-            </p>
-          )}
-          {failed && (
-            <p className="text-sm text-destructive">
-              {t('loadFailed')}{' '}
-              <button type="button" className="underline" onClick={() => void load()}>
-                {tCommon('retry')}
-              </button>
-            </p>
-          )}
-          {read && read.brands.length === 0 && (
-            <p className="text-sm text-muted-foreground">{t('noBrands')}</p>
-          )}
-          {read && read.brands.length > 0 && (
-            <section className="space-y-2" aria-label={t('handOff')}>
-              <ul className="divide-y rounded-xl border bg-card">
-                {read.brands.map((brand) => (
-                  <li key={brand.id} className="flex items-center gap-3 px-3 py-2.5">
-                    <span
-                      id={`content-${brand.id}`}
-                      className="min-w-0 flex-1 text-sm [overflow-wrap:anywhere]"
-                    >
-                      {brand.name}
-                    </span>
-                    <label className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={saving[brand.id] ?? brand.qualityHandoff}
-                        aria-describedby={`content-${brand.id}`}
-                        disabled={!read.canManage || brand.id in saving}
-                        onCheckedChange={guard(
-                          (checked: boolean) => void toggle(brand.id, checked === true),
-                          { action: tActions('changeContentSettings') },
-                        )}
-                      />
-                      {t('handOff')}
-                    </label>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs text-muted-foreground">{t('handOffHint')}</p>
-              {!read.canManage && <p className="text-xs text-muted-foreground">{t('managers')}</p>}
-            </section>
-          )}
-        </CardContent>
-      </Card>
+      {/* Quality's hand-off (CE-051): only with Quality's phase 2. */}
+      {qualityPhase() >= 2 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('title')}</CardTitle>
+            <CardDescription>{t('description')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!read && !failed && (
+              <p className="text-sm text-muted-foreground" aria-busy="true">
+                <LoadingDots />
+                <span className="sr-only">{t('loading')}</span>
+              </p>
+            )}
+            {failed && (
+              <p className="text-sm text-destructive">
+                {t('loadFailed')}{' '}
+                <button type="button" className="underline" onClick={() => void load()}>
+                  {tCommon('retry')}
+                </button>
+              </p>
+            )}
+            {read && read.brands.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t('noBrands')}</p>
+            )}
+            {read && read.brands.length > 0 && (
+              <section className="space-y-2" aria-label={t('handOff')}>
+                <ul className="divide-y rounded-xl border bg-card">
+                  {read.brands.map((brand) => (
+                    <li key={brand.id} className="flex items-center gap-3 px-3 py-2.5">
+                      <span
+                        id={`content-${brand.id}`}
+                        className="min-w-0 flex-1 text-sm [overflow-wrap:anywhere]"
+                      >
+                        {brand.name}
+                      </span>
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={saving[brand.id] ?? brand.qualityHandoff}
+                          aria-describedby={`content-${brand.id}`}
+                          disabled={!read.canManage || brand.id in saving}
+                          onCheckedChange={guard(
+                            (checked: boolean) => void toggle(brand.id, checked === true),
+                            { action: tActions('changeContentSettings') },
+                          )}
+                        />
+                        {t('handOff')}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground">{t('handOffHint')}</p>
+                {!read.canManage && (
+                  <p className="text-xs text-muted-foreground">{t('managers')}</p>
+                )}
+              </section>
+            )}
+          </CardContent>
+        </Card>
+      )}
       {read && read.trustedSourcesOn && read.brands.length > 0 && (
         <TrustedSourcesCard
           read={read}
