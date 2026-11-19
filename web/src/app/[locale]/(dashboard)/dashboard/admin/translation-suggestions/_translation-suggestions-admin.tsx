@@ -75,7 +75,7 @@ export function TranslationSuggestionsAdmin({ rows }: { rows: SuggestionRow[] })
               <TableHead>{t('columns.current')}</TableHead>
               <TableHead>{t('columns.suggestion')}</TableHead>
               <TableHead>{t('columns.note')}</TableHead>
-              <TableHead className="text-right">{t('columns.actions')}</TableHead>
+              <TableHead className="text-end">{t('columns.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -100,7 +100,7 @@ export function TranslationSuggestionsAdmin({ rows }: { rows: SuggestionRow[] })
                 <TableCell className="max-w-64 whitespace-normal text-muted-foreground">
                   {row.note || '–'}
                 </TableCell>
-                <TableCell className="text-right whitespace-nowrap">
+                <TableCell className="text-end whitespace-nowrap">
                   <Button
                     size="sm"
                     disabled={busy === row.id}

@@ -184,7 +184,7 @@ export function SuggestTranslationDialog({
       {picking && (
         <div
           role="status"
-          className="fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-md border bg-popover px-4 py-2 text-sm text-popover-foreground shadow-lg"
+          className="fixed inset-x-0 bottom-4 z-[100] mx-auto w-fit rounded-md border bg-popover px-4 py-2 text-sm text-popover-foreground shadow-lg"
         >
           {t('picking')}
         </div>
