@@ -13,6 +13,7 @@ import { answerFormats, answerTitle, type ExportAnswer } from './export';
 import { exportChatFile, type ChatFileFormat, type StoredChatFile } from './file-export';
 import { fileChatOutput } from './file-output';
 import { CHAT_FILES_BUCKET, ZIP_MAX_BYTES, ZIP_MAX_FILES } from './files';
+import { pageTitleIssue } from './page-title';
 import { fileStamp } from './stamp';
 
 /**
@@ -175,6 +176,7 @@ export async function saveRunAnswer(actor: ChatActor, runId: string): Promise<Sa
 }
 
 const tChat = createTranslator({ locale: 'en', messages, namespace: 'chatPage' });
+const tChat2 = createTranslator({ locale: 'en', messages, namespace: 'chatEngine.pageMoves' });
 
 /**
  * Export chat (CHAT-23 `chat.export`): the whole chat as one file, each
@@ -523,6 +525,25 @@ export async function zipChatFiles(
 }
 
 /**
+ * The draft's title for an answer opened in the Content Editor: the answer's
+ * first heading, else the person's message when it is a question a page can
+ * answer ("Why did citations drop?"), else "Untitled page" for the person
+ * to name. A request ("Find content opportunities for topics") titled
+ * drafts before: it isn't a page's title.
+ */
+export function draftTitleOfAnswer(answer: ExportAnswer): string {
+  const heading = /^#{1,2}\s+(.+?)\s*#*\s*$/m
+    .exec(answer.markdown)?.[1]
+    ?.replace(/[*_`]/g, '')
+    .trim();
+  if (heading && pageTitleIssue(heading) === null) return heading;
+  const question = answerTitle(answer).trim();
+  return question.endsWith('?') && pageTitleIssue(question) === null
+    ? question
+    : tChat2('untitled');
+}
+
+/**
  * Open in Content Editor on an answer (CHAT-06 item 6, CHAT-25): a new
  * Content draft with the answer as its page, in the chat's brand (or the
  * brand the person has open, for a chat about none), marked on the
@@ -542,7 +563,7 @@ export async function answerToDraft(
   const html = draftMarked.parse(read.answer.markdown, { async: false }) as string;
   const draftId = await createContentDraft(brandId, {
     method: 'create',
-    title: answerTitle(read.answer).slice(0, MAX_TITLE_LENGTH),
+    title: draftTitleOfAnswer(read.answer).slice(0, MAX_TITLE_LENGTH),
     pageType: 'blog_post',
     typePicked: false,
     source: { kind: 'content' },
