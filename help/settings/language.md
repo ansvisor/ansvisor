@@ -29,7 +29,7 @@ Anything without a translation shows in English, never as a blank or a code.
 
 ## E-mails and error messages
 
-E-mails Ansvisor sends you, such as the first-results and Site Audit e-mails and your workspace's AI key warnings, come in your language too, as do the most common messages when something can't be done, such as a plan limit or a read-only workspace. A text that isn't translated yet comes in English. Who gets an e-mail, and when, doesn't change.
+E-mails Ansvisor sends you come in your language too: first results, Site Audit, the Daily Pulse, the AI Traffic weekly digest, your workspace's AI key warnings, agent notices and scheduled job e-mails. So do the most common messages when something can't be done, such as a plan limit or a read-only workspace. A job's title and an agent's answer stay as they were written. When you send a report to someone outside your workspace, its few fixed lines are in your language. A text that isn't translated yet comes in English. Who gets an e-mail, and when, doesn't change.
 
 ## Your brand's content language
 
