@@ -7,6 +7,7 @@ import type { AuditOverview, AuditQuota, SiteCoverage } from '@/lib/actions/audi
 import { nextAutoRun } from '@/lib/audit-auto-runs';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useRubricText } from '@/hooks/use-rubric-text';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -34,6 +35,7 @@ export function AuditSummaryStrip({
   coverage?: SiteCoverage | null;
 }) {
   const t = useTranslations('audit.strip');
+  const rubric = useRubricText();
   if (!overview) return null;
 
   const b = (chunks: React.ReactNode) => <b className="font-semibold">{chunks}</b>;
@@ -65,9 +67,8 @@ export function AuditSummaryStrip({
         : t('noPages'),
   );
   if (overview.lowestCategory) {
-    const label =
-      CATEGORY_META.find((c) => c.key === overview.lowestCategory?.key)?.label ??
-      overview.lowestCategory.key;
+    const { key } = overview.lowestCategory;
+    const label = rubric.category(key, CATEGORY_META.find((c) => c.key === key)?.label ?? key);
     items.push(
       t.rich('lowest', { b, category: label, score: pct(overview.lowestCategory.score) ?? 0 }),
     );

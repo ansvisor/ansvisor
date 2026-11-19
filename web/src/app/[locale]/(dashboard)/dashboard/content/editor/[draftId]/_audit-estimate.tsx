@@ -16,6 +16,7 @@ import {
 } from '@/lib/content/audit-estimate';
 import { BAND_BAR_CLASSES, BAND_TEXT_CLASSES, qualityBand } from '@/lib/content/quality';
 import { cn } from '@/lib/utils';
+import { useRubricText } from '@/hooks/use-rubric-text';
 
 /** How long after the page settles the estimate is read again: a pause, not each keystroke. */
 export const ESTIMATE_DELAY_MS = 1_000;
@@ -120,6 +121,7 @@ export function AuditEstimateCard({
   className?: string;
 }) {
   const t = useTranslations('contentEditor.editor.auditEstimate');
+  const rubric = useRubricText();
   const format = useFormatter();
   const { usage } = useAiUsage();
   const { estimate, aiAt, estimatingAi, estimateAi } = state;
@@ -191,7 +193,7 @@ export function AuditEstimateCard({
                   <p className="text-xs font-medium">{t(`reasons.${scope}`)}</p>
                   <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
                     {list.map((i) => (
-                      <li key={i.key}>{i.label}</li>
+                      <li key={i.key}>{rubric.signal(i.key, 'label', i.label)}</li>
                     ))}
                   </ul>
                   {scope === 'site' && (

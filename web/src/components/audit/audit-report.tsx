@@ -30,6 +30,7 @@ import { ScoreRangeMark, useScoreRangeTip } from './score-range';
 import { ScoreFormula } from './score-formula';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useRubricText, type RubricSignalField } from '@/hooks/use-rubric-text';
 
 // Display order + labels for the five rubric categories (keys come from the
 // server's categoryScores). Mirrors the rubric category weights.
@@ -285,6 +286,9 @@ function SignalRow({
   const [open, setOpen] = useState(false);
   const Icon = STATUS_ICON[signal.status] ?? Minus;
   const t = useTranslations('audit');
+  const rubric = useRubricText();
+  const words = (field: RubricSignalField, english: string) =>
+    rubric.signal(signal.key, field, english);
 
   return (
     <div className="border-b last:border-b-0">
@@ -296,7 +300,7 @@ function SignalRow({
         aria-controls={`signal-panel-${signal.key}`}
       >
         <Icon className={cn('h-4 w-4 shrink-0', STATUS_COLOR[signal.status])} />
-        <span className="flex-1 text-sm font-medium">{signal.label}</span>
+        <span className="flex-1 text-sm font-medium">{words('label', signal.label)}</span>
         {signal.evidenceLevel === 'informational' && (
           <span className="hidden text-[11px] text-muted-foreground sm:inline">
             {t('notScored')}
@@ -323,18 +327,18 @@ function SignalRow({
           {signal.key === AUTHORITY_SIGNAL ? (
             <AuthoritySources signal={signal} />
           ) : (
-            signal.what && <p>{signal.what}</p>
+            signal.what && <p>{words('what', signal.what)}</p>
           )}
           {signal.why && (
             <p>
               <span className="font-medium text-foreground">{t('why')}: </span>
-              {signal.why}
+              {words('why', signal.why)}
             </p>
           )}
           {signal.evidenceNote && (
             <p>
               <span className="font-medium text-foreground">{t('evidenceNote')}: </span>
-              {signal.evidenceNote}
+              {words('evidenceNote', signal.evidenceNote)}
               {signal.evidenceLevel === 'informational' && ` ${t('notScored')}.`}
             </p>
           )}
@@ -355,7 +359,7 @@ function SignalRow({
             signal.howToFix && (
               <p>
                 <span className="font-medium text-foreground">{t('fix')}: </span>
-                {signal.howToFix}
+                {words('howToFix', signal.howToFix)}
               </p>
             )
           )}
@@ -368,13 +372,16 @@ function SignalRow({
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 } as const;
 
 function RecommendationItem({ rec }: { rec: AuditRecommendation }) {
+  const rubric = useRubricText();
   return (
     <div className="space-y-2 border-b py-4 last:border-b-0">
       <div className="flex items-center gap-2">
         <Badge variant={rec.priority === 'high' ? 'default' : 'secondary'} className="text-[10px]">
           {rec.priority}
         </Badge>
-        <span className="text-sm font-medium">{rec.label}</span>
+        <span className="text-sm font-medium">
+          {rubric.signal(rec.signalKey, 'label', rec.label)}
+        </span>
       </div>
       <p className="text-sm text-muted-foreground">{rec.recommendation}</p>
       <PasteBlocks rec={rec} />
@@ -384,6 +391,7 @@ function RecommendationItem({ rec }: { rec: AuditRecommendation }) {
 
 export function AuditReport({ audit }: { audit: AuditResult }) {
   const t = useTranslations('audit');
+  const rubric = useRubricText();
   const [onlyIssues, setOnlyIssues] = useState(false);
   const recBySignal = new Map(audit.recommendations.map((r) => [r.signalKey, r]));
 
@@ -504,7 +512,7 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
             categories={CATEGORY_META}
             notScored={audit.signals
               .filter((s) => s.evidenceLevel === 'informational')
-              .map((s) => s.label)}
+              .map((s) => rubric.signal(s.key, 'label', s.label))}
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -515,7 +523,7 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
             return (
               <div key={cat.key}>
                 <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="font-medium">{cat.label}</span>
+                  <span className="font-medium">{rubric.category(cat.key, cat.label)}</span>
                   <span className="text-muted-foreground">
                     {p === null ? 'n/a' : `${p}/100`}
                     {cs ? ` · ${cs.evaluated}/${cs.total}` : ''}
@@ -554,7 +562,7 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
           return (
             <Card key={cat.key}>
               <CardHeader>
-                <CardTitle className="text-base">{cat.label}</CardTitle>
+                <CardTitle className="text-base">{rubric.category(cat.key, cat.label)}</CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 {sigs.map((s) => (

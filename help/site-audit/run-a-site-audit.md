@@ -1,11 +1,11 @@
 ---
 title: Run a site audit
 route: /dashboard/audit
-keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audit again, bulk audit, audit all]
+keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audit again, bulk audit, audit all, your language]
 synonyms: [page audit, check my page, scan a page, AI readiness check]
 plan: all
-updated: 2026-11-17
-last_checked: 2026-11-17
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -56,6 +56,10 @@ Each completed audit uses one of your plan's monthly audits. An audit still runn
 Auto-audit spends a quarter of your monthly audits on the top pages of the **Opportunities** tab, in five runs on days 1, 7, 14, 21 and 28 of your billing month. On a plan without a monthly limit, auto-audit is off until you turn it on.
 
 Pages you fixed go first: a page whose Site Audit fix you completed in the Action Center in the last 30 days, and that hasn't been audited since, so the action's result says whether the fix took. Pinned pages come next. Pages audited in the last 30 days wait for a later run. After a run, a notice sums it up with **View pages**, and its audits show **Auto** in the Pages list.
+
+## Reports in your language
+
+The report's categories and checks (each check's name, what it looks for, why it matters and how to fix it) follow your interface language. A check added since your language was last updated shows in English until it's translated.
 
 ## Site Audit settings
 
