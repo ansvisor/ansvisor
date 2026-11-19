@@ -11183,7 +11183,8 @@
           "attach": "Attach a file"
         },
         "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
-        "counter": "{count} / {target} characters · {words, plural, one {# word} other {# words}}"
+        "counter": "{count} / {target} characters · {words, plural, one {# word} other {# words}}",
+        "counterRange": "{count} / {min}–{max} characters · {words, plural, one {# word} other {# words}}"
       },
       "link": {
         "title": "Add a link",
@@ -12415,6 +12416,7 @@
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
         "tooShortShort": "Too short yet",
         "notScored": "Not scored yet",
+        "needsAuthor": "Scored once the page has an author",
         "site": {
           "label": "Site trust",
           "score": "Site trust {score}/5",
@@ -12693,8 +12695,8 @@
           },
           "avgSentence": {
             "line": "Sentences average {words, number} words",
-            "detail": "Aim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.",
-            "detailShort": "Aim for 15–20 words: join some short ones, so each says one whole thing."
+            "detail": "Aim for 20 words or fewer: shorter sentences read faster, and AI answers quote them whole.",
+            "detailShort": "Under 8 words on average reads choppy: join some short ones, so each says one whole thing."
           },
           "longSentences": {
             "line": "{count, plural, one {# sentence} other {# sentences}} over 35 words",

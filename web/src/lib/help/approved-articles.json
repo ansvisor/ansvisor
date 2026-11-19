@@ -3677,7 +3677,7 @@
         },
         {
           "heading": "The Rules tab",
-          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
+          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. The character counter in the toolbar shows that range. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
         },
         {
           "heading": "Rule sets and page types",
@@ -3823,7 +3823,7 @@
         "regulated page review"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3832,6 +3832,10 @@
         {
           "heading": "The scores",
           "text": "Quality scores the page from 0 to 100 on three things, each card saying what it scores:\n\n- **E-E-A-T**: who stands behind the page, such as its author and their experience.\n- **Trust**: sources, links and dated facts.\n- **Readability**: how easily it reads.\n\n80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nIn **Before you publish**, **AI search readiness (Site Audit estimate)** is about where the page would score in Site Audit. It's a different score from Quality. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
+        },
+        {
+          "heading": "Without an author, and short sentences",
+          "text": "Until the page has an author, the **Quality** chip leaves **E-E-A-T** out. When only the author would score it, **E-E-A-T** says it's scored once the page has one. The author stays one of your to-dos.\n\nFor **Readability**, sentences of 20 words or fewer on average read best. Short ones are fine, unless they average under 8 words."
         },
         {
           "heading": "Your to-dos and what would raise it",

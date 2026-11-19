@@ -1055,6 +1055,15 @@ const lengthBound = (text: string): number | null => {
  * a Length no rewrite hits exactly), met within it and aimed at its
  * middle. Null for neither (no value, 0, or something else).
  */
+/** The Length rule's range while it is on, for the toolbar's counter; null with it off. */
+export function lengthRangeOf(
+  rules: { rule: { key: string; on: boolean; current: string } }[],
+): { min: number; max: number } | null {
+  const rule = rules.find(({ rule }) => rule.key === 'length' && rule.on)?.rule;
+  const span = rule ? lengthSpan(rule.current) : null;
+  return span ? { min: span.min, max: span.max } : null;
+}
+
 export function lengthSpan(value: string): { target: number; min: number; max: number } | null {
   const range = value.split(/[-–—]/);
   if (range.length === 2) {

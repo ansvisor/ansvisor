@@ -156,7 +156,13 @@ import {
 } from '@/lib/content/ready-to-publish';
 import { estimateDocument } from '@/lib/content/audit-estimate';
 import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
-import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
+import {
+  BAND_CLASSES,
+  eeatAwaitsAuthor,
+  qualityAverage,
+  qualityBand,
+  qualityPhase,
+} from '@/lib/content/quality';
 import { inputsGiven } from '@/lib/content/draft-inputs';
 import {
   linksToCheck,
@@ -199,6 +205,7 @@ import {
   openRulesForAgent,
   overLengthFor,
   lengthCapFor,
+  lengthRangeOf,
   lengthSpan,
   rewriteAdvice,
   NO_RULE_CONTEXT,
@@ -1458,11 +1465,13 @@ export function DraftEditor({
       toast.error(t('quality.keepFailed'));
     }
   };
-  const qualityScore = qualityAverage([
-    eeatScore?.score ?? null,
-    trustScore?.score ?? null,
-    readable?.score ?? null,
-  ]);
+  // E-E-A-T waiting for an author is a to-do, not a 0 in the average
+  // (eeatAwaitsAuthor), while another score stands: with none, the chip
+  // still opens Quality, where the author is asked for.
+  const awaitsAuthor = eeatAwaitsAuthor(pageAuthor, authorConfirmed);
+  const qualityScore =
+    (awaitsAuthor ? qualityAverage([trustScore?.score ?? null, readable?.score ?? null]) : null) ??
+    qualityAverage([eeatScore?.score ?? null, trustScore?.score ?? null, readable?.score ?? null]);
   const hasAuthors = (authorsRead?.authors.length ?? 0) > 0;
   // Add byline to content (CE-057): the brand's CMS has no author field, so
   // its exports carry one byline line under the H1.
@@ -1542,6 +1551,7 @@ export function DraftEditor({
             : null,
         readability: readable,
         eeat: eeatScore,
+        eeatAwaitsAuthor: awaitsAuthor,
         trust: trustScore,
         author: pageAuthor,
         canEdit: canEditPageAuthor,
@@ -4582,6 +4592,7 @@ export function DraftEditor({
             <EditorToolbar
               editor={editor}
               target={rules.length}
+              range={lengthRangeOf(rules.rules)}
               lengthWarning={lengthWarns(rules.rules)}
               htmlView={htmlSource !== null}
               onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}

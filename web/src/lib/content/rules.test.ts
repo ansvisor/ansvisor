@@ -22,6 +22,7 @@ import {
   ruleLength,
   ruleLengthBand,
   lengthCapFor,
+  lengthRangeOf,
   lengthSpan,
   lengthRangeValue,
   wordsForLength,
@@ -1527,5 +1528,20 @@ describe('My rules and text rules', () => {
   it('checks a rule with a number as a number, the rest by AI', () => {
     expect(textRuleCheck('Use at least 3 images')).toBe('numberCheck');
     expect(textRuleCheck('Mention free shipping')).toBe('aiCheck');
+  });
+});
+
+describe('lengthRangeOf (Content test 2026-11-19, item 8)', () => {
+  const length = (current: string, on = true) => [{ rule: { key: 'length', on, current } }];
+
+  it('is the Length rule’s range, as the counter shows it', () => {
+    // "/3,000" beside a rule of 2,400–3,600: the counter shows the range.
+    expect(lengthRangeOf(length('3000'))).toEqual({ min: 2_400, max: 3_600 });
+    expect(lengthRangeOf(length('4,000-5,000'))).toEqual({ min: 4_000, max: 5_000 });
+  });
+
+  it('is none with the rule off or unread', () => {
+    expect(lengthRangeOf(length('3000', false))).toBeNull();
+    expect(lengthRangeOf([])).toBeNull();
   });
 });
