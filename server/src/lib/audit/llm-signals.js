@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { resolveModel } from '../ai-provider.js';
 import { signalsByKey } from './rubric.js';
 import { readVerdicts, saveVerdicts } from './llm-verdicts.js';
+import { authorFacts } from './author-facts.js';
 import { withRetry } from '../retry.js';
 import { logger } from '../logger.js';
 
@@ -133,9 +134,17 @@ function pageAddress(url) {
 export function viewInputs(ctx) {
   const url = pageAddress(ctx.url);
   const title = ctx.$ ? ctx.$('title').first().text().replace(/\s+/g, ' ').trim() : '';
+  const author = authorFacts(ctx);
   return {
     opening: { url, title, text: ctx.text.slice(0, OPENING_CHARS) },
-    body: { url, wordCount: ctx.wordCount, text: ctx.text.slice(0, BODY_CHARS) },
+    body: {
+      url,
+      wordCount: ctx.wordCount,
+      text: ctx.text.slice(0, BODY_CHARS),
+      // The author's facts from the whole page (an author box can sit past
+      // the text's first characters): only when the page names some.
+      ...(author ? { author } : {}),
+    },
   };
 }
 
@@ -181,7 +190,16 @@ PAGE TEXT (truncated):
 """
 ${input.text}
 """
-
+${
+  input.author
+    ? `
+AUTHOR FACTS (read from the whole page: author boxes, bylines, Person JSON-LD and profile links; author-credentials and byline-depth judge these too, wherever on the page they sit):
+"""
+${input.author}
+"""
+`
+    : ''
+}
 Return a verdict for every signal key.`;
 }
 

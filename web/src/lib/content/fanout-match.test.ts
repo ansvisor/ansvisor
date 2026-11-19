@@ -19,6 +19,19 @@ describe('carriesFanout', () => {
     }
   });
 
+  it('meets a natural heading for a long string of keywords, by its main words', () => {
+    // Content test 2026-11-19: the agent pasted this as an H2 to meet fanoutH2.
+    const fanout =
+      '2026 AI SEO GEO brand monitoring tools platforms answer engine optimization monitoring AI visibility competitors pricing features';
+    expect(
+      carriesFanout(
+        fanout,
+        'Which AI SEO and GEO brand monitoring tools should you compare in 2026?',
+      ),
+    ).toBe(true);
+    expect(carriesFanout(fanout, 'Pricing of AI tools')).toBe(false);
+  });
+
   it('never meets an unrelated heading, or one with a fan-out’s words but two', () => {
     const fanout = 'how to measure ai overviews in search console';
     expect(carriesFanout(fanout, 'Pricing and plans')).toBe(false);

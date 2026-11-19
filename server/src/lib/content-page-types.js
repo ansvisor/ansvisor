@@ -32,6 +32,48 @@ export const PAGE_TYPE_FORMATS = {
   sizing_guide: 'Sizing guide: how to find the right size, with a size chart',
 };
 
+/** Page types that weigh options against each other: each option named must be on the page. */
+export const WEIGHING_PAGE_TYPES = new Set(['alternatives', 'comparison', 'best_of']);
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The brand's competitors a page weighing options must cover (Content test
+ * 2026-11-19, item 14: a "Profound alternatives" page left out Otterly and
+ * Peec AI, which its opportunity named): those named in its title, prompts
+ * or brief, written as the brand's list writes them, plus the ones its brief
+ * names. None for any other page type.
+ */
+export function namedCompetitors(pageType, competitors, texts, briefNames = []) {
+  if (!WEIGHING_PAGE_TYPES.has(pageType)) return [];
+  const text = texts.filter(Boolean).join('\n');
+  const listed = new Map(
+    competitors.map((name) => [
+      String(name ?? '')
+        .trim()
+        .toLowerCase(),
+      String(name ?? '').trim(),
+    ]),
+  );
+  const named = competitors.filter((name) => {
+    const clean = String(name ?? '').trim();
+    return (
+      clean.length > 1 &&
+      new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(clean)}(?![\\p{L}\\p{N}])`, 'iu').test(text)
+    );
+  });
+  const fromBrief = briefNames
+    .map((name) =>
+      listed.get(
+        String(name ?? '')
+          .trim()
+          .toLowerCase(),
+      ),
+    )
+    .filter(Boolean);
+  return [...new Set([...named.map((name) => String(name).trim()), ...fromBrief])];
+}
+
 /** A draft's page type as the model reads it: its name and format, or "not set". */
 export function pageTypeFormat(pageType) {
   if (!pageType) return 'not set';

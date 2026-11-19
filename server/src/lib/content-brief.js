@@ -36,6 +36,7 @@ import {
 } from './content-sources.js';
 import { TABLE_PAGE_TYPES } from './content-lists.js';
 import { reserveAiBudget } from './plan-guard.js';
+import { fitSources } from './content-query-fit.js';
 import { objectOptions } from './structured-output.js';
 
 /**
@@ -385,7 +386,7 @@ export const SYSTEM_PROMPT_V2 = `${SYSTEM_PROMPT}
 - Names as written: in "products", the brand's products the page names, written exactly as the data writes them; in "competitors", the competitors listed that it names, as listed. Never another spelling.
 - In "links", pick up to 5 of the brand's pages and up to 3 of the sources listed to link to, each by its address copied exactly, with the words to link and the H2 it goes in. None when none is listed.
 - "format", "sourceType" and a proof's "kind" are keys: write them as listed, in English, whatever the brief's language.
-- Headings: each H2 about 8 to 15 words, under 90 characters.
+- Headings: each H2 about 8 to 15 words, under 90 characters, worded as a person would write it with the fan-out's main terms: a fan-out is often a string of keywords, never pasted as a heading.
 - No keyword stuffing, and no wording made to trigger a citation: write for the reader.
 - Follow the rules the page is written to, when listed.`;
 
@@ -582,6 +583,9 @@ export async function rebuildDraftBrief({
   // The rules only with the brief rules on: the brief plans to them then, and may say their numbers.
   const planTo = briefRulesOn() ? rules : [];
   const inputs = inputSources(inputRow, brand.name);
+  // Only the searches in the brief's language, and the Search Console
+  // queries about this page (content-query-fit.js).
+  sources = fitSources(sources, { language: brand.language, focus: [draft.title, ...prompts] });
 
   if (!prompts.length && !sources.fanouts.length && !sources.queries.length) {
     throw Object.assign(new Error('No prompts, fan-outs or queries to build from'), {

@@ -118,7 +118,7 @@ When the fix is content the user can paste, put the ready-to-use text in "draft"
 
 Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length limit; a value only the brand knows is a placeholder there too, e.g. "price": "[your price]".
 
-When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist.
+When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist. Never suggest a source the page already links to ("already links to"): suggest others.
 
 When BRAND RULES are given, every recommendation, draft and code follows them: a recommendation a rule forbids is left out, never written against it.
 
@@ -233,7 +233,12 @@ export async function generateRecommendations(
         : reading
           ? ` | finding: ${reading}`
           : '';
-      return `- ${r.key} [${r.status}, impact: ${s.impactTier ?? 'standard'}]: ${s.what ?? ''}${finding}`;
+      // The authority sites the page links to already: never suggested again.
+      const linked =
+        r.key === 'outbound-authority-links' && r.evidence?.authorityHosts?.length
+          ? ` | already links to: ${r.evidence.authorityHosts.join(', ')}`
+          : '';
+      return `- ${r.key} [${r.status}, impact: ${s.impactTier ?? 'standard'}]: ${s.what ?? ''}${finding}${linked}`;
     })
     .join('\n');
 

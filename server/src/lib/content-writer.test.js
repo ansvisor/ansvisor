@@ -720,9 +720,9 @@ describe('runDraftWriting on a new page', () => {
     // The answer is charged to the hold; nothing is left to release after.
     expect(budget.charge).toHaveBeenCalledTimes(1);
     expect(budget.release).toHaveBeenCalled();
-    // The fan-outs a rule names, in their words, on a new page too (B).
+    // The fan-outs a rule names, as natural headings, on a new page too (B).
     expect(generateObject.mock.calls[0][0].system).toContain(
-      'For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.',
+      'For each fan-out a rule names, use it, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq. A fan-out is a search, often a string of keywords',
     );
     expect(rpcCalls).toEqual([
       ['content_draft_snapshot', { p_draft_id: DRAFT, p_origin: 'agent_before' }],
@@ -1613,6 +1613,21 @@ describe('the write prompt', () => {
     // None: the prompt is as it was.
     expect(prompt([])).not.toContain("The brand's rules");
     expect(prompt(undefined)).not.toContain("The brand's rules");
+  });
+
+  it('names the options a page weighing them must cover, and none for other pages', () => {
+    const prompt = (namedCompetitors) =>
+      buildWritePrompt({
+        brand: { ...brand, namedCompetitors },
+        draft: draftRow({ page_type: 'alternatives' }),
+        brief: 'No brief.',
+        input: { sources: { length: 3000 }, rules: [], textRules: [] },
+      });
+    expect(prompt(['Otterly.AI', 'Peec AI'])).toContain(
+      'Options the page must cover, each in its own section or table row, written as here: Otterly.AI, Peec AI. Leave none out.',
+    );
+    expect(prompt([])).not.toContain('Options the page must cover');
+    expect(prompt(undefined)).not.toContain('Options the page must cover');
   });
 
   it('tells the model the brand’s banned phrases, and nothing without any', () => {
