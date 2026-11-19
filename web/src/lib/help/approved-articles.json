@@ -3743,7 +3743,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3779,7 +3779,7 @@
         },
         {
           "heading": "Follow it to Done",
-          "text": "Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.\n\nA done opportunity comes back as **New**, marked **New signal detected**, when its score has risen since, or the visibility its work gained didn't hold."
+          "text": "Starting a draft for an opportunity (Write this, Send to Editor or New content) sets it **In Progress**. Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.\n\nA done opportunity comes back as **New**, marked **New signal detected**, when its score has risen since, or the visibility its work gained didn't hold."
         }
       ]
     },

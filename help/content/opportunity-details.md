@@ -4,7 +4,7 @@ route: /dashboard/content
 keywords: [opportunity details, source data, why this score, another angle, mark as reviewed, dismiss opportunity, send to actions, new signal detected, write this]
 synonyms: [opportunity panel, opportunity page, act on an opportunity, follow an opportunity]
 plan: all
-updated: 2026-11-03
+updated: 2026-11-19
 last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
@@ -75,6 +75,6 @@ It counts as one of the month's new opportunities.
 
 ## Follow it to Done
 
-Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.
+Starting a draft for an opportunity (Write this, Send to Editor or New content) sets it **In Progress**. Once an opportunity is in the Action Center, its status follows its action: **In Progress** once work on it starts, **Done** when it's complete. Its **Results** card shows what changed once the work has been measured.
 
 A done opportunity comes back as **New**, marked **New signal detected**, when its score has risen since, or the visibility its work gained didn't hold.

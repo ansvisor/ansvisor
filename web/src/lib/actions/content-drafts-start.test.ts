@@ -404,6 +404,22 @@ describe('createContentDraft', () => {
     expect(inserted()).toMatchObject({ prompt_ids: [PROMPT] });
   });
 
+  it('sets the opportunity In Progress once its draft is started, never back from Sent or Done', async () => {
+    reads = {
+      content_opportunities: { id: OPPORTUNITY, prompt_id: PROMPT, cluster_id: null },
+    };
+    await createContentDraft(BRAND, start({ title: 'CRM for agents' }));
+    const update = calls.find(
+      (call) => call.table === 'content_opportunities' && call.op === 'update',
+    );
+    expect(update?.value).toMatchObject({ status: 'in_progress' });
+    expect(update?.filters).toEqual([
+      ['eq', 'id', OPPORTUNITY],
+      ['eq', 'brand_id', BRAND],
+      ['in', 'status', ['new', 'reviewed']],
+    ]);
+  });
+
   it('takes the one prompt of an opportunity with no clusters', async () => {
     reads = {
       content_opportunities: {

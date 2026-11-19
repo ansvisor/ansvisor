@@ -144,6 +144,7 @@ import {
   promptsFor,
   saveDraft,
   startInput,
+  startOpportunity,
   type UpdateContentDraftResult,
 } from '@/lib/content/draft-writes';
 import { assertWritable } from '@/lib/subscription-guard';
@@ -1223,6 +1224,7 @@ export async function startDraftFromAction(
         );
       if (inputsError) console.error("Failed to put the page's links in Your input:", inputsError);
     }
+    if (opportunityRow?.id) await startOpportunity(supabase, brandId, opportunityRow.id);
     if (taskRes.data.status === 'todo') {
       // The draft is started either way; the task's status can be set in the drawer.
       await setDraftTasksStatus(
