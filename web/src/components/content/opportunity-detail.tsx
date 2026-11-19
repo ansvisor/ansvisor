@@ -75,6 +75,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { isNoPlan } from '@/lib/billing/no-plan';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useAiText } from '@/hooks/use-ai-text';
 import { OpportunityActions } from '@/components/content/opportunity-actions';
 import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
 import { WriteThisDialog } from '@/components/content/write-this-dialog';
@@ -210,6 +211,8 @@ export function OpportunityDetail({
   useEffect(() => {
     if (opportunity) onOpportunity?.(opportunity);
   }, [opportunity, onOpportunity]);
+  // Its title and reason in the person's interface language (LOC-010).
+  const aiText = useAiText('opportunity', opportunity ? [opportunity.id] : []);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [generatingBrief, setGeneratingBrief] = useState(false);
@@ -557,7 +560,9 @@ export function OpportunityDetail({
               </Link>
             )}
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-bold tracking-tight">{opportunity.title}</h1>
+              <h1 className="text-xl font-bold tracking-tight">
+                {aiText(opportunity.id, 'title', opportunity.title)}
+              </h1>
               {sd.alternativeOf && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   <Badge variant="outline" className="mr-1.5 text-[10px] font-normal">
@@ -573,7 +578,9 @@ export function OpportunityDetail({
                 </p>
               )}
               {opportunity.description && (
-                <p className="text-sm text-muted-foreground mt-1">{opportunity.description}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {aiText(opportunity.id, 'description', opportunity.description)}
+                </p>
               )}
             </div>
           </div>

@@ -3539,6 +3539,10 @@
           "text": "- the action to take, with what it was built for: a topic and its number of prompts, **Single prompt**, or the Action Center action it came from;\n- when it was **Suggested**, with a dot on the rows suggested since your last visit;\n- its **Type**: **Owned** or **Earned**, and, where it applies, what to do with your page: Create, Optimize, Expand, Refresh, Consolidate or Defend;\n- its **Impact**, **High**, **Medium** or **Low**, which Ansvisor rates when it writes the opportunity, and its **Score**, from 0 to 100;\n- its **Status**: New, Reviewed, Sent to Workflow, In Progress, Done, Dismissed or Archived.\n\nAbove the list, cards count the **Total Opportunities** and the **High Impact** ones, and give the **Avg. Score**. On plans with monthly limits, **This billing period** shows how many new opportunities and content briefs are left, and when they reset."
         },
         {
+          "heading": "In your language",
+          "text": "Ansvisor writes each opportunity's title and reason in English. When your interface language is another, the ones on your screen show in your language: in English for a moment the first time, then translated. Each is translated once and kept, so teammates who use the same language see it at once. Search still matches the English words."
+        },
+        {
           "heading": "Filter, sort and export",
           "text": "- Search the opportunities, and narrow the list by topic, prompt, type, impact, **Source** and status. The sources are **System**, suggested automatically; **Manual**, made with **New**; **Prompt**, suggested from a prompt; and **Action**, sent from an Action Center task.\n- **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.\n- Archived opportunities stay hidden unless you filter to them.\n- Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.\n- **Export CSV** downloads every opportunity that matches the filters and the search, not only the page you see."
         },
