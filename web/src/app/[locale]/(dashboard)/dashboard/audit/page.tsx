@@ -745,7 +745,7 @@ export default function SiteAuditPage() {
         </div>
       </HeaderWithAiUsage>
       <AuditConfirmDialog
-        // Each asking starts over: Leave out the recent ones ticked again.
+        // Each asking starts over, Leave out the recent ones as its kind starts it.
         key={confirm?.at}
         pages={confirm?.pages ?? null}
         mode={confirm?.mode ?? 'picked'}
