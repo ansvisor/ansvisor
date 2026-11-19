@@ -104,6 +104,13 @@ export interface AddOnChangeInput {
   topUp?: number;
   /** The preview's proration date (Unix seconds), so the charge is the amount shown. */
   prorationDate?: number;
+  /**
+   * Only the top-up: the subscription keeps the tracking and brands it has
+   * in Stripe now, whatever trackingUnits / extraBrands say. The Get more
+   * window sends it, so a snapshot read before a change in another tab (or
+   * before the webhook) never reverts or adds an add-on.
+   */
+  topUpOnly?: boolean;
 }
 
 export type AddOnChangePreview =
@@ -131,6 +138,7 @@ const inputSchema = z.object({
   extraBrands: z.number().int().min(0).max(1_000),
   topUp: z.number().int().min(0).max(100).optional(),
   prorationDate: z.number().int().positive().optional(),
+  topUpOnly: z.boolean().optional(),
 });
 
 const refuse = (failure: AddOnChangeFailure, extra: Partial<AddOnChangeRefusal> = {}) =>
@@ -379,8 +387,9 @@ const idOf = (value: string | { id: string } | null | undefined) =>
 async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal> {
   const parsed = inputSchema.safeParse(raw);
   if (!parsed.success) return refuse('unavailable');
-  const input = parsed.data;
+  let input = parsed.data;
   if (!isCloud()) return refuse('not_cloud');
+  if (input.topUpOnly && !input.topUp) return refuse('unavailable');
 
   const supabase = await createClient();
   const {
@@ -439,6 +448,13 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     row.active && addOnForPlan(row, 'growth') && addOnInterval(row) === interval;
 
   const current = currentAddOns(items, recurring);
+  if (input.topUpOnly) {
+    input = {
+      ...input,
+      trackingUnits: current.tracking?.units ?? 0,
+      extraBrands: current.brands?.quantity ?? 0,
+    };
+  }
   const base = getPlan('growth').limits;
   const limits: AddOnLimits = {
     prompts: base.maxPrompts + input.trackingUnits,
@@ -556,4 +572,170 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     interval,
     prorationDate: prorationDateOf(input.prorationDate),
   };
+}
+
+// ─── Settings › Billing: what the card shows ───────────────────────────────
+
+/** Why the workspace can't change its add-ons now, or `open` when it can. */
+export type PlanAddOnsState =
+  | 'open'
+  | 'not_admin'
+  | 'starter'
+  | 'enterprise'
+  | 'trial'
+  | 'no_plan'
+  | 'ending';
+
+export interface PlanAddOnsView {
+  state: PlanAddOnsState;
+  /** The plan's billing period: add-on prices follow it. */
+  interval: 'month' | 'year';
+  currency: string;
+  /** What the plan includes. */
+  base: AddOnLimits;
+  /** What the subscription adds now. */
+  current: { trackingUnits: number; extraBrands: number };
+  /** The tracking tiers on the plan's period, smallest first. */
+  tiers: { units: number; priceCents: number; contactSales: boolean }[];
+  /** One extra brand on the plan's period; null when not on sale. */
+  brandPriceCents: number | null;
+  /** The AI usage top-ups. */
+  topUps: { multiplier: number; priceCents: number; briefs: number; opportunities: number }[];
+  /** When the plan renews: a top-up lasts until then. */
+  renewsOn: string | null;
+}
+
+export type PlanAddOnsRead =
+  | { ok: true; addOns: PlanAddOnsView }
+  | { ok: false; failure: 'not_cloud' | 'failed' };
+
+interface ViewRow {
+  kind: 'tracking' | 'brand' | 'ai_topup';
+  price_cents: number;
+  currency: string;
+  billing: 'monthly' | 'yearly' | 'one_time';
+  grant_prompts: number | null;
+  grant_briefs: number | null;
+  grant_opportunities: number | null;
+  multiplier: number | null;
+  sale: 'self_serve' | 'contact_sales';
+  plans: string[] | null;
+  active: boolean;
+}
+
+/** What Settings › Billing shows of Growth's add-ons. Never throws. */
+export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
+  try {
+    if (!isCloud()) return { ok: false, failure: 'not_cloud' };
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, failure: 'failed' };
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('organization_id, role')
+      .eq('id', user.id)
+      .maybeSingle();
+    const organizationId = profile?.organization_id as string | undefined;
+    if (!organizationId) return { ok: false, failure: 'failed' };
+
+    const [{ data: org }, { data: rows, error }] = await Promise.all([
+      supabaseAdmin
+        .from('organizations')
+        .select(
+          'plan, subscription_status, cancel_at_period_end, subscription_ends_at, stripe_subscription_id, add_on_prompts, add_on_brands',
+        )
+        .eq('id', organizationId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('add_on_products')
+        .select(
+          'kind, price_cents, currency, billing, grant_prompts, grant_briefs, grant_opportunities, multiplier, sale, plans, active',
+        )
+        .in('kind', ['tracking', 'brand', 'ai_topup']),
+    ]);
+    if (error || !org) return { ok: false, failure: 'failed' };
+
+    const planId = (org.plan as string | null) ?? 'starter';
+    const status = org.subscription_status as string | null;
+    const state: PlanAddOnsState =
+      planId === 'enterprise'
+        ? 'enterprise'
+        : planId !== 'growth'
+          ? 'starter'
+          : status === 'trialing'
+            ? 'trial'
+            : status !== 'active' || !org.stripe_subscription_id
+              ? 'no_plan'
+              : org.cancel_at_period_end
+                ? 'ending'
+                : profile?.role !== 'admin'
+                  ? 'not_admin'
+                  : 'open';
+
+    // The plan's period, from its Stripe item, whatever the state (a trial
+    // on a yearly plan sees yearly prices); monthly when there's no
+    // subscription or it can't be read.
+    let interval: 'month' | 'year' = 'month';
+    if (planId === 'growth' && org.stripe_subscription_id) {
+      try {
+        const stripe = await loadStripe();
+        if (stripe) {
+          const sub = await stripe.subscriptions.retrieve(org.stripe_subscription_id as string);
+          const found = planItemOf(sub.items.data)?.price?.recurring?.interval;
+          if (found === 'year') interval = 'year';
+        }
+      } catch (err) {
+        if (state === 'open' || state === 'not_admin') throw err;
+        console.error('[plan-add-ons] Plan period not read; monthly shown:', err);
+      }
+    }
+
+    const catalog = ((rows ?? []) as ViewRow[]).filter(
+      (r) => r.active && addOnForPlan(r, 'growth'),
+    );
+    const onPeriod = (r: ViewRow) => addOnInterval(r) === interval;
+    const tiers = catalog
+      .filter((r) => r.kind === 'tracking' && onPeriod(r) && r.grant_prompts)
+      .sort((a, b) => (a.grant_prompts ?? 0) - (b.grant_prompts ?? 0))
+      .map((r) => ({
+        units: r.grant_prompts as number,
+        priceCents: r.price_cents,
+        contactSales: r.sale === 'contact_sales',
+      }));
+    const brand = catalog.find((r) => r.kind === 'brand' && onPeriod(r) && r.sale === 'self_serve');
+    const topUps = catalog
+      .filter((r) => r.kind === 'ai_topup' && r.multiplier && r.sale === 'self_serve')
+      .sort((a, b) => (a.multiplier ?? 0) - (b.multiplier ?? 0))
+      .map((r) => ({
+        multiplier: r.multiplier as number,
+        priceCents: r.price_cents,
+        briefs: r.grant_briefs ?? 0,
+        opportunities: r.grant_opportunities ?? 0,
+      }));
+    const base = getPlan('growth').limits;
+    const count = (v: unknown) => (typeof v === 'number' && v > 0 ? v : 0);
+
+    return {
+      ok: true,
+      addOns: {
+        state,
+        interval,
+        currency: catalog[0]?.currency ?? 'usd',
+        base: { prompts: base.maxPrompts, brands: base.maxBrands },
+        current: {
+          trackingUnits: count(org.add_on_prompts),
+          extraBrands: count(org.add_on_brands),
+        },
+        tiers,
+        brandPriceCents: brand?.price_cents ?? null,
+        topUps,
+        renewsOn: (org.subscription_ends_at as string | null) ?? null,
+      },
+    };
+  } catch (err) {
+    console.error('[plan-add-ons] Read failed:', err);
+    return { ok: false, failure: 'failed' };
+  }
 }

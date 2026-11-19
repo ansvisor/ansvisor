@@ -192,7 +192,7 @@ When the fix is content the user can paste, put the ready-to-use text in "draft"
 
 Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length limit; a value only the brand knows is a placeholder there too, e.g. "price": "[your price]".
 
-When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist.
+When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist. Never suggest a source the page already links to ("already links to"): suggest others.
 
 A price or a plan fact is quoted only as the page states it, with its billing period ("$249 a month", "$199 a month billed yearly"); when unsure, use [your price]. Never state as fact anything about the brand that the PAGE TEXT or BRAND DATA doesn't say (what it's built on, its methods, partners, guidelines it follows): write it as a [your …] placeholder or leave it out. Never invent an address on the brand's own site (an author page, a bio, a product page): use [your author url] or [your page url]. When TRACKED ENGINES are given, name only those AI engines in any copy.
 
@@ -313,7 +313,12 @@ export async function generateRecommendations(
         : reading
           ? ` | finding: ${reading}`
           : '';
-      return `- ${r.key} [${r.status}, impact: ${s.impactTier ?? 'standard'}]: ${s.what ?? ''}${finding}`;
+      // The authority sites the page links to already: never suggested again.
+      const linked =
+        r.key === 'outbound-authority-links' && r.evidence?.authorityHosts?.length
+          ? ` | already links to: ${r.evidence.authorityHosts.join(', ')}`
+          : '';
+      return `- ${r.key} [${r.status}, impact: ${s.impactTier ?? 'standard'}]: ${s.what ?? ''}${finding}${linked}`;
     })
     .join('\n');
 

@@ -7,13 +7,14 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { CONTACT_SALES_URL, PLANS } from '@/config/plans';
 import { track } from '@/lib/analytics';
 import { useUpgradeWallShown } from '@/lib/friction-events';
+import { ADD_TRACKING_HREF } from '@/lib/billing/add-on-links';
 
 const BILLING = '/dashboard/settings?tab=billing';
 
 /**
  * Where to go past the plan's prompt limit (Simplify PR 16): Starter sees Growth's limit in
- * billing; Growth and Enterprise (custom limits) are raised by Ansvisor, so
- * they contact us. Self-hosted has no limit and no button. Each showing
+ * billing; Growth adds more tracking on Billing's add-ons card (00546);
+ * Enterprise (custom limits) is raised by Ansvisor, so it contacts us. Self-hosted has no limit and no button. Each showing
  * counts as an upgrade wall, as before.
  */
 export function PlanLimitButtons({
@@ -44,6 +45,17 @@ export function PlanLimitButtons({
         className={buttonVariants({ variant: 'outline', size })}
       >
         {t('seeGrowth', { count: growthPrompts })}
+      </Link>
+    );
+  }
+  if (planId === 'growth') {
+    return (
+      <Link
+        href={ADD_TRACKING_HREF}
+        onClick={() => track('add_on_entry', { source })}
+        className={buttonVariants({ variant: 'outline', size })}
+      >
+        {t('addTracking')}
       </Link>
     );
   }

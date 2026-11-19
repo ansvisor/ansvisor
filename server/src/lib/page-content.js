@@ -18,6 +18,7 @@
 
 import * as cheerio from 'cheerio';
 import { compile } from 'css-select';
+import { keepStructure, pageAuthor } from './page-structure.js';
 
 /** The most HTML a page brings into a draft, as the editor's body limit. */
 export const MAX_CONTENT_LENGTH = 500_000;
@@ -866,18 +867,21 @@ export function textLength(html) {
 /**
  * @param {string} html the page as fetched
  * @param {string} pageUrl the page's address after redirects, for its links
- * @param {{ $?: import('cheerio').CheerioAPI, dropHidden?: boolean, withText?: boolean }} [opts]
+ * @param {{ $?: import('cheerio').CheerioAPI, dropHidden?: boolean, withText?: boolean, forEditor?: boolean }} [opts]
  *   `$`: the page already parsed, read once by a caller that reads it too
  *   (it is changed: the frame and furniture go). `dropHidden`: all the page
  *   hides goes first, with no FAQ answers kept (a reader for a model).
- *   `withText`: the content's words too.
- * @returns {{ title: string, html: string, text?: string }} html: the content,
- *   then its JSON-LD scripts; text (withText): its words, each block apart
+ *   `withText`: the content's words too. `forEditor`: the page as the
+ *   Content Editor takes it in, its tables, lists and cards kept as blocks
+ *   the editor keeps (page-structure.js), with the person it is by.
+ * @returns {{ title: string, html: string, text?: string, author?: object | null }}
+ *   html: the content, then its JSON-LD scripts; text (withText): its words,
+ *   each block apart; author (forEditor): who the page says it is by
  */
 export function extractPageContent(
   html,
   pageUrl,
-  { $: parsed, dropHidden = false, withText = false } = {},
+  { $: parsed, dropHidden = false, withText = false, forEditor = false } = {},
 ) {
   const $ = parsed ?? cheerio.load(html);
 
@@ -886,6 +890,9 @@ export function extractPageContent(
     .get()
     .filter((text) => text && text.length <= MAX_JSON_LD_LENGTH)
     .slice(0, MAX_JSON_LD);
+
+  // The author box is furniture and goes with it: who the page is by is read first.
+  const author = forEditor ? pageAuthor($, jsonLd, pageUrl) : undefined;
 
   // The copies a desktop screen doesn't show, by the page's own CSS, go
   // before anything is read: the text, its title and its pictures once.
@@ -1085,6 +1092,7 @@ export function extractPageContent(
     else el.name = 'h2';
   }
   unwrapAll(wordless);
+  if (forEditor) keepStructure($, root[0]);
   let content = (root.html() ?? '').trim();
   // A title above the content (a hero outside <main>) heads it, as the
   // draft's title is its first heading.
@@ -1098,5 +1106,6 @@ export function extractPageContent(
     title,
     html: `${content}${schema}`,
     ...(withText ? { text: plainTextOf(root[0]) } : {}),
+    ...(forEditor ? { author } : {}),
   };
 }
