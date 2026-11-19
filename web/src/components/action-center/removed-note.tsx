@@ -38,7 +38,7 @@ export function RemovedNote({ payload }: { payload: Record<string, unknown> }) {
       >
         {note}
       </TooltipTrigger>
-      <TooltipContent className="max-w-80 text-left">
+      <TooltipContent className="max-w-80 text-start">
         {more > 0 ? t('removed.hoverMore', { names, more }) : t('removed.hover', { names })}
       </TooltipContent>
     </Tooltip>

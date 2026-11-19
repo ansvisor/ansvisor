@@ -282,9 +282,9 @@ function GoogleCard({
             onClick={guard(connect, { action: tActions('connectIntegrations') })}
           >
             {busy === 'connect' ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              <Plus className="me-1.5 h-3.5 w-3.5" />
             )}
             {t(current ? 'connectAnother' : 'connect')}
           </Button>
@@ -297,9 +297,9 @@ function GoogleCard({
               className="text-muted-foreground"
             >
               {busy === 'disconnect' ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                <Unplug className="me-1.5 h-3.5 w-3.5" />
               )}
               {t('disconnect')}
             </Button>

@@ -66,7 +66,7 @@ export function FormulaDialog() {
                 confidence = answers mentioning you ÷ (answers mentioning you +{' '}
                 {POSITION_SUPPORT_ANSWERS})
               </Formula>
-              <ul className="list-disc pl-5 space-y-1">
+              <ul className="list-disc ps-5 space-y-1">
                 <li>
                   <span className="font-medium text-foreground">Mention rate ({PCT.mention}%)</span>{' '}
                   — share of AI answers that mention your brand by name.

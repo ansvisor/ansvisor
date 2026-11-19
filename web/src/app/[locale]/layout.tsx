@@ -3,6 +3,8 @@ import { getLocale, getMessages } from 'next-intl/server';
 import { FormatLocale } from '@/components/providers/format-locale';
 import { notFound } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
+import { DirectionProvider } from '@base-ui/react/direction-provider';
+import { localeDirection } from '@/i18n/locales';
 import { routing } from '@/i18n/routing';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -26,9 +28,11 @@ export default async function LocaleLayout({
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
       <NextIntlClientProvider messages={messages} locale={uiLocale}>
-        <FormatLocale locale={uiLocale} />
-        {children}
-        <Toaster richColors position="top-right" />
+        <DirectionProvider direction={localeDirection(uiLocale)}>
+          <FormatLocale locale={uiLocale} />
+          {children}
+          <Toaster richColors position="top-right" />
+        </DirectionProvider>
       </NextIntlClientProvider>
     </ThemeProvider>
   );

@@ -531,7 +531,7 @@ function OperatorToday({
                 size: 'sm',
                 variant: plan.state === 'waiting' ? 'default' : 'outline',
               }),
-              'ml-auto',
+              'ms-auto',
             )}
           >
             {plan.state === 'waiting' ? tPanel('review') : tPanel('openPlan')}
@@ -930,7 +930,7 @@ export function AgentDetail({
             )}
           </p>
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="ms-auto flex flex-wrap items-center gap-2">
           {stateButton && (
             <Button
               variant="outline"
@@ -1099,8 +1099,8 @@ export function AgentDetail({
             data-field={field}
             className={cn(
               'min-w-0 px-3.5 py-3',
-              i > 0 && 'border-l',
-              i === 2 && 'max-[900px]:border-l-0 max-[900px]:border-t',
+              i > 0 && 'border-s',
+              i === 2 && 'max-[900px]:border-s-0 max-[900px]:border-t',
               i === 3 && 'max-[900px]:border-t',
             )}
           >
@@ -1195,7 +1195,7 @@ export function AgentDetail({
                     <span
                       className={cn(
                         'absolute top-0.5 size-3.5 rounded-full bg-background',
-                        trigger.enabled ? 'left-[14px]' : 'left-0.5',
+                        trigger.enabled ? 'start-[14px]' : 'start-0.5',
                       )}
                     />
                   </span>
@@ -1216,7 +1216,7 @@ export function AgentDetail({
             <div
               role="group"
               aria-label={tDetail('runs.filtersLabel')}
-              className="ml-auto inline-flex gap-px rounded-[9px] border bg-muted/60 p-0.5"
+              className="ms-auto inline-flex gap-px rounded-[9px] border bg-muted/60 p-0.5"
             >
               {RUN_FILTERS.map((f) => (
                 <button

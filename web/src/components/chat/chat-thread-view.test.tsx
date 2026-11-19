@@ -486,7 +486,7 @@ describe('ChatThreadView', () => {
     const bar = container.querySelector('[role="toolbar"][aria-label="Answer actions"]')!;
     expect(
       [...bar.querySelectorAll('[aria-label]')].map((b) => b.getAttribute('aria-label')),
-    ).toEqual(['Copy', 'Download', 'In Files', 'Open in Editor', 'Send to Actions']);
+    ).toEqual(['Copy', 'Download', 'In Files', 'Open in Editor', 'Send to Action Center']);
     // What the run made shows as its card, its page open in the editor.
     const card = container.querySelector('[data-slot="deliverable-card"]')!;
     expect(card.getAttribute('aria-label')).toBe('Pricing FAQ');
@@ -1475,7 +1475,7 @@ describe('ChatThreadView', () => {
       expect(sendButton()).toBeNull();
     });
 
-    it('shows what it sent with Open in Actions, after a reload too', async () => {
+    it('shows what it sent with Open in Action Center, after a reload too', async () => {
       await render({
         thread: answered({
           sent: [
@@ -1495,7 +1495,7 @@ describe('ChatThreadView', () => {
       expect(card.querySelector('a')!.getAttribute('href')).toBe(
         '/dashboard/action-center/actions/a1',
       );
-      expect(card.querySelector('a')!.textContent).toBe('Open in Actions');
+      expect(card.querySelector('a')!.textContent).toBe('Open in Action Center');
     });
   });
 

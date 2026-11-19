@@ -280,6 +280,35 @@ export function LocationsWarningLine({
 }
 
 /**
+ * "● Your plan ended: prompts aren't tracked until you choose a plan · Plan &
+ * usage": in place of the prompt locations' count, once the plan ended.
+ */
+export function PlanEndedLine({ planHref }: { planHref?: string }) {
+  const t = useTranslations('prompts.header');
+  const tUsage = useTranslations('prompts.usage');
+  return (
+    <p
+      data-plan-ended
+      className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground"
+    >
+      <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
+      <span>{t('planEnded')}</span>
+      {planHref && (
+        <>
+          <span aria-hidden>·</span>
+          <Link
+            href={planHref}
+            className="rounded-sm font-medium underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            {tUsage('planAndUsage')}
+          </Link>
+        </>
+      )}
+    </p>
+  );
+}
+
+/**
  * "● Volume and competition missing for 2 prompts · Analyze": active prompts
  * without a volume, whose Volume and Competition stay empty until their
  * volume is analyzed. The prompts themselves are tracked (visibility,

@@ -116,7 +116,7 @@ export function RunSteps({
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setToggled({ active, open: !open })}
-        className="flex w-full items-center gap-2 rounded-lg py-1 text-left text-[13px] hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="flex w-full items-center gap-2 rounded-lg py-1 text-start text-[13px] hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         {status === 'done' ? (
           <DoneTick size="sm" decorative />
@@ -153,7 +153,7 @@ export function RunSteps({
             ...stepRowFrom(step),
             ...(step.parts?.length ? { below: <RunParts parts={step.parts} /> } : {}),
           }))}
-          className="pl-1"
+          className="ps-1"
         />
       </div>
     </div>

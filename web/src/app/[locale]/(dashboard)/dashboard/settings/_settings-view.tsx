@@ -205,21 +205,21 @@ export function SettingsView({ section }: { section: SettingsSection }) {
               key={item.id}
               onClick={() => show(item.id)}
               className={cn(
-                'w-full text-left rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                'w-full text-start rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 active === item.id
                   ? 'bg-accent text-accent-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
               )}
             >
               {item.label}
-              {item.dot && <SettingsDotMark dot={item.dot} className="ml-2 align-middle" />}
+              {item.dot && <SettingsDotMark dot={item.dot} className="ms-2 align-middle" />}
               {item.id === 'roles-access' && pendingRequests > 0 && (
-                <Badge className="ml-2 px-1.5 py-0 text-[10px] tabular-nums">
+                <Badge className="ms-2 px-1.5 py-0 text-[10px] tabular-nums">
                   {pendingRequests}
                 </Badge>
               )}
               {item.id === 'menu-access' && (
-                <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
+                <Badge variant="secondary" className="ms-2 px-1.5 py-0 text-[10px]">
                   {t('menuAccess.new')}
                 </Badge>
               )}
@@ -290,7 +290,7 @@ export function SettingsView({ section }: { section: SettingsSection }) {
                   />
                 </div>
                 <Button onClick={handleSaveAccount} disabled={savingName || !displayName.trim()}>
-                  {savingName && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {savingName && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                   {t('save')}
                 </Button>
                 <Separator className="my-2" />

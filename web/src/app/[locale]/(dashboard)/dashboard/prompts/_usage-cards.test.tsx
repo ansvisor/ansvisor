@@ -10,6 +10,7 @@ import {
   countByStatus,
   locationQuotaFromUsage,
   locationsWarning,
+  planEnded,
   matchesStatusFilter,
   newFirst,
   planUsageHref,
@@ -302,6 +303,25 @@ describe("the menu's Plan & usage and Show usage", () => {
       }),
     ).toBeNull();
     expect(locationsWarning({ status: 'loading' })).toBeNull();
+  });
+
+  it('says the plan ended instead of a count against Starter’s limit', () => {
+    // A Growth trial that ended: Stripe's webhook leaves the plan as Starter,
+    // so its 73 locations would read as 73 / 50.
+    const ended = summary({
+      plan: {
+        key: 'starter',
+        name: 'Starter plan',
+        locationLimit: 50,
+        cta: 'upgrade_growth',
+        ended: true,
+      },
+      account: { activePrompts: 73, brands: 1, locationsUsed: 73 },
+    });
+    expect(locationsWarning({ status: 'ready', usage: ended })).toBeNull();
+    expect(planEnded({ status: 'ready', usage: ended })).toBe(true);
+    expect(planEnded({ status: 'ready', usage: summary() })).toBe(false);
+    expect(planEnded({ status: 'loading' })).toBe(false);
   });
 });
 

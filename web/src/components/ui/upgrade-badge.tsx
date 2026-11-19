@@ -17,7 +17,7 @@ export function UpgradeBadge({ feature, className }: UpgradeBadgeProps) {
 
   return (
     <Badge variant="outline" className={className}>
-      <Crown className="mr-1 h-3 w-3" />
+      <Crown className="me-1 h-3 w-3" />
       {requiredPlanFor(feature)}
     </Badge>
   );

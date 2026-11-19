@@ -163,7 +163,7 @@ export function WorkAreasCard() {
                       <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 truncate">{getDashboardNavLabel(title, tNav)}</span>
                       {off && (
-                        <span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                        <span className="ms-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
                           {byAdmin && <Lock className="h-3 w-3" />}
                           {byAdmin ? t('hiddenByAdmin') : t('notInWorkAreas')}
                         </span>

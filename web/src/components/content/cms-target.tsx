@@ -361,7 +361,7 @@ export function CmsTargetPicker({
           onClick={() => onChange(target)}
           onKeyDown={(event) => onKey(event, i)}
           className={cn(
-            'min-w-0 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent',
+            'min-w-0 rounded-xl border px-3 py-2.5 text-start transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent',
             value === target && 'border-foreground ring-1 ring-inset ring-foreground',
           )}
         >

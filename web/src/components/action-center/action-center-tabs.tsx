@@ -89,7 +89,7 @@ export function ActionCenterTabs() {
               {counted && (
                 <span
                   data-count={tab.key}
-                  className="ml-1.5 inline-block min-w-[2ch] font-normal tabular-nums text-muted-foreground"
+                  className="ms-1.5 inline-block min-w-[2ch] font-normal tabular-nums text-muted-foreground"
                 >
                   {count > 0 ? count : null}
                 </span>

@@ -126,7 +126,7 @@ function ImpactItem({
           {tReport('prompts', { count: row.targetPrompts })}
         </span>
       </div>
-      <div className="flex flex-col items-end gap-0.5 text-right max-[520px]:flex-row max-[520px]:flex-wrap max-[520px]:items-center max-[520px]:gap-x-2.5 max-[520px]:text-left">
+      <div className="flex flex-col items-end gap-0.5 text-end max-[520px]:flex-row max-[520px]:flex-wrap max-[520px]:items-center max-[520px]:gap-x-2.5 max-[520px]:text-start">
         <span data-slot="agent-impact-outcome" className={cn(PILL, OUTCOME_PILL[row.outcome])}>
           {outcomeLabel(row, tReport)}
         </span>
@@ -309,7 +309,7 @@ export function AgentImpactCard({ id }: { id: string }) {
         <h2 id="agent-impact-title" className="text-[15px] font-semibold">
           {t('title')}
         </h2>
-        <span data-slot="agent-impact-period" className="ml-auto text-xs text-muted-foreground">
+        <span data-slot="agent-impact-period" className="ms-auto text-xs text-muted-foreground">
           {t('period')}
         </span>
       </div>

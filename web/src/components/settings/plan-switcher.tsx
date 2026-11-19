@@ -397,7 +397,7 @@ export function PlanSwitcher({
                   </div>
                   {isCurrent && (
                     <Badge variant="default">
-                      <Check className="mr-1 h-3 w-3" />
+                      <Check className="me-1 h-3 w-3" />
                       {t('currentPlan')}
                     </Badge>
                   )}
@@ -468,22 +468,22 @@ export function PlanSwitcher({
                   >
                     {action === 'buy' ? (
                       <>
-                        <ShoppingCart className="mr-1 h-4 w-4" />
+                        <ShoppingCart className="me-1 h-4 w-4" />
                         {t('buyPlanNow', { plan: plan.name })}
                       </>
                     ) : action === 'period' ? (
                       <>
-                        <Repeat className="mr-1 h-4 w-4" />
+                        <Repeat className="me-1 h-4 w-4" />
                         {period === 'year' ? t('switchToAnnual') : t('switchToMonthly')}
                       </>
                     ) : upgrade ? (
                       <>
-                        <ArrowUp className="mr-1 h-4 w-4" />
+                        <ArrowUp className="me-1 h-4 w-4" />
                         {t('upgradeTo', { plan: plan.name })}
                       </>
                     ) : (
                       <>
-                        <ArrowDown className="mr-1 h-4 w-4" />
+                        <ArrowDown className="me-1 h-4 w-4" />
                         {t('downgradeTo', { plan: plan.name })}
                       </>
                     )}
@@ -617,7 +617,7 @@ export function PlanSwitcher({
             rel="noopener noreferrer"
             className="inline-flex shrink-0 items-center justify-center rounded-md border bg-background px-5 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
           >
-            <Mail className="mr-2 h-4 w-4" />
+            <Mail className="me-2 h-4 w-4" />
             {t('contactUs')}
           </a>
         </div>
@@ -690,7 +690,7 @@ export function PlanSwitcher({
           title={t('manageBillingHint')}
         >
           {portalLoading ? t('processing') : t('manageBilling')}
-          <ExternalLink className="ml-2 h-4 w-4" />
+          <ExternalLink className="ms-2 h-4 w-4" />
         </Button>
       </div>
       {/* Mounted outside the button's branch: it still sends the answer once

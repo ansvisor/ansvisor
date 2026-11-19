@@ -181,6 +181,11 @@ function usageTone(usage: PromptUsageSummary): Tone {
   return 'normal';
 }
 
+/** The plan ended: nothing is tracked until a plan is chosen again. */
+export function planEnded(state: PromptUsageState): boolean {
+  return state.status === 'ready' && !!state.usage.plan.ended;
+}
+
 /** Where Plan & usage goes: none on self-hosted, or before the counts are read. */
 export function planUsageHref(state: PromptUsageState): string | undefined {
   return state.status === 'ready' && state.usage.plan.cta ? PLAN_PAGE : undefined;
@@ -196,6 +201,10 @@ export type LocationsWarning = { used: number; limit: number; tone: 'warning' | 
  */
 export function locationsWarning(state: PromptUsageState): LocationsWarning | null {
   if (state.status !== 'ready') return null;
+  // An ended plan says so instead (planEnded): its prompts aren't tracked,
+  // and its plan reads as Starter once Stripe ends it (the webhook), so a
+  // count against Starter's limit would read as over a limit never chosen.
+  if (state.usage.plan.ended) return null;
   const limit = state.usage.plan.locationLimit;
   const tone = usageTone(state.usage);
   if (limit === null || tone === 'normal') return null;
@@ -308,7 +317,7 @@ export function PromptUsageCards({
   return (
     <section aria-label={t('panelLabel')} className="overflow-hidden rounded-xl border bg-card">
       <div className="grid grid-cols-1 min-[900px]:grid-cols-[2fr_3fr]">
-        <div className="min-w-0 border-b min-[900px]:border-r min-[900px]:border-b-0">
+        <div className="min-w-0 border-b min-[900px]:border-e min-[900px]:border-b-0">
           <GroupHeader name={t('thisBrand')}>
             <span className="truncate text-xs text-muted-foreground">{brandName}</span>
           </GroupHeader>
@@ -463,7 +472,7 @@ export function PromptUsageCards({
         <button
           type="button"
           onClick={onHide}
-          className="ml-auto flex items-center gap-1 rounded font-medium text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="ms-auto flex items-center gap-1 rounded font-medium text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {t('hide')}
           <ChevronUp aria-hidden className="h-4 w-4 shrink-0" />
@@ -503,12 +512,12 @@ function UsageCard({
   children: ReactNode;
 }) {
   const labelClass =
-    'block h-4 truncate text-left text-[11px] tracking-wide text-muted-foreground uppercase ' +
+    'block h-4 truncate text-start text-[11px] tracking-wide text-muted-foreground uppercase ' +
     "after:absolute after:inset-0 after:content-[''] focus-visible:outline-none";
   return (
     <div
       className={cn(
-        'relative min-w-0 border-r px-4 py-3.5 last:border-r-0 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50 has-[:focus-visible]:ring-inset',
+        'relative min-w-0 border-e px-4 py-3.5 last:border-e-0 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50 has-[:focus-visible]:ring-inset',
         (onSelect || href) && 'hover:bg-muted/40',
         selected && 'shadow-[inset_0_-2px_0_var(--foreground)]',
       )}
