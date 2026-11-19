@@ -36,6 +36,8 @@ function query(table) {
       one = true;
       return builder;
     },
+    // Site Audit settings (exclude patterns): none here.
+    maybeSingle: () => builder,
     order: () => builder,
     update: (values) => {
       updated.push({ table, values });

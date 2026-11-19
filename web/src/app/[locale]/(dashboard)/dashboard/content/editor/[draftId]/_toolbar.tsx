@@ -120,6 +120,7 @@ function useNarrowerThan(ref: RefObject<HTMLElement | null>, below: number): boo
 export function EditorToolbar({
   editor,
   target,
+  range = null,
   lengthWarning,
   htmlView,
   onToggleHtml,
@@ -131,6 +132,12 @@ export function EditorToolbar({
 }: {
   editor: Editor;
   target: number;
+  /**
+   * The Length rule's range (lengthSpan), shown in place of the target so the
+   * counter says what the rule does (Content test 2026-11-19, item 8: "/3,000"
+   * beside a rule of 2,400–3,600); none with the rule off.
+   */
+  range?: { min: number; max: number } | null;
   /** The Length rule is on and reads short or long (lengthWarns): amber. */
   lengthWarning: boolean;
   htmlView: boolean;
@@ -393,11 +400,18 @@ export function EditorToolbar({
             lengthWarning && 'text-amber-700 dark:text-amber-400',
           )}
         >
-          {t('counter', {
-            count: formatNumber(state.characters),
-            target: formatNumber(target),
-            words: state.words,
-          })}
+          {range
+            ? t('counterRange', {
+                count: formatNumber(state.characters),
+                min: formatNumber(range.min),
+                max: formatNumber(range.max),
+                words: state.words,
+              })
+            : t('counter', {
+                count: formatNumber(state.characters),
+                target: formatNumber(target),
+                words: state.words,
+              })}
         </span>
       </div>
 

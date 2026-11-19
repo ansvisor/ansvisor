@@ -1,4 +1,5 @@
 import supabaseAdmin from '../config/supabase.js';
+import { fetchPage } from './safe-fetch.js';
 import { logger } from './logger.js';
 import { ownDomainMatcher } from './response-parser.js';
 import { preferredDomains, readSourceRules, sourceAllowed } from './content-rules.js';
@@ -57,16 +58,92 @@ export function linkHref(url) {
   return parsed.toString();
 }
 
+const bareHost = (host) => host.toLowerCase().replace(/^www\./, '');
+
+/** A site's canonical host is looked up once in a while, not per draft. */
+const HOST_TTL_MS = 6 * 60 * 60 * 1000;
+const HOST_RETRY_MS = 5 * 60 * 1000;
+const HOST_TIMEOUT_MS = 4000;
+const hostCache = new Map();
+
+/** Clears what canonicalHost remembers (tests). */
+export function resetCanonicalHosts() {
+  hostCache.clear();
+}
+
+/**
+ * The host the brand's site answers on, with its www or without: where its
+ * home page lands after redirects. The page inventory stores hosts without
+ * www (site-pages.js normalizePageUrl), so an internal link would otherwise
+ * point at the redirected form. Null when it can't be told (the stored host stays).
+ */
+export async function canonicalHost(domain) {
+  const bare = bareHost(domain);
+  const known = hostCache.get(bare);
+  if (known && known.until > Date.now()) return known.host;
+  let host = null;
+  try {
+    // Through safe-fetch: public addresses only, redirects checked each hop;
+    // only the start of the home page is read.
+    const res = await fetchPage(`https://${bare}/`, {
+      timeoutMs: HOST_TIMEOUT_MS,
+      maxBytes: 64 * 1024,
+      truncate: true,
+    });
+    const landed = new URL(res.url).hostname.toLowerCase();
+    // Only the same site's www or bare form; a redirect elsewhere says nothing.
+    if (bareHost(landed) === bare) host = landed;
+  } catch {
+    // Unreachable: keep the stored host, and try again soon.
+  }
+  hostCache.set(bare, { host, until: Date.now() + (host ? HOST_TTL_MS : HOST_RETRY_MS) });
+  return host;
+}
+
+/** A page's URL on the canonical host, when it is on the brand's own domain itself. */
+function onHost(url, domain, host) {
+  if (!host) return url;
+  try {
+    const parsed = new URL(url);
+    if (bareHost(parsed.hostname) !== bareHost(domain) || parsed.hostname === host) return url;
+    parsed.hostname = host;
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 const clean = (text) =>
   String(text ?? '')
     .replace(/\s+/g, ' ')
     .trim();
 
+/** The brand's primary domain and the host its site answers on; null when unknown. */
+async function readCanonicalHost(brandId) {
+  try {
+    const { data } = await supabaseAdmin
+      .from('brand_domains')
+      .select('domain, is_primary')
+      .eq('brand_id', brandId);
+    const row = (data ?? []).find((d) => d.is_primary) ?? data?.[0];
+    if (!row) return null;
+    const domain = bareHost(
+      String(row.domain)
+        .replace(/^https?:\/\//, '')
+        .split('/')[0],
+    );
+    return { domain, host: await canonicalHost(domain) };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The draft's link targets: `own` (the brand's pages) and `sources` (pages AI
  * answers cite for the draft's prompts, without the brand's own and its
  * competitors', without the ones the person left out, with the ones they
- * added), each { url, title }. A failed read leaves its list empty: the agent
+ * added), each { url, title }; the brand's own pages on the host its site
+ * answers on (www or not). A failed read leaves its list empty: the agent
  * then links nothing there, as before.
  */
 export async function readLinkTargets({ brandId, draftId, sourceUrl, ruleKeys }) {
@@ -76,7 +153,7 @@ export async function readLinkTargets({ brandId, draftId, sourceUrl, ruleKeys })
   if (!wantsOwn && !wantsSources) return NO_LINK_TARGETS;
   const none = { data: null, error: null };
   const rulesRead = wantsSources ? readSourceRules(brandId) : null;
-  const [pagesRead, sourcesRead, choicesRead] = await Promise.all([
+  const [pagesRead, sourcesRead, choicesRead, host] = await Promise.all([
     wantsOwn
       ? supabaseAdmin
           .from('site_pages')
@@ -98,6 +175,7 @@ export async function readLinkTargets({ brandId, draftId, sourceUrl, ruleKeys })
           .eq('draft_id', draftId)
           .eq('kind', 'cited_page')
       : none,
+    wantsOwn ? readCanonicalHost(brandId) : null,
   ]);
   for (const [what, read] of [
     ['site pages', pagesRead],
@@ -120,7 +198,10 @@ export async function readLinkTargets({ brandId, draftId, sourceUrl, ruleKeys })
 
   const own = [];
   for (const page of pagesRead.error ? [] : (pagesRead.data ?? [])) {
-    take(own, MAX_OWN_PAGES, { url: page.url, title: page.title || page.h1 });
+    take(own, MAX_OWN_PAGES, {
+      url: host ? onHost(page.url, host.domain, host.host) : page.url,
+      title: page.title || page.h1,
+    });
   }
 
   const data = sourcesRead.error ? null : sourcesRead.data;

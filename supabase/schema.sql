@@ -68374,3 +68374,45 @@ grant all on table public.usage_top_ups to service_role;
 
 notify pgrst, 'reload schema';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00547_retire_ai_credit_packs.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00547: AI credit packs leave the sale; AI usage top-ups take their place
+-- ============================================================================
+-- Growth add-ons (00546) sell one-time AI usage top-ups (+5x, +10x, +20x),
+-- valid until the plan renews. CHAT-18's AI credit packs ($10 … $1,000,
+-- 12 months) are no longer sold: their rows are switched off, so Billing
+-- and the Get more window stop offering them. Packs already bought keep
+-- their credits until they expire (ai_credit_grants is untouched), and
+-- storage packs stay on sale. Four rows; nothing else changes.
+
+update public.add_on_products
+set active = false
+where kind = 'ai'
+  and active;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00548_enterprise_grandfather.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00548: Enterprise's new defaults; existing contracts keep what they have
+-- ============================================================================
+-- Enterprise now starts from $1,999 a month with 1 brand and 3,000 prompt
+-- locations by default (web/src/config/plans.ts, server/src/config/plans.js);
+-- more is set per contract in plan_overrides, as today. Workspaces already
+-- on Enterprise were sold unlimited brands and prompts: their overrides get
+-- maxBrands -1 and maxPrompts -1, only where the contract set no number of
+-- its own, so nothing a customer has today changes. A few rows; running it
+-- again changes nothing.
+
+update public.organizations
+set plan_overrides = jsonb_build_object('maxBrands', -1, 'maxPrompts', -1)
+  || coalesce(plan_overrides, '{}'::jsonb)
+where plan = 'enterprise'
+  and (
+    plan_overrides is null
+    or not (plan_overrides ? 'maxBrands')
+    or not (plan_overrides ? 'maxPrompts')
+  );
+

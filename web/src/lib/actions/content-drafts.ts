@@ -14,6 +14,7 @@ import {
   agentStateOf,
   draftConversationOf,
   draftOriginOf,
+  importedAuthor,
   libraryTabCounts,
   type ContentDraft,
   type ContentDraftListItem,
@@ -141,9 +142,11 @@ import {
   insertDraft,
   isDraftId,
   keepVersion,
+  pageAuthorId,
   promptsFor,
   saveDraft,
   startInput,
+  startOpportunity,
   type UpdateContentDraftResult,
 } from '@/lib/content/draft-writes';
 import { assertWritable } from '@/lib/subscription-guard';
@@ -728,6 +731,7 @@ export async function importContentPage(
         url: String(body.url),
         title: String(body.title ?? ''),
         html: String(body.html ?? ''),
+        author: importedAuthor(body.author),
       },
     };
   } catch (err) {
@@ -1067,11 +1071,16 @@ export async function startDraftFromAction(
     let pageTitle: string | null = null;
     let bodyHtml: string | undefined;
     let importFailed = false;
+    let authorId: string | null = null;
     if (page) {
       const imported = await importContentPage(brandId, page);
       if ('page' in imported) {
         bodyHtml = imported.page.html;
         pageTitle = imported.page.title;
+        // The person the page says it is by, as the member: their organization's author.
+        if (imported.page.author) {
+          authorId = await pageAuthorId(supabase, brandId, user.id, imported.page.author);
+        }
       } else {
         importFailed = true;
       }
@@ -1181,6 +1190,7 @@ export async function startDraftFromAction(
         body_html: body,
         opportunity_id: opportunityRow?.id ?? null,
         source_url: page,
+        ...(authorId ? { author_id: authorId } : {}),
         prompt_ids: [...new Set(prompts.map((p) => p.id))],
         action_id: actionId,
         // A page brought in to optimize aims at its own length, not a new page's.
@@ -1223,6 +1233,7 @@ export async function startDraftFromAction(
         );
       if (inputsError) console.error("Failed to put the page's links in Your input:", inputsError);
     }
+    if (opportunityRow?.id) await startOpportunity(supabase, brandId, opportunityRow.id);
     if (taskRes.data.status === 'todo') {
       // The draft is started either way; the task's status can be set in the drawer.
       await setDraftTasksStatus(
@@ -1390,7 +1401,17 @@ export async function getContentOverlap(
     p_brand_id: brandId,
     p_prompt_ids: prompts,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Production hides a server action's error from the browser (React #441):
+    // said here, with what was read, so the server's log shows why.
+    console.error('[content] pages cited for the prompts not read:', {
+      brandId,
+      source: parsed.data,
+      prompts: prompts.length,
+      error: error.message,
+    });
+    throw new Error(error.message);
+  }
   return {
     totalPrompts: prompts.length,
     pages: (data ?? []).map((row) => ({
@@ -2026,12 +2047,12 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
  */
 export async function getLastPageRewrite(
   id: string,
-): Promise<(LastRewrite & { html: string }) | null> {
+): Promise<(LastRewrite & { html: string; beforeHtml: string | null }) | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_draft_suggestions')
-    .select('after_text, after_chars, length_target, kept_chars')
+    .select('after_text, before_html, after_chars, length_target, kept_chars')
     .eq('draft_id', id)
     .eq('kind', 'page')
     .order('created_at', { ascending: false })
@@ -2044,6 +2065,8 @@ export async function getLastPageRewrite(
     target: data.length_target,
     kept: data.kept_chars,
     html: data.after_text,
+    // The page it rewrote, for whether it met fewer rules (rewriteAdvice).
+    beforeHtml: data.before_html ?? null,
   };
 }
 
