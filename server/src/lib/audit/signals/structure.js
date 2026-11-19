@@ -10,7 +10,7 @@
  * response-assembly time, so evaluators stay purely about measurement.
  */
 
-import { jsonLd, typesOf, classifyLinks, metaContent } from './helpers.js';
+import { allNodes, jsonLd, typesOf, classifyLinks, metaContent } from './helpers.js';
 import { pageProse } from './readability.js';
 import { NO_JS, botProtectionPage, compareNoJs } from '../no-js.js';
 
@@ -169,8 +169,8 @@ export const jsonLdRelevance = {
 export const faqSchema = {
   key: 'faq-schema',
   evaluate(ctx) {
-    const { nodes } = jsonLd(ctx);
-    const faq = nodes.find((n) => typesOf(n).includes('faqpage'));
+    // Anywhere in the JSON-LD: at the top, in a @graph, or nested (a WebPage's mainEntity).
+    const faq = allNodes(jsonLd(ctx).nodes).find((n) => typesOf(n).includes('faqpage'));
     const qa = faq && Array.isArray(faq.mainEntity) ? faq.mainEntity.length : 0;
     const ok = Boolean(faq) && qa >= 2;
     return {
