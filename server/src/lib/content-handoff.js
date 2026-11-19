@@ -14,7 +14,7 @@ import { fixDraftRules, fixRulesInput } from './content-agent.js';
 /** Each fixable check, by the editor's suggestion key: what the agent is asked. */
 export const HANDOFF_CHECKS = {
   'readability:avgSentence':
-    'Average sentence 15–20 words: split the longest sentences, saying the same thing',
+    'Average sentence 20 words or fewer: split the longest sentences, saying the same thing',
   'readability:longSentences': 'No sentence over 35 words: split each into two or three',
   'readability:readingLevel':
     'Easier to read: shorter sentences and words, plain words for jargon, the meaning kept',

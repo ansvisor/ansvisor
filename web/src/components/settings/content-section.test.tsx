@@ -41,6 +41,8 @@ async function render(isLocked = false) {
 const box = () => container.querySelector<HTMLButtonElement>('[role="checkbox"]')!;
 
 beforeEach(() => {
+  // The Quality hand-off card shows with Quality's phase 2.
+  vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '2');
   getContentSettings.mockReset().mockResolvedValue({
     brands: [{ id: 'b1', name: 'Acme', qualityHandoff: false }],
     canManage: true,
@@ -107,5 +109,13 @@ describe('ContentSection', () => {
     root = createRoot(container);
     await render();
     expect(container.textContent).toContain("Couldn't load the brands.");
+  });
+});
+
+describe('ContentSection before Quality’s phase 2', () => {
+  it('keeps the trusted sources and rules, without the Quality hand-off', async () => {
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '0');
+    await render();
+    expect(document.body.textContent).not.toContain('Hand off');
   });
 });

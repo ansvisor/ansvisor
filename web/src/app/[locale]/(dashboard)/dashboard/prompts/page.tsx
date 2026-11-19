@@ -2335,6 +2335,7 @@ export default function PromptsPage() {
                   quota={locationQuota}
                   onShow={() => setStatusFilter('waiting')}
                   onFreeUp={canSwap ? () => setSwapFor(waitingFirst.id) : undefined}
+                  addMore={canSwap && locationQuota?.planId === 'growth'}
                 />
               )}
               {firstRun && allPrompts.length > 0 && <FirstRunEmptyState run={firstRun} />}
