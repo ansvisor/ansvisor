@@ -6249,7 +6249,7 @@
         "hidden content"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -6297,7 +6297,7 @@
         },
         {
           "heading": "AI bot access",
-          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot robots.txt keeps out, by name or with \"User-agent: *\", fails the check. A bot your CDN or firewall refuses while robots.txt lets it in only warns: the bots are asked from Ansvisor's servers, and a firewall that checks a crawler's own addresses can still let the real one in. A slow or busy answer isn't a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides."
+          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot robots.txt keeps out, by name or with \"User-agent: *\", fails. A bot only your CDN or firewall refuses warns: a firewall that checks a crawler's own addresses can still let the real one in. A slow answer isn't a block. If every bot asked gets in, it passes, even when robots.txt only has \"User-agent: *\". If your site refuses Ansvisor's own request, robots.txt decides, and one that doesn't name the AI bots warns."
         },
         {
           "heading": "Main text without JavaScript",
