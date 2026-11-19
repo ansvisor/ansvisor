@@ -84,7 +84,7 @@ export function AiSaysCard({ says }: { says: ProductAiSays | null | undefined })
                           aria-hidden
                         />
                       </a>
-                      <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
+                      <span className="ms-auto shrink-0 text-xs tabular-nums text-muted-foreground">
                         {t('cited', { count: source.answers })}
                       </span>
                     </li>

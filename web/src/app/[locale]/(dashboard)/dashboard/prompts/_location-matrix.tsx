@@ -432,7 +432,7 @@ export function LocationMatrix({
       <Table stickyHeader stickyFirstColumn>
         <TableHeader>
           <TableRow>
-            <TableHead className="pl-6">{t('prompt')}</TableHead>
+            <TableHead className="ps-6">{t('prompt')}</TableHead>
             <TableHead>{t('topic')}</TableHead>
             {regions.map((r) => (
               <TableHead key={r} className="min-w-[96px] text-center">
@@ -467,14 +467,14 @@ export function LocationMatrix({
                 )}
               </TableHead>
             ))}
-            <TableHead className="pr-6 text-right" title={t('gapTip')}>
+            <TableHead className="pe-6 text-end" title={t('gapTip')}>
               {t('gap')}
             </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           <TableRow className="bg-muted/30 hover:bg-muted/30">
-            <TableCell className="pl-6 text-sm font-medium">{t('average')}</TableCell>
+            <TableCell className="ps-6 text-sm font-medium">{t('average')}</TableCell>
             <TableCell className="text-xs text-muted-foreground">—</TableCell>
             {averages.map((v, i) => (
               <TableCell key={regions[i]} className="px-1 py-1.5">
@@ -488,7 +488,7 @@ export function LocationMatrix({
                 </div>
               </TableCell>
             ))}
-            <TableCell className="pr-6 text-right text-xs text-muted-foreground">—</TableCell>
+            <TableCell className="pe-6 text-end text-xs text-muted-foreground">—</TableCell>
           </TableRow>
           {pageRows.map((p) => {
             const values = valuesOf(p);
@@ -501,7 +501,7 @@ export function LocationMatrix({
             );
             return (
               <TableRow key={p.id}>
-                <TableCell className="max-w-[320px] pl-6 text-sm font-medium">
+                <TableCell className="max-w-[320px] ps-6 text-sm font-medium">
                   <span className="line-clamp-2" title={p.text}>
                     {p.text}
                   </span>
@@ -559,7 +559,7 @@ export function LocationMatrix({
                       aria-label={t('stopLabel', { prompt: p.text, location: where })}
                       title={t('stop')}
                       onClick={() => onStopTracking(p, r)}
-                      className="pointer-events-none absolute right-1.5 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full border bg-background text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/cell:pointer-events-auto group-hover/cell:opacity-100"
+                      className="pointer-events-none absolute end-1.5 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full border bg-background text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/cell:pointer-events-auto group-hover/cell:opacity-100"
                     >
                       <X className="h-2.5 w-2.5" aria-hidden />
                     </button>
@@ -595,7 +595,7 @@ export function LocationMatrix({
                     </TableCell>
                   );
                 })}
-                <TableCell className="pr-6 text-right text-sm font-semibold tabular-nums">
+                <TableCell className="pe-6 text-end text-sm font-semibold tabular-nums">
                   {gap === null ? (
                     <span className="text-xs font-normal text-muted-foreground">—</span>
                   ) : metric === 'position' ? (

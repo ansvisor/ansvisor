@@ -902,7 +902,7 @@ function AddPromptDialog({
                   onClick={addToList}
                   disabled={saving || !text.trim() || !enginesChosen}
                 >
-                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  <Plus className="me-1 h-3.5 w-3.5" />
                   Add to list
                 </Button>
 
@@ -959,12 +959,12 @@ function AddPromptDialog({
                 >
                   {saving ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" />
                       Saving…
                     </>
                   ) : (
                     <>
-                      <Plus className="mr-2 h-4 w-4" />
+                      <Plus className="me-2 h-4 w-4" />
                       {toSave.length > 1 ? `Save ${toSave.length} & close` : 'Save & close'}
                     </>
                   )}
@@ -1165,7 +1165,7 @@ function EditPromptDialog({
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="gap-1 pr-1.5">
+                  <Badge key={tag} variant="secondary" className="gap-1 pe-1.5">
                     {tag}
                     <button
                       type="button"
@@ -1231,9 +1231,9 @@ function EditPromptDialog({
                   disabled={deleting}
                 >
                   {deleting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <Trash2 className="mr-2 h-4 w-4" />
+                    <Trash2 className="me-2 h-4 w-4" />
                   )}
                   Delete
                 </Button>
@@ -1244,11 +1244,11 @@ function EditPromptDialog({
               <Button
                 type="button"
                 variant="ghost"
-                className="text-red-500 hover:text-red-600 sm:mr-auto"
+                className="text-red-500 hover:text-red-600 sm:me-auto"
                 onClick={() => setConfirmingDelete(true)}
                 disabled={busy}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="me-2 h-4 w-4" />
                 Delete
               </Button>
               <Button type="button" variant="outline" onClick={handleClose} disabled={busy}>
@@ -1261,7 +1261,7 @@ function EditPromptDialog({
               >
                 {saving ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     Saving…
                   </>
                 ) : (
@@ -2282,7 +2282,7 @@ export default function PromptsPage() {
                 trackedCount={trackedCount}
               />
             )}
-            <div className="ml-auto flex flex-wrap items-end justify-end gap-3">
+            <div className="ms-auto flex flex-wrap items-end justify-end gap-3">
               <DateRangeFilter
                 value={rangePreset}
                 presets={PROMPT_RANGE_PRESETS}
@@ -2671,12 +2671,12 @@ export default function PromptsPage() {
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <CardTitle className="text-sm font-medium">Prompt Volumes</CardTitle>
                     <div className="relative w-60">
-                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                      <Search className="absolute start-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                       <Input
                         placeholder="Search prompts…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="pl-8 h-8 text-xs"
+                        className="ps-8 h-8 text-xs"
                       />
                     </div>
                   </div>
@@ -2685,12 +2685,12 @@ export default function PromptsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="pl-6">Prompt</TableHead>
+                        <TableHead className="ps-6">Prompt</TableHead>
 
-                        <ColHead className="text-right" tooltip={tVolumes('googleTip')}>
+                        <ColHead className="text-end" tooltip={tVolumes('googleTip')}>
                           {tVolumes('googleColumn')}
                         </ColHead>
-                        <ColHead className="text-right" tooltip={tVolumes('aiTip')}>
+                        <ColHead className="text-end" tooltip={tVolumes('aiTip')}>
                           {tVolumes('aiColumn')}
                         </ColHead>
                         <ColHead
@@ -2704,14 +2704,14 @@ export default function PromptsPage() {
                     <TableBody>
                       {filtered.map((row) => (
                         <TableRow key={row.id} className="hover:bg-muted/50">
-                          <TableCell className="pl-6 font-medium text-sm max-w-[280px]">
+                          <TableCell className="ps-6 font-medium text-sm max-w-[280px]">
                             <span className="line-clamp-1">{row.promptText}</span>
                           </TableCell>
 
-                          <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
+                          <TableCell className="text-end tabular-nums text-sm text-muted-foreground">
                             {formatNumber(row.totalGoogleVolume)}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-end">
                             <EstimateRange
                               estimate={estimateOf(row)}
                               handle={volumeTableNote}
@@ -2754,7 +2754,7 @@ export default function PromptsPage() {
                       <CardTitle className="text-sm font-medium">
                         High Opportunity Prompts
                       </CardTitle>
-                      <span className="text-xs text-muted-foreground ml-1">
+                      <span className="text-xs text-muted-foreground ms-1">
                         Prompts with highest estimated AI search demand
                       </span>
                     </div>
@@ -2763,18 +2763,15 @@ export default function PromptsPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="pl-6">Prompt</TableHead>
-                          <ColHead
-                            className="text-right"
-                            tooltip={tVolumes('opportunityVolumeTip')}
-                          >
+                          <TableHead className="ps-6">Prompt</TableHead>
+                          <ColHead className="text-end" tooltip={tVolumes('opportunityVolumeTip')}>
                             Est. AI Volume
                           </ColHead>
                           <ColHead className="text-center" tooltip="The detected search intent.">
                             Intent
                           </ColHead>
                           <ColHead
-                            className="text-right pr-6"
+                            className="text-end pe-6"
                             tooltip={tVolumes('opportunityLevelTip', {
                               high: formatCompactNumber(OPPORTUNITY_HIGH_VOLUME),
                               min: formatCompactNumber(OPPORTUNITY_MIN_VOLUME),
@@ -2787,10 +2784,10 @@ export default function PromptsPage() {
                       <TableBody>
                         {opportunityRows.map((row) => (
                           <TableRow key={row.id} className="hover:bg-muted/50">
-                            <TableCell className="pl-6 font-medium text-sm">
+                            <TableCell className="ps-6 font-medium text-sm">
                               {row.promptText}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-end">
                               <EstimateRange
                                 estimate={estimateOf(row)}
                                 handle={opportunityTableNote}
@@ -2805,7 +2802,7 @@ export default function PromptsPage() {
                                 {INTENT_LABELS[row.intent] || row.intent}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right pr-6">
+                            <TableCell className="text-end pe-6">
                               <Badge
                                 variant="outline"
                                 className={cn(
@@ -4142,7 +4139,7 @@ function AllPromptsTab({
     visibility: (
       <SortableHead
         key="visibility"
-        className="text-right"
+        className="text-end"
         tooltip={tTips('visibility', { range: rangeLabel })}
         sortKey="visibility"
         activeSort={latenessOrder ? null : activeSort}
@@ -4155,7 +4152,7 @@ function AllPromptsTab({
     mentions: (
       <SortableHead
         key="mentions"
-        className="text-right"
+        className="text-end"
         tooltip={tTips('mentions', { range: rangeLabel })}
         sortKey="mentions"
         activeSort={latenessOrder ? null : activeSort}
@@ -4168,7 +4165,7 @@ function AllPromptsTab({
     citations: (
       <SortableHead
         key="citations"
-        className="text-right"
+        className="text-end"
         tooltip={tTips('citations', { range: rangeLabel })}
         sortKey="citations"
         activeSort={latenessOrder ? null : activeSort}
@@ -4181,7 +4178,7 @@ function AllPromptsTab({
     positions: (
       <SortableHead
         key="positions"
-        className="pl-8"
+        className="ps-8"
         tooltip={tTips('positions', { range: rangeLabel })}
         sortKey="position"
         activeSort={latenessOrder ? null : activeSort}
@@ -4194,7 +4191,7 @@ function AllPromptsTab({
     volume: (
       <SortableHead
         key="volume"
-        className="text-right"
+        className="text-end"
         tooltip={tTips('volume')}
         sortKey="volume"
         activeSort={latenessOrder ? null : activeSort}
@@ -4212,7 +4209,7 @@ function AllPromptsTab({
     runs: (
       <SortableHead
         key="runs"
-        className="text-right"
+        className="text-end"
         tooltip={tTips('runs', { range: rangeLabel })}
         sortKey="runs"
         activeSort={latenessOrder ? null : activeSort}
@@ -4225,7 +4222,7 @@ function AllPromptsTab({
     added: (
       <SortableHead
         key="added"
-        className="text-right"
+        className="text-end"
         tooltip={tTips('added')}
         sortKey="added"
         activeSort={latenessOrder ? null : activeSort}
@@ -4238,7 +4235,7 @@ function AllPromptsTab({
     lastRun: (
       <SortableHead
         key="lastRun"
-        className="text-right"
+        className="text-end"
         tooltip={tTips('lastRun')}
         sortKey="lastRun"
         activeSort={latenessOrder ? null : activeSort}
@@ -4348,12 +4345,12 @@ function AllPromptsTab({
             </SelectContent>
           </Select>
           <div className="relative w-60">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <Search className="absolute start-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               placeholder="Search prompts…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-8 text-xs"
+              className="ps-8 h-8 text-xs"
             />
           </div>
           {layout === 'table' && (
@@ -4488,7 +4485,7 @@ function AllPromptsTab({
             )}
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-6">
+                <TableHead className="ps-6">
                   {onEditPrompt ? (
                     <div className="flex items-center gap-3">
                       <Checkbox
@@ -4505,7 +4502,7 @@ function AllPromptsTab({
                 {columns.map((id) => {
                   const loc = parseLocationColumn(id);
                   return loc ? (
-                    <TableHead key={id} className="bg-muted/40 text-right">
+                    <TableHead key={id} className="bg-muted/40 text-end">
                       <span className="block text-xs font-medium">{tMetrics(loc.metric)}</span>
                       <span className="block text-[11px] font-normal text-muted-foreground">
                         {regionLabel(loc.region)}
@@ -4516,7 +4513,7 @@ function AllPromptsTab({
                   );
                 })}
                 {onEditPrompt && (
-                  <TableHead className="text-right pr-6 w-[60px]">
+                  <TableHead className="text-end pe-6 w-[60px]">
                     <span className="sr-only">Actions</span>
                   </TableHead>
                 )}
@@ -4625,7 +4622,7 @@ function AllPromptsTab({
                     </TableCell>
                   ),
                   visibility: (
-                    <TableCell key="visibility" className="text-right">
+                    <TableCell key="visibility" className="text-end">
                       {vis ? (
                         <div
                           className="inline-flex items-center gap-2 justify-end min-w-[110px]"
@@ -4661,17 +4658,17 @@ function AllPromptsTab({
                     </TableCell>
                   ),
                   mentions: (
-                    <TableCell key="mentions" className="text-right tabular-nums text-sm">
+                    <TableCell key="mentions" className="text-end tabular-nums text-sm">
                       {vis ? formatNumber(vis.totalMentions) : noAnswers('mentions')}
                     </TableCell>
                   ),
                   citations: (
-                    <TableCell key="citations" className="text-right tabular-nums text-sm">
+                    <TableCell key="citations" className="text-end tabular-nums text-sm">
                       {vis ? formatNumber(vis.totalCitations) : noAnswers('citations')}
                     </TableCell>
                   ),
                   positions: (
-                    <TableCell key="positions" className="pl-8">
+                    <TableCell key="positions" className="ps-8">
                       {/* Fixed widths so the value, dots and See line up on every row. */}
                       <div className="inline-flex items-center gap-2">
                         <div className="w-[5.5rem] whitespace-nowrap">
@@ -4700,9 +4697,9 @@ function AllPromptsTab({
                     </TableCell>
                   ),
                   volume: (
-                    <TableCell key="volume" className="text-right">
+                    <TableCell key="volume" className="text-end">
                       {volumesPending ? (
-                        <Skeleton data-volume-pending className="ml-auto h-4 w-16" />
+                        <Skeleton data-volume-pending className="ms-auto h-4 w-16" />
                       ) : vol ? (
                         <EstimateRange
                           estimate={estimateByPromptId.get(p.id)!}
@@ -4729,14 +4726,14 @@ function AllPromptsTab({
                     </TableCell>
                   ),
                   runs: (
-                    <TableCell key="runs" className="text-right tabular-nums text-sm">
+                    <TableCell key="runs" className="text-end tabular-nums text-sm">
                       {vis ? formatNumber(vis.runs) : noAnswers('runs')}
                     </TableCell>
                   ),
                   added: (
                     <TableCell
                       key="added"
-                      className="text-right text-xs whitespace-nowrap text-muted-foreground"
+                      className="text-end text-xs whitespace-nowrap text-muted-foreground"
                       title={new Date(p.createdAt).toLocaleString('en-US', {
                         dateStyle: 'medium',
                         timeStyle: 'short',
@@ -4746,7 +4743,7 @@ function AllPromptsTab({
                     </TableCell>
                   ),
                   lastRun: (
-                    <TableCell key="lastRun" className="text-right text-xs text-muted-foreground">
+                    <TableCell key="lastRun" className="text-end text-xs text-muted-foreground">
                       {pendingAt === 'lastRun'
                         ? noAnswers('lastRun')
                         : formatRelative(vis?.lastRunAt, tCommon)}
@@ -4755,7 +4752,7 @@ function AllPromptsTab({
                 };
                 return (
                   <TableRow key={p.id} className="hover:bg-muted/50">
-                    <TableCell className="pl-6 font-medium text-sm max-w-[320px]">
+                    <TableCell className="ps-6 font-medium text-sm max-w-[320px]">
                       <div className="flex items-start gap-3">
                         {onEditPrompt && (
                           <Checkbox
@@ -4799,7 +4796,7 @@ function AllPromptsTab({
                       return (
                         <TableCell
                           key={id}
-                          className="bg-muted/20 text-right text-sm font-semibold tabular-nums"
+                          className="bg-muted/20 text-end text-sm font-semibold tabular-nums"
                         >
                           {pending ? (
                             <LocationPending
@@ -4820,7 +4817,7 @@ function AllPromptsTab({
                       );
                     })}
                     {onEditPrompt && (
-                      <TableCell className="text-right pr-6">
+                      <TableCell className="text-end pe-6">
                         <RowActionsMenu
                           prompt={p}
                           brandId={activeBrandId}
@@ -4988,7 +4985,7 @@ function AllPromptsTab({
                 setConfirmDelete(null);
               }}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="me-2 h-4 w-4" />
               Delete
             </Button>
           </DialogFooter>
@@ -5029,7 +5026,7 @@ function SimilarTopicsList({ volumes }: { volumes: PromptVolume[] }) {
                 style={{ width: `${(item.volume / maxVol) * 100}%` }}
               />
             </div>
-            <span className="w-12 text-right font-medium tabular-nums text-foreground">
+            <span className="w-12 text-end font-medium tabular-nums text-foreground">
               {formatCompactNumber(item.volume)}
             </span>
           </div>

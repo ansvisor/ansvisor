@@ -85,7 +85,7 @@ export function RunDots({ auto, now }: { auto: AuditAutoStatus; now: Date }) {
             className={cn(
               'relative flex flex-1 flex-col items-center gap-[3px] text-[11px] leading-none whitespace-nowrap',
               // The line to the next run.
-              "after:absolute after:top-1.5 after:right-[calc(-50%+8px)] after:left-[calc(50%+8px)] after:h-px after:bg-border after:content-[''] last:after:hidden",
+              "after:absolute after:top-1.5 after:end-[calc(-50%+8px)] after:start-[calc(50%+8px)] after:h-px after:bg-border after:content-[''] last:after:hidden",
               state === 'next' ? 'font-semibold text-foreground' : 'text-muted-foreground',
             )}
           >

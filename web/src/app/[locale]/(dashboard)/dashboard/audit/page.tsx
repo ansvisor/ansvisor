@@ -821,12 +821,12 @@ export default function SiteAuditPage() {
             <Button onClick={handleRun} disabled={running || quotaExhausted} className="shrink-0">
               {running ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
                   {t('running')}
                 </>
               ) : (
                 <>
-                  <Search className="mr-2 h-4 w-4" />
+                  <Search className="me-2 h-4 w-4" />
                   {t('runAudit')}
                 </>
               )}
@@ -993,7 +993,7 @@ export default function SiteAuditPage() {
             <div className="text-base font-semibold">{t('failed')}</div>
             <p className="max-w-md text-sm text-muted-foreground">{error}</p>
             <Button variant="outline" size="sm" onClick={refetch}>
-              <RefreshCw className="mr-2 h-4 w-4" />
+              <RefreshCw className="me-2 h-4 w-4" />
               {t('retry')}
             </Button>
           </CardContent>
@@ -1066,7 +1066,7 @@ export default function SiteAuditPage() {
                       filterShown === 'notAudited' && (
                         <Button
                           size="sm"
-                          className="ml-2 h-7 rounded-full px-3 text-xs"
+                          className="ms-2 h-7 rounded-full px-3 text-xs"
                           disabled={startingBulk}
                           onClick={guard(() => confirmOpps(shownOpps, 'notAudited'), {
                             action: tActions('auditPages'),

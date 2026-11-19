@@ -55,13 +55,13 @@ function CopyBlock({ text, label }: { text: string; label: string }) {
   };
   return (
     <div className="relative min-w-0">
-      <pre className="whitespace-pre-wrap break-all rounded-md bg-muted py-3 pr-10 pl-4 font-mono text-[12px] leading-relaxed">
+      <pre className="whitespace-pre-wrap break-all rounded-md bg-muted py-3 pe-10 ps-4 font-mono text-[12px] leading-relaxed">
         {text}
       </pre>
       <Button
         variant="ghost"
         size="icon"
-        className="absolute top-2 right-2 h-7 w-7"
+        className="absolute top-2 end-2 h-7 w-7"
         onClick={copy}
         aria-label={copied ? t('copied') : label}
       >
@@ -184,7 +184,7 @@ export function ConversionsCard({
             <p className="text-xs text-muted-foreground">{t('help')}</p>
             {!canManage && <p className="text-xs text-muted-foreground">{t('managersOnly')}</p>}
           </div>
-          {saving && <LoadingDots className="ml-auto" />}
+          {saving && <LoadingDots className="ms-auto" />}
         </div>
 
         {enabled && (
@@ -281,7 +281,7 @@ export function ConversionsCard({
 
             <div className="space-y-1.5 rounded-lg border p-4">
               <p className="text-sm font-medium">{t('limits.title')}</p>
-              <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+              <ul className="list-disc space-y-1 ps-4 text-xs text-muted-foreground">
                 <li>{t('limits.consent')}</li>
                 <li>{t('limits.direct')}</li>
                 <li>{t('limits.estimate')}</li>
