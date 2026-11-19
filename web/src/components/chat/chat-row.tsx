@@ -148,7 +148,7 @@ export function ChatRow({
         <span
           className={cn(
             'min-w-0 flex-1 text-[13px]',
-            actions && 'group-hover/row:pr-7 group-focus-within/row:pr-7',
+            actions && 'group-hover/row:pe-7 group-focus-within/row:pe-7',
           )}
         >
           <span

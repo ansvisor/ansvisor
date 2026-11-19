@@ -324,7 +324,7 @@ function ChatShellFrame({
   const chatHidden = stacked && !chatShown;
   const pageHidden = stacked && chatShown;
   // The one not shown stays laid out at the shown one's width, unseen: its scroll stays.
-  const unseen = 'invisible absolute inset-y-0 right-0';
+  const unseen = 'invisible absolute inset-y-0 end-0';
   const unseenWidth = stacked && room !== null ? { width: room } : undefined;
 
   // Close: the page leaves the address, without a reload; the chat takes the width.
@@ -389,8 +389,8 @@ function ChatShellFrame({
       <div
         id="chat-menu"
         className={cn(
-          'hidden shrink-0 overflow-hidden border-r bg-sidebar transition-[width] duration-150 ease-out motion-reduce:transition-none min-[1100px]:block',
-          open ? 'w-64' : 'w-0 border-r-0',
+          'hidden shrink-0 overflow-hidden border-e bg-sidebar transition-[width] duration-150 ease-out motion-reduce:transition-none min-[1100px]:block',
+          open ? 'w-64' : 'w-0 border-e-0',
         )}
         inert={!open || undefined}
       >
@@ -405,7 +405,7 @@ function ChatShellFrame({
         style={chatHidden ? unseenWidth : undefined}
         className={cn(
           'flex min-w-0 flex-col bg-background',
-          openPage && !stacked ? 'w-[420px] min-w-[300px] border-r' : 'flex-1',
+          openPage && !stacked ? 'w-[420px] min-w-[300px] border-e' : 'flex-1',
           chatHidden && unseen,
         )}
       >
@@ -549,7 +549,7 @@ function ChatShellFrame({
               anchor={searchAnchor}
             />
           )}
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ms-auto flex items-center gap-1.5">
             {pageHidden && (
               <button
                 type="button"

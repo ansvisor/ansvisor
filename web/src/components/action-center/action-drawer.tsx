@@ -472,7 +472,7 @@ export function ActionDrawer({
       )}
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         {/* pt-3: the top row's buttons line up with the sheet's close button. */}
-        <SheetHeader className="border-b px-6 pt-3 pb-4 pr-12">
+        <SheetHeader className="border-b px-6 pt-3 pb-4 pe-12">
           {/* One row at 1024px too (W2-17): beside Run agent the action's number
               alone, its "Action ID" label kept for hover and screen readers. */}
           <div className="group/top flex flex-wrap items-center gap-2 text-xs">
@@ -482,7 +482,7 @@ export function ActionDrawer({
             {action.priorityScore !== null && (
               <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
             )}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ms-auto flex items-center gap-2">
               <RunAgentButton action={action} title={texts.title} variant="drawer" />
               <ActionExportButtons
                 action={action}
@@ -999,7 +999,7 @@ export function ActionDrawer({
                     key={signal.id}
                     type="button"
                     onClick={() => openSignal(signal.id)}
-                    className="block w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/40"
+                    className="block w-full rounded-md border px-3 py-2 text-start transition-colors hover:bg-muted/40"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-xs font-medium">{st.title}</p>
@@ -1116,7 +1116,7 @@ function TaskRow({
           onClick={() => !editing && setOpen((current) => !current)}
           aria-expanded={open}
           title={open ? t('drawer.task.hideDetails') : t('drawer.task.showDetails')}
-          className="flex min-w-0 flex-1 items-start gap-1 rounded px-1 py-1 text-left text-sm leading-snug hover:bg-muted/60"
+          className="flex min-w-0 flex-1 items-start gap-1 rounded px-1 py-1 text-start text-sm leading-snug hover:bg-muted/60"
         >
           <ChevronRight
             className={cn(
@@ -1299,7 +1299,7 @@ function AddTaskForm({
         onClick={guard(() => setDraft(''), { action: tActions('addTasks') })}
         className="mt-3 h-8 w-full text-xs"
       >
-        <Plus className="mr-1.5 h-3.5 w-3.5" />
+        <Plus className="me-1.5 h-3.5 w-3.5" />
         {t('drawer.addTask')}
       </Button>
     );

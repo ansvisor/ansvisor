@@ -360,8 +360,8 @@ function PackEstimates({
         <p className="bg-muted/50 px-3 py-1.5 font-medium">{t('title')}</p>
         <div className="grid grid-cols-3 border-t px-3 py-1.5 text-[11.5px] text-muted-foreground">
           <span>{t('pack')}</span>
-          <span className="text-right">{t('answers')}</span>
-          <span className="text-right">{t('articles')}</span>
+          <span className="text-end">{t('answers')}</span>
+          <span className="text-end">{t('articles')}</span>
         </div>
         {packs.map((pack) => {
           const estimate = packEstimate(pack.priceCents);
@@ -375,8 +375,8 @@ function PackEstimates({
               )}
             >
               <span>{formatPackPrice(pack.priceCents, pack.currency)}</span>
-              <span className="text-right">{count(estimate.answers)}</span>
-              <span className="text-right">{count(estimate.articles)}</span>
+              <span className="text-end">{count(estimate.answers)}</span>
+              <span className="text-end">{count(estimate.articles)}</span>
             </div>
           );
         })}

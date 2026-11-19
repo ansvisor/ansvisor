@@ -404,10 +404,10 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
         <span className="text-xs text-muted-foreground">
           {summary.selected} of {summary.total} selected · {summary.platforms} platform
           {summary.platforms === 1 ? '' : 's'}
-          <span className="ml-2 text-muted-foreground/70">
+          <span className="ms-2 text-muted-foreground/70">
             Generated {formatDateTime(set.generatedAt)}
           </span>
-          <QuotaNote quota={quota} planId={planId} className="ml-2" />
+          <QuotaNote quota={quota} planId={planId} className="ms-2" />
           {sentLatest && (
             <span className="mt-1 flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
               <CircleCheck className="h-3.5 w-3.5" />

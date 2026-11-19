@@ -89,7 +89,7 @@ export function CapabilitiesView({
               <span>
                 {toolName(entry)}
                 {lock && (
-                  <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+                  <span className="ms-1 inline-flex items-center gap-0.5 text-xs text-muted-foreground">
                     <Lock className="h-3 w-3" aria-hidden />
                     {t('locked', { plan: PLANS[lock].name })}
                   </span>
@@ -139,7 +139,7 @@ export function CapabilitiesView({
             {t(`filters.${id}`)}
           </button>
         ))}
-        <span className="ml-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <span className="ms-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           {(Object.keys(MARK_ICON) as ApprovalMark[]).map((mark) => {
             const Icon = MARK_ICON[mark];
             return (

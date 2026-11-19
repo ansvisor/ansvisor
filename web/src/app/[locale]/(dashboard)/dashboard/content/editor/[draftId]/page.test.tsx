@@ -3256,7 +3256,7 @@ describe('the side panel', () => {
     expect(hide.getAttribute('aria-pressed')).toBe('true');
     expect(hide.title).toBe('Hide side panel');
     expect(tags.lastElementChild).toBe(hide);
-    expect(hide.className).toContain('ml-auto');
+    expect(hide.className).toContain('ms-auto');
     const tabRow = panel()!.querySelector('[role="tablist"]')!.parentElement!;
     expect([...tabRow.children].map((el) => el.getAttribute('role'))).toEqual(['tablist']);
     expect(panel()!.querySelector('[aria-label="Hide side panel"]')).toBeNull();

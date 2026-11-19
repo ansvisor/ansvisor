@@ -6,5 +6,5 @@ import { cn } from '@/lib/utils';
  * working" — never a spinning ring. Still with reduced motion.
  */
 export function WorkingDots({ className }: { className?: string }) {
-  return <LoadingDots className={cn('ml-1.5', className)} />;
+  return <LoadingDots className={cn('ms-1.5', className)} />;
 }

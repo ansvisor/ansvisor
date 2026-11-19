@@ -327,7 +327,7 @@ export function ShoppingPathSection({
                 <li key={hit.id}>
                   <button
                     type="button"
-                    className="w-full px-2.5 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                    className="w-full px-2.5 py-2 text-start text-sm hover:bg-muted disabled:opacity-50"
                     disabled={busy !== null}
                     aria-label={t('addThis', { title: hit.title })}
                     onClick={() => {

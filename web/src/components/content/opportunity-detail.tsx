@@ -541,12 +541,12 @@ export function OpportunityDetail({
       <div className="space-y-3">
         {/* The month's AI usage at the row's right, as on every page, also in
             the drawer, which covers the Content page's header; there it
-            leaves room for the drawer's close button (top-3 right-3, 28 px).
+            leaves room for the drawer's close button (top-3 end-3, 28 px).
             The banner follows the whole header block. */}
         <HeaderWithAiUsage
           banner={false}
           askChat={!inDrawer}
-          className={inDrawer ? 'pr-8' : undefined}
+          className={inDrawer ? 'pe-8' : undefined}
         >
           <div className="flex items-start gap-3">
             {!inDrawer && (
@@ -560,7 +560,7 @@ export function OpportunityDetail({
               <h1 className="text-xl font-bold tracking-tight">{opportunity.title}</h1>
               {sd.alternativeOf && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  <Badge variant="outline" className="mr-1.5 text-[10px] font-normal">
+                  <Badge variant="outline" className="me-1.5 text-[10px] font-normal">
                     {t('alternative.badge')}
                   </Badge>
                   {t('alternative.of')}{' '}
@@ -603,7 +603,7 @@ export function OpportunityDetail({
           </Badge>
           {/* The UI's language, not the browser's: an English page showed "25 Eyl". */}
           <span
-            className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground"
+            className="ms-auto flex items-center gap-1.5 text-xs text-muted-foreground"
             title={suggestedDate(opportunity.createdAt, locale).full}
           >
             <Clock className="h-3.5 w-3.5" />
@@ -1023,7 +1023,7 @@ export function OpportunityDetail({
                   <p className="text-sm font-medium mb-1.5">
                     {idx + 1}. {section.heading}
                   </p>
-                  <ul className="space-y-1 ml-4">
+                  <ul className="space-y-1 ms-4">
                     {section.keyPoints.map((point, pIdx) => (
                       <li key={pIdx} className="text-xs text-muted-foreground list-disc">
                         {point}
@@ -1136,7 +1136,7 @@ function FromTaskCard({
             <>
               <dt className="text-muted-foreground">{t('how')}</dt>
               <dd>
-                <ol className="list-decimal space-y-0.5 pl-4">
+                <ol className="list-decimal space-y-0.5 ps-4">
                   {task.how.map((step, i) => (
                     <li key={i}>{step}</li>
                   ))}

@@ -540,7 +540,7 @@ export function PlanStart({
         </p>
       ) : (
         <p data-slot="trust-line" className="text-center text-xs text-muted-foreground">
-          <Lock className="-mt-0.5 mr-1 inline size-3" aria-hidden />
+          <Lock className="-mt-0.5 me-1 inline size-3" aria-hidden />
           {/* It breaks between its two parts, never inside one. */}
           {tOffer.rich('trustLine', {
             part: (chunks) => <span className="whitespace-nowrap">{chunks}</span>,
@@ -671,7 +671,7 @@ export function PlanStartCard({
       )}
     >
       {plan.highlighted && (
-        <Badge className="absolute -top-2.5 left-4">{tSettings('popular')}</Badge>
+        <Badge className="absolute -top-2.5 start-4">{tSettings('popular')}</Badge>
       )}
       <h3 id={headingId} className="text-base font-semibold">
         {plan.name}

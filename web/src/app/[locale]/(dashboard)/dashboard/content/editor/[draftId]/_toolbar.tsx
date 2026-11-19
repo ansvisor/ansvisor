@@ -310,7 +310,7 @@ export function EditorToolbar({
               onClick={edit(tool.run)}
             >
               <tool.icon className="h-4 w-4" />
-              {tool.text && <span className="ml-1 text-xs font-medium">{tool.text}</span>}
+              {tool.text && <span className="ms-1 text-xs font-medium">{tool.text}</span>}
             </ToolButton>
           ))}
         </div>
@@ -347,7 +347,7 @@ export function EditorToolbar({
               >
                 <tool.icon className="h-4 w-4" />
                 {t(`folded.${tool.key}`)}
-                {tool.on && <Check aria-hidden className="ml-auto h-3.5 w-3.5" />}
+                {tool.on && <Check aria-hidden className="ms-auto h-3.5 w-3.5" />}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
@@ -379,7 +379,7 @@ export function EditorToolbar({
           ))}
         </div>
       )}
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ms-auto flex items-center gap-3">
         {placeholders && !htmlView && (
           <PlaceholderNav
             editor={editor}
@@ -426,7 +426,7 @@ export function EditorToolbar({
         ).map((item) => (
           <ToolButton key={item.key} label={t(`insert.${item.key}Hint`)} onClick={item.run}>
             <item.icon className="h-3.5 w-3.5" />
-            <span className="ml-1 text-xs font-medium">{t(`insert.${item.key}`)}</span>
+            <span className="ms-1 text-xs font-medium">{t(`insert.${item.key}`)}</span>
           </ToolButton>
         ))}
       </FloatingMenu>
@@ -472,7 +472,7 @@ function LinkTarget({ href }: { href: string }) {
   const safe = safeLinkHref(href);
   const label = href.replace(/^https?:\/\//, '').replace(/\/$/, '');
   const className =
-    'ml-1 flex max-w-[240px] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-blue-600 dark:text-blue-400';
+    'ms-1 flex max-w-[240px] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-blue-600 dark:text-blue-400';
   if (!safe || !/^https?:/.test(safe)) {
     return (
       <span className={cn(className, 'text-muted-foreground dark:text-muted-foreground')}>
@@ -594,7 +594,7 @@ function LinkDialog({ editor, onClose }: { editor: Editor; onClose: () => void }
           {current && (
             <Button
               variant="ghost"
-              className="mr-auto text-muted-foreground"
+              className="me-auto text-muted-foreground"
               onClick={() => {
                 editor.chain().focus().extendMarkRange('link').unsetLink().run();
                 onClose();

@@ -262,7 +262,7 @@ function SheetPreviewDialog({
           </div>
         )}
         <div className="max-h-80 overflow-auto rounded-md border">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-start text-xs">
             <thead className="sticky top-0 bg-muted">
               <tr>
                 {header.map((cell, i) => (

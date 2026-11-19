@@ -540,7 +540,7 @@ export function SendDialog({
             }
             onClick={() => void send()}
           >
-            {sending && <LoadingDots className="mr-1" />}
+            {sending && <LoadingDots className="me-1" />}
             {sending ? t('sending') : t('send')}
           </Button>
         </DialogFooter>
