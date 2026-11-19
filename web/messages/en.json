@@ -41,6 +41,19 @@
       "startPlan": "Start your plan"
     },
     "getMoreWindow": {
+      "topUp": {
+        "title": "AI usage top-up",
+        "label": "AI usage top-ups",
+        "buy": "Buy {option} · {price}",
+        "confirm": "Pay {price} now, from the card on file? It adds to this period until your plan renews.",
+        "pay": "Pay {price}",
+        "cancel": "Cancel",
+        "paying": "Paying…",
+        "done": "Top-up bought. It counts as soon as the payment is confirmed.",
+        "starter": "Growth comes with 5× the AI usage, and AI top-ups whenever you need more.",
+        "seeGrowth": "See Growth",
+        "oldCredits": "AI credit packs are no longer sold; credits you bought stay until they expire."
+      },
       "titleAi": "Get more AI credits",
       "titleStorage": "Get more storage",
       "description": "Your plan, where your limits stand, and the packs that add more.",
@@ -49,7 +62,7 @@
       "aiLine": "AI usage this month: {percent} · {plan} · resets {date}",
       "aiLineNoDate": "AI usage this month: {percent} · {plan}",
       "ownKey": "Use your own key",
-      "askAi": "Buy an AI credit pack",
+      "askAi": "Buy an AI usage top-up",
       "askStorage": "Buy a storage pack",
       "estimates": {
         "title": "What a pack can cover, roughly",
@@ -673,6 +686,7 @@
     "billing": "Plans & billing",
     "whatsNew": "What’s new",
     "whatsNewUnread": "New updates",
+    "language": "Language",
     "help": "Help",
     "signOut": "Sign out"
   },
@@ -9150,7 +9164,7 @@
       "pagesSubOther": "+ {count} on other sites",
       "coverageOf": "of {count, plural, one {# site page} other {# site pages}}",
       "coverageSub": "{never} never audited · {stale} not in {days} days",
-      "coverageTip": "Pages of your site with an audit in the last {days} days, of those Ansvisor keeps from your sitemap, Google Analytics and the pages AI cites (up to 500). Pages you exclude in Site Audit settings, and checkout, login and legal pages, aren't counted.",
+      "coverageTip": "Pages of your site with an audit (those not audited in the last {days} days are said beside), of those Ansvisor keeps from your sitemap, Google Analytics and the pages AI cites (up to 500). Pages you exclude in Site Audit settings, and checkout, login and legal pages, aren't counted.",
       "seeNotAudited": "See the {count} not audited →",
       "authority": "Authority · E-E-A-T",
       "authorityTip": "The Authority and E-E-A-T scores, averaged over each page's latest audit, and the signals that fail or warn on the most pages.",
@@ -9256,7 +9270,7 @@
       },
       "list": "{pages}{count, plural, =0 {} other { and # more}}",
       "recent": "Leave out the {count, plural, one {# page} other {# pages}} audited in the last {days} days",
-      "recentPages": "{pages}{count, plural, =0 {} other { and # more}}. A page that hasn't changed scores the same.",
+      "recentPages": "{pages}{count, plural, =0 {} other { and # more}}. Audit them again after a change across the site, such as robots.txt or a template.",
       "recentPage": "{page} on {date}",
       "noLimit": "Your plan has no monthly limit. A page already being audited isn't started twice.",
       "noneLeft": "No audits left this month.",
@@ -9392,7 +9406,7 @@
       "counts": {
         "official": "Government and academic sites: .gov, .edu, .mil and their country forms, such as .gov.tr, .edu.tr, .ac.uk",
         "international": "International bodies: any .int site, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
-        "research": "Reference and research: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
+        "research": "Reference, research, standards and platform docs: wikipedia.org, doi.org, arxiv.org, nature.com, iso.org, w3.org, rfc-editor.org, schema.org, developers.google.com, developer.mozilla.org",
         "news": "Major news: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post",
         "trusted": "Your trusted sources:"
       },
@@ -9432,6 +9446,7 @@
       "firewall": "{count, plural, one {{bots} is} other {{bots} are}} blocked by your CDN or firewall, though robots.txt lets {count, plural, one {it} other {them}} in.",
       "robots": "robots.txt keeps out {bots}.",
       "allLetIn": "Every AI bot tested was let in.",
+      "unnamed": "robots.txt doesn't name the AI bots, so the audit can't confirm they're welcome. Add a group for each (for example \"User-agent: GPTBot\" with \"Allow: /\").",
       "inconclusive": "Your site turned away Ansvisor's own request ({status}), so the bots weren't tested.",
       "note": "Asked once as each bot, from Ansvisor's servers. A firewall that checks a crawler's own addresses can treat the real crawler differently.",
       "cell": {
@@ -10699,6 +10714,7 @@
     },
     "editor": {
       "back": "Back to the Library",
+      "newContent": "New content",
       "closeHere": "Close",
       "untitled": "Untitled",
       "newPage": "New page",
@@ -11168,7 +11184,8 @@
           "attach": "Attach a file"
         },
         "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
-        "counter": "{count} / {target} characters · {words, plural, one {# word} other {# words}}"
+        "counter": "{count} / {target} characters · {words, plural, one {# word} other {# words}}",
+        "counterRange": "{count} / {min}–{max} characters · {words, plural, one {# word} other {# words}}"
       },
       "link": {
         "title": "Add a link",
@@ -12400,6 +12417,7 @@
         "tooShort": "Write a few paragraphs: Readability is read from the page as you write.",
         "tooShortShort": "Too short yet",
         "notScored": "Not scored yet",
+        "needsAuthor": "Scored once the page has an author",
         "site": {
           "label": "Site trust",
           "score": "Site trust {score}/5",
@@ -12678,8 +12696,8 @@
           },
           "avgSentence": {
             "line": "Sentences average {words, number} words",
-            "detail": "Aim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.",
-            "detailShort": "Aim for 15–20 words: join some short ones, so each says one whole thing."
+            "detail": "Aim for 20 words or fewer: shorter sentences read faster, and AI answers quote them whole.",
+            "detailShort": "Under 8 words on average reads choppy: join some short ones, so each says one whole thing."
           },
           "longSentences": {
             "line": "{count, plural, one {# sentence} other {# sentences}} over 35 words",
@@ -13014,7 +13032,7 @@
         "draftDetail": "The Content Agent writes the page from the brief, by your rules and the page type's.",
         "draftDetailPage": "The Content Agent suggests changes to {page} from the brief, by your rules and the page type's.",
         "review": "You review it",
-        "reviewDetail": "The editor opens as it writes, with a free estimate of its Site Audit score. Nothing is published."
+        "reviewDetail": "The editor opens as it writes. When you mark it ready, you get a free estimate of its Site Audit score. Nothing is published."
       },
       "usage": "Uses about <b>{estimate}</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
       "usageSmall": "Uses under <b>1%</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
@@ -14540,7 +14558,10 @@
         "bodyUnlimited": "Your plan has room for them. Waiting prompts don't start by themselves: pick one to track.",
         "show": "Show them",
         "freeUp": "Free up a spot",
-        "track": "Track a waiting prompt"
+        "track": "Track a waiting prompt",
+        "addTracking": "Add more tracking",
+        "moved": "{count, plural, one {One of them was tracked until {date}} other {# of them were tracked until {date}}}, when your plan's tracking went down to {limit, number} prompt locations.",
+        "movedNoLimit": "{count, plural, one {One of them was tracked until {date}} other {# of them were tracked until {date}}}, when your plan's tracking went down."
       },
       "dialog": {
         "pill": "Prompt limit reached · {used} of {max}",
@@ -14553,6 +14574,7 @@
         "needs": "It's tracked in {count} locations, so it needs {count} spots.",
         "howStarter": "To track it, pause a prompt you need less, or move to a bigger plan.",
         "howContact": "To track it, pause a prompt you need less, or contact us to raise your limit.",
+        "howGrowth": "To track it, pause a prompt you need less, or add more tracking to your plan.",
         "room": "Your plan has room for it. Waiting prompts don't start by themselves, so it waits for you to track it.",
         "candidates": "Prompts you could pause",
         "candidatesMany": "Prompts you could pause: pick enough to free {count} spots",
@@ -14571,6 +14593,7 @@
         "pauseMany": "Pause {count} and track this one",
         "trackNow": "Track it",
         "seeGrowth": "See Growth: {count} prompts",
+        "addTracking": "Add more tracking",
         "contact": "Contact us",
         "keepWaiting": "Keep it waiting",
         "keepPaused": "Keep it paused",
@@ -14836,6 +14859,7 @@
       "unlimited": "Unlimited",
       "cta": {
         "upgrade_growth": "Upgrade to Growth",
+        "add_more": "Add more",
         "upgrade": "Upgrade plan",
         "contact": "Contact us",
         "choose_plan": "Choose a plan"
@@ -15061,7 +15085,7 @@
       "unlimited": "{used} → {after} tracked locations · no limit on your plan",
       "usageHint": "Each prompt in each location is one tracked location on your plan, checked every day. Paused prompts don't count.",
       "over": "This needs {adding, plural, one {# more tracked location} other {# more tracked locations}}; {left, plural, =0 {none are} one {# is} other {# are}} left on your {plan} plan.",
-      "overHint": "Pick fewer prompts or places. {plan, select, starter {Or upgrade your plan, or contact us for a custom plan.} growth {Or contact us for a custom plan.} other {Or contact us to raise your limit.}}",
+      "overHint": "Pick fewer prompts or places. {plan, select, starter {Or upgrade your plan, or contact us for a custom plan.} growth {Or add more tracking to your plan.} other {Or contact us to raise your limit.}}",
       "nothing": "These prompts are already tracked in these locations.",
       "cityBlocked": "None of these prompts runs an engine that answers from a city (Google AI Mode, AI Overview or an API model). Add one of those engines to the prompts first.",
       "cityPartly": "{count, plural, one {# of these prompts doesn't} other {# of these prompts don't}} run an engine that answers from a city; a city counts on the plan for them but isn't asked there.",
@@ -16793,6 +16817,17 @@
       "saved": "Time zone saved",
       "saveFailed": "Couldn’t save your time zone. Try again."
     },
+    "language": {
+      "label": "Language",
+      "automatic": "Automatic ({language})",
+      "hint": "The language of Ansvisor’s screens, for you only. Your brands’ content language doesn’t change.",
+      "loading": "Loading languages…",
+      "moreSoon": "More languages are on the way.",
+      "preview": "Staff and test builds also see the languages that have no translation yet, and a test language with longer text. They show English where text is missing.",
+      "testLanguage": "{language} · test",
+      "saved": "Language saved",
+      "saveFailed": "Couldn’t save your language. Try again."
+    },
     "save": "Save changes",
     "saved": "Changes saved!",
     "signOut": "Sign out",
@@ -16911,6 +16946,81 @@
         }
       }
     },
+    "planAddOns": {
+      "title": "Add more to your plan",
+      "description": "Extra tracking, extra brands and AI usage top-ups for your Growth plan. Everything you pick is charged once, to the card on file.",
+      "tracking": {
+        "title": "Extra tracking",
+        "description": "More prompt locations, tracked on your plan's engines every day. One tier at a time; change or remove it any time.",
+        "label": "Extra tracking tiers",
+        "none": "None",
+        "tier": "+{units} prompt locations",
+        "price": "{price}/{interval, select, year {yr} other {mo}}",
+        "contactSales": "Contact sales",
+        "yearly": "Yearly prices: 2 months free."
+      },
+      "brands": {
+        "title": "Extra brands",
+        "description": "Each brand gets its own topics, competitors and white-label reports. {price} a {interval, select, year {year} other {month}} per brand.",
+        "count": "{count} extra",
+        "fewer": "One brand fewer",
+        "more": "One brand more",
+        "note": "You can't go below the brands you have: remove one in Brands first."
+      },
+      "topUp": {
+        "title": "AI usage top-up",
+        "description": "One payment. Adds AI usage, briefs and opportunities until your plan renews on {date}; it doesn't renew.",
+        "descriptionNoDate": "One payment. Adds AI usage, briefs and opportunities until your plan renews; it doesn't renew.",
+        "label": "AI usage top-ups",
+        "none": "None",
+        "option": "+{multiplier}x",
+        "adds": "{multiplier}× this month’s AI usage · +{briefs} briefs · +{opportunities} opportunities"
+      },
+      "summary": "{prompts} prompt locations · {brands} brands",
+      "nothing": "Pick what to change above.",
+      "review": "Review and pay",
+      "reviewing": "Checking the price…",
+      "dialog": {
+        "title": "Review your add-ons",
+        "newLimits": "New limits",
+        "tracking": "Extra tracking",
+        "trackingNone": "No extra tracking",
+        "brands": "{count, plural, =0 {No extra brands} one {# extra brand} other {# extra brands}}",
+        "topUp": "AI usage top-up +{multiplier}x, one payment",
+        "dueToday": "Due today",
+        "dueTodayNote": "The rest of this period for extra tracking and brands, and a top-up in full.",
+        "total": "From the next renewal",
+        "totalValue": "{price} a {interval, select, year {year} other {month}}",
+        "credit": "A lower tier or fewer brands leaves a credit for your next invoices.",
+        "pay": "Pay {price}",
+        "confirm": "Confirm",
+        "cancel": "Cancel",
+        "processing": "Processing…"
+      },
+      "done": "Your add-ons are updated. A top-up counts as soon as the payment is confirmed.",
+      "states": {
+        "not_admin": "Only admins change add-ons. Ask an admin of your workspace.",
+        "starter": "Add-ons come with the Growth plan. Upgrade to Growth to add tracking, brands and AI usage.",
+        "enterprise": "Your contract sets your limits. Contact your account manager for more.",
+        "trial": "Add-ons can be bought once your plan has started.",
+        "no_plan": "Add-ons can be bought while your plan is active.",
+        "ending": "Your plan is set to end. Keep your plan to change its add-ons."
+      },
+      "errors": {
+        "not_cloud": "Add-ons aren't available here.",
+        "admin_only": "Only admins change add-ons.",
+        "not_growth": "Add-ons come with the Growth plan.",
+        "trial": "Add-ons can be bought once your plan has started.",
+        "no_plan": "Add-ons can be bought while your plan is active.",
+        "ending": "Your plan is set to end. Keep your plan to change its add-ons.",
+        "contact_sales": "This tier is sold by our sales team.",
+        "unavailable": "This add-on can't be bought right now.",
+        "below_usage": "You use {prompts} prompt locations and {brands} brands; the new limits are {limitPrompts} and {limitBrands}. Pause prompts or remove brands first.",
+        "payment_failed": "The payment didn't go through.",
+        "failed": "Couldn't change your add-ons. Try again."
+      },
+      "readFailed": "Couldn't read your add-ons. Try again later."
+    },
     "cancelsOn": "Subscription ends on {date}",
     "changePlan": "Change Plan",
     "upgradeTo": "Upgrade to {plan}",
@@ -16991,18 +17101,19 @@
     "planChanged": "Plan updated successfully.",
     "subscriptionCanceled": "Your subscription has been canceled.",
     "needCustomPlan": "Need a custom plan?",
-    "customPlanDescription": "For large companies and agencies managing AI visibility at scale. Starting at $499/month.",
+    "customPlanDescription": "For large companies and agencies managing AI visibility at scale. Starting at ${price}/month.",
     "customPlanPoints": [
-      "Unlimited brands in a custom workspace",
-      "All answer engines, Claude included",
-      "Custom prompt and location tracking",
-      "Custom KPI frameworks and data integrations",
-      "Priority support and onboarding sessions",
-      "SSO / SAML and custom feature requests",
+      "1 brand and 3,000 prompts to start, more by contract",
+      "Every answer engine, Claude by contract",
+      "Unlimited content briefs, opportunities and site audits",
+      "SSO / SAML, priority support and an SLA",
+      "Invoice billing and API access",
       "Your own AI keys: OpenAI, Anthropic, Google, Azure or OpenRouter"
     ],
     "customPlanPointsChat": ["Chat and Agents", "Full auto, with agents that publish on their own"],
     "planCards": {
+      "expandable": "+ add-ons",
+      "expandableHint": "Growth can add more of this any time, on Settings › Billing: extra tracking, extra brands and AI usage top-ups.",
       "starter": {
         "tagline": "For small teams getting started with AI visibility monitoring and optimization.",
         "engines": "ChatGPT & Gemini tracking",
@@ -17207,6 +17318,8 @@
     "integrations_connectForbidden": "Only admins and managers can connect integrations.",
     "integrations_statusFailed": "Couldn't check whether {label} is connected. Try again in a moment.",
     "integrations_statusTimedOut": "Checking {label} took too long. Try again in a moment.",
+    "integrations_propertiesFailed": "Couldn't load {source} properties.",
+    "integrations_propertiesNoAccess": "Google didn't give Ansvisor access to {source}: a box on Google's screen was left unticked. Disconnect it above, then connect again and tick every box.",
     "integrations_propertiesTimedOut": "Reading the properties took too long. Try again in a moment.",
     "integrations_retry": "Try again",
     "integrations_propertyMapping": "Property mapping",
@@ -18120,6 +18233,7 @@
     },
     "description": "Manage all the brands you track across AI platforms.",
     "addBrand": "Add Brand",
+    "addBrandAddOn": "Add a brand to your plan",
     "showAllBrands": "Show My All Brands",
     "visitBrandSettings": "Visit Brand Setting",
     "workspaceSettings": "Workspace Settings",

@@ -68374,3 +68374,73 @@ grant all on table public.usage_top_ups to service_role;
 
 notify pgrst, 'reload schema';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00547_retire_ai_credit_packs.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00547: AI credit packs leave the sale; AI usage top-ups take their place
+-- ============================================================================
+-- Growth add-ons (00546) sell one-time AI usage top-ups (+5x, +10x, +20x),
+-- valid until the plan renews. CHAT-18's AI credit packs ($10 … $1,000,
+-- 12 months) are no longer sold: their rows are switched off, so Billing
+-- and the Get more window stop offering them. Packs already bought keep
+-- their credits until they expire (ai_credit_grants is untouched), and
+-- storage packs stay on sale. Four rows; nothing else changes.
+
+update public.add_on_products
+set active = false
+where kind = 'ai'
+  and active;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00548_enterprise_grandfather.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00548: Enterprise's new defaults; existing contracts keep what they have
+-- ============================================================================
+-- Enterprise now starts from $1,999 a month with 1 brand and 3,000 prompt
+-- locations by default (web/src/config/plans.ts, server/src/config/plans.js);
+-- more is set per contract in plan_overrides, as today. Workspaces already
+-- on Enterprise were sold unlimited brands and prompts: their overrides get
+-- maxBrands -1 and maxPrompts -1, only where the contract set no number of
+-- its own, so nothing a customer has today changes. A few rows; running it
+-- again changes nothing.
+
+update public.organizations
+set plan_overrides = jsonb_build_object('maxBrands', -1, 'maxPrompts', -1)
+  || coalesce(plan_overrides, '{}'::jsonb)
+where plan = 'enterprise'
+  and (
+    plan_overrides is null
+    or not (plan_overrides ? 'maxBrands')
+    or not (plan_overrides ? 'maxPrompts')
+  );
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00549_profiles_ui_language.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00549: a person's own interface language (Settings › Account › Language)
+-- ============================================================================
+-- profiles.ui_language: the language the person picked for Ansvisor's screens,
+-- as a locale code ("tr", "de", "pt-BR"); null is Automatic, their browser's
+-- language, else English. Per person, never per workspace, and apart from a
+-- brand's content language (what prompts are tracked and content is written
+-- in), which it never changes. Theirs to set, on their own row
+-- ("profiles: own row update", 00001): 00228's guard keeps role and
+-- organization with the server and leaves this column to the person.
+--
+-- The format check only keeps a stray value out; which codes the app has
+-- (and which have a messages file) is the web app's list (web/src/i18n/
+-- locales.ts), so a new language needs no migration.
+
+alter table public.profiles
+  add column if not exists ui_language text
+    constraint profiles_ui_language_format check (
+      ui_language is null
+      or ui_language ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$'
+    );
+
+comment on column public.profiles.ui_language is
+  'The interface language the person picked (Settings › Account › Language), a locale code such as tr or pt-BR; null = Automatic, their browser''s language, else English. Never the brand''s content language.';
+

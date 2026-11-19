@@ -4,7 +4,10 @@ import { STOP_WORDS, wordsOf } from './sources';
  * Whether a heading or an FAQ question carries a fan-out (fanoutH2, fanoutFaq
  * only): words meet by their light stems ("Measuring", "measure"), an acronym
  * in capitals counts ("AI"), and with three key words or more all but one is
- * enough, or three in four where that asks for fewer.
+ * enough, or three in four where that asks for fewer. A long fan-out, often
+ * a string of keywords, is met by a natural heading with MAX_KEY_HITS of its
+ * words (Content test 2026-11-19, item 3: the agent pasted a 17-word search
+ * as an H2 to meet the rule).
  */
 export function carriesFanout(fanout: string, text: string): boolean {
   const acronyms = new Set([...acronymsOf(fanout), ...acronymsOf(text)]);
@@ -17,8 +20,11 @@ export function carriesFanout(fanout: string, text: string): boolean {
   const have = new Set(keyWords(text).flatMap(forms));
   const hits = keys.filter((w) => forms(w).some((f) => have.has(f))).length;
   const share = Math.ceil(keys.length * 0.75);
-  return hits >= (keys.length >= 3 ? Math.min(keys.length - 1, share) : share);
+  return hits >= (keys.length >= 3 ? Math.min(keys.length - 1, share, MAX_KEY_HITS) : share);
 }
+
+/** The most of a fan-out's key words a heading needs to carry it. */
+const MAX_KEY_HITS = 5;
 
 /** Two-character words a text writes in capitals ("AI", "UX", "5G"), lowercased; never a stop word. */
 function acronymsOf(text: string): string[] {

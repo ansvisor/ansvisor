@@ -396,6 +396,9 @@ export function AgentCard({
   // From the page as it is now when checked so: never a count a beat behind it.
   const from = rules.after?.now ?? rules.met;
   const after = rules.after?.met ?? rulesAfter(suggestions, rules);
+  // A result that meets fewer rules than the page now: Reject is the button
+  // to press, not Accept (Content test 2026-11-19, item 7).
+  const fewer = after < from;
   // Rules met now that accepting it would break: said, never left to find after.
   const breaks = rules.after?.breaks ? (
     <span className="text-amber-700 dark:text-amber-400">
@@ -747,14 +750,19 @@ export function AgentCard({
               {page.status === 'open' ? (
                 <>
                   <Button
-                    variant="outline"
+                    variant={fewer ? 'default' : 'outline'}
                     size="sm"
                     disabled={busy}
                     onClick={() => onDecidePage('rejected')}
                   >
                     {tRewrite('reject')}
                   </Button>
-                  <Button size="sm" disabled={busy} onClick={() => onDecidePage('accepted')}>
+                  <Button
+                    variant={fewer ? 'outline' : 'default'}
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => onDecidePage('accepted')}
+                  >
                     {tRewrite('accept')}
                   </Button>
                 </>
@@ -778,10 +786,20 @@ export function AgentCard({
               <Button variant="ghost" size="sm" className={GHOST} onClick={onReview}>
                 {t('review')}
               </Button>
-              <Button variant="outline" size="sm" disabled={busy} onClick={onRejectAll}>
+              <Button
+                variant={fewer ? 'default' : 'outline'}
+                size="sm"
+                disabled={busy}
+                onClick={onRejectAll}
+              >
                 {tSuggestions('rejectAll')}
               </Button>
-              <Button size="sm" disabled={busy} onClick={onAcceptAll}>
+              <Button
+                variant={fewer ? 'outline' : 'default'}
+                size="sm"
+                disabled={busy}
+                onClick={onAcceptAll}
+              >
                 {tSuggestions('acceptAll')}
               </Button>
             </>
