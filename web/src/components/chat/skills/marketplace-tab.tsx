@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Search } from 'lucide-react';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -80,7 +81,8 @@ function keepInAddress(topic: Topic, sort: MarketplaceSort, query: string) {
 export async function addLibrarySkill(
   id: string,
 ): Promise<
-  { ok: true; skill: ImportedSkill } | { ok: false; error: string | null; upgrade: boolean }
+  | { ok: true; skill: ImportedSkill }
+  | { ok: false; error: string | null; code?: string; status?: number; upgrade: boolean }
 > {
   const res = await fetch('/api/chat/skills/marketplace/skill', {
     method: 'POST',
@@ -96,11 +98,12 @@ export async function addLibrarySkill(
   if (res?.ok && body?.ok && body.skill) return { ok: true, skill: body.skill };
   // A read-only workspace, or the trial: the plans.
   const upgrade = res?.status === 402 || body?.code === 'library_plan';
-  return { ok: false, error: body?.error ?? null, upgrade };
+  return { ok: false, error: body?.error ?? null, code: body?.code, status: res?.status, upgrade };
 }
 
 export function MarketplaceTab() {
   const t = useTranslations('chatSkills.library');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const { openUpgrade } = useUpgradeGate();
   // What the address holds (Back from a skill's detail). The tab shows only
@@ -162,7 +165,7 @@ export function MarketplaceTab() {
     setAdding(null);
     if (!added.ok) {
       if (added.upgrade) openUpgrade();
-      else toast.error(added.error ?? t('addFailed'));
+      else toast.error(serverError(added, added.error ?? t('addFailed'), added.status));
       return;
     }
     const { skill } = added;

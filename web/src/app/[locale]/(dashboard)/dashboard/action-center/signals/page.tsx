@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import {
   AlertCircle,
@@ -317,6 +318,7 @@ function SignalsContent({ brand }: { brand: Brand }) {
   // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its window, its
   // filters, and once read, the signals on screen by the code each row shows, with how many.
   const tChatRange = useTranslations('chatPanel.range');
+  const serverError = useServerErrorText();
   const chatFilters: ChatPageFilter[] = [
     ...(category !== 'all'
       ? [{ key: 'category', label: tCategories(category), value: category }]
@@ -429,8 +431,8 @@ function SignalsContent({ brand }: { brand: Brand }) {
           : s;
       setSignals((prev) => (prev ?? []).map(patch));
       setSelected((prev) => (prev && ids.has(prev.id) ? patch(prev) : prev));
-    } catch {
-      toast.error(t('statusChangeFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('statusChangeFailed')));
     } finally {
       withBusy(false);
     }

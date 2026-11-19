@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { ArrowLeft, FileText, X } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
@@ -213,6 +214,7 @@ export function NewContentDialog({
   // Open editor do too.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
 
   const [options, setOptions] = useState<DraftStartOptions | null>(null);
   const [optionsFailed, setOptionsFailed] = useState(false);
@@ -542,7 +544,7 @@ export function NewContentDialog({
     } catch (err) {
       console.error('Failed to start a draft:', err);
       CONTENT_GENERATE.failed();
-      toast.error(t('start.failed'));
+      toast.error(serverError(err, t('start.failed')));
       setOpening(false);
     }
   };

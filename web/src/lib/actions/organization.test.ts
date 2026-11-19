@@ -35,6 +35,10 @@ vi.mock('@/lib/supabase/server', () => ({
           return chain;
         },
         maybeSingle: async () => ({ data: { time_zone: stored }, error: null }),
+        single: async () => ({
+          data: { id: ME, role: 'manager', organization_id: 'org-1' },
+          error: null,
+        }),
         then: (resolve: (value: unknown) => unknown) =>
           Promise.resolve({ data: null, error: null }).then(resolve),
       };
@@ -44,8 +48,10 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('@/lib/subscription-guard', () => ({ assertWritable: async () => {} }));
 
-const { getAccountTimeZone, updateAccountTimeZone } = await import('./organization');
+const { getAccountTimeZone, updateAccountTimeZone, updateOrganizationName } =
+  await import('./organization');
 
 beforeEach(() => {
   calls = [];
@@ -85,5 +91,14 @@ describe('the Account time zone', () => {
     await expect(updateAccountTimeZone('Asia/Tokyo')).rejects.toThrow('Unauthorized');
     await expect(getAccountTimeZone()).rejects.toThrow('Unauthorized');
     expect(calls).toEqual([]);
+  });
+});
+
+describe('an Admin-only change by someone else (LOC-008)', () => {
+  it('refuses with a stable code as its digest, for the browser to say in their language', async () => {
+    const refused = await updateOrganizationName('Acme').catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(Error);
+    expect(refused).toMatchObject({ code: 'admin_required', digest: 'admin_required' });
+    expect(calls.some((c) => c.table === 'organizations')).toBe(false);
   });
 });

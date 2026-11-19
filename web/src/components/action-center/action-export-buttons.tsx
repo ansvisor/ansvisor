@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Check, Copy, Download, FileDown, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -58,6 +59,7 @@ export function ActionExportButtons({
   story?: ActionStory | null;
 }) {
   const tExport = useTranslations('actionCenter.actionsPage.export');
+  const serverError = useServerErrorText();
   // Every label the export reads, from the same namespaces the API uses.
   const t: ExportTranslators = {
     page: useTranslations(EXPORT_NAMESPACES.page),
@@ -124,8 +126,8 @@ export function ActionExportButtons({
     try {
       const data = await build();
       if (data) await fn(data);
-    } catch {
-      toast.error(tExport('exportFailed'));
+    } catch (err) {
+      toast.error(serverError(err, tExport('exportFailed')));
     } finally {
       setIsBusy(false);
     }

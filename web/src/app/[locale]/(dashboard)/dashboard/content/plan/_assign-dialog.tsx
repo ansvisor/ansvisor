@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,6 +47,7 @@ export function AssignDialog({
   onAssigned: () => void;
 }) {
   const t = useTranslations('contentEditor.plan.assign');
+  const serverError = useServerErrorText();
   const [memberId, setMemberId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const draft = row?.draft ?? null;
@@ -67,7 +69,7 @@ export function AssignDialog({
       onAssigned();
     } catch (err) {
       console.error('Failed to assign the Plan row:', err);
-      toast.error(t('failed'));
+      toast.error(serverError(err, t('failed')));
     } finally {
       setSaving(false);
     }

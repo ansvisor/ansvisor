@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -81,6 +82,7 @@ function PromptsCheck({
   reload: () => void;
 }) {
   const t = useTranslations('actionCenter.today.firstDay.check');
+  const serverError = useServerErrorText();
   const { canManage } = useUserRole();
   const [removed, setRemoved] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
@@ -111,10 +113,10 @@ function PromptsCheck({
       text,
       platforms: data.platforms,
       models: data.models,
-    }).catch(() => ({ error: t('addFailed') }));
+    }).catch((err: unknown) => ({ error: serverError(err, t('addFailed')) }));
     setBusy(false);
     if ('error' in result) {
-      toast.error(result.error || t('addFailed'));
+      toast.error(serverError(result, result.error || t('addFailed')));
       return;
     }
     setText('');
@@ -226,14 +228,19 @@ function listOf(items: string[]): string {
 /** "Worth tracking too": suggestions already stored for the brand, with the spots left. */
 function WorthTracking({ data, reload }: { data: TodayFirstDay; reload: () => void }) {
   const t = useTranslations('actionCenter.today.firstDay.worth');
+  const serverError = useServerErrorText();
   const { canManage } = useUserRole();
   const [busy, setBusy] = useState<string | null>(null);
   const track_ = async (id: string) => {
     setBusy(id);
-    const result = await acceptSuggestion(id).catch(() => ({ error: t('failed') }));
+    const result = await acceptSuggestion(id).catch((err: unknown) => ({
+      error: serverError(err, t('failed')),
+    }));
     setBusy(null);
     if (result && 'error' in result && result.error) {
-      toast.error(typeof result.error === 'string' ? result.error : t('failed'));
+      toast.error(
+        serverError(result, typeof result.error === 'string' ? result.error : t('failed')),
+      );
       return;
     }
     reload();

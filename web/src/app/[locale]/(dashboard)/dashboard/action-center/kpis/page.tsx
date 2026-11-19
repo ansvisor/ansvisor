@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { AlertCircle, ListFilter, Plus, Settings2, Sparkles, Target, X } from 'lucide-react';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -87,6 +88,7 @@ function KpisContent({ brand }: { brand: Brand }) {
   // ready-made set unsaved, as a member is.
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const [result, setResult] = useState<KpiSnapshotsResult | null>(null);
   // A brand that never had a KPI opens on the ready-made set: saved for an
   // admin or manager (and said so once), shown unsaved to everyone else.
@@ -176,8 +178,8 @@ function KpisContent({ brand }: { brand: Brand }) {
     try {
       await removeKpi(brand.id, key);
       await load();
-    } catch {
-      toast.error(t('removeFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('removeFailed')));
     } finally {
       setBusyKey(null);
     }

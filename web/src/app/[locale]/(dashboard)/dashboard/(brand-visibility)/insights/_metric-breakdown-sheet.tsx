@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useCaughtErrorText } from '@/hooks/use-server-error';
 import { TrendingDown, TrendingUp, Minus, AlertTriangle } from 'lucide-react';
 import {
   Sheet,
@@ -59,6 +60,8 @@ export function MetricBreakdownSheet({
 }: Props) {
   const open = Boolean(brandId && metric);
   const locale = useLocale();
+  const t = useTranslations('insights.breakdown');
+  const caughtError = useCaughtErrorText();
   const [data, setData] = useState<InsightsBreakdown | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +87,7 @@ export function MetricBreakdownSheet({
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load breakdown');
+          setError(caughtError(err, t('loadFailed')));
         }
       })
       .finally(() => {
@@ -96,7 +99,7 @@ export function MetricBreakdownSheet({
     };
     // filtersKey is the stable dependency; `filters` is intentionally omitted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, brandId, metric, filtersKey, locale]);
+  }, [open, brandId, metric, filtersKey, locale, caughtError, t]);
 
   const title = metric ? METRIC_TITLE[metric] : '';
 

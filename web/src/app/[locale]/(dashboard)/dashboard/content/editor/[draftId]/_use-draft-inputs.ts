@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { getDraftInputs, saveDraftInputs } from '@/lib/actions/content-draft-inputs';
 import type { DraftInputs } from '@/lib/content/draft-inputs';
@@ -27,6 +28,7 @@ export type DraftInputsRead =
  */
 export function useDraftInputs(draftId: string, on: boolean): DraftInputsRead {
   const t = useTranslations('contentEditor.editor.yourInput');
+  const serverError = useServerErrorText();
   const [inputs, setInputs] = useState<DraftInputs | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -63,7 +65,7 @@ export function useDraftInputs(draftId: string, on: boolean): DraftInputsRead {
       setInputs(next);
       saveDraftInputs(draftId, next).catch((err) => {
         console.error('Failed to save the input:', err);
-        toast.error(t('saveFailed'));
+        toast.error(serverError(err, t('saveFailed')));
         const at = changes.current;
         getDraftInputs(draftId)
           .then((read) => {
@@ -74,7 +76,7 @@ export function useDraftInputs(draftId: string, on: boolean): DraftInputsRead {
           .catch((readErr) => console.error('Failed to read the input:', readErr));
       });
     },
-    [draftId, t],
+    [draftId, t, serverError],
   );
   const retry = useCallback(() => {
     setFailed(false);

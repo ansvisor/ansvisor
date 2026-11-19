@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { exportMentions, getMentionsOverview } from '@/lib/actions/mentions';
 import {
@@ -90,6 +91,7 @@ export function useMentionsExport({
   const tSentiment = useTranslations('mentions.overview.sentiment');
   const tHeadline = useTranslations('mentions.overview.headline');
   const tKpi = useTranslations('mentions.overview.kpi');
+  const serverError = useServerErrorText();
   const locale = useLocale();
   const f = numberFormat(locale);
   const query = useMemo(() => mentionsQuery(filters), [filters]);
@@ -169,8 +171,8 @@ export function useMentionsExport({
         mentionsExportFileName(slug, new Date(), await exportFileWord()),
       );
       if (capped) toast.warning(t('capped', shown));
-    } catch {
-      toast.error(t('exportFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('exportFailed')));
     } finally {
       setBusy(null);
     }

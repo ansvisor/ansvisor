@@ -523,9 +523,9 @@ export function ChatSuggestion({
       await startedDailySuggestion(suggestion.id, 'editor').catch(() => undefined);
       if (result.importFailed) toast.warning(tDrawer('task.pageNotRead'));
       router.push(contentEditorPath(result.draftId));
-    } catch {
+    } catch (err) {
       end();
-      toast.error(t('editorFailed'));
+      toast.error(serverError(err, t('editorFailed')));
     }
   }
 
@@ -545,9 +545,9 @@ export function ChatSuggestion({
       }
       toast.success(done);
       router.push(INBOX_HREF);
-    } catch {
+    } catch (err) {
       end();
-      toast.error(t('changeFailed'));
+      toast.error(serverError(err, t('changeFailed')));
     }
   }
 

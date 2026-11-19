@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { FlaskConical, Loader2, Play, StopCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -41,15 +42,18 @@ export function RunSinglePromptDialog({
   >([]);
   const [loading, setLoading] = useState(false);
   const [runningId, setRunningId] = useState<string | null>(null);
+  const t = useTranslations('insights.tracking');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     getBrandPrompts(brandId)
       .then(setPrompts)
-      .catch(() => toast.error('Failed to load prompts'))
+      .catch((err: unknown) => toast.error(serverError(err, t('loadPromptsFailed'))))
       .finally(() => setLoading(false));
-  }, [open, brandId]);
+  }, [open, brandId, serverError, t]);
 
   const handleRun = async (promptId: string) => {
     setRunningId(promptId);
@@ -58,7 +62,7 @@ export function RunSinglePromptDialog({
       onClose();
       onJobStarted(jobId);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to run prompt');
+      toast.error(caughtError(err, t('runPromptFailed')));
     } finally {
       setRunningId(null);
     }

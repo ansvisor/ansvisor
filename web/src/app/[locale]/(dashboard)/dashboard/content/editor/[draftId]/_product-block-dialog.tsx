@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ export function ProductBlockDialog({
   onClose: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.productBlock');
+  const serverError = useServerErrorText();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<BlockProductRead[] | 'failed' | null>(null);
@@ -135,7 +137,7 @@ export function ProductBlockDialog({
     } catch (err) {
       if (closed.current) return;
       console.error('Failed to read the products:', err);
-      toast.error(t('failed'));
+      toast.error(serverError(err, t('failed')));
     } finally {
       if (!closed.current) setBusy(false);
     }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import {
   Check,
@@ -119,6 +120,7 @@ export function DeliverableCard({
   const t = useTranslations('chatDeliverable');
   const tFormats = useTranslations('chatAnswer.formats');
   const tReadOnly = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const openGetMore = useGetMore();
   const { guard, openUpgrade } = useUpgradeGate();
   const [fileStatus, setFileStatus] = useState(deliverable.status);
@@ -182,8 +184,8 @@ export function DeliverableCard({
     setBusy(true);
     try {
       return settle(await write(runId, n), label);
-    } catch {
-      toast.error(t('task.failed.failed'));
+    } catch (err) {
+      toast.error(serverError(err, t('task.failed.failed')));
       return false;
     } finally {
       setBusy(false);

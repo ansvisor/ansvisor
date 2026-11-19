@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { Check, Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { ClassBadge } from '@/components/chat-access/class-badge';
@@ -614,6 +615,7 @@ function AgentFormBody({
   const tErrors = useTranslations('chatAgents.form.errors');
   const tRoles = useTranslations('chatAccess.roleNames');
   const tProviders = useTranslations('settings.agent_providers');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const { isLocked, openUpgrade } = useUpgradeGate();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
@@ -830,7 +832,7 @@ function AgentFormBody({
     setServer({
       ...place,
       code: answer.code,
-      message: answer.message ?? t('failed'),
+      message: serverError(answer, answer.message ?? t('failed')),
       denial: answer.denial,
       savedDraft,
     });

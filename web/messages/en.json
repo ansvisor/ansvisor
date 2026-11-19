@@ -24,7 +24,9 @@
     "missing_ai_key": "Add an AI provider key in Settings › AI Providers first.",
     "server_error": "Something went wrong on our side. Try again.",
     "location_limit": "Your plan's prompt locations are full: each prompt counts once per location it tracks, and paused prompts don't count. Remove or pause some, or upgrade your plan.",
-    "brand_limit": "Your plan's brands are all in use. Upgrade your plan to add more."
+    "brand_limit": "Your plan's brands are all in use. Upgrade your plan to add more.",
+    "demo_brand": "This is the demo brand: its data is sample data, so it can't be changed or run. Make the change on your own brand.",
+    "admin_required": "Only an Admin can do this. Ask an Admin of your workspace."
   },
   "aiUsage": {
     "meter": {
@@ -440,7 +442,8 @@
       "companyName": "Company name",
       "competitorsToTrack": "Competitors to track",
       "finishingSetup": "Finishing setup...",
-      "competitorsTitle": "Competitors"
+      "competitorsTitle": "Competitors",
+      "saveCompetitorsFailed": "Couldn't save the competitors. Try again."
     },
     "prompts": {
       "removeTopic": "Remove topic",
@@ -9676,7 +9679,10 @@
       "doneCount": "{count, plural, one {Analysis complete — # answer saved.} other {Analysis complete — # answers saved.}}",
       "doneSoFar": "{count, plural, one {Almost done — # answer saved so far, the rest still arriving.} other {Almost done — # answers saved so far, the rest still arriving.}}",
       "failed": "Job failed: {reason}",
-      "unknownError": "Unknown error"
+      "unknownError": "Unknown error",
+      "loadPromptsFailed": "Couldn't load your prompts. Try again.",
+      "runPromptFailed": "Couldn't run the prompt. Try again.",
+      "startFailed": "Couldn't start tracking. Try again."
     },
     "runPrompts": "Run Prompts",
     "runPromptsNow": "Run Prompts Now",
@@ -9855,7 +9861,8 @@
     },
     "breakdown": {
       "noData": "No data",
-      "lowSample": "Low sample"
+      "lowSample": "Low sample",
+      "loadFailed": "Couldn't load the breakdown. Try again."
     },
     "header": {
       "lastRun": "Last run {when}",
@@ -10036,7 +10043,9 @@
         "failed": "Couldn't import the file. Nothing was saved.",
         "back": "Back"
       }
-    }
+    },
+    "loadFailed": "Couldn't load insights. Try again.",
+    "exportFailed": "Couldn't export the CSV. Try again."
   },
   "topics": {
     "addTopic": "Add Topic",
@@ -13354,7 +13363,8 @@
       "setupFirst": "Set up a webhook to send opportunities to your workflow tools.",
       "urlRequired": "Webhook URL is required",
       "urlRequiredTest": "Enter a webhook URL first",
-      "saveError": "Failed to save webhook config"
+      "saveError": "Failed to save webhook config",
+      "testNotRun": "The test didn't run. Try again."
     },
     "loadError": "Failed to load content opportunities",
     "exportError": "Failed to export opportunities",
@@ -13999,7 +14009,8 @@
         "trackNotAllowed": "Only admins and managers can add prompts.",
         "failed": "Couldn't load these queries.",
         "noData": "Google Search Console has no queries for this brand yet.",
-        "empty": "Every Google query with clicks in this range is tracked."
+        "empty": "Every Google query with clicks in this range is tracked.",
+        "trackFailed": "Couldn't track these queries. Try again."
       }
     },
     "summaryLine": {
@@ -15721,7 +15732,10 @@
     "excludeOwnDomain": "Exclude own domain",
     "competitorsOnly": "Competitors only",
     "noBrandTitle": "No brand selected",
-    "noBrandDescription": "Select or create a brand to see the citations AI platforms use when answering about it."
+    "noBrandDescription": "Select or create a brand to see the citations AI platforms use when answering about it.",
+    "loadFailed": "Couldn't load citation data. Try again.",
+    "checkFailed": "Couldn't check for citation data. Try again.",
+    "exportFailed": "Couldn't export the CSV. Try again."
   },
   "shopping": {
     "title": "Product Visibility",

@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { useFailureToast } from '@/hooks/use-failure-toast';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -28,6 +29,7 @@ export function useMentionActions(brandId: string) {
   const failureToast = useFailureToast();
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState<string | null>(null);
 
@@ -42,7 +44,10 @@ export function useMentionActions(brandId: string) {
           rows.map((r) => ({ id: r.id, excerpt: r.excerpt })),
         );
         if ('error' in result) {
-          toast.error(t('sendFailed'), { id: toastId, description: result.error });
+          toast.error(t('sendFailed'), {
+            id: toastId,
+            description: serverError(result, result.error, result.status),
+          });
           return false;
         }
         const open = {
@@ -65,14 +70,14 @@ export function useMentionActions(brandId: string) {
           });
         }
         return true;
-      } catch {
-        toast.error(t('sendFailed'), { id: toastId });
+      } catch (err) {
+        toast.error(serverError(err, t('sendFailed')), { id: toastId });
         return false;
       } finally {
         setSending(false);
       }
     },
-    [brandId, router, t],
+    [brandId, router, t, serverError],
   );
 
   const suggest = useCallback(

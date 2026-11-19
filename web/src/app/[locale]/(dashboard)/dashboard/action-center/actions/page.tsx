@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import {
   AlertCircle,
@@ -179,6 +180,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const tCategories = useTranslations('actionCenter.actionCategories');
   const tChat = useTranslations('chatPanel.suggest');
   const tStarted = useTranslations('actionCenter.gettingStarted');
+  const serverError = useServerErrorText();
 
   const [actions, setActions] = useState<ActionItem[] | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -353,8 +355,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
     try {
       await change();
       toast.success(done);
-    } catch {
-      toast.error(t('updateFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('updateFailed')));
     } finally {
       await load();
       setBusyIds((prev) => {
@@ -454,8 +456,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
         brand.id,
         visible.map((action) => action.id),
       );
-    } catch {
-      if (mounted.current) toast.error(t('export.exportFailed'));
+    } catch (err) {
+      if (mounted.current) toast.error(serverError(err, t('export.exportFailed')));
       return;
     } finally {
       setIsExporting(false);
@@ -485,7 +487,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
       new Blob([BYTE_ORDER_MARK, csv], { type: 'text/csv;charset=utf-8;' }),
       await exportFileName(`${slug}_actions_${date}.csv`),
     );
-  }, [brand.id, brand.slug, visible, tTexts, tCategories, t]);
+  }, [brand.id, brand.slug, visible, tTexts, tCategories, t, serverError]);
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<ActionCategory, number>();

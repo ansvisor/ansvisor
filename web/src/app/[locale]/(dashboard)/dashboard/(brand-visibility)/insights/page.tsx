@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useLocale, useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -402,6 +403,8 @@ export default function InsightsPage() {
   const tChatRange = useTranslations('chatPanel.range');
   const tPlatforms = useTranslations('insights.platforms');
   const tLeaderboard = useTranslations('insights.leaderboard');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
   const router = useRouter();
   const { isCloud } = usePlanContext();
   const locale = useLocale();
@@ -604,7 +607,7 @@ export default function InsightsPage() {
         if (!quiet) {
           // The read's route keeps the server's error in its log, so there
           // is nothing more actionable to say than this.
-          toast.error('Failed to load insights — please try again');
+          toast.error(serverError(err, t('loadFailed')));
           // Not "No tracking data yet", nor the last filters' figures: the
           // tab says the read failed, with Retry (Brand Visibility).
           setLoadFailed(true);
@@ -619,7 +622,7 @@ export default function InsightsPage() {
         if (!stale()) setIsLoading(false);
       }
     },
-    [brandId, cache, show],
+    [brandId, cache, show, serverError, t],
   );
 
   // The brand's filter choices, topics and Opportunities card: their own
@@ -742,11 +745,11 @@ export default function InsightsPage() {
 
       URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to export CSV');
+      toast.error(caughtError(err, t('exportFailed')));
     } finally {
       setIsExporting(false);
     }
-  }, [brand]);
+  }, [brand, caughtError, t]);
 
   // Chat's side panel sees the page (W1-08): its dates and filters, the
   // platform that moved most, and the tables to ask about.

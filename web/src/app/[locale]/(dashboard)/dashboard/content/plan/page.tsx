@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -117,6 +118,7 @@ export default function ContentPlanPage() {
   // period still filter.
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   // The people who can see the brand, read for it: another brand's aren't offered.
   const [team, setTeam] = useState<{ brandId: string; members: TeamMember[] } | null>(null);
   const members = team && team.brandId === activeBrandId ? team.members : [];
@@ -261,7 +263,7 @@ export default function ContentPlanPage() {
       reload();
     } catch (err) {
       console.error('Failed to mark the Plan row:', err);
-      toast.error(t('rowMenu.failed'));
+      toast.error(serverError(err, t('rowMenu.failed')));
     }
   };
 
@@ -272,7 +274,7 @@ export default function ContentPlanPage() {
       reload();
     } catch (err) {
       console.error('Failed to show the Plan row:', err);
-      toast.error(t('rowMenu.failed'));
+      toast.error(serverError(err, t('rowMenu.failed')));
     }
   };
 
@@ -286,7 +288,7 @@ export default function ContentPlanPage() {
       });
     } catch (err) {
       console.error('Failed to hide the Plan row:', err);
-      toast.error(t('rowMenu.failed'));
+      toast.error(serverError(err, t('rowMenu.failed')));
     }
   };
 
