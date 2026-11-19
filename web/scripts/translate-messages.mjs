@@ -123,6 +123,8 @@ async function callModel({ key, model, system, items, maxTokens, retryNotes }) {
     model,
     temperature: 0.2,
     max_tokens: maxTokens,
+    // Translation needs no long reasoning: keep the model's thinking short (and cheap).
+    reasoning: { effort: 'low' },
     usage: { include: true },
     messages: [
       { role: 'system', content: system },
@@ -253,8 +255,10 @@ async function main() {
         stopped = true;
         return;
       }
-      const inputTok = remaining.reduce((a, r) => a + estimateTokens(r.text), 0);
-      const maxTokens = Math.min(16000, Math.round(inputTok * 3 + remaining.length * 20 + 500));
+      // A fixed, roomy ceiling: a model that thinks first spends its thinking
+      // from the same allowance, and a tight one cut replies off mid-JSON
+      // ("finish: length"), which cost a retry each. Billing is per token used.
+      const maxTokens = 16000;
       const items = remaining.map((r) => [r.id, r.path.split('.').slice(-3).join('.'), r.text]);
       let reply;
       try {
