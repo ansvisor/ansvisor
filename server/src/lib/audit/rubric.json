@@ -176,7 +176,7 @@
       "key": "alt-text",
       "category": "structure",
       "label": "Alt-text",
-      "what": "≥80% of <img> tags have non-empty alt attributes.",
+      "what": "≥80% of meaningful <img> tags have non-empty alt attributes. Decorative images (alt=\"\", role=\"presentation\" or aria-hidden) are left out.",
       "why": "Multi-modal engines (Gemini, Claude, GPT-4o) read alt-text as page semantic context.",
       "howToFix": "Add descriptive alt to every meaningful image. Decorative images get alt=\"\".",
       "source": "Google SGE evaluation guide",
