@@ -83,6 +83,8 @@ describe('getUiLanguageState', () => {
       'nl',
       'ja',
       'pl',
+      'zh-CN',
+      'ko',
       'en-XA',
     ]);
     expect(state.preview).toBe(true);
@@ -120,6 +122,7 @@ describe('setUiLanguage', () => {
   it('refuses a language with no translation for a customer, and writes nothing', async () => {
     await expect(setUiLanguage('de')).rejects.toThrow('Unknown language');
     await expect(setUiLanguage('en-XA')).rejects.toThrow('Unknown language');
+    await expect(setUiLanguage('ar')).rejects.toThrow('Unknown language');
     await expect(setUiLanguage('klingon' as never)).rejects.toThrow('Unknown language');
     expect(updates).toEqual([]);
     expect(cookieJar).toEqual({});
@@ -131,6 +134,11 @@ describe('setUiLanguage', () => {
     await setUiLanguage('en-XA');
     expect(updates).toEqual([]);
     expect(cookieJar.ansvisor_ui_locale).toBe('en-XA:user-1');
+  });
+
+  it('refuses Arabic even to staff', async () => {
+    preview = true;
+    await expect(setUiLanguage('ar')).rejects.toThrow('Unknown language');
   });
 
   it('refuses anyone signed out', async () => {

@@ -4,8 +4,9 @@ import { cookies, headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import {
-  LOCALES,
+  HIDDEN_LOCALES,
   PSEUDO_LOCALE,
+  SELECTABLE_LOCALES,
   TRANSLATED_LOCALES,
   isAnyUiLocale,
   isUiLocale,
@@ -69,7 +70,7 @@ export async function getUiLanguageState(): Promise<UiLanguageState> {
     selected = isUiLocale(data?.ui_language) ? data.ui_language : null;
   }
   // A pick the person may no longer have shows as Automatic.
-  const offered = preview ? [...LOCALES, PSEUDO_LOCALE] : TRANSLATED_LOCALES;
+  const offered = preview ? [...SELECTABLE_LOCALES, PSEUDO_LOCALE] : TRANSLATED_LOCALES;
   if (selected && !offered.includes(selected as never)) selected = null;
 
   return {
@@ -88,7 +89,8 @@ export async function getUiLanguageState(): Promise<UiLanguageState> {
  * the cookie only.
  */
 export async function setUiLanguage(locale: AnyUiLocale | null): Promise<void> {
-  if (locale !== null && !isAnyUiLocale(locale)) throw new Error('Unknown language');
+  if (locale !== null && (!isAnyUiLocale(locale) || HIDDEN_LOCALES.includes(locale as never)))
+    throw new Error('Unknown language');
   const { supabase, user } = await signedInUser();
 
   const translated = locale === null || (isUiLocale(locale) && TRANSLATED_LOCALES.includes(locale));

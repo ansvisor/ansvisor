@@ -1,5 +1,6 @@
 import {
   DEFAULT_LOCALE,
+  HIDDEN_LOCALES,
   PSEUDO_LOCALE,
   TRANSLATED_LOCALES,
   isUiLocale,
@@ -32,7 +33,7 @@ export async function chooseLocale({
 }): Promise<AnyUiLocale> {
   if (picked) {
     if (isUiLocale(picked) && TRANSLATED_LOCALES.includes(picked)) return picked;
-    if (picked === PSEUDO_LOCALE || isUiLocale(picked)) {
+    if (picked === PSEUDO_LOCALE || (isUiLocale(picked) && !HIDDEN_LOCALES.includes(picked))) {
       if (await canPreview().catch(() => false)) return picked;
     }
   }

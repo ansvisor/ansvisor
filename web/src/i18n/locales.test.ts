@@ -3,7 +3,10 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  HIDDEN_LOCALES,
   LOCALES,
+  SELECTABLE_LOCALES,
+  localeDirection,
   LOCALE_NAMES,
   PSEUDO_LOCALE,
   TRANSLATED_LOCALES,
@@ -15,8 +18,24 @@ import { pseudoLocalize } from './pseudo';
 import english from '../../messages/en.json';
 
 describe('the interface languages', () => {
-  it('are English plus the nine of waves 1 and 2, each with its own name', () => {
-    expect([...LOCALES]).toEqual(['en', 'tr', 'de', 'fr', 'es', 'it', 'pt-BR', 'nl', 'ja', 'pl']);
+  it('are English plus the twelve of the waves, each with its own name', () => {
+    expect([...LOCALES]).toEqual([
+      'en',
+      'tr',
+      'de',
+      'fr',
+      'es',
+      'it',
+      'pt-BR',
+      'nl',
+      'ja',
+      'pl',
+      'zh-CN',
+      'ko',
+      'ar',
+    ]);
+    expect(LOCALE_NAMES['zh-CN']).toBe('简体中文');
+    expect(LOCALE_NAMES.ko).toBe('한국어');
     expect(LOCALE_NAMES.tr).toBe('Türkçe');
     expect(LOCALE_NAMES.de).toBe('Deutsch');
     expect(Object.keys(LOCALE_NAMES).sort()).toEqual([...LOCALES, PSEUDO_LOCALE].sort());
@@ -37,6 +56,17 @@ describe('the interface languages', () => {
     expect(normalizeLocale('EN-xa')).toBe('en-XA');
     expect(normalizeLocale('xx')).toBeNull();
     expect(normalizeLocale('')).toBeNull();
+  });
+});
+
+describe('Arabic', () => {
+  it('is known and right to left, but offered to no one', () => {
+    expect(LOCALES).toContain('ar');
+    expect(HIDDEN_LOCALES).toEqual(['ar']);
+    expect(SELECTABLE_LOCALES).not.toContain('ar');
+    expect(localeDirection('ar')).toBe('rtl');
+    expect(localeDirection('en')).toBe('ltr');
+    expect(localeDirection('zh-CN')).toBe('ltr');
   });
 });
 
