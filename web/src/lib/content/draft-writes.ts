@@ -6,6 +6,7 @@ import {
   WRITING_STALE_MS,
   agentStateOf,
   type DraftStart,
+  type ImportedAuthor,
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
 import {
@@ -53,6 +54,28 @@ export const startInput = z.object({
     .optional(),
   origin: z.enum(DRAFT_ORIGINS).default('editor'),
   conversationId: z.guid().nullish(),
+  // As content_authors takes it (00256); one it can't take is no author, not a refused start.
+  pageAuthor: z
+    .object({
+      name: z.string().trim().min(1).max(120),
+      title: z.string().trim().max(120).nullish(),
+      photoUrl: z
+        .string()
+        .max(2048)
+        .regex(/^https:\/\//i)
+        .nullish(),
+      sameAs: z
+        .array(
+          z
+            .string()
+            .max(300)
+            .regex(/^https:\/\/\S+$/i),
+        )
+        .max(10)
+        .default([]),
+    })
+    .nullish()
+    .catch(null),
 });
 
 /** The most prompt ids a draft keeps (00206). */
@@ -196,6 +219,60 @@ export async function keepVersion(
   if (error) console.error(`Failed to keep the draft's ${origin} version:`, error.message);
 }
 
+/** Escape `\`, `%` and `_` for a PostgREST ilike pattern: the name matched as it is. */
+const ilikeExact = (value: string) => value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+
+/**
+ * The author a page brought in by its URL names (its Person schema or
+ * byline, CE-003 and CE-038): the brand's organization's author of that name,
+ * any case, else a new one the member adds, as Settings › Authors would.
+ * Null when it can't be set: the draft then has the brand's default author,
+ * else its byline, as before.
+ */
+export async function pageAuthorId(
+  supabase: DraftClient,
+  brandId: string,
+  createdBy: string,
+  author: ImportedAuthor,
+): Promise<string | null> {
+  try {
+    const { data: brand, error } = await supabase
+      .from('brands')
+      .select('organization_id')
+      .eq('id', brandId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const organizationId = (brand as { organization_id?: string } | null)?.organization_id;
+    if (!organizationId) return null;
+    const name = author.name.trim();
+    const { data: found, error: findError } = await supabase
+      .from('content_authors')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .ilike('name', ilikeExact(name))
+      .limit(1);
+    if (findError) throw new Error(findError.message);
+    if (found?.[0]) return (found[0] as { id: string }).id;
+    const { data: added, error: addError } = await supabase
+      .from('content_authors')
+      .insert({
+        organization_id: organizationId,
+        name,
+        title: author.title || null,
+        photo_url: author.photoUrl || null,
+        same_as: author.sameAs,
+        created_by: createdBy,
+      })
+      .select('id')
+      .single();
+    if (addError) throw new Error(addError.message);
+    return (added as { id: string }).id;
+  } catch (err) {
+    console.error('Failed to set the imported page’s author:', err);
+    return null;
+  }
+}
+
 /**
  * A new draft (New content, Start, Chat's create_draft: CE-003, CE-015) for
  * the person `createdBy`, the brand checked by the caller: its page type,
@@ -203,7 +280,8 @@ export async function keepVersion(
  * chose to optimize, starts with its title as the H1; content brought to
  * optimize is checked against the draft allow-list, as a save is. A type the
  * person picked stays; Start's guess is stored as detected, so it follows the
- * page (CE-023). Throws 'invalid' for a start that isn't one.
+ * page (CE-023). A page brought in by its URL is by the person it names
+ * (pageAuthorId). Throws 'invalid' for a start that isn't one.
  */
 export async function insertDraft(
   supabase: DraftClient,
@@ -213,8 +291,17 @@ export async function insertDraft(
 ): Promise<string> {
   const parsed = startInput.safeParse(start);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
-  const { method, pageType, typePicked, source, bodyHtml, sourceUrl, origin, conversationId } =
-    parsed.data;
+  const {
+    method,
+    pageType,
+    typePicked,
+    source,
+    bodyHtml,
+    sourceUrl,
+    origin,
+    conversationId,
+    pageAuthor,
+  } = parsed.data;
   const title = parsed.data.title.trim().slice(0, MAX_TITLE_LENGTH).trim();
 
   const bodyHtmlKept =
@@ -229,6 +316,16 @@ export async function insertDraft(
   });
   // A page brought in to optimize aims at its own length, not a new page's.
   const rules = startingRules(method, bodyHtml !== undefined ? bodyHtmlKept : undefined);
+  // Only a page read from its address names its author.
+  const authorId =
+    sourceUrl && bodyHtml !== undefined && pageAuthor
+      ? await pageAuthorId(supabase, brandId, createdBy, {
+          name: pageAuthor.name,
+          title: pageAuthor.title ?? null,
+          photoUrl: pageAuthor.photoUrl ?? null,
+          sameAs: pageAuthor.sameAs,
+        })
+      : null;
 
   const { data, error } = await supabase
     .from('content_drafts')
@@ -242,6 +339,8 @@ export async function insertDraft(
       body_html: bodyHtmlKept,
       opportunity_id: opportunityId,
       source_url: sourceUrl ?? null,
+      // The page's own author over the brand's default (content_draft_author, 00257).
+      ...(authorId ? { author_id: authorId } : {}),
       prompt_ids: [...new Set(promptIds)].slice(0, MAX_DRAFT_PROMPTS),
       ...(rules.importLength ? { rules } : {}),
       // Where it was made (00463): set once.
@@ -253,7 +352,29 @@ export async function insertDraft(
   if (error) throw new Error(error.message);
   // A page brought in from its address starts History as the live page.
   if (sourceUrl && bodyHtml !== undefined) await keepVersion(supabase, data.id, 'import');
+  if (opportunityId) await startOpportunity(supabase, brandId, opportunityId);
   return data.id;
+}
+
+/**
+ * The opportunity a draft was started for is In Progress (content test
+ * 2026-11-19: it stayed New, and New content offered it again). Only from
+ * New or Reviewed, never back from Sent or Done; through the person's
+ * session, so a member whose role can't change it leaves it as it is.
+ * Best effort: the draft is started either way.
+ */
+export async function startOpportunity(
+  supabase: DraftClient,
+  brandId: string,
+  opportunityId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('content_opportunities')
+    .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+    .eq('id', opportunityId)
+    .eq('brand_id', brandId)
+    .in('status', ['new', 'reviewed']);
+  if (error) console.error('Failed to set the opportunity In Progress:', error);
 }
 
 const saveInput = z.object({

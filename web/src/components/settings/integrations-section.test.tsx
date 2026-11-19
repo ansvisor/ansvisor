@@ -450,6 +450,18 @@ describe('IntegrationsSection property mapping', () => {
     await act(async () => retry.click());
     expect(container.querySelectorAll('[role="combobox"]')).toHaveLength(2);
   });
+
+  it('says how to give Google access when a box was left unticked, not Google’s JSON', async () => {
+    client.readGscProperties.mockResolvedValueOnce({
+      ok: false,
+      error:
+        '{ "error": { "code": 403, "message": "Request had insufficient authentication scopes.", "status": "PERMISSION_DENIED", "details": [ { "reason": "ACCESS_TOKEN_SCOPE_INSUFFICIENT" } ] } }',
+    });
+    await render(false);
+    expect(container.querySelector('[data-load-failed]')?.textContent).toBe(
+      "Google didn't give Ansvisor access to Search Console: a box on Google's screen was left unticked. Disconnect it above, then connect again and tick every box.",
+    );
+  });
 });
 
 describe('IntegrationsSection on the demo brand', () => {

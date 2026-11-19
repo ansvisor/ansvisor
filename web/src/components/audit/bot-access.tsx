@@ -72,6 +72,18 @@ export function BotAccess({ signal }: { signal: AuditSignal }) {
   else if (robots.length > 0) finding = t('robots', { bots: names(robots), count: robots.length });
   else if (liveTest === 'done') finding = t('allLetIn');
   else if (liveTest === 'inconclusive') finding = t('inconclusive', { status: control ?? '—' });
+  // A warning with nothing blocked: robots.txt doesn't name the AI bots, and
+  // no live test showed them let in, so it can't tell. Said, so the warning
+  // never stands without a reason.
+  if (
+    signal.status === 'warn' &&
+    firewall.length === 0 &&
+    robots.length === 0 &&
+    Array.isArray(signal.evidence.aiBotsMentioned) &&
+    signal.evidence.aiBotsMentioned.length === 0
+  ) {
+    finding = [finding, t('unnamed')].filter(Boolean).join(' ');
+  }
 
   return (
     <div data-slot="bot-access" className="space-y-2">

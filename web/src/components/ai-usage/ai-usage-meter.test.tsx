@@ -261,7 +261,7 @@ describe('AiUsageMeter', () => {
     // Opening reads the usage again.
     expect(readAiUsage).toHaveBeenCalledTimes(2);
     expect(links()).toEqual([
-      ['Get more AI usage', '/dashboard/settings/billing'],
+      ['Get more AI usage', '/dashboard/settings/billing#plan-add-ons'],
       ['Use your own key', '/dashboard/settings/ai-providers'],
       ['See details', '/dashboard/settings/billing#ai-usage'],
     ]);
