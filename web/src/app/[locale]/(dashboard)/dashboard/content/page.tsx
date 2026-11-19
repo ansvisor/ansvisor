@@ -67,6 +67,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAiText } from '@/hooks/use-ai-text';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import type { ChatPageFilter } from '@/lib/chat/page-context';
@@ -1136,6 +1137,17 @@ export default function ContentPage() {
     }
   };
 
+  // The rows' titles and reasons in the person's interface language (LOC-010).
+  const aiText = useAiText(
+    'opportunity',
+    opportunities.map((o) => o.id),
+  );
+  const shownText = (opp: ContentOpportunity): ContentOpportunity => ({
+    ...opp,
+    title: aiText(opp.id, 'title', opp.title),
+    description: opp.description ? aiText(opp.id, 'description', opp.description) : opp.description,
+  });
+
   const filtered = opportunities.filter(
     (o) =>
       o.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -1781,7 +1793,7 @@ export default function ContentPage() {
                       </TableCell>
                       <TableCell className="pl-6 max-w-0">
                         <OpportunityTextCell
-                          opp={opp}
+                          opp={shownText(opp)}
                           handle={fullText}
                           onOpen={() => selectOpportunity(opp.id)}
                         />
