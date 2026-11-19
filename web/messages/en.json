@@ -15562,6 +15562,7 @@
     }
   },
   "competitors": {
+    "forbiddenRole": "Only an admin or a manager can merge competitors.",
     "title": "Competitors",
     "description": "Manage competitors and compare AI visibility head-to-head.",
     "addCompetitor": "Add Competitor",

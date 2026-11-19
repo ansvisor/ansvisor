@@ -105,7 +105,12 @@ export function MergeCompetitorsDialog({
         others.map((c) => c.id),
       );
       if (!result.ok) {
-        toast.error(serverError({ code: result.reason }, result.message || t('error')));
+        toast.error(
+          // Admins and Managers may merge: the generic "Ask an Admin" would be wrong here.
+          result.reason === 'forbidden_role'
+            ? common('forbiddenRole')
+            : serverError({ code: result.reason }, result.message || t('error')),
+        );
         return;
       }
       if (result.merged.length > 0) toast.success(t('success', { kept: kept.name }));
@@ -395,7 +400,12 @@ export function UnmergeCompetitorDialog({
     try {
       const result = await unmergeCompetitor(brandId, competitor.id);
       if (!result.ok) {
-        toast.error(serverError({ code: result.reason }, result.message || t('error')));
+        toast.error(
+          // Admins and Managers may merge: the generic "Ask an Admin" would be wrong here.
+          result.reason === 'forbidden_role'
+            ? common('forbiddenRole')
+            : serverError({ code: result.reason }, result.message || t('error')),
+        );
         return;
       }
       toast.success(result.unmerged ? t('success', { name }) : t('notMerged', { name }));
