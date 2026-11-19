@@ -197,7 +197,7 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                 disabled={!open}
                 onClick={() => setUnits(tier.units)}
                 className={cn(
-                  'flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                  'flex items-center justify-between rounded-lg border px-3 py-2 text-start text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60',
                   selected ? 'border-foreground bg-accent' : 'hover:bg-accent',
                 )}
               >
@@ -278,7 +278,7 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                   disabled={!open}
                   onClick={() => setTopUp(option.multiplier)}
                   className={cn(
-                    'rounded-lg border px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                    'rounded-lg border px-3 py-2 text-start text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60',
                     topUp === option.multiplier ? 'border-foreground bg-accent' : 'hover:bg-accent',
                   )}
                 >
