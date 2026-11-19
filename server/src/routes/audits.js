@@ -46,6 +46,7 @@ import {
   normalizeExcludePattern,
   opportunityKey,
   siteCoverage,
+  sitePageKeys,
 } from '../lib/audit/opportunities.js';
 import { AUTO_AUDIT } from '../lib/audit/auto-audit.js';
 import { rankOpportunities } from '../lib/audit/priority.js';
@@ -108,6 +109,29 @@ function assembleAudit(audit, signalRows) {
     signals,
     recommendations: audit.recommendations ?? [],
   };
+}
+
+/**
+ * The site's pages the hub counts (sitePageKeys): null when the brand's
+ * pages aren't known yet, and then every audited page on the primary domain
+ * counts, as before.
+ */
+async function readSitePageKeys(brandId) {
+  const [sitePages, prefs, excludePatterns] = await Promise.all([
+    supabaseAdmin.from('site_pages').select('url').eq('brand_id', brandId),
+    supabaseAdmin
+      .from('site_audit_page_prefs')
+      .select('page_key, url, state')
+      .eq('brand_id', brandId),
+    readExcludePatterns(brandId),
+  ]);
+  for (const read of [sitePages, prefs]) if (read.error) throw read.error;
+  const keys = sitePageKeys({
+    sitePages: sitePages.data ?? [],
+    prefs: prefs.data ?? [],
+    excludePatterns,
+  });
+  return keys.size > 0 ? keys : null;
 }
 
 /** The brand's primary domain as stored (else its first domain), or null. */
@@ -704,7 +728,7 @@ router.get('/trend', async (req, res) => {
     );
     if (error) throw error;
 
-    const points = buildTrendPoints(rows, primaryHost);
+    const points = buildTrendPoints(rows, primaryHost, undefined, await readSitePageKeys(brandId));
 
     return res.json({ success: true, primaryDomain: primary, points });
   } catch (err) {
@@ -777,14 +801,20 @@ router.get('/overview', async (req, res) => {
   try {
     await assertBrandAccess(brandId, userId);
 
-    const [primary, { data: rows, error }] = await Promise.all([
+    const [primary, { data: rows, error }, siteKeys] = await Promise.all([
       primaryDomainOf(brandId),
       readBrandAudits(brandId),
+      readSitePageKeys(brandId),
     ]);
     if (error) throw error;
 
     const primaryHost = normStoredDomain(primary);
-    const { own, otherPages } = primaryPages(buildAuditPages(rows), primaryHost);
+    const primaryAudited = primaryPages(buildAuditPages(rows), primaryHost);
+    // The site's pages only, as coverage's "of N" counts them (one source of truth).
+    const own = siteKeys
+      ? primaryAudited.own.filter((p) => siteKeys.has(p.key.toLowerCase()))
+      : primaryAudited.own;
+    const { otherPages } = primaryAudited;
     const ids = own.map((p) => p.auditId);
 
     const [scoreRows, failingRows] = await Promise.all([
