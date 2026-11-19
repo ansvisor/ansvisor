@@ -9,7 +9,12 @@ export interface PlanFeature {
   text: string;
   /** A longer word on it, shown on hover. */
   hint?: string;
+  /** The plan can grow it with add-ons (00546): Growth's brands, prompts and AI usage. */
+  expandable?: boolean;
 }
+
+/** The plans whose brands, prompts and AI usage can be grown with add-ons. */
+const EXPANDABLE_PLANS: readonly PlanId[] = ['growth'];
 
 /** A plan's monthly AI allowance as a multiple of Starter's; null when either has none. */
 export function aiUsageMultiple(planId: PlanId): number | null {
@@ -45,18 +50,26 @@ export function usePlanFeatures(): (planId: PlanId) => PlanFeature[] {
   return (planId) => {
     const { limits } = PLANS[planId];
     const aiUsage = aiUsageMultiple(planId);
-    const items = [
-      limits.maxBrands === -1
-        ? tCards('unlimitedBrands')
-        : tCards('brands', { count: limits.maxBrands }),
-      limits.maxTeamMembers === -1
-        ? tCards('unlimitedSeats')
-        : tCards('seats', { count: limits.maxTeamMembers }),
-      tCards('prompts', { count: limits.maxPrompts }),
-      tCards(`${planId}.engines`),
-      tCards('briefs', { count: limits.maxBriefGenerations }),
-      tCards('audits', { count: limits.maxSiteAudits }),
-    ].map((text) => ({ text }));
+    const expandable = EXPANDABLE_PLANS.includes(planId);
+    const items: PlanFeature[] = [
+      {
+        text:
+          limits.maxBrands === -1
+            ? tCards('unlimitedBrands')
+            : tCards('brands', { count: limits.maxBrands }),
+        expandable,
+      },
+      {
+        text:
+          limits.maxTeamMembers === -1
+            ? tCards('unlimitedSeats')
+            : tCards('seats', { count: limits.maxTeamMembers }),
+      },
+      { text: tCards('prompts', { count: limits.maxPrompts }), expandable },
+      { text: tCards(`${planId}.engines`) },
+      { text: tCards('briefs', { count: limits.maxBriefGenerations }) },
+      { text: tCards('audits', { count: limits.maxSiteAudits }) },
+    ];
     return [
       ...items,
       ...(aiUsage
@@ -64,6 +77,7 @@ export function usePlanFeatures(): (planId: PlanId) => PlanFeature[] {
             {
               text: tCards('aiUsage', { count: aiUsage }),
               hint: tCards(chatMetered ? 'aiUsageHintChat' : 'aiUsageHint'),
+              expandable,
             },
           ]
         : []),

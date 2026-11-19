@@ -4,8 +4,8 @@ route: /dashboard/prompts/tracked
 keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume, track now, no answers yet]
 synonyms: [prompt list, my prompts, prompt table, tracked queries]
 plan: all
-updated: 2026-11-17
-last_checked: 2026-11-17
+updated: 2026-11-18
+last_checked: 2026-11-18
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -30,9 +30,9 @@ Each row has a status:
 - **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.
 - **Active**: tracked on its schedule.
 - **Paused**: kept, but not tracked.
-- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.
+- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. If your plan shrinks, the newest prompts past it wait. It never starts by itself.
 
-While prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them.
+While prompts wait, a yellow banner says how many, and why; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. On Growth, **Add more tracking** opens your plan's add-ons in **Settings › Billing**. The table opens on **Active + New**. The **Status** filter, or the usage cards (**…** › **Show usage**), show one status or all of them.
 
 ## Track new prompts now
 

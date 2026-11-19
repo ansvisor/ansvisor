@@ -4,8 +4,8 @@ route: /dashboard/prompts/suggestions
 keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter, product prompts, catalog suggestions, generate by topic, edit suggestion, regenerate prompts]
 synonyms: [prompt ideas, recommended prompts, new prompt ideas, suggest queries, ai generate prompts, prompts for a topic]
 plan: all
-updated: 2026-11-17
-last_checked: 2026-11-17
+updated: 2026-11-18
+last_checked: 2026-11-18
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -61,7 +61,7 @@ Admins and managers can change a suggestion's words before adding it. Click the 
 
 When your plan's prompt locations run out, **Add All** and **+** still add: the suggestions past the limit become prompts **Waiting for a spot**, kept but not tracked. An amber note above the list says how many were added and how many wait.
 
-A waiting prompt never starts by itself. **Go to Tracked Prompts** opens the list, where admins and managers can **Free up a spot**, or upgrade your plan or ask us to raise your limit.
+A waiting prompt never starts by itself. **Go to Tracked Prompts** opens the list, where admins and managers can **Free up a spot**, or get more room: Starter upgrades, Growth adds more tracking, and Enterprise asks us.
 
 ## How AI suggestions are written
 

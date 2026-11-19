@@ -13,7 +13,12 @@ import { PLANS } from '@/config/plans';
 
 const starter = PLANS.starter; // maxPrompts: 50
 const selfHosted = PLANS.self_hosted; // maxPrompts: -1
-const enterprise = PLANS.enterprise; // maxPrompts: -1
+// An Enterprise contract with no prompt limit (what 00548 keeps for existing
+// customers); a new Enterprise starts at 3,000.
+const enterprise = {
+  ...PLANS.enterprise,
+  limits: { ...PLANS.enterprise.limits, maxPrompts: -1 },
+};
 
 describe('promptLocationCount', () => {
   it('counts one location per region entry', () => {

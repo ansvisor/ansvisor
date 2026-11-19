@@ -140,6 +140,22 @@ describe('generateRecommendations', () => {
     expect(prompt).toContain('- Domains: ansvisor.com');
   });
 
+  it('tells the model which authority sites the page links to already, never to suggest again', async () => {
+    modelReturns([]);
+    await generateRecommendations(ctx, {
+      results: [
+        {
+          key: 'outbound-authority-links',
+          status: 'warn',
+          evidence: { authorityHosts: ['rfc-editor.org'], count: 1 },
+        },
+      ],
+    });
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain('| already links to: rfc-editor.org');
+    expect(system).toContain('Never suggest a source the page already links to');
+  });
+
   it("gives the model the brand's rules on any page it audits, and none without (00450)", async () => {
     modelReturns([]);
     await generateRecommendations(ctx, {
