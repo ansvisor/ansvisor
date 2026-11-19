@@ -43,6 +43,7 @@ import {
   withoutHealthFinds,
 } from './content-health.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { brandFactSources } from './content-brand-facts.js';
 import {
   RESEARCH_RULE,
   applyEdits,
@@ -1315,7 +1316,11 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     fanouts: input.sources.fanouts,
     pages: input.sources.pages,
     queries: input.sources.queries,
-    inputs: inputSources(inputRow, brand.name),
+    // The brand's own facts (its approved ones and the engines it tracks) beside Your input.
+    inputs: [
+      ...inputSources(inputRow, brand.name),
+      ...(await brandFactSources({ id: draft.brand_id, name: brand.name }, draft)),
+    ],
   });
   const known = withNamedNumbers(
     knownNumbers(

@@ -13,6 +13,7 @@ import {
   rebuildSources,
 } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { brandFactSources } from './content-brand-facts.js';
 import { bannedPhrasesIn, readBannedPhrases } from './content-rules.js';
 import {
   RESEARCH_RULE,
@@ -1560,7 +1561,11 @@ async function fixWithRun({
     fanouts: input.sources?.fanouts,
     pages: input.sources?.pages,
     queries: input.sources?.queries,
-    inputs: inputSources(inputRow, brand.name),
+    // The brand's own facts (its approved ones and the engines it tracks) beside Your input.
+    inputs: [
+      ...inputSources(inputRow, brand.name),
+      ...(await brandFactSources({ id: brandId, name: brand.name }, draft)),
+    ],
   });
   // A hand-off's details and the person's and brand's rules are the editor's
   // words: no fact the agent may write. The brand's approved facts are, read here.
