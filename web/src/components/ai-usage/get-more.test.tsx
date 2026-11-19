@@ -29,6 +29,27 @@ const read = vi.hoisted(() => ({ getGetMore: vi.fn() }));
 vi.mock('@/lib/actions/get-more', () => read);
 const addOnActions = vi.hoisted(() => ({ getBillingAddOns: vi.fn(), startAddOnPurchase: vi.fn() }));
 vi.mock('@/lib/actions/add-ons', () => addOnActions);
+// Growth's AI usage top-ups (00546/00547), on the AI tab.
+const topUps = vi.hoisted(() => ({ readPlanAddOns: vi.fn(), applyAddOnChange: vi.fn() }));
+vi.mock('@/lib/actions/plan-add-ons', () => topUps);
+const planAddOns = (state = 'open') => ({
+  ok: true,
+  addOns: {
+    state,
+    interval: 'month',
+    currency: 'usd',
+    base: { prompts: 200, brands: 4 },
+    current: { trackingUnits: 100, extraBrands: 1 },
+    tiers: [],
+    brandPriceCents: 2500,
+    topUps: [
+      { multiplier: 5, priceCents: 3900, briefs: 50, opportunities: 50 },
+      { multiplier: 10, priceCents: 6900, briefs: 100, opportunities: 100 },
+      { multiplier: 20, priceCents: 12900, briefs: 200, opportunities: 200 },
+    ],
+    renewsOn: '2026-11-29T10:00:00.000Z',
+  },
+});
 const ai = vi.hoisted(() => ({ usage: null as AiUsage | null, refresh: vi.fn() }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({
   useAiUsage: () => ({ usage: ai.usage, refresh: ai.refresh }),
@@ -169,6 +190,8 @@ beforeEach(() => {
   ai.refresh.mockReset();
   read.getGetMore.mockReset().mockResolvedValue(windowRead());
   addOnActions.startAddOnPurchase.mockReset();
+  topUps.readPlanAddOns.mockReset().mockResolvedValue(planAddOns());
+  topUps.applyAddOnChange.mockReset();
   window.location.hash = '';
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -183,41 +206,65 @@ afterEach(() => {
 });
 
 describe('the Get more window', () => {
-  it('shows the plan, the AI limit, the packs and what a pack covers, $50 picked', async () => {
+  it('shows the plan, the AI limit and the AI usage top-ups, +10x picked', async () => {
     await openWindow();
     expect(dialog()?.querySelector('h2')?.textContent).toBe('Get more AI credits');
     expect(text()).toContain('Your plan');
     expect(dialog()?.querySelector('[data-slot="get-more-limit"]')?.textContent).toBe(
       'AI usage this month: 18% · Growth · resets Nov 1',
     );
-    expect(cards()).toHaveLength(4);
-    expect(cards()[1].getAttribute('aria-checked')).toBe('true');
-    const rows = [...(dialog()?.querySelectorAll('[data-slot="pack-estimates"] .grid') ?? [])];
-    expect(rows.map((r) => r.textContent)).toEqual([
-      'Pack≈ Chat answers≈ Articles',
-      '$10~200~60',
-      '$50~1,000~300',
-      '$250~5,000~1,500',
-      '$1,000~20,000~6,000',
+    expect(cards().map((c) => c.textContent)).toEqual([
+      '+5x$395× this month’s AI usage · +50 briefs · +50 opportunities',
+      '+10x$6910× this month’s AI usage · +100 briefs · +100 opportunities',
+      '+20x$12920× this month’s AI usage · +200 briefs · +200 opportunities',
     ]);
-    expect(rows[2].getAttribute('data-selected')).toBe('true');
-    expect(text()).toContain('Answers and articles are only examples.');
-    expect(text()).toContain('Estimates on Auto.');
+    expect(cards()[1].getAttribute('aria-checked')).toBe('true');
+    expect(text()).toContain('until your plan renews on Nov 29, 2026');
+    // The retired credit packs and their estimates are gone.
+    expect(dialog()?.querySelector('[data-slot="pack-estimates"]')).toBeNull();
+    expect(button('Continue to payment')).toBeUndefined();
     // Growth: no own key (Enterprise only while Chat draws on the AI budget).
     expect(button('Use your own key')).toBeUndefined();
   });
 
-  it('buys the pack picked through Stripe Checkout', async () => {
-    addOnActions.startAddOnPurchase.mockResolvedValue({
+  it('buys a top-up at once, the plan’s tracking and brands left as they are', async () => {
+    topUps.applyAddOnChange.mockResolvedValue({
       ok: true,
-      next: 'checkout',
-      url: '#checkout',
+      changed: true,
+      limits: { prompts: 300, brands: 5 },
     });
     await openWindow();
     await click(cards()[2]);
-    await click(button('Continue to payment'));
-    expect(addOnActions.startAddOnPurchase).toHaveBeenCalledWith('ai_250');
-    expect(window.location.hash).toBe('#checkout');
+    await click(button('Buy +20x · $129'));
+    expect(text()).toContain('Pay $129 now, from the card on file?');
+    await click(button('Pay $129'));
+    expect(topUps.applyAddOnChange).toHaveBeenCalledWith({
+      trackingUnits: 100,
+      extraBrands: 1,
+      topUp: 20,
+      topUpOnly: true,
+    });
+    expect(text()).toContain('Top-up bought. It counts as soon as the payment is confirmed.');
+  });
+
+  it('says why a top-up wasn’t bought', async () => {
+    topUps.applyAddOnChange.mockResolvedValue({
+      ok: false,
+      failure: 'payment_failed',
+      message: 'Your card was declined.',
+    });
+    await openWindow();
+    await click(button('Buy +10x · $69'));
+    await click(button('Pay $69'));
+    expect(text()).toContain("The payment didn't go through. Your card was declined.");
+  });
+
+  it('tells Starter that Growth comes with more AI usage', async () => {
+    topUps.readPlanAddOns.mockResolvedValue(planAddOns('starter'));
+    await openWindow();
+    expect(text()).toContain('Growth comes with 5× the AI usage');
+    expect(button('See Growth')?.getAttribute('href')).toBe('/dashboard/settings/billing');
+    expect(cards()).toHaveLength(0);
   });
 
   it('opens on Storage with its meter, and adds storage once confirmed', async () => {
@@ -255,8 +302,9 @@ describe('the Get more window', () => {
 
   it('says a purchase that failed to start, never a button left at Opening…', async () => {
     addOnActions.startAddOnPurchase.mockRejectedValue(new TypeError('Failed to fetch'));
-    await openWindow();
+    await openWindow('storage');
     await click(button('Continue to payment'));
+    await click(button('Add to plan'));
     expect(text()).toContain("Couldn't start the purchase. Try again.");
     expect(button('Continue to payment')).toBeDefined();
     expect((button('Continue to payment') as HTMLButtonElement).disabled).toBe(false);
@@ -279,23 +327,26 @@ describe('the Get more window', () => {
     expect(tab('AI credits').getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('shows the packs to other members, with Ask your Admin instead of payment', async () => {
+  it('shows the top-ups to other members, with Ask your Admin instead of payment', async () => {
     role.canAdmin = false;
     read.getGetMore.mockResolvedValue(windowRead({}, { isAdmin: false }));
+    topUps.readPlanAddOns.mockResolvedValue(planAddOns('not_admin'));
     await openWindow();
-    expect(cards()).toHaveLength(4);
+    expect(cards()).toHaveLength(3);
     expect(cards().every((c) => (c as HTMLButtonElement).disabled)).toBe(true);
-    expect(button('Continue to payment')).toBeUndefined();
+    expect(button('Buy +10x · $69')).toBeUndefined();
     expect(button('Ask your Admin')).toBeDefined();
-    expect(asked.text).toBe('Buy an AI credit pack');
+    expect(asked.text).toBe('Buy an AI usage top-up');
   });
 
-  it('lets the trial see the packs but not buy them', async () => {
+  it('lets the trial see the top-ups but not buy them', async () => {
     read.getGetMore.mockResolvedValue(
       windowRead({ plan: { ...PLAN, isTrial: true } }, { buy: 'trial' }),
     );
+    topUps.readPlanAddOns.mockResolvedValue(planAddOns('trial'));
     await openWindow();
-    expect(button('Continue to payment')).toBeUndefined();
+    expect(button('Buy +10x · $69')).toBeUndefined();
+    expect(text()).toContain('Add-ons can be bought once your plan has started.');
     expect(text()).toContain("Trials can't buy packs. Choose a plan to buy them.");
     expect(dialog()?.querySelector('[data-slot="get-more-limit"]')?.textContent).toContain(
       'Trial · Growth',

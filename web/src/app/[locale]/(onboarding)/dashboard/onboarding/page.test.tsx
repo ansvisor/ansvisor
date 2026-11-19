@@ -148,6 +148,40 @@ vi.mock('@/hooks/use-explore-demo', async (importOriginal) => ({
     setupDialog: { setup: null, onRetry: exploreDemo.explore, onClose: () => {} },
   }),
 }));
+// The server actions run here through the same fake client, as the person's session would.
+vi.mock('@/lib/actions/organization', async () => {
+  const fake = async () => (await import('@/lib/supabase/client')).createClient() as never;
+  const userId = async () => {
+    const { data } = await (
+      (await fake()) as {
+        auth: { getUser: () => Promise<{ data: { user: { id: string } | null } }> };
+      }
+    ).auth.getUser();
+    return data.user?.id ?? null;
+  };
+  return {
+    ensureMyOrganization: async (name: string) => {
+      const id = await userId();
+      if (!id) throw new Error('Unauthorized');
+      const { ensureOrganization } = await import('@/lib/onboarding/organization');
+      return ensureOrganization(await fake(), id, name);
+    },
+    markMyOnboardingCompleted: async () => {
+      const id = await userId();
+      if (!id) return false;
+      const client = (await fake()) as unknown as {
+        from: (t: string) => {
+          update: (v: unknown) => { eq: (c: string, v: string) => Promise<{ error: unknown }> };
+        };
+      };
+      const { error } = await client
+        .from('profiles')
+        .update({ onboarding_completed: true })
+        .eq('id', id);
+      return !error;
+    },
+  };
+});
 vi.mock('@/lib/actions/topic', () => ({
   getTopics: vi.fn(async () => [{ id: 't1', name: 'Coffee' }]),
   createTopics: vi.fn(async () => undefined),
