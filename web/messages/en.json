@@ -16244,6 +16244,16 @@
       "verifiedLabel": "Verified seller in ChatGPT",
       "verifiedStatus": "Unknown",
       "verifiedDetail": "OpenAI hasn't said how the verified-seller flag is granted, and in early tests shops without it were left out of answers. Until it says more, send a direct product feed."
+    },
+    "page": {
+      "allTime": "All time",
+      "last": "Last {period}",
+      "allPlatforms": "All platforms",
+      "allRegions": "All regions",
+      "noProducts": "No products found matching filters.",
+      "appearances": "{count, plural, one {# appearance} other {# appearances}}",
+      "brandAppearances": "{brand} • {count, plural, one {# appearance} other {# appearances}}",
+      "viewPrompt": "View Prompt Details"
     }
   },
   "reports": {

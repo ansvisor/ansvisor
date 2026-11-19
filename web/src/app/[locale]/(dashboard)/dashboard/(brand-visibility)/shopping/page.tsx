@@ -830,12 +830,16 @@ function FilterBar({
       <FilterField label={t('filterDateRange')}>
         <Select value={datePreset} onValueChange={(v) => setDatePreset(v as ShoppingDatePreset)}>
           <SelectTrigger className="h-8 w-32">
-            <SelectValue>{(value) => (value === 'all' ? 'All time' : `Last ${value}`)}</SelectValue>
+            <SelectValue>
+              {(value) =>
+                value === 'all' ? t('page.allTime') : t('page.last', { period: String(value) })
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {DATE_PRESETS.map((p) => (
               <SelectItem key={p} value={p}>
-                {p === 'all' ? 'All time' : `Last ${p}`}
+                {p === 'all' ? t('page.allTime') : t('page.last', { period: p })}
               </SelectItem>
             ))}
           </SelectContent>
@@ -848,13 +852,13 @@ function FilterBar({
             <SelectValue>
               {(value) =>
                 value === 'all' || !value
-                  ? 'All platforms'
+                  ? t('page.allPlatforms')
                   : (PLATFORM_LABELS[String(value)] ?? String(value))
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All platforms</SelectItem>
+            <SelectItem value="all">{t('page.allPlatforms')}</SelectItem>
             {platformOpts.map((p) => (
               <SelectItem key={p} value={p}>
                 {PLATFORM_LABELS[p] ?? p}
@@ -869,12 +873,14 @@ function FilterBar({
           <SelectTrigger className="h-8 w-32">
             <SelectValue>
               {(value) =>
-                value === 'all' || !value ? 'All regions' : formatRegionDisplay(String(value))
+                value === 'all' || !value
+                  ? t('page.allRegions')
+                  : formatRegionDisplay(String(value))
               }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All regions</SelectItem>
+            <SelectItem value="all">{t('page.allRegions')}</SelectItem>
             {regionOpts.map((r) => (
               <SelectItem key={r} value={r}>
                 {formatRegionDisplay(r)}
@@ -1063,7 +1069,7 @@ function ProductTable({
     return (
       <div className="rounded-xl border border-dashed py-8 text-center bg-card">
         <Layers className="mx-auto h-8 w-8 text-muted-foreground/30" />
-        <p className="mt-2 text-sm text-muted-foreground">No products found matching filters.</p>
+        <p className="mt-2 text-sm text-muted-foreground">{t('page.noProducts')}</p>
       </div>
     );
   }
@@ -1281,8 +1287,11 @@ function ProductAppearancesDrawer({
           </SheetTitle>
           <SheetDescription className="text-xs">
             {product?.product_brand
-              ? `${product.product_brand} • ${product.impressions} appearances`
-              : `${product?.impressions || 0} appearances`}
+              ? t('page.brandAppearances', {
+                  brand: product.product_brand,
+                  count: product.impressions,
+                })
+              : t('page.appearances', { count: product?.impressions || 0 })}
           </SheetDescription>
         </SheetHeader>
 
@@ -1343,7 +1352,7 @@ function ProductAppearancesDrawer({
                         <Link
                           href={`/dashboard/prompts/${app.prompt_id}`}
                           className="text-sm text-foreground font-medium hover:text-primary hover:underline line-clamp-3 block leading-relaxed"
-                          title="View Prompt Details"
+                          title={t('page.viewPrompt')}
                           onClick={() => onOpenChange(false)}
                         >
                           &quot;{app.prompt_text}&quot;
