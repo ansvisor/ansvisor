@@ -24,7 +24,7 @@ import {
 import { percentLabel } from '@/lib/billing/ai-usage';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { cleanHtml } from '@/lib/content/clean-html';
-import { contentEditorPath } from '@/lib/content/drafts';
+import { contentEditorPath, type ImportedAuthor } from '@/lib/content/drafts';
 import { frictionFlow } from '@/lib/friction-events';
 import { pagePath } from '@/lib/content/overlap';
 import type { SiteType } from '@/lib/content/page-types';
@@ -78,6 +78,7 @@ export function WriteThisDialog({
     CONTENT_GENERATE.started();
     let id: string;
     let bodyHtml: string | undefined;
+    let pageAuthor: ImportedAuthor | null | undefined;
     try {
       // An existing page is read first: the agent's suggestions are on its live text.
       if (start.page) {
@@ -89,6 +90,7 @@ export function WriteThisDialog({
           return;
         }
         bodyHtml = cleanHtml(read.page.html, { keepImages: true }).html;
+        pageAuthor = read.page.author;
       }
       id = await createContentDraft(brandId, {
         method: start.method,
@@ -98,6 +100,7 @@ export function WriteThisDialog({
         source: { kind: 'opportunity', id: opportunity.id },
         bodyHtml,
         sourceUrl: start.page?.url,
+        pageAuthor,
       });
     } catch (err) {
       console.error('Failed to start a draft for Write this:', err);

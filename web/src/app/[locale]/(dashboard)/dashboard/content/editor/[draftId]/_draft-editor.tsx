@@ -13,6 +13,7 @@ import { TableKit } from '@tiptap/extension-table';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import {
   ArrowLeft,
+  Plus,
   ArrowUpRight,
   Bot,
   Check,
@@ -93,6 +94,7 @@ import type { SiteTrust } from '@/lib/content/site-trust';
 import {
   AGENT_POLL_MS,
   CONTENT_LIBRARY_PATH,
+  CONTENT_NEW_PATH,
   isPageType,
   type ContentDraft,
   type PageType,
@@ -155,7 +157,13 @@ import {
 } from '@/lib/content/ready-to-publish';
 import { estimateDocument } from '@/lib/content/audit-estimate';
 import { detectPageType, isSiteType, type SiteType } from '@/lib/content/page-types';
-import { BAND_CLASSES, qualityAverage, qualityBand, qualityPhase } from '@/lib/content/quality';
+import {
+  BAND_CLASSES,
+  eeatAwaitsAuthor,
+  qualityAverage,
+  qualityBand,
+  qualityPhase,
+} from '@/lib/content/quality';
 import { inputsGiven } from '@/lib/content/draft-inputs';
 import {
   linksToCheck,
@@ -198,6 +206,7 @@ import {
   openRulesForAgent,
   overLengthFor,
   lengthCapFor,
+  lengthRangeOf,
   lengthSpan,
   rewriteAdvice,
   NO_RULE_CONTEXT,
@@ -1458,11 +1467,13 @@ export function DraftEditor({
       toast.error(serverError(err, t('quality.keepFailed')));
     }
   };
-  const qualityScore = qualityAverage([
-    eeatScore?.score ?? null,
-    trustScore?.score ?? null,
-    readable?.score ?? null,
-  ]);
+  // E-E-A-T waiting for an author is a to-do, not a 0 in the average
+  // (eeatAwaitsAuthor), while another score stands: with none, the chip
+  // still opens Quality, where the author is asked for.
+  const awaitsAuthor = eeatAwaitsAuthor(pageAuthor, authorConfirmed);
+  const qualityScore =
+    (awaitsAuthor ? qualityAverage([trustScore?.score ?? null, readable?.score ?? null]) : null) ??
+    qualityAverage([eeatScore?.score ?? null, trustScore?.score ?? null, readable?.score ?? null]);
   const hasAuthors = (authorsRead?.authors.length ?? 0) > 0;
   // Add byline to content (CE-057): the brand's CMS has no author field, so
   // its exports carry one byline line under the H1.
@@ -1542,6 +1553,7 @@ export function DraftEditor({
             : null,
         readability: readable,
         eeat: eeatScore,
+        eeatAwaitsAuthor: awaitsAuthor,
         trust: trustScore,
         author: pageAuthor,
         canEdit: canEditPageAuthor,
@@ -2059,7 +2071,9 @@ export function DraftEditor({
   // The page's last rewrite, from any run (00285), read on opening and again
   // whenever the rewrite shown changes: a Length it missed isn't a rewrite's to reach
   // (rules.ts RewriteReach). A later Fix run's batch doesn't hide it.
-  const [lastRewrite, setLastRewrite] = useState<(LastRewrite & { html: string }) | null>(null);
+  const [lastRewrite, setLastRewrite] = useState<
+    (LastRewrite & { html: string; beforeHtml: string | null }) | null
+  >(null);
   const shownRewriteId = pageSuggestion?.id ?? null;
   // The rewrite shown when it was last read (or failed to be): the Length's
   // state waits for the read for the rewrite shown now.
@@ -2100,9 +2114,17 @@ export function DraftEditor({
         target: lastRewrite.target,
         kept: lastRewrite.kept,
         chars: lastRewrite.html ? htmlChars(lastRewrite.html) : lastRewrite.chars,
+        // Met fewer rules than the page it rewrote: no rewrite is recommended again.
+        lowered:
+          !!lastRewrite.beforeHtml &&
+          !!lastRewrite.html &&
+          rules.ready &&
+          rulesMet(rules.checkHtml(lastRewrite.html, htmlChars(lastRewrite.html))).met <
+            rulesMet(rules.checkHtml(lastRewrite.beforeHtml, htmlChars(lastRewrite.beforeHtml)))
+              .met,
       },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- its page, once
-    [lastRewrite, editor],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- its pages, once the rules are read
+    [lastRewrite, editor, rules.ready],
   );
   const reach: RewriteReach = { kept: keptChars, floor: keptChars, last: lastCounted };
   // The rules' count stands once My rules and the fan-outs (the fan-out
@@ -4070,6 +4092,18 @@ export function DraftEditor({
               <ArrowLeft className="h-4 w-4" />
             </Link>
           )}
+          {/* A new page from the editor too (Content test 2026-11-19, item 21):
+              Editor in the sidebar comes back to the last draft (#1477). */}
+          {!embedded && (
+            <Link
+              href={CONTENT_NEW_PATH}
+              aria-label={t('newContent')}
+              title={t('newContent')}
+              className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+            >
+              <Plus className="h-4 w-4" />
+            </Link>
+          )}
           {/* The title takes the room left (at least ~140px from 1024px, 96px
               narrower; less while the save state needs its words), ends in "…",
               and never pushes, overlaps or wraps the buttons (Next step spec §3b). */}
@@ -4560,6 +4594,7 @@ export function DraftEditor({
             <EditorToolbar
               editor={editor}
               target={rules.length}
+              range={lengthRangeOf(rules.rules)}
               lengthWarning={lengthWarns(rules.rules)}
               htmlView={htmlSource !== null}
               onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}

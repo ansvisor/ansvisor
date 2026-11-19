@@ -48,10 +48,18 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('@/lib/subscription-guard', () => ({ assertWritable: async () => {} }));
+const guard = vi.hoisted(() => ({ assertWritable: vi.fn() }));
+vi.mock('@/lib/subscription-guard', () => guard);
+const onboarding = vi.hoisted(() => ({ ensureOrganization: vi.fn() }));
+vi.mock('@/lib/onboarding/organization', () => onboarding);
 
-const { getAccountTimeZone, updateAccountTimeZone, updateOrganizationName } =
-  await import('./organization');
+const {
+  getAccountTimeZone,
+  updateAccountTimeZone,
+  ensureMyOrganization,
+  markMyOnboardingCompleted,
+  updateOrganizationName,
+} = await import('./organization');
 
 beforeEach(() => {
   calls = [];
@@ -100,5 +108,37 @@ describe('an Admin-only change by someone else (LOC-008)', () => {
     expect(refused).toBeInstanceOf(Error);
     expect(refused).toMatchObject({ code: 'admin_required', digest: 'admin_required' });
     expect(calls.some((c) => c.table === 'organizations')).toBe(false);
+  });
+});
+
+describe('onboarding’s first choice, from the server', () => {
+  // A network that blocks the database's own address let the site through,
+  // but the browser's write failed to fetch (2026-11-19).
+  it('makes or finds the person’s organization, after setup’s check', async () => {
+    onboarding.ensureOrganization.mockResolvedValue({ id: 'org1', created: true });
+    await expect(ensureMyOrganization('My workspace')).resolves.toEqual({
+      id: 'org1',
+      created: true,
+    });
+    expect(guard.assertWritable).toHaveBeenCalledWith({ onboarding: true });
+    expect(onboarding.ensureOrganization).toHaveBeenCalledWith(
+      expect.anything(),
+      ME,
+      'My workspace',
+    );
+    signedIn = false;
+    await expect(ensureMyOrganization('My workspace')).rejects.toThrow('Unauthorized');
+  });
+
+  it('marks onboarding done on the person’s own row', async () => {
+    await expect(markMyOnboardingCompleted()).resolves.toBe(true);
+    expect(calls.at(-1)).toMatchObject({
+      table: 'profiles',
+      op: 'update',
+      row: { onboarding_completed: true },
+      filters: [['eq', 'id', ME]],
+    });
+    signedIn = false;
+    await expect(markMyOnboardingCompleted()).resolves.toBe(false);
   });
 });

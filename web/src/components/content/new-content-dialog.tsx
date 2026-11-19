@@ -60,6 +60,7 @@ import {
   type DraftMethod,
   type DraftSource,
   type DraftStartOptions,
+  type ImportedAuthor,
   type OverlapPage,
   type PageImportError,
   type PageType,
@@ -107,6 +108,8 @@ interface BroughtContent extends ContentSummary {
   fileName?: string;
   /** The page's address, for content read from a URL. */
   sourceUrl?: string;
+  /** Who the page read from a URL says it is by. */
+  author?: ImportedAuthor | null;
   imagesRemoved: number;
 }
 
@@ -124,6 +127,8 @@ interface StartChoice {
   bodyHtml?: string;
   /** The page the content was read from, for content brought by URL. */
   sourceUrl?: string;
+  /** Who that page says it is by: the draft's author. */
+  pageAuthor?: ImportedAuthor | null;
   pageType: PageType;
   detectedFrom: DetectedFrom;
   /** The person picked the type from the chips; otherwise it follows the page. */
@@ -314,11 +319,17 @@ export function NewContentDialog({
   // source.
   const startSource = start?.source;
   const overlapKey = startSource && startSource.kind !== 'content' ? sourceKey(startSource) : null;
+  // The source as it was when its key changed: read once per source (and per
+  // Try again), never again because Start's object was rebuilt (content test
+  // 2026-11-19: one Try again sent five reads).
+  const sourceRef = useRef(startSource);
+  sourceRef.current = startSource;
   useEffect(() => {
-    if (!startSource || startSource.kind === 'content') return;
-    const key = sourceKey(startSource);
+    const source = sourceRef.current;
+    if (!overlapKey || !source || source.kind === 'content') return;
+    const key = overlapKey;
     let cancelled = false;
-    getContentOverlap(brandId, startSource)
+    getContentOverlap(brandId, source)
       .then((overlap) => {
         if (cancelled) return;
         setOverlapRead({ key, overlap, failed: false });
@@ -335,7 +346,7 @@ export function NewContentDialog({
     return () => {
       cancelled = true;
     };
-  }, [brandId, startSource, siteType, overlapAttempt]);
+  }, [brandId, overlapKey, siteType, overlapAttempt]);
 
   const reset = () => {
     presetApplied.current = false;
@@ -375,7 +386,12 @@ export function NewContentDialog({
   const bring = (
     incoming: string,
     imagesRemoved: number,
-    origin: { fileName?: string; sourceUrl?: string; title?: string } = {},
+    origin: {
+      fileName?: string;
+      sourceUrl?: string;
+      title?: string;
+      author?: ImportedAuthor | null;
+    } = {},
   ) => {
     // One H1 per page, its title, whichever way the page comes in.
     const html = oneH1Html(incoming);
@@ -403,6 +419,7 @@ export function NewContentDialog({
       bring(cleaned.html, cleaned.imagesRemoved, {
         sourceUrl: read.page.url,
         title: read.page.title,
+        author: read.page.author,
       });
     } finally {
       setReading(false);
@@ -495,6 +512,7 @@ export function NewContentDialog({
       source: { kind: 'content' },
       bodyHtml: brought.html,
       sourceUrl,
+      pageAuthor: 'author' in brought ? brought.author : undefined,
       ...newPageType,
       newPageType,
       choice: { kind: 'create' },
@@ -514,10 +532,13 @@ export function NewContentDialog({
       // An existing page Start chose to optimize brings its live text; if it
       // can't be read, the draft starts with its title, and says so.
       let bodyHtml = start.bodyHtml;
+      let pageAuthor = existing ? undefined : start.pageAuthor;
       if (existing) {
         const read = await importContentPage(brandId, existing.url);
-        if ('page' in read) bodyHtml = cleanHtml(read.page.html, { keepImages: true }).html;
-        else {
+        if ('page' in read) {
+          bodyHtml = cleanHtml(read.page.html, { keepImages: true }).html;
+          pageAuthor = read.page.author;
+        } else {
           bodyHtml = undefined;
           toast.warning(t('start.pageUnread', { page: pagePath(existing.url) }));
         }
@@ -530,6 +551,7 @@ export function NewContentDialog({
         source: start.source,
         bodyHtml,
         sourceUrl: existing?.url ?? start.sourceUrl,
+        pageAuthor,
       });
       if (who === 'team') {
         await sendToTeam(id);

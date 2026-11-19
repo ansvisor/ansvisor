@@ -30,6 +30,7 @@ import {
   startPositionProps,
 } from '@/lib/onboarding/start-choice';
 import { ensureOrganization, nameWorkspaceFromBrand } from '@/lib/onboarding/organization';
+import { ensureMyOrganization, markMyOnboardingCompleted } from '@/lib/actions/organization';
 import {
   CONNECT_SITE_STEP,
   connectSiteSnippet,
@@ -1329,12 +1330,9 @@ export default function OnboardingPage() {
   const choiceOrganization = async (): Promise<string | null> => {
     if (organizationId) return organizationId;
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error(tSetup('setup.notAuthenticated'));
-      const { id } = await ensureOrganization(supabase, user.id, workspacePlaceholder);
+      // From the server: a network that blocks the database's address lets
+      // our own site through (a browser write there failed to fetch).
+      const { id } = await ensureMyOrganization(workspacePlaceholder);
       setOrganizationId(id);
       return id;
     } catch (err) {
@@ -1388,19 +1386,7 @@ export default function OnboardingPage() {
         setPreparing(null);
         return;
       }
-      const supabase = createClient();
-      const done = await supabase.auth
-        .getUser()
-        .then(async ({ data: { user } }) => {
-          if (!user) return false;
-          const { error } = await supabase
-            .from('profiles')
-            .update({ onboarding_completed: true })
-            .eq('id', user.id);
-          if (error) console.error('Could not mark onboarding completed:', error);
-          return !error;
-        })
-        .catch(() => false);
+      const done = await markMyOnboardingCompleted().catch(() => false);
       setPreparing(null);
       if (!done) {
         toast.error(tExplore('failed'));

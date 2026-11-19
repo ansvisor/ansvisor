@@ -55,21 +55,31 @@ export function assetKind(type: string | null | undefined, siteType: SiteType): 
 }
 
 /**
+ * The type a site writes for one it doesn't, when one is close: a buying
+ * guide on a software site is its best-of list (Content test 2026-11-19,
+ * item 13: a "Buying guide" opportunity opened as a blog post).
+ */
+const NEAREST_TYPES: Partial<Record<PageType, readonly PageType[]>> = {
+  buying_guide: ['best_of', 'guide'],
+  docs_faq: ['help_faq'],
+  help_faq: ['docs_faq'],
+};
+
+/**
  * The page type Start picks for an opportunity: its primary asset's, when
- * the brand's site writes that type; null otherwise (an earned asset, or a
- * type from before the site type changed). A blog post is what opportunities
- * were when nothing more specific fit, so it is null too: what the page or
- * its title shows comes first, and Start falls back to a blog post anyway.
+ * the brand's site writes that type, else the closest one it writes
+ * (NEAREST_TYPES); null otherwise (an earned asset, or a type with none
+ * close). A blog post is what opportunities were when nothing more specific
+ * fit, so it is null too: what the page or its title shows comes first, and
+ * Start falls back to a blog post anyway.
  */
 export function opportunityPageType(
   type: string | null | undefined,
   siteType: SiteType,
 ): PageType | null {
   const kind = assetKind(type, siteType);
-  return kind &&
-    kind !== 'blog_post' &&
-    !isEarnedAssetType(kind) &&
-    SITE_PAGE_TYPES[siteType].includes(kind)
-    ? kind
-    : null;
+  if (!kind || kind === 'blog_post' || isEarnedAssetType(kind)) return null;
+  const writes = SITE_PAGE_TYPES[siteType];
+  if (writes.includes(kind)) return kind;
+  return (NEAREST_TYPES[kind] ?? []).find((near) => writes.includes(near)) ?? null;
 }

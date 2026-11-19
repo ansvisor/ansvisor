@@ -56,7 +56,7 @@ import {
   type AuditQuota,
   type AuditTrend,
 } from '@/lib/actions/audits';
-import { pct, scoreColor, CATEGORY_META } from '@/components/audit/audit-report';
+import { barColor, pct, scoreColor, CATEGORY_META } from '@/components/audit/audit-report';
 import { formatMonthDay, formatNumber } from '@/lib/format';
 import { frictionFlow } from '@/lib/friction-events';
 import { SiteTrustCard } from './_site-trust-card';
@@ -110,10 +110,7 @@ function TabCount({ count }: { count: number }) {
 const RUNNING_POLL_MS = 10_000;
 
 function barClass(score: number | null): string {
-  if (score === null) return 'bg-muted';
-  if (score >= 0.7) return 'bg-green-600';
-  if (score >= 0.4) return 'bg-amber-500';
-  return 'bg-destructive';
+  return barColor(score);
 }
 
 export default function SiteAuditPage() {
@@ -748,7 +745,7 @@ export default function SiteAuditPage() {
         </div>
       </HeaderWithAiUsage>
       <AuditConfirmDialog
-        // Each asking starts over: Leave out the recent ones ticked again.
+        // Each asking starts over, Leave out the recent ones as its kind starts it.
         key={confirm?.at}
         pages={confirm?.pages ?? null}
         mode={confirm?.mode ?? 'picked'}
