@@ -9405,7 +9405,7 @@
       "counts": {
         "official": "Government and academic sites: .gov, .edu, .mil and their country forms, such as .gov.tr, .edu.tr, .ac.uk",
         "international": "International bodies: any .int site, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
-        "research": "Reference and research: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
+        "research": "Reference, research, standards and platform docs: wikipedia.org, doi.org, arxiv.org, nature.com, iso.org, w3.org, rfc-editor.org, schema.org, developers.google.com, developer.mozilla.org",
         "news": "Major news: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post",
         "trusted": "Your trusted sources:"
       },
