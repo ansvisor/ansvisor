@@ -178,7 +178,7 @@ export function TeamSection({
             <CardTitle>{t('team')}</CardTitle>
             <CardDescription>
               {t('team_description')}
-              {seatsLabel && <span className="ml-1 text-foreground">· {seatsLabel}</span>}
+              {seatsLabel && <span className="ms-1 text-foreground">· {seatsLabel}</span>}
             </CardDescription>
           </div>
           {isAdmin && info && (
@@ -263,7 +263,7 @@ export function TeamSection({
                     onClick={() => router.push('/dashboard/settings?tab=billing')}
                   >
                     {t('team_upgrade')}
-                    <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+                    <ArrowUpRight className="ms-1 h-3.5 w-3.5" />
                   </Button>
                 </div>
               )}
@@ -448,7 +448,7 @@ function RemoveMember({ member, actions }: { member: TeamMember; actions: Member
           <Button variant="destructive" onClick={actions.remove} disabled={actions.removing}>
             {actions.removing ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 {t('team_removing')}
               </>
             ) : (
@@ -557,7 +557,7 @@ function MemberTableRow({
             ? format.relativeTime(new Date(chat.lastActiveAt))
             : tAccess('roles.neverSignedIn')}
       </TableCell>
-      <TableCell className="w-10 text-right">
+      <TableCell className="w-10 text-end">
         {canEdit && <RemoveMember member={member} actions={actions} />}
       </TableCell>
     </TableRow>
@@ -654,14 +654,14 @@ function InvitationRow({
             <DropdownMenuItem
               onClick={guard(handleResend, { action: tActions('resendInvitations') })}
             >
-              <RefreshCw className="mr-2 h-4 w-4" />
+              <RefreshCw className="me-2 h-4 w-4" />
               {t('team_resendInvite')}
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={handleRevoke}
               className="text-destructive focus:text-destructive"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="me-2 h-4 w-4" />
               {t('team_revoke')}
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -753,7 +753,7 @@ function InviteDialog({
       <DialogTrigger
         render={
           <Button size="sm" disabled={!canInvite}>
-            <UserPlus className="mr-2 h-4 w-4" />
+            <UserPlus className="me-2 h-4 w-4" />
             {t('team_inviteMember')}
           </Button>
         }
@@ -830,7 +830,7 @@ function InviteDialog({
               <Button onClick={handleSubmit} disabled={submitting || !brandsComplete}>
                 {submitting ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     {t('team_sending')}
                   </>
                 ) : (
@@ -925,7 +925,7 @@ function EditBrandsDialog({
           <Button onClick={save} disabled={saving || !isBrandChoiceComplete(value, false)}>
             {saving ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 {t('saving')}
               </>
             ) : (

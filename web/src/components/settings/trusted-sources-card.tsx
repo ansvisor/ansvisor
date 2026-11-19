@@ -140,7 +140,7 @@ export function TrustedSourcesCard({
         </ul>
         <details className="rounded-xl border px-3 py-2.5">
           <summary className="cursor-pointer text-sm font-medium">{t('counted')}</summary>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+          <ul className="mt-2 list-disc space-y-1 ps-5 text-xs text-muted-foreground">
             {COUNTED.map((kind) => (
               <li key={kind}>{tCounts(kind)}</li>
             ))}

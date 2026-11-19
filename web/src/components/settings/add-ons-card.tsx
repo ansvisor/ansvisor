@@ -359,7 +359,7 @@ export function PackCard({
       disabled={!live}
       onClick={onSelect}
       className={cn(
-        'relative rounded-xl border bg-card p-3 text-left transition-colors',
+        'relative rounded-xl border bg-card p-3 text-start transition-colors',
         live && 'hover:bg-accent/50',
         !live && 'cursor-default',
         !pack.available && 'opacity-60',
@@ -372,7 +372,7 @@ export function PackCard({
       {adds && <span className="mt-0.5 block text-xs">{adds}</span>}
       <span className="mt-1 block text-[11px] text-muted-foreground">{validity}</span>
       {pack.mostPicked && (
-        <span className="absolute -top-2.5 right-2 rounded-full bg-emerald-100 px-2 text-[10.5px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+        <span className="absolute -top-2.5 end-2 rounded-full bg-emerald-100 px-2 text-[10.5px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
           {t('mostPicked')}
         </span>
       )}
@@ -397,7 +397,7 @@ function PurchaseHistory({ purchases }: { purchases: AddOnPurchaseView[] }) {
               <TableHead>{t('price')}</TableHead>
               <TableHead>{t('status')}</TableHead>
               <TableHead>{t('left')}</TableHead>
-              <TableHead className="text-right">{t('invoice')}</TableHead>
+              <TableHead className="text-end">{t('invoice')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -422,7 +422,7 @@ function PurchaseHistory({ purchases }: { purchases: AddOnPurchaseView[] }) {
                       ? t('until', { date: formatDate(p.until) })
                       : '—'}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-end">
                   {p.hasInvoice ? (
                     <a
                       href={`/api/add-ons/invoice/${p.id}`}

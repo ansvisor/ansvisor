@@ -307,7 +307,7 @@ export function WhiteLabelSection() {
               onClick={guard(() => void handleSave(), { action: tActions('saveWhiteLabel') })}
               disabled={saving || colorInvalid || !changed}
             >
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {saving && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
               {tSettings('save')}
             </Button>
           ) : (
