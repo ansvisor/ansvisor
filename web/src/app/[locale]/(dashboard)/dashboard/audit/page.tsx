@@ -61,6 +61,7 @@ import { frictionFlow } from '@/lib/friction-events';
 import { SiteTrustCard } from './_site-trust-card';
 import { ScoreTrendChart } from './_charts';
 import { AuditPagesTable } from './_pages-table';
+import { mergePages, pruneSelection } from '@/lib/audit/merge-pages';
 import { AuditBulkBar, ExportMenu } from './_bulk-bar';
 import { AuditOverviewCards } from './_overview-cards';
 import {
@@ -107,6 +108,9 @@ function TabCount({ count }: { count: number }) {
 
 /** While audits run, the Pages list and the quota are read again this often. */
 const RUNNING_POLL_MS = 10_000;
+
+/** The most pages one read returns (the server's limit). */
+const HUB_PAGES_MAX = 100;
 
 function barClass(score: number | null): string {
   if (score === null) return 'bg-muted';
@@ -425,24 +429,38 @@ export default function SiteAuditPage() {
     }
   };
 
-  // Read the pages shown (up to the server's 100), the quota and the trend
-  // again, in place: the table stays up with its open histories. Selected
-  // pages that are gone or now running are dropped from the selection.
+  // Read the pages shown, the quota and the trend again, in place: the table
+  // stays up with its open histories and every row loaded so far, the rows
+  // patched where they are (by page key) rather than the list replaced. The
+  // selection is kept by key, outside the paged rows; only pages now running
+  // (or gone) leave it.
   const shownRef = useRef(0);
   useEffect(() => {
     shownRef.current = pages.length;
   }, [pages.length]);
   const reloadInPlace = async (brandId: string) => {
-    const hub = await getAuditHub(brandId, Math.min(Math.max(shownRef.current, 50), 100));
+    const shown = Math.max(shownRef.current, 50);
+    const hub = await getAuditHub(brandId, Math.min(shown, HUB_PAGES_MAX));
     const data = hub.pages;
-    setPages(data.pages);
+    // The hub reads the first rows only; the rest of what's shown is read in chunks.
+    let fresh = data.pages;
+    while (shown > HUB_PAGES_MAX && fresh.length < Math.min(shown, data.total)) {
+      const more = await getAuditPages(
+        brandId,
+        fresh.length,
+        Math.min(HUB_PAGES_MAX, shown - fresh.length),
+      );
+      if (more.pages.length === 0) break;
+      fresh = [...fresh, ...more.pages];
+    }
+    const complete = fresh.length >= data.total;
+    setPages((current) => mergePages(current, fresh, complete));
     setPagesTotal(data.total);
     setPrimaryHost(data.primaryHost);
     setQuota(hub.quota);
     setTrend(hub.trend);
     setOverview(hub.overview);
-    const selectable = new Set(data.pages.filter((p) => p.status !== 'running').map((p) => p.key));
-    setSelected((prev) => new Set([...prev].filter((key) => selectable.has(key))));
+    setSelected((prev) => pruneSelection(prev, fresh, complete));
 
     const { opportunities: op, latestRun: run } = await getAuditHubExtras(brandId);
     setOpps(op);
