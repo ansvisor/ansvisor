@@ -9648,6 +9648,53 @@
     "errorRetry": "Start the connection again from the app. If it keeps happening, the app may not support signing in to Ansvisor: use an API key instead.",
     "errorCode": "Code: {code}"
   },
+  "invite": {
+    "fallbackTeam": "this team",
+    "invalid": {
+      "not_found": {
+        "title": "Invitation not found",
+        "description": "The link you followed is invalid."
+      },
+      "expired": {
+        "title": "Invitation expired",
+        "description": "Ask your team admin to send a new invitation."
+      },
+      "accepted": {
+        "title": "Invitation already used",
+        "description": "This invitation has already been accepted."
+      },
+      "revoked": {
+        "title": "Invitation revoked",
+        "description": "This invitation was revoked by the team admin."
+      },
+      "pending": {
+        "title": "Invitation unavailable",
+        "description": "Please try again or contact your team admin."
+      }
+    },
+    "card": {
+      "title": "Join {organization}",
+      "invitedAs": "You've been invited to join as <b>{role}</b>",
+      "invitedEmail": "Invited email",
+      "signedInAs": "Signed in as",
+      "wrongAccount": "This invitation was sent to <b>{email}</b>, but you're signed in as {current}. Please switch accounts to continue.",
+      "switching": "Switching...",
+      "switchAccount": "Sign out and use correct account",
+      "fullName": "Full name",
+      "namePlaceholder": "Your name",
+      "password": "Set a password",
+      "passwordPlaceholder": "At least 8 characters",
+      "confirmPassword": "Confirm password",
+      "confirmPlaceholder": "Repeat the password",
+      "joining": "Joining...",
+      "accept": "Accept and join {organization}",
+      "passwordNote": "You'll use this password the next time you sign in.",
+      "passwordTooShort": "Password must be at least 8 characters",
+      "passwordsDiffer": "Passwords do not match",
+      "welcome": "Welcome to {organization}!",
+      "failed": "Failed to accept invitation"
+    }
+  },
   "dashboard": {
     "overview": "Overview",
     "welcome": "Welcome back",

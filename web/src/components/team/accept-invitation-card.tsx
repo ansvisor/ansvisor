@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { acceptInvitation, type TeamRole } from '@/lib/actions/team';
@@ -20,19 +21,6 @@ interface Props {
   emailMatches: boolean;
 }
 
-function roleLabel(role: TeamRole): string {
-  switch (role) {
-    case 'admin':
-      return 'Admin';
-    case 'manager':
-      return 'Manager';
-    case 'analyst':
-      return 'Analyst';
-    case 'agency_partner':
-      return 'Agency Partner';
-  }
-}
-
 export function AcceptInvitationCard({
   token,
   organizationName,
@@ -42,6 +30,8 @@ export function AcceptInvitationCard({
   emailMatches,
 }: Props) {
   const router = useRouter();
+  const t = useTranslations('invite.card');
+  const tSettings = useTranslations('settings');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -54,11 +44,11 @@ export function AcceptInvitationCard({
     setAcceptError(null);
 
     if (password.length < 8) {
-      toast.error('Password must be at least 8 characters');
+      toast.error(t('passwordTooShort'));
       return;
     }
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
+      toast.error(t('passwordsDiffer'));
       return;
     }
 
@@ -89,11 +79,11 @@ export function AcceptInvitationCard({
         return;
       }
 
-      toast.success(`Welcome to ${organizationName}!`);
+      toast.success(t('welcome', { organization: organizationName }));
       router.push('/dashboard');
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to accept invitation');
+      toast.error(error instanceof Error ? error.message : t('failed'));
       setIsAccepting(false);
     }
   }
@@ -116,20 +106,24 @@ export function AcceptInvitationCard({
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
           <Users className="h-6 w-6 text-primary" />
         </div>
-        <h1 className="text-xl font-semibold tracking-tight">Join {organizationName}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">
+          {t('title', { organization: organizationName })}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          You&apos;ve been invited to join as{' '}
-          <span className="font-medium text-foreground">{roleLabel(role)}</span>
+          {t.rich('invitedAs', {
+            role: tSettings(`team_role_${role}`),
+            b: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+          })}
         </p>
       </div>
 
       <div className="space-y-3 rounded-lg border bg-muted/30 p-3 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Invited email</span>
+          <span className="text-muted-foreground">{t('invitedEmail')}</span>
           <span className="font-medium">{email}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Signed in as</span>
+          <span className="text-muted-foreground">{t('signedInAs')}</span>
           <span className="font-medium">{currentUserEmail}</span>
         </div>
       </div>
@@ -137,17 +131,20 @@ export function AcceptInvitationCard({
       {!emailMatches ? (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-destructive">
-            This invitation was sent to <span className="font-medium">{email}</span>, but
-            you&apos;re signed in as {currentUserEmail}. Please switch accounts to continue.
+            {t.rich('wrongAccount', {
+              email,
+              current: currentUserEmail,
+              b: (chunks) => <span className="font-medium">{chunks}</span>,
+            })}
           </p>
           <Button onClick={handleSwitchAccount} disabled={isSwitching} className="w-full">
             {isSwitching ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Switching...
+                {t('switching')}
               </>
             ) : (
-              'Sign out and use correct account'
+              t('switchAccount')
             )}
           </Button>
         </div>
@@ -155,11 +152,11 @@ export function AcceptInvitationCard({
         <form onSubmit={handleAccept} className="mt-6 space-y-4">
           {acceptError && <p className="text-sm text-destructive">{acceptError}</p>}
           <div className="space-y-2">
-            <Label htmlFor="invite-fullname">Full name</Label>
+            <Label htmlFor="invite-fullname">{t('fullName')}</Label>
             <Input
               id="invite-fullname"
               type="text"
-              placeholder="Your name"
+              placeholder={t('namePlaceholder')}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               autoComplete="name"
@@ -168,10 +165,10 @@ export function AcceptInvitationCard({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="invite-password">Set a password</Label>
+            <Label htmlFor="invite-password">{t('password')}</Label>
             <PasswordInput
               id="invite-password"
-              placeholder="At least 8 characters"
+              placeholder={t('passwordPlaceholder')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
@@ -182,10 +179,10 @@ export function AcceptInvitationCard({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="invite-confirm-password">Confirm password</Label>
+            <Label htmlFor="invite-confirm-password">{t('confirmPassword')}</Label>
             <PasswordInput
               id="invite-confirm-password"
-              placeholder="Repeat the password"
+              placeholder={t('confirmPlaceholder')}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               autoComplete="new-password"
@@ -199,15 +196,13 @@ export function AcceptInvitationCard({
             {isAccepting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Joining...
+                {t('joining')}
               </>
             ) : (
-              `Accept and join ${organizationName}`
+              t('accept', { organization: organizationName })
             )}
           </Button>
-          <p className="text-xs text-muted-foreground text-center">
-            You&apos;ll use this password the next time you sign in.
-          </p>
+          <p className="text-xs text-muted-foreground text-center">{t('passwordNote')}</p>
         </form>
       )}
     </div>
