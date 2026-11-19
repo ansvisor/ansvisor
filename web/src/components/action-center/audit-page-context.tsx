@@ -61,7 +61,7 @@ export function AuditPageContext({ payload }: { payload: Record<string, unknown>
           <p className="text-xs font-medium text-muted-foreground">
             {t('checks', { count: checks.length })}
           </p>
-          <ul className="mt-1 list-disc space-y-1 pl-4">
+          <ul className="mt-1 list-disc space-y-1 ps-4">
             {checks.map((check) => (
               <li key={check.key} className="break-words">
                 {check.label}

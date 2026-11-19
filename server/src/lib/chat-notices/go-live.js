@@ -1,6 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { brandReaders } from '../access.js';
 import { deliverEmail } from '../email.js';
+import { DEFAULT_LOCALE, translate, translator, uiLanguagesOf } from '../i18n.js';
 import logger from '../logger.js';
 import { appOrigin, emailOf, escapeHtml, wantsEmail } from './own-key.js';
 
@@ -68,7 +69,9 @@ export async function membersOf(orgId, ids) {
  * Slack are handed to it first: those it posted for get no e-mail, the
  * others (a brand without Slack, a post that failed) get the e-mail
  * instead. Every other notice comes by e-mail with Inbox + Slack too, as
- * Slack doesn't carry it. What went out.
+ * Slack doesn't carry it. `email` is { subject, html }, or a function of
+ * the reader's interface language that makes it (LOC-008): each person gets
+ * it in their own, made once per language. What went out.
  */
 export async function tell({
   orgId,
@@ -100,13 +103,24 @@ export async function tell({
   const via = await notifyViaOf([...told]);
   const toSlack = [...told].filter((id) => via.get(id) === 'inbox_slack');
   const posted = slack && toSlack.length ? await slack(toSlack) : new Set();
+  // Inbox only sends no e-mail; nor does Inbox + Slack once Slack carried it.
+  const wanted = [...told].filter((id) => wantsEmail(via.get(id)) && !posted.has(id));
+  const languages =
+    typeof email === 'function' && wanted.length ? await uiLanguagesOf(wanted) : new Map();
+  const rendered = new Map();
+  const emailIn = (locale) => {
+    if (typeof email !== 'function') return email;
+    if (!rendered.has(locale)) rendered.set(locale, email(locale));
+    return rendered.get(locale);
+  };
   let emails = 0;
-  for (const id of told) {
-    // Inbox only sends no e-mail; nor does Inbox + Slack once Slack carried it.
-    if (!wantsEmail(via.get(id)) || posted.has(id)) continue;
+  for (const id of wanted) {
     const to = await emailOf(id);
     if (!to) continue;
-    const outcome = await deliverEmail({ to: [to], ...email });
+    const outcome = await deliverEmail({
+      to: [to],
+      ...emailIn(languages.get(id) ?? DEFAULT_LOCALE),
+    });
     if (outcome === 'sent') emails += 1;
     else if (outcome !== 'skipped')
       logger.warn({ orgId, kind, outcome }, 'go-live e-mail not sent');
@@ -142,7 +156,8 @@ export function siteOf(url) {
 /**
  * The e-mail for a page an agent sent or published on its own (§6.4's words).
  * @param {{ agent: string, title: string, target: string, brand: string, draftId: string,
- *   chatId: string|null, kind?: string, url?: string|null }} input
+ *   chatId: string|null, kind?: string, url?: string|null, locale?: string }} input
+ *   `locale`: the reader's interface language (LOC-008), English when none.
  */
 export function renderWentLiveEmail({
   agent,
@@ -153,63 +168,62 @@ export function renderWentLiveEmail({
   chatId,
   kind = 'cms_draft',
   url = null,
+  locale = DEFAULT_LOCALE,
 }) {
-  const cms = CMS_NAMES[target] ?? target;
+  const t = translator(locale);
+  const cms = target === 'webhook' ? t('goLive.yourWebhook') : (CMS_NAMES[target] ?? target);
   const origin = appOrigin();
   const site = kind === 'publish' && url ? siteOf(url) : null;
   // A webhook send (PR 11): the workspace's workflow takes it from there, and Ansvisor can't take it back.
   const webhook = kind === 'webhook';
   const subject = site
-    ? `${agent} published “${title}” on ${site}`
+    ? t('goLive.publishedSubject', { agent, title, site })
     : webhook
-      ? `${agent} sent “${title}” to your webhook`
-      : `${agent} sent “${title}” to ${cms} as a draft`;
+      ? t('goLive.webhookSubject', { agent, title })
+      : t('goLive.draftSubject', { agent, title, cms });
+  const words = {
+    agent: escapeHtml(agent),
+    brand: escapeHtml(brand),
+    title: escapeHtml(title),
+    site: escapeHtml(site),
+    cms: escapeHtml(cms),
+  };
   const html = frame(
     escapeHtml(subject),
     site
-      ? [
-          `${escapeHtml(agent)} published the ${escapeHtml(brand)} page “${escapeHtml(title)}” on ${escapeHtml(site)} through ${escapeHtml(cms)}, without a click. An Admin allowed this agent to publish and send on its own.`,
-          'It passed Quality and your brand facts first. It is live now: check it, and if it shouldn’t be, use Take down on its notice in your Chat Inbox.',
-        ]
+      ? [t('goLive.publishedBody', words), t('goLive.publishedNext')]
       : webhook
-        ? [
-            `${escapeHtml(agent)} sent the ${escapeHtml(brand)} page “${escapeHtml(title)}” to your webhook, without a click. An Admin allowed this agent to publish and send on its own.`,
-            'It passed Quality and your brand facts first. Ansvisor can’t take a webhook send back: your workflow decides what happens to it.',
-          ]
-        : [
-            `${escapeHtml(agent)} sent the ${escapeHtml(brand)} page “${escapeHtml(title)}” to ${escapeHtml(cms)} as a draft, without a click. An Admin allowed this agent to publish and send on its own.`,
-            `It passed Quality and your brand facts first. Nothing is live yet: the page waits in ${escapeHtml(cms)} as a draft.`,
-          ],
+        ? [t('goLive.webhookBody', words), t('goLive.webhookNext')]
+        : [t('goLive.draftBody', words), t('goLive.draftNext', words)],
     [
       site
-        ? `<a href="${escapeHtml(url)}" style="${BUTTON}">Open the live page</a>`
-        : `<a href="${escapeHtml(`${origin}/dashboard/content/editor/${draftId}`)}" style="${BUTTON}">Open the page</a>`,
+        ? `<a href="${escapeHtml(url)}" style="${BUTTON}">${t('goLive.openLive')}</a>`
+        : `<a href="${escapeHtml(`${origin}/dashboard/content/editor/${draftId}`)}" style="${BUTTON}">${t('goLive.openPage')}</a>`,
       ...(chatId
         ? [
-            `<a href="${escapeHtml(`${origin}/dashboard/chat/${chatId}`)}" style="${LINK_BUTTON}">Open the run</a>`,
+            `<a href="${escapeHtml(`${origin}/dashboard/chat/${chatId}`)}" style="${LINK_BUTTON}">${t('goLive.openRun')}</a>`,
           ]
         : []),
     ],
-    "You get this as the agent's owner or one of the people it notifies, by your Chat settings' Notify me when an agent needs me.",
+    t('goLive.footer'),
   );
   return { subject, html };
 }
 
 /**
  * The e-mail for an agent an edit stopped from going live on its own (§7.2's words).
- * @param {{ agent: string, agentId: string }} input
+ * @param {{ agent: string, agentId: string, locale?: string }} input
  */
-export function renderGoLiveOffEmail({ agent, agentId }) {
-  const subject = `${agent} no longer publishes on its own`;
+export function renderGoLiveOffEmail({ agent, agentId, locale = DEFAULT_LOCALE }) {
+  const t = translator(locale);
+  const subject = t('goLive.offSubject', { agent });
   const html = frame(
     escapeHtml(subject),
+    [t('goLive.offBody', { agent: escapeHtml(agent) })],
     [
-      `${escapeHtml(agent)} changed, so it no longer publishes on its own. Turn it on again if you still want it: an Admin ticks Publish and send on its own on the agent's Mode & approvals step.`,
+      `<a href="${escapeHtml(`${appOrigin()}/dashboard/agents/${agentId}`)}" style="${BUTTON}">${t('goLive.openAgent')}</a>`,
     ],
-    [
-      `<a href="${escapeHtml(`${appOrigin()}/dashboard/agents/${agentId}`)}" style="${BUTTON}">Open the agent</a>`,
-    ],
-    "You get this as the Admin who allowed the agent, or as its owner, by your Chat settings' Notify me when an agent needs me.",
+    t('goLive.offFooter'),
   );
   return { subject, html };
 }
@@ -292,16 +306,18 @@ export async function tellWentLive({ eventId }) {
       chatId: convo?.id ?? null,
       url: event.published_url ?? null,
     },
-    email: renderWentLiveEmail({
-      kind: event.kind,
-      url: event.published_url ?? null,
-      agent: agent.name,
-      title,
-      target: event.target,
-      brand: brand?.name ?? 'your',
-      draftId: event.content_draft_id,
-      chatId: convo?.id ?? null,
-    }),
+    email: (locale) =>
+      renderWentLiveEmail({
+        kind: event.kind,
+        url: event.published_url ?? null,
+        agent: agent.name,
+        title: draft.title?.trim() || translate(locale, 'goLive.untitled'),
+        target: event.target,
+        brand: brand?.name ?? translate(locale, 'goLive.fallbackBrand'),
+        draftId: event.content_draft_id,
+        chatId: convo?.id ?? null,
+        locale,
+      }),
   });
 
   // The action the page works on: its History says the agent sent or published it (once per step).
@@ -371,6 +387,6 @@ export async function tellGoLiveOff({ orgId, agentId, version, editor }) {
     kind: 'agent_go_live_off',
     dedupe: `go_live_off:${agentId}:${version}`,
     payload: { agent: agent.name, agentId },
-    email: renderGoLiveOffEmail({ agent: agent.name, agentId }),
+    email: (locale) => renderGoLiveOffEmail({ agent: agent.name, agentId, locale }),
   });
 }

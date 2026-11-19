@@ -51,7 +51,7 @@ export function ApprovalPill({ kind, className }: { kind: ApprovalPillKind; clas
       )}
     >
       {kind === 'logged' && (
-        <span aria-hidden className="mr-[5px] size-[5px] shrink-0 rounded-full bg-current" />
+        <span aria-hidden className="me-[5px] size-[5px] shrink-0 rounded-full bg-current" />
       )}
       {t(kind)}
     </span>

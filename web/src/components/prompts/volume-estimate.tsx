@@ -128,7 +128,7 @@ export function createEstimateNoteHandle(): EstimateNoteHandle {
   return createTooltipHandle<NotePayload>();
 }
 
-const NOTE_CLASS = 'max-w-80 space-y-1 text-left';
+const NOTE_CLASS = 'max-w-80 space-y-1 text-start';
 
 /** The shared method note for a table's estimates (see createEstimateNoteHandle). */
 export function EstimateNoteTooltip({ handle }: { handle: EstimateNoteHandle }) {

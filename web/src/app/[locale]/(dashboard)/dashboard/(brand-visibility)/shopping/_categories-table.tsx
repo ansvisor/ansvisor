@@ -69,15 +69,15 @@ export function CategoriesTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="pl-4">{t('columns.category')}</TableHead>
-            <TableHead className="text-right">{t('columns.share')}</TableHead>
-            <TableHead className="text-right">{t('columns.onShelf')}</TableHead>
+            <TableHead className="ps-4">{t('columns.category')}</TableHead>
+            <TableHead className="text-end">{t('columns.share')}</TableHead>
+            <TableHead className="text-end">{t('columns.onShelf')}</TableHead>
             <TableHead>{t('columns.rival')}</TableHead>
-            <TableHead className={cn('text-right', !brandId && 'pr-4')}>
+            <TableHead className={cn('text-end', !brandId && 'pe-4')}>
               {t('columns.revenue')}
             </TableHead>
             {brandId && (
-              <TableHead className="w-0 pr-4">
+              <TableHead className="w-0 pe-4">
                 <span className="sr-only">{t('columns.plan')}</span>
               </TableHead>
             )}
@@ -89,7 +89,7 @@ export function CategoriesTable({
               key={row.id}
               className={cn(row.needsAttention && 'bg-amber-500/5 hover:bg-amber-500/10')}
             >
-              <TableCell className="max-w-[260px] pl-4">
+              <TableCell className="max-w-[260px] ps-4">
                 <p className="truncate text-sm font-medium" title={row.name}>
                   {row.leaf}
                 </p>
@@ -104,7 +104,7 @@ export function CategoriesTable({
                 </p>
                 <ActionResultLine result={results[resultKey({ type: 'category', id: row.id })]} />
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-end">
                 {row.shelfShare === null ? (
                   <span className="text-muted-foreground">—</span>
                 ) : (
@@ -125,7 +125,7 @@ export function CategoriesTable({
                   </span>
                 )}
               </TableCell>
-              <TableCell className="text-right tabular-nums">
+              <TableCell className="text-end tabular-nums">
                 {formatNumber(row.productsOnShelf)} / {formatNumber(row.products)}
               </TableCell>
               <TableCell className="max-w-[180px]">
@@ -146,11 +146,11 @@ export function CategoriesTable({
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
-              <TableCell className={cn('text-right tabular-nums', !brandId && 'pr-4')}>
+              <TableCell className={cn('text-end tabular-nums', !brandId && 'pe-4')}>
                 {row.revenue ? priceText(Math.round(row.revenue.value), row.revenue.currency) : '—'}
               </TableCell>
               {brandId && (
-                <TableCell className="pr-4 text-right">
+                <TableCell className="pe-4 text-end">
                   <Button
                     variant={row.needsAttention ? 'default' : 'outline'}
                     size="sm"

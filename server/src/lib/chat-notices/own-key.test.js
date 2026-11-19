@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Telling the Admins the workspace's own AI key fails (AGENT-OWN-KEY §5.3,
@@ -58,6 +61,7 @@ vi.mock('../email.js', () => ({ deliverEmail }));
 vi.mock('../logger.js', () => ({ default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const { notifyOwnKeyFailure, renderOwnKeyEmail, keyWhy } = await import('./own-key.js');
+const { forgetMessages } = await import('../i18n.js');
 
 const ORG = 'org-1';
 const SINCE = '2026-11-01T09:00:00.000Z';
@@ -169,5 +173,45 @@ describe('the e-mail', () => {
     expect(keyWhy('google', 'unreadable')).toBe(
       "Your saved Google Gemini key can't be read any more.",
     );
+  });
+});
+
+describe('the e-mail in the Admin’s language (LOC-008)', () => {
+  const file = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../../messages/de.json',
+  );
+  afterEach(() => {
+    fs.rmSync(file, { force: true });
+    forgetMessages();
+  });
+
+  it('sends each Admin the e-mail in their own language, English with none set', async () => {
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ ownKey: { title: 'Ihr KI-Schlüssel funktioniert nicht' } }),
+    );
+    forgetMessages();
+    db.tables.profiles.find((p) => p.id === 'admin-1').ui_language = 'de';
+    db.tables.chat_user_prefs = [];
+    await tell();
+    const mails = deliverEmail.mock.calls.map(([mail]) => mail);
+    const german = mails.find((mail) => mail.to[0] === 'admin-1@acme.test');
+    expect(german.subject).toBe('Ihr KI-Schlüssel funktioniert nicht');
+    // What the language lacks reads English; the other Admin has no language set.
+    expect(german.html).toContain('Open AI Providers');
+    expect(mails.find((mail) => mail.to[0] === 'admin-2@acme.test').subject).toBe(
+      "Your AI key for Ansvisor isn't working",
+    );
+  });
+
+  it('words the failure in the language of the file, and falls back to English', () => {
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ ownKey: { why: { noCredit: 'Kein Guthaben bei {provider}.' } } }),
+    );
+    forgetMessages();
+    expect(keyWhy('openai', 'no_credit', 'de')).toBe('Kein Guthaben bei OpenAI.');
+    expect(keyWhy('openai', 'invalid', 'de')).toBe("OpenAI turned down your workspace's key.");
   });
 });

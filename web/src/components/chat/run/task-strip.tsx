@@ -117,7 +117,7 @@ export function TaskStrip({
         <h3 id={titleId} className="m-0 text-[13px] font-semibold">
           {t('title', { due: strip.due })}
         </h3>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2">
           <div
             role="progressbar"
             aria-label={t('progress')}
@@ -148,7 +148,7 @@ export function TaskStrip({
           <Link
             href="/dashboard/action-center/actions"
             data-action="done.closeTasksInActionCenter"
-            className={cn(buttonVariants({ size: 'sm' }), 'ml-auto')}
+            className={cn(buttonVariants({ size: 'sm' }), 'ms-auto')}
           >
             {t('close')}
           </Link>

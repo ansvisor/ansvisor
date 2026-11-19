@@ -88,7 +88,7 @@ export function ComposerPreview() {
     <section className="rounded-[14px] border bg-card p-4 shadow-[0_1px_2px_rgba(10,10,10,.04)]">
       <h2 className="mb-4 text-sm font-semibold">
         {t('title')}
-        <span className="ml-2 font-normal text-muted-foreground">{t('note')}</span>
+        <span className="ms-2 font-normal text-muted-foreground">{t('note')}</span>
       </h2>
       <div className="grid gap-8">
         <figure className="m-0 grid gap-2">

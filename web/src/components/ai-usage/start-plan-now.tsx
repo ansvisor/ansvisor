@@ -208,7 +208,7 @@ export function StartPlanNowDialog({
               </div>
               <div className="flex items-center justify-between gap-3 px-3 py-2">
                 <dt className="text-muted-foreground">{t('today')}</dt>
-                <dd className="text-right">
+                <dd className="text-end">
                   <span className="font-medium tabular-nums">${money(today)}</span>
                   {withOffer && (
                     <span className="block text-xs text-muted-foreground">

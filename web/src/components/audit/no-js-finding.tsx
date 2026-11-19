@@ -54,7 +54,7 @@ export function NoJsFinding({ evidence }: { evidence: NoJsEvidence }) {
       {evidence.hiddenText.length > 0 && (
         <>
           <p>{t('evidence.noJsHidden', { bot })}</p>
-          <ul className="list-disc space-y-0.5 pl-5">
+          <ul className="list-disc space-y-0.5 ps-5">
             {evidence.hiddenText.map((text, i) => (
               <li key={i}>“{text}”</li>
             ))}

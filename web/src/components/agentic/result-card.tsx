@@ -138,7 +138,7 @@ export function ResultCard({
                     {kpi.value}
                   </b>
                   {kpi.note && (
-                    <span className="ml-1 text-[11.5px] text-green-700 dark:text-green-400">
+                    <span className="ms-1 text-[11.5px] text-green-700 dark:text-green-400">
                       {kpi.note}
                     </span>
                   )}

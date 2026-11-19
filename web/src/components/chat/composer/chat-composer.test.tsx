@@ -291,7 +291,7 @@ describe('ChatComposer', () => {
       const group = button('Send')!.parentElement!;
       expect(group.getAttribute('data-slot')).toBe('composer-send-group');
       expect(group.className).toContain('shrink-0');
-      expect(group.className).toContain('ml-auto');
+      expect(group.className).toContain('ms-auto');
       expect(group.lastElementChild).toBe(button('Send'));
       expect(
         [...row.children].map(
@@ -325,7 +325,7 @@ describe('ChatComposer', () => {
       // Nothing pushes them right: the status after them reads from the left too.
       expect(line.className).not.toContain('justify-end');
       expect(container.querySelector('[data-slot="composer-status"]')!.className).not.toContain(
-        'text-right',
+        'text-end',
       );
       expect(
         [...settings().children].map(

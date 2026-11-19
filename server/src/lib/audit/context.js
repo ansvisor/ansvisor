@@ -12,6 +12,7 @@ import * as cheerio from 'cheerio';
 import { fetchViaScrapeDo, fetchText } from './fetcher.js';
 import { probeBotAccess } from './bot-access.js';
 import { canonicalHref, probeAuditCanonical } from './canonical.js';
+import { canonicalAuditUrl } from './audit-address.js';
 
 /**
  * Normalize user-supplied input into an absolute http(s) URL.
@@ -65,11 +66,9 @@ export function normalizeUrl(raw) {
  * @returns {Promise<AuditContext>}
  */
 export async function buildAuditContext(rawUrl, { query = null } = {}) {
-  const url = normalizeUrl(rawUrl);
-  const u = new URL(url);
-  const origin = `${u.protocol}//${u.host}`;
+  const fetched = normalizeUrl(rawUrl);
 
-  const page = await fetchViaScrapeDo(url, { render: true });
+  const page = await fetchViaScrapeDo(fetched, { render: true });
   if (page.error === 'too_deep') {
     throw Object.assign(new Error('The page nests its elements too deeply to read'), {
       status: 422,
@@ -79,14 +78,23 @@ export async function buildAuditContext(rawUrl, { query = null } = {}) {
     throw Object.assign(new Error(`Failed to fetch page (status ${page.status})`), { status: 502 });
   }
 
-  const read = auditContextOf({
-    url,
+  const first = auditContextOf({
+    url: fetched,
     statusCode: page.status,
     html: page.html,
     robotsTxt: null,
     llmsTxt: null,
     query,
   });
+  // The page's own address, as its canonical tag gives it (www or not): the
+  // audit is of that page, so the files, the bot test and the canonical read
+  // go to it, not to the address that redirected, and it is the address stored
+  // and shown (final_url).
+  const url = canonicalAuditUrl(fetched, canonicalHref(first.$));
+  const u = new URL(url);
+  const origin = `${u.protocol}//${u.host}`;
+  const read =
+    url === fetched ? first : { ...first, url, origin, protocol: u.protocol.slice(0, -1) };
   // The live bot test (SA-008) asks the page itself, alongside the two
   // files; and the canonical tag's target is read once (AC plan P-11).
   const [robotsTxt, llmsTxt, botAccess, canonicalTarget] = await Promise.all([

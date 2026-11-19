@@ -195,14 +195,14 @@ export function ProductDataStrip({
       </section>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-xs font-medium text-muted-foreground">{t('marketplaces')}</span>
+        <span className="me-1 text-xs font-medium text-muted-foreground">{t('marketplaces')}</span>
         {MARKETPLACES.map((place) => {
           const state = chipState(place.id, catalog, sources.merchantCenterOffered);
           return (
             <span
               key={place.id}
               data-marketplace={place.id}
-              className="inline-flex items-center gap-1.5 rounded-full border bg-card py-0.5 pl-1 pr-2.5 text-xs"
+              className="inline-flex items-center gap-1.5 rounded-full border bg-card py-0.5 ps-1 pe-2.5 text-xs"
             >
               <span
                 aria-hidden

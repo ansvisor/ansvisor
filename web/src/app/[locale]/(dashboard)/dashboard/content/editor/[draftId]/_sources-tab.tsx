@@ -222,7 +222,7 @@ export function SourcesTab({
           disabled={rebuilding || total === 0 || blocked !== null}
           onClick={() => onRebuild({ data: read.data, choices: read.choices })}
         >
-          {rebuilding ? <WorkingDots className="ml-0" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {rebuilding ? <WorkingDots className="ms-0" /> : <RefreshCw className="h-3.5 w-3.5" />}
           {t('rebuild')}
         </Button>
         <Button

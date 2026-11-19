@@ -171,7 +171,7 @@ export function PageTypeMix({
           aria-expanded={open}
           aria-controls={bodyId}
           onClick={() => setOpen((o) => !o)}
-          className="group flex w-full cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+          className="group flex w-full cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-4 py-2.5 text-start transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
         >
           <span id="plan-mix-title">{t('title')}</span>
           {!open && rows.length > 0 && (
@@ -179,7 +179,7 @@ export function PageTypeMix({
               {t('collapsed', { types: rows.length, gaps })}
             </span>
           )}
-          <span className="ml-auto flex items-center gap-1 text-xs font-medium text-foreground group-hover:underline">
+          <span className="ms-auto flex items-center gap-1 text-xs font-medium text-foreground group-hover:underline">
             {open ? t('hide') : t('show')}
             <ChevronDown
               aria-hidden
@@ -226,13 +226,13 @@ export function PageTypeMix({
                   aria-pressed={selected === row.pageType}
                   onClick={() => onSelect(selected === row.pageType ? null : row.pageType)}
                   className={cn(
-                    'grid w-full grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-3 px-4 py-2 text-left text-sm transition-colors hover:bg-muted/40 sm:grid-cols-[minmax(0,12rem)_1fr_5.5rem_8rem]',
+                    'grid w-full grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-3 px-4 py-2 text-start text-sm transition-colors hover:bg-muted/40 sm:grid-cols-[minmax(0,12rem)_1fr_5.5rem_8rem]',
                     selected === row.pageType && 'bg-muted/60',
                   )}
                 >
                   <span className="truncate">{tTypes(row.pageType)}</span>
                   <MixBars aiShare={row.aiShare} yourShare={row.yourShare} scale={scale} />
-                  <span className="text-right text-xs tabular-nums text-muted-foreground">
+                  <span className="text-end text-xs tabular-nums text-muted-foreground">
                     {t('shares', { ai: row.aiShare, yours: row.yourShare })}
                     {/* On a phone the gap goes under the shares. */}
                     {row.gap && (
@@ -243,7 +243,7 @@ export function PageTypeMix({
                   </span>
                   <span
                     className={cn(
-                      'hidden text-right text-xs sm:block',
+                      'hidden text-end text-xs sm:block',
                       row.gap
                         ? 'font-medium text-amber-700 dark:text-amber-400'
                         : 'text-muted-foreground',

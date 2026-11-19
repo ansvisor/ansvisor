@@ -49,7 +49,7 @@ export function AuthoritySources({ signal }: { signal: AuditSignal }) {
                 <span
                   key={host}
                   title={isKind(kind) ? t(`kinds.${kind}`) : undefined}
-                  className="mr-1 inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-xs text-foreground"
+                  className="me-1 inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-xs text-foreground"
                 >
                   {host}
                 </span>
@@ -62,7 +62,7 @@ export function AuthoritySources({ signal }: { signal: AuditSignal }) {
       {others.length > 0 && <p>{t('others', { sites: others.join(', ') })}</p>}
       <div className="space-y-1.5 rounded-lg border px-3 py-2.5">
         <p className="text-xs font-medium text-foreground">{t('whatCounts')}</p>
-        <ul className="list-disc space-y-1 pl-5 text-xs">
+        <ul className="list-disc space-y-1 ps-5 text-xs">
           {SHARED.map((kind) => (
             <li key={kind}>{t(`counts.${kind}`)}</li>
           ))}
@@ -71,7 +71,7 @@ export function AuthoritySources({ signal }: { signal: AuditSignal }) {
             {trusted.map((site) => (
               <span
                 key={site}
-                className="mr-1 inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-xs text-foreground"
+                className="me-1 inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-xs text-foreground"
               >
                 {site}
               </span>

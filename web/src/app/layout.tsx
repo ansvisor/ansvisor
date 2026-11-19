@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono, Inter, Plus_Jakarta_Sans } from 'next/font/google';
+import { getLocale } from 'next-intl/server';
+import { localeDirection } from '@/i18n/locales';
 import { Analytics } from '@vercel/analytics/next';
 import { PostHogProvider } from '@/components/providers/posthog-provider';
 import './globals.css';
@@ -58,9 +60,14 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The language and its direction (rtl is ready for Arabic, which is off
+  // until the app has RTL support: see localeDirection).
+  const locale = await getLocale().catch(() => 'en');
   return (
     <html
+      lang={locale}
+      dir={localeDirection(locale)}
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} ${jakarta.variable}`}
     >

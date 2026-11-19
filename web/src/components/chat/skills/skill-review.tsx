@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { ArrowLeft } from 'lucide-react';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,7 @@ import { cn } from '@/lib/utils';
 export const CARD = 'rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]';
 export const CARD_HEAD = 'flex items-center gap-2 border-b px-4 py-2.5 text-[13px] font-semibold';
 export const PILL =
-  'ml-auto rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground';
+  'ms-auto rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground';
 
 /** The status pill's colors, as the Skills page's badges. */
 const STATUS_TONE: Record<Review['status'], string> = {
@@ -36,6 +37,7 @@ const STATUS_TONE: Record<Review['status'], string> = {
  */
 export function SkillReview({ id }: { id: string }) {
   const t = useTranslations('chatSkills.reviewPage');
+  const serverError = useServerErrorText();
   const format = useFormatter();
   const router = useRouter();
   const [review, setReview] = useState<Review | null | 'failed' | 'missing'>(null);
@@ -95,7 +97,7 @@ export function SkillReview({ id }: { id: string }) {
     const body = (await res?.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
     setBusy(false);
     if (!res?.ok || !body?.ok) {
-      toast.error(body?.error ?? t('failed'));
+      toast.error(serverError(body, body?.error ?? t('failed'), res?.status));
       return;
     }
     toast.success(t(decision === 'approve' ? 'approved' : 'rejected', { name: review.name }));
@@ -147,7 +149,7 @@ export function SkillReview({ id }: { id: string }) {
         <span
           data-slot="review-status"
           className={cn(
-            'ml-auto rounded-full px-2.5 py-0.5 text-xs font-medium',
+            'ms-auto rounded-full px-2.5 py-0.5 text-xs font-medium',
             STATUS_TONE[review.status],
           )}
         >
@@ -225,7 +227,7 @@ export function SkillReview({ id }: { id: string }) {
               {review.removed.length === 0 ? (
                 <p className="text-muted-foreground">{t('nothingRemoved')}</p>
               ) : (
-                <ul className="list-disc space-y-0.5 pl-4">
+                <ul className="list-disc space-y-0.5 ps-4">
                   {review.removed.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
@@ -302,7 +304,7 @@ export function SkillReview({ id }: { id: string }) {
                   {t('seePlans')}
                 </Button>
               )}
-              <div className="ml-auto flex gap-2">
+              <div className="ms-auto flex gap-2">
                 {review.can.reject && (
                   <Button
                     variant="outline"
@@ -347,7 +349,7 @@ export function ScanList({
   return (
     <div data-slot={slot}>
       <p className={cn('text-xs font-semibold', tone)}>{title}</p>
-      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+      <ul className="mt-1 list-disc space-y-0.5 ps-4">
         {items.map((item) => (
           <li key={item}>{item}</li>
         ))}

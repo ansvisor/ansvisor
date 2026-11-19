@@ -70,7 +70,7 @@ export function InvoiceList() {
         <AlertCircle className="h-5 w-5 text-destructive" />
         <p className="text-sm text-muted-foreground">{error}</p>
         <Button variant="outline" size="sm" onClick={() => void load()}>
-          <RotateCw className="mr-2 h-4 w-4" />
+          <RotateCw className="me-2 h-4 w-4" />
           {tCommon('retry')}
         </Button>
       </div>
@@ -110,7 +110,7 @@ export function InvoiceList() {
           <TableHead>{t('invoiceDate')}</TableHead>
           <TableHead>{t('invoiceAmount')}</TableHead>
           <TableHead>{t('invoiceStatus')}</TableHead>
-          <TableHead className="text-right">{t('invoiceDownload')}</TableHead>
+          <TableHead className="text-end">{t('invoiceDownload')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -130,7 +130,7 @@ export function InvoiceList() {
             <TableCell>
               <Badge variant={statusVariant(inv.status)}>{inv.status ?? 'unknown'}</Badge>
             </TableCell>
-            <TableCell className="text-right">
+            <TableCell className="text-end">
               {inv.pdfUrl ? (
                 <a
                   href={inv.pdfUrl}

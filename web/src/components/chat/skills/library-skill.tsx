@@ -133,7 +133,7 @@ export function LibrarySkill({ id }: { id: string }) {
         <h1 className="min-w-0 text-2xl font-bold tracking-[-.6px] [overflow-wrap:anywhere]">
           {skill.name}
         </h1>
-        <span className="ml-auto">
+        <span className="ms-auto">
           {(skill.added || addable) && (
             <AddOrState
               card={skill}
@@ -246,7 +246,7 @@ export function LibrarySkill({ id }: { id: string }) {
                 <span id="library-edited">{t('edited')}</span>
               </div>
               <ul
-                className="list-disc space-y-0.5 px-4 py-3 pl-8 text-[13px]"
+                className="list-disc space-y-0.5 px-4 py-3 ps-8 text-[13px]"
                 data-slot="library-edits"
               >
                 {read.edits.map((edit) => (
@@ -265,7 +265,7 @@ export function LibrarySkill({ id }: { id: string }) {
                 {read.removed.length === 0 ? (
                   <p className="text-muted-foreground">{t('nothingRemoved')}</p>
                 ) : (
-                  <ul className="list-disc space-y-0.5 pl-4">
+                  <ul className="list-disc space-y-0.5 ps-4">
                     {read.removed.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
