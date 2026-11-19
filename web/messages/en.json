@@ -14791,6 +14791,7 @@
       "showUsage": "Show usage",
       "hideUsage": "Hide usage",
       "locationsUsed": "{used} / {limit} prompt locations used",
+      "planEnded": "Your plan ended: prompts aren't tracked until you choose a plan",
       "view": {
         "label": "Prompt list",
         "tracked": "Tracked",

@@ -181,6 +181,11 @@ function usageTone(usage: PromptUsageSummary): Tone {
   return 'normal';
 }
 
+/** The plan ended: nothing is tracked until a plan is chosen again. */
+export function planEnded(state: PromptUsageState): boolean {
+  return state.status === 'ready' && !!state.usage.plan.ended;
+}
+
 /** Where Plan & usage goes: none on self-hosted, or before the counts are read. */
 export function planUsageHref(state: PromptUsageState): string | undefined {
   return state.status === 'ready' && state.usage.plan.cta ? PLAN_PAGE : undefined;
@@ -196,6 +201,10 @@ export type LocationsWarning = { used: number; limit: number; tone: 'warning' | 
  */
 export function locationsWarning(state: PromptUsageState): LocationsWarning | null {
   if (state.status !== 'ready') return null;
+  // An ended plan says so instead (planEnded): its prompts aren't tracked,
+  // and its plan reads as Starter once Stripe ends it (the webhook), so a
+  // count against Starter's limit would read as over a limit never chosen.
+  if (state.usage.plan.ended) return null;
   const limit = state.usage.plan.locationLimit;
   const tone = usageTone(state.usage);
   if (limit === null || tone === 'normal') return null;
