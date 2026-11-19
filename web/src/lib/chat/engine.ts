@@ -18,6 +18,7 @@ import { searchHelp } from '@/lib/help/search';
 import { platformName } from '@/lib/signals/names';
 import { SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { cardLocaleOf } from './card-locale';
 import type { Json } from '@/types/supabase';
 import type { UserRole } from '@/types';
 import { recordAccessDenied } from './access-log';
@@ -3990,12 +3991,14 @@ async function cardTarget(
   tool: ChatTool,
   input: Record<string, unknown>,
   brandId: string | null,
-  organizationId: string,
+  actor: ChatActor,
 ) {
   let own: string | null = null;
   if (tool.target) {
     try {
-      own = await tool.target(input as never, { organizationId });
+      // The card's own words (its cost line) in the person's language.
+      const locale = await cardLocaleOf(actor.userId);
+      own = await tool.target(input as never, { organizationId: actor.organizationId, locale });
     } catch (err) {
       console.error('[chat/engine] could not name a card’s target:', err);
     }
@@ -4039,7 +4042,7 @@ async function openCard(
 ): Promise<CallOutcome> {
   const n = ++rc.progress.steps;
   const execute = decision.kind === 'click';
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor);
   const row = await insertStep(rc.run.id, {
     position: n,
     kind: execute ? 'execute' : (tool.stepKind ?? 'write'),
@@ -5006,7 +5009,7 @@ async function writeCall(
   /** A step an allowed agent takes live on its own: its slot and page (goLiveCall). */
   goLive?: WriteRequest['goLive'],
 ): Promise<CallOutcome> {
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor);
   let row;
   if (cardStepId) {
     row = await updateStep(cardStepId, { status: 'running' });
@@ -5738,7 +5741,7 @@ export async function prepareResume(
       sink.emit('confirm.required', {
         n: pending.n,
         action: toolWords(tool, 'name'),
-        target: await cardTarget(brand, tool, input, brand?.id ?? null, actor.organizationId),
+        target: await cardTarget(brand, tool, input, brand?.id ?? null, actor),
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
         ...cardNotes(tool),
