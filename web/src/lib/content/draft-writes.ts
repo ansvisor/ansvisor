@@ -253,7 +253,29 @@ export async function insertDraft(
   if (error) throw new Error(error.message);
   // A page brought in from its address starts History as the live page.
   if (sourceUrl && bodyHtml !== undefined) await keepVersion(supabase, data.id, 'import');
+  if (opportunityId) await startOpportunity(supabase, brandId, opportunityId);
   return data.id;
+}
+
+/**
+ * The opportunity a draft was started for is In Progress (content test
+ * 2026-11-19: it stayed New, and New content offered it again). Only from
+ * New or Reviewed, never back from Sent or Done; through the person's
+ * session, so a member whose role can't change it leaves it as it is.
+ * Best effort: the draft is started either way.
+ */
+export async function startOpportunity(
+  supabase: DraftClient,
+  brandId: string,
+  opportunityId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('content_opportunities')
+    .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+    .eq('id', opportunityId)
+    .eq('brand_id', brandId)
+    .in('status', ['new', 'reviewed']);
+  if (error) console.error('Failed to set the opportunity In Progress:', error);
 }
 
 const saveInput = z.object({
