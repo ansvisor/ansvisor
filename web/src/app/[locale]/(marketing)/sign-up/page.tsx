@@ -1,10 +1,11 @@
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 import { SignUpForm } from '@/components/auth/sign-up-form';
 import { AuthCard, AuthShell } from '@/components/auth/auth-shell';
 import { NewUserTheme } from '@/components/theme/new-user-theme';
+import { getSignUpLanguageState } from '@/lib/i18n/sign-up-language';
 
-export default function SignUpPage() {
-  const t = useTranslations('auth');
+export default async function SignUpPage() {
+  const [t, languages] = await Promise.all([getTranslations('auth'), getSignUpLanguageState()]);
 
   return (
     <>
@@ -18,7 +19,7 @@ export default function SignUpPage() {
         backdrop="agent"
       >
         <AuthCard>
-          <SignUpForm />
+          <SignUpForm languages={languages} />
         </AuthCard>
       </AuthShell>
     </>

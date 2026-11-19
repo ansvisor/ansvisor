@@ -9520,6 +9520,8 @@
     "email": "Email",
     "workEmail": "Work email",
     "workEmailSuggested": "Work email suggested",
+    "language": "Language",
+    "languageFailed": "Couldn't change the language. Try again.",
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "noAccount": "Don't have an account?",
