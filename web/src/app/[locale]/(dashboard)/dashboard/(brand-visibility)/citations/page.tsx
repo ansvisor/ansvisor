@@ -201,7 +201,7 @@ function SourceTypeDonut({
               aria-hidden
             />
             <span className="truncate text-foreground">{d.label}</span>
-            <span className="ml-auto tabular-nums text-muted-foreground">{d.pct.toFixed(1)}%</span>
+            <span className="ms-auto tabular-nums text-muted-foreground">{d.pct.toFixed(1)}%</span>
           </li>
         ))}
       </ul>
@@ -292,7 +292,7 @@ const DomainsTable = memo(function DomainsTable({
             <TableHead className="text-xs">Domain</TableHead>
             <TableHead className="text-xs">Platforms</TableHead>
             <TableHead className="text-xs">Usage</TableHead>
-            <TableHead className="text-right text-xs">Avg Citations</TableHead>
+            <TableHead className="text-end text-xs">Avg Citations</TableHead>
             <TableHead className="w-[44px]">
               <span className="sr-only">Add as competitor</span>
             </TableHead>
@@ -331,10 +331,10 @@ const DomainsTable = memo(function DomainsTable({
               <TableCell>
                 <UsageBar pct={row.usagePct} />
               </TableCell>
-              <TableCell className="text-right text-xs tabular-nums">
+              <TableCell className="text-end text-xs tabular-nums">
                 {row.avgCitationsPerResult.toFixed(1)}
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-end">
                 {row.category !== 'you' && row.category !== 'competitor' && brandId ? (
                   <AddCompetitorButton brandId={brandId} domain={row.domain} onAdded={onAdded} />
                 ) : null}
@@ -401,7 +401,7 @@ const UrlsTable = memo(function UrlsTable({
             <TableHead className="text-xs">URL</TableHead>
             <TableHead className="text-xs">Platforms</TableHead>
             <TableHead className="text-xs">Usage</TableHead>
-            <TableHead className="text-right text-xs">Citations</TableHead>
+            <TableHead className="text-end text-xs">Citations</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -448,9 +448,7 @@ const UrlsTable = memo(function UrlsTable({
               <TableCell>
                 <UsageBar pct={row.usagePct} />
               </TableCell>
-              <TableCell className="text-right text-xs tabular-nums">
-                {row.totalCitations}
-              </TableCell>
+              <TableCell className="text-end text-xs tabular-nums">{row.totalCitations}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -612,7 +610,7 @@ function GapListTable({ rows }: { rows: CitationGapDomain[] }) {
         <TableRow>
           <TableHead className="text-xs">Domain</TableHead>
           <TableHead className="text-xs">Source type</TableHead>
-          <TableHead className="text-right text-xs">Competitor answers</TableHead>
+          <TableHead className="text-end text-xs">Competitor answers</TableHead>
           <TableHead className="text-xs">Which competitors</TableHead>
           <TableHead className="text-xs">Strength</TableHead>
         </TableRow>
@@ -626,9 +624,7 @@ function GapListTable({ rows }: { rows: CitationGapDomain[] }) {
             <TableCell>
               <CategoryBadge category={row.category} />
             </TableCell>
-            <TableCell className="text-right text-xs tabular-nums">
-              {row.competitorAnswers}
-            </TableCell>
+            <TableCell className="text-end text-xs tabular-nums">{row.competitorAnswers}</TableCell>
             <TableCell>
               <div className="flex flex-wrap gap-1">
                 {row.competitors.map((c) => (
@@ -704,7 +700,7 @@ function ByCompetitorView({
             <TableRow>
               <TableHead className="text-xs">Domain</TableHead>
               <TableHead className="text-xs">Source type</TableHead>
-              <TableHead className="text-right text-xs">Answers feeding</TableHead>
+              <TableHead className="text-end text-xs">Answers feeding</TableHead>
               <TableHead className="text-center text-xs">Also cites us?</TableHead>
               <TableHead className="text-xs">Strength</TableHead>
             </TableRow>
@@ -718,7 +714,7 @@ function ByCompetitorView({
                 <TableCell>
                   <CategoryBadge category={row.category} />
                 </TableCell>
-                <TableCell className="text-right text-xs tabular-nums">
+                <TableCell className="text-end text-xs tabular-nums">
                   {row.answersFeeding}
                 </TableCell>
                 <TableCell className="text-center">

@@ -238,7 +238,7 @@ function VisibilityBar({ score }: { score: number }) {
           style={{ width: `${Math.min(100, Math.max(0, rounded))}%` }}
         />
       </div>
-      <span className="w-8 text-right text-xs font-semibold tabular-nums">{rounded}</span>
+      <span className="w-8 text-end text-xs font-semibold tabular-nums">{rounded}</span>
     </div>
   );
 }
@@ -293,7 +293,7 @@ function TopSourceDomainsTable({
             <TableHead className="text-xs">Domain</TableHead>
             <TableHead className="text-xs">Platforms</TableHead>
             <TableHead className="text-xs">Usage</TableHead>
-            <TableHead className="text-right text-xs">Citations</TableHead>
+            <TableHead className="text-end text-xs">Citations</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -329,9 +329,7 @@ function TopSourceDomainsTable({
               <TableCell>
                 <UsageBar pct={row.usagePct} />
               </TableCell>
-              <TableCell className="text-right text-xs tabular-nums">
-                {row.totalCitations}
-              </TableCell>
+              <TableCell className="text-end text-xs tabular-nums">{row.totalCitations}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -369,7 +367,7 @@ function TopSourceUrlsTable({
             <TableHead className="text-xs">URL</TableHead>
             <TableHead className="text-xs">Platforms</TableHead>
             <TableHead className="text-xs">Usage</TableHead>
-            <TableHead className="text-right text-xs">Citations</TableHead>
+            <TableHead className="text-end text-xs">Citations</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -417,9 +415,7 @@ function TopSourceUrlsTable({
               <TableCell>
                 <UsageBar pct={row.usagePct} />
               </TableCell>
-              <TableCell className="text-right text-xs tabular-nums">
-                {row.totalCitations}
-              </TableCell>
+              <TableCell className="text-end text-xs tabular-nums">{row.totalCitations}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -540,11 +536,11 @@ function PlatformResultGroup({
           </div>
         </div>
         <div className="hidden items-center gap-5 sm:flex">
-          <div className="text-right">
+          <div className="text-end">
             <p className="text-[10px] text-muted-foreground">Mentions</p>
             <p className="text-xs font-semibold tabular-nums">{group.totalMentions}</p>
           </div>
-          <div className="text-right">
+          <div className="text-end">
             <p className="text-[10px] text-muted-foreground">Citations</p>
             <p className="text-xs font-semibold tabular-nums">{group.totalCitations}</p>
           </div>
@@ -974,7 +970,7 @@ export default function PromptDetailPage() {
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-2 gap-2 text-muted-foreground hover:text-foreground"
+            className="-ms-2 gap-2 text-muted-foreground hover:text-foreground"
             onClick={() => router.back()}
           >
             <ArrowLeft className="h-4 w-4" />

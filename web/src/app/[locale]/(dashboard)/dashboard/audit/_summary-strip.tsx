@@ -101,7 +101,7 @@ export function AuditSummaryStrip({
         </Fragment>
       ))}
       {overview.primaryHost && (
-        <span className="ml-auto text-xs text-muted-foreground">{overview.primaryHost}</span>
+        <span className="ms-auto text-xs text-muted-foreground">{overview.primaryHost}</span>
       )}
     </div>
   );

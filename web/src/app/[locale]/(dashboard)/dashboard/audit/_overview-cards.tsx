@@ -67,7 +67,7 @@ function HowItWorks({ quota, onOpenSettings }: { quota: AuditQuota; onOpenSettin
       ];
   return (
     <div id="audit-how-it-works" className="rounded-xl border px-4 py-3">
-      <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+      <ol className="list-decimal space-y-1 ps-5 text-sm text-muted-foreground">
         {points.map((point, i) => (
           <li key={i}>{point}</li>
         ))}

@@ -86,7 +86,7 @@ export function AutoRunNotice({
     return (
       <div
         role="status"
-        className="flex items-center gap-2 rounded-lg border bg-card py-1.5 pr-1.5 pl-3 text-sm"
+        className="flex items-center gap-2 rounded-lg border bg-card py-1.5 pe-1.5 ps-3 text-sm"
       >
         <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <p className="flex min-w-0 flex-1 items-center gap-2">
@@ -131,7 +131,7 @@ export function AutoRunNotice({
   return (
     <div
       role="status"
-      className="flex items-center gap-2 rounded-lg border bg-card py-1.5 pr-1.5 pl-3 text-sm"
+      className="flex items-center gap-2 rounded-lg border bg-card py-1.5 pe-1.5 ps-3 text-sm"
     >
       <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       {/* Wraps rather than cut off the next run on a narrow screen. */}
@@ -140,7 +140,7 @@ export function AutoRunNotice({
           <span key={i}>
             {i > 0 && <span className="text-muted-foreground"> · </span>}
             {i === 0 ? <span className="font-medium">{part}</span> : part}
-            {i === 0 && named && <PageDot dot={named} className="ml-1.5 align-middle" />}
+            {i === 0 && named && <PageDot dot={named} className="ms-1.5 align-middle" />}
           </span>
         ))}
         {words && (
