@@ -253,7 +253,7 @@ describe('the plan cards', () => {
     await render('growth');
     expect(container.textContent).toContain('Need a custom plan?');
     expect(container.textContent).toContain(
-      'For large companies and agencies managing AI visibility at scale. Starting at $499/month.',
+      'For large companies and agencies managing AI visibility at scale. Starting at $1,999/month.',
     );
     // Its AI usage is set per customer, from Enterprise's $50 (10x Starter's).
     const ai = [...container.querySelectorAll('li span')].find(
@@ -265,9 +265,10 @@ describe('the plan cards', () => {
     expect(ai?.getAttribute('title')).toContain('Ansvisor sets the amount with you.');
     expect(container.textContent).not.toContain('10x AI usage');
     for (const point of [
-      'Unlimited brands in a custom workspace',
-      'All answer engines, Claude included',
-      'SSO / SAML and custom feature requests',
+      '1 brand and 3,000 prompts to start, more by contract',
+      'Every answer engine, Claude by contract',
+      'SSO / SAML, priority support and an SLA',
+      'Invoice billing and API access',
     ]) {
       expect(container.textContent).toContain(point);
     }

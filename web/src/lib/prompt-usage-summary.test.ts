@@ -33,7 +33,9 @@ describe('usagePlan', () => {
   });
 
   it('reports no limit, rather than -1, while none is set', () => {
-    expect(usagePlan(PLANS.enterprise).locationLimit).toBeNull();
+    // Enterprise starts at 3,000 (00548); a contract with no limit sets -1.
+    expect(usagePlan(PLANS.enterprise).locationLimit).toBe(3000);
+    expect(usagePlan(withLimit(PLANS.enterprise, -1)).locationLimit).toBeNull();
     expect(usagePlan(PLANS.self_hosted)).toEqual({
       key: 'self_hosted',
       name: 'Self-Hosted plan',
