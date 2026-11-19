@@ -104,6 +104,13 @@ export interface AddOnChangeInput {
   topUp?: number;
   /** The preview's proration date (Unix seconds), so the charge is the amount shown. */
   prorationDate?: number;
+  /**
+   * Only the top-up: the subscription keeps the tracking and brands it has
+   * in Stripe now, whatever trackingUnits / extraBrands say. The Get more
+   * window sends it, so a snapshot read before a change in another tab (or
+   * before the webhook) never reverts or adds an add-on.
+   */
+  topUpOnly?: boolean;
 }
 
 export type AddOnChangePreview =
@@ -131,6 +138,7 @@ const inputSchema = z.object({
   extraBrands: z.number().int().min(0).max(1_000),
   topUp: z.number().int().min(0).max(100).optional(),
   prorationDate: z.number().int().positive().optional(),
+  topUpOnly: z.boolean().optional(),
 });
 
 const refuse = (failure: AddOnChangeFailure, extra: Partial<AddOnChangeRefusal> = {}) =>
@@ -379,8 +387,9 @@ const idOf = (value: string | { id: string } | null | undefined) =>
 async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal> {
   const parsed = inputSchema.safeParse(raw);
   if (!parsed.success) return refuse('unavailable');
-  const input = parsed.data;
+  let input = parsed.data;
   if (!isCloud()) return refuse('not_cloud');
+  if (input.topUpOnly && !input.topUp) return refuse('unavailable');
 
   const supabase = await createClient();
   const {
@@ -439,6 +448,13 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     row.active && addOnForPlan(row, 'growth') && addOnInterval(row) === interval;
 
   const current = currentAddOns(items, recurring);
+  if (input.topUpOnly) {
+    input = {
+      ...input,
+      trackingUnits: current.tracking?.units ?? 0,
+      extraBrands: current.brands?.quantity ?? 0,
+    };
+  }
   const base = getPlan('growth').limits;
   const limits: AddOnLimits = {
     prompts: base.maxPrompts + input.trackingUnits,

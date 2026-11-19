@@ -464,6 +464,37 @@ describe('an AI usage top-up', () => {
     expect(purchases()[0]).toMatchObject({ status: 'pending', stripe_invoice_id: 'in_topup' });
   });
 
+  it('from Get more keeps the add-ons Stripe has now, whatever the window read', async () => {
+    // The window read no add-ons; another tab has since bought a tier and 2 brands.
+    stripeApi.retrieve.mockResolvedValue(
+      subscription([
+        planItem(),
+        addOnItem('si_t', 'tracking_100_month'),
+        addOnItem('si_b', 'brand_month', 2),
+      ]),
+    );
+    await expect(
+      applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 5, topUpOnly: true }),
+    ).resolves.toMatchObject({ ok: true, changed: true });
+    // Nothing reverted: no subscription change, only the top-up's own invoice.
+    expect(stripeApi.update).not.toHaveBeenCalled();
+    expect(stripeApi.createInvoiceItem).toHaveBeenCalledWith(
+      expect.objectContaining({ pricing: { price: 'price_ai_topup_5x' } }),
+      expect.anything(),
+    );
+    // And it never adds one: a snapshot ahead of Stripe changes nothing either.
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem()]));
+    await applyAddOnChange({ trackingUnits: 1000, extraBrands: 3, topUp: 5, topUpOnly: true });
+    expect(stripeApi.update).not.toHaveBeenCalled();
+  });
+
+  it('only, without a top-up, is refused', async () => {
+    await expect(
+      applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUpOnly: true }),
+    ).resolves.toMatchObject({ ok: false, failure: 'unavailable' });
+    expect(stripeApi.update).not.toHaveBeenCalled();
+  });
+
   it('can be bought again: no monthly cap', async () => {
     await applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 20 });
     await applyAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 20 });

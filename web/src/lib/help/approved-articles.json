@@ -1603,7 +1603,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-18",
       "sections": [
         {
           "heading": null,
@@ -1815,7 +1815,7 @@
         },
         {
           "heading": "AI usage",
-          "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The model button's menu ends with **AI usage this month**: a bar, the share used and when it resets. From 80% a dot on the model button turns amber (red once used up), and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
+          "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The model button's menu ends with **AI usage this month**: a bar, the share used and when it resets. From 80% a dot on the model button turns amber (red once used up), and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and, on Growth, AI usage top-ups; it opens once by itself the first time Chat stops. Admins buy one; others can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
         },
         {
           "heading": "When only part of a job fits",
@@ -5337,8 +5337,8 @@
           "text": "Pick what you want, then click **Review and pay**. The window shows your new limits, what is **Due today** (the rest of this period for tracking and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. A lower tier or fewer brands leaves a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.\n\nOnly admins of an active Growth plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first."
         },
         {
-          "heading": "AI credit packs",
-          "text": "Each AI credit pack says what it adds as a share of your plan's monthly AI limit, such as **+20% of the monthly limit** or **+5 monthly limits**, and is valid 12 months from the payment. The monthly limit is your workspace's included AI usage, shared by every seat.\n\nCredits are used only once the month's included AI usage is spent, the oldest pack first, so the monthly reset never wipes them. Usage on your own AI keys never touches them. The line **AI credit: … left · expires …** shows what is left and when the oldest pack ends."
+          "heading": "AI credit packs (no longer sold)",
+          "text": "AI credit packs have been replaced by AI usage top-ups. Packs you already bought stay valid until they expire, 12 months from the payment. Their credits are used only once the month's included AI usage is spent, the oldest pack first, so the monthly reset never wipes them. Usage on your own AI keys never touches them. The line **AI credit: … left · expires …** shows what is left and when the oldest pack ends."
         },
         {
           "heading": "Storage packs",
@@ -5346,15 +5346,15 @@
         },
         {
           "heading": "Get more from where a limit shows",
-          "text": "You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, on an output Chat couldn't save to Files, and on an image upload refused because storage is full. When Chat stops at the AI limit, the window opens once by itself."
+          "text": "You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. Without the new Chat, **Get more AI usage** on Growth goes to **Add more to your plan** in Billing. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, on an output Chat couldn't save to Files, and on an image upload refused because storage is full. When Chat stops at the AI limit, the window opens once by itself."
         },
         {
           "heading": "What the Get more window shows",
-          "text": "The window shows your plan and what the next plan would add, where the limit stands (for example \"AI usage this month: 100% · Growth · resets Nov 1\" or \"Storage 24.6 of 25 GB\"), and the packs on two tabs, **AI credits** and **Storage**. Pick a pack and click **Continue to payment**, as below.\n\nOn AI credits, a table shows roughly how many Chat answers or articles each pack covers. These are only examples: credits work for everything Chat does, and expensive models, long tasks, higher effort and images use more.\n\nOn Enterprise, the window also has **Use your own key**: on the other plans, Chat runs on the plan's AI limit and credit packs."
+          "text": "The window shows your plan and what the next plan would add, and where the limit stands (for example \"AI usage this month: 100% · Growth · resets Nov 1\" or \"Storage 24.6 of 25 GB\"). It has two tabs. On **AI credits**, Growth admins pick a top-up (+5x, +10x or +20x), click **Buy**, then **Pay** to charge the card on file at once; Starter is offered Growth. On **Storage**, pick a pack and click **Continue to payment**, as below.\n\nOn Enterprise, the window also has **Use your own key**: on the other plans, Chat runs on the plan's AI limit and credit packs."
         },
         {
           "heading": "Buy a pack",
-          "text": "1. Open **Settings › Billing** and find **Add-ons**.\n2. Choose **AI credits** or **Storage**, then pick a pack. **Most picked** marks the one most workspaces choose.\n3. Click **Continue to payment**. AI credits open Stripe's secure checkout; storage asks you to confirm with **Add to plan**.\n\nOnce the payment is confirmed, the pack is listed under **Purchases**."
+          "text": "1. Open **Settings › Billing** and find **Add-ons**.\n2. Pick a storage pack. **Most picked** marks the one most workspaces choose.\n3. Click **Continue to payment**, then confirm with **Add to plan**.\n\nOnce the payment is confirmed, the pack is listed under **Purchases**."
         },
         {
           "heading": "Who can buy",

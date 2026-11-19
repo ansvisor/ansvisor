@@ -170,6 +170,15 @@ describe('the add-ons card', () => {
     expect(byText('+1,000 prompt locations')?.getAttribute('aria-checked')).toBe('true');
   });
 
+  it('scrolls to itself once read, when a link opened Billing on it', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    window.history.replaceState(null, '', '/dashboard/settings/billing#plan-add-ons');
+    await render({});
+    expect(scroll).toHaveBeenCalledWith({ block: 'start' });
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
   it('picks nothing from the link for one who can’t buy', async () => {
     window.history.replaceState(null, '', '/dashboard/settings/billing?add=tracking');
     await render({ state: 'not_admin', current: { trackingUnits: 100, extraBrands: 0 } });
