@@ -85,7 +85,10 @@ export function AuditConfirmDialog({
   const t = useTranslations('audit.confirm');
   const format = useFormatter();
   const { isLocked } = useUpgradeGate();
-  const [leaveOutRecent, setLeaveOutRecent] = useState(true);
+  // Pages someone picked are re-audited as picked, recent ones too (a
+  // sitewide change, robots.txt or a template, moves their scores: 2026-11-19);
+  // Audit all of the not audited leaves the recent ones out.
+  const [leaveOutRecent, setLeaveOutRecent] = useState(mode !== 'picked');
   // Without an active plan the quota reads 0 of 0: no limit to speak of here,
   // the start itself opens the plan dialog.
   const limited = quota !== null && quota.limit !== -1 && !isNoPlan(quota, isLocked);

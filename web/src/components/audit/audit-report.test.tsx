@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { AuditRecommendation, AuditResult, AuditSignal } from '@/lib/actions/audits';
-import { AuditReport } from './audit-report';
+import { AuditReport, barColor, scoreBand, scoreColor } from './audit-report';
 
 // Outbound authority links' way to Settings (00449).
 vi.mock('@/i18n/navigation', () => ({
@@ -405,6 +405,33 @@ describe('AI bot access (SA-008)', () => {
       li.className.includes('destructive'),
     ]);
 
+  it('says why it warns when nothing is blocked: robots.txt doesn’t name the bots', () => {
+    render([], {
+      signals: [
+        access(
+          {
+            liveTest: 'inconclusive',
+            control: 403,
+            aiBotsMentioned: [],
+            blocked: false,
+            bots: bots({
+              gptbot: { http: null, live: 'inconclusive' },
+              'oai-searchbot': { http: null, live: 'inconclusive' },
+              'chatgpt-user': { http: null, live: 'inconclusive' },
+              perplexitybot: { http: null, live: 'inconclusive' },
+              claudebot: { http: null, live: 'inconclusive' },
+            }),
+          },
+          'warn',
+        ),
+      ],
+    });
+    open();
+    expect(panel()?.textContent).toContain(
+      "robots.txt doesn't name the AI bots, so the audit can't confirm they're welcome.",
+    );
+  });
+
   it('lists each bot with its answer, and names a CDN or firewall block', () => {
     render([], {
       signals: [
@@ -540,5 +567,18 @@ describe('main text without JavaScript (SA-009)', () => {
   it('shows no finding for a page it could not compare', () => {
     render([], { signals: [noJs({ compared: false }, 'na')] });
     expect(opened()).not.toContain('Finding');
+  });
+});
+
+describe('a score’s band', () => {
+  it('follows the number shown: the same 70 is never two bands', () => {
+    expect(scoreBand(0.696)).toBe('good');
+    expect(scoreBand(0.704)).toBe('good');
+    expect(scoreBand(0.694)).toBe('needsWork');
+    expect(scoreBand(0.396)).toBe('needsWork');
+    expect(scoreBand(0.394)).toBe('poor');
+    expect(scoreBand(null)).toBeNull();
+    expect(scoreColor(0.696)).toBe(scoreColor(0.704));
+    expect(barColor(0.696)).toBe('bg-green-600');
   });
 });

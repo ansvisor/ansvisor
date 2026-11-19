@@ -42,6 +42,18 @@ export const BAND_TEXT_CLASSES: Record<QualityBand, string> = {
   needsWork: 'text-amber-700 dark:text-amber-300',
 };
 
+/**
+ * Whether E-E-A-T waits for an author: none picked, and the person hasn't
+ * confirmed the one their site names (00271). Its score is then about the
+ * author alone, 0 on every new draft, so the header's Quality leaves it out
+ * and the Quality tab asks for an author instead (Content test 2026-11-19,
+ * item 8). The go-live gate still holds the page for it: no author stays a
+ * to-do, never hidden.
+ */
+export function eeatAwaitsAuthor(author: unknown, confirmed?: { real: boolean } | null): boolean {
+  return !author && !confirmed?.real;
+}
+
 /** The header chip's figure: the scores that could be read, averaged; null with none. */
 export function qualityAverage(scores: (number | null)[]): number | null {
   const read = scores.filter((s): s is number => s !== null);

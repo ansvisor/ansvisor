@@ -197,7 +197,7 @@ describe('PromptLimitDialog', () => {
     expect(swap.getSwapOptions).toHaveBeenCalledTimes(2);
   });
 
-  it('offers Starter Growth in billing, and anyone else Contact us, beside Keep it waiting', async () => {
+  it('offers Starter Growth, Growth more tracking and Enterprise Contact us, beside Keep it waiting', async () => {
     await open();
     const growth = [...dialog().querySelectorAll('a')].find((a) =>
       a.textContent?.includes('See Growth'),
@@ -215,8 +215,21 @@ describe('PromptLimitDialog', () => {
       options({ plan: { id: 'growth', name: 'Growth', max: 200, used: 200 } }),
     );
     await open();
-    expect(dialog().textContent).toContain('or contact us to raise your limit.');
+    expect(dialog().textContent).toContain('or add more tracking to your plan.');
     expect(dialog().textContent).not.toContain('See Growth');
+    const more = dialog().querySelector('a')!;
+    expect(more.textContent).toBe('Add more tracking');
+    expect(more.getAttribute('href')).toBe('/dashboard/settings/billing?add=tracking#plan-add-ons');
+    await act(async () => more.click());
+    expect(analytics.track).toHaveBeenCalledWith('add_on_entry', { source: 'dialog' });
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    swap.getSwapOptions.mockResolvedValue(
+      options({ plan: { id: 'enterprise', name: 'Enterprise', max: 1000, used: 1000 } }),
+    );
+    await open();
+    expect(dialog().textContent).toContain('or contact us to raise your limit.');
     expect(dialog().querySelector('a')?.textContent).toBe('Contact us');
   });
 
