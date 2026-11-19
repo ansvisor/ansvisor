@@ -174,6 +174,11 @@ export async function getOpportunities(
 ): Promise<{
   opportunities: ContentOpportunity[];
   total: number;
+  /**
+   * The ones still to do (not done, dismissed or archived) among them, for
+   * "Available"; with a status picked, that status's count. Older APIs send none.
+   */
+  open?: number;
   aggregates: {
     avgScore: number;
     highImpactCount: number;

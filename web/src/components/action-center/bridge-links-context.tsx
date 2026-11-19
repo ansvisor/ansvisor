@@ -130,7 +130,7 @@ export function BridgeLinksContext({ payload }: { payload: Record<string, unknow
           disabled={pairs.length === 0}
           onClick={() => void copy()}
         >
-          <Copy className="mr-1.5 h-3.5 w-3.5" />
+          <Copy className="me-1.5 h-3.5 w-3.5" />
           {t('copyPlan')}
         </Button>
         <p className="text-xs text-muted-foreground">{t('startNow')}</p>

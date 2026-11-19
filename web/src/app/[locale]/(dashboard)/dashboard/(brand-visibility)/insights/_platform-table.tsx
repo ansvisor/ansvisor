@@ -39,12 +39,12 @@ export function PlatformTable({
         <table className="w-full min-w-[560px] text-sm" aria-label={t('tableLabel')}>
           <thead>
             <tr className="border-b text-[11px] uppercase tracking-wide text-muted-foreground">
-              <th className="py-2 pr-3 text-left font-medium">{t('platform')}</th>
-              <th className="w-20 px-2 py-2 text-right font-medium">{t('visibility')}</th>
-              <th className="w-16 px-2 py-2 text-right font-medium">{t('change')}</th>
-              <th className="w-20 px-2 py-2 text-right font-medium">{t('coverage')}</th>
-              <th className="w-[34%] px-2 py-2 text-left font-medium">{t('shareOfVoice')}</th>
-              <th className="w-16 py-2 pl-2 text-right font-medium">{t('avgPosition')}</th>
+              <th className="py-2 pe-3 text-start font-medium">{t('platform')}</th>
+              <th className="w-20 px-2 py-2 text-end font-medium">{t('visibility')}</th>
+              <th className="w-16 px-2 py-2 text-end font-medium">{t('change')}</th>
+              <th className="w-20 px-2 py-2 text-end font-medium">{t('coverage')}</th>
+              <th className="w-[34%] px-2 py-2 text-start font-medium">{t('shareOfVoice')}</th>
+              <th className="w-16 py-2 ps-2 text-end font-medium">{t('avgPosition')}</th>
             </tr>
           </thead>
           <tbody>
@@ -58,24 +58,24 @@ export function PlatformTable({
                     row.worst && 'bg-red-50 dark:bg-red-950/30',
                   )}
                 >
-                  <td className="py-2.5 pr-3 font-medium">
+                  <td className="py-2.5 pe-3 font-medium">
                     {row.name}
                     {row.worst && <span className="sr-only"> ({t('biggestDrop')})</span>}
                   </td>
                   {row.status === 'ok' ? (
                     <>
-                      <td className="px-2 py-2.5 text-right font-semibold tabular-nums">
+                      <td className="px-2 py-2.5 text-end font-semibold tabular-nums">
                         {row.visibility === null ? '—' : f.number(row.visibility)}
                       </td>
                       <td
                         className={cn(
-                          'px-2 py-2.5 text-right font-medium tabular-nums',
+                          'px-2 py-2.5 text-end font-medium tabular-nums',
                           change && TONE_TEXT[change.tone],
                         )}
                       >
                         {change?.text ?? '—'}
                       </td>
-                      <td className="px-2 py-2.5 text-right tabular-nums">
+                      <td className="px-2 py-2.5 text-end tabular-nums">
                         {row.coverage === null ? '—' : f.percent(row.coverage)}
                       </td>
                       <td className="px-2 py-2.5">
@@ -91,13 +91,13 @@ export function PlatformTable({
                                 }}
                               />
                             </span>
-                            <span className="min-w-10 text-right tabular-nums">
+                            <span className="min-w-10 text-end tabular-nums">
                               {f.percent(row.shareOfVoice)}
                             </span>
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 pl-2 text-right tabular-nums">
+                      <td className="py-2.5 ps-2 text-end tabular-nums">
                         {row.avgPosition === null ? '—' : `#${f.number(row.avgPosition)}`}
                       </td>
                     </>

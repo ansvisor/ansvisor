@@ -231,7 +231,7 @@ export function PromptPositionsSheet({
   return (
     <Sheet open={prompt !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl">
-        <SheetHeader className="gap-2 border-b px-5 py-4 pr-12">
+        <SheetHeader className="gap-2 border-b px-5 py-4 pe-12">
           <SheetTitle className="text-base leading-snug break-words">{prompt?.text}</SheetTitle>
           {data && (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -581,7 +581,7 @@ function ImproveTrigger({ improve }: { improve: ImproveController }) {
     <TabsTrigger value="improve">
       Improve
       {improve.count !== null && improve.count > 0 && (
-        <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+        <Badge variant="secondary" className="ms-1 h-4 px-1.5 text-[10px]">
           {improve.count}
         </Badge>
       )}
@@ -696,7 +696,7 @@ function LatestRow({ platform: p }: { platform: PlatformPositions }) {
               )}
             </dd>
           </div>
-          <div className="sm:text-right">
+          <div className="sm:text-end">
             <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Citation
             </dt>
@@ -982,7 +982,7 @@ function PlatformPeriodRow({ platform: p, days }: { platform: PlatformPositions;
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label={`${open ? 'Hide' : 'Show'} daily ${p.label} results`}
-        className="flex w-full flex-wrap items-center gap-x-5 gap-y-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="flex w-full flex-wrap items-center gap-x-5 gap-y-2 rounded-md text-start outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <PlatformName platform={p} />
         <Metric
@@ -998,7 +998,7 @@ function PlatformPeriodRow({ platform: p, days }: { platform: PlatformPositions;
         <PositionTrio stats={p.mentionPosition} />
         <ChevronDown
           className={cn(
-            'ml-auto h-4 w-4 text-muted-foreground transition-transform',
+            'ms-auto h-4 w-4 text-muted-foreground transition-transform',
             open && 'rotate-180',
           )}
         />

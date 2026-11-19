@@ -27,7 +27,7 @@ function ProposalTask({ item }: { item: NonNullable<ChatConfirm['items']>[number
               data-action="approval.showAll"
               aria-expanded={open}
               onClick={() => setOpen((was) => !was)}
-              className="ml-1 rounded font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="ms-1 rounded font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               {open ? t('showLess') : t('showAll')}
             </button>

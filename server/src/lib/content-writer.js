@@ -46,6 +46,7 @@ import {
   withoutHealthFinds,
 } from './content-health.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { brandFactSources } from './content-brand-facts.js';
 import {
   RESEARCH_RULE,
   applyEdits,
@@ -115,6 +116,13 @@ import {
   stopIfStopped,
 } from './content-runs.js';
 import { getLanguageName } from './languages.js';
+import {
+  MAX_TABLE_COLUMNS,
+  MAX_TABLE_ROWS,
+  numberedLists,
+  tableHtml,
+  tableLine,
+} from './content-lists.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
 import { objectOptions } from './structured-output.js';
@@ -195,6 +203,18 @@ export const pageSchema = z.object({
         heading: z.string().describe('The H2.'),
         paragraphs: z.array(z.string()).max(6),
         bullets: z.array(z.string()).max(10).describe('A list after the paragraphs, or none.'),
+        numbered: z
+          .boolean()
+          .describe('Whether the list is steps in order or a ranking: a numbered list.'),
+        table: z
+          .object({
+            columns: z.array(z.string()).max(MAX_TABLE_COLUMNS),
+            rows: z.array(z.array(z.string()).max(MAX_TABLE_COLUMNS)).max(MAX_TABLE_ROWS),
+          })
+          .nullable()
+          .describe(
+            'A table after the list: the options in rows, first column the name, the criteria in columns; null for none.',
+          ),
       }),
     )
     .min(2)
@@ -208,7 +228,7 @@ export const WRITE_SYSTEM_PROMPT = `You are the Content Agent for Answer Engine 
 How to write:
 - Answer first: the opening paragraphs answer the page's main question directly.
 - Follow the outline when there is one; each H2 answers one of the questions or AI searches given.
-- Short paragraphs and plain sentences. Lists where a reader compares or follows steps.
+- Short paragraphs and plain sentences. Lists where a reader compares or follows steps: steps in order and rankings as a numbered list ("numbered": true), the items without numbers of their own; never start paragraphs with "1.", "2.". A comparison of options by the same criteria as a table.
 - Follow the brand's rules first, then every rule listed and the writer's own rules; when they disagree, the brand's rule wins.
 - For each fan-out a rule names, use it, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq. ${FANOUT_WORDING}
 - Use only facts from the brand, the brief and your data, and the ones you ask to have looked up. Never invent numbers, prices, dates, names, customers, sources or quotes.
@@ -241,7 +261,7 @@ const SUGGEST_SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optim
 Rules for your suggestions:
 - Make the page answer the questions and AI searches listed, follow the brief when there is one, and meet the rules listed.
 - A replace changes words inside one passage: copy "before" exactly as that passage has it (a phrase or a sentence), and write "after" as plain text that fits in its place, with links only as the links rule below says.
-- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, strong, em, and a for links): a missing section, a direct answer, an FAQ.
+- An insert adds new blocks after a passage, as simple HTML (h2, h3, p, ul, ol, li, table, tr, th, td, strong, em, and a for links): a missing section, a direct answer, an FAQ, a comparison table. Steps in order and rankings go in an <ol>, its items without numbers of their own.
 ${HEADING_RULE}
 ${LINK_RULE}
 ${FANOUT_RULE}
@@ -295,8 +315,11 @@ export function renderPage(page, { language = null } = {}) {
     parts.push(h(2, section.heading), ...section.paragraphs.map(p));
     const bullets = section.bullets.filter((b) => clean(b));
     if (bullets.length) {
-      parts.push(`<ul>${bullets.map((b) => `<li>${p(b)}</li>`).join('')}</ul>`);
+      const tag = section.numbered ? 'ol' : 'ul';
+      parts.push(`<${tag}>${bullets.map((b) => `<li>${p(b)}</li>`).join('')}</${tag}>`);
     }
+    // A comparison as a table (Content test 2026-11-19, item 12).
+    parts.push(tableHtml(section.table));
   }
   const faq = page.faq.filter((item) => clean(item.question) && clean(item.answer));
   if (faq.length && clean(page.faqHeading)) {
@@ -305,8 +328,18 @@ export function renderPage(page, { language = null } = {}) {
       parts.push(h(3, item.question), p(item.answer));
     }
   }
-  return parts.filter(Boolean).join('');
+  // Numbered paragraphs, or numbers written into a list's items: a numbered list.
+  return numberedLists(parts.filter(Boolean).join(''));
 }
+
+/** A section's table with `fix` on each cell; none stays none. */
+const tableWith = (table, fix) =>
+  table
+    ? {
+        columns: (table.columns ?? []).map((text) => fix(text)),
+        rows: (table.rows ?? []).map((row) => row.map((text) => fix(text))),
+      }
+    : null;
 
 const list = (items) => (items.length ? items.map((item) => `- ${item}`).join('\n') : '- none');
 
@@ -328,6 +361,7 @@ export function sourcedPage(page, known, people = knownPeople()) {
       heading: heading(section.heading),
       paragraphs: section.paragraphs.map((text) => fix(text)),
       bullets: section.bullets.map((text) => fix(text)),
+      table: tableWith(section.table, fix),
     })),
     faqHeading: heading(page.faqHeading),
     faq: page.faq.map((item) => ({ question: heading(item.question), answer: fix(item.answer) })),
@@ -352,6 +386,7 @@ export function editPage(page, editsFor) {
       heading: heading(section.heading),
       paragraphs: section.paragraphs.map((text) => fix(text)),
       bullets: section.bullets.map((text) => fix(text)),
+      table: tableWith(section.table, fix),
     })),
     faqHeading: heading(page.faqHeading),
     faq: page.faq.map((item) => ({ question: heading(item.question), answer: fix(item.answer) })),
@@ -504,7 +539,7 @@ Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 
 Page type: ${pageTypeFormat(draft.page_type)}
-${namedLine(brand?.namedCompetitors)}Length: ${lengthLine(sources)}${now === null ? '' : ` ${lengthNow(now, sources.length, sources.lengthBand)}`}
+${tableLine(draft.page_type)}${namedLine(brand?.namedCompetitors)}Length: ${lengthLine(sources)}${now === null ? '' : ` ${lengthNow(now, sources.length, sources.lengthBand)}`}
 
 Brief:
 ${brief}
@@ -1359,7 +1394,11 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     fanouts: fitted.fanouts,
     pages: input.sources.pages,
     queries: fitted.queries,
-    inputs: inputSources(inputRow, brand.name),
+    // The brand's approved facts beside Your input.
+    inputs: [
+      ...inputSources(inputRow, brand.name),
+      ...(await brandFactSources({ id: draft.brand_id, name: brand.name }, draft)),
+    ],
   });
   const known = withNamedNumbers(
     knownNumbers(

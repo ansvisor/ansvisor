@@ -131,7 +131,7 @@ export function TopicCategories({ refreshKey = 0 }: { refreshKey?: number }) {
         <div className="relative overflow-x-auto rounded-md border bg-card">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-muted-foreground">
+              <tr className="text-start text-xs text-muted-foreground">
                 <th className="px-3 py-2 font-medium">{t('topic')}</th>
                 <th className="px-3 py-2 font-medium">{t('categories')}</th>
               </tr>

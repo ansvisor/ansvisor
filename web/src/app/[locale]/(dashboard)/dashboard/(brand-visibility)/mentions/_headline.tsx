@@ -106,7 +106,7 @@ export function Headline({ overview, brand }: { overview: MentionsOverview; bran
   return (
     <section
       aria-label={t('label')}
-      className="rounded-xl border border-l-[3px] border-l-foreground bg-card px-4 py-3 text-sm"
+      className="rounded-xl border border-s-[3px] border-s-foreground bg-card px-4 py-3 text-sm"
     >
       <p>
         {headlineSentences(overview, brand, locale, t).map((s, i) => (

@@ -74,9 +74,31 @@ export const EXCLUDED_SEGMENTS = new Set([
  * GA4's own placeholders count as excluded: a blank or "(not set)" landing
  * page is an unattributed session, not a page anyone can be sent to.
  */
+/** GA4's and PostHog's placeholders for a page they couldn't name. */
+const PLACEHOLDERS = new Set(['(not set)', '(other)', '(none)', '(direct)', '(not provided)']);
+
+/**
+ * A landing page that is only an analytics placeholder, however it was
+ * written: "(not set)", "/(not set)" or "/(not%20set)" (2026-11-19: it
+ * reached Pages and Audit all as "/(not%20set)").
+ */
+export function isPlaceholderPath(path) {
+  let raw = String(path ?? '').trim();
+  try {
+    raw = decodeURIComponent(raw);
+  } catch {
+    /* kept as written */
+  }
+  raw = raw
+    .replace(/^https?:\/\/[^/]+/i, '')
+    .replace(/^\/+|\/+$/g, '')
+    .toLowerCase();
+  return PLACEHOLDERS.has(raw);
+}
+
 export function isExcludedPath(path) {
   const raw = String(path ?? '').trim();
-  if (!raw || raw === '(not set)' || raw === '(other)') return true;
+  if (!raw || isPlaceholderPath(raw)) return true;
   return raw
     .split(/[?#]/)[0]
     .split('/')

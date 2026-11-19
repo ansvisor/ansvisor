@@ -53,7 +53,7 @@ function RunPart({ part }: { part: ChatStepPart }) {
         aria-expanded={open}
         aria-controls={stepsId}
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-[13px] hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-start text-[13px] hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         <ListDot state={DOT[part.status]} decorative />
         <span className="min-w-0 flex-1 truncate">{part.title}</span>
@@ -66,7 +66,7 @@ function RunPart({ part }: { part: ChatStepPart }) {
           )}
         />
       </button>
-      <div id={stepsId} hidden={!open} className="pl-6">
+      <div id={stepsId} hidden={!open} className="ps-6">
         {part.steps.length > 0 ? (
           <StepList rows={part.steps.map((step) => stepRowFrom(step))} />
         ) : (

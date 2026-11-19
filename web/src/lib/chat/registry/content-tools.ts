@@ -14,6 +14,7 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { OPTIMIZE_TOOL, optimizeDraftHere, type OptimizeResult } from '../page-optimize';
 import { refuseBannedPhrases } from '../banned-guard';
+import { refuseChatSentenceTitle } from '../page-title';
 import { refuseMissingFacts } from '../placeholders';
 import { readPageVersion } from '../page-versions';
 import { FIXTURE_IDS, defineTool, type ChatToolContext } from './define-tool';
@@ -97,6 +98,7 @@ export const CONTENT_TOOLS = [
       .refine((input) => input.title !== undefined || input.body_html !== undefined, {
         message: 'Change the title, the page, or both.',
       })
+      .superRefine(refuseChatSentenceTitle)
       .superRefine(refuseMissingFacts),
     run: async (_ctx, input) =>
       (await refuseBannedPhrases({ draftId: input.draft_id }, [input.title, input.body_html])) ??

@@ -633,7 +633,7 @@ function ChannelAndSends({
           })}
         >
           <ComboboxTrigger className="w-72" aria-label={t('channel')}>
-            <span className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+            <span className="flex min-w-0 flex-1 items-center gap-1.5 text-start">
               {saving === 'channel' ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : picked ? (

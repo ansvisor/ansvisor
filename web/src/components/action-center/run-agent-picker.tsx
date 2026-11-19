@@ -44,7 +44,7 @@ const ENDED = ['stopped', 'failed', 'skipped'];
 type Busy = { kind: 'agent'; id: string } | { kind: 'chat' } | null;
 
 const ROW =
-  'flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50';
+  'flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-start text-[13px] outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50';
 
 export function RunAgentPicker({
   action,

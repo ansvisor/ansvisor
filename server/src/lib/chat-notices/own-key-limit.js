@@ -1,7 +1,6 @@
 import supabaseAdmin from '../../config/supabase.js';
-import { deliverEmail } from '../email.js';
-import logger from '../logger.js';
-import { adminsOf, appOrigin, emailOf, escapeHtml, wantsEmail } from './own-key.js';
+import { DEFAULT_LOCALE, formatLocale, translate, translator } from '../i18n.js';
+import { adminsOf, appOrigin, escapeHtml, sendToAdmins } from './own-key.js';
 
 /**
  * Warning the Admins about the key guard (AGENT-OWN-KEY §4.2 item 4, PR 10):
@@ -38,43 +37,57 @@ export function forgetOwnKeyLimitWarnings() {
   seen.clear();
 }
 
-const dollars = (usd, cents = false) =>
-  new Intl.NumberFormat('en-US', {
+const dollars = (usd, cents = false, locale = DEFAULT_LOCALE) =>
+  new Intl.NumberFormat(formatLocale(locale), {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: cents ? 2 : 0,
     maximumFractionDigits: cents ? 2 : 0,
   }).format(usd);
 
-const dayOf = (iso) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+const dayOf = (iso, locale = DEFAULT_LOCALE) =>
+  new Date(iso).toLocaleDateString(formatLocale(locale), {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 
 /**
  * The e-mail (§4.2 item 4).
- * @param {{ level: 80 | 100, usedUsd: number, capUsd: number, renewsAt: string, workspace: string }} input
+ * @param {{ level: 80 | 100, usedUsd: number, capUsd: number, renewsAt: string, workspace: string, locale?: string }} input
+ *   `locale`: the reader's interface language (LOC-008), English when none;
+ *   it also sets the amounts' and the date's format.
  * @returns {{ subject: string, html: string }}
  */
-export function renderOwnKeyLimitEmail({ level, usedUsd, capUsd, renewsAt, workspace }) {
+export function renderOwnKeyLimitEmail({
+  level,
+  usedUsd,
+  capUsd,
+  renewsAt,
+  workspace,
+  locale = DEFAULT_LOCALE,
+}) {
+  const t = translator(locale);
   const url = `${appOrigin()}/dashboard/settings/ai-providers`;
-  const spent = `about ${dollars(usedUsd)} of the ${dollars(capUsd, !Number.isInteger(capUsd))}`;
-  const renews = dayOf(renewsAt);
-  const title =
-    level === 100
-      ? 'Your agents reached their monthly limit on your AI key'
-      : 'Your agents have used 80% of their monthly limit on your AI key';
-  const body =
-    level === 100
-      ? `In ${escapeHtml(workspace)}, agents have used ${spent} they may spend on your own AI key this month, so the agents that run on it are paused. They start again by themselves when the month renews on ${renews}, or when an Admin raises the limit in Settings › AI Providers. Chat you use yourself keeps working.`
-      : `In ${escapeHtml(workspace)}, agents have used ${spent} they may spend on your own AI key this month. At the limit they pause until the month renews on ${renews}, or until an Admin raises it in Settings › AI Providers.`;
+  const spent = t('ownKeyLimit.spent', {
+    used: dollars(usedUsd, false, locale),
+    cap: dollars(capUsd, !Number.isInteger(capUsd), locale),
+  });
+  const title = t(level === 100 ? 'ownKeyLimit.title100' : 'ownKeyLimit.title80');
+  const body = t(level === 100 ? 'ownKeyLimit.body100' : 'ownKeyLimit.body80', {
+    workspace: escapeHtml(workspace),
+    spent,
+    renews: dayOf(renewsAt, locale),
+  });
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
   <h1 style="font-size:18px;color:#111827;margin:0 0 8px 0;">${title}</h1>
   <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${body}</p>
-  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">The amounts are an estimate at the providers' list prices. Your provider's bill is the real one.</p>
+  <p style="font-size:14px;color:#111827;margin:0 0 16px 0;">${t('ownKeyLimit.estimate')}</p>
   <div style="margin:24px 0;">
-    <a href="${escapeHtml(url)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">Open AI Providers</a>
+    <a href="${escapeHtml(url)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">${t('ownKeyLimit.button')}</a>
   </div>
   <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">
-    You get this as an Admin of the workspace, by your Chat settings' Notify me when an agent needs me.
+    ${t('ownKeyLimit.footer')}
   </p>
 </div>`;
   return { subject: title, html };
@@ -143,24 +156,21 @@ async function tell(orgId, level, spend) {
     .select('name')
     .eq('id', orgId)
     .maybeSingle();
-  const { subject, html } = renderOwnKeyLimitEmail({
-    level,
-    usedUsd: spend.usedUsd,
-    capUsd: spend.capUsd,
-    renewsAt: spend.renewsAt,
-    workspace: org?.name ?? 'your workspace',
+  // Inbox only sends no e-mail; Inbox + Slack does for this notice, which Slack doesn't carry.
+  const emails = await sendToAdmins({
+    admins,
+    told,
+    context: { orgId, notice: 'own_key_limit' },
+    render: (locale) =>
+      renderOwnKeyLimitEmail({
+        level,
+        usedUsd: spend.usedUsd,
+        capUsd: spend.capUsd,
+        renewsAt: spend.renewsAt,
+        workspace: org?.name ?? translate(locale, 'ownKeyLimit.fallbackWorkspace'),
+        locale,
+      }),
   });
-  let emails = 0;
-  for (const admin of admins) {
-    // Inbox only sends no e-mail; Inbox + Slack does for this notice, which Slack doesn't carry.
-    if (!wantsEmail(admin.notifyVia) || !told.has(admin.id)) continue;
-    const to = await emailOf(admin.id);
-    if (!to) continue;
-    const outcome = await deliverEmail({ to: [to], subject, html });
-    if (outcome === 'sent') emails += 1;
-    else if (outcome !== 'skipped')
-      logger.warn({ orgId, outcome }, 'own key limit e-mail not sent');
-  }
   return { notices: told.size, emails };
 }
 

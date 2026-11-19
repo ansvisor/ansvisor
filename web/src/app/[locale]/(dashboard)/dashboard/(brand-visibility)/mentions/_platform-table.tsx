@@ -53,11 +53,11 @@ export function PlatformTable({
         <table className="w-full min-w-[480px] text-sm" aria-label={t('tableLabel')}>
           <thead>
             <tr className="border-b text-[11px] uppercase tracking-wide text-muted-foreground">
-              <th className="py-2 pr-3 text-left font-medium">{t('platform')}</th>
-              <th className="w-20 px-2 py-2 text-right font-medium">{t('mentions')}</th>
-              <th className="w-16 px-2 py-2 text-right font-medium">{t('rate')}</th>
-              <th className="w-[30%] px-2 py-2 text-left font-medium">{t('sentiment')}</th>
-              <th className="w-24 py-2 pl-2 text-right font-medium">{t('net')}</th>
+              <th className="py-2 pe-3 text-start font-medium">{t('platform')}</th>
+              <th className="w-20 px-2 py-2 text-end font-medium">{t('mentions')}</th>
+              <th className="w-16 px-2 py-2 text-end font-medium">{t('rate')}</th>
+              <th className="w-[30%] px-2 py-2 text-start font-medium">{t('sentiment')}</th>
+              <th className="w-24 py-2 ps-2 text-end font-medium">{t('net')}</th>
             </tr>
           </thead>
           <tbody>
@@ -76,7 +76,7 @@ export function PlatformTable({
                     negative && 'bg-red-50 dark:bg-red-950/30',
                   )}
                 >
-                  <td className="py-2.5 pr-3 font-medium">
+                  <td className="py-2.5 pe-3 font-medium">
                     <span className="inline-flex items-center gap-2 whitespace-nowrap">
                       <AIProviderAvatar
                         provider={resolveAIProvider(row.platform, row.platform)}
@@ -87,10 +87,8 @@ export function PlatformTable({
                     {negative && <span className="sr-only"> ({t('negativeNet')})</span>}
                   </td>
                   {/* Every time it names the brand, as Total mentions counts them. */}
-                  <td className="px-2 py-2.5 text-right tabular-nums">
-                    {f.number(row.occurrences)}
-                  </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums">
+                  <td className="px-2 py-2.5 text-end tabular-nums">{f.number(row.occurrences)}</td>
+                  <td className="px-2 py-2.5 text-end tabular-nums">
                     {rate === null ? '—' : f.percent(rate, 0)}
                   </td>
                   <td className="px-2 py-2.5">
@@ -100,7 +98,7 @@ export function PlatformTable({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className="py-2.5 pl-2 text-right tabular-nums">
+                  <td className="py-2.5 ps-2 text-end tabular-nums">
                     {net === null ? (
                       <span className="text-muted-foreground">—</span>
                     ) : (
@@ -116,7 +114,7 @@ export function PlatformTable({
                           {signedValue(net, locale)}
                           {change && (
                             <span
-                              className={cn('ml-1 text-[11px] font-medium', TONE_TEXT[change.tone])}
+                              className={cn('ms-1 text-[11px] font-medium', TONE_TEXT[change.tone])}
                             >
                               {change.text}
                             </span>

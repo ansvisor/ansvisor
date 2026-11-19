@@ -125,7 +125,7 @@ function BrandSelector({
                 fallbackClassName="rounded-md bg-primary text-primary-foreground text-sm font-semibold"
                 imageClassName="object-contain p-1"
               />
-              <span className="flex-1 text-left text-sm font-medium">{brand.name}</span>
+              <span className="flex-1 text-start text-sm font-medium">{brand.name}</span>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </CardContent>
           </Card>

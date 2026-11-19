@@ -403,7 +403,7 @@ export default function ContentPlanPage() {
             disabled={!plan}
             onClick={() => setCard((c) => (c === value ? null : value))}
             className={cn(
-              'rounded-xl border bg-card p-4 text-left transition-colors hover:bg-muted/40 disabled:cursor-default disabled:hover:bg-card',
+              'rounded-xl border bg-card p-4 text-start transition-colors hover:bg-muted/40 disabled:cursor-default disabled:hover:bg-card',
               card === value && 'border-foreground ring-1 ring-inset ring-foreground',
             )}
           >

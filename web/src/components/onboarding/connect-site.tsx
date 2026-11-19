@@ -93,11 +93,11 @@ export function ConnectSite({
 
       <div className="mt-6 space-y-2">
         <Button className="w-full" disabled={leaving != null} onClick={onDone}>
-          {leaving === 'done' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {leaving === 'done' && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
           {t('done')}
         </Button>
         <Button variant="ghost" className="w-full" disabled={leaving != null} onClick={onLater}>
-          {leaving === 'later' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {leaving === 'later' && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
           {t('later')}
         </Button>
         <p className="text-center text-xs text-muted-foreground">{t('laterNote')}</p>
