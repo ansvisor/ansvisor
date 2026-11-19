@@ -7,6 +7,7 @@ import {
   normalizeExcludePattern,
   opportunityKey,
   siteCoverage,
+  sitePageKeys,
 } from './opportunities.js';
 
 const NOW = Date.parse('2026-10-17T12:00:00Z');
@@ -388,5 +389,31 @@ describe('siteCoverage (customer priorities item 11)', () => {
 
   it('is nothing for a brand with no site pages', () => {
     expect(siteCoverage({ staleDays: 90 })).toEqual({ pages: 0, audited: 0, never: 0, stale: 0 });
+  });
+});
+
+describe('sitePageKeys', () => {
+  it('is the site’s pages the hub counts: each once, less those excluded unless pinned', () => {
+    const keys = sitePageKeys({
+      sitePages: [
+        { url: 'https://www.acme.com/' },
+        { url: 'https://acme.com/pricing/' },
+        { url: 'https://acme.com/blog/a' },
+        { url: 'https://acme.com/legal/terms' },
+        { url: 'https://acme.com/legal/keep' },
+        { url: 'https://acme.com/old' },
+      ],
+      prefs: [
+        { page_key: 'acme.com/old', url: 'https://acme.com/old', state: 'excluded' },
+        { page_key: 'acme.com/legal/keep', url: 'https://acme.com/legal/keep', state: 'pinned' },
+      ],
+      excludePatterns: ['/legal/*'],
+    });
+    expect([...keys].sort()).toEqual([
+      'acme.com/',
+      'acme.com/blog/a',
+      'acme.com/legal/keep',
+      'acme.com/pricing',
+    ]);
   });
 });

@@ -123,10 +123,11 @@ describe('Pages audited, once the site’s pages are read (customer priorities i
     return onShowNotAudited;
   };
 
-  it('says how many of the site’s pages have a current audit, and opens the rest', () => {
+  it('says how many of the site’s pages have an audit, as the site score counts them, and opens the rest', () => {
     const open = renderCoverage({ pages: 36, audited: 18, never: 15, stale: 3 });
     const pages = cards()[1];
-    expect(pages).toContain('18of 36 site pages');
+    // 18 current and 3 out of date: 21 audited, as the site score counts them.
+    expect(pages).toContain('21of 36 site pages');
     expect(pages).toContain('15 never audited · 3 not in 90 days');
     const see = [...container.querySelectorAll('button')].find(
       (b) => b.textContent === 'See the 18 not audited →',
