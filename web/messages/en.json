@@ -13028,7 +13028,7 @@
         "draftDetail": "The Content Agent writes the page from the brief, by your rules and the page type's.",
         "draftDetailPage": "The Content Agent suggests changes to {page} from the brief, by your rules and the page type's.",
         "review": "You review it",
-        "reviewDetail": "The editor opens as it writes, with a free estimate of its Site Audit score. Nothing is published."
+        "reviewDetail": "The editor opens as it writes. When you mark it ready, you get a free estimate of its Site Audit score. Nothing is published."
       },
       "usage": "Uses about <b>{estimate}</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
       "usageSmall": "Uses under <b>1%</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
