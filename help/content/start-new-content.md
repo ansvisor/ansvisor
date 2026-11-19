@@ -4,8 +4,8 @@ route: /dashboard/content/library
 keywords: [new content, create page, optimize page, content agent, import page, page type, site type]
 synonyms: [write a new article, start a draft, new page, improve an existing page]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-19
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -38,6 +38,12 @@ Click **Continue**. Ansvisor picks a **Page type** from the title, the content, 
 The page types on offer follow the brand's **Site type** in the brand settings: B2B SaaS, E-commerce, B2C or Mobile app. A mobile app, for example, gets **Feature page**, **Pricing** and **Help & FAQ** among its types, and no product or destination pages.
 
 For a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. Pick **Optimize … instead** on one of those pages to work on it, or **Create a new page**.
+
+## How the page type is read
+
+An opportunity's type carries over: when your site type doesn't write it, the closest one it does is picked, such as **Best-of list** for a buying guide on a B2B SaaS site. A title that lists tools or picks ("The complete AI SEO tools list") reads as a **Best-of list** too.
+
+On an online shop, the brief's **Shopping path** shows only once the brand has a product catalog in **Settings › Integrations**, or a path is already picked.
 
 ## Choose who does it
 
