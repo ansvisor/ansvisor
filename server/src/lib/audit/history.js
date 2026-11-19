@@ -4,7 +4,6 @@
  * tested.
  */
 
-
 /** How many recent completed audits the trend endpoint reads. */
 export const TREND_LIMIT = 500;
 
