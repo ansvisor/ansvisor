@@ -87,6 +87,7 @@ const topicAgg = (topicId: string, answers: number, mentions: number, competitor
 const group = (
   promptId: string,
   platform: string,
+  /** Of the group's 2 answers, how many name the brand, and the competitor. */
   brand: number,
   comp: number,
   latest: string,
@@ -96,8 +97,10 @@ const group = (
   model_used: null,
   region: 'US',
   runs: 2,
-  brand_total: brand * 2,
-  comp_total: comp * 2,
+  brand_total: brand * 50,
+  comp_total: comp * 50,
+  brand_mention_answers: brand,
+  comp_mention_answers: comp,
   latest_at: latest,
 });
 
@@ -264,9 +267,9 @@ function seed() {
     args.p_competitor_id === C1
       ? {
           groups: [
-            group(P[0], 'chatgpt-web', 20, 60, '2026-11-15T06:00:00Z'),
-            group(P[1], 'chatgpt-web', 70, 30, '2026-11-16T06:00:00Z'),
-            group(P[1], 'perplexity', 10, 15, '2026-11-14T06:00:00Z'),
+            group(P[0], 'chatgpt-web', 0, 2, '2026-11-15T06:00:00Z'),
+            group(P[1], 'chatgpt-web', 2, 1, '2026-11-16T06:00:00Z'),
+            group(P[1], 'perplexity', 0, 1, '2026-11-14T06:00:00Z'),
           ],
           engines: [
             {
@@ -276,6 +279,8 @@ function seed() {
               brand_total: 180,
               comp_count: 4,
               comp_total: 180,
+              brand_mention_answers: 2,
+              comp_mention_answers: 3,
             },
           ],
           prompts: [

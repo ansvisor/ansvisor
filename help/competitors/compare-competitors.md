@@ -37,15 +37,15 @@ They only change which cards show and in what order: scores, the date range and 
 
 Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.
 
-The comparison reads the same **Date Range** as the cards: its scores, **Gaps**, **Strengths**, **Prompt-by-Prompt** and the runs you open cover those days, and change with it. Its scores are each answer's own visibility score from 0 to 100, for your brand and for the competitor.
+The comparison reads the same **Date Range** as the cards: its scores, **Gaps**, **Strengths**, **Prompt-by-Prompt** and the runs you open cover those days, and change with it. Its scores are the same AI Visibility Score as the cards, from 0 to 100 and not a percentage, for your brand and for the competitor alike over your answers: for the whole comparison, each platform, each prompt and each answer.
 
 When there's nothing to compare yet, it says **No comparison data**: run tracking for your prompts first.
 
 ## Scores and Platform Breakdown
 
-At the top of the comparison, **Your Avg. Score**, **Their Avg. Score** and **Score Difference** show your average score, the competitor's, and the difference between them.
+At the top of the comparison, **Your Visibility score** and **Their Visibility score** show each side's score out of 100 over the date range, the same numbers as the two cards, and **Difference** shows the gap between them in points.
 
-**Platform Breakdown** shows your average and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead.
+**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead.
 
 ## Gaps and Strengths
 

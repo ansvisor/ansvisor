@@ -24,7 +24,12 @@ import {
   getHeadToHeadRuns,
   type CompetitorComparisonData,
 } from '@/lib/actions/tracking';
-import type { HeadToHeadData, HeadToHeadGroup, HeadToHeadRun } from '@/lib/head-to-head';
+import {
+  foldScores,
+  type HeadToHeadData,
+  type HeadToHeadGroup,
+  type HeadToHeadRun,
+} from '@/lib/head-to-head';
 import { getFaviconUrl } from '@/lib/favicon';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
@@ -543,8 +548,8 @@ function PlatformBreakdown({
                       style={{ width: `${(row.brandScore / max) * 100}%` }}
                     />
                   </div>
-                  <span className="text-[10px] tabular-nums w-8 text-end font-medium">
-                    {row.brandScore}%
+                  <span className="text-[10px] tabular-nums w-10 text-end font-medium">
+                    {row.brandScore}
                   </span>
                 </div>
                 <div className="flex gap-1 items-center">
@@ -554,8 +559,8 @@ function PlatformBreakdown({
                       style={{ width: `${(row.competitorScore / max) * 100}%` }}
                     />
                   </div>
-                  <span className="text-[10px] tabular-nums w-8 text-end font-medium">
-                    {row.competitorScore}%
+                  <span className="text-[10px] tabular-nums w-10 text-end font-medium">
+                    {row.competitorScore}
                   </span>
                 </div>
               </div>
@@ -602,8 +607,8 @@ function groupH2HByPrompt(groups: HeadToHeadGroup[]): PromptComparisonGroup[] {
   return Array.from(map.entries())
     .map(([promptId, items]) => {
       const runs = items.reduce((s, g) => s + g.runs, 0);
-      const avgB = Math.round(items.reduce((s, g) => s + g.brandScore * g.runs, 0) / runs);
-      const avgC = Math.round(items.reduce((s, g) => s + g.competitorScore * g.runs, 0) / runs);
+      // The prompt's scores over all its engines' answers (UX audit CP-01).
+      const { brandScore: avgB, competitorScore: avgC, diff } = foldScores(items);
       return {
         promptId,
         promptText: items[0].promptText,
@@ -613,7 +618,7 @@ function groupH2HByPrompt(groups: HeadToHeadGroup[]): PromptComparisonGroup[] {
         latestAt: items.reduce((max, g) => (g.latestAt > max ? g.latestAt : max), ''),
         avgBrandScore: avgB,
         avgCompetitorScore: avgC,
-        avgDiff: avgB - avgC,
+        avgDiff: diff,
       };
     })
     .sort((a, b) => b.latestAt.localeCompare(a.latestAt));
@@ -721,17 +726,15 @@ function ModelSubGroup({
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-end">
             <p className="text-[10px] text-muted-foreground">{t('h2h.you')}</p>
-            <p className="text-xs font-semibold tabular-nums">{Math.round(group.brandScore)}%</p>
+            <p className="text-xs font-semibold tabular-nums">{group.brandScore}</p>
           </div>
           <div className="text-end">
             <p className="text-[10px] text-muted-foreground">{t('h2h.them')}</p>
-            <p className="text-xs font-semibold tabular-nums">
-              {Math.round(group.competitorScore)}%
-            </p>
+            <p className="text-xs font-semibold tabular-nums">{group.competitorScore}</p>
           </div>
           <div className="text-end min-w-[48px]">
             <p className="text-[10px] text-muted-foreground">{t('h2h.diff')}</p>
-            <DiffBadge diff={Math.round(group.brandScore) - Math.round(group.competitorScore)} />
+            <DiffBadge diff={group.diff} />
           </div>
           <Button
             variant="ghost"
@@ -784,13 +787,15 @@ function ModelSubGroup({
                       {formatTimestamp(row.createdAt)}
                     </TableCell>
                     <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
-                      {Math.round(row.brandScore)}%
+                      {row.brandScore}
                     </TableCell>
                     <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
-                      {Math.round(row.competitorScore)}%
+                      {row.competitorScore}
                     </TableCell>
                     <TableCell className="text-center py-1.5">
-                      <DiffBadge diff={Math.round(row.brandScore - row.competitorScore)} />
+                      <DiffBadge
+                        diff={Math.round((row.brandScore - row.competitorScore) * 10) / 10}
+                      />
                     </TableCell>
                     <TableCell className="text-center py-1.5">
                       <SentimentBadge sentiment={row.sentiment} />
@@ -907,11 +912,11 @@ function PromptComparisonGrouped({
               <div className="flex items-center gap-4 shrink-0">
                 <div className="text-end">
                   <p className="text-[10px] text-muted-foreground">{t('h2h.you')}</p>
-                  <p className="text-sm font-semibold tabular-nums">{group.avgBrandScore}%</p>
+                  <p className="text-sm font-semibold tabular-nums">{group.avgBrandScore}</p>
                 </div>
                 <div className="text-end">
                   <p className="text-[10px] text-muted-foreground">{t('h2h.them')}</p>
-                  <p className="text-sm font-semibold tabular-nums">{group.avgCompetitorScore}%</p>
+                  <p className="text-sm font-semibold tabular-nums">{group.avgCompetitorScore}</p>
                 </div>
                 <div className="text-end min-w-[48px]">
                   <p className="text-[10px] text-muted-foreground">{t('h2h.diff')}</p>
@@ -967,17 +972,15 @@ function groupGapStrengthByPrompt(items: HeadToHeadGroup[]): GapStrengthGroup[] 
   }
   return Array.from(map.entries())
     .map(([promptId, groupItems]) => {
-      const avgB = Math.round(groupItems.reduce((s, r) => s + r.brandScore, 0) / groupItems.length);
-      const avgC = Math.round(
-        groupItems.reduce((s, r) => s + r.competitorScore, 0) / groupItems.length,
-      );
+      // The prompt's scores over its gap (or strength) engines' answers.
+      const { brandScore: avgB, competitorScore: avgC, diff } = foldScores(groupItems);
       return {
         promptId,
         promptText: groupItems[0].promptText,
         items: groupItems,
         avgBrandScore: avgB,
         avgCompetitorScore: avgC,
-        avgDiff: avgB - avgC,
+        avgDiff: diff,
       };
     })
     .sort((a, b) => a.avgDiff - b.avgDiff);
@@ -1065,10 +1068,10 @@ function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                   <span>
-                    {t('h2h.you')}: {group.avgBrandScore}%
+                    {t('h2h.you')}: {group.avgBrandScore}
                   </span>
                   <span>
-                    {t('h2h.them')}: {group.avgCompetitorScore}%
+                    {t('h2h.them')}: {group.avgCompetitorScore}
                   </span>
                   {hasMultiple ? (
                     <span>{group.items.length} models</span>
@@ -1125,10 +1128,10 @@ function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap
                       </Badge>
                     )}
                     <span className="tabular-nums text-muted-foreground">
-                      {t('h2h.you')}: {Math.round(item.brandScore)}%
+                      {t('h2h.you')}: {item.brandScore}
                     </span>
                     <span className="tabular-nums text-muted-foreground">
-                      {t('h2h.them')}: {Math.round(item.competitorScore)}%
+                      {t('h2h.them')}: {item.competitorScore}
                     </span>
                     {item.latestAt && (
                       <span className="text-muted-foreground whitespace-nowrap">
@@ -1165,7 +1168,9 @@ function HeadToHeadSection({
 }) {
   const t = useTranslations('competitors');
   const router = useRouter();
-  const overallDiff = data.brandAvg - data.competitorAvg;
+  const overallDiff = Math.round((data.brandAvg - data.competitorAvg) * 10) / 10;
+  // The Visibility score, as the cards show it: 0–100, no "%" (decisions D1–D3).
+  const outOf = <span className="ms-1 text-sm font-normal text-muted-foreground">/100</span>;
 
   return (
     <div className="space-y-4">
@@ -1177,7 +1182,10 @@ function HeadToHeadSection({
               <Target className="h-3.5 w-3.5" />
               {t('h2h.yourAvg')}
             </div>
-            <div className="text-2xl font-bold tabular-nums">{data.brandAvg}%</div>
+            <div className="text-2xl font-bold tabular-nums" title={t('h2h.scoreTip')}>
+              {data.brandAvg}
+              {outOf}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -1186,7 +1194,10 @@ function HeadToHeadSection({
               <Swords className="h-3.5 w-3.5" />
               {t('h2h.theirAvg')}
             </div>
-            <div className="text-2xl font-bold tabular-nums">{data.competitorAvg}%</div>
+            <div className="text-2xl font-bold tabular-nums" title={t('h2h.scoreTip')}>
+              {data.competitorAvg}
+              {outOf}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -1207,7 +1218,7 @@ function HeadToHeadSection({
               )}
             >
               {overallDiff > 0 ? '+' : ''}
-              {overallDiff}%
+              {t('h2h.points', { value: overallDiff })}
             </div>
           </CardContent>
         </Card>

@@ -82,6 +82,7 @@ import {
 import { competitorDomainRows } from '@/lib/competitor-merge';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
+  answerScore,
   competitorScoreIn,
   emptyHeadToHead,
   headToHeadFromRollups,
@@ -3516,7 +3517,9 @@ export async function getHeadToHeadRuns(
 
   let query = supabase
     .from('prompt_results')
-    .select('id, created_at, visibility_score, sentiment, competitor_mentions')
+    .select(
+      'id, created_at, mention_count, citation_count, mention_position, sentiment, competitor_mentions',
+    )
     .eq('brand_id', brandId)
     .eq('prompt_id', group.promptId);
   query = group.rawPlatform ? query.eq('platform', group.rawPlatform) : query.is('platform', null);
@@ -3536,7 +3539,8 @@ export async function getHeadToHeadRuns(
   return (data ?? []).map((row) => ({
     resultId: row.id as string,
     createdAt: row.created_at as string,
-    brandScore: (row.visibility_score as number | null) ?? 0,
+    // Each answer's Visibility score, as the cards' (UX audit CP-01).
+    brandScore: answerScore(row),
     competitorScore: competitorScoreIn(row.competitor_mentions, competitorId) ?? 0,
     sentiment: ((row.sentiment as Sentiment | null) ?? 'neutral') as Sentiment,
   }));
