@@ -356,8 +356,9 @@ describe('the menu', () => {
     await act(async () => {
       aside.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: null }));
     });
+    // It opens once the pointer rests on it (300 ms, UX audit CH-01).
     await act(async () => {
-      vi.advanceTimersByTime(200);
+      vi.advanceTimersByTime(300);
     });
     expect(aside.className).toContain('w-60');
     expect(link('/dashboard/action-center/today')).not.toBeNull();

@@ -1843,7 +1843,11 @@
         },
         {
           "heading": "Move around Chat",
-          "text": "Pages under Chat, such as **Inbox** and **All chats**, show **← Back to Chat** at the top left, next to where you are, such as Chat › All chats. It takes you back to the chat you last had open in this tab, or to Chat Home. Click **Chat** in the path for Chat Home; **Chat** in the main menu always opens Chat Home too.\n\nEsc closes only the box or menu on top, such as search or a **⋯** menu, and never leaves the page.\n\nIn Chat, the main menu on the left is a narrow bar of icons, so the chat has room. Point at it to see it whole, or click the Ansvisor logo to keep it open; click the logo again to make it narrow. Chat remembers your choice on every device."
+          "text": "Pages under Chat, such as **Inbox** and **All chats**, show **← Back to Chat** at the top left, next to where you are, such as Chat › All chats. It takes you back to the chat you last had open in this tab, or to Chat Home. Click **Chat** in the path for Chat Home; **Chat** in the main menu always opens Chat Home too.\n\nEsc closes only the box or menu on top, such as search or a **⋯** menu, and never leaves the page."
+        },
+        {
+          "heading": "The main menu in Chat",
+          "text": "In Chat, the main menu on the left is a narrow bar of icons, so the chat has room. It stays narrow when you point at it, so it never covers the chat menu; point at an icon to see its name. Click the Ansvisor logo to open the menu whole, and again to make it narrow. Chat remembers your choice on every device.\n\nOn other pages, a narrow main menu opens over the page when you rest the pointer on it, and closes when you move away, press Esc or click outside it."
         },
         {
           "heading": "Manage a chat",

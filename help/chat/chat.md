@@ -390,7 +390,11 @@ Pages under Chat, such as **Inbox** and **All chats**, show **← Back to Chat**
 
 Esc closes only the box or menu on top, such as search or a **⋯** menu, and never leaves the page.
 
-In Chat, the main menu on the left is a narrow bar of icons, so the chat has room. Point at it to see it whole, or click the Ansvisor logo to keep it open; click the logo again to make it narrow. Chat remembers your choice on every device.
+## The main menu in Chat
+
+In Chat, the main menu on the left is a narrow bar of icons, so the chat has room. It stays narrow when you point at it, so it never covers the chat menu; point at an icon to see its name. Click the Ansvisor logo to open the menu whole, and again to make it narrow. Chat remembers your choice on every device.
+
+On other pages, a narrow main menu opens over the page when you rest the pointer on it, and closes when you move away, press Esc or click outside it.
 
 ## Manage a chat
 

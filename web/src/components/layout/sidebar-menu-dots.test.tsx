@@ -288,7 +288,8 @@ describe('the dots after a nightly run', () => {
     expect(link('/dashboard/traffic')?.getAttribute('aria-label')).toBe(
       'AI Referral Traffic, Needs you',
     );
-    expect(link('/dashboard/audit')?.getAttribute('aria-label')).toBeNull();
+    // An icon without a dot is named plainly (UX audit CH-01).
+    expect(link('/dashboard/audit')?.getAttribute('aria-label')).toBe('Audit');
   });
 
   it('clears a dot at once when its page is opened here', async () => {
