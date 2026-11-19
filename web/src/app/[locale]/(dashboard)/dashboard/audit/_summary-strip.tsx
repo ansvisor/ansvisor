@@ -31,7 +31,11 @@ export function AuditSummaryStrip({
   overview: AuditOverview | null;
   quota: AuditQuota | null;
   now: Date;
-  /** The site's coverage (customer priorities item 11): "18 of 36 pages audited". */
+  /**
+   * The site's coverage (customer priorities item 11): "18 of 36 pages
+   * audited", every page with an audit (out of date ones too), as the site
+   * score and the Authority card count them.
+   */
   coverage?: SiteCoverage | null;
 }) {
   const t = useTranslations('audit.strip');
@@ -61,7 +65,7 @@ export function AuditSummaryStrip({
   }
   items.push(
     coverage && coverage.pages > 0
-      ? t('pagesOf', { audited: coverage.audited, count: coverage.pages })
+      ? t('pagesOf', { audited: coverage.audited + coverage.stale, count: coverage.pages })
       : overview.pages > 0
         ? t('pages', { count: overview.pages })
         : t('noPages'),

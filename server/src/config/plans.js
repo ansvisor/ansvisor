@@ -167,8 +167,11 @@ export const PLANS = {
     id: 'enterprise',
     name: 'Enterprise',
     limits: {
-      maxBrands: -1,
-      maxPrompts: -1,
+      // From $1,999 a month: 1 brand and 3,000 prompt locations to start;
+      // more per contract in plan_overrides. Workspaces on Enterprise before
+      // this kept unlimited brands and prompts in their overrides (00548).
+      maxBrands: 1,
+      maxPrompts: 3000,
       // Growth's five engines plus Claude, set per contract.
       maxPlatforms: 6,
       maxTeamMembers: -1,
@@ -180,9 +183,9 @@ export const PLANS = {
       // sets a customer's own in plan_overrides.improveMonthlyBudgetUsd
       // (2026-10-27); the contract's value doesn't raise it.
       improveMonthlyBudgetUsd: 50,
-      // 0.1% of the $499 floor, raised to 0.1% of contractMonthlyUsd; an
+      // 0.1% of the $1,999 floor, raised to 0.1% of contractMonthlyUsd; an
       // explicit plan_overrides.relevanceMonthlyBudgetUsd wins.
-      relevanceMonthlyBudgetUsd: 0.499,
+      relevanceMonthlyBudgetUsd: 1.999,
       maxOpportunitiesPerMonth: -1,
       maxOpportunitiesPerRequest: 5,
       maxSiteAudits: -1,

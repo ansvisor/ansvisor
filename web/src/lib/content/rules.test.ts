@@ -22,6 +22,7 @@ import {
   ruleLength,
   ruleLengthBand,
   lengthCapFor,
+  lengthRangeOf,
   lengthSpan,
   lengthRangeValue,
   wordsForLength,
@@ -1268,6 +1269,17 @@ describe('rewriteAdvice', () => {
     expect(rewriteAdvice(statuses(60_001))).toBeNull();
   });
 
+  it('recommends no rewrite again after one met fewer rules than its page', () => {
+    // Content test 2026-11-19: the Recommended rewrite took 10 of 15 met to 9.
+    const open = statuses(8_000, ['faq', 'summary', 'h2Answer', 'keywords']);
+    const last = { chars: 8_000, target: 8_000, kept: 0 };
+    expect(rewriteAdvice(open, { kept: 0, floor: 0, last })).toMatchObject({ reason: 'open' });
+    expect(rewriteAdvice(open, { kept: 0, floor: 0, last: { ...last, lowered: true } })).toBeNull();
+    expect(
+      rewriteAdvice(statuses(19_203), { kept: 0, floor: 0, last: { ...last, lowered: true } }),
+    ).toBeNull();
+  });
+
   it("doesn't recommend shortening a page a rewrite can't bring under its Length", () => {
     const page = statuses(6_877, [], '4000');
     // The least a rewrite comes to (kept + headings + least answers) past the band's top (4,800).
@@ -1516,5 +1528,20 @@ describe('My rules and text rules', () => {
   it('checks a rule with a number as a number, the rest by AI', () => {
     expect(textRuleCheck('Use at least 3 images')).toBe('numberCheck');
     expect(textRuleCheck('Mention free shipping')).toBe('aiCheck');
+  });
+});
+
+describe('lengthRangeOf (Content test 2026-11-19, item 8)', () => {
+  const length = (current: string, on = true) => [{ rule: { key: 'length', on, current } }];
+
+  it('is the Length rule’s range, as the counter shows it', () => {
+    // "/3,000" beside a rule of 2,400–3,600: the counter shows the range.
+    expect(lengthRangeOf(length('3000'))).toEqual({ min: 2_400, max: 3_600 });
+    expect(lengthRangeOf(length('4,000-5,000'))).toEqual({ min: 4_000, max: 5_000 });
+  });
+
+  it('is none with the rule off or unread', () => {
+    expect(lengthRangeOf(length('3000', false))).toBeNull();
+    expect(lengthRangeOf([])).toBeNull();
   });
 });
