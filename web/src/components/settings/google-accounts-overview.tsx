@@ -81,7 +81,7 @@ export function GoogleAccountsOverview({ refreshKey = 0 }: { refreshKey?: number
                 <TableCell className="font-medium">{row.brandName}</TableCell>
                 <TableCell className="text-sm">{cell(row.gsc)}</TableCell>
                 <TableCell className="text-sm">{cell(row.ga)}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-end">
                   <Link
                     href={`/dashboard/brands/${row.brandId}/settings?tab=integrations`}
                     className="text-xs font-medium underline-offset-2 hover:underline"

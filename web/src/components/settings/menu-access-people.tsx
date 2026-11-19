@@ -214,7 +214,7 @@ export function MenuPeopleCard({ settings, onChange, onFailed }: Props) {
                     <div className="min-w-0 [grid-area:person]">
                       <PersonCell member={member} sub={`${roleName(role)} · ${member.email}`} />
                     </div>
-                    <div className="flex min-w-0 flex-wrap gap-1 pl-9 [grid-area:areas] @xl:pl-0">
+                    <div className="flex min-w-0 flex-wrap gap-1 ps-9 [grid-area:areas] @xl:ps-0">
                       {member.workAreas.length ? (
                         member.workAreas.map((area) => (
                           <Badge key={area} variant="outline" className="font-normal">
@@ -225,9 +225,9 @@ export function MenuPeopleCard({ settings, onChange, onFailed }: Props) {
                         <span className="text-xs text-muted-foreground">{t('allSections')}</span>
                       )}
                     </div>
-                    <div className="min-w-0 pl-9 [grid-area:menu] @xl:pl-0">
+                    <div className="min-w-0 ps-9 [grid-area:menu] @xl:ps-0">
                       {changes.length ? (
-                        <Badge className="h-auto border-amber-200 bg-amber-50 text-left font-normal whitespace-normal text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                        <Badge className="h-auto border-amber-200 bg-amber-50 text-start font-normal whitespace-normal text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
                           {t('custom', { changes: changes.join(', ') })}
                         </Badge>
                       ) : (

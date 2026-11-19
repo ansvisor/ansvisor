@@ -366,7 +366,7 @@ export function Sidebar() {
         // Icons alone: an icon's motion waits until the menu has opened (globals.css).
         data-icons-only={compact || undefined}
         className={cn(
-          'absolute inset-y-0 left-0 z-40 flex flex-col border-r bg-sidebar transition-[width] duration-200',
+          'absolute inset-y-0 start-0 z-40 flex flex-col border-e bg-sidebar transition-[width] duration-200',
           compact ? 'w-16' : 'w-60',
           isCollapsed && !compact && 'shadow-xl',
         )}
@@ -516,7 +516,7 @@ export function Sidebar() {
                               <span className="flex-1 truncate">{label}</span>
                               <Badge
                                 variant="outline"
-                                className="ml-auto h-5 shrink-0 gap-0.5 px-1.5 text-[10px] font-normal"
+                                className="ms-auto h-5 shrink-0 gap-0.5 px-1.5 text-[10px] font-normal"
                               >
                                 <Crown className="h-2.5 w-2.5" />
                                 {requiredPlanFor(item.requiredFeature!)}
@@ -524,7 +524,7 @@ export function Sidebar() {
                             </>
                           )}
                           {compact && (
-                            <Lock className="absolute right-1 top-1 h-2.5 w-2.5 text-muted-foreground/40" />
+                            <Lock className="absolute end-1 top-1 h-2.5 w-2.5 text-muted-foreground/40" />
                           )}
                         </span>
                       );
@@ -556,7 +556,7 @@ export function Sidebar() {
                             aria-controls={submenuId}
                             onClick={() => setSubmenuOpen(item.href, !submenuOpen)}
                             className={cn(
-                              'flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                              'flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-start text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                               isActive
                                 ? 'text-primary'
                                 : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
@@ -567,9 +567,9 @@ export function Sidebar() {
                             <span className={nameDot ? 'truncate' : 'flex-1 truncate'}>
                               {label}
                             </span>
-                            {nameDot && <MenuDot dot={nameDot} className="mr-auto" />}
+                            {nameDot && <MenuDot dot={nameDot} className="me-auto" />}
                             {iconDot && (
-                              <MenuDot dot={iconDot} className={cn(ICON_DOT, 'left-5')} />
+                              <MenuDot dot={iconDot} className={cn(ICON_DOT, 'start-5')} />
                             )}
                             {words && <NewResultsWords />}
                             {effectiveBadge && (
@@ -590,7 +590,7 @@ export function Sidebar() {
                           {submenuOpen && (
                             <ul
                               id={submenuId}
-                              className="mt-0.5 ml-[18px] space-y-0.5 border-l pl-2"
+                              className="mt-0.5 ms-[18px] space-y-0.5 border-s ps-2"
                             >
                               {children.map((child) => {
                                 const childActive = child.href === currentChild;
@@ -600,7 +600,7 @@ export function Sidebar() {
                                     <span className={childDot ? 'truncate' : 'flex-1 truncate'}>
                                       {getDashboardNavLabel(child.title, t)}
                                     </span>
-                                    {childDot && <MenuDot dot={childDot} className="mr-auto" />}
+                                    {childDot && <MenuDot dot={childDot} className="me-auto" />}
                                   </>
                                 );
                                 const onDotClick = childDot
@@ -694,21 +694,21 @@ export function Sidebar() {
                         >
                           <NavIcon icon={item.icon} />
                           {iconName && dot && (
-                            <MenuDot dot={dot} className={cn(ICON_DOT, 'left-7')} />
+                            <MenuDot dot={dot} className={cn(ICON_DOT, 'start-7')} />
                           )}
                           {!compact && (
                             <>
                               <span className={dot ? 'truncate' : 'flex-1 truncate'}>{label}</span>
-                              {dot && <MenuDot dot={dot} className="mr-auto" />}
+                              {dot && <MenuDot dot={dot} className="me-auto" />}
                               {effectiveBadge && (
                                 <Badge
                                   variant="secondary"
-                                  className="ml-auto h-5 shrink-0 px-1.5 text-[10px] font-normal"
+                                  className="ms-auto h-5 shrink-0 px-1.5 text-[10px] font-normal"
                                 >
                                   {effectiveBadge}
                                 </Badge>
                               )}
-                              {item.newPill && <NewPill className="ml-auto" />}
+                              {item.newPill && <NewPill className="ms-auto" />}
                             </>
                           )}
                         </span>
