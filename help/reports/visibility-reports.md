@@ -17,6 +17,10 @@ The **Reports** page makes point-in-time snapshots of your brand's AI visibility
 
 Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Without a title, a report is named after its template, such as Weekly Visibility Summary; its period shows beside it. Generated reports appear under **Generated Reports** on the same page, newest first. To delete one, open its **⋯** menu, choose **Delete report** and confirm.
 
+## Share or download from the list
+
+Each report's **⋯** menu also has **Copy link** and **Download PDF**. **Copy link** copies the report's address: it opens the report for people in your workspace, who sign in to see it. Reports have no public link, so to send one to a client, download the PDF. **Download PDF** saves the same PDF as the report's own page, with your white label kit if you use one.
+
 ## Templates
 
 - **Weekly Visibility Summary**: KPIs, Trend and Share of Voice, over the last 7 days.

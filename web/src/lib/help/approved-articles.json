@@ -5269,6 +5269,10 @@
           "text": "Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Without a title, a report is named after its template, such as Weekly Visibility Summary; its period shows beside it. Generated reports appear under **Generated Reports** on the same page, newest first. To delete one, open its **⋯** menu, choose **Delete report** and confirm."
         },
         {
+          "heading": "Share or download from the list",
+          "text": "Each report's **⋯** menu also has **Copy link** and **Download PDF**. **Copy link** copies the report's address: it opens the report for people in your workspace, who sign in to see it. Reports have no public link, so to send one to a client, download the PDF. **Download PDF** saves the same PDF as the report's own page, with your white label kit if you use one."
+        },
+        {
           "heading": "Templates",
           "text": "- **Weekly Visibility Summary**: KPIs, Trend and Share of Voice, over the last 7 days.\n- **Monthly Executive Report**: every section, over the last 30 days.\n- **Competitor Benchmark**: KPIs, Share of Voice, Competitors and Topics, over the last 30 days.\n- **Citation & Sources Report**: Citations and Citation Evidence, over the last 30 days."
         },

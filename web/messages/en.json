@@ -16438,6 +16438,9 @@
     "deleteConfirm": "Delete this report?",
     "deleteFailed": "Failed to delete report",
     "rowMenuLabel": "More actions for {title}",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied. It opens the report for people in your workspace.",
+    "copyLinkFailed": "Couldn't copy the link. Open the report and copy its address instead.",
     "selectDates": "Pick a start and end date",
     "templateLabel": "Template",
     "templates": {
