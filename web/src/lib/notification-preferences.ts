@@ -127,7 +127,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'instant',
     fallback: 'off',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'score_dropped',
@@ -136,7 +136,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'instant',
     fallback: 'off',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'drafts_review',

@@ -35,6 +35,14 @@ Each e-mail comes once, only for brands you can open.
 
 **Weekly action summary** comes on Mondays, one per brand: how many actions were completed in the last seven days, how many are open, and the next three by priority. Everyone starts with it on; set it to **Off** to stop it.
 
+## Audit finished and Score dropped
+
+**Audit finished** tells you when audits finish, a bulk run's or a scheduled run's, with each page's score. **Right away** gathers the audits finished in the last few minutes in one e-mail per brand, so a bulk run isn't one e-mail per page; **Daily summary** sends the day's.
+
+**Score dropped** tells you when a page's new audit scores 5 points or more below its previous one, such as 70 → 61, **Right away** or in the day's summary. A page's first audit is never a drop.
+
+Both are **Off** until you pick them, and each audit is told once.
+
 ## Set a brand apart
 
 With more than one brand, **For** picks what your choices apply to. **All my brands** sets them for every brand you can open. Pick one brand to set it differently: the row then says it's set for that brand only, and **Use my All my brands choice** puts it back. Brand e-mails come one per brand; one e-mail for all brands is coming soon.

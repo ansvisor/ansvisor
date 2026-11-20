@@ -92,6 +92,7 @@ import {
 } from './lib/notifications/critical-action.js';
 import { sendDraftsReview } from './lib/notifications/drafts-review.js';
 import { sendDueActions, sendWeeklyActions } from './lib/notifications/actions-digest.js';
+import { sendAuditAlerts, sendAuditSummaries } from './lib/notifications/audits.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
@@ -503,6 +504,10 @@ async function runDailyTracking() {
       });
       sendWeeklyActions().catch((err) => {
         logger.error({ err }, '[notifications] weekly actions crashed');
+      });
+      // The day's finished audits and dropped scores, for Daily summary.
+      sendAuditSummaries().catch((err) => {
+        logger.error({ err }, '[notifications] audit summaries crashed');
       });
       return sweepAutoAudits({
         readInbox: readOpportunityInbox,
@@ -970,6 +975,8 @@ server.listen(PORT, async () => {
     sendCriticalActionAlerts().catch((err) =>
       logger.error({ err }, '[notifications] critical alerts crashed'),
     );
+    // Finished audits and dropped scores, Right away, the same way.
+    sendAuditAlerts().catch((err) => logger.error({ err }, '[notifications] audit alerts crashed'));
   });
 
   cron.schedule(REBUILD_QUEUE_SCHEDULE, () => {
