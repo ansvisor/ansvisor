@@ -1961,6 +1961,7 @@
       "stale": {
         "pill": "Stale",
         "hint": "New for {days} days or more, with no one working on it",
+        "quiet": "No update in {days} d",
         "notice": "Stale: this action has been New for {days} days or more and no one has worked on it. It isn't closed: keep it if it still matters, or dismiss it.",
         "keep": "Still relevant",
         "kept": "Kept: it's no longer stale"
@@ -1970,6 +1971,7 @@
       "everyoneTitle": "Everyone in the workspace: no one is assigned yet",
       "tags": {
         "signals": "{count, plural, one {1 signal} other {# signals}}",
+        "signalResolved": "Signal resolved, review",
         "prompts": "{count, plural, one {1 prompt} other {# prompts}}",
         "pages": "{count, plural, one {1 page} other {# pages}}",
         "sources": "{count, plural, one {# source} other {# sources}}",
