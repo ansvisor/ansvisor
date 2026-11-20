@@ -1090,6 +1090,26 @@ export async function getReport(id: string): Promise<Report | null> {
   };
 }
 
+/**
+ * Renames a report (UX audit RP-11): its title alone, through rename_report
+ * (00555), for a brand the person may see; the snapshot itself never
+ * changes. A blank title, or one over 200 characters, isn't sent. Says
+ * whether a report was renamed.
+ */
+export async function renameReport(id: string, title: string): Promise<boolean> {
+  await assertWritable();
+  const name = title.replace(/\s+/g, ' ').trim();
+  if (!name || name.length > 200) return false;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('rename_report', {
+    p_report_id: id,
+    p_title: name,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/reports');
+  return data === true;
+}
+
 export async function deleteReport(id: string): Promise<void> {
   await assertWritable();
   const supabase = await createClient();

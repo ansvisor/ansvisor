@@ -7,7 +7,13 @@ import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
-import { createReport, getReports, deleteReport, type ReportListItem } from '@/lib/actions/reports';
+import {
+  createReport,
+  getReports,
+  deleteReport,
+  renameReport,
+  type ReportListItem,
+} from '@/lib/actions/reports';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { viewRows } from '@/lib/chat/page-view';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,7 +45,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { REPORT_TEMPLATE_TITLES } from '@/lib/reports/template-titles';
 import { samePeriodReport } from '@/lib/reports/same-period';
-import { Check, Crown, FileBarChart, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import {
+  Check,
+  Crown,
+  FileBarChart,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
@@ -94,6 +109,10 @@ export default function ReportsPage() {
   const [generating, setGenerating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  // Rename (UX audit RP-11): the report, and the title being typed.
+  const [renaming, setRenaming] = useState<ReportListItem | null>(null);
+  const [newTitle, setNewTitle] = useState('');
+  const [savingTitle, setSavingTitle] = useState(false);
 
   const [template, setTemplate] = useState<ReportTemplateId>('executive_summary');
   const [preset, setPreset] = useState<DatePreset>('30d');
@@ -231,6 +250,27 @@ export default function ReportsPage() {
     }
   };
 
+  const handleRename = async () => {
+    if (!renaming || savingTitle) return;
+    const title = newTitle.replace(/\s+/g, ' ').trim();
+    if (!title || title === renaming.title) {
+      setRenaming(null);
+      return;
+    }
+    setSavingTitle(true);
+    try {
+      if (!(await renameReport(renaming.id, title))) throw new Error('not renamed');
+      setReports((prev) => prev.map((r) => (r.id === renaming.id ? { ...r, title } : r)));
+      setRenaming(null);
+      toast.success(t('rename.done'));
+    } catch (err) {
+      console.error('Report rename error:', err);
+      toast.error(t('rename.failed'));
+    } finally {
+      setSavingTitle(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
@@ -345,6 +385,19 @@ export default function ReportsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
                               <DropdownMenuItem
+                                data-action="reports.rename"
+                                onClick={guard(
+                                  () => {
+                                    setNewTitle(report.title);
+                                    setRenaming(report);
+                                  },
+                                  { action: tActions('renameReports') },
+                                )}
+                              >
+                                <Pencil className="h-4 w-4" />
+                                {t('rename.item')}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 variant="destructive"
                                 onClick={guard(() => setPendingConfirm(report.id), {
                                   action: tActions('deleteReports'),
@@ -361,6 +414,52 @@ export default function ReportsPage() {
                   ))}
                 </TableBody>
               </Table>
+              <Dialog
+                open={renaming !== null}
+                onOpenChange={(v) => !v && !savingTitle && setRenaming(null)}
+              >
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>{t('rename.title')}</DialogTitle>
+                    <DialogDescription>{t('rename.description')}</DialogDescription>
+                  </DialogHeader>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void handleRename();
+                    }}
+                    className="space-y-4"
+                  >
+                    <Input
+                      autoFocus
+                      aria-label={t('rename.label')}
+                      data-action="reports.renameTitle"
+                      value={newTitle}
+                      maxLength={200}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      disabled={savingTitle}
+                    />
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setRenaming(null)}
+                        disabled={savingTitle}
+                      >
+                        {tc('cancel')}
+                      </Button>
+                      <Button
+                        type="submit"
+                        data-action="reports.saveTitle"
+                        disabled={savingTitle || !newTitle.trim()}
+                      >
+                        {savingTitle && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                        {t('rename.save')}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
               <Dialog
                 open={pendingConfirm !== null}
                 onOpenChange={(v) => !v && setPendingConfirm(null)}

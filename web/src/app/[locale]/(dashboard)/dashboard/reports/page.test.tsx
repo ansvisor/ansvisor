@@ -15,6 +15,7 @@ import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provide
 const reports = vi.hoisted(() => ({
   getReports: vi.fn(),
   createReport: vi.fn(),
+  renameReport: vi.fn(),
   deleteReport: vi.fn(),
 }));
 vi.mock('@/lib/actions/reports', () => reports);
@@ -164,6 +165,37 @@ describe('Reports', () => {
       document.querySelector<HTMLElement>('[data-action="reports.generateAnyway"]')!.click(),
     );
     expect(reports.createReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('renames a report from its row menu: the name only (UX audit RP-11)', async () => {
+    reports.renameReport.mockResolvedValue(true);
+    await render(false);
+    const trigger = container.querySelector<HTMLElement>(
+      'tbody [aria-label="More actions for October review"]',
+    )!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === 'Rename',
+    )!;
+    await act(async () => item.click());
+    const field = document.querySelector<HTMLInputElement>('[data-action="reports.renameTitle"]')!;
+    expect(field.value).toBe('October review');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        field,
+        '  Board  review ',
+      );
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () =>
+      document.querySelector<HTMLElement>('[data-action="reports.saveTitle"]')!.click(),
+    );
+    expect(reports.renameReport).toHaveBeenCalledWith('r1', 'Board review');
+    expect(container.textContent).toContain('Board review');
+    expect(dialog()).toBeNull();
   });
 
   it('opens Generate Report on an active plan', async () => {

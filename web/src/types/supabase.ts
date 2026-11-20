@@ -9887,6 +9887,10 @@ export type Database = {
         Args: { p_organization_id: string; p_provider: string }
         Returns: string
       }
+      rename_report: {
+        Args: { p_report_id: string; p_title: string }
+        Returns: boolean
+      }
       report_citation_evidence: {
         Args: {
           p_brand_id: string

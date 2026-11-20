@@ -332,6 +332,7 @@
       "setProductFeed": "Changing the product feed setting needs a plan",
       "generateReports": "Generating reports needs a plan",
       "deleteReports": "Deleting reports needs a plan",
+      "renameReports": "Renaming reports needs a plan",
       "markTaskDone": "Marking a task done needs a plan",
       "attachFiles": "Attaching files needs a plan",
       "startChat": "Starting a chat needs a plan",
@@ -16438,6 +16439,15 @@
     "deleteConfirm": "Delete this report?",
     "deleteFailed": "Failed to delete report",
     "rowMenuLabel": "More actions for {title}",
+    "rename": {
+      "item": "Rename",
+      "title": "Rename report",
+      "description": "Only the name changes: the report's numbers stay as they were.",
+      "label": "Report name",
+      "save": "Save",
+      "done": "Report renamed",
+      "failed": "Couldn't rename the report. Try again."
+    },
     "selectDates": "Pick a start and end date",
     "templateLabel": "Template",
     "templates": {
