@@ -5,6 +5,7 @@ import messages from '../../../messages/en.json';
 import type { ChatActor } from './engine';
 import type { PendingCalls } from './engine-store';
 import { chatTool } from './registry/tools';
+import { inRunLocale } from './run-locale';
 
 /**
  * The person's waiting approvals on one brand, grouped by the Content draft
@@ -26,8 +27,15 @@ import { chatTool } from './registry/tools';
  * from its own chat, where the person sees what it does to the page now.
  */
 
-const t = createTranslator({ locale: 'en', messages, namespace: 'chatShell.inbox.drafts' });
-const toolT = createTranslator({ locale: 'en', messages, namespace: 'chatTools' });
+/** The Inbox's words, for the person reading it: their language inside withRunLocale. */
+const t = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatShell.inbox.drafts' }),
+  'chatShell.inbox.drafts',
+);
+const toolT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatTools' }),
+  'chatTools',
+);
 
 /**
  * The changes to a draft that leave its page as it is: Mark ready sets its

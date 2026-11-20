@@ -17,8 +17,18 @@ import { siteConfig } from '@/config/site';
 import { track } from '@/lib/analytics';
 import { stripInviteParams } from '@/lib/analytics-privacy';
 import { cn } from '@/lib/utils';
+import { LOCALE_NAMES, type AnyUiLocale } from '@/i18n/locales';
+import { setSignUpUiLanguage } from '@/lib/actions/ui-language';
 
-export function SignUpForm() {
+/**
+ * The sign-up form. `languages` is the Language field (the page's
+ * getSignUpLanguageState): shown only while more than one language is offered.
+ */
+export function SignUpForm({
+  languages,
+}: {
+  languages?: { options: AnyUiLocale[]; selected: AnyUiLocale };
+}) {
   const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -30,6 +40,25 @@ export function SignUpForm() {
   const [email, setEmail] = useState(invitedEmail);
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [language, setLanguage] = useState(languages?.selected);
+  const [changingLanguage, setChangingLanguage] = useState(false);
+
+  // Before the account exists, in the visitor's cookie only; saved on their
+  // profile when they first sign in. The page then shows in it.
+  async function chooseLanguage(locale: AnyUiLocale) {
+    const before = language;
+    setLanguage(locale);
+    setChangingLanguage(true);
+    try {
+      await setSignUpUiLanguage(locale);
+      router.refresh();
+    } catch {
+      setLanguage(before);
+      toast.error(t('languageFailed'));
+    } finally {
+      setChangingLanguage(false);
+    }
+  }
 
   useEffect(() => {
     const clean = stripInviteParams(window.location.href);
@@ -135,6 +164,28 @@ export function SignUpForm() {
             {t('passwordRuleLength')}
           </p>
         </div>
+
+        {languages && languages.options.length > 1 && (
+          <div className="space-y-2">
+            <Label htmlFor="signup-language">{t('language')}</Label>
+            <select
+              id="signup-language"
+              value={language}
+              disabled={isLoading || changingLanguage}
+              onChange={(e) => {
+                const picked = languages.options.find((code) => code === e.target.value);
+                if (picked) void chooseLanguage(picked);
+              }}
+              className="h-11 w-full rounded-md border border-input bg-background px-3 text-start text-sm text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60"
+            >
+              {languages.options.map((code) => (
+                <option key={code} value={code} lang={code}>
+                  {LOCALE_NAMES[code]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <Button type="submit" className="h-11 w-full text-base" disabled={isLoading}>
           {isLoading ? (

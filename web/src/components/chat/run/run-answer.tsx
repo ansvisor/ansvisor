@@ -12,6 +12,7 @@ import { Link } from '@/i18n/navigation';
 import type { Components } from 'react-markdown';
 import { MARKDOWN_COMPONENTS, Markdown } from '@/components/ui/markdown';
 import { opensOneAction, remarkActionRefs } from '@/lib/action-center/action-ref';
+import { remarkCodeActionRefs } from '@/lib/chat/answer-shape';
 import type { ClientRun, ClientRunStatus } from '@/lib/chat/run-state';
 import { cn } from '@/lib/utils';
 import { RunLiveLine } from './run-live-line';
@@ -81,8 +82,11 @@ const ANSWER_MARKDOWN: Partial<Components> = {
   },
 };
 
-/** After GFM and line breaks: each "AC-1497" in the text links to its action. */
-const ANSWER_PLUGINS = [remarkActionRefs];
+/**
+ * After GFM and line breaks: each "AC-1497" in the text links to its action,
+ * one in code marks (`AC-12`) too (UX audit CH-10).
+ */
+const ANSWER_PLUGINS = [remarkCodeActionRefs, remarkActionRefs];
 
 /** The agent beside the answer (item 12a): it works, waits on the person, or is still. */
 const avatarState = (status: ClientRunStatus): AgentAvatarState =>

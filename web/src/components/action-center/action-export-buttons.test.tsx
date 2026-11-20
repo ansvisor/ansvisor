@@ -203,6 +203,7 @@ describe('ActionExportButtons', () => {
           family: 'visibilityLoss',
           why: 'Your AI visibility fell from 40% to 20% on Gemini on Oct 8.',
           goal: 'AI visibility back to 40% on Gemini by Nov 7.',
+          goalDate: new Date(2026, 10, 7, 12),
         }}
       />,
     );

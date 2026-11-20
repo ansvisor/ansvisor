@@ -9616,6 +9616,15 @@ export type Database = {
         Args: { p_brand_id: string; p_competitor_id: string }
         Returns: Json
       }
+      head_to_head_window_daily: {
+        Args: {
+          p_brand_id: string
+          p_competitor_id: string
+          p_day_from: string | null
+          p_day_to: string | null
+        }
+        Returns: Json
+      }
       insights_aggregates: {
         Args: {
           p_brand_id: string

@@ -1,5 +1,6 @@
 import type { TaskStatus } from '@/lib/action-center/registry';
 import { dayIn, startOfDayIn } from '@/lib/time-zone';
+import { currentTaskParams } from '@/lib/action-center/entity-counts';
 
 /**
  * Helpers for Action Center › Today: an action's first step, who does it,
@@ -66,13 +67,21 @@ export function whoDoesIt(
   return 'team';
 }
 
-/** The first step as the card shows it. */
-export function todayStep(task: TodayTaskRow | null): TodayStep | null {
+/**
+ * The first step as the card shows it. Given the action's payload as it
+ * reads now (withEntityCounts), a step that named the action's count names
+ * the count left, so it says the same number as the action's title (AC-05).
+ */
+export function todayStep(
+  task: TodayTaskRow | null,
+  payload?: Record<string, unknown>,
+): TodayStep | null {
   if (!task) return null;
+  const params = task.title_params ?? {};
   return {
     taskKey: task.task_key,
     title: task.title,
-    titleParams: task.title_params ?? {},
+    titleParams: (payload ? currentTaskParams(params, payload) : params) ?? params,
     url: task.url,
   };
 }

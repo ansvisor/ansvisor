@@ -82,6 +82,7 @@ import {
 import { competitorDomainRows } from '@/lib/competitor-merge';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import {
+  answerScore,
   competitorScoreIn,
   emptyHeadToHead,
   headToHeadFromRollups,
@@ -3466,20 +3467,27 @@ export async function getVisibilityRateTrend(
  * Compare a brand vs a single competitor (#923): one summary per (prompt,
  * engine, model, region), the per-engine breakdown, and the largest gaps and
  * strengths. A group's individual runs load separately via
- * `getHeadToHeadRuns`, so no answer text is sent up front.
+ * `getHeadToHeadRuns`, so no answer text is sent up front. Over `days`, the
+ * page picker's UTC days (inclusive), as the competitor cards are; all time
+ * without them (UX audit CP-02).
  */
 export async function getHeadToHeadComparison(
   brandId: string,
   competitorId: string,
+  days: { dayFrom?: string; dayTo?: string } = {},
 ): Promise<HeadToHeadData> {
   const supabase = await dbClient();
 
   // Every answer, from the daily rollups (00169, #923): a read of the raw
   // answers stopped at PostgREST's 1,000-row page. The rollups leave out
   // chatgpt-shopping (#155), as the Competitors tab always did.
-  const { data, error } = await supabase.rpc('head_to_head_daily', {
+  // Over the picker's days, null for no bound (00552): head_to_head_daily
+  // stays, all time, for older callers.
+  const { data, error } = await supabase.rpc('head_to_head_window_daily', {
     p_brand_id: brandId,
     p_competitor_id: competitorId,
+    p_day_from: days.dayFrom ?? null,
+    p_day_to: days.dayTo ?? null,
   });
   if (error) throw new Error(error.message);
   const rollups = data as unknown as HeadToHeadRollups | null;
@@ -3490,7 +3498,8 @@ export async function getHeadToHeadComparison(
 
 /**
  * The individual runs behind one head-to-head group, newest first, loaded when
- * the user opens the group. Bounded by `limit` (max 100).
+ * the user opens the group. Bounded by `limit` (max 100), and to the page's
+ * window when it gives one (`dateFrom`/`dateTo`, as getDateRange makes them).
  */
 export async function getHeadToHeadRuns(
   brandId: string,
@@ -3502,12 +3511,15 @@ export async function getHeadToHeadRuns(
     region: string | null;
   },
   limit = 50,
+  window: { dateFrom?: string; dateTo?: string } = {},
 ): Promise<HeadToHeadRun[]> {
   const supabase = await dbClient();
 
   let query = supabase
     .from('prompt_results')
-    .select('id, created_at, visibility_score, sentiment, competitor_mentions')
+    .select(
+      'id, created_at, mention_count, citation_count, mention_position, sentiment, competitor_mentions',
+    )
     .eq('brand_id', brandId)
     .eq('prompt_id', group.promptId);
   query = group.rawPlatform ? query.eq('platform', group.rawPlatform) : query.is('platform', null);
@@ -3515,6 +3527,8 @@ export async function getHeadToHeadRuns(
     ? query.eq('model_used', group.rawModelUsed)
     : query.is('model_used', null);
   query = group.region ? query.eq('region', group.region) : query.is('region', null);
+  if (window.dateFrom) query = query.gte('created_at', window.dateFrom);
+  if (window.dateTo) query = query.lte('created_at', window.dateTo);
 
   const { data, error } = await query
     .order('created_at', { ascending: false })
@@ -3525,7 +3539,8 @@ export async function getHeadToHeadRuns(
   return (data ?? []).map((row) => ({
     resultId: row.id as string,
     createdAt: row.created_at as string,
-    brandScore: (row.visibility_score as number | null) ?? 0,
+    // Each answer's Visibility score, as the cards' (UX audit CP-01).
+    brandScore: answerScore(row),
     competitorScore: competitorScoreIn(row.competitor_mentions, competitorId) ?? 0,
     sentiment: ((row.sentiment as Sentiment | null) ?? 'neutral') as Sentiment,
   }));

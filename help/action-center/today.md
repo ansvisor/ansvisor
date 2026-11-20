@@ -4,7 +4,7 @@ route: /dashboard/action-center/today
 keywords: [today, action center, todays focus, since yesterday, waiting for you, finish setting up, where you stand, new area to track, waiting for a spot]
 synonyms: [start page, home page, daily summary, what to do today, my day]
 plan: all
-updated: 2026-11-17
+updated: 2026-11-20
 last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
@@ -17,17 +17,17 @@ sources: [docs/guides/action-center.mdx]
 
 The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.
 
-Beside **Actions** is how many open actions are yours or unassigned, beside **Signals** how many new signals wait, and beside **Agents** how many of your agent runs wait for you.
+Beside **Agents** is how many of your agent runs wait for you.
 
 ## The top of the page
 
-The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones that are yours or no one's), **Done** (this week) and **Results** (your score and its change).
+The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones: new, in progress or on hold, whoever has them, the same number as **All** on the Actions tab; under it, how many are on hold and how many are yours), **Done** (this week) and **Results** (your score and its change).
 
 ## Waiting for you and Where you stand
 
 Under the loop strip, two cards sit side by side, one under the other on a narrow screen:
 
-- **Waiting for you**: this brand's agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.
+- **Waiting for you**: this brand's agent work waiting for your OK, drafts waiting for your review (whoever wrote them, linked to **Library › In review**), tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.
 - **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand. Before a score is in, it says so.
 
 Each card keeps its place while Today loads and fills in as soon as its own data is in. To ask about any of it, use **Ask Chat** in the header, on every page.
@@ -37,7 +37,7 @@ Each card keeps its place while Today loads and fills in as soon as its own data
 Both run across the page, under the two cards.
 
 - **Since yesterday**: the 3 to 5 biggest changes the nightly checks found since your last visit, each marked **Up**, **Down** or **Rival**, with a link to the action it added. Only high and medium impact signals count; the rest are in **All signals**. On a Monday it reads "Since Friday". A quiet day says so.
-- **Today's focus**: your three highest-impact actions, ranked as Chat's daily suggestion ranks them. They stay until you finish them; **Skip for now** hides one from your focus for 7 days without changing it. A new one is marked **New**.
+- **Today's focus**: your three highest-impact actions, picked as Chat's daily suggestion picks them and shown highest impact first (Critical, High, Medium, Low), then by priority. Each card's first step names the action's own prompts, pages or rivals, the same count as its title. They stay until you finish them; **Skip for now** hides one from your focus for 7 days without changing it. A new one is marked **New**.
 
 ## Finish setting up
 
