@@ -23,7 +23,7 @@ vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams()
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/insights' }));
 vi.mock('@/i18n/navigation', () => ({
   usePathname: () => nav.pathname,
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), prefetch: vi.fn() }),
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
       {children}
@@ -356,8 +356,9 @@ describe('the menu', () => {
     await act(async () => {
       aside.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: null }));
     });
+    // It opens once the pointer rests on it (300 ms, UX audit CH-01).
     await act(async () => {
-      vi.advanceTimersByTime(200);
+      vi.advanceTimersByTime(300);
     });
     expect(aside.className).toContain('w-60');
     expect(link('/dashboard/action-center/today')).not.toBeNull();

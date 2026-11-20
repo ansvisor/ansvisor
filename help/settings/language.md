@@ -9,7 +9,7 @@ last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/components/settings/language-field.tsx, web/src/components/settings/suggest-translation.tsx, server/messages/en.json]
+sources: [web/messages/en.json, web/src/components/settings/language-field.tsx, web/src/components/settings/suggest-translation.tsx, web/src/components/auth/sign-up-form.tsx, server/messages/en.json]
 ---
 Each person picks the language of their own Ansvisor screens. Find it in **Settings › Account › Language**, or in the **Language** item of the account menu at the bottom left, so you can change it from any page. It never changes anyone else's screens.
 
@@ -18,6 +18,8 @@ Each person picks the language of their own Ansvisor screens. Find it in **Setti
 Open **Language** and choose one. Each language is written in its own name, such as **Deutsch** or **Türkçe**, so you can find yours even when you can't read the current one. Your choice is saved as soon as you pick it, and the page reloads in that language. **Automatic** follows your browser's language, and uses English when Ansvisor doesn't have it yet.
 
 Only languages that are ready are listed. More are on the way.
+
+You can also pick a language while you sign up, in the **Language** field of the sign-up form, once more than one is ready. The sign-up page switches to it, and it is saved as your language the first time you sign in, unless you have already chosen one.
 
 ## Dates and numbers
 
@@ -29,7 +31,7 @@ Anything without a translation shows in English, never as a blank or a code.
 
 ## E-mails and error messages
 
-E-mails Ansvisor sends you come in your language too: first results, Site Audit, the Daily Pulse, the AI Traffic weekly digest, your workspace's AI key warnings, agent notices and scheduled job e-mails. So do the most common messages when something can't be done, such as a plan limit or a read-only workspace. A job's title and an agent's answer stay as they were written. When you send a report to someone outside your workspace, its few fixed lines are in your language. A text that isn't translated yet comes in English. Who gets an e-mail, and when, doesn't change.
+E-mails Ansvisor sends you come in your language too: first results, Site Audit, the Daily Pulse, the AI Traffic weekly digest, your workspace's AI key warnings, agent notices and scheduled job e-mails. So do the messages when something can't be done, such as a plan limit or a read-only workspace, on Prompts, Brands, Content, Competitors and the Settings pages for Team, Billing, AI Providers and Integrations. A job's title and an agent's answer stay as they were written. When you send a report to someone outside your workspace, its few fixed lines are in your language. A text that isn't translated yet comes in English. Who gets an e-mail, and when, doesn't change.
 
 ## Your brand's content language
 

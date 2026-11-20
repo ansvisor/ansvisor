@@ -228,7 +228,7 @@ describe('ChatComposer', () => {
   it('puts the run mode under the box by its short name, as a menu that says what each pick does, and locks Full auto below Growth', async () => {
     await render({ fullAutoOpen: false });
     const open = modeButton()!;
-    expect(open.textContent).toBe('Ask before changes ▾');
+    expect(open.textContent).toBe('Run mode:Ask before changes ▾');
     expect(open.getAttribute('aria-label')).toBe('Run mode: Auto, ask before changes');
     expect(open.getAttribute('aria-haspopup')).toBe('menu');
     // On the line under the box, not in the box's row with Send; no status while idle.
@@ -277,9 +277,9 @@ describe('ChatComposer', () => {
 
   it('names the mode the chat is in on the menu’s button', async () => {
     await render({ mode: 'full_auto' });
-    expect(modeButton()!.textContent).toBe('Full auto ▾');
+    expect(modeButton()!.textContent).toBe('Run mode:Full auto ▾');
     await render({ mode: 'ask_first' });
-    expect(modeButton()!.textContent).toBe('Ask me first ▾');
+    expect(modeButton()!.textContent).toBe('Run mode:Ask me first ▾');
   });
 
   it('keeps only ＋ / @ and the microphone and Send in the box’s row, in every composer', async () => {
@@ -334,12 +334,12 @@ describe('ChatComposer', () => {
       ).toEqual(['composer.openMode', 'composer-model']);
       // The whole names, never cut: no truncation and no cap on the mode's width.
       const mode = modeButton()!;
-      expect(mode.textContent).toBe('Ask before changes ▾');
+      expect(mode.textContent).toBe('Run mode:Ask before changes ▾');
       expect(mode.querySelector('.truncate')).toBeNull();
       expect(mode.className).toContain('shrink-0');
       expect(mode.className).toContain('whitespace-nowrap');
       const model = button('Model')!;
-      expect(model.textContent).toBe('Auto ▾');
+      expect(model.textContent).toBe('Model:Auto ▾');
       expect(model.className).not.toMatch(/max-w-/);
       expect(model.className).toContain('whitespace-nowrap');
       // The status takes what the buttons leave: they keep their room.
@@ -420,7 +420,9 @@ describe('ChatComposer', () => {
 
   it('shows the model on Auto, short, on the line under the box', async () => {
     await render();
-    expect(settings().querySelector('[data-slot="composer-model"]')!.textContent).toBe('Auto');
+    expect(settings().querySelector('[data-slot="composer-model"]')!.textContent).toBe(
+      'Model:Auto',
+    );
   });
 
   it('puts the / and @ hint in the placeholder, not under the box', async () => {
@@ -455,7 +457,7 @@ describe('ChatComposer', () => {
     aiUsage.usage = usage(42);
     await render(props);
     expect(dot()).toBeNull();
-    expect(button('Model')!.textContent).toBe('Auto ▾');
+    expect(button('Model')!.textContent).toBe('Model:Auto ▾');
 
     aiUsage.usage = usage(84.6);
     await render(props);
@@ -464,7 +466,7 @@ describe('ChatComposer', () => {
     expect(warned.getAttribute('aria-label')).toBe(
       'Model · AI 84.6% used this month, close to the limit',
     );
-    expect(warned.textContent).toBe('Auto ▾');
+    expect(warned.textContent).toBe('Model:Auto ▾');
 
     aiUsage.usage = usage(100);
     await render(props);
@@ -480,7 +482,7 @@ describe('ChatComposer', () => {
       onModelChoice,
     });
     const open = button('Model')!;
-    expect(open.textContent).toBe('Sonnet 5.5 · High ▾');
+    expect(open.textContent).toBe('Model:Sonnet 5.5 · High ▾');
     await act(async () => open.click());
     expect(open.getAttribute('aria-expanded')).toBe('true');
     expect(container.querySelector('[data-slot="model-menu"]')).not.toBeNull();
@@ -490,7 +492,7 @@ describe('ChatComposer', () => {
     vi.unstubAllGlobals();
 
     await render({ modelChoice: { model: 'auto', effort: 'normal' }, onModelChoice });
-    expect(button('Model')!.textContent).toBe('Auto ▾');
+    expect(button('Model')!.textContent).toBe('Model:Auto ▾');
   });
 });
 
@@ -998,9 +1000,9 @@ describe('ChatComposer: the image model on the model button (W4-08b, CHAT-15 ite
   it('reads "Image · {model}" for an image task, and the chat model otherwise', async () => {
     const choice = { model: 'auto', effort: 'normal' } as const;
     await render({ modelChoice: choice, onModelChoice: vi.fn(), imageModel: 'Nano Banana 2 Lite' });
-    expect(model()).toBe('Image · Nano Banana 2 Lite ▾');
+    expect(model()).toBe('Model:Image · Nano Banana 2 Lite ▾');
     await render({ modelChoice: choice, onModelChoice: vi.fn(), imageModel: null });
-    expect(model()).toBe('Auto ▾');
+    expect(model()).toBe('Model:Auto ▾');
   });
 });
 
