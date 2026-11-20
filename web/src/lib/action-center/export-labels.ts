@@ -1,4 +1,5 @@
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
+import { brandGoalText } from '@/lib/kpis/brand-goal';
 import { removedTargets } from '@/lib/action-center/entity-counts';
 import type { ContentOpportunity, OpportunityBasket } from '@/types';
 import {
@@ -282,7 +283,7 @@ export function labelActionExport(input: ActionExportInput, t: ExportTranslators
         .filter((kpi) => related.includes(kpi.kpiKey) && isKpiKey(kpi.kpiKey))
         .map(
           (kpi) =>
-            `${t.registry(`${kpi.kpiKey}.name`)} (${t.page('drawer.kpiTarget', { target: kpi.target })})`,
+            `${t.registry(`${kpi.kpiKey}.name`)} (${t.page('drawer.kpiBrandGoal', { target: brandGoalText(kpi.kpiKey, kpi.target), timeframe: kpi.timeframe })})`,
         ),
       context: sentFromFacts(action, input.sentFrom, origin, t),
       affected: exportAffectedRows(input.affected, input.volumes, origin, t),

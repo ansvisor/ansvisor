@@ -2,7 +2,8 @@ import { createTranslator } from 'next-intl';
 import { describe, expect, it } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { Signal } from '@/lib/signals/map';
-import { actionStory, storyFamily, type StoryFamily } from './story';
+import { actionStory, goalDatePassed, storyFamily, type StoryFamily } from './story';
+import { affectedOf } from './affected';
 import type { VolumeEstimate } from '@/lib/volume-estimate';
 
 // Days are read where the reader is; pin it so the fixtures' days hold anywhere.
@@ -425,5 +426,47 @@ describe('storyFamily', () => {
         expect(copy.goal).toHaveProperty(key);
       }
     }
+  });
+});
+
+describe('actionStory over the Affected tab’s set (UX audit AC-20, AC-23)', () => {
+  it('counts, scopes the goal and sums the demand over the set it is given', () => {
+    // The drawer's Affected set: the first five of the seven, as the tab lists them.
+    const affected = affectedOf(lostSeven.slice(0, 5));
+    const volumes = new Map(lostSeven.map((_, i) => [`p${i}`, est(5_000)]));
+    const told = actionStory(
+      {
+        signals: lostSeven,
+        volumes,
+        createdAt: '2026-10-09T12:00:00Z',
+        dueDate: null,
+        affected,
+      },
+      t,
+      format,
+    )!;
+    // Five prompts, their demand alone (5 × 4–6k), and the goal out of five.
+    expect(told.why).toMatch(/^5 prompts in AI Rank Tracker \(20–30k AI searches a month/);
+    expect(told.goal).toBe('Citations back on ≥4 of 5 prompts by Nov 8.');
+  });
+});
+
+describe('a passed goal date (UX audit AC-21, decision D9)', () => {
+  const now = new Date(2026, 10, 19, 15, 0);
+  it('is flagged on an open action once the day has gone, never moved', () => {
+    const told = tell(lostSeven)!;
+    // Raised Oct 9: the goal day is Nov 8, as the sentence says, and stays so.
+    expect(told.goal).toBe('Citations back on ≥5 of 7 prompts by Nov 8.');
+    expect(goalDatePassed(told, 'in_progress', now)).toBe(true);
+    expect(goalDatePassed(told, 'on_hold', now)).toBe(true);
+  });
+
+  it('is not flagged on its day, before it, or on a closed action', () => {
+    const due = (dueDate: string) => tell(lostSeven, { dueDate })!;
+    expect(goalDatePassed(due('2026-11-19'), 'new', now)).toBe(false);
+    expect(goalDatePassed(due('2026-11-25'), 'new', now)).toBe(false);
+    expect(goalDatePassed(due('2026-11-01'), 'completed', now)).toBe(false);
+    expect(goalDatePassed(due('2026-11-01'), 'dismissed', now)).toBe(false);
+    expect(goalDatePassed(null, 'new', now)).toBe(false);
   });
 });

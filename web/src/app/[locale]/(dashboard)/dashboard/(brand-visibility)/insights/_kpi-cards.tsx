@@ -48,6 +48,7 @@ import {
 const INFO_TIP_HALF_WIDTH = 120;
 
 export function InfoTip({ content }: { content: string }) {
+  const t = useTranslations('insights.page');
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
   const tooltipId = useId();
@@ -73,7 +74,7 @@ export function InfoTip({ content }: { content: string }) {
       <span
         ref={ref}
         tabIndex={0}
-        aria-label="More information"
+        aria-label={t('moreInfo')}
         aria-describedby={pos ? tooltipId : undefined}
         onMouseEnter={show}
         onMouseLeave={hide}

@@ -125,6 +125,7 @@ describe('createBrand plan limit', () => {
 
     expect(result).toEqual({
       code: 'plan_limit',
+      limit: 'brands',
       error: 'Your plan includes 5 brands. Upgrade your plan to add more.',
     });
     expect(inserted).toEqual([]);

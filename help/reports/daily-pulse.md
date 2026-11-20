@@ -36,13 +36,13 @@ A pulse follows a brand's scheduled daily tracking run; manual runs and single-p
 
 ## What's in a pulse
 
-The KPIs are **Visibility**, the **7-day trend**, **Mentions** and **Citations**, **Positive sentiment**, and **Prompts you appear in**. For Daily and Only when notable, the period is the latest completed tracking run, at most 24 hours, compared with the run before it. For Weekly, it is the last 7 days compared with the 7 days before. The email subject carries the visibility score and the weekly trend; on Weekly, it says Weekly Pulse.
+The KPIs are the **Visibility score** (out of 100, not a percentage), the **7-day average** score with its change in points from the 7 days before, **Mentions** and **Citations**, **Positive sentiment**, and **Prompts with a mention**, such as "135 of 227": 227 is the number of prompts with answers in the period. For Daily and Only when notable, the period is the latest completed tracking run, at most 24 hours, compared with the run before it. For Weekly, it is the last 7 days compared with the 7 days before. Lines that cover another period name it. The email subject carries the visibility score and the 7-day average; on Weekly, it says Weekly Pulse.
 
 ## Highlights
 
 - **First citation**: a URL from a prompt's Target URLs list was cited by an AI engine for the first time. Up to 5 are listed.
-- **Prompt gain**: a prompt's visibility score rose by 5 points or more this week versus last week. The top 3 are listed.
-- **Competitor overtaken**: last week a competitor's score was at or above yours; this week yours is higher.
+- **Prompt gain**: a prompt's visibility score rose by 5 points or more in the last 7 days versus the 7 days before. The top 3 are listed.
+- **Competitor overtaken**: in the 7 days before, a competitor's score was at or above yours; in the last 7 days yours is higher.
 - **New engine**: your brand was mentioned or cited on an AI platform for the first time ever.
 
 ## Warnings
