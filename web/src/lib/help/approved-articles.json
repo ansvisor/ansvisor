@@ -5270,7 +5270,7 @@
         },
         {
           "heading": "Rename or delete a report",
-          "text": "To rename a report, open its **⋯** menu, choose **Rename**, type the new name and click **Save**: only the name changes, never the report's numbers. To delete one, open its **⋯** menu, choose **Delete report** and confirm."
+          "text": "Admins and Managers can rename a report: open its **⋯** menu, choose **Rename**, type the new name and click **Save**. Only the name changes, never the report's numbers. To delete one, open its **⋯** menu, choose **Delete report** and confirm."
         },
         {
           "heading": "Templates",

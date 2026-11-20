@@ -21,7 +21,7 @@ When the brand already has a report of the same template and days, **Generate Re
 
 ## Rename or delete a report
 
-To rename a report, open its **⋯** menu, choose **Rename**, type the new name and click **Save**: only the name changes, never the report's numbers. To delete one, open its **⋯** menu, choose **Delete report** and confirm.
+Admins and Managers can rename a report: open its **⋯** menu, choose **Rename**, type the new name and click **Save**. Only the name changes, never the report's numbers. To delete one, open its **⋯** menu, choose **Delete report** and confirm.
 
 ## Templates
 

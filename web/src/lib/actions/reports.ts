@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { isManager } from '@/lib/session-role';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { REPORT_TEMPLATE_TITLES } from '@/lib/reports/template-titles';
 import type { Json } from '@/types/supabase';
@@ -1091,23 +1093,46 @@ export async function getReport(id: string): Promise<Report | null> {
 }
 
 /**
- * Renames a report (UX audit RP-11): its title alone, through rename_report
- * (00555), for a brand the person may see; the snapshot itself never
- * changes. A blank title, or one over 200 characters, isn't sent. Says
- * whether a report was renamed.
+ * Renames a report (UX audit RP-11): its title alone. Reports stay
+ * immutable snapshots for members (00023 has no UPDATE policy), so the
+ * write goes through the service role, and only after every check a
+ * member's own write would face: a workspace that can write
+ * (assertWritable), an Admin or a Manager, a report the person reads
+ * themselves (RLS) of a brand they may see (can_access_brand), and the
+ * brand's own plan check (a demo brand changes nothing). The update is
+ * held to that report of that brand, the snapshot never touched. A blank
+ * title, or one over 200 characters, isn't sent. Says whether it was
+ * renamed.
  */
 export async function renameReport(id: string, title: string): Promise<boolean> {
   await assertWritable();
   const name = title.replace(/\s+/g, ' ').trim();
   if (!name || name.length > 200) return false;
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('rename_report', {
-    p_report_id: id,
-    p_title: name,
+  if (!(await isManager(supabase))) return false;
+  // The person's own read: another workspace's report isn't found (RLS).
+  const { data: report, error: readError } = await supabase
+    .from('reports')
+    .select('id, brand_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+  if (!report) return false;
+  const { data: allowed, error: accessError } = await supabase.rpc('can_access_brand', {
+    p_brand_id: report.brand_id,
   });
+  if (accessError) throw new Error(accessError.message);
+  if (allowed !== true) return false;
+  await assertWritable({ brandId: report.brand_id });
+  const { data: renamed, error } = await supabaseAdmin
+    .from('reports')
+    .update({ title: name })
+    .eq('id', report.id)
+    .eq('brand_id', report.brand_id)
+    .select('id');
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/reports');
-  return data === true;
+  return (renamed ?? []).length > 0;
 }
 
 export async function deleteReport(id: string): Promise<void> {

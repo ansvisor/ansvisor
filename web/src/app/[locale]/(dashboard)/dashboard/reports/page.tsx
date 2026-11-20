@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 import {
   createReport,
   getReports,
@@ -109,6 +110,8 @@ export default function ReportsPage() {
   const [generating, setGenerating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  // Renaming is an Admin's or a Manager's, as the server checks (RP-11).
+  const { canManage } = useUserRole();
   // Rename (UX audit RP-11): the report, and the title being typed.
   const [renaming, setRenaming] = useState<ReportListItem | null>(null);
   const [newTitle, setNewTitle] = useState('');
@@ -384,19 +387,21 @@ export default function ReportsPage() {
                               )}
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem
-                                data-action="reports.rename"
-                                onClick={guard(
-                                  () => {
-                                    setNewTitle(report.title);
-                                    setRenaming(report);
-                                  },
-                                  { action: tActions('renameReports') },
-                                )}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                {t('rename.item')}
-                              </DropdownMenuItem>
+                              {canManage && (
+                                <DropdownMenuItem
+                                  data-action="reports.rename"
+                                  onClick={guard(
+                                    () => {
+                                      setNewTitle(report.title);
+                                      setRenaming(report);
+                                    },
+                                    { action: tActions('renameReports') },
+                                  )}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  {t('rename.item')}
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 variant="destructive"
                                 onClick={guard(() => setPendingConfirm(report.id), {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 
 /**
  * Reports on a read-only workspace (plan not active): the reports list and
@@ -85,17 +86,19 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-async function render(isLocked: boolean, chatAgentic = false) {
+async function render(isLocked: boolean, chatAgentic = false, role: TeamRole = 'manager') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatAgenticProvider enabled={chatAgentic}>
-          <UpgradeDialogContext.Provider
-            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-          >
-            <ReportsPage />
-          </UpgradeDialogContext.Provider>
-        </ChatAgenticProvider>
+        <RoleProvider role={role}>
+          <ChatAgenticProvider enabled={chatAgentic}>
+            <UpgradeDialogContext.Provider
+              value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+            >
+              <ReportsPage />
+            </UpgradeDialogContext.Provider>
+          </ChatAgenticProvider>
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -196,6 +199,21 @@ describe('Reports', () => {
     expect(reports.renameReport).toHaveBeenCalledWith('r1', 'Board review');
     expect(container.textContent).toContain('Board review');
     expect(dialog()).toBeNull();
+  });
+
+  it('offers Rename to Admins and Managers only, as the server allows', async () => {
+    await render(false, false, 'analyst');
+    const trigger = container.querySelector<HTMLElement>(
+      'tbody [aria-label="More actions for October review"]',
+    )!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map(
+      (el) => el.textContent,
+    );
+    expect(items).toEqual(['Delete report']);
   });
 
   it('opens Generate Report on an active plan', async () => {
