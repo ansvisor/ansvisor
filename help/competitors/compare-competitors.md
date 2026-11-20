@@ -45,7 +45,7 @@ When there's nothing to compare yet, it says **No comparison data**: run trackin
 
 At the top of the comparison, **Your Visibility score** and **Their Visibility score** show each side's score out of 100 over the date range, the same numbers as the two cards, and **Difference** shows the gap between them in points.
 
-**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead.
+**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead. It lists the platforms your plan tracks, with **No answers in this period** for one without answers yet. Microsoft Copilot is asked through Bing AI Mode. Platforms outside your plan, such as Claude on Growth, aren't shown; a line under the card names them.
 
 ## Gaps and Strengths
 

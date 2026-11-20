@@ -40,6 +40,9 @@ import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
 import { viewRows } from '@/lib/chat/page-view';
 import { MODEL_LABELS } from '@/config/platform-labels';
+import { PLANS } from '@/config/plans';
+import { usePlanContext } from '@/components/providers/plan-provider';
+import { breakdownForPlan, planEngineKeys } from '@/lib/competitors/plan-engines';
 import type { Competitor } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -548,6 +551,12 @@ function PlatformBreakdown({
   competitorName: string;
 }) {
   const t = useTranslations('competitors');
+  const { planId, isCloud, allowedModelIds } = usePlanContext();
+  // Only the engines the plan tracks, those without answers too (UX audit CP-04).
+  const { rows, notInPlan } = breakdownForPlan(
+    data.platformRows,
+    isCloud ? planEngineKeys(PLANS[planId]?.limits.allowedScrapers, allowedModelIds) : null,
+  );
 
   return (
     <Card>
@@ -556,12 +565,32 @@ function PlatformBreakdown({
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {data.platformRows.map((row) => {
+          {rows.map((row) => {
             const max = Math.max(row.brandScore, row.competitorScore, 1);
+            const name = (
+              <span className="font-medium">
+                {row.platform}
+                {row.provider === 'copilot' && (
+                  <span className="font-normal text-muted-foreground"> {t('h2h.viaBing')}</span>
+                )}
+              </span>
+            );
+            if (row.noAnswers) {
+              return (
+                <div
+                  key={row.platform}
+                  data-slot="engine-no-answers"
+                  className="flex items-center justify-between text-xs"
+                >
+                  {name}
+                  <span className="text-muted-foreground">{t('h2h.noAnswersEngine')}</span>
+                </div>
+              );
+            }
             return (
               <div key={row.platform} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium">{row.platform}</span>
+                  {name}
                   <DiffBadge diff={row.diff} />
                 </div>
                 <div className="flex gap-1 items-center">
@@ -600,6 +629,11 @@ function PlatformBreakdown({
             {competitorName}
           </div>
         </div>
+        {notInPlan.length > 0 && (
+          <p data-slot="engines-not-in-plan" className="mt-2 text-[11px] text-muted-foreground">
+            {t('h2h.notInPlan', { engines: notInPlan.join(', ') })}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
