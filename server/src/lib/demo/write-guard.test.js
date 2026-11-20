@@ -40,6 +40,8 @@ const NOT_A_BRAND_ROW = {
 const OPEN_ON_A_DEMO_BRAND = {
   chat_notices:
     "A person's own notes from the system (00446): they only mark them read or close them, no sample data and nothing that costs; none is ever written about a demo brand.",
+  notification_preferences:
+    "A person's own e-mail choices (00554): a brand's row only says how often they want its e-mails. No sample data and nothing that costs, and nobody is mailed about a demo brand.",
   prompt_table_views:
     "A person's column layout of the Tracked Prompts table (00363): it changes no sample data and costs nothing; the web keeps it open while read-only too.",
   user_brand_state:
