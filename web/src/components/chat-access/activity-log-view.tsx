@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { ArrowUpRight, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { DEFAULT_LOCALE } from '@/i18n/locales';
 import { Link } from '@/i18n/navigation';
 import { TakeDownDialog } from '@/components/content/take-down-dialog';
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { exportActivityCsv, listActivity, undoActivity } from '@/lib/actions/chat-activity';
-import { approvalLabel, type ActivityFilters, type ActivityRow } from '@/lib/chat/activity-view';
+import {
+  approvalLabel,
+  shownParams,
+  type ActivityFilters,
+  type ActivityRow,
+} from '@/lib/chat/activity-view';
 import type { ToolArea } from '@/lib/chat/registry/define-tool';
 import { cn } from '@/lib/utils';
 import { ClassBadge } from './class-badge';
@@ -45,6 +51,7 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
   const tAreas = useTranslations('chatAccess.capabilities.areaNames');
   const tSummary = useTranslations('chatActivity.summary');
   const tTools = useTranslations('chatTools');
+  const locale = useLocale();
   const format = useFormatter();
   const [filters, setFilters] = useState<ActivityFilters>({});
   const [page, setPage] = useState<Page | 'failed' | null>(null);
@@ -146,7 +153,11 @@ export function ActivityLogView({ areas }: { areas: ToolArea[] }) {
     const name =
       row.toolKey && tTools.has(`${row.toolKey}.name`) ? tTools(`${row.toolKey}.name`) : '';
     if (row.summaryKey && tSummary.has(row.summaryKey)) {
-      return tSummary(row.summaryKey, row.summaryParams);
+      // A denial's tool, saved in English with its row, in this person's words.
+      return tSummary(
+        row.summaryKey,
+        shownParams(row, () => (locale === DEFAULT_LOCALE ? '' : name)),
+      );
     }
     return name;
   };

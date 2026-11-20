@@ -210,6 +210,26 @@ describe('the ready-made KPIs', () => {
     expect(getInsightsSummary).toHaveBeenCalledTimes(1);
   });
 
+  it('gives Mentions and Citations each its own first goal, from its own count (UX audit AC-62)', async () => {
+    lastThirtyDays();
+    getInsightsSummary.mockResolvedValue({
+      totalMentions: 17_796,
+      mentionsChange: null,
+      totalCitations: 17_843,
+      citationsChange: null,
+      positiveSentimentPct: 40,
+      sentimentChange: null,
+    });
+    brandRow = { ga_property_id: null };
+    await seedKpiPresets('b1');
+    const targets = Object.fromEntries(
+      (seedCalls[0].p_kpis as { key: string; target: number }[]).map((k) => [k.key, k.target]),
+    );
+    // Both read "21.4K" compact; the goals themselves differ.
+    expect(targets.mentions).toBe(21_356);
+    expect(targets.citations).toBe(21_412);
+  });
+
   it('leaves traffic out without GA, and reports a brand set up meanwhile', async () => {
     lastThirtyDays();
     brandRow = { ga_property_id: null };

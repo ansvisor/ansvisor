@@ -35,6 +35,7 @@ import {
 import { outsideLockOf } from '@/lib/chat/schedule/outside';
 import { WHEN_MAX_LENGTH } from '@/lib/chat/schedule/when';
 import { runJobNow, type RunNowResult } from '@/lib/chat/schedule/worker';
+import { asViewer } from '@/lib/chat/viewer-locale';
 
 /**
  * Chat's scheduled jobs, as the signed-in person (CHAT-12; W3-02, W3-03):
@@ -208,7 +209,8 @@ export async function setChatScheduleOn(id: string, on: boolean): Promise<Manage
   await assertWritable();
   const me = await reader();
   if (!me || !idInput.safeParse(id).success) return NOT_SIGNED_IN;
-  return setScheduleOn(me.read, me.plan, id, on === true);
+  // Why a change was refused, in the viewer's language.
+  return asViewer(() => setScheduleOn(me.read, me.plan, id, on === true), me.read.userId);
 }
 
 /** Deletes a job; past results stay in Files. */
@@ -216,7 +218,7 @@ export async function deleteChatSchedule(id: string): Promise<ManageResult> {
   await assertWritable();
   const me = await reader();
   if (!me || !idInput.safeParse(id).success) return NOT_SIGNED_IN;
-  return deleteSchedule(me.read, id);
+  return asViewer(() => deleteSchedule(me.read, id), me.read.userId);
 }
 
 /** An Admin takes over a job its creator can no longer run. */
@@ -224,7 +226,7 @@ export async function takeOverChatSchedule(id: string): Promise<ManageResult> {
   await assertWritable();
   const me = await reader();
   if (!me || !idInput.safeParse(id).success) return NOT_SIGNED_IN;
-  return takeOverSchedule(me.read, me.plan, id);
+  return asViewer(() => takeOverSchedule(me.read, me.plan, id), me.read.userId);
 }
 
 const editsInput = z.object({
@@ -246,7 +248,10 @@ export async function updateChatSchedule(id: string, edits: unknown): Promise<Ma
   const parsed = editsInput.safeParse(edits);
   if (!me || !idInput.safeParse(id).success) return NOT_SIGNED_IN;
   if (!parsed.success) return { ok: false, reason: 'invalid', message: 'Check the fields.' };
-  return updateSchedule(me.read, id, parsed.data, new Date(), me.plan);
+  return asViewer(
+    () => updateSchedule(me.read, id, parsed.data, new Date(), me.plan),
+    me.read.userId,
+  );
 }
 
 /** Run now: one run at once, as its creator. */

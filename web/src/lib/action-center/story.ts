@@ -1,4 +1,5 @@
 import type { Signal } from '@/lib/signals/map';
+import { OPEN_ACTION_STATUSES } from './registry';
 import { signalWhereValue } from '@/lib/signals/detail';
 import { SIGNAL_KINDS, isSignalKind } from '@/lib/signals/registry';
 import { platformName } from '@/lib/signals/names';
@@ -201,6 +202,23 @@ export interface ActionStory {
   family: StoryFamily;
   why: string;
   goal: string;
+  /** The day the goal is set for: the due date, or 30 days after the action was raised. */
+  goalDate: Date;
+}
+
+/**
+ * Whether an open action's goal date has passed (UX audit AC-21, decision
+ * D9): the day is before today. It is flagged, never moved: the date stays
+ * what was set, so a missed goal stays visible and the scorecard keeps it.
+ */
+export function goalDatePassed(
+  story: Pick<ActionStory, 'goalDate'> | null,
+  status: string,
+  now: Date = new Date(),
+): boolean {
+  if (!story || !(OPEN_ACTION_STATUSES as readonly string[]).includes(status)) return false;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return story.goalDate.getTime() < today.getTime();
 }
 
 /**
@@ -214,6 +232,7 @@ export function actionStory(
     createdAt,
     dueDate,
     payload = {},
+    affected: shown,
   }: {
     /** The signals the Affected list was built from. */
     signals: Signal[];
@@ -223,6 +242,13 @@ export function actionStory(
     dueDate: string | null;
     /** The action as it reads now (AC-009): what was removed since isn't told. */
     payload?: Record<string, unknown>;
+    /**
+     * The Affected tab's set (affectedOf over every evidence signal, the
+     * action's kept rows and its removals). Given, the counts, the goal's
+     * "N of M" and the demand are told from it, so they match the tab and the
+     * title (UX audit AC-20, AC-23); without it, from the lead family alone.
+     */
+    affected?: Affected;
   },
   t: Translator,
   format: StoryFormat,
@@ -232,7 +258,7 @@ export function actionStory(
   // Told from the lead family's signals alone, so the counts match the verb:
   // a competitor's prompts are not "lost citations".
   const mine = signals.filter((signal) => storyFamily(signal) === family);
-  const affected = affectedOf(mine, removedOnly(payload));
+  const affected = shown ?? affectedOf(mine, removedOnly(payload));
   const subject = subjectOf(affected, family, mine);
 
   // The subject: "7 prompts in AI Rank Tracker (28–42k AI searches a month, estimated)".
@@ -361,5 +387,5 @@ export function actionStory(
     now: now ?? 0,
   };
   const key = subject ? family : `${family}All`;
-  return { family, why: t(`why.${key}`, values), goal: t(`goal.${key}`, values) };
+  return { family, why: t(`why.${key}`, values), goal: t(`goal.${key}`, values), goalDate };
 }

@@ -384,16 +384,13 @@ describe('guardrails found on ansvisor.com (2026-11-19)', () => {
     expect(askedKeys()).toContain('h1-quality');
   });
 
-  it('names only the tracked engines, and sets the rules for prices, claims and addresses', async () => {
+  it('sets the rules for prices, claims and addresses, and names no tracked engines', async () => {
     modelReturns([]);
-    await generateRecommendations(at('https://ansvisor.com/blog/a'), {
-      results: authorFail,
-      engines: ['ChatGPT', 'Gemini'],
-    });
+    await generateRecommendations(at('https://ansvisor.com/blog/a'), { results: authorFail });
     const { system, prompt } = generateObject.mock.calls[0][0];
-    expect(prompt).toContain(
-      'TRACKED ENGINES (the only AI engines to name in copy): ChatGPT, Gemini',
-    );
+    // Our own tracking setup is no customer's fact: never in their copy (as #2520).
+    expect(prompt).not.toContain('TRACKED ENGINES');
+    expect(system).not.toContain('TRACKED ENGINES');
     expect(system).toContain('with its billing period');
     expect(system).toContain('Never state as fact anything about the brand');
     expect(system).toContain('use [your author url] or [your page url]');
