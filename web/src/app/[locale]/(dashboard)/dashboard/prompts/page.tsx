@@ -282,6 +282,7 @@ import {
 import { viewerTimeZone } from '@/lib/time-zone';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { PromptsInfo } from './_prompts-guide';
 
 // ─── Info Tooltip ─────────────────────────────────────────────────────────────
 
@@ -2221,7 +2222,10 @@ export default function PromptsPage() {
       {/* Header: the title alone, with the AI meter and Ask Chat at the right.
           The meter keeps its room on every tab, read or not, so the row never moves. */}
       <HeaderWithAiUsage reserveMeter>
-        <h1 className="text-2xl font-bold tracking-tight">{tHeader('title')}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight">{tHeader('title')}</h1>
+          <PromptsInfo brandId={activeBrandId} />
+        </div>
       </HeaderWithAiUsage>
 
       <Tabs value={tab} onValueChange={(v) => showSection(v as TabId, view)}>

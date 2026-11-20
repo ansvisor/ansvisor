@@ -15012,6 +15012,95 @@
         "limitReached": "Monthly limit reached"
       }
     },
+    "info": {
+      "button": "How Ansvisor works with prompts",
+      "whatTitle": "What's a prompt?",
+      "whatText": "A question or a request your potential customers type into an AI assistant like ChatGPT or Gemini, such as <example>\"What's the best open-source AEO tool?\"</example> or <example>\"Compare the best AEO platforms\"</example>",
+      "howTitle": "How Ansvisor works",
+      "systemsLine": "Smart AI systems work for you in the background, every day.",
+      "steps": {
+        "find": {
+          "title": "Finds the best prompts.",
+          "text": "Our AI reads your site, your competitors, what people search (Search Console, Analytics) and what the AI platforms themselves answer, and suggests the ones that matter."
+        },
+        "pick": {
+          "title": "You pick what to track.",
+          "text": "Press <b>+</b> on a suggestion."
+        },
+        "ask": {
+          "title": "Asks the AI platforms every day.",
+          "text": "ChatGPT, Gemini, Google AI Overviews and more: do they mention you, link to your site, rank you above competitors?"
+        },
+        "data": {
+          "title": "Builds your own data.",
+          "text": "Every answer is kept, so trends, gaps and your competitors' moves show over time."
+        },
+        "next": {
+          "title": "Smart AI systems show you what to do next.",
+          "text": "They catch drops, find content gaps and prepare pages and fixes in Action Center, to win AI visibility, traffic and revenue."
+        }
+      },
+      "openGuide": "Open the step-by-step guide"
+    },
+    "guide": {
+      "title": "How to find the best prompts and get positioned in their answers",
+      "description": "Do these once, then check Suggestions daily. Each step opens in a new tab, so this guide stays here.",
+      "progress": "{done} of {total} done",
+      "progressLabel": "Steps done",
+      "done": "Done",
+      "comingSoon": "Coming soon",
+      "footer": "Ask Chat to do a step for you: “Connect my Search Console”.",
+      "steps": {
+        "gsc": {
+          "title": "Connect Google Search Console",
+          "text": "See what people already search to find you; we turn it into prompts.",
+          "cta": "Connect"
+        },
+        "ga": {
+          "title": "Connect Google Analytics 4",
+          "text": "See which pages bring visitors, to find the prompts that matter.",
+          "cta": "Connect"
+        },
+        "trafficCode": {
+          "title": "Add the AI traffic code to your site",
+          "text": "Count the visits AI assistants send you, and the AI bots that read your pages.",
+          "cta": "Get the code"
+        },
+        "suggestions": {
+          "title": "Check Suggestions every day",
+          "text": "New prompts from your site, competitors and searches. Press + to track the good ones.",
+          "cta": "Open Suggestions"
+        },
+        "content": {
+          "title": "Create content from suggestions",
+          "text": "Write the pages AI answers are missing for your prompts.",
+          "cta": "Open Content"
+        },
+        "optimize": {
+          "title": "Optimize your pages",
+          "text": "Improve existing pages in the Editor so AI answers cite them.",
+          "cta": "Open Editor"
+        },
+        "audit": {
+          "title": "Fix technical issues",
+          "text": "Run Site Audit and fix what stops AI from reading your site.",
+          "cta": "Run an audit"
+        },
+        "moreTracking": {
+          "title": "Track more prompts",
+          "text": "Add more prompts, locations or AI platforms to your plan.",
+          "cta": "Get more tracking"
+        },
+        "mentions": {
+          "title": "Get mentioned on other sites",
+          "text": "Be named on the third-party sites AI answers trust."
+        },
+        "ads": {
+          "title": "Run AI ads",
+          "text": "Show up in sponsored AI answers."
+        }
+      }
+    },
     "trackNow": {
       "count": "{count, plural, one {# prompt has no answers yet} other {# prompts have no answers yet}}",
       "hint": "These get their first answers with the next tracking run. Track now asks the AI engines now.",
