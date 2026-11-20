@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Info } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -12,6 +12,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
+import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { readImpactReport, type ImpactRange, type ImpactReport } from '@/lib/actions/impact-report';
@@ -28,11 +30,10 @@ import {
   type ImpactRow,
 } from '@/lib/impact/report';
 import { actionCode } from '@/lib/action-center/action-ref';
+import { ACTION_CENTER_TODAY } from '@/lib/action-center/tabs';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { OUTCOME_PILL, PILL, outcomeLabel, signed, type ImpactWords } from './impact-parts';
-
-const CHIP = 'inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-xs';
 
 /** A month the page shows: its year and month (0–11), in the browser's time. */
 interface Month {
@@ -77,6 +78,7 @@ const timeOf = (iso: string) =>
  */
 export function ImpactReportView() {
   const t = useTranslations('reports.impact');
+  const tReports = useTranslations('reports');
   const brandId = useBrandStore((s) => s.activeBrandId);
   const brands = useBrandStore((s) => s.brands);
   const brandName = brands.find((b) => b.id === brandId)?.name ?? null;
@@ -158,65 +160,77 @@ export function ImpactReportView() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="text-muted-foreground">
-            {brandName ? t('subtitle', { brand: brandName }) : t('subtitleNoBrand')}
-          </p>
-          {report && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t('generated', {
-                date: dayOf(report.generatedAt),
-                time: timeOf(report.generatedAt),
-              })}
-              {report.dataAsOf &&
-                ` · ${t('dataAsOf', { date: dayOf(report.dataAsOf), time: timeOf(report.dataAsOf) })}`}
+      {/* The usual header (UX audit RP-15): Back to Reports, then the AI usage
+          meter and Ask Chat beside the page's own controls. */}
+      <HeaderWithAiUsage>
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <Link
+              href="/dashboard/reports"
+              data-action="impact.backToReports"
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              {tReports('backToReports')}
+            </Link>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+            <p className="text-muted-foreground">
+              {brandName ? t('subtitle', { brand: brandName }) : t('subtitleNoBrand')}
             </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-lg border">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              data-action="impact.changeMonth"
-              aria-label={t('previousMonth')}
-              onClick={() => setMonth((m) => normalize(m, -1))}
-            >
-              <ChevronLeft aria-hidden />
-            </Button>
-            <span data-slot="month" className="min-w-[120px] px-1 text-center text-sm">
-              {monthName(month)}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              data-action="impact.changeMonth"
-              aria-label={t('nextMonth')}
-              disabled={atCurrent}
-              onClick={() => setMonth((m) => normalize(m, 1))}
-            >
-              <ChevronRight aria-hidden />
-            </Button>
+            {report && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('generated', {
+                  date: dayOf(report.generatedAt),
+                  time: timeOf(report.generatedAt),
+                })}
+                {report.dataAsOf &&
+                  ` · ${t('dataAsOf', { date: dayOf(report.dataAsOf), time: timeOf(report.dataAsOf) })}`}
+              </p>
+            )}
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              data-action="impact.export"
-              disabled={!report || report.rows.length === 0}
-              className={buttonVariants({ variant: 'outline' })}
-            >
-              {t('export')} ▾
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem data-action="impact.exportCsv" onClick={exportCsv}>
-                <Download aria-hidden />
-                {t('exportCsv')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center rounded-lg border">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                data-action="impact.changeMonth"
+                aria-label={t('previousMonth')}
+                onClick={() => setMonth((m) => normalize(m, -1))}
+              >
+                <ChevronLeft aria-hidden />
+              </Button>
+              <span data-slot="month" className="min-w-[120px] px-1 text-center text-sm">
+                {monthName(month)}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                data-action="impact.changeMonth"
+                aria-label={t('nextMonth')}
+                disabled={atCurrent}
+                onClick={() => setMonth((m) => normalize(m, 1))}
+              >
+                <ChevronRight aria-hidden />
+              </Button>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                data-action="impact.export"
+                disabled={!report || report.rows.length === 0}
+                className={buttonVariants({ variant: 'outline' })}
+              >
+                {t('export')} ▾
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem data-action="impact.exportCsv" onClick={exportCsv}>
+                  <Download aria-hidden />
+                  {t('exportCsv')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+      </HeaderWithAiUsage>
 
       {state.kind === 'loading' && (
         <div className="space-y-3" data-slot="impact-loading">
@@ -246,16 +260,7 @@ export function ImpactReportView() {
               {t('capped', { count: report.rows.length, month: monthName(month) })}
             </p>
           )}
-          <div role="group" aria-label={t('method.label')} className="flex flex-wrap gap-1.5">
-            <span className={CHIP}>{t('method.baseline')}</span>
-            <span className={CHIP} title={t('method.checkpointsTip')}>
-              {t('method.checkpoints')}
-            </span>
-            <span className={CHIP}>{t('method.control')}</span>
-            <span className={CHIP}>{t('method.minChange')}</span>
-            <span className={CHIP}>{t('method.noCost')}</span>
-            <span className={CHIP}>{t('method.correlation')}</span>
-          </div>
+          <HowWeMeasure />
           <div role="group" aria-label={t('filterLabel')} className="flex flex-wrap gap-1.5">
             {(['all', ...OUTCOMES] as const).map((key) => (
               <button
@@ -280,9 +285,24 @@ export function ImpactReportView() {
           <ImpactTable
             rows={rows}
             empty={
-              report.rows.length === 0
-                ? t('empty', { month: monthName(month) })
-                : t('emptyFilter', { month: monthName(month) })
+              report.rows.length === 0 ? (
+                // Nothing shipped yet: say what starts it, and where (RP-15).
+                <>
+                  <span className="block">{t('empty', { month: monthName(month) })}</span>
+                  <span className="mt-1 block">
+                    {t('emptyNext')}{' '}
+                    <Link
+                      href={ACTION_CENTER_TODAY}
+                      data-action="impact.openFocus"
+                      className="text-foreground underline underline-offset-2"
+                    >
+                      {t('emptyNextLink')}
+                    </Link>
+                  </span>
+                </>
+              ) : (
+                t('emptyFilter', { month: monthName(month) })
+              )
             }
             onOpen={setOpened}
           />
@@ -295,6 +315,43 @@ export function ImpactReportView() {
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+/**
+ * How the page measures (UX audit RP-15): what "shipped" means, the baseline,
+ * checkpoints, control, minimum change and cost, and that a result is a
+ * correlation. In a popover rather than a row of chips the reader has to decode.
+ */
+function HowWeMeasure() {
+  const t = useTranslations('reports.impact');
+  const items = [
+    t('method.shippedDefinition'),
+    `${t('method.baseline')}. ${t('method.baselineHelp')}`,
+    `${t('method.checkpoints')}. ${t('method.checkpointsTip')}`,
+    `${t('method.control')}. ${t('method.controlHelp')}`,
+    t('method.minChange'),
+    t('method.noCost'),
+    `${t('method.correlation')}. ${t('method.correlationHelp')}`,
+  ];
+  return (
+    <Popover>
+      <PopoverTrigger
+        data-action="impact.howWeMeasure"
+        className="inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        <Info className="size-4" aria-hidden />
+        {t('method.howWeMeasure')}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80" data-slot="impact-method">
+        <PopoverTitle>{t('method.howWeMeasure')}</PopoverTitle>
+        <ul className="mt-2 list-disc space-y-1.5 ps-4 text-[13px] text-muted-foreground">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -378,7 +435,7 @@ function ImpactTable({
   onOpen,
 }: {
   rows: readonly ImpactRow[];
-  empty: string;
+  empty: ReactNode;
   onOpen: (row: ImpactRow) => void;
 }) {
   const t = useTranslations('reports.impact');

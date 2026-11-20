@@ -2,8 +2,8 @@ import type { ChatListItem } from './conversations';
 
 /**
  * The chat menu's lists (CHAT-01 agentic update): Agents at work first —
- * the chats that need the person, then the ones running, then unread
- * results — and every other chat under Pinned or its day: Today, Yesterday,
+ * the chats that need the person, then the ones running or paused — and
+ * every other chat under Pinned or its day: Today, Yesterday,
  * Previous 7 days, Previous 30 days, then by month. Days are the person's
  * own, in the browser's time zone. A chat is in one list only.
  */
@@ -24,7 +24,7 @@ export interface ChatGroup {
 }
 
 export interface ChatMenuLists {
-  /** Needs you, then running or paused, then unread results; newest first in each. */
+  /** Needs you, then running or paused; newest first in each. */
   atWork: ChatListItem[];
   /** Pinned first, then by day, newest first. */
   groups: ChatGroup[];
@@ -34,16 +34,33 @@ export interface ChatMenuLists {
 export const AT_WORK_ROWS = 3;
 
 /**
- * Where a chat sits in Agents at work, or null when it isn't there. Only the
- * person's own chats: a teammate's shared chat waits on its author's OK, not
- * theirs, and keeps its dot under its day.
+ * Where a chat sits in Agents at work, or null when it isn't there: work
+ * under way or waiting for the person, as the section's name says. A chat
+ * whose answer has finished, read or not, is no longer at work: it stays
+ * under its day with its green dot, rather than listed with "Done" and then
+ * moving to Chats once opened (UX audit CH-03). Only the person's own chats:
+ * a teammate's shared chat waits on its author's OK, not theirs, and keeps
+ * its dot under its day.
  */
 function atWorkRank(chat: ChatListItem): number | null {
   if (!chat.mine) return null;
   if (chat.state === 'needsYou') return 0;
   if (chat.state === 'running' || chat.state === 'paused') return 1;
-  if (chat.unread) return 2;
   return null;
+}
+
+/**
+ * The Inbox's rows (chat-inbox): the person's own chats at work, then their
+ * unread results, newest first in each. Unlike Agents at work, the Inbox
+ * keeps a finished answer until it is read.
+ */
+export function inboxChats(chats: ChatListItem[]): ChatListItem[] {
+  const rank = (chat: ChatListItem) => atWorkRank(chat) ?? (chat.mine && chat.unread ? 2 : null);
+  return chats
+    .map((chat) => ({ chat, rank: rank(chat) }))
+    .filter((entry): entry is { chat: ChatListItem; rank: number } => entry.rank !== null)
+    .sort((a, b) => a.rank - b.rank || newestFirst(a.chat, b.chat))
+    .map((entry) => entry.chat);
 }
 
 /** The local midnight that starts `date`'s day. */

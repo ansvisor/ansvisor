@@ -12,6 +12,7 @@ import {
   getKpiPresetPreview,
   getKpiSnapshots,
   removeKpi,
+  setKpiTarget,
   seedKpiPresets,
   type KpiSnapshot,
   type KpiSnapshotsResult,
@@ -171,6 +172,20 @@ function KpisContent({ brand }: { brand: Brand }) {
       else next.add(status);
       return next;
     });
+  };
+
+  // "Goal passed · Set a new goal" (UX audit AC-62): saved only once confirmed.
+  const handleSetGoal = async (key: KpiKey, target: number) => {
+    setBusyKey(key);
+    try {
+      await setKpiTarget(brand.id, key, target);
+      await load();
+      toast.success(t('newGoal.saved'));
+    } catch {
+      toast.error(t('newGoal.failed'));
+    } finally {
+      setBusyKey(null);
+    }
   };
 
   const handleRemove = async (key: KpiKey) => {
@@ -395,6 +410,13 @@ function KpisContent({ brand }: { brand: Brand }) {
             previewing
               ? undefined
               : guard((key: KpiKey) => void handleRemove(key), { action: tActions('removeKpis') })
+          }
+          onSetGoal={
+            previewing
+              ? undefined
+              : guard((key: KpiKey, target: number) => void handleSetGoal(key, target), {
+                  action: tActions('editKpis'),
+                })
           }
           busyKey={busyKey}
         />

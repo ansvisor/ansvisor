@@ -45,7 +45,7 @@
         "oldest first"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -53,11 +53,11 @@
         },
         {
           "heading": "Today's focus",
-          "text": "What to do today is on the **Today** tab: **Today's focus** lists your three highest-impact open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. The **Actions** tab lists every action; sort it by Priority to see what comes next."
+          "text": "What to do today is on the **Today** tab: **Today's focus** lists your three highest-impact open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. The **Actions** tab lists every open action; sort it by Priority to see what comes next."
         },
         {
           "heading": "Agent work",
-          "text": "When Chat is on, the **Agent work** gear beside **Today's focus** sets how far your workspace's agents go without a person:\n\n- **I approve first**, where every workspace starts: every change an agent makes waits for someone to approve it, whatever the agent's mode.\n- **Agent starts on its own**: each agent works in its own mode, **Ask me first**, **Auto** or **Full auto**.\n\nNeither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. It is also in **Settings › Chat**."
+          "text": "When Chat is on, the **Agent work** gear beside **Today's focus** sets how far your workspace's agents go without a person:\n\n- **I approve first**, where every workspace starts: each change an agent makes waits for someone's OK.\n- **Agent starts on its own**: each agent follows its own mode, **Ask me first**, **Auto** or **Full auto**.\n\nEither way, agents always ask before publishing or sending. The exception is an agent an Admin has allowed to publish and send on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. The panel opens above the gear, clear of the focus rows' buttons. It is also in **Settings › Chat**."
         },
         {
           "heading": "Action categories",
@@ -69,7 +69,7 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products."
+          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Open** and **Stale**) and **Assignee**, or search. **Status** starts on **Open** (new, in progress and on hold, anyone's), the number Today shows; pick **All** to add closed ones. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products."
         },
         {
           "heading": "Action codes",
@@ -85,11 +85,15 @@
         },
         {
           "heading": "Stale actions",
-          "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: it shows a **Stale** label next to its status, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Still relevant** in the open action, or in the row menu. The label goes, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it."
+          "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: its row keeps one status, **New**, with \"No update in 44 d\" under it, the open action shows a **Stale** label, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Still relevant** in the open action, or in the row menu. The hint and label go, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it.\n\nAn open action whose signals have all resolved shows **Signal resolved, review** instead of a signal count. It stays open: check whether the work is done, then complete or dismiss it."
         },
         {
           "heading": "Inside an action",
-          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
+          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent.\n\nThe title's count, **Why this action?**, the **Goal**'s \"5 of 7 prompts\" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows."
+        },
+        {
+          "heading": "A goal date that has passed",
+          "text": "The **Goal** is set for the action's due date, or 30 days after it was raised. Once that day has gone and the action is still open, **Goal date passed** shows under it, with **Set a new date**, which takes you to **Due date**. The date never moves on its own, so a missed goal stays visible."
         },
         {
           "heading": "In your language",
@@ -123,7 +127,9 @@
         "targets",
         "edit kpis",
         "kpi status",
-        "goal reached"
+        "goal reached",
+        "visibility score",
+        "out of 100"
       ],
       "synonyms": [
         "key metrics",
@@ -132,7 +138,7 @@
         "performance targets"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -140,15 +146,23 @@
         },
         {
           "heading": "KPIs you can track",
-          "text": "AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic and Positive Sentiment.\n\nA brand that never had KPIs starts with a suggested set: AI Visibility, Citations, Mentions, Share of Voice and Positive Sentiment, plus AI Referral Traffic when Google Analytics is connected. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. It is saved the first time an admin or manager opens KPIs."
+          "text": "AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic and Positive Sentiment.\n\nAI Visibility is your Visibility score over the KPI period (Today shows it for the latest run): a score out of 100, such as \"29.9/100\", not a percentage of prompts. Its goal is out of 100 too, and its change, here and in History results, is in points. Share of Voice and Positive Sentiment are percentages.\n\nA brand that never had KPIs starts with a suggested set: AI Visibility, Citations, Mentions, Share of Voice and Positive Sentiment, plus AI Referral Traffic when Google Analytics is connected. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. It is saved the first time an admin or manager opens KPIs."
         },
         {
           "heading": "KPI status",
           "text": "- **Goal Reached**: 100% of the goal or more.\n- **On Track**: 70% or more, and not moving the wrong way.\n- **At Risk**: 40 to 69%, or moving the wrong way before the goal is reached.\n- **Off Track**: under 40%."
         },
         {
+          "heading": "Set a new goal",
+          "text": "When a KPI passes its goal, **Goal passed · Set a new goal** shows under its status. Click it to see the next goal, 20% above where the KPI is now; change it if you like and click **Save goal**. Nothing changes until you save. Point at a goal to see its exact number, such as 21,356 behind \"21.4K\"."
+        },
+        {
           "heading": "Change your KPIs",
           "text": "Click **Edit KPIs** (or **Configure KPIs**) to open the framework. Pick a template (**AI Search Visibility**, **Brand Monitoring** or **Custom Framework**; **Content Performance** is marked coming soon), a time period (Weekly, Monthly or Quarterly) and a target for each KPI, then click **Save & Apply**. Only admins and managers can change KPIs."
+        },
+        {
+          "heading": "KPIs on an action",
+          "text": "An action's Overview lists the KPIs it is linked to, each with its **Brand monthly goal** (or weekly, or quarterly, as the goal is set), such as \"Brand monthly goal: 5k\". That is the goal for the whole brand, written as on this page, not a goal for the action's own prompts."
         }
       ]
     },
@@ -216,15 +230,15 @@
         "findings"
       ],
       "plan": "all",
-      "updated": "2026-11-14",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
-          "text": "The **Signals** tab lists what changed: a visibility drop, a lost citation, a competitor gaining, a page with no AI traffic, a site issue. Signals are detected after your daily tracking runs, and they are the evidence actions are built from. Many of the same changes also appear in the Daily Pulse email."
+          "text": "The **Signals** tab lists what changed: a visibility drop, a lost citation, a competitor gaining, a page with no AI traffic, a site issue. Signals are detected after your daily tracking runs, not in real time: the subtitle says how long ago your latest AI answer run finished. They are the evidence actions are built from. Many of the same changes also appear in the Daily Pulse email."
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards show Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before.\n\nFilter by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, or search. Each signal has a code beside its title, such as S-12: each brand numbers its own signals from S-01, and searching for S-12 or 12 finds it."
+          "text": "The cards show Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before. **Resolved** can be higher than **New**: it also counts signals opened before the range and resolved in it.\n\nFilter by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, or search. Each signal has a code beside its title, such as S-12: each brand numbers its own signals from S-01, and searching for S-12 or 12 finds it."
         },
         {
           "heading": "Signal status",
@@ -304,7 +318,8 @@
         "priority level",
         "critical",
         "why this priority",
-        "action ranking"
+        "action ranking",
+        "low confidence"
       ],
       "synonyms": [
         "action priority",
@@ -313,7 +328,7 @@
         "urgency"
       ],
       "plan": "all",
-      "updated": "2026-10-29",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -340,6 +355,10 @@
           "text": "The action's **Overview** tab starts with **Why this priority?**: one sentence written from the facts the score rests on. It says what changed, on what, how recently, and what makes it matter. When past success moves the score by a point or more, it says so too."
         },
         {
+          "heading": "Low confidence",
+          "text": "When an action's score rests on little evidence, such as one kind of finding from one source, a **Low confidence** tag sits next to its score in the **Actions** list and next to **Why this priority?** in the open action. Hover or focus the tag to see why.\n\nThe score itself doesn't change. Confidence is only one part of it, so an action with strong impact and demand can still rank high. Check what it found before you act on it."
+        },
+        {
           "heading": "Not the Content Plan's score",
           "text": "The Content Plan has its own Priority Score, which ranks the Plan's pages. The two are worked out separately."
         }
@@ -357,7 +376,9 @@
         "done when",
         "how we check",
         "attached from chat",
-        "ready for review"
+        "ready for review",
+        "removed prompts",
+        "re-plan"
       ],
       "synonyms": [
         "steps",
@@ -366,7 +387,7 @@
         "task checks"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -399,6 +420,10 @@
         {
           "heading": "Regenerate tasks",
           "text": "Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence, in your brand's terms, by the **Site type** in the brand settings. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance, so it's for admins and managers.\n\nThe AI also reads this brand's last three closed rounds of the same action. It builds on what improved results here, and doesn't hand out again a task that was done without effect. A task it writes without its URL, Change, Done when or How we check waits on **Needs review**."
+        },
+        {
+          "heading": "Prompts removed since the action was created",
+          "text": "An action keeps the prompts it was made for. When some are deleted or paused later, the action says so next to its count, such as \"(4 prompts removed since this action was created)\", in the list and in the open action. Click that note to see which prompts they are, each marked **Deleted** or **Paused**.\n\nWhen more than half of an action's prompts are gone, its tasks may no longer fit. Admins and managers then see **Re-plan with the remaining prompts** under the list. It works like **Regenerate tasks**: it asks first, writes the tasks again for the prompts left, and keeps done, under-way and hand-added tasks. Regenerated tasks never cover removed prompts."
         },
         {
           "heading": "Tasks Ansvisor does itself",
@@ -661,7 +686,7 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -669,19 +694,19 @@
         },
         {
           "heading": "The tabs",
-          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Actions** is how many open actions are yours or unassigned, beside **Signals** how many new signals wait, and beside **Agents** how many of your agent runs wait for you."
+          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Agents** is how many of your agent runs wait for you."
         },
         {
           "heading": "The top of the page",
-          "text": "The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones that are yours or no one's), **Done** (this week) and **Results** (your score and its change)."
+          "text": "The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones: new, in progress or on hold, whoever has them, the same number as **All** on the Actions tab; under it, how many are on hold and how many are yours), **Done** (this week) and **Results** (your score and its change)."
         },
         {
           "heading": "Waiting for you and Where you stand",
-          "text": "Under the loop strip, two cards sit side by side, one under the other on a narrow screen:\n\n- **Waiting for you**: this brand's agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.\n- **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand. Before a score is in, it says so.\n\nEach card keeps its place while Today loads and fills in as soon as its own data is in. To ask about any of it, use **Ask Chat** in the header, on every page."
+          "text": "Under the loop strip, two cards sit side by side, one under the other on a narrow screen:\n\n- **Waiting for you**: this brand's agent work waiting for your OK, drafts waiting for your review (whoever wrote them, linked to **Library › In review**), tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.\n- **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand. Before a score is in, it says so.\n\nEach card keeps its place while Today loads and fills in as soon as its own data is in. To ask about any of it, use **Ask Chat** in the header, on every page."
         },
         {
           "heading": "Since yesterday and Today's focus",
-          "text": "Both run across the page, under the two cards.\n\n- **Since yesterday**: the 3 to 5 biggest changes the nightly checks found since your last visit, each marked **Up**, **Down** or **Rival**, with a link to the action it added. Only high and medium impact signals count; the rest are in **All signals**. On a Monday it reads \"Since Friday\". A quiet day says so.\n- **Today's focus**: your three highest-impact actions, ranked as Chat's daily suggestion ranks them. They stay until you finish them; **Skip for now** hides one from your focus for 7 days without changing it. A new one is marked **New**."
+          "text": "Both run across the page, under the two cards.\n\n- **Since yesterday**: the 3 to 5 biggest changes the nightly checks found since your last visit, each marked **Up**, **Down** or **Rival**, with a link to the action it added. Only high and medium impact signals count; the rest are in **All signals**. On a Monday it reads \"Since Friday\". A quiet day says so.\n- **Today's focus**: your three highest-impact actions, picked as Chat's daily suggestion picks them and shown highest impact first (Critical, High, Medium, Low), then by priority. Each card's first step names the action's own prompts, pages or rivals, the same count as its title. They stay until you finish them; **Skip for now** hides one from your focus for 7 days without changing it. A new one is marked **New**."
         },
         {
           "heading": "Finish setting up",
@@ -786,7 +811,7 @@
         "ai sessions"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -822,7 +847,7 @@
         },
         {
           "heading": "Weekly AI Traffic e-mail",
-          "text": "Every Monday, an e-mail about the week before goes to each brand's Daily Pulse recipients, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.\n\nTo turn it off for a brand, untick **AI Traffic weekly digest** in **Settings › Notifications**; admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only."
+          "text": "Every Monday, an e-mail about the week before goes to each brand's Daily Pulse recipients, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.\n\nTo turn it off for a brand, untick the brand under **AI Traffic weekly digest** in **Settings › Notifications**; it's saved at once, and admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only."
         }
       ]
     },
@@ -1177,7 +1202,7 @@
         },
         {
           "heading": "Open Agents",
-          "text": "Click **Agents** under **Action Center** on the left menu. The page is titled **Agents**, with the Action Center's tabs under it. It is also in the chat menu, under **Inbox**, as **Agents**, with **New** until you first open it. Old links to Agent Center still open it.\n\n**Your agents** comes first, with **Ready to use** under it. **Ask Chat to make one** opens Chat with a request filled in for you to send; **New agent** opens the form. In **Your agents**, the filters above the list show how many agents each holds:\n\n- **Mine**: the agents you own.\n- **Workspace**: the agents shared with everyone in your workspace. Admins also see their teammates' private agents here.\n- **Paused** and **Archived**: agents that are off.\n\nType in **Search by name or skill** to find an agent by its name or by a skill it uses."
+          "text": "Click **Agents** under **Action Center** on the left menu. The page is titled **Agents**, with the Action Center's tabs under it. It is also in the chat menu, under **Inbox**, as **Agents** with an arrow ↗, since it opens outside Chat, and **New** until you first open it. Old links to Agent Center still open it.\n\n**Your agents** comes first, with **Ready to use** under it. **Ask Chat to make one** opens Chat with a request filled in for you to send; **New agent** opens the form. In **Your agents**, the filters above the list show how many agents each holds:\n\n- **Mine**: the agents you own.\n- **Workspace**: the agents shared with everyone in your workspace. Admins also see their teammates' private agents here.\n- **Paused** and **Archived**: agents that are off.\n\nType in **Search by name or skill** to find an agent by its name or by a skill it uses."
         },
         {
           "heading": "Ready-to-use agents",
@@ -1633,7 +1658,7 @@
         },
         {
           "heading": "Ask Chat",
-          "text": "Type in the box and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nOn the left under the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; there it says **Read-only**, linking to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
+          "text": "Type in the box and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nUnder the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Run mode: Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; there it says **Read-only**, linking to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -1805,7 +1830,7 @@
         },
         {
           "heading": "Data used and action links",
-          "text": "Once Chat is done, **Data used** under the answer names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both."
+          "text": "Once Chat is done, **Data used** under the answer names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names comes with its title, and its code, such as AC-07, is a link, also when it's written as code: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both."
         },
         {
           "heading": "Big requests in parts",
@@ -1833,7 +1858,11 @@
         },
         {
           "heading": "The chat menu",
-          "text": "The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Settings**, closed until you click it, holds **General** (your own Chat settings), the **Activity** log, **What Chat can do** and the **Tool policy**.\n\n**Agents at work** lists the chats that need your OK, the ones still working, and finished results you haven't opened yet, with the step each one is on. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.\n\n**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat."
+          "text": "The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Settings**, closed until you click it, holds **General** (your own Chat settings), the **Activity** log, **What Chat can do** and the **Tool policy**."
+        },
+        {
+          "heading": "Agents at work and Chats",
+          "text": "**Agents at work** lists the chats that need your OK and the ones still working or paused, with the step each one is on. A finished chat isn't listed there: it stays under its day with a green dot until you open it, and the **Inbox** lists it too. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.\n\n**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat."
         },
         {
           "heading": "Dots on chats",
@@ -1849,7 +1878,11 @@
         },
         {
           "heading": "Move around Chat",
-          "text": "Pages under Chat, such as **Inbox** and **All chats**, show **← Back to Chat** at the top left, next to where you are, such as Chat › All chats. It takes you back to the chat you last had open in this tab, or to Chat Home. Click **Chat** in the path for Chat Home; **Chat** in the main menu always opens Chat Home too.\n\nEsc closes only the box or menu on top, such as search or a **⋯** menu, and never leaves the page.\n\nIn Chat, the main menu on the left is a narrow bar of icons, so the chat has room. Point at it to see it whole, or click the Ansvisor logo to keep it open; click the logo again to make it narrow. Chat remembers your choice on every device."
+          "text": "Pages under Chat, such as **Inbox** and **All chats**, show **← Back to Chat** at the top left, next to where you are, such as Chat › All chats. It takes you back to the chat you last had open in this tab, or to Chat Home. Click **Chat** in the path for Chat Home; **Chat** in the main menu always opens Chat Home too.\n\nEsc closes only the box or menu on top, such as search or a **⋯** menu, and never leaves the page."
+        },
+        {
+          "heading": "The main menu in Chat",
+          "text": "In Chat, the main menu on the left is a narrow bar of icons, so the chat has room. It stays narrow when you point at it, so it never covers the chat menu; point at an icon to see its name. Click the Ansvisor logo to open the menu whole, and again to make it narrow. Chat remembers your choice on every device.\n\nOn other pages, a narrow main menu opens over the page when you rest the pointer on it, and closes when you move away, press Esc or click outside it."
         },
         {
           "heading": "Manage a chat",
@@ -1861,7 +1894,7 @@
         },
         {
           "heading": "What Chat makes",
-          "text": "When Chat makes something for you, such as a page saved as a Content draft, it shows under the answer as a card with its name and type. It is also kept in **Files** for your whole workspace, and the card says **In Files**. From the card, **Copy** copies it, **Download** gives it in the formats it has (for a page: HTML, Markdown, Word or PDF), and **Open in Content Editor** opens the page to keep working on it. When storage is full, the card says it wasn't saved to Files, with **Get more storage** to add a storage pack. Click **Files** in the chat menu to find, copy or download everything kept there.\n\nThe pen button under an answer, **Open in Content Editor**, turns the answer itself into a new Content draft in your brand and opens it."
+          "text": "When Chat makes something for you, such as a page saved as a Content draft, it shows under the answer as a card with its name and type. It is also kept in **Files** for your whole workspace, and the card says **In Files**. From the card, **Copy** copies it, **Download** gives it in the formats it has (for a page: HTML, Markdown, Word or PDF), and **Open in Content Editor** opens the page to keep working on it. When storage is full, the card says it wasn't saved to Files, with **Get more storage** to add a storage pack. Click **Files** in the chat menu to find, copy or download everything kept there.\n\nThe pen button under an answer, **Open in Content Editor**, turns the answer itself into a new Content draft in your brand and opens it. It shows only on an answer that reads as a page."
         },
         {
           "heading": "A page's title from Chat",
@@ -2151,7 +2184,11 @@
         },
         {
           "heading": "What changes on Chat Home",
-          "text": "With a focus, the chips under **For you now** come from your areas, taken in turn so each one shows: for example **Competitor moves**, **Fact check** or **Buyer questions**. **Complete tasks**, **Win back citations** and **Ready to publish** keep their counts and show only when there is something to do.\n\n**Start with a question** offers four questions from your areas, filled with your own competitors, topics and markets where Ansvisor knows them. Select one and its chat opens at once, with your question and Chat's first step.\n\n**New for you** lists up to four new skills for your areas, such as **Rival brief** or **Buyer questions**; select one to start a chat with it.\n\nWith **Competitors** picked, the line under the greeting can say when a competitor's mention rate rose this week. The skills in the **/** menu list your areas' skills first."
+          "text": "With a focus, the chips under **For you now** come from your areas, taken in turn so each one shows: for example **Competitor moves**, **Fact check** or **Buyer questions**. **Complete tasks**, **Win back citations** and **Ready to publish** keep their counts and show only when there is something to do.\n\n**Start with a question** offers four questions from your areas, filled with your own competitors, topics and markets where Ansvisor knows them. Select one and its chat opens at once, with your question and Chat's first step.\n\n**New for you** lists up to four new skills for your areas, such as **Rival brief** or **Buyer questions**; select one to start a chat with it.\n\nThe skills in the **/** menu list your areas' skills first."
+        },
+        {
+          "heading": "The competitor line",
+          "text": "On the Default view, or with **Competitors** picked, the line under the greeting can say when a competitor's mention rate rose this week. It speaks of your primary rivals, the competitors typed **Direct competitor**, or of any competitor while none is typed so. Click the name to see the numbers on **Competitors**."
         },
         {
           "heading": "Change it later",
@@ -2243,7 +2280,7 @@
         },
         {
           "heading": "Pick an image model",
-          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.\n\nAfter you pick, the model button under the box reads **Image ·** and the model, such as **Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu."
+          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.\n\nAfter you pick, the model button under the box reads **Model: Image ·** and the model, such as **Model: Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu."
         },
         {
           "heading": "Approve the images",
@@ -2683,7 +2720,7 @@
         },
         {
           "heading": "The Skills page",
-          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **Library** lists skills by other people to add (below). **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
+          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **Library** lists skills by other people to add (below). **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace with its **Enabled** switch, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
         },
         {
           "heading": "When Chat picks a skill",
@@ -3060,7 +3097,7 @@
         "group competitors"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -3068,7 +3105,7 @@
         },
         {
           "heading": "Tracked Competitors",
-          "text": "The **Tracked Competitors** card lists every competitor with its domain and:\n\n- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.\n- the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.\n\n**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.\n\nThe **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores. **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations."
+          "text": "The **Tracked Competitors** card lists every competitor with its domain and:\n\n- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.\n- the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.\n\n**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.\n\nThe **Date Range** under the page's title (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as \"Scores cover the last 7 days.\" **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations."
         },
         {
           "heading": "Filter and group by type",
@@ -3076,11 +3113,11 @@
         },
         {
           "heading": "Open a head-to-head comparison",
-          "text": "Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.\n\nThe comparison reads every tracked answer, not just the date range. Its scores are each answer's own visibility score from 0 to 100, for your brand and for the competitor.\n\nWhen there's nothing to compare yet, it says **No comparison data**: run tracking for your prompts first."
+          "text": "Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.\n\nThe comparison reads the same **Date Range** as the cards: its scores, **Gaps**, **Strengths**, **Prompt-by-Prompt** and the runs you open cover those days, and change with it. Its scores are the same AI Visibility Score as the cards, from 0 to 100 and not a percentage, for your brand and for the competitor alike over your answers: for the whole comparison, each platform, each prompt and each answer.\n\nWhen there's nothing to compare yet, it says **No comparison data**: run tracking for your prompts first."
         },
         {
           "heading": "Scores and Platform Breakdown",
-          "text": "At the top of the comparison, **Your Avg. Score**, **Their Avg. Score** and **Score Difference** show your average score, the competitor's, and the difference between them.\n\n**Platform Breakdown** shows your average and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead."
+          "text": "At the top of the comparison, **Your Visibility score** and **Their Visibility score** show each side's score out of 100 over the date range, the same numbers as the two cards, and **Difference** shows the gap between them in points.\n\n**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead. It lists the platforms your plan tracks, with **No answers in this period** for one without answers yet. Microsoft Copilot is asked through Bing AI Mode. Platforms outside your plan, such as Claude on Growth, aren't shown; a line under the card names them."
         },
         {
           "heading": "Gaps and Strengths",
@@ -3088,7 +3125,11 @@
         },
         {
           "heading": "Prompt-by-Prompt Comparison",
-          "text": "**Prompt-by-Prompt Comparison** lists every prompt with **You**, **Them** and **Diff**, the most recently run first.\n\nClick a prompt to see each platform, with its model and region, and how many runs it has. Click a platform with more than one run to see its **Previous runs**, with the date, both scores, the difference and the sentiment. The eye icon opens an AI answer.\n\n**Export CSV** beside the comparison's title downloads it per prompt and platform: the model, region, runs, both scores, the difference and the latest run."
+          "text": "**Prompt-by-Prompt Comparison** lists every prompt with **You**, **Them** and **Diff**, the most recently run first, and how many platforms and runs it has.\n\nClick a prompt to see each platform once, with its scores, and its locations under it, each with its runs. A location answered by two models names the model. A score from fewer than 10 runs is marked **Low sample**: one answer can move it a lot. Click a location with more than one run to see its **Previous runs**, with the date, both scores, the difference and the sentiment. The eye icon opens an AI answer.\n\n**Export CSV** beside the comparison's title downloads it per prompt and platform: the model, region, runs, both scores, the difference and the latest run."
+        },
+        {
+          "heading": "Find a prompt in the comparison",
+          "text": "Above the list, **Search prompts** keeps the prompts with every word you type. Sort them **Most recent first** or **Widest gap first**, and pick a **Category** when your prompts have them. The list shows 20 prompts at a time; **Show more** adds the next ones. When two prompts differ only in letter case, a line says so: pause the extra copy on **Prompts** so their answers count once."
         },
         {
           "heading": "The competitor's pages over time",
@@ -3785,7 +3826,7 @@
         },
         {
           "heading": "What it rests on",
-          "text": "**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap** in points (the strongest competitor's visibility minus yours), the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited. The description says why the opportunity matters in words; its numbers are the ones shown here.\n\nAn opportunity sent from an Action Center task shows that task instead: where, why, how, and when it's done.\n\n**Results** lists the Action Center actions sent from the opportunity, with what changed once their work is complete and measured."
+          "text": "**Source Data** shows the related prompt, **Est. AI Volume**, your **Current Visibility**, the **Competitor Gap** in points (the strongest competitor's visibility minus yours), the **Strongest Competitor**, the **Search Intent**, the keywords, the searches AI engines ran for the prompt, and the competitors cited. The description says why the opportunity matters in words; its numbers are the ones shown here.\n\nAn opportunity sent from an Action Center task shows that task instead: where, why, how, and when it's done.\n\n**Results** lists the Action Center actions sent from the opportunity, with what changed once their work is complete and measured.\n\nAn opportunity on one of your pages (optimize, expand, refresh and the like) shows that page under **Your Site**, with its AI citations and sessions over 30 days, as **Write this** opens it."
         },
         {
           "heading": "For a group of prompts",
@@ -4999,6 +5040,9 @@
       "route": "/dashboard/prompts/tracked",
       "keywords": [
         "tracked prompts",
+        "what is a prompt",
+        "how to find the best prompts",
+        "prompts guide",
         "prompt status",
         "columns",
         "performance filter",
@@ -5023,11 +5067,15 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
           "text": "**Tracked Prompts** lists every prompt Ansvisor asks the AI engines for your brand, with its results over the date range you pick (24h, 7d, 30d, 90d or custom). It sits on the **Prompts** tab of the **Prompts** page: the **Tracked** | **Suggestions** switch, at the left of the date range, picks this list or **Prompt Suggestions**. A range you pick carries over to Topics and Query Fan-out."
+        },
+        {
+          "heading": "What a prompt is, and the guide",
+          "text": "A prompt is a question or a request your potential customers type into an AI assistant. The **(i)** beside the **Prompts** title explains this, with examples, and how Ansvisor works: it finds the best prompts, you pick what to track, it asks the AI platforms every day, builds your own data, and smart AI systems show you what to do next. They work for you in the background, every day.\n\n**Open the step-by-step guide**, at its bottom, opens ten steps to find the best prompts and get positioned in their answers, such as connecting Search Console and Analytics, adding the AI traffic code and running Site Audit. Each step opens its page in a new tab, so the guide stays open. Steps your brand's data already shows are ticked. Click outside the guide to close it."
         },
         {
           "heading": "Where the page's actions are",
@@ -5087,7 +5135,7 @@
         "stop the emails"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -5095,7 +5143,7 @@
         },
         {
           "heading": "Choose how often it comes",
-          "text": "Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily**: after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable** (the default): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings. Brands that never chose a frequency use this; a brand whose admin saved **Daily** keeps it.\n- **Off**: no email, no webhook and no Slack post."
+          "text": "Open **Settings › Notifications**. The page has two sections: **Daily Pulse** and **AI Traffic weekly digest**. Under **Daily Pulse**, every active brand has its own card with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily**: after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable** (the default): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings. Brands that never chose a frequency use this; a brand whose admin saved **Daily** keeps it.\n- **Off**: no email, no webhook and no Slack post."
         },
         {
           "heading": "Choose who gets it",
@@ -5103,7 +5151,7 @@
         },
         {
           "heading": "AI Traffic weekly digest",
-          "text": "Each brand's row also has **AI Traffic weekly digest**: every Monday, last week's AI visits in one summary line, with the top three changes. It goes to the same recipients, and isn't sent while the Daily Pulse is **Off**."
+          "text": "The **AI Traffic weekly digest** has its own section on the same page, with one tick box per brand: every Monday, last week's AI visits in one summary line, with the top three changes. Each brand's line shows who gets it: the brand's Daily Pulse recipients, or every member when that list is empty. A tick or untick is saved at once. The digest isn't sent while the brand's Daily Pulse is **Off**."
         },
         {
           "heading": "When it is sent",
@@ -5111,11 +5159,11 @@
         },
         {
           "heading": "What's in a pulse",
-          "text": "The KPIs are **Visibility**, the **7-day trend**, **Mentions** and **Citations**, **Positive sentiment**, and **Prompts you appear in**. For Daily and Only when notable, the period is the latest completed tracking run, at most 24 hours, compared with the run before it. For Weekly, it is the last 7 days compared with the 7 days before. The email subject carries the visibility score and the weekly trend; on Weekly, it says Weekly Pulse."
+          "text": "The KPIs are the **Visibility score** (out of 100, not a percentage), the **7-day average** score with its change in points from the 7 days before, **Mentions** and **Citations**, **Positive sentiment**, and **Prompts with a mention**, such as \"135 of 227\": 227 is the number of prompts with answers in the period. For Daily and Only when notable, the period is the latest completed tracking run, at most 24 hours, compared with the run before it. For Weekly, it is the last 7 days compared with the 7 days before. Lines that cover another period name it. The email subject carries the visibility score and the 7-day average; on Weekly, it says Weekly Pulse."
         },
         {
           "heading": "Highlights",
-          "text": "- **First citation**: a URL from a prompt's Target URLs list was cited by an AI engine for the first time. Up to 5 are listed.\n- **Prompt gain**: a prompt's visibility score rose by 5 points or more this week versus last week. The top 3 are listed.\n- **Competitor overtaken**: last week a competitor's score was at or above yours; this week yours is higher.\n- **New engine**: your brand was mentioned or cited on an AI platform for the first time ever."
+          "text": "- **First citation**: a URL from a prompt's Target URLs list was cited by an AI engine for the first time. Up to 5 are listed.\n- **Prompt gain**: a prompt's visibility score rose by 5 points or more in the last 7 days versus the 7 days before. The top 3 are listed.\n- **Competitor overtaken**: in the 7 days before, a competitor's score was at or above yours; in the last 7 days yours is higher.\n- **New engine**: your brand was mentioned or cited on an AI platform for the first time ever."
         },
         {
           "heading": "Warnings",
@@ -5258,7 +5306,7 @@
         "plus or minus"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-19",
       "sections": [
         {
           "heading": null,
@@ -5266,7 +5314,11 @@
         },
         {
           "heading": "Generate a report",
-          "text": "Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Generated reports appear under **Generated Reports** on the same page, newest first. Delete a report with the bin icon there."
+          "text": "Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Without a title, a report is named after its template, such as Weekly Visibility Summary; its period shows beside it. Generated reports appear under **Generated Reports** on the same page, newest first. To delete one, open its **⋯** menu, choose **Delete report** and confirm."
+        },
+        {
+          "heading": "Share or download from the list",
+          "text": "Each report's **⋯** menu also has **Copy link** and **Download PDF**. **Copy link** copies the report's address: it opens the report for people in your workspace, who sign in to see it. Reports have no public link, so to send one to a client, download the PDF. **Download PDF** saves the same PDF as the report's own page, with your white label kit if you use one."
         },
         {
           "heading": "Templates",
@@ -5274,7 +5326,7 @@
         },
         {
           "heading": "Sections",
-          "text": "The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, AI-sourced pipeline, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. **AI-sourced pipeline** comes with the Growth plan and above. The AI executive summary is always included: it isn't a section you pick. If it can't be written, the report is saved with its figures and no summary."
+          "text": "The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, AI-sourced pipeline, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. **AI-sourced pipeline** comes with the Growth plan and above. The AI executive summary is always included: it isn't a section you pick. If it can't be written, the report is saved with its figures and no summary. A section that can't be gathered is tried once more; if it still fails, the report is saved without it and doesn't mention it, so nothing in it tells a client data is missing. Admins see a short note about it above the report, which the PDF leaves out."
         },
         {
           "heading": "Read a report",
@@ -5283,6 +5335,10 @@
         {
           "heading": "Site Audit Score",
           "text": "**Site Audit Score** shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. It isn't compared with the previous period. Once the page has three audits by the end date, the score shows its range, such as **64 ± 2**, worked out as in Site Audit's report: half the gap between the lowest and highest score of its last five audits. A line below gives those two scores. Reports made before the range was added don't show it."
+        },
+        {
+          "heading": "KPIs and the leaderboard",
+          "text": "The KPI row leads with your **Visibility score**, out of 100, such as **15.5/100**, never with a % sign. It blends how often AI answers mention you, how often they cite your site and how early they name you. Next to it, **Prompts with a mention** is the share of the period's answered prompts whose answers named or cited you, with the counts under it, such as **112 of 308 prompts**. **Mentions**, **Brand Citations** and **Positive Sentiment** follow. The older **Avg. Score** is no longer shown.\n\nIn the **Competitor Leaderboard**, the **Visibility score** column shows each brand's score with its prompts with a mention under it, and **Change** is the score's change in points. A report saved before a figure existed shows only the figures it has."
         },
         {
           "heading": "AI-sourced pipeline",
@@ -5322,11 +5378,15 @@
       "sections": [
         {
           "heading": null,
-          "text": "**What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**. It shows the brand you have open."
+          "text": "**What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**, and go back with **Back to Reports**. It shows the brand you have open."
+        },
+        {
+          "heading": "What shipped means",
+          "text": "A change is shipped once it went live: published to your CMS, its pull request merged, or marked as shipped. A draft waiting for review isn't shipped yet, so it isn't measured. A month with nothing shipped says so and points to **Today's focus**, where you can start an action."
         },
         {
           "heading": "How a change is measured",
-          "text": "Each change is compared on its target prompts: the 14 days before it shipped against the days after. The same is done for similar prompts nothing touched, the control. The **Lift** is how much more the target prompts moved than the control, in points. A change needs a lift of at least 3 points to count as **Improved** or **Declined**.\n\nResults come at **checkpoints**: day 7 shows only the early direction (**Pending · early signal**), day 14 gives the first verdict, day 30 confirms it and day 90 shows whether it lasted. In a change's details, day 90 says **Held** when it kept the verdict before it, or **Faded** when it didn't. It all comes from your scheduled tracking, so it costs nothing extra.\n\nA result shows that things moved together, not that the change alone made them move."
+          "text": "The page sums this up under **How we measure**. Each change is compared on its target prompts: the 14 days before it shipped against the days after. The same is done for similar prompts nothing touched, the control. The **Lift** is how much more the target prompts moved than the control, in points. A change needs a lift of at least 3 points to count as **Improved** or **Declined**.\n\nResults come at **checkpoints**: day 7 shows only the early direction (**Pending · early signal**), day 14 gives the first verdict, day 30 confirms it and day 90 shows whether it lasted. In a change's details, day 90 says **Held** when it kept the verdict before it, or **Faded** when it didn't. It all comes from your scheduled tracking, so it costs nothing extra.\n\nA result shows that things moved together, not that the change alone made them move."
         },
         {
           "heading": "Read the page",
@@ -6236,7 +6296,7 @@
         },
         {
           "heading": "AI Recommendations",
-          "text": "**AI Recommendations**, right under the score, collects the fixes written for this page, ordered by priority: **high**, **medium** or **low**. Each names the signal and says what to change in one sentence. Where it helps, it gives a ready-to-paste draft, such as a meta description, an H1, an opening paragraph, FAQ questions and answers or sources to cite, and code, such as an FAQ schema block.\n\nMechanical signals, such as HTTPS, the viewport tag, alt text or a video embed, keep their general fix. Home, pricing, product and legal pages get no author advice: they don't carry a byline. Copy names only the AI engines your brand tracks."
+          "text": "**AI Recommendations**, right under the score, collects the fixes written for this page, ordered by priority: **high**, **medium** or **low**. Each names the signal and says what to change in one sentence. Where it helps, it gives a ready-to-paste draft, such as a meta description, an H1, an opening paragraph, FAQ questions and answers or sources to cite, and code, such as an FAQ schema block.\n\nMechanical signals, such as HTTPS, the viewport tag, alt text or a video embed, keep their general fix. Home, pricing, product and legal pages get no author advice: they don't carry a byline."
         },
         {
           "heading": "In your language",
@@ -6397,7 +6457,8 @@
         "audit settings",
         "audit again",
         "bulk audit",
-        "audit all"
+        "audit all",
+        "your language"
       ],
       "synonyms": [
         "page audit",
@@ -6426,7 +6487,11 @@
         },
         {
           "heading": "Before a bulk audit",
-          "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\n**Audit all** leaves out pages audited in the last 7 days; untick **Leave out** to include them. Pages you pick yourself are all audited, recent ones too, since a change across the site, such as robots.txt or a template, moves their scores; tick **Leave out** to skip them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
+          "text": "Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.\n\nPages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.\n\nWhen fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month."
+        },
+        {
+          "heading": "Following a bulk audit",
+          "text": "While a bulk audit runs, a bar above the lists shows **12 of 235 done · about 70 min left**. The time left is worked out from how fast the audits have finished since you opened the page, so it appears once the first one is done and settles as more finish. Audits run a few at a time, so a large batch takes a while.\n\nClick **This batch** to list only the pages in the bulk audit on **Pages**, and **All pages** to go back. When every audit is done the bar says so until you dismiss it."
         },
         {
           "heading": "The Pages list during a bulk audit",
@@ -6447,6 +6512,10 @@
         {
           "heading": "How auto-audit works",
           "text": "Auto-audit spends a quarter of your monthly audits on the top pages of the **Opportunities** tab, in five runs on days 1, 7, 14, 21 and 28 of your billing month. On a plan without a monthly limit, auto-audit is off until you turn it on.\n\nPages you fixed go first: a page whose Site Audit fix you completed in the Action Center in the last 30 days, and that hasn't been audited since, so the action's result says whether the fix took. Pinned pages come next. Pages audited in the last 30 days wait for a later run. After a run, a notice sums it up with **View pages**, and its audits show **Auto** in the Pages list."
+        },
+        {
+          "heading": "Reports in your language",
+          "text": "The report's categories and checks (each check's name, what it looks for, why it matters and how to fix it) follow your interface language. A check added since your language was last updated shows in English until it's translated."
         },
         {
           "heading": "Site Audit settings",

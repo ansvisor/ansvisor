@@ -40,10 +40,14 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-async function render(isLocked: boolean, role: TeamRole = 'manager') {
+async function render(
+  isLocked: boolean,
+  role: TeamRole = 'manager',
+  words: typeof messages = messages,
+) {
   await act(async () => {
     root.render(
-      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+      <NextIntlClientProvider locale="en" messages={words} timeZone="UTC">
         <RoleProvider role={role}>
           <UpgradeDialogContext.Provider
             value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
@@ -86,5 +90,31 @@ describe('AddCompetitorButton', () => {
   it.each(['analyst', 'agency_partner'] as const)('is not shown to an %s', async (role) => {
     await render(false, role);
     expect(container.querySelector('button')).toBeNull();
+  });
+
+  it('words its button and dialog from the messages', async () => {
+    const add = messages.citations.addCompetitor;
+    await render(false, 'manager', {
+      ...messages,
+      citations: {
+        ...messages.citations,
+        addCompetitor: {
+          ...add,
+          ariaLabel: '{domain} rakip olarak ekle',
+          title: '{domain} rakip olarak eklensin mi?',
+          add: 'Ekle',
+        },
+      },
+    });
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="rival.com rakip olarak ekle"]')!
+        .click(),
+    );
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('rival.com rakip olarak eklensin mi?');
+    expect(
+      [...dialog.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Ekle'),
+    ).toBe(true);
   });
 });

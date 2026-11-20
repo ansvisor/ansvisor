@@ -9,6 +9,7 @@ import { logActivity, summaryValue, type ActivityPlace } from './activity';
 import { buildDenial, type ChatDenial } from './denial';
 import type { ChatHref } from './events';
 import { idempotencyKey, requestHash, withIdempotencyKey } from './idempotency';
+import { inRunLocale } from './run-locale';
 import { decideToolCall, type ChatSurface } from './precedence';
 import { readPrecedenceContext, readToolCall } from './precedence-context';
 import type { ChatTool } from './registry/define-tool';
@@ -591,7 +592,11 @@ export type UndoOutcome =
 /** An outcome, with what the person reads. */
 export type UndoResult = UndoOutcome & { message: string };
 
-const undoT = createTranslator({ locale: 'en', messages, namespace: 'chatActivity.undo' });
+/** What Undo says to the person who clicked it: their language inside withRunLocale. */
+const undoT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatActivity.undo' }),
+  'chatActivity.undo',
+);
 
 /** What Undo says: "Undone.", or why not, from messages/en.json. */
 export function undoMessage(outcome: UndoOutcome): string {

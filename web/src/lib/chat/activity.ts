@@ -2,8 +2,11 @@ import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
+import type { ActivityWords } from './activity-view';
 import type { ChatMode, ChatSurface, ToolDecision, ToolDenial } from './precedence';
 import type { ChatTool, ToolClass } from './registry/define-tool';
+import { DEFAULT_LOCALE } from '@/i18n/locales';
+import { inRunLocale, runLocale } from './run-locale';
 
 /**
  * The Activity log (CHAT-20 §10a layer 2; chat_activity_log, 00402): one row
@@ -163,7 +166,11 @@ export type ActivityRecord = ({ kind: 'change' } & ActivityEntry) | AccessDenied
 
 const toolT = createTranslator({ locale: 'en', messages, namespace: 'chatTools' });
 
-/** A tool's name in Settings' words, by label key; '' for a key with no words. */
+/**
+ * A tool's name in Settings' words, by label key; '' for a key with no words.
+ * English: it is saved with a denial's row, which several people read
+ * (the page names it again in each one's words, activity-view shownParams).
+ */
 function toolName(key: string): string {
   return Object.hasOwn(messages.chatTools, key)
     ? toolT(`${key as keyof (typeof messages)['chatTools']}.name`)
@@ -196,7 +203,16 @@ export async function recordActivity(record: ActivityRecord): Promise<string> {
   return (data as { id: string }).id;
 }
 
-const summaryT = createTranslator({ locale: 'en', messages, namespace: 'chatActivity.summary' });
+/** The log's words for the person reading it: their language inside withRunLocale. */
+const summaryT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatActivity.summary' }),
+  'chatActivity.summary',
+);
+const shownToolT = inRunLocale(toolT, 'chatTools');
+const activityT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatAccess.activity' }),
+  'chatAccess.activity',
+);
 
 type SummaryKey = keyof (typeof messages)['chatActivity']['summary'];
 
@@ -205,10 +221,27 @@ export function isSummaryKey(key: string): key is SummaryKey {
   return Object.hasOwn(messages.chatActivity.summary, key);
 }
 
-/** A row's summary in words: "Saved the draft “Pricing FAQ”". */
+/** A row's summary in words, for the person reading the log: "Saved the draft “Pricing FAQ”". */
 export function activitySummary(key: string, params: Record<string, string>): string {
   return isSummaryKey(key) ? summaryT(key, params) : '';
 }
+
+/** The CSV's words (activity-view activityCsv), for the person reading the log. */
+export const activityWords: ActivityWords = {
+  tool: (key) =>
+    key && Object.hasOwn(messages.chatTools, key)
+      ? shownToolT(`${key as keyof (typeof messages)['chatTools']}.name`)
+      : '',
+  approval: (label) => activityT(`approval.${label}`),
+  status: (status) => activityT(`status.${status}`),
+};
+
+/**
+ * A denial's tool named again in the viewer's language (activity-view
+ * shownParams); '' in English, which keeps the name saved with the row.
+ */
+export const deniedToolName = (key: string | null): string =>
+  runLocale() === DEFAULT_LOCALE ? '' : activityWords.tool(key);
 
 /** A value for a summary: the text, on one line, at most 120 characters. */
 export function summaryValue(value: unknown): string {
