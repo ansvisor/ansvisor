@@ -1268,7 +1268,8 @@
     },
     "signalsPage": {
       "title": "Signals",
-      "subtitle": "Real-time signals from AI Search, your site, and the web. These signals drive your Action Center.",
+      "subtitle": "Signals from your AI answers, your site and the web. They drive your Action Center.",
+      "subtitleRun": "Signals from your latest AI answer run ({ago}). They drive your Action Center.",
       "cards": {
         "total": "Total Signals",
         "totalPopulation": "active in the last {days, plural, one {day} other {# days}}",
@@ -1278,6 +1279,7 @@
         "newPopulation": "detected in the last {days, plural, one {day} other {# days}}",
         "resolved": "Resolved Signals",
         "resolvedPopulation": "resolved in the last {days, plural, one {day} other {# days}}",
+        "resolvedNote": "Can be more than New: it includes signals opened before this period and resolved in it.",
         "avgImpact": "Avg. Signal Impact",
         "avgImpactPopulation": "across signals active in the last {days, plural, one {day} other {# days}}",
         "noPrev": "no previous data",

@@ -4,18 +4,18 @@ route: /dashboard/action-center/signals
 keywords: [signals, what changed, visibility drop, lost citation, signal status, signal code, find signal by number]
 synonyms: [alerts, changes, detections, findings]
 plan: all
-updated: 2026-11-14
+updated: 2026-11-20
 last_checked: 2026-11-14
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx, docs/guides/ai-traffic-analytics.mdx]
 ---
-The **Signals** tab lists what changed: a visibility drop, a lost citation, a competitor gaining, a page with no AI traffic, a site issue. Signals are detected after your daily tracking runs, and they are the evidence actions are built from. Many of the same changes also appear in the Daily Pulse email.
+The **Signals** tab lists what changed: a visibility drop, a lost citation, a competitor gaining, a page with no AI traffic, a site issue. Signals are detected after your daily tracking runs, not in real time: the subtitle says how long ago your latest AI answer run finished. They are the evidence actions are built from. Many of the same changes also appear in the Daily Pulse email.
 
 ## Cards and filters
 
-The cards show Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before.
+The cards show Total, Important (high impact), New and Resolved signals, and the average signal impact, for the selected range (7, 30 or 90 days) against the range before. **Resolved** can be higher than **New**: it also counts signals opened before the range and resolved in it.
 
 Filter by category (Visibility, Citation, Mention, Traffic, Technical, Competitor), **Impact**, **Status**, **Source** (AI Results, Google Analytics, Google Search Console, Site Audit) and **Platform**, or search. Each signal has a code beside its title, such as S-12: each brand numbers its own signals from S-01, and searching for S-12 or 12 finds it.
 
