@@ -7,6 +7,7 @@ import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { ChevronRight, Paperclip, Plus, Trash2 } from 'lucide-react';
 import { RemovedNote } from '@/components/action-center/removed-note';
+import { LowConfidenceTag } from '@/components/action-center/low-confidence-tag';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -732,7 +733,12 @@ export function ActionDrawer({
               {action.priorityReason && (
                 <>
                   <section>
-                    <p className="text-xs font-medium text-muted-foreground">{t('priority.why')}</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {t('priority.why')}
+                      </p>
+                      <LowConfidenceTag confidence={action.priorityReason.confidence} />
+                    </div>
                     <p className="mt-1">{priorityReasonText(action.priorityReason, tPriority)}</p>
                     {action.priorityReason.confidence && (
                       <p className="mt-1 text-xs text-muted-foreground">
