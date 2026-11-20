@@ -156,7 +156,7 @@ describe('the Live page tab', () => {
     expect(container.textContent).toContain('Prompts cited · 1 · 1 lost');
     const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toEqual([
-      'best crm for realtorsChatGPT API, PerplexityCited 3×',
+      'best crm for realtorsChatGPT, PerplexityCited 3×',
       'crm pricingWas cited on Google AI OverviewsLost',
     ]);
     expect(
