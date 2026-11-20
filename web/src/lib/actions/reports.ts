@@ -36,6 +36,7 @@ import {
   type ReportSection,
   type ReportTemplateId,
 } from '@/lib/reports/templates';
+import { gatherSection } from '@/lib/reports/gather';
 import { assertWritable } from '@/lib/subscription-guard';
 
 /**
@@ -254,9 +255,10 @@ export interface ReportPayload {
   /** AI-generated executive summary (plain prose). */
   summaryText: string;
   /**
-   * Sections that were asked for but could not be gathered. A report is
-   * generated without them rather than not at all, and this is how the page
-   * says which ones are missing instead of leaving the reader to guess.
+   * Sections that were asked for but could not be gathered, even on a second
+   * try. A report is generated without them rather than not at all. The
+   * report itself never names them (RP-06): only an Admin sees a quiet note
+   * on its page, outside what the PDF draws.
    */
   missingSections?: ReportSection[];
   insights?: InsightsSummary;
@@ -875,20 +877,19 @@ export async function createReport(
   // 1. Gather the metric snapshot through the existing analytics actions —
   //    only the picked sections (null = section not gathered).
   //
-  //    A section that fails does not take the report with it. Losing one
-  //    module is a gap the reader can see; losing all fourteen because the
-  //    last one timed out is a report that never existed. What went missing is
-  //    recorded so the output can say so rather than quietly shrink.
+  //    A section that fails does not take the report with it: it is tried
+  //    once more, and if it still fails the report is saved without it.
+  //    Losing all fourteen because the last one timed out is a report that
+  //    never existed. The gap is logged and kept in the payload for the
+  //    team, but the report a client reads never names it (UX audit RP-06).
   const failed = new Set<ReportSection>();
-  async function section<T>(name: ReportSection, run: () => Promise<T>): Promise<T | null> {
-    try {
-      return await run();
-    } catch (err) {
-      console.error(`[reports] section "${name}" failed for brand ${brandId}:`, err);
-      failed.add(name);
-      return null;
-    }
-  }
+  const section = <T>(name: ReportSection, run: () => Promise<T>) =>
+    gatherSection(
+      name,
+      run,
+      (message, err) => console.error(`${message} (brand ${brandId})`, err),
+      () => failed.add(name),
+    );
   const pick = <T>(name: ReportSection, run: () => Promise<T>) =>
     has(name) ? section(name, run) : Promise.resolve(null);
 
@@ -1007,7 +1008,15 @@ export async function createReport(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ brandId, snapshot, dateFrom, dateTo, template: template.id }),
+    // The gaps stay out of what the summary is written from: its prose must
+    // not tell a client what could not be gathered (RP-06).
+    body: JSON.stringify({
+      brandId,
+      snapshot: { ...snapshot, missingSections: undefined },
+      dateFrom,
+      dateTo,
+      template: template.id,
+    }),
   });
   //    The prose is the one part of a report the reader can do without. If it
   //    cannot be written, the figures are still worth keeping — the page shows

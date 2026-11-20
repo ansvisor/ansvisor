@@ -1,17 +1,23 @@
 ---
 title: Tracked Prompts list, statuses and columns
 route: /dashboard/prompts/tracked
-keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume, track now, no answers yet]
+keywords: [tracked prompts, what is a prompt, how to find the best prompts, prompts guide, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume, track now, no answers yet]
 synonyms: [prompt list, my prompts, prompt table, tracked queries]
 plan: all
-updated: 2026-11-19
-last_checked: 2026-11-19
+updated: 2026-11-20
+last_checked: 2026-11-20
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/prompts.mdx]
 ---
 **Tracked Prompts** lists every prompt Ansvisor asks the AI engines for your brand, with its results over the date range you pick (24h, 7d, 30d, 90d or custom). It sits on the **Prompts** tab of the **Prompts** page: the **Tracked** | **Suggestions** switch, at the left of the date range, picks this list or **Prompt Suggestions**. A range you pick carries over to Topics and Query Fan-out.
+
+## What a prompt is, and the guide
+
+A prompt is a question or a request your potential customers type into an AI assistant. The **(i)** beside the **Prompts** title explains this, with examples, and how Ansvisor works: it finds the best prompts, you pick what to track, it asks the AI platforms every day, builds your own data, and smart AI systems show you what to do next. They work for you in the background, every day.
+
+**Open the step-by-step guide**, at its bottom, opens ten steps to find the best prompts and get positioned in their answers, such as connecting Search Console and Analytics, adding the AI traffic code and running Site Audit. Each step opens its page in a new tab, so the guide stays open. Steps your brand's data already shows are ticked. Click outside the guide to close it.
 
 ## Where the page's actions are
 

@@ -7,7 +7,12 @@ import { track } from '@/lib/analytics';
 import { actionTexts, taskText } from '@/lib/action-center/display';
 import { isReminderKind } from '@/lib/action-center/focus';
 import { ACTION_CENTER_REVIEW } from '@/lib/action-center/tabs';
-import { waitingRows, type WaitingAction, type WaitingRow } from '@/lib/action-center/waiting';
+import {
+  LIBRARY_IN_REVIEW,
+  waitingRows,
+  type WaitingAction,
+  type WaitingRow,
+} from '@/lib/action-center/waiting';
 import { brokenReasons, type BrokenReason } from '@/lib/menu-dots';
 import type { TodayWaiting } from '@/lib/actions/today-waiting';
 import type { FocusCard } from '@/lib/actions/today-focus';
@@ -242,9 +247,10 @@ function WaitingActionLine({ row }: { row: Exclude<WaitingRow, { type: 'prompts'
         return [
           t('drafts.line', { count: row.count }),
           t('drafts.open', { count: row.count }),
+          // Every draft in review, whoever wrote it (AC-03): the Library's In review tab.
           row.count === 1
             ? `/dashboard/content/editor/${encodeURIComponent(row.draftId)}`
-            : '/dashboard/content/library',
+            : LIBRARY_IN_REVIEW,
           undefined,
         ];
       case 'due':

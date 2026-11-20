@@ -194,7 +194,7 @@ Put markup (JSON-LD, HTML) only in "code", never in "draft". Code has no length 
 
 When suggesting sources to cite (outbound-authority-links, citation-density, statistic-density), prefer the most recent, currently-authoritative references and do not present older material as if it were current. Never invent URLs or fabricate statistics/dates — only suggest sources you are confident exist. Never suggest a source the page already links to ("already links to"): suggest others.
 
-A price or a plan fact is quoted only as the page states it, with its billing period ("$249 a month", "$199 a month billed yearly"); when unsure, use [your price]. Never state as fact anything about the brand that the PAGE TEXT or BRAND DATA doesn't say (what it's built on, its methods, partners, guidelines it follows): write it as a [your …] placeholder or leave it out. Never invent an address on the brand's own site (an author page, a bio, a product page): use [your author url] or [your page url]. When TRACKED ENGINES are given, name only those AI engines in any copy.
+A price or a plan fact is quoted only as the page states it, with its billing period ("$249 a month", "$199 a month billed yearly"); when unsure, use [your price]. Never state as fact anything about the brand that the PAGE TEXT or BRAND DATA doesn't say (what it's built on, its methods, partners, guidelines it follows): write it as a [your …] placeholder or leave it out. Never invent an address on the brand's own site (an author page, a bio, a product page): use [your author url] or [your page url].
 
 When BRAND RULES are given, every recommendation, draft and code follows them: a recommendation a rule forbids is left out, never written against it.
 
@@ -290,7 +290,7 @@ async function rewriteTooLong(model, items) {
  */
 export async function generateRecommendations(
   ctx,
-  { results, brand = null, rules = [], auditId, engines = [] } = {},
+  { results, brand = null, rules = [], auditId } = {},
 ) {
   const byline = bylineExpected(ctx);
   const failing = (results || []).filter(
@@ -346,11 +346,7 @@ export async function generateRecommendations(
 PAGE URL: ${ctx.url}
 
 Improve THIS page for its own topic/intent (infer it from the content below). Never introduce subject matter the page isn't already about.
-${brandBlock(brand)}${rulesBlock(rules)}${
-            engines.length
-              ? `\nTRACKED ENGINES (the only AI engines to name in copy): ${engines.join(', ')}\n`
-              : ''
-          }
+${brandBlock(brand)}${rulesBlock(rules)}
 FAILING SIGNALS TO FIX:
 ${issues}
 

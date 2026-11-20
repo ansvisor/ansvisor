@@ -14,6 +14,55 @@
     "upgrade": "Upgrade",
     "choosePlan": "Choose a plan"
   },
+  "locationPicker": {
+    "label": "Locations",
+    "tracked": "tracked",
+    "count": "· {count} {noun}",
+    "countOf": "· {count} of {max} available",
+    "country": "Country",
+    "countryMissing": "Country · not on {engines}",
+    "usState": "United States · state",
+    "city": "City · {country}",
+    "atCap": "Plan limit reached",
+    "add": "Add a country, US state or city",
+    "search": "Search locations…",
+    "empty": "No locations match.",
+    "already": "Already {noun}",
+    "atCapHint": "Plan limit reached — remove a location or upgrade",
+    "remove": "Remove {location}",
+    "cityNote": "A city is asked by Google AI Mode, AI Overview and the API models. ChatGPT, Gemini and Grok answer per country, so track the country too to see them."
+  },
+  "promptCard": {
+    "save": "Save changes",
+    "cancelEdit": "Cancel edit",
+    "edit": "Edit prompt",
+    "delete": "Delete prompt",
+    "deleteTitle": "Delete Prompt",
+    "deleteBody": "Are you sure you want to delete this prompt? This action cannot be undone.",
+    "cancel": "Cancel",
+    "confirmDelete": "Delete"
+  },
+  "brandGuard": {
+    "noBrandsTitle": "No brands yet",
+    "noBrandsBody": "Create your first brand to start tracking how AI engines talk about you.",
+    "createBrand": "Create Brand",
+    "selectTitle": "Select a brand",
+    "selectBody": "Choose which brand you want to work with."
+  },
+  "runSingle": {
+    "title": "Run Single Prompt",
+    "description": "Pick a prompt to test. Only that prompt will run across your enabled platforms.",
+    "empty": "No active prompts found. Add prompts in brand settings first.",
+    "loadFailed": "Failed to load prompts",
+    "runFailed": "Failed to run prompt"
+  },
+  "responseDetail": {
+    "response": "AI Response",
+    "showLess": "Show less",
+    "showFull": "Show full response",
+    "citations": "Citations ({count})",
+    "fanOut": "Query fan-out ({count})"
+  },
   "serverErrors": {
     "invalid": "That didn't go through: something in it isn't valid. Check it and try again.",
     "too_large": "That's too large. Try something smaller.",
@@ -22,7 +71,9 @@
     "forbidden": "You don't have permission to do this. Ask an Admin.",
     "duplicate": "That already exists.",
     "missing_ai_key": "Add an AI provider key in Settings › AI Providers first.",
-    "server_error": "Something went wrong on our side. Try again."
+    "server_error": "Something went wrong on our side. Try again.",
+    "location_limit": "Your plan's prompt locations are full: each prompt counts once per location it tracks, and paused prompts don't count. Remove or pause some, or upgrade your plan.",
+    "brand_limit": "Your plan's brands are all in use. Upgrade your plan to add more."
   },
   "aiUsage": {
     "meter": {
@@ -865,6 +916,7 @@
         "starting": "Starting",
         "notYet": "Not yet",
         "open": "{count} open",
+        "openBreakdown": "{onHold} on hold · {mine} yours",
         "doneWeek": "{count} this week",
         "noChange": "no change",
         "tomorrow": "Tomorrow"
@@ -943,7 +995,7 @@
           "openNewest": "Open the newest in Chat"
         },
         "drafts": {
-          "line": "An agent drafted {count, plural, one {a page} other {# pages}}. Nothing goes live without your OK.",
+          "line": "{count, plural, one {# draft} other {# drafts}} waiting for your review. Nothing goes live without your OK.",
           "open": "{count, plural, one {Review the draft} other {Review # drafts}}"
         },
         "due": {
@@ -1085,8 +1137,8 @@
         },
         "saved": {
           "title": "Saved for you",
-          "drafts": "{count, plural, one {1 draft from your agent} other {# drafts from your agents}}: {title}.",
-          "draftsUntitled": "{count, plural, one {1 draft from your agent} other {# drafts from your agents}} waiting for review.",
+          "drafts": "{count, plural, one {1 draft} other {# drafts}} waiting for your review: {title}.",
+          "draftsUntitled": "{count, plural, one {1 draft} other {# drafts}} waiting for your review.",
           "kept": "Choose a plan to review and publish them. Your {prompts, plural, one {# prompt} other {# prompts}} and {competitors, plural, one {# competitor} other {# competitors}} are kept."
         },
         "plan": {
@@ -1123,6 +1175,16 @@
       "content": "Content"
     },
     "kpis": {
+      "newGoal": {
+        "prompt": "Goal passed · Set a new goal",
+        "title": "New goal for {name}",
+        "description": "It's at {value}, past its goal of {goal}. The new goal starts 20% above where it is now; change it if you like.",
+        "label": "New goal",
+        "cancel": "Cancel",
+        "save": "Save goal",
+        "saved": "New goal saved",
+        "failed": "Couldn't save the goal. Try again."
+      },
       "title": "KPIs",
       "subtitle": "Track the metrics that matter, aligned with your goals.",
       "allKpis": "All KPIs",
@@ -1145,6 +1207,7 @@
         "goal_reached": "Goal Reached"
       },
       "pointsChange": "{value} pts",
+      "score": "{value}/100",
       "vsGoalAria": "{progress}% of goal",
       "editKpis": "Edit KPIs",
       "addKpi": "Add KPI",
@@ -1217,7 +1280,8 @@
       },
       "targets": "Targets",
       "targetAria": "Target for {name}",
-      "invalidTarget": "Targets must be positive; percent targets can't exceed 100.",
+      "invalidTarget": "Targets must be positive; percent and score targets can't exceed 100.",
+      "scoreSuffix": "/100",
       "callout": {
         "title": "This KPI framework will drive your Action Center.",
         "description": "Actions and recommendations are prioritized based on your KPI goals."
@@ -1268,7 +1332,8 @@
     },
     "signalsPage": {
       "title": "Signals",
-      "subtitle": "Real-time signals from AI Search, your site, and the web. These signals drive your Action Center.",
+      "subtitle": "Signals from your AI answers, your site and the web. They drive your Action Center.",
+      "subtitleRun": "Signals from your latest AI answer run ({ago}). They drive your Action Center.",
       "cards": {
         "total": "Total Signals",
         "totalPopulation": "active in the last {days, plural, one {day} other {# days}}",
@@ -1278,6 +1343,7 @@
         "newPopulation": "detected in the last {days, plural, one {day} other {# days}}",
         "resolved": "Resolved Signals",
         "resolvedPopulation": "resolved in the last {days, plural, one {day} other {# days}}",
+        "resolvedNote": "Can be more than New: it includes signals opened before this period and resolved in it.",
         "avgImpact": "Avg. Signal Impact",
         "avgImpactPopulation": "across signals active in the last {days, plural, one {day} other {# days}}",
         "noPrev": "no previous data",
@@ -1881,14 +1947,15 @@
       "choices": {
         "approve_first": {
           "label": "I approve first",
-          "note": "Every change an agent makes waits for someone's approval, whatever the agent's mode."
+          "note": "Each change an agent makes waits for someone's OK."
         },
         "auto_start": {
           "label": "Agent starts on its own",
-          "note": "Each agent works in its own mode: Ask me first, Auto or Full auto."
+          "note": "Each agent follows its own mode: Ask me first, Auto or Full auto."
         }
       },
-      "goLive": "Neither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own.",
+      "goLive": "Agents always ask before publishing or sending.",
+      "goLiveAdmin": "The exception: an agent an Admin has allowed to publish and send on its own.",
       "changedBy": "Changed by {name} · {date}",
       "someone": "someone no longer in the workspace",
       "neverChanged": "Not changed yet: every workspace starts on I approve first.",
@@ -1951,6 +2018,7 @@
         "actions": "Actions"
       },
       "status": {
+        "open": "Open",
         "new": "New",
         "in_progress": "In Progress",
         "on_hold": "On Hold",
@@ -1961,6 +2029,7 @@
       "stale": {
         "pill": "Stale",
         "hint": "New for {days} days or more, with no one working on it",
+        "quiet": "No update in {days} d",
         "notice": "Stale: this action has been New for {days} days or more and no one has worked on it. It isn't closed: keep it if it still matters, or dismiss it.",
         "keep": "Still relevant",
         "kept": "Kept: it's no longer stale"
@@ -1970,6 +2039,7 @@
       "everyoneTitle": "Everyone in the workspace: no one is assigned yet",
       "tags": {
         "signals": "{count, plural, one {1 signal} other {# signals}}",
+        "signalResolved": "Signal resolved, review",
         "prompts": "{count, plural, one {1 prompt} other {# prompts}}",
         "pages": "{count, plural, one {1 page} other {# pages}}",
         "sources": "{count, plural, one {# source} other {# sources}}",
@@ -1981,8 +2051,15 @@
       },
       "removed": {
         "note": "({items} removed since this action was created)",
-        "hover": "No longer tracked since this action was created: {names}",
-        "hoverMore": "No longer tracked since this action was created: {names} and {more} more"
+        "title": "No longer tracked since this action was created",
+        "more": "and {count} more",
+        "reasons": {
+          "deleted": "Deleted",
+          "paused": "Paused"
+        },
+        "replanHint": "More than half of this action's prompts are gone, so its tasks may not fit the {count, plural, one {# prompt} other {# prompts}} left.",
+        "replan": "Re-plan with the remaining prompts",
+        "replanConfirm": "Write this action's tasks again for the prompts left? Done, under-way and hand-added tasks stay."
       },
       "menu": {
         "label": "Actions for this item"
@@ -2007,6 +2084,8 @@
         "description": "Actions are generated from your signals after daily tracking runs. When meaningful work emerges, it will appear here — quality over quantity."
       },
       "noResults": "No actions match these filters.",
+      "noOpen": "No open actions. Completed and dismissed ones are under every status.",
+      "showAllStatuses": "Show every status",
       "error": {
         "title": "We couldn't load your actions.",
         "retry": "Try again"
@@ -2026,6 +2105,10 @@
         },
         "notScored": "Not scored yet",
         "why": "Why this priority?",
+        "lowConfidence": {
+          "tip": "Based on {why}. Confidence is only one part of the score, so impact and demand can still rank it high. Check it before acting.",
+          "sentTip": "Rated from what it was sent with, not from detected findings. Check it before acting."
+        },
         "reason": {
           "change": {
             "lost": "Lost ground on {subject}",
@@ -2187,7 +2270,7 @@
         "why": "Why this action?",
         "goal": "Goal",
         "kpis": "KPIs",
-        "kpiTarget": "target {target}",
+        "kpiBrandGoal": "{timeframe, select, weekly {Brand weekly goal} quarterly {Brand quarterly goal} other {Brand monthly goal}}: {target}",
         "noKpis": "No configured KPIs are linked to this action.",
         "support": "{count, plural, =0 {No open signal supports this action any more.} one {# signal supports this action} other {# signals support this action}}",
         "supportAll": "All signals ({count})",
@@ -2328,6 +2411,8 @@
         "assignee": "Assignee",
         "assignTo": "Assign to teammate",
         "dueDate": "Due date",
+        "goalPassed": "Goal date passed",
+        "setNewDate": "Set a new date",
         "statusLabel": "Status",
         "events": {
           "created": "{source, select, chat {Action created from Chat} ads {Action created from Ads} other {Action created}}",
@@ -5097,6 +5182,8 @@
     "readOnly": "Read-only · {role}",
     "readOnlyTitle": "{role}s ask and read. Admins and Managers make changes. See what you can do.",
     "model": "Model",
+    "modelPrefix": "Model:",
+    "modelTip": "The AI model Chat answers with, and how hard it works. Auto picks one for each step.",
     "modelAuto": "Auto",
     "modelWarn": "Model · {usage}",
     "modelImage": "Image · {model}",
@@ -5238,6 +5325,7 @@
     },
     "mode": {
       "label": "Run mode",
+      "prefix": "Run mode:",
       "current": "Run mode: {mode}",
       "ask_first": "Ask me first",
       "auto": "Auto, ask before changes",
@@ -5773,7 +5861,8 @@
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
       "agents": "Agents",
       "agentsShort": "Agents",
-      "agentsLabel": "Agents · in Action Center"
+      "agentsLabel": "Agents · in Action Center",
+      "agentsTip": "Opens Action Center › Agents, outside Chat"
     },
     "actions": {
       "more": "More for {name}",
@@ -5870,7 +5959,7 @@
         "whatsNew": "What’s new"
       },
       "byFocus": {
-        "rivalRose": "{rival}’s mention rate rose {points, number} points this week.",
+        "rivalRose": "<link>{rival}</link>’s mention rate rose {points, number} points this week.",
         "startTitle": "Start with a question",
         "newForYou": {
           "title": "New for you",
@@ -8504,6 +8593,11 @@
       "createAgent": "Create agent",
       "connect": "Connect {name}",
       "notConnected": "{name} · not connected",
+      "catalog": {
+        "name": "A catalog",
+        "connect": "Connect a catalog (Shopify, feed URL, CSV)"
+      },
+      "enabled": "Enabled",
       "toggle": "/{name} on for the workspace",
       "turnedOn": "/{name} is on for the workspace.",
       "turnedOff": "/{name} is off for the workspace.",
@@ -9250,6 +9344,17 @@
       "saveFailed": "Couldn't save the settings",
       "loadFailed": "Couldn't load the settings"
     },
+    "batch": {
+      "title": "Bulk audit",
+      "progress": "{done} of {total} done",
+      "timeLeft": "about {minutes} min left",
+      "estimating": "working out the time left…",
+      "finished": "All {total, plural, one {# audit is} other {# audits are}} done",
+      "thisBatch": "This batch",
+      "thisBatchTip": "List only the pages in this bulk audit",
+      "allPages": "All pages",
+      "dismiss": "Dismiss"
+    },
     "autoRun": {
       "label": "Auto-audit",
       "done": "{pages, plural, one {# page} other {# pages}} audited · {issues, plural, one {# critical issue} other {# critical issues}}",
@@ -9499,6 +9604,7 @@
       "tipSame": "This page's last {audits} audits all scored {low}."
     },
     "aiRecommendations": "AI Recommendations",
+    "topRecommendations": "Top recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",
     "allSignals": "All signals",
@@ -9511,6 +9617,327 @@
     "emptyTitle": "Audit any page for AI search readiness",
     "emptyBody": "Enter a URL above to score it against 48 AEO/GEO signals and get AI-written fixes."
   },
+  "auditRubric": {
+    "categories": {
+      "structure": {
+        "label": "Structure",
+        "description": "How parseable your page is to an AI engine. Schema, headings, lists, tables, alt-text, OG meta. The substrate that makes everything else legible."
+      },
+      "authority": {
+        "label": "Authority",
+        "description": "Whether your page reads as authored by an expert, citing real sources. Bylines, citations, statistics, quotations, freshness, technical terms."
+      },
+      "content": {
+        "label": "Content",
+        "description": "Whether the page actually answers the buyer query — directly, completely, in the right register. BLUF, query coverage, sub-question coverage, readability, and on product pages the description's opening."
+      },
+      "trust": {
+        "label": "Trust",
+        "description": "Crawl-time + share-time trust signals: HTTPS, canonical, viewport, AI-bot access via robots.txt and a live fetch as each AI bot, Twitter card, meta description. llms.txt is shown for information only."
+      },
+      "eeat": {
+        "label": "E-E-A-T",
+        "description": "Google's framework for Experience, Expertise, Authoritativeness, Trustworthiness. First-person evidence, case studies, author credentials, brand entity in Wikidata, press mentions, privacy policy, contact info."
+      }
+    },
+    "signals": {
+      "structural-depth": {
+        "label": "Structural depth (GEO-SFE)",
+        "what": "Heading hierarchy + nested structure depth — H1→H2→H3 nesting that mirrors a real outline.",
+        "why": "arXiv:2603.29979 shows a +17.3% citation lift for pages with measurable structural depth vs flat documents.",
+        "howToFix": "Group your content under named H2 subsections. Use H3 for sub-points. Don't skip levels."
+      },
+      "internal-linking": {
+        "label": "Internal linking",
+        "what": "Links from this page to other pages on your site — signal of a navigable graph.",
+        "why": "AI crawlers expand context via internal links the same way they crawl. Isolated pages get under-indexed.",
+        "howToFix": "Add 5–10 internal links per page to related concepts, glossary terms, or supporting pages."
+      },
+      "page-weight": {
+        "label": "Page weight",
+        "what": "Total HTML size, lower is better. We flag pages over 500 KB.",
+        "why": "AI render bots have shorter timeouts than humans. Heavy pages get truncated or skipped.",
+        "howToFix": "Strip unused JS, defer below-the-fold images, kill render-blocking third-party scripts."
+      },
+      "no-js-content": {
+        "label": "Main text without JavaScript",
+        "what": "How much of the page's main text is in the HTML an AI bot gets before any JavaScript runs, compared with the page as a browser renders it. 10% or less hidden passes; up to 30% warns.",
+        "why": "AI crawlers such as GPTBot, ClaudeBot and PerplexityBot don't run JavaScript: text that only appears once it runs is text they never see.",
+        "howToFix": "Render the main content on the server (server-side rendering or static pages), or prerender it for bots, instead of loading it with JavaScript."
+      },
+      "json-ld-presence": {
+        "label": "JSON-LD presence",
+        "what": "Whether the page ships at least one schema.org JSON-LD block.",
+        "why": "Schema.org is the single highest-leverage signal for AI Overview eligibility — engines parse it before text.",
+        "howToFix": "Add at minimum an Organization or Article block. Our /tools/schema-generator outputs valid JSON-LD."
+      },
+      "json-ld-validity": {
+        "label": "JSON-LD validity",
+        "what": "Whether the JSON-LD parses, has @context = schema.org, and a valid @type.",
+        "why": "Malformed JSON-LD is worse than absent — engines log a parse error and downrank trust.",
+        "howToFix": "Run your JSON-LD through Google's Rich Results Test before shipping."
+      },
+      "json-ld-relevance": {
+        "label": "JSON-LD type relevance",
+        "what": "Whether the @type matches the page intent (Article on a blog, Product on a PDP, FAQPage on a FAQ).",
+        "why": "Wrong-type schema gets ignored — Article markup on a homepage is parsed as noise.",
+        "howToFix": "Pick the closest schema.org type for the page's actual content, not a generic catch-all."
+      },
+      "faq-schema": {
+        "label": "FAQ schema",
+        "what": "FAQPage JSON-LD with at least 2 Q&A pairs.",
+        "why": "FAQPage is the highest single-type lift for AI Overview citations per Google's own SGE guidance.",
+        "howToFix": "Add FAQPage schema with 3–5 question/answer pairs that mirror real buyer queries."
+      },
+      "h1-quality": {
+        "label": "H1 quality",
+        "what": "Exactly one H1, length 20–70 chars, contains a primary query token.",
+        "why": "AI engines treat H1 as the page's claim — multiple H1s confuse the topical model.",
+        "howToFix": "One H1 per page, descriptive, 30–60 chars, includes the page's primary topic."
+      },
+      "h2-coverage": {
+        "label": "H2 coverage",
+        "what": "≥3 H2 subsections that segment the content for skim-readability.",
+        "why": "AI engines extract H2s as section anchors — pages without them are harder to summarize.",
+        "howToFix": "Break content into 3–6 H2 subsections, each addressing a sub-question."
+      },
+      "lists": {
+        "label": "Lists",
+        "what": "≥1 <ul> or <ol> with ≥3 items.",
+        "why": "Lists are the unit AI engines preferentially extract for 'how to X' and 'best Y' queries.",
+        "howToFix": "Convert at least one paragraph of enumerated reasons or steps into a real <ul>/<ol>."
+      },
+      "tables": {
+        "label": "Tables",
+        "what": "≥1 <table> with proper <thead>/<tbody> for structured data.",
+        "why": "Tables are the highest-extraction-rate format for comparison and spec-sheet queries.",
+        "howToFix": "If you have specs, prices, or comparisons, render them as real <table>s, not images."
+      },
+      "alt-text": {
+        "label": "Alt-text",
+        "what": "≥80% of meaningful <img> tags have non-empty alt attributes. Decorative images (alt=\"\", role=\"presentation\" or aria-hidden) are left out.",
+        "why": "Multi-modal engines (Gemini, Claude, GPT-4o) read alt-text as page semantic context.",
+        "howToFix": "Add descriptive alt to every meaningful image. Decorative images get alt=\"\"."
+      },
+      "open-graph": {
+        "label": "Open Graph metadata",
+        "what": "og:title, og:description, og:image, og:type all present.",
+        "why": "AI engine link previews + social shares use OG meta as the citation card.",
+        "howToFix": "Add the 4 OG tags. Use 1200×630 og:image. Our /tools/og-checker validates them."
+      },
+      "outbound-authority-links": {
+        "label": "Outbound authority links",
+        "what": "Links to official sites (government, academic or international bodies), reference and research sites, or major news.",
+        "why": "Linking out to trusted sources transfers authority backwards (citation graph effect).",
+        "howToFix": "Cite primary sources with real <a> tags, not bare-text references. Aim for 2–3 per long page."
+      },
+      "citation-density": {
+        "label": "Citation density",
+        "what": "Inline citations per 1000 words (target ≥2).",
+        "why": "Pages that cite sources get cited as sources. Citation density is the strongest non-link authority signal.",
+        "howToFix": "Replace 'studies show' with 'a 2024 Stanford study (link)'. Specificity wins."
+      },
+      "statistic-density": {
+        "label": "Statistic density",
+        "what": "Quantitative claims with numbers per 1000 words (target ≥3).",
+        "why": "AI engines preferentially cite content with measurable claims over hand-wavy text.",
+        "howToFix": "Add real numbers — percentages, dollar amounts, time durations — to your claims."
+      },
+      "quotations": {
+        "label": "Direct quotations",
+        "what": "Inline <blockquote> or quoted attributions.",
+        "why": "Quotations imply primary research. They lift citation rates ~12% in the GEO paper test set.",
+        "howToFix": "Quote one customer, one expert, or one primary source per long page."
+      },
+      "author-byline": {
+        "label": "Author byline",
+        "what": "A named author with at least a real name in the byline area.",
+        "why": "Anonymous content is treated as low-E-E-A-T. AI engines surface authored content.",
+        "howToFix": "Add 'By [Name]' at the top. Link to a real author bio page. Use Person schema."
+      },
+      "date-markup": {
+        "label": "Date markup",
+        "what": "datePublished + dateModified in JSON-LD or <time datetime>.",
+        "why": "Engines penalize undated content as potentially stale. Dated content gets freshness scoring.",
+        "howToFix": "Add JSON-LD datePublished + dateModified, or a visible <time datetime> tag."
+      },
+      "freshness": {
+        "label": "Freshness",
+        "what": "Date modified within the last 365 days.",
+        "why": "Stale content gets downranked for time-sensitive queries. Re-publishing dates resets the clock.",
+        "howToFix": "Refresh top pages at least annually. Bump dateModified when you do."
+      },
+      "technical-terms": {
+        "label": "Technical term density",
+        "what": "Domain-specific terminology indicating real expertise vs surface-level writing.",
+        "why": "Pages that use precise technical vocabulary signal genuine expertise.",
+        "howToFix": "Use the field's actual technical language. Glossary-link or define the first occurrence."
+      },
+      "direct-answer": {
+        "label": "Direct answer to query",
+        "what": "Whether the buyer query appears answered in the first 200 chars.",
+        "why": "AI engines preferentially extract direct answers. Burying the answer = no citation.",
+        "howToFix": "Lead the page with a 1–2 sentence direct answer to the primary query. Then expand."
+      },
+      "bluf-answer": {
+        "label": "BLUF (Bottom Line Up Front)",
+        "what": "A clear thesis statement in the first paragraph stating the page's main claim.",
+        "why": "Military-doctrine writing style — BLUF dramatically improves AI extractability.",
+        "howToFix": "Open with 'The answer is X. Here's why.' Don't bury the lede."
+      },
+      "query-coverage": {
+        "label": "Query token coverage",
+        "what": "Fraction of query tokens that appear in the page body (target ≥80%).",
+        "why": "Coverage is a baseline relevance signal — missing tokens means the page misses the query.",
+        "howToFix": "Make sure every meaningful query token appears at least once in body content."
+      },
+      "entity-coverage": {
+        "label": "Entity coverage",
+        "what": "Named entities mentioned that match the query's entity space.",
+        "why": "AI engines build an entity graph per page — missing related entities reduces topical authority.",
+        "howToFix": "If the page is about X, mention X's known related entities (people, places, products)."
+      },
+      "readability": {
+        "label": "Readability",
+        "what": "Reading-ease score in the page's language: Flesch Reading Ease for English (target 50–70), Ateşman for Turkish (50 or more), Amstad, Kandel–Moles or Fernández-Huerta for German, French or Spanish (60 or more); other languages by sentence and word length.",
+        "why": "Engines extract from content humans can read. Dense, academic text underperforms; in English, very simple text (over 70) can leave out the detail readers expect.",
+        "howToFix": "Under the target: shorten sentences and use plainer words, about 16 words a sentence. English over 70: write fuller sentences with the detail readers expect."
+      },
+      "length": {
+        "label": "Page length",
+        "what": "Word count in the main content (target 800–3000).",
+        "why": "Too short = thin; too long = engines truncate. Sweet spot is medium-long form.",
+        "howToFix": "If under 600 words, expand with examples + sub-sections. If over 4000, split into hub + spokes."
+      },
+      "info-density": {
+        "label": "Information density",
+        "what": "Ratio of substantive content to filler.",
+        "why": "Dense content gets preferentially cited. Engines model 'value per token' implicitly.",
+        "howToFix": "Cut throat-clearing sentences. Replace 'It is important to note that' with the actual point."
+      },
+      "mega-page-coverage": {
+        "label": "Mega-page coverage",
+        "what": "Whether the page covers multiple closely-related sub-topics under one URL.",
+        "why": "Mega-pages outrank thin pages on AI engines because they cover entity neighborhoods.",
+        "howToFix": "Consolidate 3 thin pages into one comprehensive page with H2-segmented sub-topics."
+      },
+      "youtube-embed": {
+        "label": "YouTube embed",
+        "what": "Embedded YouTube video alongside the article.",
+        "why": "Multi-modal engines weight pages with on-topic video. 0.737 correlation with citation rate.",
+        "howToFix": "Create or embed a 2–4 minute video on the page topic. Mark up with VideoObject schema."
+      },
+      "product-description-opening": {
+        "label": "Product description opening",
+        "what": "On a product page, the description's first 40 words (or 250 characters) name the product type and at least two key attributes: a measure, a material, a fit or a use.",
+        "why": "ChatGPT appears to read only about the first 50 tokens of a product description when it matches products to a shopping question. A description that opens with the brand's story may never be matched.",
+        "howToFix": "Put the product type and key attributes in the first 40 words."
+      },
+      "sub-query-coverage": {
+        "label": "Sub-query coverage",
+        "what": "Fraction of decomposed sub-questions answered in body content.",
+        "why": "Engines decompose seed queries into 4–6 sub-queries (Profound 'fanouts') — missing answers = missing citations.",
+        "howToFix": "Add a Q&A section that explicitly addresses the top 5 sub-questions for your topic."
+      },
+      "definitions": {
+        "label": "In-line definitions",
+        "what": "First-mention terms defined inline ('X (definition…)').",
+        "why": "Defined-in-place pages get cited as glossary sources. AI engines preferentially link to them.",
+        "howToFix": "Define the key 3–5 terms on first use, in-line."
+      },
+      "ai-bot-access": {
+        "label": "AI bot access",
+        "what": "Whether robots.txt lets the AI bots in, and whether the page answers them: it is fetched once as GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot and ClaudeBot to catch CDN or firewall blocks.",
+        "why": "A bot your CDN or firewall turns away never reads the page, whatever robots.txt says. Naming the AI bots in robots.txt shows they are welcome.",
+        "howToFix": "Allow GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended in robots.txt, and in your CDN or firewall bot rules."
+      },
+      "llms-txt-presence": {
+        "label": "llms.txt presence",
+        "what": "Whether /llms.txt exists at the site root, per the llmstxt.org proposal. Shown for information only: it does not change the score.",
+        "why": "Proposed as a plain-text map of a site for AI engines.",
+        "howToFix": "Optional. Add /llms.txt at your site root if you want one; it does not change the score.",
+        "evidenceNote": "Weak evidence: Ahrefs found 97% of llms.txt files are never requested, and Google says it has no effect."
+      },
+      "https": {
+        "label": "HTTPS",
+        "what": "Site responds correctly over TLS without mixed content.",
+        "why": "AI crawlers refuse to crawl mixed-content pages. HTTPS is table stakes.",
+        "howToFix": "Migrate to HTTPS. Force redirect with HSTS. Fix mixed-content warnings."
+      },
+      "canonical": {
+        "label": "Canonical URL",
+        "what": "<link rel=canonical> pointing to the page's preferred URL.",
+        "why": "Without canonical, AI engines may split citations across duplicate URLs and downrank each.",
+        "howToFix": "Add <link rel=canonical href=…> to every page. Self-canonical on canonical pages."
+      },
+      "viewport": {
+        "label": "Viewport meta",
+        "what": "<meta name=viewport content=…> present.",
+        "why": "Mobile rendering signal — AI crawlers favor mobile-first content.",
+        "howToFix": "Add <meta name=viewport content=\"width=device-width, initial-scale=1\">."
+      },
+      "twitter-card": {
+        "label": "Twitter card",
+        "what": "<meta name=twitter:card> + twitter:image present.",
+        "why": "AI engines fall back to Twitter card on platforms without OG support.",
+        "howToFix": "Add twitter:card=summary_large_image + twitter:image (can reuse og:image)."
+      },
+      "meta-description": {
+        "label": "Meta description",
+        "what": "<meta name=description> with 80–160 chars of summary text.",
+        "why": "AI engines use meta description as a primary summary candidate when generating cites.",
+        "howToFix": "Write a 130-char meta description for every page. Include the primary query."
+      },
+      "first-person": {
+        "label": "First-person evidence",
+        "what": "Sentences told in the first person, showing real experience: 'we tested', 'I built', and in Turkish verb endings such as 'gezdik' or 'düşünüyoruz'. Two or more pass. Quotes and stock phrases such as 'Contact us' don't count. Read in English and Turkish.",
+        "why": "Google's E-E-A-T update prioritizes lived experience. First-person signals it.",
+        "howToFix": "Use first-person sparingly but precisely — 'we tested', 'in our experience', 'I found that…'."
+      },
+      "case-study-evidence": {
+        "label": "Case study evidence",
+        "what": "Named customer outcomes, numbers, or before/after evidence in-line.",
+        "why": "Case studies are the highest-conversion E-E-A-T signal — prove it, don't just claim it.",
+        "howToFix": "Name one customer. Quote one outcome with numbers. 'We helped X go from Y → Z.'"
+      },
+      "author-credentials": {
+        "label": "Author credentials",
+        "what": "Author has visible credentials — years of experience, prior role, education, certifications — in a byline, an author box anywhere on the page, or Person JSON-LD (jobTitle, description).",
+        "why": "Anonymous bylines fail E-E-A-T. Credentialed authors get treated as expert sources.",
+        "howToFix": "Each author page lists credentials, prior roles, years in field, links to LinkedIn/Twitter."
+      },
+      "byline-depth": {
+        "label": "Byline depth",
+        "what": "Byline links to a real author bio page with sufficient detail, or to the author's profile elsewhere (LinkedIn, Person JSON-LD sameAs).",
+        "why": "Byline → bio page → credentialed author chain is the E-E-A-T graph engines trace.",
+        "howToFix": "Make every byline link to /authors/[name] with bio, photo, credentials, prior work."
+      },
+      "brand-entity": {
+        "label": "Brand entity in Wikidata",
+        "what": "Brand has a Wikidata entity (Q-number) that AI engines can dereference.",
+        "why": "Wikidata is the canonical entity database — engines use it to validate brand identity. No entity = no trust anchor.",
+        "howToFix": "Get a Wikidata entry: requires 2–3 press mentions as citations. Submit at wikidata.org."
+      },
+      "press-mentions": {
+        "label": "Press mentions",
+        "what": "References to or links from top-tier press (NYT, WaPo, Bloomberg, FT, etc.).",
+        "why": "Press mentions transfer authority across the citation graph and validate brand entity claims.",
+        "howToFix": "Earn press. Display logos. Link back to the original article (not your case study)."
+      },
+      "privacy-terms": {
+        "label": "Privacy + terms",
+        "what": "Linked privacy policy + terms of service from every page.",
+        "why": "YMYL (Your-Money-Your-Life) categories require these — and engines treat them as legitimacy signals everywhere.",
+        "howToFix": "Footer-link privacy and terms on every page. Real pages, not coming-soon stubs."
+      },
+      "contact-info": {
+        "label": "Contact info",
+        "what": "Real contact info — email, phone, or address visible on the page or linked /contact.",
+        "why": "Anonymous brands fail E-E-A-T. Real contact info signals real entity behind the content.",
+        "howToFix": "Add an email + physical address (real or registered office) to the footer."
+      }
+    }
+  },
   "auth": {
     "signIn": "Sign in",
     "signUp": "Sign up",
@@ -9520,6 +9947,8 @@
     "email": "Email",
     "workEmail": "Work email",
     "workEmailSuggested": "Work email suggested",
+    "language": "Language",
+    "languageFailed": "Couldn't change the language. Try again.",
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "noAccount": "Don't have an account?",
@@ -9658,6 +10087,53 @@
     },
     "errorRetry": "Start the connection again from the app. If it keeps happening, the app may not support signing in to Ansvisor: use an API key instead.",
     "errorCode": "Code: {code}"
+  },
+  "invite": {
+    "fallbackTeam": "this team",
+    "invalid": {
+      "not_found": {
+        "title": "Invitation not found",
+        "description": "The link you followed is invalid."
+      },
+      "expired": {
+        "title": "Invitation expired",
+        "description": "Ask your team admin to send a new invitation."
+      },
+      "accepted": {
+        "title": "Invitation already used",
+        "description": "This invitation has already been accepted."
+      },
+      "revoked": {
+        "title": "Invitation revoked",
+        "description": "This invitation was revoked by the team admin."
+      },
+      "pending": {
+        "title": "Invitation unavailable",
+        "description": "Please try again or contact your team admin."
+      }
+    },
+    "card": {
+      "title": "Join {organization}",
+      "invitedAs": "You've been invited to join as <b>{role}</b>",
+      "invitedEmail": "Invited email",
+      "signedInAs": "Signed in as",
+      "wrongAccount": "This invitation was sent to <b>{email}</b>, but you're signed in as {current}. Please switch accounts to continue.",
+      "switching": "Switching...",
+      "switchAccount": "Sign out and use correct account",
+      "fullName": "Full name",
+      "namePlaceholder": "Your name",
+      "password": "Set a password",
+      "passwordPlaceholder": "At least 8 characters",
+      "confirmPassword": "Confirm password",
+      "confirmPlaceholder": "Repeat the password",
+      "joining": "Joining...",
+      "accept": "Accept and join {organization}",
+      "passwordNote": "You'll use this password the next time you sign in.",
+      "passwordTooShort": "Password must be at least 8 characters",
+      "passwordsDiffer": "Passwords do not match",
+      "welcome": "Welcome to {organization}!",
+      "failed": "Failed to accept invitation"
+    }
   },
   "dashboard": {
     "overview": "Overview",
@@ -10048,6 +10524,114 @@
         "failed": "Couldn't import the file. Nothing was saved.",
         "back": "Back"
       }
+    },
+    "formulas": {
+      "button": "Formulas",
+      "title": "How metrics are calculated",
+      "visibility": {
+        "title": "Visibility (0–100)",
+        "body": "A single score for how visible your brand is across all AI answers matching the current filters. Every answer counts — including ones where you don't appear — so growing the score means showing up more, being cited more, and being named earlier.",
+        "formula": "Visibility = 100 × ({mention} × mention rate + {citation} × citation rate + {position} × position factor × confidence)",
+        "confidence": "confidence = answers mentioning you ÷ (answers mentioning you + {support})",
+        "mentionRate": "<b>Mention rate ({pct}%)</b> — share of AI answers that mention your brand by name.",
+        "citationRate": "<b>Citation rate ({pct}%)</b> — share of answers that cite your website as a source.",
+        "positionFactor": "<b>Position factor ({pct}%)</b> — how early you're named in the answers that mention you: named first = 1, second = 0.5, third = 0.33, and so on, averaged. The confidence factor weights it by how many answers actually mention the brand, so a perfect position in a handful of answers can't outrank brands that consistently show up.",
+        "competitors": "Competitors on the leaderboard are scored with the exact same formula over the same set of answers, so the numbers are directly comparable."
+      },
+      "trend": {
+        "title": "Visibility trend chart",
+        "body": "Each point is the Visibility computed over the selected time window ending on that day (a rolling window). That's why the newest point always matches the Visibility card above. With \"All time\" selected, each point covers everything up to that day."
+      },
+      "mentions": {
+        "title": "Mentions",
+        "body": "Total number of times your brand was referenced by name in AI answers."
+      },
+      "citations": {
+        "title": "Citations",
+        "body": "Total number of times your website was linked as a source in AI answers. Mentions count your name; citations count your domain."
+      },
+      "sentiment": {
+        "title": "Net sentiment",
+        "body": "Of the answers that name you, the share that is positive minus the share that is negative, in points. Answers that only cite your site aren't counted: they are always neutral. Sentiment is shown alongside Visibility but is not part of the score.",
+        "formula": "Net sentiment = positive answers % − negative answers % (of answers naming you, as on the Mentions page)"
+      },
+      "position": {
+        "title": "Avg. position",
+        "body": "Where you're named in the answers that mention you, averaged. Lower is better: #1 means you're usually named first.",
+        "formula": "Avg. position = sum of your positions ÷ answers that name you"
+      },
+      "citationRate": {
+        "title": "Citation rate",
+        "body": "The share of AI answers that link to your website as a source.",
+        "formula": "Citation rate = answers citing your domain ÷ all answers × 100"
+      },
+      "shareOfVoice": {
+        "title": "Share of Voice",
+        "body": "Your slice of the total brand conversation: of all brand mentions in AI answers — yours plus your tracked competitors' — the share that are yours.",
+        "formula": "SOV = your mentions ÷ (your mentions + competitor mentions) × 100"
+      },
+      "coverage": {
+        "title": "Coverage",
+        "body": "The share of tracked prompts where you showed up (named or cited) at least once in the selected period, against all prompts that produced results.",
+        "formula": "Coverage = prompts you appeared in ÷ prompts answered × 100"
+      },
+      "changes": {
+        "title": "Changes",
+        "body": "Each card's change compares the selected period with the period of the same length just before it, over the prompts answered in both periods only, so adding prompts doesn't inflate it; the numbers themselves still cover every prompt. With \"All time\" there is no earlier period, so no change is shown."
+      }
+    },
+    "breakdownSheet": {
+      "title": "{metric, select, mentions {Mentions} other {Visibility}} Breakdown",
+      "compareHint": "Comparing the selected window with the previous equal-length window.",
+      "allTimeHint": "All time. There is no earlier period of the same length to compare.",
+      "lastVsPrevious": "{days, plural, one {Last # day vs previous # day} other {Last # days vs previous # days}}",
+      "loadFailed": "Failed to load breakdown",
+      "allTime": "All time",
+      "current": "Current {days}d",
+      "noSamePrompt": "No prompt was answered in both periods",
+      "samePrompts": "{count, plural, one {Same # prompt:} other {Same # prompts:}}",
+      "vsPrevious": "vs previous",
+      "noData": "no data",
+      "newNotCounted": "{count, plural, one {Not counted in the change: # new prompt this period.} other {Not counted in the change: # new prompts this period.}}",
+      "newIncluded": "{count, plural, one {The change includes # new prompt added this period.} other {The change includes # new prompts added this period.}}",
+      "tabs": {
+        "prompts": "Prompts",
+        "platforms": "Platforms",
+        "topics": "Topics"
+      },
+      "biggest": "{direction, select, down {Biggest drop} other {Biggest gain}}:",
+      "topPlatform": "Top platform {direction, select, down {drop} other {gain}}: {platform}",
+      "empty": "No data in this window yet.",
+      "columns": {
+        "name": "Name",
+        "prev": "Prev",
+        "cur": "Cur",
+        "change": "Change"
+      },
+      "pts": "pts",
+      "signedPts": "{value} pts",
+      "contributionPts": "{direction, select, down {dropped} other {rose}} {value} pts",
+      "contributionMentions": "{direction, select, down {lost} other {gained}} {count, plural, one {# mention} other {# mentions}}"
+    },
+    "page": {
+      "noDataTitle": "No tracking data yet",
+      "noDataBody": "Run your prompts through AI platforms to see how your brand appears in AI-generated responses.",
+      "testSingle": "Or test a single prompt",
+      "noResults": "No results for the {period, select, 24h {last 24 hours} 7d {last 7 days} 30d {last 30 days} 90d {last 90 days} other {selected period}}",
+      "otherPeriods": "There is tracking data available in other time periods. Try a wider range or switch to \"All time\".",
+      "showAll": "Show all data",
+      "noCompetitorsTitle": "No competitors tracked yet",
+      "noCompetitorsBody": "Add competitors to see how you compare in AI answers.",
+      "headToHead": "Head-to-Head Comparison",
+      "loadFailed": "Failed to load insights — please try again",
+      "exportCapped": "Export capped at 50,000 rows to prevent memory issues",
+      "exportFailed": "Failed to export CSV",
+      "noTrend": "No trend data available yet",
+      "yourBrand": "Your Brand",
+      "avgCompetitor": "Avg. Competitor",
+      "noShareOfVoice": "No share of voice data available",
+      "moreInfo": "More information",
+      "overallShareOfVoice": "Overall Share of Voice"
     }
   },
   "topics": {
@@ -13436,7 +14020,8 @@
     "mergedIntoOpen": "Open it",
     "newSignal": "New signal detected",
     "newSignalScoreRose": "Completed earlier, and its opportunity has grown since: the score rose from {from} to {to}.",
-    "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
+    "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now.",
+    "noWorkflowConnected": "No workflow connected."
   },
   "traffic": {
     "chat": {
@@ -14275,6 +14860,24 @@
           "query": "Missing addresses have a query: no redirect suggested"
         }
       }
+    },
+    "page": {
+      "subtitle": "AI-referred visits to your website",
+      "range": "{start}–{end} of {total}",
+      "previous": "Previous",
+      "next": "Next",
+      "platformBreakdown": "Platform Breakdown",
+      "referralsByPlatform": "Referrals by Platform",
+      "topLandingPages": "Top Landing Pages",
+      "recentVisits": "Recent AI Referral Visits",
+      "columns": {
+        "platform": "Platform",
+        "page": "Page",
+        "visits": "Visits",
+        "change": "Change",
+        "time": "Time",
+        "country": "Country"
+      }
     }
   },
   "ads": {
@@ -14827,6 +15430,95 @@
         "limitReached": "Monthly limit reached"
       }
     },
+    "info": {
+      "button": "How Ansvisor works with prompts",
+      "whatTitle": "What's a prompt?",
+      "whatText": "A question or a request your potential customers type into an AI assistant like ChatGPT or Gemini, such as <example>\"What's the best open-source AEO tool?\"</example> or <example>\"Compare the best AEO platforms\"</example>",
+      "howTitle": "How Ansvisor works",
+      "systemsLine": "Smart AI systems work for you in the background, every day.",
+      "steps": {
+        "find": {
+          "title": "Finds the best prompts.",
+          "text": "Our AI reads your site, your competitors, what people search (Search Console, Analytics) and what the AI platforms themselves answer, and suggests the ones that matter."
+        },
+        "pick": {
+          "title": "You pick what to track.",
+          "text": "Press <b>+</b> on a suggestion."
+        },
+        "ask": {
+          "title": "Asks the AI platforms every day.",
+          "text": "ChatGPT, Gemini, Google AI Overviews and more: do they mention you, link to your site, rank you above competitors?"
+        },
+        "data": {
+          "title": "Builds your own data.",
+          "text": "Every answer is kept, so trends, gaps and your competitors' moves show over time."
+        },
+        "next": {
+          "title": "Smart AI systems show you what to do next.",
+          "text": "They catch drops, find content gaps and prepare pages and fixes in Action Center, to win AI visibility, traffic and revenue."
+        }
+      },
+      "openGuide": "Open the step-by-step guide"
+    },
+    "guide": {
+      "title": "How to find the best prompts and get positioned in their answers",
+      "description": "Do these once, then check Suggestions daily. Each step opens in a new tab, so this guide stays here.",
+      "progress": "{done} of {total} done",
+      "progressLabel": "Steps done",
+      "done": "Done",
+      "comingSoon": "Coming soon",
+      "footer": "Ask Chat to do a step for you: “Connect my Search Console”.",
+      "steps": {
+        "gsc": {
+          "title": "Connect Google Search Console",
+          "text": "See what people already search to find you; we turn it into prompts.",
+          "cta": "Connect"
+        },
+        "ga": {
+          "title": "Connect Google Analytics 4",
+          "text": "See which pages bring visitors, to find the prompts that matter.",
+          "cta": "Connect"
+        },
+        "trafficCode": {
+          "title": "Add the AI traffic code to your site",
+          "text": "Count the visits AI assistants send you, and the AI bots that read your pages.",
+          "cta": "Get the code"
+        },
+        "suggestions": {
+          "title": "Check Suggestions every day",
+          "text": "New prompts from your site, competitors and searches. Press + to track the good ones.",
+          "cta": "Open Suggestions"
+        },
+        "content": {
+          "title": "Create content from suggestions",
+          "text": "Write the pages AI answers are missing for your prompts.",
+          "cta": "Open Content"
+        },
+        "optimize": {
+          "title": "Optimize your pages",
+          "text": "Improve existing pages in the Editor so AI answers cite them.",
+          "cta": "Open Editor"
+        },
+        "audit": {
+          "title": "Fix technical issues",
+          "text": "Run Site Audit and fix what stops AI from reading your site.",
+          "cta": "Run an audit"
+        },
+        "moreTracking": {
+          "title": "Track more prompts",
+          "text": "Add more prompts, locations or AI platforms to your plan.",
+          "cta": "Get more tracking"
+        },
+        "mentions": {
+          "title": "Get mentioned on other sites",
+          "text": "Be named on the third-party sites AI answers trust."
+        },
+        "ads": {
+          "title": "Run AI ads",
+          "text": "Show up in sponsored AI answers."
+        }
+      }
+    },
     "trackNow": {
       "count": "{count, plural, one {# prompt has no answers yet} other {# prompts have no answers yet}}",
       "hint": "These get their first answers with the next tracking run. Track now asks the AI engines now.",
@@ -15151,7 +15843,79 @@
         "usedUp": "This month's suggestion budget is used up. It resets when your subscription renews.",
         "upgrade": "Upgrade for more",
         "startPlan": "Start your plan"
+      },
+      "loadFailed": "Failed to load suggestions.",
+      "generateFailed": "Failed to generate suggestions.",
+      "notConfigured": "AI suggestions are not set up on this server yet: an AI provider key is missing.",
+      "retry": "Retry",
+      "introTitle": "Get platform-specific suggestions",
+      "introBody": "Analyzes this period's answers on every platform (the sub-queries they ran, the sources they cited and the competitors ranked above you) and suggests what to do where the brand is missing or ranked late.",
+      "generate": "Generate suggestions",
+      "generating": "Generating suggestions from this period's answers… this can take up to 15 seconds.",
+      "stale": "New runs have arrived since these suggestions were generated.",
+      "regenerate": "Regenerate",
+      "noRuns": "No runs in this period, so there is nothing to improve yet.",
+      "allWell": "No improvements needed: the brand is mentioned first and cited early on every platform in this period.",
+      "selection": "{selected} of {total} selected · {platforms, plural, one {# platform} other {# platforms}}",
+      "generated": "Generated {date}",
+      "sent": "Sent {date} · {code}",
+      "discardConfirm": "Discard your edits?",
+      "keepEditing": "Keep editing",
+      "discardRegenerate": "Discard & regenerate",
+      "openInActions": "Open in Actions",
+      "sendActions": "Send Actions",
+      "sentToast": "{count, plural, one {Action created with # task} other {Action created with # tasks}}",
+      "open": "Open",
+      "states": {
+        "no_runs": "No runs in this period",
+        "not_mentioned": "Not mentioned",
+        "mentioned_late": "Mentioned · Late",
+        "not_cited": "Mentioned early · not cited",
+        "doing_well": "Doing well"
+      },
+      "mentionRate": "mentioned in {mentioned} of {runs, plural, one {# run} other {# runs}}",
+      "avgPosition": "avg #{position} · {rate}",
+      "avgPositionOf": "avg #{position} of {total} · {rate}",
+      "citedAt": "cited at avg #{rank} of {total} sources · {rate}",
+      "notCited": "not cited · {rate}",
+      "inputs": {
+        "fanouts": "{count, plural, one {# fan-out} other {# fan-outs}}",
+        "citedDomains": "{count, plural, one {# cited domain} other {# cited domains}}",
+        "competitorUrls": "{count, plural, one {# competitor URL} other {# competitor URLs}}",
+        "answer": "AI answer",
+        "basedOn": "Based on {parts}",
+        "basedOnAnswer": "Based on the AI answer",
+        "noFanouts": "No fan-outs recorded. {based}"
+      },
+      "doingWell": "Doing well: no suggestions.",
+      "noneHeldUp": "No suggestion held up against this platform's evidence. Add your own, or regenerate.",
+      "addOwn": "Add your own suggestion",
+      "removed": "Removed: {title}",
+      "removedUntitled": "Removed: your suggestion",
+      "undo": "Undo",
+      "titlePlaceholder": "Title",
+      "bodyPlaceholder": "What to do and why",
+      "select": "Select \"{title}\"",
+      "edit": "Edit suggestion",
+      "remove": "Remove suggestion",
+      "alreadySent": "Already sent",
+      "yourSuggestion": "Your suggestion",
+      "sources": {
+        "fanout": "Fan-out: {ref}",
+        "answer": "AI answer",
+        "brandPage": "Your page: {url}"
+      },
+      "locked": {
+        "title": "Improve is available on Growth",
+        "body": "Get platform-specific suggestions to improve this prompt's position, based on the sub-queries, sources and competitors in each AI answer.",
+        "upgrade": "Upgrade plan"
       }
+    },
+    "errors": {
+      "updateFailed": "Failed to update the prompt. Try again.",
+      "noRoomToResume": "Not enough room to resume",
+      "bulkFailed": "{action, select, resume {Failed to resume the prompts.} other {Failed to pause the prompts.}}",
+      "bulkPartial": "{action, select, resume {{failed} of {total} couldn't be resumed.} other {{failed} of {total} couldn't be paused.}}"
     }
   },
   "volumeEstimate": {
@@ -15558,6 +16322,7 @@
     }
   },
   "competitors": {
+    "forbiddenRole": "Only an admin or a manager can merge competitors.",
     "title": "Competitors",
     "description": "Manage competitors and compare AI visibility head-to-head.",
     "addCompetitor": "Add Competitor",
@@ -15570,7 +16335,7 @@
     "citations": "Citations",
     "trackedCompetitors": "Tracked Competitors",
     "selectToCompare": "Select a competitor to see head-to-head comparison.",
-    "windowLast30Days": "Scores cover the last 30 days.",
+    "windowLastDays": "{days, plural, one {Scores cover the last day.} other {Scores cover the last # days.}}",
     "windowAllTime": "Scores cover all tracked history.",
     "windowSelectedRange": "Scores reflect the selected date range.",
     "selected": "Selected",
@@ -15671,10 +16436,15 @@
     },
     "h2h": {
       "title": "{brand} vs {competitor}",
-      "yourAvg": "Your Avg. Score",
-      "theirAvg": "Their Avg. Score",
-      "overallDiff": "Score Difference",
+      "yourAvg": "Your Visibility score",
+      "theirAvg": "Their Visibility score",
+      "overallDiff": "Difference",
+      "points": "{value} pts",
+      "scoreTip": "Visibility score, 0–100: how often answers in this period name the brand, cite its site, and how early it is named, over your answers. The same score as the cards.",
       "platformBreakdown": "Platform Breakdown",
+      "viaBing": "· via Bing AI Mode",
+      "noAnswersEngine": "No answers in this period",
+      "notInPlan": "Not in your plan, so not shown: {engines}.",
       "promptByPrompt": "Prompt-by-Prompt Comparison",
       "promptByPromptDesc": "Click a prompt to expand and see per-platform breakdown.",
       "comparison": "Comparison",
@@ -15690,7 +16460,25 @@
       "noPromptData": "No prompt-level data available. Run a tracking check first.",
       "noDataTitle": "No comparison data",
       "noDataDescription": "Run a tracking check from Visibility to generate comparison data for this competitor.",
-      "loadError": "Failed to load comparison data."
+      "loadError": "Failed to load comparison data.",
+      "promptCounts": "{engines, plural, one {# platform} other {# platforms}} · {runs, plural, one {# run} other {# runs}}",
+      "engineCounts": "{locations, plural, one {# location} other {# locations}} · {runs, plural, one {# run} other {# runs}}",
+      "runs": "{count, plural, one {# run} other {# runs}}",
+      "noLocation": "No location",
+      "lowSample": "Low sample",
+      "lowSampleTip": "Fewer than 10 runs: one answer can move this score a lot.",
+      "list": {
+        "search": "Search prompts",
+        "sortLabel": "Sort prompts",
+        "sortRecent": "Most recent first",
+        "sortDiff": "Widest gap first",
+        "categoryLabel": "Category",
+        "allCategories": "All categories",
+        "count": "{shown} of {total, plural, one {# prompt} other {# prompts}}",
+        "noMatch": "No prompt matches.",
+        "more": "Show {count} more",
+        "caseRepeats": "{count, plural, one {# prompt repeats another but for letter case} other {# prompts repeat others but for letter case}}: pause the extra copy on Prompts so their answers count once."
+      }
     },
     "timeline": {
       "title": "{competitor}'s pages over time",
@@ -15740,7 +16528,127 @@
     "excludeOwnDomain": "Exclude own domain",
     "competitorsOnly": "Competitors only",
     "noBrandTitle": "No brand selected",
-    "noBrandDescription": "Select or create a brand to see the citations AI platforms use when answering about it."
+    "noBrandDescription": "Select or create a brand to see the citations AI platforms use when answering about it.",
+    "addCompetitor": {
+      "added": "{domain} added as competitor",
+      "failed": "Could not add this domain as a competitor. Please try again.",
+      "ariaLabel": "Add {domain} as competitor",
+      "button": "Add as competitor",
+      "title": "Add {domain} as competitor?",
+      "description": "Track this domain as a competitor. You can edit the name below.",
+      "name": "Name",
+      "namePlaceholder": "Competitor name",
+      "add": "Add"
+    },
+    "url": {
+      "back": "Citations",
+      "noUrl": "No URL provided. Open this page from a citation row on Visibility's Citations tab.",
+      "noBrand": "Select a brand from the top switcher first.",
+      "owned": "Owned",
+      "loadFailed": "Could not load this URL — please try again.",
+      "empty": "No citations recorded for this URL in the selected window.",
+      "kpis": {
+        "citations": "Total citations",
+        "citationsSub": "{answers, plural, one {across # answer} other {across # answers}}",
+        "answers": "Answers citing",
+        "answersSub": "AI answers include this URL",
+        "prompts": "Prompts",
+        "promptsSub": "distinct prompts triggering it",
+        "platforms": "Platforms",
+        "lastSeen": "Last seen",
+        "firstSeen": "first seen {date}"
+      },
+      "targeted": "{count, plural, one {Targeted in # prompt} other {Targeted in # prompts}}",
+      "targetedSub": "Prompts tracking this URL as a target in the prompt workflow",
+      "notTargeted": "Not targeted yet — add it from a prompt's Target URLs card.",
+      "citedCount": "cited {count}×",
+      "visits": "AI-referred visits",
+      "visitsSub": "Visits to this page from AI platforms in the selected window",
+      "noVisits": "No AI-referred visits recorded for this page yet.",
+      "unknownPlatform": "Unknown",
+      "citedIn": "Cited in",
+      "citedInSub": "Every AI answer citing this URL in the selected window",
+      "columns": {
+        "date": "Date",
+        "platform": "Platform",
+        "prompt": "Prompt",
+        "sentiment": "Sentiment",
+        "brandMentioned": "Brand mentioned",
+        "position": "Position",
+        "answers": "Answers",
+        "citations": "Citations",
+        "lastSeen": "Last seen"
+      },
+      "sentiments": {
+        "positive": "Positive",
+        "neutral": "Neutral",
+        "negative": "Negative",
+        "mixed": "Mixed"
+      },
+      "breakdown": "Prompts breakdown",
+      "breakdownSub": "The queries this page is winning, grouped by prompt",
+      "noPrompts": "No prompts recorded for this URL in the selected window."
+    },
+    "categories": {
+      "you": "You",
+      "competitor": "Competitor",
+      "editorial": "Editorial",
+      "forum": "Forum",
+      "social": "Social",
+      "review": "Review",
+      "institutional": "Institutional",
+      "other": "Other"
+    },
+    "page": {
+      "noSources": "No citation sources yet.",
+      "columns": {
+        "rank": "Rank",
+        "domain": "Domain",
+        "url": "URL",
+        "platforms": "Platforms",
+        "usage": "Usage",
+        "avgCitations": "Avg Citations",
+        "citations": "Citations",
+        "addCompetitor": "Add as competitor",
+        "sourceType": "Source type",
+        "competitorAnswers": "Competitor answers",
+        "whichCompetitors": "Which competitors",
+        "strength": "Strength",
+        "answersFeeding": "Answers feeding",
+        "alsoCitesUs": "Also cites us?"
+      },
+      "openDomain": "Open {domain} in a new tab",
+      "openPage": "Open cited page in a new tab",
+      "openPageTitle": "Open cited page",
+      "loadFailedTitle": "Couldn't load citation data",
+      "loadFailedBody": "Please try again.",
+      "retry": "Retry",
+      "checking": "Checking citation data…",
+      "noneInPeriod": "No citations in {period, select, 24h {the last 24 hours} 7d {the last 7 days} 30d {the last 30 days} 90d {the last 90 days} other {the selected period}}",
+      "outsideWindow": "Citation data exists outside this window.",
+      "showAll": "Show all data",
+      "noMatch": "No citations match your filters",
+      "noMatchBody": "Try widening your date range or removing filters.",
+      "gapMethodology": "Sources that appear in answers mentioning competitors but not you, weighted by how many sources each answer had.",
+      "strengthTitle": "Strength {pct}%",
+      "noGaps": "No gap domains for these filters",
+      "noGapsBody": "Every domain citing a competitor also cites you, or there isn't enough data yet.",
+      "noCompetitorData": "No competitor source data yet",
+      "noCompetitorDataBody": "Add competitors (with domains) and let a few tracking runs complete.",
+      "competitor": "Competitor",
+      "selectCompetitor": "Select competitor",
+      "yes": "✓ Yes",
+      "no": "✗ No",
+      "gapList": "Gap list",
+      "byCompetitor": "By competitor",
+      "howItWorks": "How this works",
+      "lowVisibility": "Your visibility is low in this window, so this list may be broad — focus on baseline visibility first.",
+      "loadFailedToast": "Failed to load citation data",
+      "checkFailedToast": "Failed to check citation data",
+      "exportFailed": "Failed to export CSV",
+      "typesNotExportable": "Source Types is a chart breakdown, not exportable — switch to Domains, URLs, or Competitor Gaps to export.",
+      "tabGaps": "Competitor Gaps"
+    }
   },
   "shopping": {
     "title": "Product Visibility",
@@ -16282,14 +17190,18 @@
         "trafficConnectLink": "Connect"
       },
       "method": {
-        "label": "How it is measured",
         "baseline": "Baseline: 14 days before ship",
         "checkpoints": "Checkpoints: 7 · 14 · 30 · 90 days",
         "checkpointsTip": "7 days: pending, early signal · 14 days: first verdict · 30 days: confirmed · 90 days: lasting effect",
         "control": "Control: untouched similar prompts",
         "minChange": "Min. change: 3 pts",
         "noCost": "Scheduled tracking data · no extra cost",
-        "correlation": "Correlation, not causation"
+        "correlation": "Correlation, not causation",
+        "howWeMeasure": "How we measure",
+        "shippedDefinition": "Shipped means the change went live: published to your CMS, its pull request merged, or marked as shipped. A draft waiting for review isn't shipped yet.",
+        "baselineHelp": "Each change starts from its target prompts' visibility over those days.",
+        "controlHelp": "They show what would have happened anyway.",
+        "correlationHelp": "A result shows that things moved together, not that the change alone moved them."
       },
       "filterLabel": "Filter by outcome",
       "filters": {
@@ -16359,6 +17271,8 @@
       },
       "capped": "Showing the first {count, number} changes shipped in {month}; the counts above cover only these.",
       "empty": "Nothing shipped in {month}.",
+      "emptyNext": "Ship an action to start measuring impact.",
+      "emptyNextLink": "Open Today's focus",
       "emptyFilter": "No actions with this outcome in {month}.",
       "loadFailed": "Couldn't load what Ansvisor did. Try again.",
       "retry": "Retry",
@@ -16438,6 +17352,9 @@
     "deleteConfirm": "Delete this report?",
     "deleteFailed": "Failed to delete report",
     "rowMenuLabel": "More actions for {title}",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied. It opens the report for people in your workspace.",
+    "copyLinkFailed": "Couldn't copy the link. Open the report and copy its address instead.",
     "selectDates": "Pick a start and end date",
     "templateLabel": "Template",
     "templates": {
@@ -16474,7 +17391,7 @@
       "mentionEvidence": "Mention Evidence",
       "citationEvidence": "Citation Evidence"
     },
-    "missingSections": "Some sections could not be gathered and are not in this report:",
+    "missingSectionsAdmin": "Only Admins see this: {sections} couldn't be gathered, even on a second try, so the report leaves them out.",
     "brandLabel": "Brand",
     "sectionsLabel": "Sections",
     "selectSections": "Pick at least one section",
@@ -16559,9 +17476,11 @@
     "generatedOn": "Generated on",
     "executiveSummary": "Executive Summary",
     "kpi": {
-      "visibility": "Visibility",
-      "visibilityRate": "Visibility",
-      "visibilityRateSub": "{visible}/{total} prompts",
+      "visibilityScore": "Visibility score",
+      "scoreValue": "{score}/100",
+      "promptsWithMention": "Prompts with a mention",
+      "promptsWithMentionSub": "{visible} of {total} prompts",
+      "leaderboardPromptsSub": "{visible} of {total} prompts with a mention",
       "avgScore": "Avg. Score",
       "mentions": "Mentions",
       "citations": "Brand Citations",
@@ -16819,7 +17738,10 @@
       }
     },
     "notifications": "Notifications",
-    "notificationsDescription": "Daily Pulse — a short digest per brand after each tracking run, with highlights and warnings.",
+    "notificationsDescription": "Each brand can send two e-mails: the Daily Pulse after its tracking runs, and the AI Traffic weekly digest every Monday. Both go to the brand's Daily Pulse recipients.",
+    "pulseSection": "Daily Pulse",
+    "pulseSectionDescription": "A short digest per brand after each tracking run, with highlights and warnings. Choose how often it comes and who gets it.",
+    "pulseFrequencyLabel": "How often {brand}'s Daily Pulse comes",
     "pulseFrequency_daily": "Daily",
     "pulseFrequency_weekly": "Weekly",
     "pulseFrequency_notable": "Only when notable",
@@ -16830,7 +17752,9 @@
     "pulseRecipientsHint": "Comma-separated email addresses. Leave empty to send to every organization member.",
     "pulseRecipientsInvalid": "Not a valid email address: {emails}. Fix or remove it before saving.",
     "trafficDigest": "AI Traffic weekly digest",
-    "trafficDigestHint": "Every Monday: last week's AI visits in one summary line, with the top three changes. Sent to the recipients above.",
+    "trafficDigestDescription": "Every Monday: last week's AI visits in one summary line, with the top three changes. It goes to each brand's Daily Pulse recipients, and is saved as soon as you tick or untick it.",
+    "trafficDigestTo": "To {emails}",
+    "trafficDigestToEveryone": "To every organization member",
     "trafficDigestPulseOff": "Not sent while the Daily Pulse is off. Turn the pulse back on to get it again.",
     "pulseSaved": "Notification settings saved",
     "pulseSaveFailed": "Could not save notification settings. Please try again.",
@@ -18161,14 +19085,30 @@
     "org_description": "Manage your organization name and view plan details.",
     "org_name": "Organization Name",
     "org_namePlaceholder": "Acme Inc.",
-    "org_slug": "Slug",
-    "org_slugHint": "Used in API and integration references. Contact support to change it.",
     "org_plan": "Plan",
     "org_members": "Members",
     "org_adminOnly": "Only admins can rename the organization.",
     "org_loadFailed": "Could not load organization details.",
     "org_saveFailed": "Could not save organization name. Please try again.",
-    "accountSaveFailed": "Could not save account details. Please try again."
+    "accountSaveFailed": "Could not save account details. Please try again.",
+    "teamErrors": {
+      "invalid_email": "Enter a valid email address.",
+      "no_brands": "Choose at least one brand.",
+      "already_member": "This person is already a member of your team.",
+      "already_invited": "There's already a pending invitation for this email.",
+      "admin_all_brands": "Admins always have All brands."
+    },
+    "changePlanFailed": "Couldn't change the plan. Try again.",
+    "cancelFailed": "Couldn't cancel the subscription. Try again.",
+    "reactivateFailed": "Couldn't reactivate the subscription. Try again.",
+    "portalFailed": "Couldn't open the billing portal. Try again.",
+    "agent_loadFailed": "Couldn't load your AI providers. Reload the page.",
+    "agent_saveFailed": "Couldn't save. Try again.",
+    "agent_testFailed": "Couldn't test the key. Try again.",
+    "agent_clearFailed": "Couldn't remove the key. Try again.",
+    "integrations_disconnectFailed": "Couldn't disconnect. Try again.",
+    "integrations_propertySaveFailed": "Couldn't save the property. Try again.",
+    "integrations_propertiesLoadFailed": "Couldn't load the properties."
   },
   "brands": {
     "title": "Brands",
@@ -18567,6 +19507,14 @@
         "hint": "Enabled platforms will be queried at the configured frequency to check your brand's prompt visibility.",
         "loadError": "Failed to load AI platform settings.",
         "saveError": "Failed to save AI platform settings."
+      },
+      "errors": {
+        "save": "Failed to save. Try again.",
+        "saveDomains": "Failed to save the domains. Try again.",
+        "loadCompetitors": "Failed to load competitors.",
+        "addCompetitor": "Failed to add the competitor. Try again.",
+        "removeCompetitor": "Failed to remove the competitor. Try again.",
+        "deleteBrand": "Failed to delete the brand. Try again."
       }
     },
     "card": {

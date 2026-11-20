@@ -4,6 +4,7 @@ import { ChatUnavailable } from '@/components/chat/chat-unavailable';
 import { MarkChatRead } from '@/components/chat/mark-chat-read';
 import { chatIdOf } from '@/lib/chat/conversations';
 import { loadChatThread } from '@/lib/chat/thread';
+import { asViewer } from '@/lib/chat/viewer-locale';
 import { chatComposerSetup, chatPageOpen } from '../_chat-page-access';
 
 /**
@@ -18,7 +19,8 @@ export default async function ChatThreadPage({ params }: { params: Promise<{ id:
   if (!(await chatPageOpen())) notFound();
   const id = chatIdOf((await params).id);
   const [thread, setup] = await Promise.all([
-    id ? loadChatThread(id) : Promise.resolve(null),
+    // Its task strips in the viewer's language.
+    id ? asViewer(() => loadChatThread(id)) : Promise.resolve(null),
     chatComposerSetup(),
   ]);
   if (!thread) return <ChatUnavailable />;

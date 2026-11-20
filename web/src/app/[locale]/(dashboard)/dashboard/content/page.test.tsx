@@ -189,6 +189,23 @@ afterEach(() => {
   container.remove();
 });
 
+describe('Content Opportunities loading order (Content test 2026-11-19, item 9)', () => {
+  it('reads the list before the filters’ options and the usage card', async () => {
+    await render(false);
+    const first = (fn: { mock: { invocationCallOrder: number[] } }) =>
+      fn.mock.invocationCallOrder[0] ?? Infinity;
+    const list = first(content.getOpportunities);
+    expect(list).toBeLessThan(Infinity);
+    for (const later of [
+      content.getOpportunityPrompts,
+      content.getOpportunityTopics,
+      content.getContentUsage,
+    ]) {
+      expect(first(later)).toBeGreaterThan(list);
+    }
+  });
+});
+
 describe('Content Opportunities counters (Content test 2026-11-19, item 10)', () => {
   it('counts the open ones as Available, and says the cards hold every status', async () => {
     content.getOpportunities.mockResolvedValue({

@@ -109,6 +109,25 @@ describe('getActionHistory', () => {
     expect(item.dismissReason).toBeNull();
   });
 
+  it('gives a Visibility score result in points, not percent (AC-02)', async () => {
+    actionRows = [
+      {
+        ...action('completed'),
+        validation: {
+          metrics: [
+            { metric: 'ai_visibility', before: 27.4, after: 29.9, unit: 'percent' },
+            { metric: 'share_of_voice', before: 10, after: 12, unit: 'percent' },
+          ],
+        },
+      },
+    ];
+    const [item] = await getActionHistory('b1');
+    expect(item.results.map((m) => [m.metric, m.unit, m.delta])).toEqual([
+      ['ai_visibility', 'points', 2.5],
+      ['share_of_voice', 'percent', 2],
+    ]);
+  });
+
   it('fails on any other error, without reading again', async () => {
     readError = { code: '57014', message: 'canceling statement due to statement timeout' };
     await expect(getActionHistory('b1')).rejects.toThrow('statement timeout');

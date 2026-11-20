@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { redirect } from '@/i18n/navigation';
 import { getInvitationByToken } from '@/lib/actions/team';
 import { createClient } from '@/lib/supabase/server';
@@ -10,20 +11,21 @@ export default async function InviteAcceptPage({
   params: Promise<{ token: string; locale: string }>;
 }) {
   const { token, locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'invite' });
 
   const invitation = await getInvitationByToken(token);
 
   if (!invitation) {
-    return <InvalidInvitation reason="not_found" />;
+    return <InvalidInvitation locale={locale} reason="not_found" />;
   }
 
   if (invitation.status !== 'pending') {
-    return <InvalidInvitation reason={invitation.status} />;
+    return <InvalidInvitation locale={locale} reason={invitation.status} />;
   }
 
   // eslint-disable-next-line react-hooks/purity -- server component renders fresh per request; Date.now() is the correct expiration check, the purity rule targets client-side memoization which doesn't apply on the server.
   if (new Date(invitation.expiresAt).getTime() < Date.now()) {
-    return <InvalidInvitation reason="expired" />;
+    return <InvalidInvitation locale={locale} reason="expired" />;
   }
 
   const supabase = await createClient();
@@ -46,7 +48,7 @@ export default async function InviteAcceptPage({
       <div className="flex w-full max-w-md flex-col gap-6">
         <AcceptInvitationCard
           token={token}
-          organizationName={invitation.organizationName ?? 'this team'}
+          organizationName={invitation.organizationName ?? t('fallbackTeam')}
           email={invitation.email}
           role={invitation.role}
           currentUserEmail={user!.email ?? ''}
@@ -57,34 +59,18 @@ export default async function InviteAcceptPage({
   );
 }
 
-function InvalidInvitation({
+const INVALID_REASONS = ['not_found', 'expired', 'accepted', 'revoked', 'pending'] as const;
+
+async function InvalidInvitation({
+  locale,
   reason,
 }: {
+  locale: string;
   reason: 'not_found' | 'expired' | 'accepted' | 'revoked' | 'pending';
 }) {
-  const messages: Record<string, { title: string; description: string }> = {
-    not_found: {
-      title: 'Invitation not found',
-      description: 'The link you followed is invalid.',
-    },
-    expired: {
-      title: 'Invitation expired',
-      description: 'Ask your team admin to send a new invitation.',
-    },
-    accepted: {
-      title: 'Invitation already used',
-      description: 'This invitation has already been accepted.',
-    },
-    revoked: {
-      title: 'Invitation revoked',
-      description: 'This invitation was revoked by the team admin.',
-    },
-    pending: {
-      title: 'Invitation unavailable',
-      description: 'Please try again or contact your team admin.',
-    },
-  };
-  const msg = messages[reason] ?? messages.pending;
+  const t = await getTranslations({ locale, namespace: 'invite.invalid' });
+  const key = INVALID_REASONS.includes(reason) ? reason : 'pending';
+  const msg = { title: t(`${key}.title`), description: t(`${key}.description`) };
 
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">

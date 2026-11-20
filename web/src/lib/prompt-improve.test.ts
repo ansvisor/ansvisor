@@ -11,6 +11,7 @@ import {
   mentionRateLabel,
   selectionSummary,
   sourceChipLabel,
+  type SourceChipWords,
   toDrafts,
   type ImproveSuggestion,
 } from './prompt-improve';
@@ -61,16 +62,23 @@ describe('hasUnsentEdits', () => {
 });
 
 describe('sourceChipLabel', () => {
+  // The messages' words, as the Improve tab passes them.
+  const words: SourceChipWords = (key, values) =>
+    ({
+      fanout: `Fan-out: ${values?.ref}`,
+      answer: 'AI answer',
+      brandPage: `Your page: ${values?.url}`,
+    })[key];
+
   test('labels each source type', () => {
-    expect(sourceChipLabel({ type: 'fanout', ref: 'best coffee' })).toBe('Fan-out: best coffee');
-    expect(sourceChipLabel({ type: 'answer', ref: 'a quote' })).toBe('AI answer');
-    expect(sourceChipLabel({ type: 'competitor_url', ref: 'https://www.rival.com/plans' })).toBe(
+    const label = (source: Parameters<typeof sourceChipLabel>[0]) => sourceChipLabel(source, words);
+    expect(label({ type: 'fanout', ref: 'best coffee' })).toBe('Fan-out: best coffee');
+    expect(label({ type: 'answer', ref: 'a quote' })).toBe('AI answer');
+    expect(label({ type: 'competitor_url', ref: 'https://www.rival.com/plans' })).toBe(
       'rival.com/plans',
     );
-    expect(sourceChipLabel({ type: 'brand_page', ref: 'https://acme.com/' })).toBe(
-      'Your page: acme.com',
-    );
-    expect(sourceChipLabel({ type: 'domain', ref: 'reddit.com' })).toBe('reddit.com');
+    expect(label({ type: 'brand_page', ref: 'https://acme.com/' })).toBe('Your page: acme.com');
+    expect(label({ type: 'domain', ref: 'reddit.com' })).toBe('reddit.com');
   });
 });
 

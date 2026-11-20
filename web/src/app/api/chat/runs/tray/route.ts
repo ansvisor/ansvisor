@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { CHAT_RUN_STEP_SELECT, type ChatRunStepMemberRow } from '@/lib/chat/steps';
+import { asViewer } from '@/lib/chat/viewer-locale';
 import type { ApiFailure } from '@/lib/api-failure';
 import {
   chatTrayRun,
@@ -72,10 +73,15 @@ async function tray(req: Request) {
   }
 
   const now = Date.now();
-  const [chat, content] = await Promise.all([
-    chatRuns(supabase, user.id, organizationId, now),
-    brandId ? contentRuns(supabase, brandId, now) : Promise.resolve([]),
-  ]);
+  // A Content Agent run's step in the viewer's words.
+  const [chat, content] = await asViewer(
+    () =>
+      Promise.all([
+        chatRuns(supabase, user.id, organizationId, now),
+        brandId ? contentRuns(supabase, brandId, now) : Promise.resolve([]),
+      ]),
+    user.id,
+  );
   if (chat === null || content === null) return fail(500, 'failed', 'Failed to read runs');
   return NextResponse.json<TrayResult>({ ok: true, ...trayResponse([...chat, ...content]) });
 }

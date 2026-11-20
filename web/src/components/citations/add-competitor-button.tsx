@@ -54,6 +54,8 @@ export function AddCompetitorButton({
   // A read-only workspace (plan not active): the upgrade dialog instead of this one.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const t = useTranslations('citations.addCompetitor');
+  const tCommon = useTranslations('common');
   // Admins and managers add competitors; others only read them.
   const { canManage } = useUserRole();
 
@@ -71,11 +73,11 @@ export function AddCompetitorButton({
     setSaving(true);
     try {
       await addCompetitor(brandId, { name: trimmed, domain });
-      toast.success(`${domain} added as competitor`);
+      toast.success(t('added', { domain }));
       setOpen(false);
       onAdded();
     } catch {
-      toast.error('Could not add this domain as a competitor. Please try again.');
+      toast.error(t('failed'));
     } finally {
       setSaving(false);
     }
@@ -96,42 +98,40 @@ export function AddCompetitorButton({
           size="icon"
           className="h-7 w-7"
           onClick={openDialog}
-          aria-label={`Add ${domain} as competitor`}
-          title="Add as competitor"
+          aria-label={t('ariaLabel', { domain })}
+          title={t('button')}
         >
           <Plus className="h-3.5 w-3.5" />
         </Button>
       ) : (
         <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={openDialog}>
           <Plus className="h-3.5 w-3.5" />
-          Add as competitor
+          {t('button')}
         </Button>
       )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add {domain} as competitor?</DialogTitle>
-          <DialogDescription>
-            Track this domain as a competitor. You can edit the name below.
-          </DialogDescription>
+          <DialogTitle>{t('title', { domain })}</DialogTitle>
+          <DialogDescription>{t('description')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label htmlFor={nameId}>Name</Label>
+          <Label htmlFor={nameId}>{t('name')}</Label>
           <Input
             id={nameId}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="Competitor name"
+            placeholder={t('namePlaceholder')}
             autoFocus
           />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
-            Cancel
+            {tCommon('cancel')}
           </Button>
           <Button onClick={handleAdd} disabled={!name.trim() || saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            Add
+            {t('add')}
           </Button>
         </DialogFooter>
       </DialogContent>
