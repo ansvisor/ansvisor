@@ -105,6 +105,8 @@ export function useActionStory(
               createdAt: action.createdAt,
               dueDate: action.dueDate,
               payload: action.payload ?? {},
+              // The Affected tab's set: the counts, goal and demand match it (AC-20).
+              affected: affected ?? undefined,
             },
             tStory,
             {
@@ -113,7 +115,7 @@ export function useActionStory(
             },
           )
         : null,
-    [action, evidence, volumes, tStory, format],
+    [action, evidence, affected, volumes, tStory, format],
   );
 
   return { affected, volumes, story, ready };

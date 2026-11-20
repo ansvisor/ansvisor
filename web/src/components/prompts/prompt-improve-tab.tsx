@@ -48,11 +48,9 @@ import {
   sendImproveToActionCenter,
 } from '@/lib/actions/prompt-improve';
 import {
-  STATE_LABEL,
   STATE_ORDER,
   actionCenterLink,
   hasUnsentEdits,
-  mentionRateLabel,
   selectionSummary,
   sourceChipLabel,
   toDrafts,
@@ -110,6 +108,7 @@ export function useImprove({
   // Actions open the upgrade dialog.
   const { isLocked: readOnly, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const t = useTranslations('prompts.improve');
   const key = promptId ? `${promptId}|${JSON.stringify(range)}` : '';
   const [state, setState] = useState<{
     key: string;
@@ -230,18 +229,15 @@ export function useImprove({
         if (keyRef.current === forKey) {
           setState((s) => (s.set ? { ...s, set: { ...s.set, sent: result.sent } } : s));
         }
-        toast.success(
-          `Action created with ${result.taskCount} task${result.taskCount === 1 ? '' : 's'}`,
-          {
-            action: {
-              label: 'Open',
-              onClick: () => window.open(actionCenterLink(result.actionId), '_self'),
-            },
+        toast.success(t('sentToast', { count: result.taskCount }), {
+          action: {
+            label: t('open'),
+            onClick: () => window.open(actionCenterLink(result.actionId), '_self'),
           },
-        );
+        });
       })
       .finally(() => setSending(false));
-  }, [promptId, range, drafts, sending, state.set, readOnly, openUpgrade, tActions]);
+  }, [promptId, range, drafts, sending, state.set, readOnly, openUpgrade, tActions, t]);
 
   const dirty = useMemo(() => !!set && hasUnsentEdits(drafts, set.suggestions), [drafts, set]);
 
@@ -285,17 +281,18 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
   // Generating and sending cost AI: admins and managers do them; anyone reads the set.
   const { canManage } = useUserRole();
   const tManagers = useTranslations('managersOnly');
+  const t = useTranslations('prompts.improve');
+  const errorText = (fallback: 'loadFailed' | 'generateFailed') =>
+    error && /not configured|api key/i.test(error) ? t('notConfigured') : error || t(fallback);
 
   if (status === 'locked') return <LockedImprove />;
   if (status === 'error') {
     return (
       <div className="flex flex-col items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm dark:border-red-900/50 dark:bg-red-950/30">
-        <p className="text-red-900 dark:text-red-200">
-          {friendlyError(error, 'Failed to load suggestions.')}
-        </p>
+        <p className="text-red-900 dark:text-red-200">{errorText('loadFailed')}</p>
         <Button size="sm" variant="outline" onClick={reload}>
           <RefreshCw />
-          Retry
+          {t('retry')}
         </Button>
       </div>
     );
@@ -307,19 +304,17 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
       <div className="flex flex-col items-start gap-3 rounded-lg border p-4">
         <p className="flex items-center gap-2 text-sm font-medium">
           <Sparkles className="h-4 w-4" />
-          Get platform-specific suggestions
+          {t('introTitle')}
         </p>
-        <p className="text-xs text-muted-foreground">
-          Analyzes this period&apos;s answers on every platform (the sub-queries they ran, the
-          sources they cited and the competitors ranked above you) and suggests what to do where the
-          brand is missing or ranked late.
-        </p>
-        {error && <p className="text-xs text-red-600 dark:text-red-400">{friendlyError(error)}</p>}
+        <p className="text-xs text-muted-foreground">{t('introBody')}</p>
+        {error && (
+          <p className="text-xs text-red-600 dark:text-red-400">{errorText('generateFailed')}</p>
+        )}
         {canManage ? (
           <div className="flex flex-wrap items-center gap-3">
             <Button size="sm" onClick={generate} disabled={outOfQuota}>
               <Sparkles />
-              Generate suggestions
+              {t('generate')}
             </Button>
             <QuotaNote quota={quota} planId={planId} />
           </div>
@@ -361,9 +356,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
     <div className="space-y-3">
       {set.stale && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs dark:border-sky-900/50 dark:bg-sky-950/30">
-          <span className="text-sky-900 dark:text-sky-200">
-            New runs have arrived since these suggestions were generated.
-          </span>
+          <span className="text-sky-900 dark:text-sky-200">{t('stale')}</span>
           {canManage && (
             <Button
               size="xs"
@@ -372,19 +365,18 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
               onClick={() => (dirty ? setConfirmRegenerate(true) : generate())}
             >
               <RefreshCw />
-              Regenerate
+              {t('regenerate')}
             </Button>
           )}
         </div>
       )}
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{friendlyError(error)}</p>}
+      {error && (
+        <p className="text-xs text-red-600 dark:text-red-400">{errorText('generateFailed')}</p>
+      )}
       {tracked.length === 0 ? (
-        <EmptyNote>No runs in this period, so there is nothing to improve yet.</EmptyNote>
+        <EmptyNote>{t('noRuns')}</EmptyNote>
       ) : actionable.length === 0 ? (
-        <EmptyNote>
-          No improvements needed: the brand is mentioned first and cited early on every platform in
-          this period.
-        </EmptyNote>
+        <EmptyNote>{t('allWell')}</EmptyNote>
       ) : null}
 
       <div className="divide-y rounded-lg border">
@@ -402,16 +394,19 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
 
       <div className="sticky bottom-0 -mx-5 flex flex-wrap items-center justify-between gap-2 border-t bg-background px-5 py-3">
         <span className="text-xs text-muted-foreground">
-          {summary.selected} of {summary.total} selected · {summary.platforms} platform
-          {summary.platforms === 1 ? '' : 's'}
+          {t('selection', {
+            selected: summary.selected,
+            total: summary.total,
+            platforms: summary.platforms,
+          })}
           <span className="ms-2 text-muted-foreground/70">
-            Generated {formatDateTime(set.generatedAt)}
+            {t('generated', { date: formatDateTime(set.generatedAt) })}
           </span>
           <QuotaNote quota={quota} planId={planId} className="ms-2" />
           {sentLatest && (
             <span className="mt-1 flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
               <CircleCheck className="h-3.5 w-3.5" />
-              Sent {formatDate(sentLatest.sentAt)} · {actionCode(sentLatest)}
+              {t('sent', { date: formatDate(sentLatest.sentAt), code: actionCode(sentLatest) })}
             </span>
           )}
         </span>
@@ -422,9 +417,9 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
             )
           ) : confirmRegenerate ? (
             <span className="flex items-center gap-2 text-xs">
-              Discard your edits?
+              {t('discardConfirm')}
               <Button size="xs" variant="outline" onClick={() => setConfirmRegenerate(false)}>
-                Keep editing
+                {t('keepEditing')}
               </Button>
               <Button
                 size="xs"
@@ -433,7 +428,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
                   generate();
                 }}
               >
-                Discard & regenerate
+                {t('discardRegenerate')}
               </Button>
             </span>
           ) : (
@@ -444,7 +439,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
               onClick={() => (dirty ? setConfirmRegenerate(true) : generate())}
             >
               <RefreshCw />
-              Regenerate
+              {t('regenerate')}
             </Button>
           )}
           {sentLatest ? (
@@ -452,14 +447,14 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
               href={actionCenterLink(sentLatest.actionId)}
               className={buttonVariants({ size: 'sm' })}
             >
-              Open in Action Center
+              {t('openInActions')}
               <ArrowUpRight />
             </Link>
           ) : (
             canManage && (
               <Button size="sm" onClick={send} disabled={sending || summary.selected === 0}>
                 {sending ? <Loader2 className="animate-spin" /> : <Send />}
-                Send Actions
+                {t('sendActions')}
               </Button>
             )
           )}
@@ -467,13 +462,6 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
       </div>
     </div>
   );
-}
-
-function friendlyError(error: string | null, fallback = 'Failed to generate suggestions.'): string {
-  if (error && /not configured|api key/i.test(error)) {
-    return 'AI suggestions are not set up on this server yet: an AI provider key is missing.';
-  }
-  return error || fallback;
 }
 
 /**
@@ -543,35 +531,39 @@ const STATE_TONE: Record<ImprovePlatform['state'], string> = {
  * platform mentioned in under half its runs counts as not mentioned), and
  * where it ranks.
  */
-function stateDetail(p: ImprovePlatform): string | null {
+type ImproveT = ReturnType<typeof useTranslations<'prompts.improve'>>;
+
+function stateDetail(p: ImprovePlatform, t: ImproveT): string | null {
   if (p.state === 'no_runs') return null;
-  const rate = mentionRateLabel(p);
+  const rate = t('mentionRate', { mentioned: p.mentionedRuns, runs: p.runs });
   if (p.state === 'mentioned_late' && p.mentionPosition) {
-    return `avg #${p.mentionPosition}${p.mentionTotal ? ` of ${p.mentionTotal}` : ''} · ${rate}`;
+    return p.mentionTotal
+      ? t('avgPositionOf', { position: p.mentionPosition, total: p.mentionTotal, rate })
+      : t('avgPosition', { position: p.mentionPosition, rate });
   }
   if (p.state === 'not_cited') {
     return p.citationRank
-      ? `cited at avg #${p.citationRank.rank} of ${p.citationRank.total} sources · ${rate}`
-      : `not cited · ${rate}`;
+      ? t('citedAt', { rank: p.citationRank.rank, total: p.citationRank.total, rate })
+      : t('notCited', { rate });
   }
   return rate;
 }
 
-const countLabel = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
-function inputsNote(p: ImprovePlatform): string | null {
+function inputsNote(p: ImprovePlatform, t: ImproveT): string | null {
   if (!p.inputs) return null;
   const parts: string[] = [];
-  if (p.inputs.fanouts) parts.push(countLabel(p.inputs.fanouts, 'fan-out', 'fan-outs'));
+  if (p.inputs.fanouts) parts.push(t('inputs.fanouts', { count: p.inputs.fanouts }));
   if (p.inputs.citedDomains) {
-    parts.push(countLabel(p.inputs.citedDomains, 'cited domain', 'cited domains'));
+    parts.push(t('inputs.citedDomains', { count: p.inputs.citedDomains }));
   }
   if (p.inputs.competitorUrls) {
-    parts.push(countLabel(p.inputs.competitorUrls, 'competitor URL', 'competitor URLs'));
+    parts.push(t('inputs.competitorUrls', { count: p.inputs.competitorUrls }));
   }
-  if (p.inputs.answer) parts.push('AI answer');
-  const based = parts.length ? `Based on ${parts.join(' · ')}` : 'Based on the AI answer';
-  return p.inputs.fanouts ? based : `No fan-outs recorded. ${based}`;
+  if (p.inputs.answer) parts.push(t('inputs.answer'));
+  const based = parts.length
+    ? t('inputs.basedOn', { parts: parts.join(' · ') })
+    : t('inputs.basedOnAnswer');
+  return p.inputs.fanouts ? based : t('inputs.noFanouts', { based });
 }
 
 function PlatformGroup({
@@ -588,8 +580,9 @@ function PlatformGroup({
   onUpdate: (id: string, patch: Partial<DraftSuggestion>) => void;
   onAddOwn: () => void;
 }) {
-  const detail = stateDetail(p);
-  const inputs = inputsNote(p);
+  const t = useTranslations('prompts.improve');
+  const detail = stateDetail(p, t);
+  const inputs = inputsNote(p, t);
   const canSuggest = p.state !== 'no_runs';
   return (
     <div className="space-y-2 px-3 py-3">
@@ -599,22 +592,17 @@ function PlatformGroup({
           <span className="truncate text-sm font-medium">{p.label}</span>
         </span>
         <Badge variant="outline" className={cn('text-[11px]', STATE_TONE[p.state])}>
-          {STATE_LABEL[p.state]}
+          {t(`states.${p.state}`)}
         </Badge>
         {detail && <span className="text-xs text-muted-foreground">{detail}</span>}
       </div>
       {inputs && <p className="text-[11px] text-muted-foreground">{inputs}</p>}
 
       {p.state === 'doing_well' && drafts.length === 0 && (
-        <p className="text-xs text-muted-foreground">Doing well: no suggestions.</p>
+        <p className="text-xs text-muted-foreground">{t('doingWell')}</p>
       )}
       {(p.state === 'not_mentioned' || p.state === 'mentioned_late' || p.state === 'not_cited') &&
-        drafts.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            No suggestion held up against this platform&apos;s evidence. Add your own, or
-            regenerate.
-          </p>
-        )}
+        drafts.length === 0 && <p className="text-xs text-muted-foreground">{t('noneHeldUp')}</p>}
 
       {drafts.map((d) => (
         <SuggestionCard
@@ -632,7 +620,7 @@ function PlatformGroup({
           className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
           <Plus className="h-3.5 w-3.5" />
-          Add your own suggestion
+          {t('addOwn')}
         </button>
       )}
     </div>
@@ -648,6 +636,8 @@ function SuggestionCard({
   sent: boolean;
   onUpdate: (patch: Partial<DraftSuggestion>) => void;
 }) {
+  const t = useTranslations('prompts.improve');
+  const tCommon = useTranslations('common');
   // A new own suggestion opens straight into editing.
   const [editing, setEditing] = useState(!!d.own && !d.title);
   const [title, setTitle] = useState(d.title);
@@ -656,9 +646,11 @@ function SuggestionCard({
   if (d.removed) {
     return (
       <div className="flex items-center justify-between gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-        <span className="truncate">Removed: {d.title || 'your suggestion'}</span>
+        <span className="truncate">
+          {d.title ? t('removed', { title: d.title }) : t('removedUntitled')}
+        </span>
         <Button size="xs" variant="ghost" onClick={() => onUpdate({ removed: false })}>
-          Undo
+          {t('undo')}
         </Button>
       </div>
     );
@@ -676,14 +668,14 @@ function SuggestionCard({
           autoFocus
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title"
+          placeholder={t('titlePlaceholder')}
           className="h-8 text-sm"
           maxLength={120}
         />
         <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="What to do and why"
+          placeholder={t('bodyPlaceholder')}
           className="min-h-20 text-sm"
           maxLength={600}
         />
@@ -698,11 +690,11 @@ function SuggestionCard({
               setEditing(false);
             }}
           >
-            Cancel
+            {tCommon('cancel')}
           </Button>
           <Button size="xs" onClick={save} disabled={!title.trim()}>
             <Check />
-            Save
+            {tCommon('save')}
           </Button>
         </div>
       </div>
@@ -714,7 +706,7 @@ function SuggestionCard({
       <Checkbox
         checked={d.checked}
         onCheckedChange={(v) => onUpdate({ checked: v === true })}
-        aria-label={`Select "${d.title}"`}
+        aria-label={t('select', { title: d.title })}
         className="mt-0.5"
       />
       <div className="min-w-0 flex-1 space-y-1.5">
@@ -724,7 +716,7 @@ function SuggestionCard({
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label="Edit suggestion"
+              aria-label={t('edit')}
               onClick={() => {
                 setTitle(d.title);
                 setBody(d.body);
@@ -736,7 +728,7 @@ function SuggestionCard({
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label="Remove suggestion"
+              aria-label={t('remove')}
               onClick={() => onUpdate({ removed: true })}
             >
               <X />
@@ -751,12 +743,12 @@ function SuggestionCard({
                 variant="outline"
                 className="border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300"
               >
-                Already sent
+                {t('alreadySent')}
               </Badge>
             )}
             {d.own && (
               <Badge variant="secondary" className="text-[10px]">
-                Your suggestion
+                {t('yourSuggestion')}
               </Badge>
             )}
             {d.sources.map((s) => (
@@ -766,7 +758,7 @@ function SuggestionCard({
                 title={s.ref}
                 className="max-w-full truncate text-[10px] font-normal text-muted-foreground"
               >
-                {sourceChipLabel(s)}
+                {sourceChipLabel(s, (key, values) => t(`sources.${key}`, values))}
               </Badge>
             ))}
           </div>
@@ -777,11 +769,12 @@ function SuggestionCard({
 }
 
 function Generating() {
+  const t = useTranslations('prompts.improve');
   return (
     <div className="space-y-3">
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Generating suggestions from this period&apos;s answers… this can take up to 15 seconds.
+        {t('generating')}
       </p>
       <ImproveSkeleton />
     </div>
@@ -799,19 +792,17 @@ function ImproveSkeleton() {
 }
 
 function LockedImprove() {
+  const t = useTranslations('prompts.improve.locked');
   return (
     <div className="flex flex-col items-start gap-3 rounded-lg border p-4">
       <p className="flex items-center gap-2 text-sm font-medium">
         <Lock className="h-4 w-4" />
-        Improve is available on Growth
+        {t('title')}
       </p>
-      <p className="text-xs text-muted-foreground">
-        Get platform-specific suggestions to improve this prompt&apos;s position, based on the
-        sub-queries, sources and competitors in each AI answer.
-      </p>
+      <p className="text-xs text-muted-foreground">{t('body')}</p>
       <Link href="/dashboard/settings?tab=billing" className={buttonVariants({ size: 'sm' })}>
         <Sparkles />
-        Upgrade plan
+        {t('upgrade')}
       </Link>
     </div>
   );

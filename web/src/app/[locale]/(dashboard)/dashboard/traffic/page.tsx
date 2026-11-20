@@ -245,12 +245,13 @@ function TablePager({
   onPage: (p: number) => void;
   isLoading: boolean;
 }) {
+  const t = useTranslations('traffic.page');
   if (totalPages <= 1) return null;
 
   return (
     <div className="flex items-center justify-between border-t px-4 py-3">
       <span className="text-xs text-muted-foreground tabular-nums">
-        {start + 1}–{end} of {total}
+        {t('range', { start: start + 1, end, total })}
       </span>
       <div className="flex items-center gap-2">
         <Button
@@ -260,7 +261,7 @@ function TablePager({
           disabled={page === 0 || isLoading}
           onClick={() => onPage(page - 1)}
         >
-          Previous
+          {t('previous')}
         </Button>
         <span className="text-xs text-muted-foreground tabular-nums">
           {page + 1} / {totalPages}
@@ -272,7 +273,7 @@ function TablePager({
           disabled={page >= totalPages - 1 || isLoading}
           onClick={() => onPage(page + 1)}
         >
-          Next
+          {t('next')}
         </Button>
       </div>
     </div>
@@ -765,9 +766,10 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
       <HeaderWithAiUsage align="end">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">AI Traffic Analytics</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <p className="text-muted-foreground text-sm">
-              {primaryDomain ? `${primaryDomain} · ` : ''}AI-referred visits to your website
+              {primaryDomain ? `${primaryDomain} · ` : ''}
+              {t('page.subtitle')}
             </p>
           </div>
           {/* items-end, not items-center: the range control is two rows tall
@@ -911,7 +913,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
 
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Platform Breakdown</CardTitle>
+                    <CardTitle className="text-sm font-medium">
+                      {t('page.platformBreakdown')}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <PlatformBreakdownChart data={summary?.platformBreakdown ?? []} />
@@ -928,7 +932,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1">
-                        <CardTitle className="text-sm font-medium">Referrals by Platform</CardTitle>
+                        <CardTitle className="text-sm font-medium">
+                          {t('page.referralsByPlatform')}
+                        </CardTitle>
                         <AskAboutThis
                           reference={{
                             type: 'table',
@@ -944,9 +950,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="ps-6">Platform</TableHead>
-                          <TableHead className="text-end">Visits</TableHead>
-                          <TableHead className="text-end">Change</TableHead>
+                          <TableHead className="ps-6">{t('page.columns.platform')}</TableHead>
+                          <TableHead className="text-end">{t('page.columns.visits')}</TableHead>
+                          <TableHead className="text-end">{t('page.columns.change')}</TableHead>
                           {/* From Google Analytics (AT-005). */}
                           <TableHead className="text-end">{t('platforms.engaged')}</TableHead>
                           <TableHead className="text-end pe-6">
@@ -1015,7 +1021,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1">
-                        <CardTitle className="text-sm font-medium">Top Landing Pages</CardTitle>
+                        <CardTitle className="text-sm font-medium">
+                          {t('page.topLandingPages')}
+                        </CardTitle>
                         <AskAboutThis
                           reference={{
                             type: 'table',
@@ -1031,9 +1039,9 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="ps-6">Page</TableHead>
-                          <TableHead className="text-end">Visits</TableHead>
-                          <TableHead className="text-end">Change</TableHead>
+                          <TableHead className="ps-6">{t('page.columns.page')}</TableHead>
+                          <TableHead className="text-end">{t('page.columns.visits')}</TableHead>
+                          <TableHead className="text-end">{t('page.columns.change')}</TableHead>
                           {/* How often tracked AI answers cite the page (AT-006). */}
                           <TableHead className="text-end pe-6">
                             {t('pageList.columns.citedInAnswers')}
@@ -1090,7 +1098,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                       <div className="flex items-center gap-2">
                         <LayoutList className="h-4 w-4 text-muted-foreground" />
                         <CardTitle className="text-sm font-medium">
-                          Recent AI Referral Visits
+                          {t('page.recentVisits')}
                         </CardTitle>
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1126,10 +1134,14 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="ps-6 w-[100px]">Time</TableHead>
-                            <TableHead>Platform</TableHead>
-                            <TableHead>Page</TableHead>
-                            <TableHead className="text-end pe-6">Country</TableHead>
+                            <TableHead className="ps-6 w-[100px]">
+                              {t('page.columns.time')}
+                            </TableHead>
+                            <TableHead>{t('page.columns.platform')}</TableHead>
+                            <TableHead>{t('page.columns.page')}</TableHead>
+                            <TableHead className="text-end pe-6">
+                              {t('page.columns.country')}
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>

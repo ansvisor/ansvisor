@@ -200,6 +200,10 @@ describe('ChatSkills', () => {
     expect(connect.getAttribute('href')).toBe('/dashboard/settings/integrations');
     expect(inCard('publish', 'skills.run')).toBeNull();
     expect(inCard('publish', 'skills.schedule')).toBeNull();
+    // Connect is the card's one primary button; the others are secondary (UX audit CH-12).
+    expect(connect.className).toContain('bg-primary');
+    expect(inCard('publish', 'skills.createAgent')!.className).not.toContain('bg-primary');
+    expect(inCard('publish', 'skills.createAgent')!.className).toContain('border-border');
   });
 
   it('narrows the list by search and by filter chip', async () => {
@@ -284,6 +288,8 @@ describe('ChatSkills', () => {
     await render();
     expect(inCard('publish', 'skills.run')).toBeNull();
     expect(card('publish').textContent).toContain('Off');
+    // The switch is named on screen (UX audit CH-12).
+    expect(inCard('winback', 'skills.toggle')!.closest('label')!.textContent).toBe('Enabled');
     await click(inCard('winback', 'skills.toggle')!);
     const [url, init] = calls('PATCH')[0];
     expect(url).toBe('/api/chat/skills/library/winback');

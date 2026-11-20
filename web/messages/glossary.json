@@ -1,0 +1,147 @@
+{
+  "_note": "Given to every translation call. keepInEnglish terms stay as written (they may take local suffixes, e.g. Turkish Prompt'lar). terms: usage-checked choices per locale, from LOC spec 8.2; add the source of each choice when a term is verified. Admin, Manager and Member are the workspace's role names (with their plurals): always the term given here, and Admin and Manager never as the same word.",
+  "keepInEnglish": [
+    "Ansvisor",
+    "Prompt",
+    "Prompts",
+    "AEO",
+    "GEO",
+    "fan-out",
+    "LLM",
+    "API",
+    "MCP",
+    "llms.txt",
+    "ChatGPT",
+    "OpenAI",
+    "Gemini",
+    "Claude",
+    "Perplexity",
+    "Copilot",
+    "Grok",
+    "DeepSeek",
+    "Google",
+    "Google Search Console",
+    "AI Overviews",
+    "AI Mode",
+    "Semrush",
+    "HubSpot",
+    "Slack",
+    "Stripe",
+    "Shopify",
+    "WordPress",
+    "Webflow",
+    "Framer",
+    "Wix",
+    "PostHog",
+    "OpenRouter"
+  ],
+  "enforceKeep": ["Ansvisor"],
+  "terms": {
+    "Action Center": {
+      "tr": "Aksiyon Merkezi",
+      "de": "Aktionszentrum",
+      "fr": "Centre d'actions",
+      "es": "Centro de acciones",
+      "it": "Centro azioni",
+      "pt-BR": "Central de ações"
+    },
+    "Visibility": {
+      "tr": "Görünürlük",
+      "de": "Sichtbarkeit",
+      "fr": "Visibilité",
+      "es": "Visibilidad",
+      "it": "Visibilità",
+      "pt-BR": "Visibilidade"
+    },
+    "Mentions": {
+      "tr": "Bahsedilmeler",
+      "de": "Erwähnungen",
+      "fr": "Mentions",
+      "es": "Menciones",
+      "it": "Menzioni",
+      "pt-BR": "Menções"
+    },
+    "Citations": {
+      "tr": "Atıflar",
+      "de": "Zitierungen",
+      "fr": "Citations",
+      "es": "Citas",
+      "it": "Citazioni",
+      "pt-BR": "Citações"
+    },
+    "Content": {
+      "tr": "İçerik",
+      "de": "Inhalte",
+      "fr": "Contenu",
+      "es": "Contenido",
+      "it": "Contenuti",
+      "pt-BR": "Conteúdo"
+    },
+    "Audit": {
+      "tr": "Denetim",
+      "de": "Audit",
+      "fr": "Audit",
+      "es": "Auditoría",
+      "it": "Audit",
+      "pt-BR": "Auditoria"
+    },
+    "AI Traffic Analytics": {
+      "tr": "AI Trafik Analitiği",
+      "de": "KI-Traffic-Analyse",
+      "fr": "Analyse du trafic IA",
+      "es": "Analítica de tráfico IA",
+      "it": "Analisi traffico IA",
+      "pt-BR": "Análise de tráfego de IA"
+    },
+    "Reports": {
+      "tr": "Raporlar",
+      "de": "Berichte",
+      "fr": "Rapports",
+      "es": "Informes",
+      "it": "Report",
+      "pt-BR": "Relatórios"
+    },
+    "Admin": {
+      "tr": "Admin",
+      "de": "Admin",
+      "fr": "Administrateur",
+      "es": "Administrador",
+      "it": "Amministratore",
+      "pt-BR": "Administrador",
+      "nl": "Beheerder",
+      "ja": "管理者",
+      "pl": "Administrator",
+      "zh-CN": "管理员",
+      "ko": "관리자",
+      "ar": "مسؤول"
+    },
+    "Manager": {
+      "tr": "Yönetici",
+      "de": "Manager",
+      "fr": "Gestionnaire",
+      "es": "Gestor",
+      "it": "Gestore",
+      "pt-BR": "Gerente",
+      "nl": "Manager",
+      "ja": "マネージャー",
+      "pl": "Menedżer",
+      "zh-CN": "经理",
+      "ko": "매니저",
+      "ar": "مدير"
+    },
+    "Member": {
+      "tr": "Üye",
+      "de": "Mitglied",
+      "fr": "Membre",
+      "es": "Miembro",
+      "it": "Membro",
+      "pt-BR": "Membro",
+      "nl": "Lid",
+      "ja": "メンバー",
+      "pl": "Członek",
+      "zh-CN": "成员",
+      "ko": "멤버",
+      "ar": "عضو"
+    }
+  }
+}

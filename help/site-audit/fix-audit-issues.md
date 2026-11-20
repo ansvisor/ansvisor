@@ -17,7 +17,7 @@ An audit report doesn't only score a page: it writes fixes for what failed. Star
 
 **AI Recommendations**, right under the score, collects the fixes written for this page, ordered by priority: **high**, **medium** or **low**. Each names the signal and says what to change in one sentence. Where it helps, it gives a ready-to-paste draft, such as a meta description, an H1, an opening paragraph, FAQ questions and answers or sources to cite, and code, such as an FAQ schema block.
 
-Mechanical signals, such as HTTPS, the viewport tag, alt text or a video embed, keep their general fix. Home, pricing, product and legal pages get no author advice: they don't carry a byline. Copy names only the AI engines your brand tracks.
+Mechanical signals, such as HTTPS, the viewport tag, alt text or a video embed, keep their general fix. Home, pricing, product and legal pages get no author advice: they don't carry a byline.
 
 ## In your language
 

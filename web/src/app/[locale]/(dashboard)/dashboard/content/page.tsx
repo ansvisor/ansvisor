@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useFailureToast } from '@/hooks/use-failure-toast';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import {
   ClampedText,
   ClampedTextPreview,
@@ -465,6 +466,13 @@ export default function ContentPage() {
   const tActions = useTranslations('readOnly.actions');
   const tManagers = useTranslations('managersOnly');
   const tChat = useTranslations('chatPanel.suggest');
+  const serverError = useServerErrorText();
+  const caughtError = useCaughtErrorText();
+  /** A webhook send's refusal in the person's language (LOC-008). */
+  const sendError = (result: { error: string; code?: string; status?: number }) =>
+    result.code === 'no_webhook'
+      ? t('noWorkflowConnected')
+      : serverError(result, result.error, result.status);
   // The bulk bar's Dismiss and Delete ask first: the upgrade dialog instead.
   const confirmUnlessLocked =
     (action: string) => (open: boolean, details: { cancel: () => void }) => {
@@ -565,6 +573,12 @@ export default function ContentPage() {
     sortOrder,
   ]);
 
+  // The brand whose list has been read once (Content test 2026-11-19, item
+  // 9): Next runs a page's server actions one at a time, so the filters'
+  // options and the usage card are read after the list, never ahead of it.
+  const [listReadFor, setListReadFor] = useState<string | null>(null);
+  const listReady = !!activeBrandId && listReadFor === activeBrandId;
+
   const loadData = useCallback(
     async (silent = false, isCancelled?: () => boolean) => {
       if (!urlRead) return;
@@ -610,6 +624,7 @@ export default function ContentPage() {
       } finally {
         if (!isCancelled?.()) {
           setLoading(false);
+          setListReadFor(activeBrandId);
         }
       }
     },
@@ -779,17 +794,21 @@ export default function ContentPage() {
   useEffect(() => {
     let cancelled = false;
     setPromptOptions(null);
-    loadPromptOptions(() => cancelled);
+    // After the list: see listReadFor.
+    if (listReady) loadPromptOptions(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [loadPromptOptions]);
+  }, [loadPromptOptions, listReady]);
+
+  useEffect(() => {
+    setTopicFilter('');
+    setTopicOptions([]);
+  }, [activeBrandId]);
 
   useEffect(() => {
     let cancelled = false;
-    setTopicFilter('');
-    setTopicOptions([]);
-    if (!activeBrandId) return;
+    if (!activeBrandId || !listReady) return;
     getOpportunityTopics(activeBrandId)
       .then((options) => !cancelled && setTopicOptions(options))
       // Like the prompt filter, it just stays hidden without its options.
@@ -797,7 +816,7 @@ export default function ContentPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId]);
+  }, [activeBrandId, listReady]);
 
   // A prompt id from another brand, or one whose prompt was deleted, would
   // filter to nothing while the picker shows "All prompts". Drop it.
@@ -820,6 +839,8 @@ export default function ContentPage() {
   // have used the quota. A failure only hides the card.
   useEffect(() => {
     let cancelled = false;
+    // After the list: see listReadFor.
+    if (!listReady) return;
     getContentUsage().then(
       (usage) => !cancelled && setContentUsage(usage),
       () => !cancelled && setContentUsage(null),
@@ -827,7 +848,7 @@ export default function ContentPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, total, usageVersion]);
+  }, [activeBrandId, total, usageVersion, listReady]);
 
   const pollJob = useCallback(
     (jobId: string, startedAt: number) => {
@@ -1035,7 +1056,7 @@ export default function ContentPage() {
     try {
       const result = await sendToWebhook(id);
       if (result.success === false) {
-        toast.error(result.error);
+        toast.error(sendError(result));
       } else {
         toast.success(t('sentToWorkflow'));
         await loadData(true);
@@ -1076,7 +1097,7 @@ export default function ContentPage() {
     try {
       const result = await bulkSendToWebhook(Array.from(selectedIds));
       if (!result.success) {
-        toast.error(result.error);
+        toast.error(sendError(result));
         return;
       }
       const notes = bulkSendNotes(result);
@@ -1103,7 +1124,7 @@ export default function ContentPage() {
       setSelectedIds(new Set());
       await loadData(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('bulkUpdateError'));
+      toast.error(caughtError(err, t('bulkUpdateError')));
     } finally {
       setBulkSending(false);
     }
@@ -1118,7 +1139,7 @@ export default function ContentPage() {
       setSelectedIds(new Set());
       await loadData(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('bulkDismissError'));
+      toast.error(caughtError(err, t('bulkDismissError')));
     } finally {
       setBulkSending(false);
     }
@@ -1136,7 +1157,7 @@ export default function ContentPage() {
       // here as well would fire a second, competing load.
       await loadData(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('bulkDeleteError'));
+      toast.error(caughtError(err, t('bulkDeleteError')));
     } finally {
       setBulkSending(false);
     }

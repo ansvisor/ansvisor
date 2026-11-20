@@ -180,7 +180,7 @@ describe('ActionDrawer', () => {
     expect(previous?.className).toContain('text-muted-foreground');
   });
 
-  it("gives the Why the demand of a signal's prompt the action didn't keep", async () => {
+  it('tells the Why from the Affected set: a signal’s prompt the action didn’t keep isn’t counted (UX audit AC-20, AC-23)', async () => {
     const lost = (id: string, promptId: string, promptText: string) =>
       ({
         id,
@@ -223,10 +223,67 @@ describe('ActionDrawer', () => {
     await renderDrawer({ ...action, payload: { targetEntity: 'prompts', targetCount: 1 } });
 
     expect(server.getPromptDemand).toHaveBeenCalledWith('b1', ['p1', 'p2']);
-    // Both prompts' demand, not the kept one's alone (4.1–6.9k).
-    expect(document.body.querySelector('[role="dialog"]')!.textContent).toContain(
-      '2 prompts (8.2–13.8k AI searches a month, estimated)',
+    // The kept prompt alone, as the title (1 prompt) and the Affected tab
+    // list it, with its own demand: the sum of the rows below (4.1–6.9k).
+    const text = document.body.querySelector('[role="dialog"]')!.textContent;
+    expect(text).toContain(
+      '“Best coffee subscription?” (4.1–6.9k AI searches a month, estimated) lost its citations',
     );
+    expect(text).not.toContain('2 prompts');
+  });
+
+  it('says a passed goal date and offers a new one, without moving it (UX audit AC-21)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-19T12:00:00Z'));
+    try {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        signals: [
+          {
+            id: 's1',
+            category: 'citation',
+            kind: 'lost_citations',
+            impact: 'high',
+            status: 'new',
+            source: ['ai_results'],
+            detectedAt: '2026-10-09T00:00:00Z',
+            lastDetectedAt: '2026-10-09T00:00:00Z',
+            resolvedAt: null,
+            previousValue: null,
+            currentValue: null,
+            changeValue: null,
+            payload: { promptId: 'p1', promptText: 'Best coffee subscription?' },
+            kpiKeys: [],
+            actionId: 'a1',
+            where: { platforms: ['chatgpt-web'], regions: [], topics: [] },
+          } as Signal,
+        ],
+      });
+      server.getPromptDemand.mockResolvedValue({});
+      // Its due date, Nov 1, has gone: said, and left as it is.
+      await renderDrawer(action);
+      const dialog = document.body.querySelector('[role="dialog"]')!;
+      expect(dialog.textContent).toContain('by Nov 1.');
+      expect(dialog.textContent).toContain('Goal date passed');
+      const offer = [...dialog.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Set a new date',
+      )!;
+      await act(async () => offer.click());
+      expect(document.activeElement?.id).toBe('action-drawer-due-date');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('names a linked KPI’s target as the brand’s monthly goal, in its unit (UX audit AC-22)', async () => {
+    server.getActionDetail.mockResolvedValue({
+      ...emptyDetail,
+      kpis: [{ kpiKey: 'citations', target: 5000, timeframe: 'monthly' }],
+    });
+    await renderDrawer({ ...action, kpiKeys: ['citations'] });
+    const text = document.body.querySelector('[role="dialog"]')!.textContent;
+    expect(text).toContain('Brand monthly goal: 5k');
+    expect(text).not.toContain('target 5000');
   });
 
   describe('changes', () => {

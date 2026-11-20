@@ -13,6 +13,7 @@ import { menuOfProfile, readRoleHidden, type MenuProfile } from '@/lib/menu-acce
 import { OPEN_SIGNAL_STATUSES } from '@/lib/signals/registry';
 import { sinceMoves, sincePeriods, type SinceYouLeft } from '@/lib/chat/since';
 import { LEFT_OUT_PLATFORMS } from '@/lib/mcp/why';
+import { missingCompetitorTypeColumn } from '@/lib/competitor-types';
 
 /**
  * "For you now" on Chat Home (CHAT-08 v2, mockup #s-home `.scut`; CHAT-09
@@ -327,7 +328,31 @@ interface RivalDay {
   mention_answers: number | null;
 }
 
-/** The most mentioned competitor, and the one whose mention rate rose most this week. */
+/**
+ * The brand's competitors Home speaks of: its primary rivals, typed Direct
+ * competitor (00542), as Where you stand reads them; all of them while none
+ * is typed so, or before types exist (UX audit CH-06).
+ */
+async function readHomeRivals(supabase: Client, brandId: string): Promise<Map<string, string>> {
+  const typed = await supabase.from('competitors').select('id, name, type').eq('brand_id', brandId);
+  let rows: { id: string; name: string; type?: string | null }[];
+  if (typed.error && missingCompetitorTypeColumn(typed.error)) {
+    const plain = await supabase.from('competitors').select('id, name').eq('brand_id', brandId);
+    if (plain.error) throw new Error(`competitors: ${plain.error.message}`);
+    rows = plain.data ?? [];
+  } else if (typed.error) {
+    throw new Error(`competitors: ${typed.error.message}`);
+  } else {
+    rows = typed.data ?? [];
+  }
+  const primary = rows.filter((row) => row.type === 'direct');
+  return new Map((primary.length > 0 ? primary : rows).map((c) => [c.id, c.name]));
+}
+
+/**
+ * Of the brand's primary rivals (readHomeRivals), the most mentioned, and
+ * the one whose mention rate rose most this week.
+ */
 async function readRivals(
   supabase: Client,
   brandId: string,
@@ -335,7 +360,7 @@ async function readRivals(
 ): Promise<{ rival: string | null; rivalMove: RivalMove | null }> {
   const since = dayOf(now - 13 * DAY_MS);
   const weekStart = dayOf(now - 6 * DAY_MS);
-  const [rows, competitors] = await Promise.all([
+  const [rows, names] = await Promise.all([
     readAllRpcRows<RivalDay>(
       (from, to) =>
         supabase
@@ -353,10 +378,8 @@ async function readRivals(
           error: { message: string } | null;
         }>,
     ),
-    supabase.from('competitors').select('id, name').eq('brand_id', brandId),
+    readHomeRivals(supabase, brandId),
   ]);
-  if (competitors.error) throw new Error(`competitors: ${competitors.error.message}`);
-  const names = new Map((competitors.data ?? []).map((c) => [c.id, c.name]));
   type Weeks = {
     mentions: number;
     thisAnswers: number;

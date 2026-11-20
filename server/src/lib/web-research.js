@@ -145,6 +145,39 @@ async function scrapedoResearch(modelString, prompt, query) {
 }
 
 /**
+ * Research via Firecrawl's search endpoint when `FIRECRAWL_API_KEY` is set,
+ * for installs that already hold a Firecrawl key for Site Audit. Same
+ * distill-search-synthesize shape as Tavily; any failure returns null so the
+ * caller falls through.
+ */
+async function firecrawlResearch(modelString, prompt, query) {
+  const key = process.env.FIRECRAWL_API_KEY;
+  if (!key) return null;
+  try {
+    if (!query) throw new Error('empty search query');
+    const res = await fetch('https://api.firecrawl.dev/v2/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ query, limit: 8, origin: 'ansvisor' }),
+      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`Firecrawl search HTTP ${res.status}`);
+    const data = await res.json();
+    const results = Array.isArray(data?.data?.web) ? data.data.web : [];
+    if (!results.length) throw new Error('Firecrawl returned no results');
+    return await synthesize(
+      modelString,
+      prompt,
+      results.map((r) => [r.title, r.url, r.description || '']),
+      results.length,
+    );
+  } catch (err) {
+    logger.warn({ err: err?.message }, 'firecrawl research failed; falling back');
+    return null;
+  }
+}
+
+/**
  * The plain-model synthesis every SERP provider shares: turn the fetched
  * results into the research answer the caller asked for.
  */
@@ -164,14 +197,15 @@ const SERP_PROVIDERS = [
   { name: 'tavily', keyEnv: 'TAVILY_API_KEY', search: tavilyResearch },
   { name: 'cloro', keyEnv: 'CLORO_API_KEY', search: cloroResearch },
   { name: 'scrapedo', keyEnv: 'SCRAPEDO_API_KEY', search: scrapedoResearch },
+  { name: 'firecrawl', keyEnv: 'FIRECRAWL_API_KEY', search: firecrawlResearch },
 ];
 
 /**
  * The providers that will actually run, in order: `WEB_RESEARCH_PROVIDERS`
  * (comma-separated, default `tavily`) names them and their
- * order, so Cloro and Scrape.do are opt-in
- * (`WEB_RESEARCH_PROVIDERS=tavily,cloro,scrapedo`): an install that already
- * holds a Cloro or Scrape.do key for tracking or Site Audit should not start
+ * order, so Cloro, Scrape.do and Firecrawl are opt-in
+ * (`WEB_RESEARCH_PROVIDERS=tavily,cloro,scrapedo,firecrawl`): an install that
+ * already holds one of those keys for tracking or Site Audit should not start
  * spending those credits on suggestion research it never signed up for.
  * Unknown names are ignored and a provider without its API key is skipped, so
  * an install that holds only a Tavily key behaves exactly as it did before
@@ -189,9 +223,9 @@ export function serpProviderOrder() {
 
 /**
  * The research phase of the suggestion routes: one generateText call, with web
- * search attached when available — the SERP providers in `WEB_RESEARCH_PROVIDERS`
- * order (Tavily by default; Cloro and Scrape.do opt-in), then the provider's own
- * tool. The search query is distilled once for the whole chain, not once per
+ * search attached when available — the SERP providers in
+ * `WEB_RESEARCH_PROVIDERS` order (Tavily by default; Cloro, Scrape.do and
+ * Firecrawl opt-in), then the provider's own tool. The search query is distilled once for the whole chain, not once per
  * provider, so a quota wall on that call cannot repeat itself down the line.
  * Returns the text plus how many sources the answer drew on, so callers can
  * log it — a research step that silently stops searching shows up as

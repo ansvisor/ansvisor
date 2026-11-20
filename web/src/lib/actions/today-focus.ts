@@ -18,6 +18,7 @@ import {
 import {
   FOCUS_SLOTS,
   SKIP_DAYS,
+  byImpact,
   pickFocus,
   rankedIds,
   skippedActions,
@@ -139,29 +140,33 @@ export async function getTodayFocus(brandId: string, seenAt: string | null): Pro
   }
 
   const rowOf = new Map(actionRows.map((row) => [row.id, row]));
-  return slots.slice(0, FOCUS_SLOTS).flatMap((slot) => {
+  const cards = slots.slice(0, FOCUS_SLOTS).flatMap((slot) => {
     const row = rowOf.get(slot.id);
     if (!row) return [];
     const list = tasksOf.get(slot.id) ?? [];
     const progress = taskProgress(list.map((task) => task.status));
     const first = firstOpenTask(list) as FocusTaskRow | null;
+    const action = actionItemFromRow(row, {
+      assignee: null,
+      taskTotal: progress.total,
+      taskCompleted: progress.completed,
+      signalCount: 0,
+      entityCounts: entityCounts.get(slot.id),
+    });
     return [
       {
         id: slot.id,
-        action: actionItemFromRow(row, {
-          assignee: null,
-          taskTotal: progress.total,
-          taskCompleted: progress.completed,
-          signalCount: 0,
-          entityCounts: entityCounts.get(slot.id),
-        }),
+        action,
         isNew: slot.isNew,
-        firstStep: todayStep(first),
+        // The step names the action's own count, as its title does (AC-05).
+        firstStep: todayStep(first, action.payload),
         effort: first?.effort ?? null,
         who: whoDoesIt(first, row.assignee_id, user.id),
       },
     ];
   });
+  // Highest impact first, then priority (AC-04).
+  return byImpact(cards);
 }
 
 /**

@@ -33,12 +33,14 @@ const translations: Record<string, string> = {
   'settings.stateHint': 'Translated state hint',
 };
 
-vi.mock('next-intl', () => ({
-  useTranslations: () =>
-    Object.assign((key: string) => translations[key] ?? key, {
-      rich: (key: string) => translations[key] ?? key,
-    }),
-}));
+// One function for every render, as next-intl's own `t` is stable: the
+// competitors' read depends on it.
+vi.mock('next-intl', () => {
+  const t = Object.assign((key: string) => translations[key] ?? key, {
+    rich: (key: string) => translations[key] ?? key,
+  });
+  return { useTranslations: () => t };
+});
 
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
