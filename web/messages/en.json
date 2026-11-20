@@ -4571,7 +4571,7 @@
     "runsTray": {
       "label": "Your runs",
       "title": "Your runs",
-      "button": "{count, plural, =0 {Runs} other {# running}}",
+      "button": "{count, plural, =0 {Runs · none running} other {Runs · # running}}",
       "needsYouTip": "{count, plural, one {# needs you} other {# need you}}",
       "summary": "{running} running · {needsYou, plural, one {# needs you} other {# need you}}",
       "summaryRunning": "{running} running",
@@ -5773,7 +5773,8 @@
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
       "agents": "Agents",
       "agentsShort": "Agents",
-      "agentsLabel": "Agents · in Action Center"
+      "agentsLabel": "Agents · in Action Center",
+      "datedTitle": "{when} · "
     },
     "actions": {
       "more": "More for {name}",
