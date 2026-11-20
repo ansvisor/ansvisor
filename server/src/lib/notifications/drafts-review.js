@@ -3,7 +3,7 @@ import { logger } from '../logger.js';
 import { sendEmail } from '../email.js';
 import { translator, uiLanguagesOf } from '../i18n.js';
 import { emailsOf } from '../pulse/audience.js';
-import { brandAudience, choosing } from './choices.js';
+import { brandAudience, choosing, ofActiveWorkspaces } from './choices.js';
 import { claimSend, dayKey, markSent, weekKey } from './sends.js';
 import { appOrigin, notificationHtml } from './email-shell.js';
 
@@ -29,8 +29,9 @@ async function waitingByBrand() {
     .from('content_drafts')
     .select('id, brand_id, title, updated_at, brands!inner(name, organization_id)')
     .eq('status', 'in_review')
-    // Nobody is mailed about a demo brand.
+    // Nobody is mailed about a demo brand, or one turned off.
     .eq('brands.is_demo', false)
+    .eq('brands.is_active', true)
     .order('updated_at', { ascending: false });
   if (error) throw new Error(`content_drafts: ${error.message}`);
   const brands = new Map();
@@ -85,7 +86,7 @@ export async function sendDraftsReview(now = new Date()) {
   const periods = [{ choice: 'daily', key: `daily:${dayKey(now)}` }];
   if (monday) periods.push({ choice: 'weekly', key: `weekly:${weekKey(now)}` });
   let sent = 0;
-  for (const group of await waitingByBrand()) {
+  for (const group of await ofActiveWorkspaces(await waitingByBrand())) {
     try {
       const audience = await brandAudience(group.organizationId, group.brandId, KIND);
       for (const { choice, key } of periods) {

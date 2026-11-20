@@ -1,16 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = vi.hoisted(() => ({ rows: [], error: null }));
+const db = vi.hoisted(() => ({ rows: [], error: null, orgs: [] }));
 vi.mock('../../config/supabase.js', () => ({
   default: {
-    from: () => {
+    from: (table) => {
       const chain = {
         select: () => chain,
         eq: () => chain,
-        then: (resolve) => resolve({ data: db.error ? null : db.rows, error: db.error }),
+        in: () => chain,
+        then: (resolve) =>
+          table === 'organizations'
+            ? resolve({ data: db.orgs, error: null })
+            : resolve({ data: db.error ? null : db.rows, error: db.error }),
       };
       return chain;
     },
@@ -19,7 +23,7 @@ vi.mock('../../config/supabase.js', () => ({
 const readers = vi.hoisted(() => ({ map: new Map() }));
 vi.mock('../access.js', () => ({ brandReaders: async () => readers.map }));
 
-const { KIND_DEFAULTS, brandAudience, choosing } = await import('./choices.js');
+const { KIND_DEFAULTS, activeOrgIds, brandAudience, choosing } = await import('./choices.js');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -69,5 +73,22 @@ describe('who gets a notification e-mail of a brand (Settings › Notifications)
     });
     db.error = { code: 'XX000', message: 'boom' };
     await expect(brandAudience('o1', 'b1', 'drafts_review')).rejects.toThrow('boom');
+  });
+});
+
+describe('active workspaces only (as the Pulse)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('keeps workspaces active or trialing on Ansvisor Cloud, and every one self-hosted', async () => {
+    db.orgs = [
+      { id: 'o1', subscription_status: 'active' },
+      { id: 'o2', subscription_status: 'trialing' },
+      { id: 'o3', subscription_status: 'canceled' },
+      { id: 'o4', subscription_status: null },
+    ];
+    vi.stubEnv('IS_CLOUD', 'true');
+    expect([...(await activeOrgIds(['o1', 'o2', 'o3', 'o4']))]).toEqual(['o1', 'o2']);
+    vi.stubEnv('IS_CLOUD', 'false');
+    expect((await activeOrgIds(['o1', 'o3'])).has('o3')).toBe(true);
   });
 });
