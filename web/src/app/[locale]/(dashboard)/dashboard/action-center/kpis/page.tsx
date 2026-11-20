@@ -53,14 +53,16 @@ function utcDay(offset = 0): string {
 export default function ActionCenterKpisPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const t = useTranslations('actionCenter.kpis');
-  // KPIs is one of History's views: the tab shown above it is History's.
+  const tHistory = useTranslations('actionCenter.historyPage');
+  // KPIs is one of History's views: the tab shown above it is History's, and so is
+  // the title; the KPIs view is picked below it (AC-64).
 
   return (
     <div className="space-y-6">
       <HeaderWithAiUsage>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{tHistory('title')}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{tHistory('subtitle')}</p>
         </div>
       </HeaderWithAiUsage>
       <ActionCenterTabs />
