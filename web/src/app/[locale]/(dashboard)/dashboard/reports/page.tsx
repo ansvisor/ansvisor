@@ -31,7 +31,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Check, Crown, FileBarChart, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { REPORT_TEMPLATE_TITLES } from '@/lib/reports/template-titles';
+import { Check, Crown, FileBarChart, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
@@ -277,7 +284,11 @@ export default function ReportsPage() {
                     <TableRow key={report.id}>
                       <TableCell>
                         <span className="font-medium">{report.title}</span>
+                        {/* The template's name under a title of the person's own;
+                            a default title already is it. */}
                         {KNOWN_TEMPLATE_IDS.has(report.template) &&
+                          report.title !==
+                            REPORT_TEMPLATE_TITLES[report.template as ReportTemplateId] &&
                           t.has(`templates.${report.template}.name`) && (
                             <span className="mt-0.5 block text-xs text-muted-foreground">
                               {t(`templates.${report.template}.name`)}
@@ -299,21 +310,32 @@ export default function ReportsPage() {
                           >
                             {tc('view')}
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-muted-foreground hover:text-destructive"
-                            disabled={deletingId === report.id}
-                            onClick={guard(() => setPendingConfirm(report.id), {
-                              action: tActions('deleteReports'),
-                            })}
-                          >
-                            {deletingId === report.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
+                          {/* Delete sits in the row's menu, away from View, and asks
+                              first (UX audit RP-10). */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              className="rounded p-1.5 text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+                              disabled={deletingId === report.id}
+                              aria-label={t('rowMenuLabel', { title: report.title })}
+                            >
+                              {deletingId === report.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MoreHorizontal className="h-4 w-4" />
+                              )}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={guard(() => setPendingConfirm(report.id), {
+                                  action: tActions('deleteReports'),
+                                })}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                {t('deleteTitle')}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>

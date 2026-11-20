@@ -102,8 +102,19 @@ async function render(isLocked: boolean, chatAgentic = false) {
 
 const generate = () =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === 'Generate Report')!;
-// The row's last button: the bin.
-const remove = () => [...container.querySelectorAll('tbody button')].at(-1) as HTMLButtonElement;
+// The row's "…" menu, then its Delete report (UX audit RP-10).
+const remove = async () => {
+  const trigger = container.querySelector<HTMLElement>(
+    'tbody [aria-label="More actions for October review"]',
+  )!;
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    trigger.click();
+  });
+  return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (item) => item.textContent === 'Delete report',
+  )!;
+};
 const dialog = () => document.querySelector('[role="dialog"]');
 
 describe('Reports', () => {
@@ -112,7 +123,10 @@ describe('Reports', () => {
     expect(container.textContent).toContain('October review');
     await act(async () => generate().click());
     expect(openUpgrade).toHaveBeenLastCalledWith('Generating reports needs a plan');
-    await act(async () => remove().click());
+    {
+      const item = await remove();
+      await act(async () => item.click());
+    }
     expect(openUpgrade).toHaveBeenLastCalledWith('Deleting reports needs a plan');
     expect(openUpgrade).toHaveBeenCalledTimes(2);
     expect(dialog()).toBeNull();
@@ -173,5 +187,33 @@ describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
     reports.getReports.mockReturnValue(new Promise(() => {}));
     await render(false);
     expect(chatPage.mock.lastCall![0].view).toEqual({});
+  });
+
+  it('names a report by its title, and its template under a title of the person’s own (UX audit RP-12)', async () => {
+    reports.getReports.mockResolvedValue([
+      {
+        id: 'r1',
+        brandId: 'b1',
+        title: 'October review',
+        template: 'executive_summary',
+        dateFrom: '2026-10-01T00:00:00Z',
+        dateTo: '2026-10-27T00:00:00Z',
+        createdAt: '2026-10-27T00:00:00Z',
+      },
+      {
+        id: 'r2',
+        brandId: 'b1',
+        title: 'Monthly Executive Report',
+        template: 'executive_summary',
+        dateFrom: '2026-11-01T00:00:00Z',
+        dateTo: '2026-11-18T00:00:00Z',
+        createdAt: '2026-11-18T00:00:00Z',
+      },
+    ]);
+    await render(false);
+    const titles = [...container.querySelectorAll('tbody tr')].map(
+      (row) => row.querySelector('td')?.textContent,
+    );
+    expect(titles).toEqual(['October reviewMonthly Executive Report', 'Monthly Executive Report']);
   });
 });
