@@ -41,7 +41,7 @@ Each e-mail comes once, only for brands you can open.
 
 **Score dropped** tells you when a page's new audit scores 5 points or more below its previous one, such as 70 → 61, **Right away** or in the day's summary. A page's first audit is never a drop.
 
-Both are **Off** until you pick them, and each audit is told once.
+Both are **Off** until you pick them, and each audit is told once. With **Audit finished** on for a brand, its scheduled runs no longer also send the workspace's auto-audit e-mail to you: you get one.
 
 ## Set a brand apart
 
