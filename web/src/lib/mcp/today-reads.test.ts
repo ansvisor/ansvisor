@@ -205,6 +205,7 @@ function start(over: Partial<TodayStart> = {}): TodayStart {
       change: 1.1,
       rank: 2,
       of: 5,
+      set: 'rivals',
       neighbour: { name: 'Northbound', gap: 3.4, ahead: false },
       competitors: [],
     }),
@@ -257,7 +258,7 @@ describe('get_today', () => {
     expect(today).toMatchObject({
       day: 'normal',
       loop: { tracked_prompts: 40, open_actions: 9, done_this_week: 2 },
-      where_you_stand: { score: 54.2, rank: 2, of: 5 },
+      where_you_stand: { score: 54.2, rank: 2, of: 5, rank_among: 'rivals' },
       last_week: null,
     });
   });
@@ -315,7 +316,15 @@ describe('get_today', () => {
 
   it("reads Last week on the person's Monday, and This week's focus", async () => {
     page.getTodayLastWeek.mockResolvedValue({
-      visibility: { score: 50, change: 2, rank: 1, of: 4, neighbour: null, competitors: [] },
+      visibility: {
+        score: 50,
+        change: 2,
+        rank: 1,
+        of: 4,
+        set: 'top',
+        neighbour: null,
+        competitors: [],
+      },
       done: { count: 1, actions: [{ id: 'a3', kind: 'recover_lost_citations', payload: {} }] },
       results: null,
     });

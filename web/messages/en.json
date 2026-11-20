@@ -891,10 +891,13 @@
         "title": "Where you stand",
         "change": "{change} since yesterday",
         "noChange": "no change since yesterday",
-        "behind": "#{rank} of {count} brands. {gap} points behind {name}.",
-        "ahead": "#1 of {count} brands. {gap} points ahead of {name}.",
+        "behind": "#{rank} of {count} {set, select, rivals {with your primary rivals} competitors {with competitors named in {min}+ prompts} other {brands}}. {gap} points behind {name}.",
+        "ahead": "#1 of {count} {set, select, rivals {with your primary rivals} competitors {with competitors named in {min}+ prompts} other {brands}}. {gap} points ahead of {name}.",
         "alone": "No competitor scored on your prompts yet.",
-        "none": "No score yet. It shows here once your latest AI answers are scored."
+        "none": "No score yet. It shows here once your latest AI answers are scored.",
+        "outOf": "/100",
+        "scoreLabel": "Visibility score",
+        "run": "From the latest run, {date}"
       },
       "summary": {
         "changes": "{title}: {count, plural, =0 {no big changes} one {# change} other {# changes}}",
