@@ -83,7 +83,7 @@ const topicAgg = (topicId: string, answers: number, mentions: number, competitor
   daily: { '2026-11-15': { visible: mentions, count: answers } },
 });
 
-/** One (prompt, engine, model, region) of head_to_head_daily (00169). */
+/** One (prompt, engine, model, region) of head_to_head_window_daily (00552, 00169's read). */
 const group = (
   promptId: string,
   platform: string,
@@ -259,7 +259,8 @@ function seed() {
     { query: 'Best CRM', engines: ['chatgpt-web'], times_searched: 4 },
   ]);
   rpc('ae_fanout_gaps', () => [{ query: 'free crm', results: 1, prompts: 0, competitor_only: 1 }]);
-  rpc('head_to_head_daily', (args) =>
+  // All time, as the page's all-time view: no day bounds (00552).
+  rpc('head_to_head_window_daily', (args) =>
     args.p_competitor_id === C1
       ? {
           groups: [
@@ -573,8 +574,15 @@ describe("Competitors' head-to-head (get_competitor_head_to_head)", () => {
     });
     expect(both).toMatchObject({ competitors: [{ competitor_id: C1 }, { competitor_id: C2 }] });
     expect(
-      rpcCalls.filter((c) => c.name === 'head_to_head_daily').map((c) => c.args.p_competitor_id),
-    ).toEqual([C2, C2, C2, C2]);
+      rpcCalls
+        .filter((c) => c.name === 'head_to_head_window_daily')
+        .map((c) => [c.args.p_competitor_id, c.args.p_day_from, c.args.p_day_to]),
+    ).toEqual([
+      [C2, null, null],
+      [C2, null, null],
+      [C2, null, null],
+      [C2, null, null],
+    ]);
   });
 });
 

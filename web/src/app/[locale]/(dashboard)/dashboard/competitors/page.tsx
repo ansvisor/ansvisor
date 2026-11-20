@@ -1275,6 +1275,9 @@ const COMPETITOR_DATE_PRESETS: readonly CompetitorDatePreset[] = [
   'custom',
 ];
 
+/** The days each fixed preset covers, as getDateRange counts them. */
+const PRESET_DAYS = { '7d': 7, '30d': 30, '90d': 90 } as const;
+
 function competitorComparisonWindow(
   preset: CompetitorDatePreset,
   custom: { from: string; to: string },
@@ -1460,22 +1463,28 @@ export default function CompetitorsPage() {
     setLinkedCompetitorId(null);
   }, [linkedCompetitorId, loading, competitors, selectCompetitor]);
 
-  // Load head-to-head when a competitor is selected
+  // Load head-to-head when a competitor is selected, over the picker's days as
+  // the cards above (UX audit CP-02); again when the range changes.
+  const h2hRequestId = useRef(0);
   const loadH2H = useCallback(
     async (competitorId: string) => {
-      if (!brand) return;
+      const requestId = ++h2hRequestId.current;
+      if (!brand || !dateParamsReady) return;
+      // An incomplete custom range is not a query yet: the last one stays.
+      if (datePreset === 'custom' && (!dateFrom || !dateTo)) return;
       setH2hLoading(true);
       setH2hData(null);
       try {
-        const data = await getHeadToHeadComparison(brand.id, competitorId);
-        setH2hData(data);
+        const { days } = competitorComparisonWindow(datePreset, { from: dateFrom, to: dateTo });
+        const data = await getHeadToHeadComparison(brand.id, competitorId, days);
+        if (requestId === h2hRequestId.current) setH2hData(data);
       } catch {
-        toast.error(t('h2h.loadError'));
+        if (requestId === h2hRequestId.current) toast.error(t('h2h.loadError'));
       } finally {
-        setH2hLoading(false);
+        if (requestId === h2hRequestId.current) setH2hLoading(false);
       }
     },
-    [brand, t],
+    [brand, dateFrom, dateParamsReady, datePreset, dateTo, t],
   );
 
   useEffect(() => {
@@ -1507,6 +1516,10 @@ export default function CompetitorsPage() {
   const loadRuns = useCallback(
     (group: HeadToHeadGroup, limit: number) => {
       if (!brand || !selectedCompetitorId) return Promise.resolve([]);
+      const { dateFrom: from, dateTo: to } = competitorComparisonWindow(datePreset, {
+        from: dateFrom,
+        to: dateTo,
+      });
       return getHeadToHeadRuns(
         brand.id,
         selectedCompetitorId,
@@ -1517,9 +1530,10 @@ export default function CompetitorsPage() {
           region: group.region ?? null,
         },
         limit,
+        { dateFrom: from, dateTo: to },
       );
     },
-    [brand, selectedCompetitorId],
+    [brand, dateFrom, datePreset, dateTo, selectedCompetitorId],
   );
 
   // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its period, the
@@ -1864,11 +1878,12 @@ export default function CompetitorsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {t('selectToCompare')}{' '}
-                {datePreset === '30d'
-                  ? t('windowLast30Days')
-                  : datePreset === 'all'
-                    ? t('windowAllTime')
-                    : t('windowSelectedRange')}
+                {/* The range the cards and the head-to-head read (UX audit CP-08). */}
+                {datePreset === 'all'
+                  ? t('windowAllTime')
+                  : datePreset === 'custom'
+                    ? t('windowSelectedRange')
+                    : t('windowLastDays', { days: PRESET_DAYS[datePreset] })}
               </p>
               {hint && (
                 <DuplicateHint

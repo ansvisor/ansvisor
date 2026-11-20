@@ -329,3 +329,41 @@ describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
     expect(chatPage.mock.lastCall![0].view).toEqual({});
   });
 });
+
+describe('the head-to-head over the picker’s days (UX audit CP-02, CP-08)', () => {
+  beforeEach(() => {
+    // The competitor's timeline chart sizes itself; jsdom has no ResizeObserver.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.history.replaceState(null, '', '/');
+  });
+
+  const h2hCall = async () => {
+    const tracking = await import('@/lib/actions/tracking');
+    return vi.mocked(tracking.getHeadToHeadComparison).mock.lastCall;
+  };
+
+  it('reads the open competitor over the same days as the cards', async () => {
+    window.history.replaceState(null, '', '/?competitor=c1&preset=7d');
+    await render(false);
+    const call = (await h2hCall())!;
+    expect(call.slice(0, 2)).toEqual(['b1', 'c1']);
+    // Seven UTC days, today included, as the cards' window.
+    const { dayFrom, dayTo } = call[2]!;
+    expect((Date.parse(dayTo!) - Date.parse(dayFrom!)) / 86_400_000).toBe(6);
+  });
+
+  it('reads all time with All', async () => {
+    window.history.replaceState(null, '', '/?competitor=c1&preset=all');
+    await render(false);
+    expect(await h2hCall()).toEqual(['b1', 'c1', {}]);
+  });
+});
