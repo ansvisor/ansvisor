@@ -275,6 +275,17 @@ describe('ActionDrawer', () => {
     }
   });
 
+  it('names a linked KPI’s target as the brand’s monthly goal, in its unit (UX audit AC-22)', async () => {
+    server.getActionDetail.mockResolvedValue({
+      ...emptyDetail,
+      kpis: [{ kpiKey: 'citations', target: 5000, timeframe: 'monthly' }],
+    });
+    await renderDrawer({ ...action, kpiKeys: ['citations'] });
+    const text = document.body.querySelector('[role="dialog"]')!.textContent;
+    expect(text).toContain('Brand monthly goal: 5k');
+    expect(text).not.toContain('target 5000');
+  });
+
   describe('changes', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());

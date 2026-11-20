@@ -153,6 +153,10 @@
         {
           "heading": "Change your KPIs",
           "text": "Click **Edit KPIs** (or **Configure KPIs**) to open the framework. Pick a template (**AI Search Visibility**, **Brand Monitoring** or **Custom Framework**; **Content Performance** is marked coming soon), a time period (Weekly, Monthly or Quarterly) and a target for each KPI, then click **Save & Apply**. Only admins and managers can change KPIs."
+        },
+        {
+          "heading": "KPIs on an action",
+          "text": "An action's Overview lists the KPIs it is linked to, each with its **Brand monthly goal** (or weekly, or quarterly, as the goal is set), such as \"Brand monthly goal: 5k\". That is the goal for the whole brand, written as on this page, not a goal for the action's own prompts."
         }
       ]
     },
