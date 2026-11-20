@@ -5719,8 +5719,7 @@
       "toggleMenu": "Show or hide the Menu section",
       "home": "Home",
       "inbox": "Inbox",
-      "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
-      "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
+      "inboxLabel": "Inbox · {needsYou, plural, one {# needs you} other {# need you}}",
       "skills": "Skills",
       "activity": "Activity",
       "capabilities": "What Chat can do",
@@ -6163,10 +6162,7 @@
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
       "nothingNeedsYou": "Nothing needs you.",
       "summary": {
-        "needsYou": "{count, plural, one {# needs you} other {# need you}}",
-        "running": "{count} running",
-        "doneToday": "{count} done today",
-        "suggestions": "{count, plural, one {# suggestion} other {# suggestions}} this week"
+        "needsYou": "{count, plural, one {# needs you} other {# need you}}"
       },
       "empty": "Nothing needs you. Results from your agents land here.",
       "tabs": {

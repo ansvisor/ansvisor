@@ -288,7 +288,6 @@ export function ChatMenuView({
   scheduled = 0,
 }: ChatMenuViewProps) {
   const t = useTranslations('chatShell.menu');
-  const tAttention = useTranslations('agentic.attention');
   const isMac = useIsMac();
   const [folded, setFolded] = useState<Record<Section, boolean>>(FOLDED);
   // Settings' list folds as the sections do, with one difference: open on
@@ -330,14 +329,10 @@ export function ChatMenuView({
     const at = nowProp ?? new Date();
     return { now: at, ...chatMenuLists(chats, at) };
   }, [chats, nowProp]);
-  // The Inbox holds the person's own chats in Agents at work: its count, with
-  // an amber dot while any needs them.
-  const inboxRows = atWork.filter((chat) => chat.mine);
-  const needsYou = inboxRows.filter((chat) => chat.state === 'needsYou').length;
-  const inbox = inboxRows.length;
-  const inboxLabel = needsYou
-    ? t('inboxLabelNeedsYou', { count: inbox, needsYou })
-    : t('inboxLabel', { count: inbox });
+  // The Inbox's badge counts the person's own chats that need them, as its
+  // Needs you tab does (UX audit CH-04): none, no badge.
+  const needsYou = atWork.filter((chat) => chat.mine && chat.state === 'needsYou').length;
+  const inboxLabel = t('inboxLabel', { needsYou });
   const shownRuns = allRuns ? atWork : atWork.slice(0, AT_WORK_ROWS);
   const row = (chat: ChatListItem) => (
     <ChatRow
@@ -382,7 +377,7 @@ export function ChatMenuView({
 
       <SectionHead className="mt-0">
         {t('menu')}
-        {folded.menu && inbox > 0 && (
+        {folded.menu && needsYou > 0 && (
           <Link
             href="/dashboard/chat/inbox"
             data-action="chatMenu.openInbox"
@@ -391,10 +386,8 @@ export function ChatMenuView({
             onClick={onNavigate}
             className="ms-auto inline-flex items-center gap-1 rounded-md bg-foreground/10 px-1.5 text-[10.5px] leading-4 tracking-normal text-foreground/80 normal-case outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            {needsYou > 0 && (
-              <span aria-hidden className="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400" />
-            )}
-            {inbox}
+            <span aria-hidden className="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400" />
+            {needsYou}
           </Link>
         )}
         <FoldButton
@@ -420,20 +413,17 @@ export function ChatMenuView({
             action="chatMenu.openInbox"
             active={pathname === '/dashboard/chat/inbox'}
             onNavigate={onNavigate}
-            label={inbox > 0 ? inboxLabel : undefined}
+            label={needsYou > 0 ? inboxLabel : undefined}
           >
             {t('inbox')}
-            {inbox > 0 && (
+            {needsYou > 0 && (
               <span className="ms-auto inline-flex items-center gap-1.5">
-                {needsYou > 0 && (
-                  <span
-                    aria-hidden
-                    title={tAttention('needsYou', { count: needsYou })}
-                    className="size-[7px] rounded-full bg-amber-600 dark:bg-amber-400"
-                  />
-                )}
+                <span
+                  aria-hidden
+                  className="size-[7px] rounded-full bg-amber-600 dark:bg-amber-400"
+                />
                 <span className="min-w-[22px] rounded-md bg-foreground/10 px-1.5 text-center text-[11px] leading-[18px] text-foreground/80 tabular-nums">
-                  {inbox}
+                  {needsYou}
                 </span>
               </span>
             )}

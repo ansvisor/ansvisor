@@ -225,7 +225,11 @@ function ChatShellFrame({
   const isMac = useIsMac();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { chats, status } = useChatList();
-  const inbox = useMemo(() => inboxItems(ofBrand(chats, brandId)).length, [chats, brandId]);
+  // What needs the person, as the menu's Inbox badge and Needs you tab (CH-04).
+  const inbox = useMemo(
+    () => inboxItems(ofBrand(chats, brandId)).filter((chat) => chat.state === 'needsYou').length,
+    [chats, brandId],
+  );
   const [open, setOpen] = useState(menuOpen);
   const [drawer, setDrawer] = useState(false);
   const [searching, setSearching] = useState(false);
