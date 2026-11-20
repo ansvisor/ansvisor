@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Eye,
@@ -32,10 +33,21 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { KpiSnapshot } from '@/lib/actions/kpis';
-import type { KpiKey } from '@/lib/kpis/registry';
+import { isValidKpiTarget, type KpiKey } from '@/lib/kpis/registry';
+import { presetTarget } from '@/lib/kpis/presets';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import type { KpiStatus } from '@/lib/kpis/status';
 import { isImprovement } from '@/lib/kpis/status';
-import { formatCompactNumber } from '@/lib/format';
+import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const KpiSparkline = dynamic(() => import('./kpi-sparkline'), {
@@ -78,10 +90,18 @@ const STATUS_BAR: Record<KpiStatus, string> = {
   goal_reached: 'bg-emerald-500',
 };
 
-function formatKpiValue(value: number, unit: KpiSnapshot['unit']): string {
-  if (unit === 'percent') {
-    return `${Math.round(value * 10) / 10}%`;
-  }
+/**
+ * A KPI's value or target in its unit: "12.5%" for a share, "29.9/100" for
+ * the Visibility score (a score, never a %: AC-02, D2), compact counts.
+ */
+function formatKpiValue(
+  value: number,
+  unit: KpiSnapshot['unit'],
+  score: (value: number) => string,
+): string {
+  const tenth = Math.round(value * 10) / 10;
+  if (unit === 'percent') return `${tenth}%`;
+  if (unit === 'points') return score(tenth);
   return formatCompactNumber(value);
 }
 
@@ -128,21 +148,93 @@ function GoalProgress({ snapshot }: { snapshot: KpiSnapshot }) {
   );
 }
 
+/**
+ * "Goal passed · Set a new goal" (UX audit AC-62): the next goal offered 20%
+ * above the KPI's value (presetTarget), to change before it is saved. Nothing
+ * changes until Save.
+ */
+function NewGoalDialog({
+  kpi,
+  onClose,
+  onSave,
+  score,
+}: {
+  kpi: KpiSnapshot;
+  onClose: () => void;
+  onSave: (key: KpiKey, target: number) => void;
+  score: (value: number) => string;
+}) {
+  const t = useTranslations('actionCenter.kpis');
+  const tRegistry = useTranslations('actionCenter.registry');
+  const [value, setValue] = useState(() => String(presetTarget(kpi.key, kpi.value)));
+  const target = Number(value);
+  const valid = value.trim() !== '' && isValidKpiTarget(kpi.key, target);
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t('newGoal.title', { name: tRegistry(`${kpi.key}.name`) })}</DialogTitle>
+          <DialogDescription>
+            {t('newGoal.description', {
+              value: formatKpiValue(kpi.value, kpi.unit, score),
+              goal: formatKpiValue(kpi.target, kpi.unit, score),
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!valid) return;
+            onSave(kpi.key, target);
+            onClose();
+          }}
+        >
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="any"
+            min={0}
+            aria-label={t('newGoal.label')}
+            data-action="kpis.newGoalValue"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            aria-invalid={!valid}
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t('newGoal.cancel')}
+            </Button>
+            <Button type="submit" data-action="kpis.saveNewGoal" disabled={!valid}>
+              {t('newGoal.save')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function KpiTable({
   kpis,
   onEdit,
   onRemove,
+  onSetGoal,
   busyKey,
 }: {
   kpis: KpiSnapshot[];
   /** Without them (the unsaved ready-made set) the rows have no menu. */
   onEdit?: (key: KpiKey) => void;
   onRemove?: (key: KpiKey) => void;
+  /** A passed goal's next one, saved once confirmed (AC-62); none on the ready-made set. */
+  onSetGoal?: (key: KpiKey, target: number) => void;
   busyKey: KpiKey | null;
 }) {
   const editable = Boolean(onEdit && onRemove);
   const t = useTranslations('actionCenter.kpis');
   const tRegistry = useTranslations('actionCenter.registry');
+  const scoreOf = (value: number) => t('score', { value });
+  const [newGoalFor, setNewGoalFor] = useState<KpiSnapshot | null>(null);
 
   return (
     <div className="overflow-x-auto rounded-lg border bg-card">
@@ -182,7 +274,7 @@ export function KpiTable({
                   </div>
                 </TableCell>
                 <TableCell className="text-sm font-semibold tabular-nums">
-                  {formatKpiValue(kpi.value, kpi.unit)}
+                  {formatKpiValue(kpi.value, kpi.unit, scoreOf)}
                 </TableCell>
                 <TableCell>
                   <KpiChange snapshot={kpi} />
@@ -200,9 +292,24 @@ export function KpiTable({
                     />
                     {t(`status.${kpi.status}`)}
                   </Badge>
+                  {kpi.status === 'goal_reached' && onSetGoal && (
+                    <button
+                      type="button"
+                      data-action="kpis.setNewGoal"
+                      disabled={busyKey === kpi.key}
+                      onClick={() => setNewGoalFor(kpi)}
+                      className="mt-1 block text-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+                    >
+                      {t('newGoal.prompt')}
+                    </button>
+                  )}
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground tabular-nums">
-                  {formatKpiValue(kpi.target, kpi.unit)}
+                {/* The exact goal on hover: compact counts can look alike ("21.4k"). */}
+                <TableCell
+                  className="text-xs text-muted-foreground tabular-nums"
+                  title={formatNumber(kpi.target)}
+                >
+                  {formatKpiValue(kpi.target, kpi.unit, scoreOf)}
                 </TableCell>
                 <TableCell>
                   <GoalProgress snapshot={kpi} />
@@ -235,6 +342,14 @@ export function KpiTable({
           })}
         </TableBody>
       </Table>
+      {newGoalFor && onSetGoal && (
+        <NewGoalDialog
+          kpi={newGoalFor}
+          onClose={() => setNewGoalFor(null)}
+          onSave={onSetGoal}
+          score={scoreOf}
+        />
+      )}
     </div>
   );
 }

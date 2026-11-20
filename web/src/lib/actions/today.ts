@@ -5,7 +5,7 @@ import { resolveAgentAuth } from '@/lib/agent/auth';
 import { getVisibilitySummaryFor } from '@/lib/mcp/data';
 import { getTrackingWindow } from '@/lib/actions/tracking';
 import { getActivePromptCount } from '@/lib/actions/prompt';
-import { getMyOpenActionCount } from '@/lib/actions/action-center-counts';
+import { getOpenActionCounts } from '@/lib/actions/action-center-counts';
 import { weekStart } from '@/lib/action-center/today';
 import { standingFrom, type TodayStanding } from '@/lib/action-center/focus';
 import { effectiveTimeZone } from '@/lib/time-zone';
@@ -24,8 +24,10 @@ export interface TodayOverview {
   /** The brand's last completed tracking run; null before its first. */
   lastRunAt: string | null;
   trackedPrompts: number | null;
-  /** Open actions that are the person's or no one's, as Today ranks them. */
+  /** Open actions: new, in progress or on hold, anyone's (AC-01), as the Actions list counts them. */
   openActions: number | null;
+  /** Of those, on hold and the person's own: the line under the count. */
+  openBreakdown: { onHold: number; mine: number } | null;
   /** The brand's actions completed since Monday, on the person's clock. */
   doneThisWeek: number | null;
 }
@@ -57,7 +59,7 @@ export async function getTodayOverview(
   const [window, tracked, open, done] = await Promise.allSettled([
     getTrackingWindow(brandId),
     getActivePromptCount(brandId),
-    getMyOpenActionCount(brandId),
+    getOpenActionCounts(brandId),
     supabase
       .from('actions')
       .select('id', { count: 'exact', head: true })
@@ -70,11 +72,13 @@ export async function getTodayOverview(
         return count ?? 0;
       }),
   ]);
+  const openCounts = settled(open);
   return {
     zone,
     lastRunAt: settled(window)?.lastRunAt ?? null,
     trackedPrompts: settled(tracked),
-    openActions: settled(open),
+    openActions: openCounts?.open ?? null,
+    openBreakdown: openCounts ? { onHold: openCounts.onHold, mine: openCounts.mine } : null,
     doneThisWeek: settled(done),
   };
 }

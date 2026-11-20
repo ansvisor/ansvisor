@@ -1,11 +1,13 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import type { AgentAuditSpec } from '@/components/agent/agent-chart';
 import type { AuditRecommendation, CategoryScore } from '@/lib/actions/audits';
 import { asScoreRange } from '@/lib/audit/score-range';
 import { CATEGORY_META, ScoreGauge, pct, barColor } from '@/components/audit/audit-report';
 import { useScoreRangeTip } from '@/components/audit/score-range';
 import { cn } from '@/lib/utils';
+import { useRubricText } from '@/hooks/use-rubric-text';
 
 export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
   // The render_audit tool schema uses z.unknown(), so narrow the types here.
@@ -14,6 +16,8 @@ export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
   // The score's range as get_site_audit gave it ("64 ± 2"), as the audit report shows it.
   const range = audit.totalScore === null ? null : asScoreRange(audit.scoreRange);
   const rangeTip = useScoreRangeTip();
+  const rubric = useRubricText();
+  const t = useTranslations('audit');
 
   return (
     <div className="my-3 space-y-5 rounded-lg border bg-card p-4">
@@ -22,12 +26,12 @@ export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
         <ScoreGauge score={audit.totalScore} range={range} />
 
         <div className="min-w-0 flex-1 space-y-2">
-          <h3 className="text-sm font-semibold">Site Audit</h3>
+          <h3 className="text-sm font-semibold">{t('title')}</h3>
 
           <p className="break-all text-xs text-muted-foreground">{audit.url}</p>
 
           <p className="text-xs text-muted-foreground">
-            {audit.signalsEvaluated ?? '—'} / {audit.signalsTotal ?? '—'} signals evaluated
+            {audit.signalsEvaluated ?? '—'} / {audit.signalsTotal ?? '—'} {t('signalsEvaluated')}
           </p>
 
           {/* What the gauge's "± 2" means, written out for touch screens and screen readers. */}
@@ -37,7 +41,7 @@ export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
 
       {/* Category breakdown */}
       <div className="space-y-3">
-        <h4 className="text-sm font-medium">Category breakdown</h4>
+        <h4 className="text-sm font-medium">{t('categoryBreakdown')}</h4>
 
         {CATEGORY_META.map((category) => {
           const score = categoryScores[category.key]?.score ?? null;
@@ -46,10 +50,10 @@ export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
           return (
             <div key={category.key}>
               <div className="mb-1 flex items-center justify-between text-xs">
-                <span>{category.label}</span>
+                <span>{rubric.category(category.key, category.label)}</span>
 
                 <span className="text-muted-foreground">
-                  {percentage === null ? 'n/a' : `${percentage}/100`}
+                  {percentage === null ? t('na') : `${percentage}/100`}
                 </span>
               </div>
 
@@ -69,7 +73,7 @@ export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
       {/* Recommendations */}
       {recommendations.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium">Top recommendations</h4>
+          <h4 className="text-sm font-medium">{t('topRecommendations')}</h4>
 
           <ul className="space-y-2 text-sm text-muted-foreground">
             {recommendations.slice(0, 3).map((rec, index) => (

@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { describe, expect, it } from 'vitest';
 import messages from '../../messages/en.json';
-import { useServerErrorText } from './use-server-error';
+import { refusalError } from '@/lib/server-error';
+import { useCaughtErrorText, useServerErrorText } from './use-server-error';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -48,5 +49,42 @@ describe('useServerErrorText (LOC-008)', () => {
 
   it('keeps the caller’s text for an answer it does not map', () => {
     expect(say({ error: 'Draft not found' }, 'Draft not found')).toBe('Draft not found');
+  });
+});
+
+/** What useCaughtErrorText says for a caught error. */
+function sayCaught(err: unknown, fallback: string) {
+  function Probe() {
+    return <p>{useCaughtErrorText()(err, fallback)}</p>;
+  }
+  const host = document.createElement('div');
+  const root = createRoot(host);
+  act(() =>
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <Probe />
+      </NextIntlClientProvider>,
+    ),
+  );
+  const out = host.textContent ?? '';
+  act(() => root.unmount());
+  return out;
+}
+
+describe('useCaughtErrorText (LOC-008)', () => {
+  it('says a mapped refusal, kept on a thrown refusal or a server action’s digest', () => {
+    expect(sayCaught(refusalError({ error: 'plan_limit' }, 'x', 429), 'fallback')).toBe(
+      messages.apiFailure.limit,
+    );
+    expect(
+      sayCaught(Object.assign(new Error('masked'), { digest: 'plan_limit' }), 'fallback'),
+    ).toBe(messages.apiFailure.plan);
+  });
+
+  it('keeps a browser error’s own message, and the fallback for a masked one', () => {
+    expect(sayCaught(new TypeError('Failed to fetch'), 'fallback')).toBe('Failed to fetch');
+    expect(sayCaught(Object.assign(new Error('masked'), { digest: '42' }), 'fallback')).toBe(
+      'fallback',
+    );
   });
 });

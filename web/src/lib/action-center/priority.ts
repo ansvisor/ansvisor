@@ -120,6 +120,22 @@ export function isStale(action: { status: string; staleAt?: string | null }): bo
   return action.status === 'new' && Boolean(action.staleAt);
 }
 
+/**
+ * How many days a stale action has gone with no one's update (AC-10): the
+ * month it took to be marked stale, plus the days since. A floor, as the
+ * nightly pass marks it on the first night it qualifies; null when the
+ * action isn't stale.
+ */
+export function quietDays(
+  action: { status: string; staleAt?: string | null },
+  now: Date = new Date(),
+): number | null {
+  if (!isStale(action)) return null;
+  const since = Date.parse(action.staleAt!);
+  if (Number.isNaN(since)) return STALE_AFTER_DAYS;
+  return STALE_AFTER_DAYS + Math.max(0, Math.floor((now.getTime() - since) / 86_400_000));
+}
+
 /** How many actions the Top Actions card names (spec: at most five). */
 export const TOP_ACTIONS = 5;
 

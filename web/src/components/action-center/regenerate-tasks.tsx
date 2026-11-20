@@ -15,7 +15,7 @@ export function taskWriterEnabled(): boolean {
 }
 
 /** Server reasons this build has words for (actionsPage.drawer.regenerate.errors). */
-const KNOWN_ERRORS = [
+export const KNOWN_ERRORS = [
   'disabled',
   'not_found',
   'sent',

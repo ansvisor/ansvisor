@@ -433,7 +433,15 @@ export function ChatHomeView({
               .
             </>
           ) : focusLine ? (
-            t(`byFocus.${focusLine.key}`, focusLine.values)
+            // The rival links to its numbers on Competitors (UX audit CH-06).
+            t.rich(`byFocus.${focusLine.key}`, {
+              ...focusLine.values,
+              link: (chunks) => (
+                <Link href="/dashboard/competitors" data-action="home.openRival" className={LINK}>
+                  {chunks}
+                </Link>
+              ),
+            })
           ) : inbox > 0 ? (
             t('workedWhileAway')
           ) : (

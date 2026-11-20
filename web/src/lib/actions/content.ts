@@ -246,7 +246,9 @@ export async function getOpportunityPrompts(brandId: string): Promise<Opportunit
 export async function sendOpportunityToActionCenter(
   id: string,
   assetKey?: string,
-): Promise<{ actionId: string; created: boolean } | { error: string }> {
+): Promise<
+  { actionId: string; created: boolean } | { error: string; code?: string; status?: number }
+> {
   const session = await getSession();
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/${id}/action`, {
@@ -261,7 +263,12 @@ export async function sendOpportunityToActionCenter(
   // Returned, not thrown: a thrown error's message is masked in production.
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    return { error: body.details || body.error || `Server error: ${res.status}` };
+    return {
+      error: body.details || body.error || `Server error: ${res.status}`,
+      // The stable code too, for the browser to say it in the person's language (LOC-008).
+      ...(typeof body.code === 'string' ? { code: body.code } : {}),
+      status: res.status,
+    };
   }
   return res.json();
 }
@@ -511,7 +518,7 @@ export async function updateOpportunityStatus(
 
 export type SendToWebhookResult =
   | { success: true; webhookStatus: number; opportunityStatus: string }
-  | { success: false; error: string };
+  | { success: false; error: string; code?: string; status?: number };
 
 export async function sendToWebhook(id: string): Promise<SendToWebhookResult> {
   const session = await getSession();
@@ -527,10 +534,12 @@ export async function sendToWebhook(id: string): Promise<SendToWebhookResult> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     let error = body.error || `Server error: ${res.status}`;
+    let code = typeof body.code === 'string' ? body.code : undefined;
     if (error.includes('No active webhook')) {
       error = 'No workflow connected';
+      code = 'no_webhook';
     }
-    return { success: false, error };
+    return { success: false, error, code, status: res.status };
   }
 
   const data = await res.json();
@@ -650,6 +659,9 @@ export type BulkSendResult =
   | {
       success: false;
       error: string;
+      /** The API's stable code (no_webhook when no workflow is connected), for the browser to say it in the person's language (LOC-008). */
+      code?: string;
+      status?: number;
     };
 
 export async function bulkSendToWebhook(ids: string[]): Promise<BulkSendResult> {
@@ -667,10 +679,12 @@ export async function bulkSendToWebhook(ids: string[]): Promise<BulkSendResult> 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     let error = body.error || `Server error: ${res.status}`;
+    let code = typeof body.code === 'string' ? body.code : undefined;
     if (error.includes('No active webhook')) {
       error = 'No workflow connected';
+      code = 'no_webhook';
     }
-    return { success: false, error };
+    return { success: false, error, code, status: res.status };
   }
 
   const data = await res.json();

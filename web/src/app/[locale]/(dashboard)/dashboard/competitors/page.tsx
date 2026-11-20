@@ -24,7 +24,12 @@ import {
   getHeadToHeadRuns,
   type CompetitorComparisonData,
 } from '@/lib/actions/tracking';
-import type { HeadToHeadData, HeadToHeadGroup, HeadToHeadRun } from '@/lib/head-to-head';
+import {
+  foldScores,
+  type HeadToHeadData,
+  type HeadToHeadGroup,
+  type HeadToHeadRun,
+} from '@/lib/head-to-head';
 import { rankWithYou } from '@/lib/competitors/grid-rank';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
@@ -35,6 +40,9 @@ import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
 import { viewRows } from '@/lib/chat/page-view';
 import { MODEL_LABELS } from '@/config/platform-labels';
+import { PLANS } from '@/config/plans';
+import { usePlanContext } from '@/components/providers/plan-provider';
+import { breakdownForPlan, planEngineKeys } from '@/lib/competitors/plan-engines';
 import type { Competitor } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -63,6 +71,14 @@ import { cn } from '@/lib/utils';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { BrandAvatar } from '@/components/brand-avatar';
+import { engineCount, engineRows, lowSample } from '@/lib/competitors/prompt-engines';
+import {
+  PROMPT_PAGE_SIZE,
+  caseRepeats,
+  listPrompts,
+  promptCategories,
+  type PromptSort,
+} from '@/lib/competitors/prompt-list';
 import {
   Plus,
   Sparkles,
@@ -139,6 +155,21 @@ function ModelBadge({ model, platform }: { model: string; platform?: string }) {
       <AIProviderAvatar provider={provider} />
       <span className="text-xs">{getModelDisplayName(model, platform)}</span>
     </span>
+  );
+}
+
+/** A score from fewer than 10 runs (D8, UX audit CP-05). */
+function LowSampleBadge() {
+  const t = useTranslations('competitors');
+  return (
+    <Badge
+      variant="outline"
+      data-slot="low-sample"
+      title={t('h2h.lowSampleTip')}
+      className="border-amber-200 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+    >
+      {t('h2h.lowSample')}
+    </Badge>
   );
 }
 
@@ -609,6 +640,12 @@ function PlatformBreakdown({
   competitorName: string;
 }) {
   const t = useTranslations('competitors');
+  const { planId, isCloud, allowedModelIds } = usePlanContext();
+  // Only the engines the plan tracks, those without answers too (UX audit CP-04).
+  const { rows, notInPlan } = breakdownForPlan(
+    data.platformRows,
+    isCloud ? planEngineKeys(PLANS[planId]?.limits.allowedScrapers, allowedModelIds) : null,
+  );
 
   return (
     <Card>
@@ -617,12 +654,32 @@ function PlatformBreakdown({
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {data.platformRows.map((row) => {
+          {rows.map((row) => {
             const max = Math.max(row.brandScore, row.competitorScore, 1);
+            const name = (
+              <span className="font-medium">
+                {row.platform}
+                {row.provider === 'copilot' && (
+                  <span className="font-normal text-muted-foreground"> {t('h2h.viaBing')}</span>
+                )}
+              </span>
+            );
+            if (row.noAnswers) {
+              return (
+                <div
+                  key={row.platform}
+                  data-slot="engine-no-answers"
+                  className="flex items-center justify-between text-xs"
+                >
+                  {name}
+                  <span className="text-muted-foreground">{t('h2h.noAnswersEngine')}</span>
+                </div>
+              );
+            }
             return (
               <div key={row.platform} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium">{row.platform}</span>
+                  {name}
                   <DiffBadge diff={row.diff} />
                 </div>
                 <div className="flex gap-1 items-center">
@@ -632,8 +689,8 @@ function PlatformBreakdown({
                       style={{ width: `${(row.brandScore / max) * 100}%` }}
                     />
                   </div>
-                  <span className="text-[10px] tabular-nums w-8 text-end font-medium">
-                    {row.brandScore}%
+                  <span className="text-[10px] tabular-nums w-10 text-end font-medium">
+                    {row.brandScore}
                   </span>
                 </div>
                 <div className="flex gap-1 items-center">
@@ -643,8 +700,8 @@ function PlatformBreakdown({
                       style={{ width: `${(row.competitorScore / max) * 100}%` }}
                     />
                   </div>
-                  <span className="text-[10px] tabular-nums w-8 text-end font-medium">
-                    {row.competitorScore}%
+                  <span className="text-[10px] tabular-nums w-10 text-end font-medium">
+                    {row.competitorScore}
                   </span>
                 </div>
               </div>
@@ -661,6 +718,11 @@ function PlatformBreakdown({
             {competitorName}
           </div>
         </div>
+        {notInPlan.length > 0 && (
+          <p data-slot="engines-not-in-plan" className="mt-2 text-[11px] text-muted-foreground">
+            {t('h2h.notInPlan', { engines: notInPlan.join(', ') })}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -691,8 +753,8 @@ function groupH2HByPrompt(groups: HeadToHeadGroup[]): PromptComparisonGroup[] {
   return Array.from(map.entries())
     .map(([promptId, items]) => {
       const runs = items.reduce((s, g) => s + g.runs, 0);
-      const avgB = Math.round(items.reduce((s, g) => s + g.brandScore * g.runs, 0) / runs);
-      const avgC = Math.round(items.reduce((s, g) => s + g.competitorScore * g.runs, 0) / runs);
+      // The prompt's scores over all its engines' answers (UX audit CP-01).
+      const { brandScore: avgB, competitorScore: avgC, diff } = foldScores(items);
       return {
         promptId,
         promptText: items[0].promptText,
@@ -702,7 +764,7 @@ function groupH2HByPrompt(groups: HeadToHeadGroup[]): PromptComparisonGroup[] {
         latestAt: items.reduce((max, g) => (g.latestAt > max ? g.latestAt : max), ''),
         avgBrandScore: avgB,
         avgCompetitorScore: avgC,
-        avgDiff: avgB - avgC,
+        avgDiff: diff,
       };
     })
     .sort((a, b) => b.latestAt.localeCompare(a.latestAt));
@@ -728,6 +790,7 @@ function ModelSubGroup({
   loadRuns,
   brandName,
   competitorName,
+  showModel = false,
 }: {
   group: HeadToHeadGroup;
   expanded: boolean;
@@ -736,9 +799,12 @@ function ModelSubGroup({
   loadRuns: LoadRuns;
   brandName: string;
   competitorName: string;
+  /** Its location shows twice under its engine: name the model (CP-05). */
+  showModel?: boolean;
 }) {
   const t = useTranslations('competitors');
   const hasHistory = group.runs > 1;
+  const model = MODEL_LABELS[group.modelUsed] ?? group.modelUsed;
   const [runs, setRuns] = useState<HeadToHeadRun[] | null>(null);
   const [runsFailed, setRunsFailed] = useState(false);
   const [openingLatest, setOpeningLatest] = useState(false);
@@ -796,31 +862,29 @@ function ModelSubGroup({
             !hasHistory && 'opacity-0',
           )}
         />
+        {/* A location under its engine (CP-05): the engine is the heading above. */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <ModelBadge model={group.modelUsed || group.platform} platform={group.platform} />
-          {group.region && (
-            <Badge variant="outline" className="text-[10px]">
-              {group.region}
-            </Badge>
-          )}
+          <Badge variant="outline" className="text-[10px]">
+            {group.region ?? t('h2h.noLocation')}
+          </Badge>
+          {showModel && model && <span className="text-[10px] text-muted-foreground">{model}</span>}
           <span className="text-[10px] text-muted-foreground tabular-nums ms-1">
-            {group.runs} run{group.runs !== 1 ? 's' : ''}
+            {t('h2h.runs', { count: group.runs })}
           </span>
+          {lowSample(group.runs) && <LowSampleBadge />}
         </div>
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-end">
             <p className="text-[10px] text-muted-foreground">{t('h2h.you')}</p>
-            <p className="text-xs font-semibold tabular-nums">{Math.round(group.brandScore)}%</p>
+            <p className="text-xs font-semibold tabular-nums">{group.brandScore}</p>
           </div>
           <div className="text-end">
             <p className="text-[10px] text-muted-foreground">{t('h2h.them')}</p>
-            <p className="text-xs font-semibold tabular-nums">
-              {Math.round(group.competitorScore)}%
-            </p>
+            <p className="text-xs font-semibold tabular-nums">{group.competitorScore}</p>
           </div>
           <div className="text-end min-w-[48px]">
             <p className="text-[10px] text-muted-foreground">{t('h2h.diff')}</p>
-            <DiffBadge diff={Math.round(group.brandScore) - Math.round(group.competitorScore)} />
+            <DiffBadge diff={group.diff} />
           </div>
           <Button
             variant="ghost"
@@ -873,13 +937,15 @@ function ModelSubGroup({
                       {formatTimestamp(row.createdAt)}
                     </TableCell>
                     <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
-                      {Math.round(row.brandScore)}%
+                      {row.brandScore}
                     </TableCell>
                     <TableCell className="text-center py-1.5 text-xs font-semibold tabular-nums">
-                      {Math.round(row.competitorScore)}%
+                      {row.competitorScore}
                     </TableCell>
                     <TableCell className="text-center py-1.5">
-                      <DiffBadge diff={Math.round(row.brandScore - row.competitorScore)} />
+                      <DiffBadge
+                        diff={Math.round((row.brandScore - row.competitorScore) * 10) / 10}
+                      />
                     </TableCell>
                     <TableCell className="text-center py-1.5">
                       <SentimentBadge sentiment={row.sentiment} />
@@ -924,7 +990,24 @@ function PromptComparisonGrouped({
   loadRuns: LoadRuns;
 }) {
   const t = useTranslations('competitors');
-  const groups = groupH2HByPrompt(engineGroups);
+  const all = groupH2HByPrompt(engineGroups);
+  // Search, sort, category and pages (UX audit CP-12).
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<PromptSort>('recent');
+  const [category, setCategory] = useState('');
+  const [shown, setShown] = useState(PROMPT_PAGE_SIZE);
+  const categories = promptCategories(all);
+  const listed = listPrompts(all, { query, category, sort });
+  const groups = listed.slice(0, shown);
+  const repeats = caseRepeats(all);
+  const sortItems = [
+    { value: 'recent', label: t('h2h.list.sortRecent') },
+    { value: 'diff', label: t('h2h.list.sortDiff') },
+  ];
+  const categoryItems = [
+    { value: '', label: t('h2h.list.allCategories') },
+    ...categories.map((name) => ({ value: name, label: name })),
+  ];
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
 
@@ -944,7 +1027,7 @@ function PromptComparisonGrouped({
       return next;
     });
 
-  if (groups.length === 0) {
+  if (all.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
         {t('h2h.noPromptData')}
@@ -954,6 +1037,68 @@ function PromptComparisonGrouped({
 
   return (
     <div className="space-y-2">
+      <div data-slot="prompt-list-controls" className="flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShown(PROMPT_PAGE_SIZE);
+          }}
+          placeholder={t('h2h.list.search')}
+          aria-label={t('h2h.list.search')}
+          data-action="competitors.searchPrompts"
+          className="h-8 w-full text-xs sm:w-64"
+        />
+        <Select
+          items={sortItems}
+          value={sort}
+          onValueChange={(next: string | null) => setSort(next === 'diff' ? 'diff' : 'recent')}
+        >
+          <SelectTrigger size="sm" className="text-xs" aria-label={t('h2h.list.sortLabel')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {sortItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {categories.length > 0 && (
+          <Select
+            items={categoryItems}
+            value={category}
+            onValueChange={(next: string | null) => {
+              setCategory(next ?? '');
+              setShown(PROMPT_PAGE_SIZE);
+            }}
+          >
+            <SelectTrigger size="sm" className="text-xs" aria-label={t('h2h.list.categoryLabel')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categoryItems.map((item) => (
+                <SelectItem key={item.value || ' all'} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <span className="text-xs text-muted-foreground tabular-nums" data-slot="prompt-list-count">
+          {t('h2h.list.count', { shown: groups.length, total: listed.length })}
+        </span>
+      </div>
+      {repeats > 0 && (
+        <p data-slot="prompt-case-repeats" className="text-xs text-muted-foreground">
+          {t('h2h.list.caseRepeats', { count: repeats })}
+        </p>
+      )}
+      {listed.length === 0 && (
+        <p className="py-6 text-center text-sm text-muted-foreground">{t('h2h.list.noMatch')}</p>
+      )}
       {groups.map((group) => {
         const isOpen = expanded.has(group.promptId);
         const modelGroups = group.groups;
@@ -987,20 +1132,22 @@ function PromptComparisonGrouped({
                     </Badge>
                   )}
                   <span className="text-[11px] text-muted-foreground">
-                    {modelGroups.length} platform
-                    {modelGroups.length !== 1 ? 's' : ''} · {group.runs} result
-                    {group.runs !== 1 ? 's' : ''}
+                    {t('h2h.promptCounts', {
+                      engines: engineCount(modelGroups),
+                      runs: group.runs,
+                    })}
                   </span>
+                  {lowSample(group.runs) && <LowSampleBadge />}
                 </div>
               </div>
               <div className="flex items-center gap-4 shrink-0">
                 <div className="text-end">
                   <p className="text-[10px] text-muted-foreground">{t('h2h.you')}</p>
-                  <p className="text-sm font-semibold tabular-nums">{group.avgBrandScore}%</p>
+                  <p className="text-sm font-semibold tabular-nums">{group.avgBrandScore}</p>
                 </div>
                 <div className="text-end">
                   <p className="text-[10px] text-muted-foreground">{t('h2h.them')}</p>
-                  <p className="text-sm font-semibold tabular-nums">{group.avgCompetitorScore}%</p>
+                  <p className="text-sm font-semibold tabular-nums">{group.avgCompetitorScore}</p>
                 </div>
                 <div className="text-end min-w-[48px]">
                   <p className="text-[10px] text-muted-foreground">{t('h2h.diff')}</p>
@@ -1011,27 +1158,69 @@ function PromptComparisonGrouped({
 
             {/* Platform/Model sub-groups */}
             {isOpen && (
-              <div className="border-t px-3 py-2 space-y-1.5 bg-muted/10">
-                {modelGroups.map((mg) => {
-                  const compositeKey = `${group.promptId}::${mg.rawPlatform ?? ''}|${mg.rawModelUsed ?? ''}|${mg.region ?? ''}`;
-                  return (
-                    <ModelSubGroup
-                      key={compositeKey}
-                      group={mg}
-                      expanded={expandedModels.has(compositeKey)}
-                      onToggle={() => toggleModel(compositeKey)}
-                      onViewResult={onViewResult}
-                      loadRuns={loadRuns}
-                      brandName={brandName}
-                      competitorName={competitorName}
-                    />
-                  );
-                })}
+              <div className="border-t px-3 py-2 space-y-3 bg-muted/10">
+                {/* Each engine once, its locations under it (UX audit CP-05). */}
+                {(() => {
+                  const { engines, twice } = engineRows(modelGroups);
+                  return engines.map((engine) => (
+                    <div key={engine.platform} data-slot="h2h-engine" className="space-y-1.5">
+                      <div className="flex items-center gap-3 px-1">
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <ModelBadge model={engine.platform} platform={engine.platform} />
+                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                            {t('h2h.engineCounts', {
+                              locations: engine.locations,
+                              runs: engine.runs,
+                            })}
+                          </span>
+                          {lowSample(engine.runs) && <LowSampleBadge />}
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0 pe-10">
+                          <p className="text-xs font-semibold tabular-nums">{engine.brandScore}</p>
+                          <p className="text-xs font-semibold tabular-nums">
+                            {engine.competitorScore}
+                          </p>
+                          <div className="min-w-[48px] text-end">
+                            <DiffBadge diff={engine.diff} />
+                          </div>
+                        </div>
+                      </div>
+                      {engine.rows.map((mg) => {
+                        const compositeKey = `${group.promptId}::${mg.rawPlatform ?? ''}|${mg.rawModelUsed ?? ''}|${mg.region ?? ''}`;
+                        return (
+                          <ModelSubGroup
+                            key={compositeKey}
+                            group={mg}
+                            expanded={expandedModels.has(compositeKey)}
+                            onToggle={() => toggleModel(compositeKey)}
+                            onViewResult={onViewResult}
+                            loadRuns={loadRuns}
+                            brandName={brandName}
+                            competitorName={competitorName}
+                            showModel={twice.has(mg)}
+                          />
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
               </div>
             )}
           </div>
         );
       })}
+      {listed.length > groups.length && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-action="competitors.morePrompts"
+          className="w-full text-xs"
+          onClick={() => setShown((n) => n + PROMPT_PAGE_SIZE)}
+        >
+          {t('h2h.list.more', { count: Math.min(PROMPT_PAGE_SIZE, listed.length - groups.length) })}
+        </Button>
+      )}
     </div>
   );
 }
@@ -1056,17 +1245,15 @@ function groupGapStrengthByPrompt(items: HeadToHeadGroup[]): GapStrengthGroup[] 
   }
   return Array.from(map.entries())
     .map(([promptId, groupItems]) => {
-      const avgB = Math.round(groupItems.reduce((s, r) => s + r.brandScore, 0) / groupItems.length);
-      const avgC = Math.round(
-        groupItems.reduce((s, r) => s + r.competitorScore, 0) / groupItems.length,
-      );
+      // The prompt's scores over its gap (or strength) engines' answers.
+      const { brandScore: avgB, competitorScore: avgC, diff } = foldScores(groupItems);
       return {
         promptId,
         promptText: groupItems[0].promptText,
         items: groupItems,
         avgBrandScore: avgB,
         avgCompetitorScore: avgC,
-        avgDiff: avgB - avgC,
+        avgDiff: diff,
       };
     })
     .sort((a, b) => a.avgDiff - b.avgDiff);
@@ -1154,10 +1341,10 @@ function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                   <span>
-                    {t('h2h.you')}: {group.avgBrandScore}%
+                    {t('h2h.you')}: {group.avgBrandScore}
                   </span>
                   <span>
-                    {t('h2h.them')}: {group.avgCompetitorScore}%
+                    {t('h2h.them')}: {group.avgCompetitorScore}
                   </span>
                   {hasMultiple ? (
                     <span>{group.items.length} models</span>
@@ -1214,10 +1401,10 @@ function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap
                       </Badge>
                     )}
                     <span className="tabular-nums text-muted-foreground">
-                      {t('h2h.you')}: {Math.round(item.brandScore)}%
+                      {t('h2h.you')}: {item.brandScore}
                     </span>
                     <span className="tabular-nums text-muted-foreground">
-                      {t('h2h.them')}: {Math.round(item.competitorScore)}%
+                      {t('h2h.them')}: {item.competitorScore}
                     </span>
                     {item.latestAt && (
                       <span className="text-muted-foreground whitespace-nowrap">
@@ -1254,7 +1441,9 @@ function HeadToHeadSection({
 }) {
   const t = useTranslations('competitors');
   const router = useRouter();
-  const overallDiff = data.brandAvg - data.competitorAvg;
+  const overallDiff = Math.round((data.brandAvg - data.competitorAvg) * 10) / 10;
+  // The Visibility score, as the cards show it: 0–100, no "%" (decisions D1–D3).
+  const outOf = <span className="ms-1 text-sm font-normal text-muted-foreground">/100</span>;
 
   return (
     <div className="space-y-4">
@@ -1266,7 +1455,10 @@ function HeadToHeadSection({
               <Target className="h-3.5 w-3.5" />
               {t('h2h.yourAvg')}
             </div>
-            <div className="text-2xl font-bold tabular-nums">{data.brandAvg}%</div>
+            <div className="text-2xl font-bold tabular-nums" title={t('h2h.scoreTip')}>
+              {data.brandAvg}
+              {outOf}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -1275,7 +1467,10 @@ function HeadToHeadSection({
               <Swords className="h-3.5 w-3.5" />
               {t('h2h.theirAvg')}
             </div>
-            <div className="text-2xl font-bold tabular-nums">{data.competitorAvg}%</div>
+            <div className="text-2xl font-bold tabular-nums" title={t('h2h.scoreTip')}>
+              {data.competitorAvg}
+              {outOf}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -1296,7 +1491,7 @@ function HeadToHeadSection({
               )}
             >
               {overallDiff > 0 ? '+' : ''}
-              {overallDiff}%
+              {t('h2h.points', { value: overallDiff })}
             </div>
           </CardContent>
         </Card>
@@ -1363,6 +1558,9 @@ const COMPETITOR_DATE_PRESETS: readonly CompetitorDatePreset[] = [
   'all',
   'custom',
 ];
+
+/** The days each fixed preset covers, as getDateRange counts them. */
+const PRESET_DAYS = { '7d': 7, '30d': 30, '90d': 90 } as const;
 
 function competitorComparisonWindow(
   preset: CompetitorDatePreset,
@@ -1557,22 +1755,28 @@ export default function CompetitorsPage() {
     setLinkedCompetitorId(null);
   }, [linkedCompetitorId, loading, competitors, selectCompetitor]);
 
-  // Load head-to-head when a competitor is selected
+  // Load head-to-head when a competitor is selected, over the picker's days as
+  // the cards above (UX audit CP-02); again when the range changes.
+  const h2hRequestId = useRef(0);
   const loadH2H = useCallback(
     async (competitorId: string) => {
-      if (!brand) return;
+      const requestId = ++h2hRequestId.current;
+      if (!brand || !dateParamsReady) return;
+      // An incomplete custom range is not a query yet: the last one stays.
+      if (datePreset === 'custom' && (!dateFrom || !dateTo)) return;
       setH2hLoading(true);
       setH2hData(null);
       try {
-        const data = await getHeadToHeadComparison(brand.id, competitorId);
-        setH2hData(data);
+        const { days } = competitorComparisonWindow(datePreset, { from: dateFrom, to: dateTo });
+        const data = await getHeadToHeadComparison(brand.id, competitorId, days);
+        if (requestId === h2hRequestId.current) setH2hData(data);
       } catch {
-        toast.error(t('h2h.loadError'));
+        if (requestId === h2hRequestId.current) toast.error(t('h2h.loadError'));
       } finally {
-        setH2hLoading(false);
+        if (requestId === h2hRequestId.current) setH2hLoading(false);
       }
     },
-    [brand, t],
+    [brand, dateFrom, dateParamsReady, datePreset, dateTo, t],
   );
 
   useEffect(() => {
@@ -1604,6 +1808,10 @@ export default function CompetitorsPage() {
   const loadRuns = useCallback(
     (group: HeadToHeadGroup, limit: number) => {
       if (!brand || !selectedCompetitorId) return Promise.resolve([]);
+      const { dateFrom: from, dateTo: to } = competitorComparisonWindow(datePreset, {
+        from: dateFrom,
+        to: dateTo,
+      });
       return getHeadToHeadRuns(
         brand.id,
         selectedCompetitorId,
@@ -1614,9 +1822,10 @@ export default function CompetitorsPage() {
           region: group.region ?? null,
         },
         limit,
+        { dateFrom: from, dateTo: to },
       );
     },
-    [brand, selectedCompetitorId],
+    [brand, dateFrom, datePreset, dateTo, selectedCompetitorId],
   );
 
   // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its period, the
@@ -1865,46 +2074,42 @@ export default function CompetitorsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header: the meter and Ask Chat at its bottom, beside the range's buttons. */}
-      <HeaderWithAiUsage align="end">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+      {/* Header as on Visibility (UX audit CP-11): the title and the page's buttons on
+          its row, the meter and Ask Chat at its end; the date range on its own row under it. */}
+      <HeaderWithAiUsage>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <p className="text-muted-foreground">{t('description')}</p>
           </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex items-center gap-2">
-              <DateRangeFilter
-                value={datePreset}
-                presets={COMPETITOR_DATE_PRESETS}
-                onChange={setDatePreset}
-                from={dateFrom}
-                to={dateTo}
-                onFromChange={setDateFrom}
-                onToChange={setDateTo}
-              />
-              {comparisonLoading && (
-                <Loader2
-                  className="mb-2 h-4 w-4 animate-spin text-muted-foreground"
-                  aria-hidden="true"
-                />
-              )}
+          {canManage && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button variant="outline" className="gap-2" onClick={openSuggest}>
+                <Sparkles className="h-4 w-4" />
+                {t('suggestCompetitors')}
+              </Button>
+              <Button className="gap-2" onClick={openAdd}>
+                <Plus className="h-4 w-4" />
+                {t('addCompetitor')}
+              </Button>
             </div>
-            {canManage && (
-              <>
-                <Button variant="outline" className="gap-2" onClick={openSuggest}>
-                  <Sparkles className="h-4 w-4" />
-                  {t('suggestCompetitors')}
-                </Button>
-                <Button className="gap-2" onClick={openAdd}>
-                  <Plus className="h-4 w-4" />
-                  {t('addCompetitor')}
-                </Button>
-              </>
-            )}
-          </div>
+          )}
         </div>
       </HeaderWithAiUsage>
+      <div data-slot="competitors-filters" className="flex flex-wrap items-center gap-2">
+        <DateRangeFilter
+          value={datePreset}
+          presets={COMPETITOR_DATE_PRESETS}
+          onChange={setDatePreset}
+          from={dateFrom}
+          to={dateTo}
+          onFromChange={setDateFrom}
+          onToChange={setDateTo}
+        />
+        {comparisonLoading && (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+        )}
+      </div>
 
       {competitors.length === 0 ? (
         <EmptyState
@@ -1951,11 +2156,12 @@ export default function CompetitorsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {t('selectToCompare')}{' '}
-                {datePreset === '30d'
-                  ? t('windowLast30Days')
-                  : datePreset === 'all'
-                    ? t('windowAllTime')
-                    : t('windowSelectedRange')}
+                {/* The range the cards and the head-to-head read (UX audit CP-08). */}
+                {datePreset === 'all'
+                  ? t('windowAllTime')
+                  : datePreset === 'custom'
+                    ? t('windowSelectedRange')
+                    : t('windowLastDays', { days: PRESET_DAYS[datePreset] })}
               </p>
               {hint && (
                 <DuplicateHint
