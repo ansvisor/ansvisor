@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { REPORT_TEMPLATE_TITLES } from '@/lib/reports/template-titles';
+import { samePeriodReport } from '@/lib/reports/same-period';
 import { Check, Crown, FileBarChart, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -98,6 +99,8 @@ export default function ReportsPage() {
   const [preset, setPreset] = useState<DatePreset>('30d');
   const [customRange, setCustomRange] = useState({ from: '', to: '' });
   const [reportTitle, setReportTitle] = useState('');
+  // A report with the same template and days, found on Generate (RP-11).
+  const [duplicate, setDuplicate] = useState<ReportListItem | null>(null);
   // US-1.1: the dialog can generate for any brand, defaulting to the active one.
   const [reportBrandId, setReportBrandId] = useState<string | null>(activeBrandId);
   // US-1.3: templates only pre-select; the user adjusts the module set freely.
@@ -118,6 +121,7 @@ export default function ReportsPage() {
 
   const selectTemplate = (id: ReportTemplateId) => {
     setTemplate(id);
+    setDuplicate(null);
     // Templates carry a sensible default window (weekly → 7d) and a default
     // module set; the user can still override both below.
     const def = REPORT_TEMPLATES.find((tpl) => tpl.id === id);
@@ -139,6 +143,7 @@ export default function ReportsPage() {
   const openDialog = guard(
     () => {
       setReportBrandId(activeBrandId);
+      setDuplicate(null);
       setDialogOpen(true);
     },
     { action: tActions('generateReports') },
@@ -180,7 +185,12 @@ export default function ReportsPage() {
       : null,
   );
 
-  const handleGenerate = async () => {
+  /**
+   * Generate; a report of the same template and days on this brand asks
+   * first, "Same period as an existing report. Open it?" (UX audit RP-11),
+   * unless `anyway`.
+   */
+  const handleGenerate = async (anyway = false) => {
     const targetBrandId = reportBrandId ?? activeBrandId;
     if (!targetBrandId) return;
     const { dateFrom, dateTo } = getDateRange(preset, customRange);
@@ -192,6 +202,15 @@ export default function ReportsPage() {
       toast.error(t('selectSections'));
       return;
     }
+    const same =
+      targetBrandId === activeBrandId
+        ? samePeriodReport(reports, { template, dateFrom, dateTo })
+        : null;
+    if (same && !anyway) {
+      setDuplicate(same);
+      return;
+    }
+    setDuplicate(null);
     setGenerating(true);
     try {
       const { id } = await createReport(targetBrandId, {
@@ -398,7 +417,8 @@ export default function ReportsPage() {
                     onClick={() => selectTemplate(tpl.id)}
                     disabled={generating}
                     className={cn(
-                      'rounded-lg border p-3 text-start transition-colors',
+                      // Top-aligned, the cards' text starts on one line (UX audit RP-13).
+                      'flex h-full flex-col justify-start rounded-lg border p-3 text-start transition-colors',
                       template === tpl.id
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-muted-foreground/40',
@@ -429,6 +449,52 @@ export default function ReportsPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* The range the template set, right under it, to change (RP-13). */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('dateRange')}</p>
+              <p className="text-xs text-muted-foreground">{t('dateRangeHint')}</p>
+              <div className="flex gap-1">
+                {(['7d', '30d', '90d', 'custom'] as DatePreset[]).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => {
+                      setPreset(p);
+                      setDuplicate(null);
+                    }}
+                    disabled={generating}
+                    className={cn(
+                      'rounded-md border px-3 py-1.5 text-xs transition-colors',
+                      preset === p
+                        ? 'border-primary bg-primary/10 font-medium text-primary'
+                        : 'border-border text-muted-foreground hover:border-muted-foreground/40',
+                    )}
+                  >
+                    {t(`presets.${p}`)}
+                  </button>
+                ))}
+              </div>
+              {preset === 'custom' && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Input
+                    type="date"
+                    value={customRange.from}
+                    onChange={(e) => setCustomRange((r) => ({ ...r, from: e.target.value }))}
+                    disabled={generating}
+                    className="text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground">—</span>
+                  <Input
+                    type="date"
+                    value={customRange.to}
+                    onChange={(e) => setCustomRange((r) => ({ ...r, to: e.target.value }))}
+                    disabled={generating}
+                    className="text-sm"
+                  />
+                </div>
+              )}
             </div>
 
             {brands.length > 1 && (
@@ -502,54 +568,42 @@ export default function ReportsPage() {
                 disabled={generating}
               />
             </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">{t('dateRange')}</p>
-              <div className="flex gap-1">
-                {(['7d', '30d', '90d', 'custom'] as DatePreset[]).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPreset(p)}
-                    disabled={generating}
-                    className={cn(
-                      'rounded-md border px-3 py-1.5 text-xs transition-colors',
-                      preset === p
-                        ? 'border-primary bg-primary/10 font-medium text-primary'
-                        : 'border-border text-muted-foreground hover:border-muted-foreground/40',
-                    )}
-                  >
-                    {t(`presets.${p}`)}
-                  </button>
-                ))}
-              </div>
-              {preset === 'custom' && (
-                <div className="flex items-center gap-2 pt-1">
-                  <Input
-                    type="date"
-                    value={customRange.from}
-                    onChange={(e) => setCustomRange((r) => ({ ...r, from: e.target.value }))}
-                    disabled={generating}
-                    className="text-sm"
-                  />
-                  <span className="text-xs text-muted-foreground">—</span>
-                  <Input
-                    type="date"
-                    value={customRange.to}
-                    onChange={(e) => setCustomRange((r) => ({ ...r, to: e.target.value }))}
-                    disabled={generating}
-                    className="text-sm"
-                  />
-                </div>
-              )}
-            </div>
           </div>
 
-          <DialogFooter>
+          {duplicate && (
+            <div
+              role="status"
+              data-slot="report-duplicate"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+            >
+              <span className="min-w-0 flex-1">
+                {t('duplicate.line', { title: duplicate.title })}
+              </span>
+              <button
+                type="button"
+                data-action="reports.openDuplicate"
+                onClick={() => router.push(`/dashboard/reports/${duplicate.id}`)}
+                className="font-medium underline underline-offset-2"
+              >
+                {t('duplicate.open')}
+              </button>
+              <button
+                type="button"
+                data-action="reports.generateAnyway"
+                onClick={() => void handleGenerate(true)}
+                className="font-medium underline underline-offset-2"
+              >
+                {t('duplicate.anyway')}
+              </button>
+            </div>
+          )}
+
+          {/* Always in view, the dialog scrolling above it (RP-13). */}
+          <DialogFooter className="sticky -bottom-4 z-10 bg-card">
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={generating}>
               {tc('cancel')}
             </Button>
-            <Button onClick={handleGenerate} disabled={generating} className="gap-2">
+            <Button onClick={() => void handleGenerate()} disabled={generating} className="gap-2">
               {generating && <Loader2 className="h-4 w-4 animate-spin" />}
               {generating ? t('generating') : t('generateReport')}
             </Button>

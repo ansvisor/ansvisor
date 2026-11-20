@@ -476,7 +476,10 @@ export default function ReportDetailPage() {
               ) : (
                 payload.shareOfVoice.byPlatform.map((p) => (
                   <div key={p.provider} className="flex items-center gap-3">
-                    <span className="w-32 shrink-0 truncate text-sm">{p.provider}</span>
+                    {/* Wide enough for "Google AI Overviews" (UX audit RP-14). */}
+                    <span className="w-44 shrink-0 truncate text-sm" title={p.provider}>
+                      {p.provider}
+                    </span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-primary"

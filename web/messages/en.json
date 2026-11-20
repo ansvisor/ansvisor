@@ -16480,6 +16480,12 @@
     "selectSections": "Pick at least one section",
     "dialogTitle": "Generate Report",
     "dialogDescription": "Snapshot your brand's AI visibility for a period, with an AI-written executive summary.",
+    "dateRangeHint": "The template sets it; change it here.",
+    "duplicate": {
+      "line": "Same period as an existing report, “{title}”. Open it?",
+      "open": "Open it",
+      "anyway": "Generate anyway"
+    },
     "reportTitleLabel": "Title (optional)",
     "reportTitlePlaceholder": "e.g. Q2 Executive Summary",
     "presets": {
