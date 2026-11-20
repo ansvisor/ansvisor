@@ -73,7 +73,12 @@ import {
   assigneeLabel,
   labelInitials,
 } from '@/lib/action-center/display';
-import { STALE_AFTER_DAYS, isStale, type PriorityLevel } from '@/lib/action-center/priority';
+import {
+  STALE_AFTER_DAYS,
+  isStale,
+  quietDays,
+  type PriorityLevel,
+} from '@/lib/action-center/priority';
 import { actionCode } from '@/lib/action-center/action-ref';
 import {
   columnSortDirection,
@@ -163,6 +168,27 @@ export function StalePill() {
       <Clock aria-hidden="true" className="h-3 w-3" />
       {t('stale.pill')}
     </Badge>
+  );
+}
+
+/**
+ * A stale action's row (AC-10): one status badge, and under it how long no
+ * one has updated it, as a hint rather than a second status. The Stale filter
+ * lists them all.
+ */
+export function StaleHint({ action }: { action: { status: string; staleAt?: string | null } }) {
+  const t = useTranslations('actionCenter.actionsPage');
+  const days = quietDays(action);
+  if (days === null) return null;
+  return (
+    <p
+      data-stale-hint=""
+      className="mt-1 inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400"
+      title={t('stale.hint', { days: STALE_AFTER_DAYS })}
+    >
+      <Clock aria-hidden="true" className="h-3 w-3" />
+      {t('stale.quiet', { days })}
+    </p>
   );
 }
 
@@ -533,8 +559,8 @@ export function ActionTable({
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-1">
                     <ActionStatusBadge status={action.status} />
-                    {isStale(action) && <StalePill />}
                   </div>
+                  <StaleHint action={action} />
                   {action.taskTotal > 0 && (
                     <div className="mt-1.5 w-24">
                       <p className="text-[10px] text-muted-foreground">
