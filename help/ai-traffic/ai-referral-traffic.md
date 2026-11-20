@@ -4,8 +4,8 @@ route: /dashboard/traffic
 keywords: [ai referral traffic, ai traffic analytics, ai visits, chatgpt visits, referral trend]
 synonyms: [traffic from ai, visitors from chatgpt, ai referrals, ai sessions]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-20
+last_checked: 2026-11-20
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -65,4 +65,4 @@ ChatGPT, Perplexity, Claude, Gemini, Copilot, Grok, DeepSeek, Meta AI, You.com, 
 
 Every Monday, an e-mail about the week before goes to each brand's Daily Pulse recipients, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.
 
-To turn it off for a brand, untick **AI Traffic weekly digest** in **Settings › Notifications**; admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only.
+To turn it off for a brand, untick the brand under **AI Traffic weekly digest** in **Settings › Notifications**; it's saved at once, and admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only.

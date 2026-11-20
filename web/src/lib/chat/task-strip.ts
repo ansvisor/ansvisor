@@ -6,6 +6,7 @@ import { ACTION_CATEGORIES, type ActionCategory } from '@/lib/action-center/regi
 import { draftMethodForTask } from '@/lib/content/action-drafts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { ChatTaskRow, ChatTaskStatus, ChatTaskStrip } from './events';
+import { inRunLocale } from './run-locale';
 
 /**
  * The task strip under a /tasks answer (CHAT-09 §B, mockup #s-work):
@@ -35,7 +36,16 @@ const OPEN_ACTIONS = ['new', 'in_progress'];
 /** A task still to do (as Ready for review reads it, chat-action-center.ts OPEN_TASK). */
 const OPEN_TASKS = ['todo', 'in_progress', 'waiting_approval'];
 
-const taskT = createTranslator({ locale: 'en', messages, namespace: 'actionCenter.actionTasks' });
+/**
+ * The tasks' words, for the person whose strip it is: their language inside
+ * withRunLocale (a run, or the request that reads their chat). A ready-by
+ * answer, saved with its chat, reads them in English (schedule/deliver.ts
+ * readyByParts).
+ */
+const taskT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'actionCenter.actionTasks' }),
+  'actionCenter.actionTasks',
+);
 
 type Db = Pick<SupabaseClient, 'from'>;
 

@@ -92,6 +92,7 @@ function KpiCard({
 }
 
 function SentimentBadge({ sentiment }: { sentiment: string | null }) {
+  const t = useTranslations('citations.url.sentiments');
   if (!sentiment) return <span className="text-xs text-muted-foreground">—</span>;
   return (
     <Badge
@@ -104,7 +105,7 @@ function SentimentBadge({ sentiment }: { sentiment: string | null }) {
           'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
       )}
     >
-      {sentiment}
+      {t.has(sentiment) ? t(sentiment) : sentiment}
     </Badge>
   );
 }
@@ -185,6 +186,7 @@ export default function CitationUrlDetailPage() {
   // Chat's side panel sees the page (the owner's plan of 2026-11-16, step 9): its period and
   // filters; the panel adds its address (?u=), which it holds open, from the URL.
   const tChatPanel = useTranslations('chatPanel');
+  const t = useTranslations('citations.url');
   useChatPageContext(
     brand && targetUrl
       ? {
@@ -230,9 +232,7 @@ export default function CitationUrlDetailPage() {
     return (
       <div className="space-y-4">
         <BackLink />
-        <p className="text-sm text-muted-foreground">
-          No URL provided. Open this page from a citation row on Visibility&apos;s Citations tab.
-        </p>
+        <p className="text-sm text-muted-foreground">{t('noUrl')}</p>
       </div>
     );
   }
@@ -241,7 +241,7 @@ export default function CitationUrlDetailPage() {
     return (
       <div className="space-y-4">
         <BackLink />
-        <p className="text-sm text-muted-foreground">Select a brand from the top switcher first.</p>
+        <p className="text-sm text-muted-foreground">{t('noBrand')}</p>
       </div>
     );
   }
@@ -257,7 +257,7 @@ export default function CitationUrlDetailPage() {
               {data &&
                 (data.category === 'you' ? (
                   <Badge className="border border-primary/30 bg-primary/10 text-foreground">
-                    Owned
+                    {t('owned')}
                   </Badge>
                 ) : (
                   <AddCompetitorButton
@@ -320,9 +320,7 @@ export default function CitationUrlDetailPage() {
       ) : !data || data.totals.answers === 0 ? (
         <Card>
           <CardContent className="py-16 text-center text-sm text-muted-foreground">
-            {loadFailed
-              ? 'Could not load this URL — please try again.'
-              : 'No citations recorded for this URL in the selected window.'}
+            {loadFailed ? t('loadFailed') : t('empty')}
           </CardContent>
         </Card>
       ) : (
@@ -330,25 +328,25 @@ export default function CitationUrlDetailPage() {
           {/* KPI strip */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <KpiCard
-              title="Total citations"
+              title={t('kpis.citations')}
               value={formatNumber(data.totals.citations)}
-              sub={`across ${data.totals.answers} answers`}
+              sub={t('kpis.citationsSub', { answers: data.totals.answers })}
               icon={Quote}
             />
             <KpiCard
-              title="Answers citing"
+              title={t('kpis.answers')}
               value={formatNumber(data.totals.answers)}
-              sub="AI answers include this URL"
+              sub={t('kpis.answersSub')}
               icon={MessagesSquare}
             />
             <KpiCard
-              title="Prompts"
+              title={t('kpis.prompts')}
               value={formatNumber(data.totals.prompts)}
-              sub="distinct prompts triggering it"
+              sub={t('kpis.promptsSub')}
               icon={ListChecks}
             />
             <KpiCard
-              title="Platforms"
+              title={t('kpis.platforms')}
               value={String(
                 new Set(data.totals.models.map((m) => getPlatformDisplayLabel(m))).size,
               )}
@@ -358,9 +356,9 @@ export default function CitationUrlDetailPage() {
               icon={Layers}
             />
             <KpiCard
-              title="Last seen"
+              title={t('kpis.lastSeen')}
               value={formatDate(data.totals.lastSeen)}
-              sub={`first seen ${formatDate(data.totals.firstSeen)}`}
+              sub={t('kpis.firstSeen', { date: formatDate(data.totals.firstSeen) })}
               icon={Clock}
             />
           </div>
@@ -372,17 +370,14 @@ export default function CitationUrlDetailPage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
                     <Target className="h-4 w-4" />
-                    Targeted in {data.owned.targetingPrompts.length} prompt
-                    {data.owned.targetingPrompts.length === 1 ? '' : 's'}
+                    {t('targeted', { count: data.owned.targetingPrompts.length })}
                   </CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    Prompts tracking this URL as a target in the prompt workflow
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('targetedSub')}</p>
                 </CardHeader>
                 <CardContent>
                   {data.owned.targetingPrompts.length === 0 ? (
                     <p className="py-6 text-center text-sm text-muted-foreground">
-                      Not targeted yet — add it from a prompt&apos;s Target URLs card.
+                      {t('notTargeted')}
                     </p>
                   ) : (
                     <ul className="divide-y">
@@ -401,7 +396,7 @@ export default function CitationUrlDetailPage() {
                             </Badge>
                           )}
                           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                            cited {tp.citedCount}×
+                            {t('citedCount', { count: tp.citedCount })}
                           </span>
                         </li>
                       ))}
@@ -413,16 +408,14 @@ export default function CitationUrlDetailPage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
                     <TrendingUp className="h-4 w-4" />
-                    AI-referred visits
+                    {t('visits')}
                   </CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    Visits to this page from AI platforms in the selected window
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('visitsSub')}</p>
                 </CardHeader>
                 <CardContent>
                   {data.owned.traffic.totalVisits === 0 ? (
                     <p className="py-6 text-center text-sm text-muted-foreground">
-                      No AI-referred visits recorded for this page yet.
+                      {t('noVisits')}
                     </p>
                   ) : (
                     <div className="space-y-3">
@@ -434,7 +427,7 @@ export default function CitationUrlDetailPage() {
                           <li key={p.platform} className="flex items-center gap-2 text-xs">
                             <span className="flex-1 truncate capitalize">
                               {p.platform === 'unknown'
-                                ? 'Unknown'
+                                ? t('unknownPlatform')
                                 : getPlatformDisplayLabel(p.platform)}
                             </span>
                             <span className="tabular-nums text-muted-foreground">{p.visits}</span>
@@ -451,21 +444,19 @@ export default function CitationUrlDetailPage() {
           {/* Cited-in list */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Cited in</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Every AI answer citing this URL in the selected window
-              </p>
+              <CardTitle className="text-sm font-medium">{t('citedIn')}</CardTitle>
+              <p className="text-xs text-muted-foreground">{t('citedInSub')}</p>
             </CardHeader>
             <CardContent className="px-0 pb-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="ps-6 text-xs">Date</TableHead>
-                    <TableHead className="text-xs">Platform</TableHead>
-                    <TableHead className="text-xs">Prompt</TableHead>
-                    <TableHead className="text-xs">Sentiment</TableHead>
-                    <TableHead className="text-xs">Brand mentioned</TableHead>
-                    <TableHead className="pe-6 text-xs">Position</TableHead>
+                    <TableHead className="ps-6 text-xs">{t('columns.date')}</TableHead>
+                    <TableHead className="text-xs">{t('columns.platform')}</TableHead>
+                    <TableHead className="text-xs">{t('columns.prompt')}</TableHead>
+                    <TableHead className="text-xs">{t('columns.sentiment')}</TableHead>
+                    <TableHead className="text-xs">{t('columns.brandMentioned')}</TableHead>
+                    <TableHead className="pe-6 text-xs">{t('columns.position')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -518,25 +509,23 @@ export default function CitationUrlDetailPage() {
           {/* Prompts breakdown */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Prompts breakdown</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                The queries this page is winning, grouped by prompt
-              </p>
+              <CardTitle className="text-sm font-medium">{t('breakdown')}</CardTitle>
+              <p className="text-xs text-muted-foreground">{t('breakdownSub')}</p>
             </CardHeader>
             <CardContent className="px-0 pb-0">
               {data.promptGroups.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  No prompts recorded for this URL in the selected window.
-                </p>
+                <p className="py-6 text-center text-sm text-muted-foreground">{t('noPrompts')}</p>
               ) : (
                 <>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="ps-6 text-xs">Prompt</TableHead>
-                        <TableHead className="text-end text-xs">Answers</TableHead>
-                        <TableHead className="text-end text-xs">Citations</TableHead>
-                        <TableHead className="pe-6 text-end text-xs">Last seen</TableHead>
+                        <TableHead className="ps-6 text-xs">{t('columns.prompt')}</TableHead>
+                        <TableHead className="text-end text-xs">{t('columns.answers')}</TableHead>
+                        <TableHead className="text-end text-xs">{t('columns.citations')}</TableHead>
+                        <TableHead className="pe-6 text-end text-xs">
+                          {t('columns.lastSeen')}
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -583,13 +572,14 @@ export default function CitationUrlDetailPage() {
 }
 
 function BackLink() {
+  const t = useTranslations('citations.url');
   return (
     <Link
       href="/dashboard/citations"
       className="-ms-2 inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
     >
       <ArrowLeft className="h-4 w-4" />
-      Citations
+      {t('back')}
     </Link>
   );
 }

@@ -180,6 +180,7 @@ function start(over: Partial<TodayStart> = {}): TodayStart {
       lastRunAt: '2026-11-17T06:00:00Z',
       trackedPrompts: 40,
       openActions: 9,
+      openBreakdown: { onHold: 1, mine: 3 },
       doneThisWeek: 2,
     }),
     state: settled(null),
@@ -296,7 +297,11 @@ describe('get_today', () => {
         line: 'An agent is waiting for your OK on “Fix FAQ”.',
         open: '/dashboard/chat/c2',
       }),
-      expect.objectContaining({ type: 'drafts', count: 1 }),
+      expect.objectContaining({
+        type: 'drafts',
+        count: 1,
+        line: '1 draft waiting for your review. Nothing goes live without your OK.',
+      }),
       expect.objectContaining({ type: 'due', ref: 'AC-20', due: '2026-11-15' }),
       expect.objectContaining({ type: 'review', count: 2 }),
     ]);
@@ -342,6 +347,7 @@ describe('get_today', () => {
           lastRunAt: null,
           trackedPrompts: 8,
           openActions: 0,
+          openBreakdown: { onHold: 0, mine: 0 },
           doneThisWeek: 0,
         }),
         // A part the first day doesn't show is null, as getTodayStart gives it.

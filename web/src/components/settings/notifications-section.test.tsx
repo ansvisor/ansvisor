@@ -6,8 +6,9 @@ import messages from '../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
- * Settings › Notifications: the AI Traffic weekly digest (AT-013) is turned
- * on or off per brand beside its Daily Pulse, and saved with it.
+ * Settings › Notifications: the Daily Pulse and the AI Traffic weekly digest
+ * (AT-013) in their own sections. The digest is turned on or off per brand,
+ * saved as it is ticked, with the brand's saved Pulse settings.
  */
 
 let canManage = true;
@@ -88,25 +89,89 @@ describe('NotificationsSection', () => {
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
   });
 
-  it('shows the weekly digest on, and saves it off with the pulse', async () => {
+  it('names both e-mails, each in its own section', async () => {
     await render();
-    expect(container.textContent).toContain('AI Traffic weekly digest');
+    const headings = [...container.querySelectorAll('h3')].map((h) => h.textContent);
+    expect(headings).toEqual(['Daily Pulse', 'AI Traffic weekly digest']);
+    expect(container.textContent).toContain(
+      'Each brand can send two e-mails: the Daily Pulse after its tracking runs, and the AI Traffic weekly digest every Monday.',
+    );
+    // The digest's toggle sits in its own section, not in the brand's Pulse card.
+    const digest = container.querySelector(
+      'section[aria-labelledby="notifications-traffic-digest"]',
+    )!;
+    expect(digest.contains(checkbox())).toBe(true);
+    const pulse = container.querySelector('section[aria-labelledby="notifications-pulse"]')!;
+    expect(pulse.contains(checkbox())).toBe(false);
+    expect(digest.textContent).toContain('Acme');
+    expect(digest.textContent).toContain('To every organization member');
+  });
+
+  it('saves the weekly digest off as it is unticked, with the saved Pulse settings', async () => {
+    await render();
     expect(checkbox().getAttribute('data-state')).toBe('checked');
+
+    // An unsaved Pulse edit doesn't ride along with the digest's save.
+    const recipients = container.querySelector<HTMLInputElement>('#pulse-recipients-b1')!;
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      setValue.call(recipients, 'new@example.com');
+      recipients.dispatchEvent(new Event('input', { bubbles: true }));
+    });
 
     await act(async () => checkbox().click());
     expect(checkbox().getAttribute('data-state')).toBe('unchecked');
-    const save = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Save changes',
-    )!;
-    await act(async () => save.click());
 
-    const [, init] = fetchMock.mock.calls.find(([, i]) => i?.method === 'PUT')!;
-    expect(JSON.parse(init.body)).toEqual({
+    const puts = fetchMock.mock.calls.filter(([, i]) => i?.method === 'PUT');
+    expect(puts).toHaveLength(1);
+    expect(JSON.parse(puts[0][1].body)).toEqual({
       brandId: 'b1',
       frequency: 'daily',
       recipients: [],
       trafficDigest: false,
     });
+  });
+
+  it('keeps the saved digest choice when the Pulse is saved', async () => {
+    await render();
+    await act(async () => checkbox().click());
+    const save = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Save changes',
+    )!;
+    await act(async () => save.click());
+    const puts = fetchMock.mock.calls.filter(([, i]) => i?.method === 'PUT');
+    expect(puts).toHaveLength(2);
+    expect(JSON.parse(puts[1][1].body).trafficDigest).toBe(false);
+  });
+
+  it("lists the brand's recipients under its digest toggle", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({
+        brands: [
+          {
+            brandId: 'b1',
+            brandName: 'Acme',
+            frequency: 'weekly',
+            recipients: ['alex@example.com', 'sam@example.com'],
+            trafficDigest: false,
+          },
+        ],
+      }),
+    }));
+    await render();
+    expect(checkbox().getAttribute('data-state')).toBe('unchecked');
+    expect(container.textContent).toContain('To alex@example.com, sam@example.com');
+  });
+
+  it('opens the upgrade dialog instead of saving the digest on a read-only workspace', async () => {
+    openUpgrade.mockClear();
+    await render(true);
+    await act(async () => checkbox().click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith(
+      'Saving notification settings needs a plan',
+    );
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
   });
 
   it('preselects Only when notable for a brand with no saved row, and saves it', async () => {

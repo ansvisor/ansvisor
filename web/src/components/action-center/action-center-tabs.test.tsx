@@ -160,7 +160,8 @@ describe('ActionCenterTabs', () => {
     await render({ chatAgentic: true });
     const room = container.querySelector('[data-count="agents"]')!;
     expect(room.textContent).toBe('');
-    expect(room.className).toMatch(/inline-block min-w-\[2ch\]/);
+    // In the gap after the tab, taking no width: the gaps stay equal (GL-03).
+    expect(room.className).toMatch(/absolute start-full/);
   });
 
   it('mark the tab of the page shown: Today, Agents under its pages, and History on KPIs', async () => {

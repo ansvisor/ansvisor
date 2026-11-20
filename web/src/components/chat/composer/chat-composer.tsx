@@ -1146,9 +1146,11 @@ export function ChatComposer({
                 onClick={onModelChoice ? () => setModelOpen((on) => !on) : onOpenModel}
                 aria-label={usageLabel ? t('modelWarn', { usage: usageLabel }) : t('model')}
                 aria-expanded={onModelChoice ? modelOpen : undefined}
-                title={usageLabel}
+                title={usageLabel ?? t('modelTip')}
                 className="flex h-7 min-w-0 items-center gap-1 rounded-lg px-1.5 text-xs whitespace-nowrap hover:bg-muted aria-expanded:bg-muted"
               >
+                {/* Labelled, as the run mode is (UX audit CH-07). */}
+                <span className="shrink-0 text-muted-foreground">{t('modelPrefix')}</span>
                 <span className="truncate">{modelWords}</span> <span aria-hidden>▾</span>
                 {usageDot}
               </button>
@@ -1157,6 +1159,7 @@ export function ChatComposer({
                 title={usageLabel}
                 className="flex h-7 min-w-0 items-center gap-1 px-1.5 text-xs whitespace-nowrap"
               >
+                <span className="shrink-0 text-muted-foreground">{t('modelPrefix')}</span>
                 <span className="truncate">{modelWords}</span>
                 {usageDot}
               </span>

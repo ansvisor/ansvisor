@@ -465,6 +465,28 @@ export async function saveKpiFramework(
 }
 
 /**
+ * A KPI's new goal, from "Goal passed · Set a new goal" (UX audit AC-62): its
+ * target alone, once the person confirms the one offered (20% above the
+ * value, presetTarget) or their own. Only a KPI the brand has; RLS keeps the
+ * write to admins and managers, as the framework's.
+ */
+export async function setKpiTarget(brandId: string, kpiKey: KpiKey, target: number): Promise<void> {
+  await assertWritable({ brandId });
+  if (!isKpiKey(kpiKey) || !isValidKpiTarget(kpiKey, target)) {
+    throw new Error(`invalid target for ${kpiKey}`);
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('kpi_definitions')
+    .update({ target, updated_at: new Date().toISOString() })
+    .eq('brand_id', brandId)
+    .eq('kpi_key', kpiKey)
+    .select('kpi_key');
+  if (error) throw new Error(error.message);
+  if ((data ?? []).length === 0) throw new Error(`no ${kpiKey} KPI to change`);
+}
+
+/**
  * Remove deletes the definition outright. Pause/resume (is_active) waits for
  * the framework drawer: without a surface that lists paused KPIs, pausing
  * would make a row vanish with no way back.

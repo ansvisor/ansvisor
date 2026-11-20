@@ -138,16 +138,17 @@ async function readWaitingActions(
   return rows.map((row) => {
     const list = tasksOf.get(row.id) ?? [];
     const progress = taskProgress(list.map((task) => task.status));
+    const action = actionItemFromRow(row, {
+      assignee: null,
+      taskTotal: progress.total,
+      taskCompleted: progress.completed,
+      signalCount: 0,
+      entityCounts: entityCounts.get(row.id),
+    });
     return {
       id: row.id,
-      action: actionItemFromRow(row, {
-        assignee: null,
-        taskTotal: progress.total,
-        taskCompleted: progress.completed,
-        signalCount: 0,
-        entityCounts: entityCounts.get(row.id),
-      }),
-      firstStep: todayStep(firstOpenTask(list)),
+      action,
+      firstStep: todayStep(firstOpenTask(list), action.payload),
       dueDate: row.due_date,
     };
   });

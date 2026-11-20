@@ -141,6 +141,7 @@ function AreaTooltip({
 // ─── Exported Charts ──────────────────────────────────────────────────────────
 
 export function TrendChart({ data }: { data: VisibilityTrendPoint[] }) {
+  const t = useTranslations('insights.page');
   const hasCompetitors = data.some((d) => d.competitors !== null);
   // Adaptive Y ceiling (see niceVisibilityYMax): a fixed 0–100 axis flattens
   // realistic low-single-digit visibility averages into a floor-hugging line.
@@ -151,7 +152,7 @@ export function TrendChart({ data }: { data: VisibilityTrendPoint[] }) {
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-[192px] text-sm text-muted-foreground">
-        No trend data available yet
+        {t('noTrend')}
       </div>
     );
   }
@@ -195,7 +196,7 @@ export function TrendChart({ data }: { data: VisibilityTrendPoint[] }) {
           <Area
             type="monotone"
             dataKey="score"
-            name="Your Brand"
+            name={t('yourBrand')}
             stroke="#6366f1"
             strokeWidth={2}
             fill="url(#gradScore)"
@@ -206,7 +207,7 @@ export function TrendChart({ data }: { data: VisibilityTrendPoint[] }) {
             <Area
               type="monotone"
               dataKey="competitors"
-              name="Avg. Competitor"
+              name={t('avgCompetitor')}
               stroke="#94a3b8"
               strokeWidth={2}
               fill="url(#gradCompetitors)"
@@ -492,10 +493,11 @@ export function ShareOfVoicePlatformChart({
   data: SoVByPlatform[];
   overallSov: number;
 }) {
+  const t = useTranslations('insights.page');
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
-        No share of voice data available
+        {t('noShareOfVoice')}
       </div>
     );
   }
@@ -522,7 +524,7 @@ export function ShareOfVoicePlatformChart({
     <div className="flex flex-col gap-4">
       <div className="text-center">
         <div className="text-4xl font-bold tabular-nums">{overallSov}%</div>
-        <div className="text-xs text-muted-foreground mt-0.5">Overall Share of Voice</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t('overallShareOfVoice')}</div>
       </div>
 
       <ChartContainer height={200}>

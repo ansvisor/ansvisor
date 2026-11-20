@@ -1,6 +1,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../messages/en.json';
 
 /** The location picker, on the engines' countries (PROMPT-015e). */
 
@@ -28,7 +30,11 @@ afterEach(() => {
 async function open() {
   const { LocationPicker } = await import('./location-picker');
   await act(async () => {
-    root.render(<LocationPicker value={[]} onChange={() => {}} maxSelectable={null} allowEmpty />);
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <LocationPicker value={[]} onChange={() => {}} maxSelectable={null} allowEmpty />
+      </NextIntlClientProvider>,
+    );
   });
   const trigger = container.querySelector('button') as HTMLButtonElement;
   await act(async () => trigger.click());

@@ -88,9 +88,13 @@ describe('a stale action (00432)', () => {
   const stale: ActionItem = { ...action, status: 'new', staleAt: '2026-10-31T03:00:00.000Z' };
   const onKeep = vi.fn();
 
-  it('shows Stale beside New, and offers Still relevant in its menu', async () => {
+  it('shows one status, New, with how long no one updated it, and offers Still relevant in its menu', async () => {
     render({ actions: [stale], onKeep });
-    expect(container.textContent).toContain('NewStale');
+    // One primary status; staleness is a hint under it, not a second badge (AC-10).
+    expect(container.textContent).not.toContain('NewStale');
+    expect(container.querySelector('[data-stale-hint]')?.textContent).toMatch(
+      /^No update in \d+ d$/,
+    );
     const items = await openMenu();
     expect(items.map((item) => item.textContent)).toEqual([
       'In Progress',
@@ -106,7 +110,7 @@ describe('a stale action (00432)', () => {
 
   it('is neither once it left New, nor without the stamp', async () => {
     render({ actions: [{ ...stale, status: 'on_hold' }], onKeep });
-    expect(container.textContent).not.toContain('Stale');
+    expect(container.querySelector('[data-stale-hint]')).toBeNull();
     expect((await openMenu()).map((item) => item.textContent)).not.toContain('Still relevant');
   });
 

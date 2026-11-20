@@ -4,8 +4,8 @@ route: /dashboard/settings/notifications
 keywords: [daily pulse, digest, notifications, email summary, highlights, warnings]
 synonyms: [daily email, weekly email, brand digest, visibility alerts, stop the emails]
 plan: all
-updated: 2026-11-10
-last_checked: 2026-11-10
+updated: 2026-11-20
+last_checked: 2026-11-20
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ The Daily Pulse is a short digest for each brand that goes out after its schedul
 
 ## Choose how often it comes
 
-Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.
+Open **Settings › Notifications**. The page has two sections: **Daily Pulse** and **AI Traffic weekly digest**. Under **Daily Pulse**, every active brand has its own card with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.
 
 - **Daily**: after every scheduled daily tracking run.
 - **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.
@@ -28,7 +28,7 @@ Enter email addresses separated by commas. Leave the field empty to send to ever
 
 ## AI Traffic weekly digest
 
-Each brand's row also has **AI Traffic weekly digest**: every Monday, last week's AI visits in one summary line, with the top three changes. It goes to the same recipients, and isn't sent while the Daily Pulse is **Off**.
+The **AI Traffic weekly digest** has its own section on the same page, with one tick box per brand: every Monday, last week's AI visits in one summary line, with the top three changes. Each brand's line shows who gets it: the brand's Daily Pulse recipients, or every member when that list is empty. A tick or untick is saved at once. The digest isn't sent while the brand's Daily Pulse is **Off**.
 
 ## When it is sent
 
@@ -36,13 +36,13 @@ A pulse follows a brand's scheduled daily tracking run; manual runs and single-p
 
 ## What's in a pulse
 
-The KPIs are **Visibility**, the **7-day trend**, **Mentions** and **Citations**, **Positive sentiment**, and **Prompts you appear in**. For Daily and Only when notable, the period is the latest completed tracking run, at most 24 hours, compared with the run before it. For Weekly, it is the last 7 days compared with the 7 days before. The email subject carries the visibility score and the weekly trend; on Weekly, it says Weekly Pulse.
+The KPIs are the **Visibility score** (out of 100, not a percentage), the **7-day average** score with its change in points from the 7 days before, **Mentions** and **Citations**, **Positive sentiment**, and **Prompts with a mention**, such as "135 of 227": 227 is the number of prompts with answers in the period. For Daily and Only when notable, the period is the latest completed tracking run, at most 24 hours, compared with the run before it. For Weekly, it is the last 7 days compared with the 7 days before. Lines that cover another period name it. The email subject carries the visibility score and the 7-day average; on Weekly, it says Weekly Pulse.
 
 ## Highlights
 
 - **First citation**: a URL from a prompt's Target URLs list was cited by an AI engine for the first time. Up to 5 are listed.
-- **Prompt gain**: a prompt's visibility score rose by 5 points or more this week versus last week. The top 3 are listed.
-- **Competitor overtaken**: last week a competitor's score was at or above yours; this week yours is higher.
+- **Prompt gain**: a prompt's visibility score rose by 5 points or more in the last 7 days versus the 7 days before. The top 3 are listed.
+- **Competitor overtaken**: in the 7 days before, a competitor's score was at or above yours; in the last 7 days yours is higher.
 - **New engine**: your brand was mentioned or cited on an AI platform for the first time ever.
 
 ## Warnings
