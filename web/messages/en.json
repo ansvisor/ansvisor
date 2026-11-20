@@ -1173,6 +1173,16 @@
       "content": "Content"
     },
     "kpis": {
+      "newGoal": {
+        "prompt": "Goal passed · Set a new goal",
+        "title": "New goal for {name}",
+        "description": "It's at {value}, past its goal of {goal}. The new goal starts 20% above where it is now; change it if you like.",
+        "label": "New goal",
+        "cancel": "Cancel",
+        "save": "Save goal",
+        "saved": "New goal saved",
+        "failed": "Couldn't save the goal. Try again."
+      },
       "title": "KPIs",
       "subtitle": "Track the metrics that matter, aligned with your goals.",
       "allKpis": "All KPIs",
