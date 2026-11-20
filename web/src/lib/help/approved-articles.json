@@ -45,7 +45,7 @@
         "oldest first"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -53,7 +53,7 @@
         },
         {
           "heading": "Today's focus",
-          "text": "What to do today is on the **Today** tab: **Today's focus** lists your three highest-impact open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. The **Actions** tab lists every action; sort it by Priority to see what comes next."
+          "text": "What to do today is on the **Today** tab: **Today's focus** lists your three highest-impact open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. The **Actions** tab lists every open action; sort it by Priority to see what comes next."
         },
         {
           "heading": "Agent work",
@@ -69,7 +69,7 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products."
+          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Open** and **Stale**) and **Assignee**, or search. **Status** starts on **Open** (new, in progress and on hold, anyone's), the number Today shows; pick **All** to add closed ones. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products."
         },
         {
           "heading": "Action codes",
@@ -669,7 +669,7 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -677,11 +677,11 @@
         },
         {
           "heading": "The tabs",
-          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Actions** is how many open actions are yours or unassigned, beside **Signals** how many new signals wait, and beside **Agents** how many of your agent runs wait for you."
+          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Agents** is how many of your agent runs wait for you."
         },
         {
           "heading": "The top of the page",
-          "text": "The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones that are yours or no one's), **Done** (this week) and **Results** (your score and its change)."
+          "text": "The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones: new, in progress or on hold, whoever has them, the same number as **All** on the Actions tab; under it, how many are on hold and how many are yours), **Done** (this week) and **Results** (your score and its change)."
         },
         {
           "heading": "Waiting for you and Where you stand",

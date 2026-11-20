@@ -180,6 +180,7 @@ function start(over: Partial<TodayStart> = {}): TodayStart {
       lastRunAt: '2026-11-17T06:00:00Z',
       trackedPrompts: 40,
       openActions: 9,
+      openBreakdown: { onHold: 1, mine: 3 },
       doneThisWeek: 2,
     }),
     state: settled(null),
@@ -342,6 +343,7 @@ describe('get_today', () => {
           lastRunAt: null,
           trackedPrompts: 8,
           openActions: 0,
+          openBreakdown: { onHold: 0, mine: 0 },
           doneThisWeek: 0,
         }),
         // A part the first day doesn't show is null, as getTodayStart gives it.

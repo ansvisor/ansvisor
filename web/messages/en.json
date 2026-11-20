@@ -914,6 +914,7 @@
         "starting": "Starting",
         "notYet": "Not yet",
         "open": "{count} open",
+        "openBreakdown": "{onHold} on hold · {mine} yours",
         "doneWeek": "{count} this week",
         "noChange": "no change",
         "tomorrow": "Tomorrow"
@@ -2000,6 +2001,7 @@
         "actions": "Actions"
       },
       "status": {
+        "open": "Open",
         "new": "New",
         "in_progress": "In Progress",
         "on_hold": "On Hold",
@@ -2056,6 +2058,8 @@
         "description": "Actions are generated from your signals after daily tracking runs. When meaningful work emerges, it will appear here — quality over quantity."
       },
       "noResults": "No actions match these filters.",
+      "noOpen": "No open actions. Completed and dismissed ones are under every status.",
+      "showAllStatuses": "Show every status",
       "error": {
         "title": "We couldn't load your actions.",
         "retry": "Try again"

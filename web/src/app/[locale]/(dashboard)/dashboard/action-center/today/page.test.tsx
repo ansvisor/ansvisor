@@ -207,6 +207,7 @@ const overview: TodayOverview = {
   lastRunAt: new Date(Date.now() - 3600_000).toISOString(),
   trackedPrompts: 12,
   openActions: 3,
+  openBreakdown: { onHold: 1, mine: 2 },
   doneThisWeek: 1,
 };
 const standing: TodayStanding = {
@@ -427,7 +428,7 @@ describe('Action Center › Today', () => {
     expect(cells).toEqual([
       '1 · Prompts12 tracked',
       '2 · AI answersUpdated today',
-      '3 · Actions3 open',
+      '3 · Actions3 open1 on hold · 2 yours',
       '4 · Done1 this week',
       '5 · Results53.9 +0.4',
     ]);

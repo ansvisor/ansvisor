@@ -4,7 +4,7 @@ route: /dashboard/action-center/today
 keywords: [today, action center, todays focus, since yesterday, waiting for you, finish setting up, where you stand, new area to track, waiting for a spot]
 synonyms: [start page, home page, daily summary, what to do today, my day]
 plan: all
-updated: 2026-11-17
+updated: 2026-11-20
 last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
@@ -17,11 +17,11 @@ sources: [docs/guides/action-center.mdx]
 
 The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.
 
-Beside **Actions** is how many open actions are yours or unassigned, beside **Signals** how many new signals wait, and beside **Agents** how many of your agent runs wait for you.
+Beside **Agents** is how many of your agent runs wait for you.
 
 ## The top of the page
 
-The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones that are yours or no one's), **Done** (this week) and **Results** (your score and its change).
+The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones: new, in progress or on hold, whoever has them, the same number as **All** on the Actions tab; under it, how many are on hold and how many are yours), **Done** (this week) and **Results** (your score and its change).
 
 ## Waiting for you and Where you stand
 
