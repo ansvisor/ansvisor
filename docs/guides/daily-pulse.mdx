@@ -63,15 +63,15 @@ If a scheduled run finished but its pulse was lost (for example, the server rest
 
 | KPI | Meaning |
 |---|---|
-| **Visibility** | Your [AI Visibility Score](/concepts/visibility-scoring) for the period |
-| **7-day trend** | The score over the last 7 days, and its change from the 7 days before |
+| **Visibility score** | Your [AI Visibility Score](/concepts/visibility-scoring) for the period, out of 100 (for example `28.1/100`) |
+| **7-day average** | The score over the last 7 days, and its change in points from the 7 days before |
 | **Mentions** / **Citations** | Totals for the period, and the change from the previous period |
 | **Positive sentiment** | Share of answers mentioning you that were positive, and its change |
-| **Prompts you appear in** | Prompts where you were visible, out of all tracked prompts |
+| **Prompts with a mention** | Prompts where you were mentioned, out of the prompts with answers in the period (for example `135 of 227`) |
 
 For **Daily** and **Only when notable**, the period is the latest completed tracking run (at most 24 hours), compared with the run before it. For **Weekly**, it is the last 7 days compared with the 7 days before.
 
-The email subject carries the score and the weekly trend, for example: `Acme Daily Pulse — visibility 42.5 (+1.2 pts this week)`. On **Weekly**, the subject and heading say **Weekly Pulse**.
+The email subject carries the score and the weekly trend, for example: `Acme Daily Pulse — visibility score 42.5/100, 7-day average 43/100 (+1.2 pts)`. On **Weekly**, the subject and heading say **Weekly Pulse**.
 
 ### Highlights
 

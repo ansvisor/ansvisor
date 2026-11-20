@@ -14,10 +14,15 @@ import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provide
 
 const reports = vi.hoisted(() => ({
   getReports: vi.fn(),
+  getReport: vi.fn(),
   createReport: vi.fn(),
   deleteReport: vi.fn(),
 }));
 vi.mock('@/lib/actions/reports', () => reports);
+const getReportBranding = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/white-label', () => ({ getReportBranding }));
+const saveReportPdf = vi.hoisted(() => vi.fn());
+vi.mock('./_save-pdf', () => ({ saveReportPdf }));
 const brand = { id: 'b1', name: 'Acme', shoppingModeEnabled: false };
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: unknown) => unknown) =>
@@ -35,7 +40,8 @@ vi.mock('@/i18n/navigation', () => ({
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 // HubSpot's pipeline section comes with the plan's crm_integrations (#2140).
 const plan = vi.hoisted(() => ({ crm: true }));
 vi.mock('@/hooks/use-feature-gate', () => ({
@@ -102,8 +108,32 @@ async function render(isLocked: boolean, chatAgentic = false) {
 
 const generate = () =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === 'Generate Report')!;
-// The row's last button: the bin.
-const remove = () => [...container.querySelectorAll('tbody button')].at(-1) as HTMLButtonElement;
+// The row's "…" menu, then one of its items.
+const menuItem = async (label: string) => {
+  const trigger = container.querySelector<HTMLElement>(
+    'tbody [aria-label="More actions for October review"]',
+  )!;
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    trigger.click();
+  });
+  return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (item) => item.textContent === label,
+  )!;
+};
+// The row's "…" menu, then its Delete report (UX audit RP-10).
+const remove = async () => {
+  const trigger = container.querySelector<HTMLElement>(
+    'tbody [aria-label="More actions for October review"]',
+  )!;
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    trigger.click();
+  });
+  return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (item) => item.textContent === 'Delete report',
+  )!;
+};
 const dialog = () => document.querySelector('[role="dialog"]');
 
 describe('Reports', () => {
@@ -112,7 +142,10 @@ describe('Reports', () => {
     expect(container.textContent).toContain('October review');
     await act(async () => generate().click());
     expect(openUpgrade).toHaveBeenLastCalledWith('Generating reports needs a plan');
-    await act(async () => remove().click());
+    {
+      const item = await remove();
+      await act(async () => item.click());
+    }
     expect(openUpgrade).toHaveBeenLastCalledWith('Deleting reports needs a plan');
     expect(openUpgrade).toHaveBeenCalledTimes(2);
     expect(dialog()).toBeNull();
@@ -173,5 +206,73 @@ describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
     reports.getReports.mockReturnValue(new Promise(() => {}));
     await render(false);
     expect(chatPage.mock.lastCall![0].view).toEqual({});
+  });
+
+  it('names a report by its title, and its template under a title of the person’s own (UX audit RP-12)', async () => {
+    reports.getReports.mockResolvedValue([
+      {
+        id: 'r1',
+        brandId: 'b1',
+        title: 'October review',
+        template: 'executive_summary',
+        dateFrom: '2026-10-01T00:00:00Z',
+        dateTo: '2026-10-27T00:00:00Z',
+        createdAt: '2026-10-27T00:00:00Z',
+      },
+      {
+        id: 'r2',
+        brandId: 'b1',
+        title: 'Monthly Executive Report',
+        template: 'executive_summary',
+        dateFrom: '2026-11-01T00:00:00Z',
+        dateTo: '2026-11-18T00:00:00Z',
+        createdAt: '2026-11-18T00:00:00Z',
+      },
+    ]);
+    await render(false);
+    const titles = [...container.querySelectorAll('tbody tr')].map(
+      (row) => row.querySelector('td')?.textContent,
+    );
+    expect(titles).toEqual(['October reviewMonthly Executive Report', 'Monthly Executive Report']);
+  });
+});
+
+describe('Share and Download in the row menu (UX audit RP-09)', () => {
+  it('copies the report’s link, on a read-only workspace too', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    await render(true);
+    const item = await menuItem('Copy link');
+    await act(async () => item.click());
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/dashboard/reports/r1`);
+    expect(toast.success).toHaveBeenCalledWith(
+      'Link copied. It opens the report for people in your workspace.',
+    );
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('downloads the saved report as a PDF with the white label kit', async () => {
+    const full = { id: 'r1', brandId: 'b1', payload: { brandName: 'Acme' } };
+    const kit = { companyName: 'Acme Agency' };
+    reports.getReport.mockResolvedValue(full);
+    getReportBranding.mockResolvedValue({ ok: true, branding: kit });
+    await render(false);
+    const item = await menuItem('Download PDF');
+    await act(async () => item.click());
+    expect(reports.getReport).toHaveBeenCalledWith('r1');
+    expect(getReportBranding).toHaveBeenCalledWith('b1');
+    expect(saveReportPdf).toHaveBeenCalledWith(full, kit);
+  });
+
+  it('makes no PDF while the kit can’t be read, and says so', async () => {
+    reports.getReport.mockResolvedValue({ id: 'r1', brandId: 'b1', payload: {} });
+    getReportBranding.mockResolvedValue({ ok: false, failure: 'failed' });
+    await render(false);
+    const item = await menuItem('Download PDF');
+    await act(async () => item.click());
+    expect(saveReportPdf).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      "Couldn't load your white label kit, so the PDF wasn't made. Try again.",
+    );
   });
 });

@@ -80,6 +80,30 @@ describe('actionTexts', () => {
     ).toEqual([]);
   });
 
+  it('says an open action whose signals all resolved is to review, not "0 signals" (AC-12)', () => {
+    const tPage = (key: string, values?: Record<string, string | number>) => {
+      const value = key
+        .split('.')
+        .reduce<unknown>(
+          (node, part) => (node as Record<string, unknown> | undefined)?.[part],
+          messages.actionCenter.actionsPage,
+        );
+      if (typeof value !== 'string') throw new Error(`missing message: ${key}`);
+      return value.replace(/\{count, plural, one \{[^}]*\} other \{([^}]*)\}\}/, (_m, other) =>
+        String(other).replace('#', String(values?.count ?? '')),
+      );
+    };
+    const resolved = action({ kind: 'recover_lost_mentions', signalCount: 0, payload: {} });
+    expect(actionContextTags({ ...resolved, status: 'in_progress' }, tPage)).toEqual([
+      'Signal resolved, review',
+    ]);
+    // Not for a closed action, nor with a signal still open.
+    expect(actionContextTags({ ...resolved, status: 'completed' }, tPage)).toEqual(['0 signals']);
+    expect(actionContextTags({ ...resolved, status: 'new', signalCount: 2 }, tPage)).toEqual([
+      '2 signals',
+    ]);
+  });
+
   it('names the ChatGPT Business Hub setup for where claiming is open, or the waitlist, with its evidence', () => {
     const evidence = { answers: 120, named: 34, cited: 9, since: '2026-10-13T03:00:00.000Z' };
     const open = actionTexts(

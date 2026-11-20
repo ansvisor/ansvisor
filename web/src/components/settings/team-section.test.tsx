@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import { toast } from 'sonner';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
@@ -371,5 +372,66 @@ describe('TeamSection in Team, roles & access', () => {
     await render(false);
     expect(document.querySelector('table')).toBeNull();
     expect(access.listRoleMembers).not.toHaveBeenCalled();
+  });
+});
+
+describe('TeamSection: refusals in the person’s language (LOC-008)', () => {
+  const translated = {
+    ...messages,
+    settings: {
+      ...messages.settings,
+      teamErrors: { ...messages.settings.teamErrors, already_invited: 'Déjà invité.' },
+    },
+    apiFailure: { ...messages.apiFailure, subscription: 'Lecture seule.' },
+  };
+
+  async function renderIn(over: typeof messages) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="fr" messages={over} timeZone="UTC">
+          <UpgradeDialogContext.Provider
+            value={{ isLocked: false, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <TeamSection />
+          </UpgradeDialogContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+
+  async function invite() {
+    await click(byText('Invite member'));
+    await typeEmail('cal@acme.test');
+    await click(byText('Send invitation'));
+  }
+
+  it("says the invite action's coded refusal from the UI's messages, not the server's English", async () => {
+    team.inviteMember.mockResolvedValue({
+      error: 'A pending invitation already exists for this email',
+      code: 'already_invited',
+    });
+    await renderIn(translated);
+    await invite();
+    expect(toast.error).toHaveBeenCalledWith('Déjà invité.');
+  });
+
+  it('keeps the server’s sentence for a refusal without a code', async () => {
+    team.inviteMember.mockResolvedValue({ error: 'Something new' });
+    await renderIn(translated);
+    await invite();
+    expect(toast.error).toHaveBeenCalledWith('Something new');
+  });
+
+  it("says a server action's masked refusal by its digest, else the page's own words", async () => {
+    const masked = (digest: string) =>
+      Object.assign(new Error('An error occurred in the Server Components render.'), { digest });
+    team.inviteMember.mockRejectedValueOnce(masked('subscription_inactive'));
+    await renderIn(translated);
+    await invite();
+    expect(toast.error).toHaveBeenLastCalledWith('Lecture seule.');
+
+    team.inviteMember.mockRejectedValueOnce(masked('1234567'));
+    await click(byText('Send invitation'));
+    expect(toast.error).toHaveBeenLastCalledWith(messages.settings.team_invitationSendFailed);
   });
 });

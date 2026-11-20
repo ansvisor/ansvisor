@@ -107,14 +107,6 @@ export interface DraftSuggestion extends ImproveSuggestion {
   own?: boolean;
 }
 
-export const STATE_LABEL: Record<ImproveState, string> = {
-  no_runs: 'No runs in this period',
-  not_mentioned: 'Not mentioned',
-  mentioned_late: 'Mentioned · Late',
-  not_cited: 'Mentioned early · not cited',
-  doing_well: 'Doing well',
-};
-
 /** Order of the groups: the biggest gaps first. */
 export const STATE_ORDER: ImproveState[] = [
   'not_mentioned',
@@ -167,15 +159,21 @@ export function hasUnsentEdits(drafts: DraftSuggestion[], original: ImproveSugge
   });
 }
 
-/** Short label for a source chip. */
-export function sourceChipLabel(source: ImproveSource): string {
+/** The words of a source chip, from the messages' prompts.improve.sources. */
+export type SourceChipWords = (
+  key: 'fanout' | 'answer' | 'brandPage',
+  values?: Record<string, string>,
+) => string;
+
+/** Short label for a source chip, worded by `words`; a link or domain as it is. */
+export function sourceChipLabel(source: ImproveSource, words: SourceChipWords): string {
   switch (source.type) {
     case 'fanout':
-      return `Fan-out: ${source.ref}`;
+      return words('fanout', { ref: source.ref });
     case 'answer':
-      return 'AI answer';
+      return words('answer');
     case 'brand_page':
-      return `Your page: ${shortUrl(source.ref)}`;
+      return words('brandPage', { url: shortUrl(source.ref) });
     case 'competitor_url':
       return shortUrl(source.ref);
     default:

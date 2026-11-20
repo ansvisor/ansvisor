@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useNow, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   AlertCircle,
@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { getTrackingWindow } from '@/lib/visibility-reads';
 import type { Brand } from '@/types';
 import {
   getSignals,
@@ -104,16 +105,44 @@ function utcDay(offset = 0): string {
   return new Date(Date.now() - offset * DAY_MS).toISOString().slice(0, 10);
 }
 
+/**
+ * When the brand's latest AI answer run finished (AC-40): signals come from
+ * the nightly run, not in real time, so the subtitle says how old they are.
+ * Null before the first run, or when it can't be read.
+ */
+function useLastRunAt(brandId: string | undefined): string | null {
+  const [read, setRead] = useState<{ brandId: string; at: string | null } | null>(null);
+  useEffect(() => {
+    if (!brandId) return;
+    let live = true;
+    getTrackingWindow(brandId)
+      .then((win) => {
+        if (live) setRead({ brandId, at: win.lastRunAt });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [brandId]);
+  return read && read.brandId === brandId ? read.at : null;
+}
+
 export default function ActionCenterSignalsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const t = useTranslations('actionCenter.signalsPage');
+  const format = useFormatter();
+  const now = useNow({ updateInterval: 60_000 });
+  const lastRunAt = useLastRunAt(brand?.id);
+  const subtitle = lastRunAt
+    ? t('subtitleRun', { ago: format.relativeTime(new Date(lastRunAt), now) })
+    : t('subtitle');
 
   return (
     <div className="space-y-6">
       <HeaderWithAiUsage>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
       </HeaderWithAiUsage>
       <ActionCenterTabs />
@@ -517,7 +546,8 @@ function SignalsContent({ brand }: { brand: Brand }) {
             prev={summary.prevResolved}
             rangeLabel={prevRangeLabel}
             spark={sparkSeries(summary.byDayResolved)}
-            note={countsNote}
+            // Resolved can pass New (AC-42): it counts signals opened before the period too.
+            note={[t('cards.resolvedNote'), countsNote].filter(Boolean).join(' ')}
           />
           <AvgImpactCard summary={summary} days={windowDays} />
         </div>

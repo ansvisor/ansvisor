@@ -19,7 +19,7 @@
 
 import { gunzipSync } from 'node:zlib';
 import supabaseAdmin from '../config/supabase.js';
-import { fetchViaScrapeDo } from './audit/fetcher.js';
+import { fetchViaScrapeDo, proxyFetcherConfigured } from './audit/fetcher.js';
 import { isExcludedPath } from './page-paths.js';
 import { logger } from './logger.js';
 
@@ -240,7 +240,7 @@ async function readSitemaps(domain) {
 async function readPage(url) {
   const direct = await fetchDirect(url);
   if (direct.ok) return { status: direct.status, via: 'direct', head: parseHead(direct.body) };
-  if (!looksBlocked(direct.status, direct.body) || !process.env.SCRAPEDO_API_KEY) {
+  if (!looksBlocked(direct.status, direct.body) || !proxyFetcherConfigured()) {
     return { status: direct.status, via: 'direct', head: null };
   }
   const proxied = await fetchViaScrapeDo(url, { render: false });
