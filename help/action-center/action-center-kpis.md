@@ -28,6 +28,10 @@ A brand that never had KPIs starts with a suggested set: AI Visibility, Citation
 - **At Risk**: 40 to 69%, or moving the wrong way before the goal is reached.
 - **Off Track**: under 40%.
 
+## Set a new goal
+
+When a KPI passes its goal, **Goal passed · Set a new goal** shows under its status. Click it to see the next goal, 20% above where the KPI is now; change it if you like and click **Save goal**. Nothing changes until you save. Point at a goal to see its exact number, such as 21,356 behind "21.4K".
+
 ## Change your KPIs
 
 Click **Edit KPIs** (or **Configure KPIs**) to open the framework. Pick a template (**AI Search Visibility**, **Brand Monitoring** or **Custom Framework**; **Content Performance** is marked coming soon), a time period (Weekly, Monthly or Quarterly) and a target for each KPI, then click **Save & Apply**. Only admins and managers can change KPIs.
