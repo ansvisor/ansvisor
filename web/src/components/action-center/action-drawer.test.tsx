@@ -232,6 +232,49 @@ describe('ActionDrawer', () => {
     expect(text).not.toContain('2 prompts');
   });
 
+  it('says a passed goal date and offers a new one, without moving it (UX audit AC-21)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-19T12:00:00Z'));
+    try {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        signals: [
+          {
+            id: 's1',
+            category: 'citation',
+            kind: 'lost_citations',
+            impact: 'high',
+            status: 'new',
+            source: ['ai_results'],
+            detectedAt: '2026-10-09T00:00:00Z',
+            lastDetectedAt: '2026-10-09T00:00:00Z',
+            resolvedAt: null,
+            previousValue: null,
+            currentValue: null,
+            changeValue: null,
+            payload: { promptId: 'p1', promptText: 'Best coffee subscription?' },
+            kpiKeys: [],
+            actionId: 'a1',
+            where: { platforms: ['chatgpt-web'], regions: [], topics: [] },
+          } as Signal,
+        ],
+      });
+      server.getPromptDemand.mockResolvedValue({});
+      // Its due date, Nov 1, has gone: said, and left as it is.
+      await renderDrawer(action);
+      const dialog = document.body.querySelector('[role="dialog"]')!;
+      expect(dialog.textContent).toContain('by Nov 1.');
+      expect(dialog.textContent).toContain('Goal date passed');
+      const offer = [...dialog.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Set a new date',
+      )!;
+      await act(async () => offer.click());
+      expect(document.activeElement?.id).toBe('action-drawer-due-date');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe('changes', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());

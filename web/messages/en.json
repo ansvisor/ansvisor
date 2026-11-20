@@ -2328,6 +2328,8 @@
         "assignee": "Assignee",
         "assignTo": "Assign to teammate",
         "dueDate": "Due date",
+        "goalPassed": "Goal date passed",
+        "setNewDate": "Set a new date",
         "statusLabel": "Status",
         "events": {
           "created": "{source, select, chat {Action created from Chat} ads {Action created from Ads} other {Action created}}",
