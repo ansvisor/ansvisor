@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { REPORT_TEMPLATES } from '@/lib/reports/templates';
 import { auditScoreView } from '@/lib/reports/audit-score';
+import { kpiGridClasses, visibilityKpis } from '@/lib/reports/visibility-kpis';
 import { ScoreRangeMark, useScoreRangeTip } from '@/components/audit/score-range';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
@@ -245,6 +246,10 @@ export default function ReportDetailPage() {
 
   const { payload } = report;
   const maxSov = Math.max(...(payload.shareOfVoice?.byPlatform.map((p) => p.sov) ?? []), 1);
+  // The Visibility score and Prompts with a mention, then Mentions, Brand
+  // Citations and Positive Sentiment.
+  const visibilityTiles = visibilityKpis(payload.visibilityRate);
+  const kpiGrid = kpiGridClasses(visibilityTiles.length + 3);
   // Reports generated before #492 stored competitor entries without these
   // fields even though the type now declares them required — check at
   // runtime rather than trusting the type for immutable, pre-existing data.
@@ -253,6 +258,7 @@ export default function ReportDetailPage() {
     typeof payload.competitors[0].visibilityRate === 'number' &&
     typeof payload.competitors[0].promptCount === 'number',
   );
+  const hasCompetitorScore = Boolean(payload.competitors?.some((c) => typeof c.score === 'number'));
   // Same story for prompt/topic performance: reports generated before the
   // rate switch stored an all-runs average score, which is 0-100 intensity —
   // not a percentage — so those payloads keep their old (unsuffixed) cells.
@@ -358,41 +364,27 @@ export default function ReportDetailPage() {
             gather their own sections, and older (immutable) reports may
             predate a field entirely. */}
         {payload.insights && (
-          <div
-            className={cn(
-              'grid gap-4',
-              payload.visibilityRate
-                ? 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-5'
-                : 'sm:grid-cols-2 lg:grid-cols-4',
-            )}
-          >
-            {payload.visibilityRate ? (
-              <>
+          <div className={cn('grid gap-4', kpiGrid.grid)}>
+            {visibilityTiles.map((tile) =>
+              tile.kind === 'score' ? (
                 <KpiCard
-                  label={t('kpi.visibilityRate')}
-                  value={
-                    typeof payload.visibilityRate.score === 'number'
-                      ? String(payload.visibilityRate.score)
-                      : `${payload.visibilityRate.ratePct}%`
-                  }
+                  key={tile.kind}
+                  label={t('kpi.visibilityScore')}
+                  value={t('kpi.scoreValue', { score: String(tile.score) })}
                   change={null}
-                  sub={t('kpi.visibilityRateSub', {
-                    visible: payload.visibilityRate.visiblePrompts,
-                    total: payload.visibilityRate.promptCount,
+                />
+              ) : (
+                <KpiCard
+                  key={tile.kind}
+                  label={t('kpi.promptsWithMention')}
+                  value={`${tile.ratePct}%`}
+                  change={null}
+                  sub={t('kpi.promptsWithMentionSub', {
+                    visible: tile.visible,
+                    total: tile.total,
                   })}
                 />
-                <KpiCard
-                  label={t('kpi.avgScore')}
-                  value={`${payload.insights.avgVisibilityScore}%`}
-                  change={payload.insights.visibilityChange}
-                />
-              </>
-            ) : (
-              <KpiCard
-                label={t('kpi.visibility')}
-                value={`${payload.insights.avgVisibilityScore}%`}
-                change={payload.insights.visibilityChange}
-              />
+              ),
             )}
             <KpiCard
               label={t('kpi.mentions')}
@@ -423,14 +415,7 @@ export default function ReportDetailPage() {
               value={`${payload.insights.positiveSentimentPct}%`}
               change={payload.insights.sentimentChange}
             />
-            <p
-              className={cn(
-                'text-xs text-muted-foreground',
-                payload.visibilityRate
-                  ? 'col-span-2 sm:col-span-3 xl:col-span-5'
-                  : 'sm:col-span-2 lg:col-span-4',
-              )}
-            >
+            <p className={cn('text-xs text-muted-foreground', kpiGrid.note)}>
               {t('kpiCitationsNote')}
             </p>
           </div>
@@ -490,9 +475,11 @@ export default function ReportDetailPage() {
                     <TableRow>
                       <TableHead>{t('columns.brand')}</TableHead>
                       <TableHead className="text-end">
-                        {hasCompetitorVisibilityRate
-                          ? t('kpi.visibilityRate')
-                          : t('kpi.visibility')}
+                        {hasCompetitorScore
+                          ? t('kpi.visibilityScore')
+                          : hasCompetitorVisibilityRate
+                            ? t('kpi.promptsWithMention')
+                            : t('kpi.avgScore')}
                       </TableHead>
                       <TableHead className="text-end">{t('columns.change')}</TableHead>
                       <TableHead className="text-end">{t('kpi.mentions')}</TableHead>
@@ -513,7 +500,7 @@ export default function ReportDetailPage() {
                             <>
                               <div>{c.score}</div>
                               <div className="text-xs font-normal text-muted-foreground">
-                                {t('kpi.visibilityRateSub', {
+                                {t('kpi.leaderboardPromptsSub', {
                                   visible: c.visiblePrompts,
                                   total: c.promptCount,
                                 })}
@@ -523,18 +510,18 @@ export default function ReportDetailPage() {
                             <>
                               <div>{c.visibilityRate}%</div>
                               <div className="text-xs font-normal text-muted-foreground">
-                                {t('kpi.visibilityRateSub', {
+                                {t('kpi.promptsWithMentionSub', {
                                   visible: c.visiblePrompts,
                                   total: c.promptCount,
                                 })}
                               </div>
                             </>
                           ) : (
-                            `${c.avgVisibilityScore}%`
+                            c.avgVisibilityScore
                           )}
                         </TableCell>
                         <TableCell className="text-end">
-                          <Delta value={c.change} />
+                          <Delta value={typeof c.score === 'number' ? c.scoreChange : c.change} />
                         </TableCell>
                         <TableCell className="text-end">{c.totalMentions}</TableCell>
                         <TableCell className="text-end">{c.totalCitations}</TableCell>

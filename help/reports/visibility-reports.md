@@ -4,7 +4,7 @@ route: /dashboard/reports
 keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss, score range, plus or minus]
 plan: all
-updated: 2026-11-10
+updated: 2026-11-19
 last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
@@ -39,6 +39,12 @@ A report opens with its **Executive Summary**: a short account of what changed v
 ## Site Audit Score
 
 **Site Audit Score** shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. It isn't compared with the previous period. Once the page has three audits by the end date, the score shows its range, such as **64 ± 2**, worked out as in Site Audit's report: half the gap between the lowest and highest score of its last five audits. A line below gives those two scores. Reports made before the range was added don't show it.
+
+## KPIs and the leaderboard
+
+The KPI row leads with your **Visibility score**, out of 100, such as **15.5/100**, never with a % sign. It blends how often AI answers mention you, how often they cite your site and how early they name you. Next to it, **Prompts with a mention** is the share of the period's answered prompts whose answers named or cited you, with the counts under it, such as **112 of 308 prompts**. **Mentions**, **Brand Citations** and **Positive Sentiment** follow. The older **Avg. Score** is no longer shown.
+
+In the **Competitor Leaderboard**, the **Visibility score** column shows each brand's score with its prompts with a mention under it, and **Change** is the score's change in points. A report saved before a figure existed shows only the figures it has.
 
 ## AI-sourced pipeline
 
