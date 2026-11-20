@@ -553,7 +553,13 @@ export function ActionDrawer({
                     {tag}
                   </Badge>
                 ))}
-            <RemovedNote payload={action.payload ?? {}} />
+            <RemovedNote
+              action={action}
+              onReplanned={async () => {
+                await load();
+                onChanged();
+              }}
+            />
             {isStale(action) && <StalePill />}
           </div>
         </SheetHeader>

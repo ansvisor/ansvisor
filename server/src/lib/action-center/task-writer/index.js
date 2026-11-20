@@ -131,7 +131,7 @@ async function loadAction(actionId) {
   if (error) throw new Error(error.message);
   if (!action) throw new TaskWriterError('not_found', 'Action not found', 404);
 
-  const [brandRes, domainsRes, signalsRes, definitions] = await Promise.all([
+  const [brandRes, domainsRes, signalsRes, definitions, removedPrompts] = await Promise.all([
     supabaseAdmin
       .from('brands')
       .select('id, name, description, organization_id, site_type, industry, shopping_mode_enabled')
@@ -144,6 +144,7 @@ async function loadAction(actionId) {
       .eq('brand_id', action.brand_id)
       .eq('action_signals.action_id', actionId),
     loadDefinitions(),
+    loadRemovedPrompts(actionId),
   ]);
   if (brandRes.error) throw new Error(brandRes.error.message);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
@@ -160,7 +161,24 @@ async function loadAction(actionId) {
     domains: (domainsRes.data ?? []).map((row) => row.domain),
     signals: supporting.length > 0 ? supporting : all,
     name: definition?.name ?? action.kind,
+    removedPrompts,
   };
+}
+
+/**
+ * The prompts deleted or paused since the action was created (action_entities,
+ * 00244), by id and by text: its tasks are written about the ones left
+ * (AC-13). Keyed by the action already loaded; none when the list can't be read.
+ */
+async function loadRemovedPrompts(actionId) {
+  const { data, error } = await supabaseAdmin
+    .from('action_entities')
+    .select('entity_key, label')
+    .eq('action_id', actionId)
+    .eq('entity_type', 'prompts')
+    .not('removed_at', 'is', null);
+  if (error) return new Set();
+  return new Set((data ?? []).flatMap((row) => [row.entity_key, row.label]).filter(Boolean));
 }
 
 /**
@@ -260,23 +278,46 @@ export async function writeTasksForAction(
   actionId,
   { trigger = 'auto', userId = null, dryRun = false, now = new Date() } = {},
 ) {
-  const { action, brand, domains, signals, name } = await loadAction(actionId);
+  const { action, brand, domains, signals, name, removedPrompts } = await loadAction(actionId);
   if (SENT_KINDS.has(action.kind)) {
     throw new TaskWriterError('sent', 'This action carries the tasks it was sent with.');
   }
   if (CLOSED.has(action.status)) throw new TaskWriterError('closed', 'This action is closed.');
-  if (dryRun) return compose({ action, brand, domains, signals, name, dryRun, now });
+  if (dryRun) {
+    return compose({ action, brand, domains, signals, name, removedPrompts, dryRun, now });
+  }
 
   await claim(actionId, now);
   try {
-    return await compose({ action, brand, domains, signals, name, trigger, userId, now });
+    return await compose({
+      action,
+      brand,
+      domains,
+      signals,
+      name,
+      removedPrompts,
+      trigger,
+      userId,
+      now,
+    });
   } finally {
     await release(actionId);
   }
 }
 
 /** The writing itself, once the action is this writer's. */
-async function compose({ action, brand, domains, signals, name, trigger, userId, dryRun, now }) {
+async function compose({
+  action,
+  brand,
+  domains,
+  signals,
+  name,
+  removedPrompts,
+  trigger,
+  userId,
+  dryRun,
+  now,
+}) {
   const actionId = action.id;
   if (!dryRun && trigger === 'auto') {
     // The night leaves alone a plan someone is already working through.
@@ -291,7 +332,7 @@ async function compose({ action, brand, domains, signals, name, trigger, userId,
     }
   }
 
-  const evidence = buildEvidence(signals, { domains });
+  const evidence = buildEvidence(signals, { domains, removedPrompts });
   if (!hasTargets(evidence)) {
     if (!dryRun) await markWritten(actionId, now);
     return { status: 'skipped', reason: 'no_targets', costUsd: 0 };

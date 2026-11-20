@@ -548,7 +548,7 @@ export function ActionTable({
                             {tag}
                           </Badge>
                         ))}
-                        <RemovedNote payload={action.payload ?? {}} />
+                        <RemovedNote action={action} />
                       </div>
                     </div>
                   </div>
