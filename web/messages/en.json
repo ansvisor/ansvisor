@@ -2026,6 +2026,10 @@
         },
         "notScored": "Not scored yet",
         "why": "Why this priority?",
+        "lowConfidence": {
+          "tip": "Based on {why}. Confidence is only one part of the score, so impact and demand can still rank it high. Check it before acting.",
+          "sentTip": "Rated from what it was sent with, not from detected findings. Check it before acting."
+        },
         "reason": {
           "change": {
             "lost": "Lost ground on {subject}",
