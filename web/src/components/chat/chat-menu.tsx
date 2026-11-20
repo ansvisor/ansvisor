@@ -9,7 +9,7 @@ import { NewPill } from '@/components/agentic/new-pill';
 import { Skeleton } from '@/components/ui/skeleton';
 import { countChatSchedules } from '@/lib/actions/chat-schedules';
 import type { ChatListItem } from '@/lib/chat/conversations';
-import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
+import { AT_WORK_ROWS, chatMenuLists, inboxChats, type DayGroup } from '@/lib/chat/menu-groups';
 import { CHAT_SETTINGS_TABS } from '@/lib/chat/settings-tabs';
 import { cn } from '@/lib/utils';
 import { readAgentsSeen } from './agents/agents-seen';
@@ -335,9 +335,9 @@ export function ChatMenuView({
     const at = nowProp ?? new Date();
     return { now: at, ...chatMenuLists(chats, at) };
   }, [chats, nowProp]);
-  // The Inbox holds the person's own chats in Agents at work: its count, with
-  // an amber dot while any needs them.
-  const inboxRows = atWork.filter((chat) => chat.mine);
+  // The Inbox holds the person's own chats at work and their unread results:
+  // its count, with an amber dot while any needs them.
+  const inboxRows = useMemo(() => inboxChats(chats), [chats]);
   const needsYou = inboxRows.filter((chat) => chat.state === 'needsYou').length;
   const inbox = inboxRows.length;
   const inboxLabel = needsYou
