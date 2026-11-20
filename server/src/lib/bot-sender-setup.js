@@ -68,6 +68,15 @@ export function logpushJob({ endpoint, secret }) {
   };
 }
 
+/** A Netlify log drain's settings (Enterprise plans): endpoint, format and header. */
+export function netlifyLogDrain({ endpoint, secret }) {
+  return {
+    endpoint,
+    format: 'json',
+    headers: [`Authorization: Bearer ${secret}`],
+  };
+}
+
 /** A Vercel drain's settings (Team Settings › Drains › Add Drain › Logs). */
 export function vercelDrain({ endpoint, secret }) {
   return {

@@ -48,6 +48,7 @@ const KINDS: BotConnectionKind[] = [
   'cloudflare_logpush',
   'vercel_drain',
   'fastly_log_stream',
+  'netlify_log_drain',
   'log_webhook',
 ];
 
@@ -164,6 +165,12 @@ function SetupSteps({ created }: { created: NewBotConnection }) {
           <CopyBlock label={t('copyEndpoint')} value={created.endpoint} />
           <CopyBlock label={t('copyHeader')} value={`Authorization: Bearer ${created.secret}`} />
           <CopyBlock label={t('copyFastlyFormat')} value={created.fastlyLogFormat} code />
+        </>
+      )}
+      {kind === 'netlify_log_drain' && created.netlifyDrain && (
+        <>
+          <CopyBlock label={t('copyEndpoint')} value={created.netlifyDrain.endpoint} />
+          <CopyBlock label={t('copyHeader')} value={created.netlifyDrain.headers.join('\n')} />
         </>
       )}
     </div>

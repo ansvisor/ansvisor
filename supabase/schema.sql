@@ -68669,3 +68669,27 @@ grant execute on function public.head_to_head_window_daily(uuid, text, date, dat
 comment on function public.head_to_head_window_daily(uuid, text, date, date) is
   'Head-to-head on the Competitors page (#923) over the picker''s days, beside the all-time head_to_head_daily (p_day_from..p_day_to, inclusive UTC days; null for no bound, both null for all time; CP-02), from the daily rollups (00164): per (prompt, platform, model, region) the runs and the brand''s and the competitor''s visibility and Visibility score parts, their averages per engine and overall, and each prompt''s text once. Security definer, for a person who can access the brand (00434, can_access_brand), and for the service role, whose callers check the brand first; anyone else reads null.';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00553_ai_bot_netlify_log_drain.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00553: Netlify log drain for AI bot traffic (#2167)
+-- ============================================================================
+-- A Netlify log drain (Enterprise plans) posts JSON or NDJSON request logs to
+-- /bots/ingest with the connection's Authorization bearer secret. Its records
+-- are read by server/src/lib/bot-log-formats.js; the existing verification
+-- pipeline still checks the user agent and published source IP ranges before
+-- storage.
+
+alter table public.ai_bot_connections
+  drop constraint if exists ai_bot_connections_kind_check;
+alter table public.ai_bot_connections
+  add constraint ai_bot_connections_kind_check check (
+    kind in (
+      'cloudflare_worker', 'cloudflare_logpush', 'vercel_drain',
+      'log_webhook', 'log_upload', 'fastly_log_stream', 'netlify_log_drain'
+    )
+  );
+
+notify pgrst, 'reload schema';
+

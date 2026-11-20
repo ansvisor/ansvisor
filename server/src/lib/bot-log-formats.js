@@ -301,12 +301,34 @@ export async function readUploadBody(text) {
   return { records: lines.length, requests };
 }
 
+/**
+ * Netlify log drain (#2167, Enterprise plans): JSON or NDJSON CDN request
+ * records. Only records with a user_agent are requests; the drain's
+ * `url` is read as a full address or a path, and `timestamp` is RFC 3339.
+ */
+export async function readNetlifyBody(text) {
+  const lines = await readLines(text);
+  const requests = lines
+    .filter((l) => l && typeof l === 'object' && 'user_agent' in l)
+    .map((l) => ({
+      userAgent: l.user_agent,
+      ip: l.client_ip,
+      url: l.url,
+      status: l.status_code,
+      at: logpushTime(l.timestamp),
+      country: l.country,
+    }))
+    .filter((r) => r.at !== undefined);
+  return { records: lines.length, requests };
+}
+
 const READERS = {
   cloudflare_worker: readWorkerBody,
   cloudflare_logpush: readLogpushBody,
   vercel_drain: readVercelBody,
   log_webhook: readJsonLinesBody,
   fastly_log_stream: readFastlyBody,
+  netlify_log_drain: readNetlifyBody,
   log_upload: readUploadBody,
 };
 

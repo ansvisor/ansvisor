@@ -9,6 +9,7 @@ import {
   readFastlyBody,
   readJsonLinesBody,
   readLogpushBody,
+  readNetlifyBody,
   readSenderBody,
   readUploadBody,
   readVercelBody,
@@ -146,6 +147,44 @@ describe('readFastlyBody (#2164)', () => {
       }),
     );
     expect(parsed).toEqual({ records: 1, requests: [] });
+  });
+});
+
+describe('Netlify log drain', () => {
+  it('reads NDJSON drain records, and drops a record without a readable time', async () => {
+    const lines = [
+      JSON.stringify({
+        client_ip: '20.171.206.9',
+        user_agent: 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2)',
+        url: 'https://acme.example/pricing',
+        status_code: 200,
+        timestamp: '2026-11-06T09:15:02.831Z',
+        country: 'US',
+      }),
+      JSON.stringify({
+        client_ip: '203.0.113.9',
+        user_agent: 'Mozilla/5.0 Chrome/129',
+        url: '/about',
+        status_code: 404,
+        timestamp: 'not-a-time',
+      }),
+    ].join('\n');
+    const parsed = await readNetlifyBody(lines);
+    expect(parsed).toEqual({
+      records: 2,
+      requests: [
+        {
+          userAgent: 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2)',
+          ip: '20.171.206.9',
+          url: 'https://acme.example/pricing',
+          status: 200,
+          at: '2026-11-06T09:15:02.831Z',
+          country: 'US',
+        },
+      ],
+    });
+    const throughReader = await readSenderBody('netlify_log_drain', Buffer.from(lines));
+    expect(throughReader.requests).toHaveLength(1);
   });
 });
 

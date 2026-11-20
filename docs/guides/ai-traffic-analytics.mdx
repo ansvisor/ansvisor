@@ -397,3 +397,11 @@ AI-bot requests, from Cloudflare, Vercel, Fastly, the webhook or an upload, are 
 <Card title="Continue: Competitors" icon="arrow-right" href="/guides/competitors">
   Benchmark your AI presence against named rivals.
 </Card>
+
+#### Netlify log drain
+
+Netlify log drains are available on Enterprise plans. Choose **Netlify log drain** in the connection dialog. **Create connection** shows the endpoint and the one-time bearer header to copy. The secret is shown once; if it is lost, revoke the connection and create another.
+
+In your Netlify site, open **Log drains** and add a **General HTTP endpoint** drain. Set the endpoint URL, choose **JSON** as the format, and add the **Authorization** header with the bearer value.
+
+Netlify sends every request log; all records count toward the monthly raw-log cap. Ansvisor stores only requests whose user agent and source IP match a known AI bot and its published ranges.
