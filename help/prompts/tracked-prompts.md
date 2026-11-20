@@ -1,17 +1,23 @@
 ---
 title: Tracked Prompts list, statuses and columns
 route: /dashboard/prompts/tracked
-keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume, track now, no answers yet]
+keywords: [tracked prompts, what is a prompt, how to find the best prompts, prompts guide, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume, track now, no answers yet]
 synonyms: [prompt list, my prompts, prompt table, tracked queries]
 plan: all
-updated: 2026-11-19
-last_checked: 2026-11-19
+updated: 2026-11-20
+last_checked: 2026-11-20
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/prompts.mdx]
 ---
 **Tracked Prompts** lists every prompt Ansvisor asks the AI engines for your brand, with its results over the date range you pick (24h, 7d, 30d, 90d or custom). It sits on the **Prompts** tab of the **Prompts** page: the **Tracked** | **Suggestions** switch, at the left of the date range, picks this list or **Prompt Suggestions**. A range you pick carries over to Topics and Query Fan-out.
+
+## What a prompt is, and the guide
+
+The **(i)** beside the **Prompts** title explains what a prompt is, with an example, and how Ansvisor works: it finds the best prompts, you pick what to track, it asks the AI platforms every day, builds your own data, and smart AI systems show you what to do next, preparing pages and fixes in Action Center. They work for you in the background, every day.
+
+**How to find the best prompts**, at its bottom, opens a guide of ten steps, such as connecting Search Console and Analytics, adding the AI traffic code, checking Suggestions and running Site Audit. Each step's button opens the page where you do it. A step your brand's data already shows, such as Search Console connected, is ticked, and the guide counts how many of the ten are done. The last two steps are coming soon.
 
 ## Where the page's actions are
 
