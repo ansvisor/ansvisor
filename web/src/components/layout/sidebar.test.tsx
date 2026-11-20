@@ -291,6 +291,61 @@ describe('Sidebar', () => {
     expect(container.querySelector('[data-action="rail.toggle"]')).toBeNull();
     expect(container.querySelector('a[href="/dashboard"]')).not.toBeNull();
   });
+  describe('a collapsed sidebar opening over the page (UX audit CH-01)', () => {
+    const render = async () =>
+      act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+            <ChatAgenticProvider enabled>
+              <Sidebar />
+            </ChatAgenticProvider>
+          </NextIntlClientProvider>,
+        );
+      });
+    const aside = () => container.querySelector('aside')!;
+    const hover = (ms: number) =>
+      act(async () => {
+        aside().dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        vi.advanceTimersByTime(ms);
+      });
+
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("never opens over Chat's own menu: the rail stays icons on Chat's screens", async () => {
+      nav.pathname = '/dashboard/chat/all';
+      await render();
+      await hover(1000);
+      expect(aside().className).toContain('w-16');
+      // Its icons say their names.
+      expect(
+        container.querySelector('a[href="/dashboard/action-center"]')?.getAttribute('aria-label'),
+      ).toBe('Action Center (New)');
+    });
+
+    it('elsewhere opens after the pointer rests on it, and closes on Escape or a click outside', async () => {
+      useSidebarStore.setState({ isCollapsed: true });
+      await render();
+      // Passing over it opens nothing.
+      await hover(200);
+      expect(aside().className).toContain('w-16');
+      await act(async () => vi.advanceTimersByTime(150));
+      expect(aside().className).toContain('w-60');
+
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      });
+      expect(aside().className).toContain('w-16');
+
+      await hover(400);
+      expect(aside().className).toContain('w-60');
+      await act(async () => {
+        // jsdom has no PointerEvent; the listener reads only the target.
+        document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      });
+      expect(aside().className).toContain('w-16');
+    });
+  });
   describe('Agent Center', () => {
     const render = (chatOn: boolean, hidden: string[] = []) =>
       act(async () => {

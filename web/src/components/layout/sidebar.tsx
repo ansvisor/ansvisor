@@ -55,7 +55,12 @@ import {
 import { ChevronDown, ChevronsLeft, ChevronsRight, Crown, Lock } from 'lucide-react';
 
 /** How long the pointer rests on the collapsed sidebar before it opens. */
-const PEEK_DELAY_MS = 150;
+/**
+ * How long the pointer rests on a collapsed sidebar before it opens: long
+ * enough that passing over it on the way to the page opens nothing (UX audit
+ * CH-01).
+ */
+const PEEK_DELAY_MS = 300;
 
 /**
  * The menu's viewport. Its edges fade out where items are hidden above or
@@ -167,13 +172,17 @@ export function Sidebar() {
   const railOpen = useChatRailStore((s) => s.open);
   const setRailOpen = useChatRailStore((s) => s.setOpen);
   const isCollapsed = onChat ? !railOpen : pinnedClosed;
-  // A collapsed sidebar opens over the page while the pointer is on it
-  // ("peeking") and while its brand menu is open, and closes again after.
+  // A collapsed sidebar opens over the page while the pointer rests on it
+  // ("peeking") and while its brand menu is open, and closes again after, on
+  // Escape or on a click outside it. Never on Chat's screens: there the rail
+  // sits beside Chat's own menu, and opening over it hid that menu and took
+  // its clicks (UX audit CH-01). The logo expands the rail there.
   const [peeking, setPeeking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const peekTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const asideRef = useRef<HTMLElement>(null);
-  const compact = isCollapsed && !peeking && !menuOpen;
+  const canPeek = isCollapsed && !onChat;
+  const compact = isCollapsed && !(peeking && canPeek) && !menuOpen;
   const searchParams = useSearchParams();
   const underPrompts = pathname.startsWith(PROMPTS_BASE);
   // Each submenu (Prompts, Content): remembered per browser, open until closed,
@@ -237,6 +246,23 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => () => clearTimeout(peekTimer.current), []);
+
+  // An open peek closes on Escape and on a click outside the sidebar.
+  useEffect(() => {
+    if (!peeking) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPeeking(false);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (!asideRef.current?.contains(e.target as Node | null)) setPeeking(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [peeking]);
 
   // When the menu is longer than the window, the current page's item is
   // scrolled into view, so it is never hidden below the fold: on every page
@@ -311,7 +337,7 @@ export function Sidebar() {
   const logoSrc = mounted && resolvedTheme === 'dark' ? '/logo_dark.svg' : '/logo_light.svg';
 
   function handleMouseEnter() {
-    if (!isCollapsed) return;
+    if (!canPeek) return;
     clearTimeout(peekTimer.current);
     peekTimer.current = setTimeout(() => setPeeking(true), PEEK_DELAY_MS);
   }
@@ -368,7 +394,7 @@ export function Sidebar() {
         onMouseLeave={handleMouseLeave}
         // Keyboard users open a collapsed sidebar by tabbing into it, as
         // pointer users do by hovering.
-        onFocus={() => isCollapsed && setPeeking(true)}
+        onFocus={() => canPeek && setPeeking(true)}
         onBlur={(e) => {
           if (!asideRef.current?.contains(e.relatedTarget as Node | null)) setPeeking(false);
         }}
@@ -685,7 +711,15 @@ export function Sidebar() {
                         {...prefetchOnIntent(linkHref)}
                         data-nav-item="link"
                         aria-current={isActive ? 'page' : undefined}
-                        aria-label={iconName}
+                        // Icons alone: the link's name, as its tooltip says it.
+                        aria-label={
+                          iconName ??
+                          (compact
+                            ? effectiveBadge
+                              ? `${label} (${effectiveBadge})`
+                              : label
+                            : undefined)
+                        }
                         onClick={dot ? () => dots.clicked(dot, compact) : undefined}
                       >
                         <span
