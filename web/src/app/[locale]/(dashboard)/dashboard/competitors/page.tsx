@@ -67,6 +67,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
+import { engineCount, engineRows, lowSample } from '@/lib/competitors/prompt-engines';
 import {
   Plus,
   Sparkles,
@@ -144,6 +145,21 @@ function ModelBadge({ model, platform }: { model: string; platform?: string }) {
       <AIProviderAvatar provider={provider} />
       <span className="text-xs">{getModelDisplayName(model, platform)}</span>
     </span>
+  );
+}
+
+/** A score from fewer than 10 runs (D8, UX audit CP-05). */
+function LowSampleBadge() {
+  const t = useTranslations('competitors');
+  return (
+    <Badge
+      variant="outline"
+      data-slot="low-sample"
+      title={t('h2h.lowSampleTip')}
+      className="border-amber-200 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+    >
+      {t('h2h.lowSample')}
+    </Badge>
   );
 }
 
@@ -644,6 +660,7 @@ function ModelSubGroup({
   loadRuns,
   brandName,
   competitorName,
+  showModel = false,
 }: {
   group: HeadToHeadGroup;
   expanded: boolean;
@@ -652,9 +669,12 @@ function ModelSubGroup({
   loadRuns: LoadRuns;
   brandName: string;
   competitorName: string;
+  /** Its location shows twice under its engine: name the model (CP-05). */
+  showModel?: boolean;
 }) {
   const t = useTranslations('competitors');
   const hasHistory = group.runs > 1;
+  const model = MODEL_LABELS[group.modelUsed] ?? group.modelUsed;
   const [runs, setRuns] = useState<HeadToHeadRun[] | null>(null);
   const [runsFailed, setRunsFailed] = useState(false);
   const [openingLatest, setOpeningLatest] = useState(false);
@@ -712,16 +732,16 @@ function ModelSubGroup({
             !hasHistory && 'opacity-0',
           )}
         />
+        {/* A location under its engine (CP-05): the engine is the heading above. */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <ModelBadge model={group.modelUsed || group.platform} platform={group.platform} />
-          {group.region && (
-            <Badge variant="outline" className="text-[10px]">
-              {group.region}
-            </Badge>
-          )}
+          <Badge variant="outline" className="text-[10px]">
+            {group.region ?? t('h2h.noLocation')}
+          </Badge>
+          {showModel && model && <span className="text-[10px] text-muted-foreground">{model}</span>}
           <span className="text-[10px] text-muted-foreground tabular-nums ms-1">
-            {group.runs} run{group.runs !== 1 ? 's' : ''}
+            {t('h2h.runs', { count: group.runs })}
           </span>
+          {lowSample(group.runs) && <LowSampleBadge />}
         </div>
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-end">
@@ -903,10 +923,12 @@ function PromptComparisonGrouped({
                     </Badge>
                   )}
                   <span className="text-[11px] text-muted-foreground">
-                    {modelGroups.length} platform
-                    {modelGroups.length !== 1 ? 's' : ''} · {group.runs} result
-                    {group.runs !== 1 ? 's' : ''}
+                    {t('h2h.promptCounts', {
+                      engines: engineCount(modelGroups),
+                      runs: group.runs,
+                    })}
                   </span>
+                  {lowSample(group.runs) && <LowSampleBadge />}
                 </div>
               </div>
               <div className="flex items-center gap-4 shrink-0">
@@ -927,22 +949,52 @@ function PromptComparisonGrouped({
 
             {/* Platform/Model sub-groups */}
             {isOpen && (
-              <div className="border-t px-3 py-2 space-y-1.5 bg-muted/10">
-                {modelGroups.map((mg) => {
-                  const compositeKey = `${group.promptId}::${mg.rawPlatform ?? ''}|${mg.rawModelUsed ?? ''}|${mg.region ?? ''}`;
-                  return (
-                    <ModelSubGroup
-                      key={compositeKey}
-                      group={mg}
-                      expanded={expandedModels.has(compositeKey)}
-                      onToggle={() => toggleModel(compositeKey)}
-                      onViewResult={onViewResult}
-                      loadRuns={loadRuns}
-                      brandName={brandName}
-                      competitorName={competitorName}
-                    />
-                  );
-                })}
+              <div className="border-t px-3 py-2 space-y-3 bg-muted/10">
+                {/* Each engine once, its locations under it (UX audit CP-05). */}
+                {(() => {
+                  const { engines, twice } = engineRows(modelGroups);
+                  return engines.map((engine) => (
+                    <div key={engine.platform} data-slot="h2h-engine" className="space-y-1.5">
+                      <div className="flex items-center gap-3 px-1">
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <ModelBadge model={engine.platform} platform={engine.platform} />
+                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                            {t('h2h.engineCounts', {
+                              locations: engine.locations,
+                              runs: engine.runs,
+                            })}
+                          </span>
+                          {lowSample(engine.runs) && <LowSampleBadge />}
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0 pe-10">
+                          <p className="text-xs font-semibold tabular-nums">{engine.brandScore}</p>
+                          <p className="text-xs font-semibold tabular-nums">
+                            {engine.competitorScore}
+                          </p>
+                          <div className="min-w-[48px] text-end">
+                            <DiffBadge diff={engine.diff} />
+                          </div>
+                        </div>
+                      </div>
+                      {engine.rows.map((mg) => {
+                        const compositeKey = `${group.promptId}::${mg.rawPlatform ?? ''}|${mg.rawModelUsed ?? ''}|${mg.region ?? ''}`;
+                        return (
+                          <ModelSubGroup
+                            key={compositeKey}
+                            group={mg}
+                            expanded={expandedModels.has(compositeKey)}
+                            onToggle={() => toggleModel(compositeKey)}
+                            onViewResult={onViewResult}
+                            loadRuns={loadRuns}
+                            brandName={brandName}
+                            competitorName={competitorName}
+                            showModel={twice.has(mg)}
+                          />
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
               </div>
             )}
           </div>

@@ -16032,7 +16032,13 @@
       "noPromptData": "No prompt-level data available. Run a tracking check first.",
       "noDataTitle": "No comparison data",
       "noDataDescription": "Run a tracking check from Visibility to generate comparison data for this competitor.",
-      "loadError": "Failed to load comparison data."
+      "loadError": "Failed to load comparison data.",
+      "promptCounts": "{engines, plural, one {# platform} other {# platforms}} · {runs, plural, one {# run} other {# runs}}",
+      "engineCounts": "{locations, plural, one {# location} other {# locations}} · {runs, plural, one {# run} other {# runs}}",
+      "runs": "{count, plural, one {# run} other {# runs}}",
+      "noLocation": "No location",
+      "lowSample": "Low sample",
+      "lowSampleTip": "Fewer than 10 runs: one answer can move this score a lot."
     },
     "timeline": {
       "title": "{competitor}'s pages over time",

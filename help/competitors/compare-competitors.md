@@ -56,9 +56,9 @@ A prompt with several platforms opens to show each one.
 
 ## Prompt-by-Prompt Comparison
 
-**Prompt-by-Prompt Comparison** lists every prompt with **You**, **Them** and **Diff**, the most recently run first.
+**Prompt-by-Prompt Comparison** lists every prompt with **You**, **Them** and **Diff**, the most recently run first, and how many platforms and runs it has.
 
-Click a prompt to see each platform, with its model and region, and how many runs it has. Click a platform with more than one run to see its **Previous runs**, with the date, both scores, the difference and the sentiment. The eye icon opens an AI answer.
+Click a prompt to see each platform once, with its scores, and its locations under it, each with its runs. A location answered by two models names the model. A score from fewer than 10 runs is marked **Low sample**: one answer can move it a lot. Click a location with more than one run to see its **Previous runs**, with the date, both scores, the difference and the sentiment. The eye icon opens an AI answer.
 
 **Export CSV** beside the comparison's title downloads it per prompt and platform: the model, region, runs, both scores, the difference and the latest run.
 
