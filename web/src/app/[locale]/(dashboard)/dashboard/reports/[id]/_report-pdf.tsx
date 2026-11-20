@@ -35,6 +35,7 @@ import { getPlatformName } from '@/lib/traffic-platforms';
 import { withInter } from '@/lib/pdf-font';
 import { auditScoreView } from '@/lib/reports/audit-score';
 import { shownMentionEvidence } from '@/lib/reports/mention-evidence';
+import { visibilityKpis } from '@/lib/reports/visibility-kpis';
 import type { ScoreRange } from '@/lib/audit/score-range';
 import { reportLook, type ReportBranding } from '@/lib/white-label/kit';
 
@@ -296,8 +297,8 @@ export function ReportPdfDocument({
   const maxSov = Math.max(...(payload.shareOfVoice?.byPlatform.map((p) => p.sov) ?? []), 1);
   const trend = payload.visibilityTrend ?? [];
   const hasCompetitorTrend = trend.some((d) => d.competitors !== null);
-  // Reports generated before #492 have no `visibilityRate` — fall back to
-  // the old score-only KPI box so those snapshots keep rendering unchanged.
+  // The Visibility score (out of 100, no %) and Prompts with a mention lead,
+  // as on the report page; reports from before a field have only what they kept.
   const kpiEntries: {
     label: string;
     value: string;
@@ -306,30 +307,16 @@ export function ReportPdfDocument({
     sub?: string;
   }[] = payload.insights
     ? [
-        ...(payload.visibilityRate
-          ? [
-              {
-                label: 'Visibility',
-                value:
-                  typeof payload.visibilityRate.score === 'number'
-                    ? String(payload.visibilityRate.score)
-                    : `${payload.visibilityRate.ratePct}%`,
+        ...visibilityKpis(payload.visibilityRate).map((tile) =>
+          tile.kind === 'score'
+            ? { label: 'Visibility score', value: `${tile.score}/100`, change: null }
+            : {
+                label: 'Prompts with a mention',
+                value: `${tile.ratePct}%`,
                 change: null,
-                sub: `${payload.visibilityRate.visiblePrompts}/${payload.visibilityRate.promptCount} prompts`,
+                sub: `${tile.visible} of ${tile.total} prompts`,
               },
-              {
-                label: 'Avg. Score',
-                value: `${payload.insights.avgVisibilityScore}%`,
-                change: payload.insights.visibilityChange,
-              },
-            ]
-          : [
-              {
-                label: 'Visibility',
-                value: `${payload.insights.avgVisibilityScore}%`,
-                change: payload.insights.visibilityChange,
-              },
-            ]),
+        ),
         {
           label: 'Mentions',
           value: String(payload.insights.totalMentions),
@@ -367,6 +354,7 @@ export function ReportPdfDocument({
     typeof payload.competitors[0].visibilityRate === 'number' &&
     typeof payload.competitors[0].promptCount === 'number',
   );
+  const hasCompetitorScore = Boolean(payload.competitors?.some((c) => typeof c.score === 'number'));
 
   return (
     <Document title={report.title} author={look.author} creator={look.author}>
@@ -476,7 +464,11 @@ export function ReportPdfDocument({
             <View style={styles.tableHeader}>
               <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Brand</Text>
               <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
-                Visibility
+                {hasCompetitorScore
+                  ? 'Visibility score'
+                  : hasCompetitorVisibilityRate
+                    ? 'Prompts with a mention'
+                    : 'Avg. Score'}
               </Text>
               <Text style={[styles.tableHeaderCell, { width: 50, textAlign: 'right' }]}>
                 Change
@@ -504,7 +496,9 @@ export function ReportPdfDocument({
                   <Text style={styles.cell}>
                     {typeof c.score === 'number'
                       ? c.score
-                      : `${hasCompetitorVisibilityRate ? c.visibilityRate : c.avgVisibilityScore}%`}
+                      : hasCompetitorVisibilityRate
+                        ? `${c.visibilityRate}%`
+                        : c.avgVisibilityScore}
                   </Text>
                   {hasCompetitorVisibilityRate && (
                     <Text style={styles.kpiSub}>
@@ -513,7 +507,7 @@ export function ReportPdfDocument({
                   )}
                 </View>
                 <View style={{ width: 50, alignItems: 'flex-end' }}>
-                  <DeltaText value={c.change} />
+                  <DeltaText value={typeof c.score === 'number' ? c.scoreChange : c.change} />
                 </View>
                 <Text style={[styles.cell, { width: 55, textAlign: 'right' }]}>
                   {c.totalMentions}

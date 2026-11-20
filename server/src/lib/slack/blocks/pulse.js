@@ -15,11 +15,11 @@ import { clip, link, mrkdwn } from './format.js';
 const MAX_ITEMS = 5;
 const MAX_SECTION = 2900;
 
-/** "▲ +2.1", "▼ -4" or nothing, for a KPI's change. */
-function change(value) {
+/** "▲ +2.1", "▼ -4" or nothing, for a KPI's change; `suffix` words it. */
+function change(value, suffix = '') {
   if (value === null || value === undefined) return '';
   const rounded = Math.round(value * 10) / 10;
-  return ` ${rounded >= 0 ? '▲' : '▼'} ${signed(rounded)}`;
+  return ` ${rounded >= 0 ? '▲' : '▼'} ${signed(rounded)}${suffix}`;
 }
 
 function highlightLine(h) {
@@ -27,9 +27,9 @@ function highlightLine(h) {
     case 'first_citation':
       return `First citation for ${h.url ? link(h.url, h.label || h.url) : mrkdwn(h.label)}${h.promptText ? ` — “${mrkdwn(h.promptText)}”` : ''}`;
     case 'prompt_gain':
-      return `“${mrkdwn(h.promptText)}” gained *${mrkdwn(signed(h.gain, ' pts'))}* visibility this week`;
+      return `“${mrkdwn(h.promptText)}” gained *${mrkdwn(signed(h.gain, ' pts'))}* visibility score in the last 7 days, vs the 7 days before`;
     case 'competitor_overtaken':
-      return `You overtook *${mrkdwn(h.competitorName)}* on the leaderboard (${mrkdwn(h.brandRate)} vs ${mrkdwn(h.competitorRate)})`;
+      return `You overtook *${mrkdwn(h.competitorName)}* on the leaderboard in the last 7 days (visibility score ${mrkdwn(h.brandRate)} vs ${mrkdwn(h.competitorRate)})`;
     case 'new_engine':
       return `First appearance on *${mrkdwn(platformLabel(h.platform))}*`;
     default:
@@ -40,13 +40,13 @@ function highlightLine(h) {
 function warningLine(w) {
   switch (w.type) {
     case 'sharp_drop':
-      return `Visibility score dropped sharply: *${mrkdwn(w.from)} → ${mrkdwn(w.to)}* week-over-week`;
+      return `Visibility score dropped sharply: *${mrkdwn(w.from)} → ${mrkdwn(w.to)}* from the 7 days before to the last 7 days`;
     case 'visibility_slipping':
-      return `Visibility is slipping: *${mrkdwn(w.from)} → ${mrkdwn(w.to)}* week-over-week`;
+      return `Visibility score is slipping: *${mrkdwn(w.from)} → ${mrkdwn(w.to)}* from the 7 days before to the last 7 days`;
     case 'competitor_surge':
-      return `*${mrkdwn(w.competitorName)}* surged from ${mrkdwn(w.from)} to ${mrkdwn(w.to)} week-over-week`;
+      return `*${mrkdwn(w.competitorName)}* surged from ${mrkdwn(w.from)} (the 7 days before) to ${mrkdwn(w.to)} (the last 7 days)`;
     case 'competitor_crossed':
-      return `*${mrkdwn(w.competitorName)}* crossed above your visibility score (${mrkdwn(w.competitorRate)} vs ${mrkdwn(w.brandRate)})`;
+      return `*${mrkdwn(w.competitorName)}* crossed above your visibility score in the last 7 days (${mrkdwn(w.competitorRate)} vs ${mrkdwn(w.brandRate)})`;
     case 'lost_citations':
       return `High-volume prompt “${mrkdwn(w.promptText)}” has stopped citing you for 3 runs in a row`;
     default:
@@ -72,15 +72,19 @@ export function pulseMessage({ brandName, metrics, insightsUrl, settingsUrl }) {
   const { kpis, highlights = [], warnings = [], degradedPlatforms = [], windowDays } = metrics;
   const weekly = windowDays === 7;
   const title = weekly ? 'Weekly Pulse' : 'Daily Pulse';
-  const text = `${mrkdwn(brandName)} ${title}: visibility ${kpis.visibilityRate} (${signed(kpis.weekTrend)} pts this week)`;
+  const period = weekly ? 'last 7 days' : 'last 24 hours';
+  const text = `${mrkdwn(brandName)} ${title}: visibility score ${kpis.visibilityRate}/100, 7-day average ${kpis.weekRate}/100 (${signed(kpis.weekTrend)} pts)`;
 
   const fields = [
-    ['Visibility', String(kpis.visibilityRate)],
-    ['7-day trend', `${kpis.weekRate}${change(kpis.weekTrend)}`],
+    ['Visibility score', `${kpis.visibilityRate}/100`],
+    ['7-day average', `${kpis.weekRate}/100${change(kpis.weekTrend, ' pts vs the 7 days before')}`],
     ['Mentions', `${kpis.mentions}${change(kpis.mentionsChange)}`],
     ['Citations', `${kpis.citations}${change(kpis.citationsChange)}`],
     ['Positive sentiment', `${kpis.sentimentPct}%${change(kpis.sentimentChange)}`],
-    ['Prompts you appear in', `${kpis.visiblePrompts}/${kpis.promptCount}`],
+    [
+      'Prompts with a mention',
+      `${kpis.visiblePrompts} of ${kpis.promptCount}\n${kpis.promptCount} ${kpis.promptCount === 1 ? 'prompt' : 'prompts'} with answers in the ${period}`,
+    ],
   ].map(([label, value]) => ({ type: 'mrkdwn', text: `*${label}*\n${mrkdwn(value)}` }));
 
   const blocks = [
@@ -90,7 +94,7 @@ export function pulseMessage({ brandName, metrics, insightsUrl, settingsUrl }) {
       elements: [
         {
           type: 'mrkdwn',
-          text: `How ${mrkdwn(brandName)} showed up in AI answers over the ${weekly ? 'last 7 days' : 'last 24 hours'}.`,
+          text: `How ${mrkdwn(brandName)} showed up in AI answers over the ${period}. A line that covers another period names it.`,
         },
       ],
     },

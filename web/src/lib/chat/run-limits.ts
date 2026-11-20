@@ -108,6 +108,8 @@ export function readBudget(
 export const RESULT_CHARS: Readonly<Record<string, number>> = {
   // A saved report is read whole: its sections are the point (mcp-wrapped-reads.ts).
   get_report: 20_000,
+  // One action whole: its affected prompts by name beside its tasks, signals and events (CH-02).
+  get_action: 20_000,
   list_action_center_tasks: 20_000,
   // Every day of a trend (scope.ts TREND_ROWS): 90 days by day, as the Overview's trend, whole.
   get_visibility_trend: 20_000,

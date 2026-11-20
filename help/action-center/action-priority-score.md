@@ -1,11 +1,11 @@
 ---
 title: Action Priority Score
 route: /dashboard/action-center/actions
-keywords: [priority score, priority level, critical, why this priority, action ranking]
+keywords: [priority score, priority level, critical, why this priority, action ranking, low confidence]
 synonyms: [action priority, ranking, how actions are sorted, urgency]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-31
+updated: 2026-11-20
+last_checked: 2026-11-20
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -45,6 +45,12 @@ An action sent from another page has no detection signals, so it is scored from 
 ## Why this priority?
 
 The action's **Overview** tab starts with **Why this priority?**: one sentence written from the facts the score rests on. It says what changed, on what, how recently, and what makes it matter. When past success moves the score by a point or more, it says so too.
+
+## Low confidence
+
+When an action's score rests on little evidence, such as one kind of finding from one source, a **Low confidence** tag sits next to its score in the **Actions** list and next to **Why this priority?** in the open action. Hover or focus the tag to see why.
+
+The score itself doesn't change. Confidence is only one part of it, so an action with strong impact and demand can still rank high. Check what it found before you act on it.
 
 ## Not the Content Plan's score
 

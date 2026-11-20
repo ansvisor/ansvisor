@@ -310,6 +310,8 @@ export async function exportActionFor(
       createdAt: action.createdAt,
       dueDate: action.dueDate,
       payload: action.payload ?? {},
+      // As in the drawer: the counts, goal and demand match the Affected rows.
+      affected,
     },
     t.story,
     {
