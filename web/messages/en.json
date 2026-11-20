@@ -14830,7 +14830,7 @@
     "info": {
       "button": "How Ansvisor works with prompts",
       "whatTitle": "What's a prompt?",
-      "whatText": "A question or a request your potential customers type into an AI assistant like ChatGPT or Gemini, such as <example>\"What's the best open-source AEO tool?\"</example> or <example>\"Compare the best AEO platforms for a small team\"</example>",
+      "whatText": "A question or a request your potential customers type into an AI assistant like ChatGPT or Gemini, such as <example>\"What's the best open-source AEO tool?\"</example> or <example>\"Compare the best AEO platforms\"</example>",
       "howTitle": "How Ansvisor works",
       "systemsLine": "Smart AI systems work for you in the background, every day.",
       "steps": {
