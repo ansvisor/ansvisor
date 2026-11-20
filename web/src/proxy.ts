@@ -3,13 +3,8 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { routing } from '@/i18n/routing';
 import { updateSession } from '@/lib/supabase/middleware';
 import { nextFromRequest } from '@/lib/auth-next';
-import {
-  UI_LOCALE_COOKIE,
-  UI_LOCALE_COOKIE_MAX_AGE,
-  formatUiLocaleCookie,
-  parseUiLocaleCookie,
-} from '@/lib/i18n/ui-locale-cookie';
-import { isUiLocale } from '@/i18n/locales';
+import { UI_LOCALE_COOKIE, UI_LOCALE_COOKIE_MAX_AGE } from '@/lib/i18n/ui-locale-cookie';
+import { uiLocaleCookieOnSignIn } from '@/lib/i18n/sign-in-locale';
 import { chatAgenticForUser, chatPathOfAgentPath } from '@/lib/chat/legacy-route';
 
 const intlMiddleware = createMiddleware(routing);
@@ -27,8 +22,9 @@ function isAuthRoute(pathname: string): boolean {
 
 /**
  * The interface language cookie (LOC-005) for a person whose cookie is missing
- * or is another person's: their profiles.ui_language (00549), or Automatic.
- * One small read, only until the cookie is set; null when nothing to set.
+ * or is another person's: their profiles.ui_language (00549), a language they
+ * picked while signing up (saved on their profile now), or Automatic. One
+ * small read, only until the cookie is set; null when nothing to set.
  */
 async function uiLocaleCookieFor(
   request: NextRequest,
@@ -36,15 +32,12 @@ async function uiLocaleCookieFor(
   supabase: Awaited<ReturnType<typeof updateSession>>['supabase'] | null,
 ): Promise<string | null> {
   if (!user || !supabase) return null;
-  const current = parseUiLocaleCookie(request.cookies.get(UI_LOCALE_COOKIE)?.value);
-  if (current && current.userId === user.id) return null;
   try {
-    const { data } = await supabase
-      .from('profiles')
-      .select('ui_language')
-      .eq('id', user.id)
-      .maybeSingle();
-    return formatUiLocaleCookie(isUiLocale(data?.ui_language) ? data.ui_language : null, user.id);
+    return await uiLocaleCookieOnSignIn(
+      request.cookies.get(UI_LOCALE_COOKIE)?.value,
+      user.id,
+      supabase,
+    );
   } catch {
     return null;
   }

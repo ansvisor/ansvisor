@@ -190,7 +190,7 @@ describe('ChatThreadView', () => {
     await render();
     expect(box().rows).toBe(2);
     expect(container.querySelector('[data-action="composer.openMode"]')!.textContent).toBe(
-      'Ask me first ▾',
+      'Run mode:Ask me first ▾',
     );
     await type('Why did citations drop?');
     await enter();
@@ -486,7 +486,7 @@ describe('ChatThreadView', () => {
     const bar = container.querySelector('[role="toolbar"][aria-label="Answer actions"]')!;
     expect(
       [...bar.querySelectorAll('[aria-label]')].map((b) => b.getAttribute('aria-label')),
-    ).toEqual(['Copy', 'Download', 'In Files', 'Open in Editor', 'Send to Action Center']);
+    ).toEqual(['Copy', 'Download', 'In Files', 'Send to Action Center']);
     // What the run made shows as its card, its page open in the editor.
     const card = container.querySelector('[data-slot="deliverable-card"]')!;
     expect(card.getAttribute('aria-label')).toBe('Pricing FAQ');
@@ -1987,12 +1987,12 @@ describe('ChatThreadView: images (W4-08b, CHAT-15 items 18 and 22)', () => {
 
   it('names the image model on the model button after an image request', async () => {
     await render({ thread: imagesThread(PICKED), variant: 'dock' });
-    expect(model()).toBe('Image · Nano Banana 2 Lite ▾');
+    expect(model()).toBe('Model:Image · Nano Banana 2 Lite ▾');
   });
 
   it('names the chat model when the latest answer wasn’t for images', async () => {
     await render({ thread: imagesThread([]), variant: 'dock' });
-    expect(model()).toBe('Auto ▾');
+    expect(model()).toBe('Model:Auto ▾');
   });
 
   it('puts a request for new images with the same model in the box on Try again', async () => {

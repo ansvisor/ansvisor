@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { ExternalLink, Search } from 'lucide-react';
 import type { PromptResultWithText } from '@/lib/actions/tracking';
@@ -30,6 +31,7 @@ export function ResponseDetail({
   variant: 'page' | 'compact';
 }) {
   const compact = variant === 'compact';
+  const t = useTranslations('responseDetail');
   const response = stripEntityMarkup(result.response);
   const searchQueries = visibleSearchQueries(result.searchQueries);
   const foldable = compact && response.length > FOLD_AT_CHARS;
@@ -38,7 +40,7 @@ export function ResponseDetail({
 
   return (
     <div className={compact ? 'space-y-4' : 'space-y-6'}>
-      <Section title="AI Response" compact={compact}>
+      <Section title={t('response')} compact={compact}>
         <div className={cn('relative', folded && 'max-h-72 overflow-hidden')}>
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <Markdown>{response}</Markdown>
@@ -54,13 +56,13 @@ export function ResponseDetail({
             className="mt-1 h-auto px-0 text-xs"
             onClick={() => setUnfolded((v) => !v)}
           >
-            {unfolded ? 'Show less' : 'Show full response'}
+            {unfolded ? t('showLess') : t('showFull')}
           </Button>
         )}
       </Section>
 
       {result.citations.length > 0 && (
-        <Section title={`Citations (${result.citations.length})`} compact={compact}>
+        <Section title={t('citations', { count: result.citations.length })} compact={compact}>
           <div className="space-y-2">
             {result.citations.map((cite, i) => (
               <a
@@ -85,7 +87,7 @@ export function ResponseDetail({
       )}
 
       {searchQueries.length > 0 && (
-        <Section title={`Query fan-out (${searchQueries.length})`} compact={compact}>
+        <Section title={t('fanOut', { count: searchQueries.length })} compact={compact}>
           <div className="space-y-2">
             {searchQueries.map((item, i) => (
               <div

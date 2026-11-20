@@ -254,3 +254,52 @@ describe('useImprove on a read-only workspace (plan not active)', () => {
     expect(actions.sendImproveToActionCenter).not.toHaveBeenCalled();
   });
 });
+
+describe('the Improve tab’s copy', () => {
+  // The messages in another language, for the words this tab shows.
+  const improve = messages.prompts.improve;
+  const other = {
+    ...messages,
+    prompts: {
+      ...messages.prompts,
+      improve: {
+        ...improve,
+        introTitle: 'Platforma özel öneriler alın',
+        introBody: 'Bu dönemin yanıtlarını inceler.',
+        generate: 'Öneri oluştur',
+        locked: {
+          title: 'Improve Growth planında',
+          body: 'Öneriler alın.',
+          upgrade: 'Planı yükselt',
+        },
+      },
+    },
+  };
+
+  const renderIn = async (improveController: ImproveController) => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="tr" messages={other}>
+          <ImproveTab improve={improveController} />
+        </NextIntlClientProvider>,
+      );
+    });
+  };
+
+  it('words the first view from the messages', async () => {
+    await renderIn(controller(null, 'growth'));
+    const text = container.textContent ?? '';
+    expect(text).toContain('Platforma özel öneriler alın');
+    expect(text).toContain('Bu dönemin yanıtlarını inceler.');
+    expect(text).toContain('Öneri oluştur');
+    expect(text).not.toContain('Generate suggestions');
+  });
+
+  it('words the locked view from the messages', async () => {
+    await renderIn({ ...controller(null, 'starter'), status: 'locked' });
+    const text = container.textContent ?? '';
+    expect(text).toContain('Improve Growth planında');
+    expect(text).toContain('Planı yükselt');
+    expect(text).not.toContain('Upgrade plan');
+  });
+});

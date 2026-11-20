@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { ArrowUpRight } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
 import { NewPill } from '@/components/agentic/new-pill';
 import { Skeleton } from '@/components/ui/skeleton';
 import { countChatSchedules } from '@/lib/actions/chat-schedules';
 import type { ChatListItem } from '@/lib/chat/conversations';
-import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
+import { AT_WORK_ROWS, chatMenuLists, inboxChats, type DayGroup } from '@/lib/chat/menu-groups';
 import { CHAT_SETTINGS_TABS } from '@/lib/chat/settings-tabs';
 import { cn } from '@/lib/utils';
 import { readAgentsSeen } from './agents/agents-seen';
@@ -140,6 +141,7 @@ function MenuItem({
   active,
   onNavigate,
   label,
+  tip,
   sub = false,
   children,
 }: {
@@ -149,6 +151,8 @@ function MenuItem({
   onNavigate?: () => void;
   /** Its name for a screen reader when the visible words and counts don't say it all. */
   label?: string;
+  /** Its tooltip. */
+  tip?: string;
   /** In the list under a row (Settings'). */
   sub?: boolean;
   children: ReactNode;
@@ -158,6 +162,7 @@ function MenuItem({
       href={href}
       data-action={action}
       aria-label={label}
+      title={tip}
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
       className={cn(
@@ -330,9 +335,9 @@ export function ChatMenuView({
     const at = nowProp ?? new Date();
     return { now: at, ...chatMenuLists(chats, at) };
   }, [chats, nowProp]);
-  // The Inbox holds the person's own chats in Agents at work: its count, with
-  // an amber dot while any needs them.
-  const inboxRows = atWork.filter((chat) => chat.mine);
+  // The Inbox holds the person's own chats at work and their unread results:
+  // its count, with an amber dot while any needs them.
+  const inboxRows = useMemo(() => inboxChats(chats), [chats]);
   const needsYou = inboxRows.filter((chat) => chat.state === 'needsYou').length;
   const inbox = inboxRows.length;
   const inboxLabel = needsYou
@@ -445,8 +450,15 @@ export function ChatMenuView({
             active={false}
             onNavigate={onNavigate}
             label={t('agentsLabel')}
+            tip={t('agentsTip')}
           >
             {t('agentsShort')}
+            {/* It leaves Chat for the Action Center (UX audit CH-05): the arrow says so. */}
+            <ArrowUpRight
+              aria-hidden
+              data-slot="leaves-chat"
+              className="size-3.5 shrink-0 text-muted-foreground"
+            />
             {agentsNew && <NewPill />}
           </MenuItem>
           <MenuItem

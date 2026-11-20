@@ -213,7 +213,7 @@ describe('exportActionFor', () => {
     expect(md).toMatch(/Why: .*Oct 9/);
   });
 
-  it("gives the Why the demand of a signal's prompt the action didn't keep", async () => {
+  it('tells the Why from the Affected rows: a signal’s prompt the action didn’t keep isn’t counted (AC-20)', async () => {
     rows.actions = [actionRow({ payload: { targetEntity: 'prompts', targetCount: 1 } })];
     // What the action kept (00244): p1 alone.
     rows.action_entities = [
@@ -225,7 +225,7 @@ describe('exportActionFor', () => {
         removed_at: null,
       },
     ];
-    // A signal about a prompt the action never kept: not listed, but the Why names it.
+    // A signal about a prompt the action never kept: neither listed nor counted.
     const [first] = rows.signals;
     rows.signals.push({
       ...first,
@@ -243,8 +243,11 @@ describe('exportActionFor', () => {
     // The list is what it kept…
     expect(md).toContain('## Affected (1)\n- Best coffee subscription? · 4.1–6.9k');
     expect(md).not.toMatch(/^- Coffee delivery near me/m);
-    // …and the Why, told from both signals, sums both prompts' demand.
-    expect(md).toMatch(/^Why: 2 prompts \(8\.2–13\.8k AI searches a month, estimated\)/m);
+    // …and the Why tells the same prompt, with the same demand.
+    expect(md).toMatch(
+      /^Why: “Best coffee subscription\?” \(4\.1–6\.9k AI searches a month, estimated\)/m,
+    );
+    expect(md).not.toMatch(/^Why: 2 prompts/m);
   });
 
   it("still writes the action when its prompts' demand can't be read, without it", async () => {

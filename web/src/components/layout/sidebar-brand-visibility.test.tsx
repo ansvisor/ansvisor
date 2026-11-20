@@ -19,7 +19,7 @@ vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams()
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/action-center', push: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   usePathname: () => nav.pathname,
-  useRouter: () => ({ push: nav.push }),
+  useRouter: () => ({ push: nav.push, prefetch: vi.fn() }),
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
       {children}

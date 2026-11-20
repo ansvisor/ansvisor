@@ -21,7 +21,15 @@ export type KpiKey =
 
 export type KpiCategory = 'visibility' | 'citations' | 'mentions' | 'traffic' | 'content';
 
-export type KpiUnit = 'percent' | 'count' | 'sessions';
+/**
+ * A KPI's unit. `points` is the Visibility score, 0–100: a score, shown as
+ * "29.9/100" and never with a % (AC-02, D2), since a % reads as a share of
+ * prompts. Percent and points are levels; counts and sessions are flows.
+ */
+export type KpiUnit = 'percent' | 'points' | 'count' | 'sessions';
+
+/** Levels hold over any window and top out at 100; flows add up over time. */
+export const isLevelUnit = (unit: KpiUnit): boolean => unit === 'percent' || unit === 'points';
 
 /**
  * Which way improvement points. Every v1 KPI grows upward, but the field is
@@ -51,7 +59,7 @@ export const KPI_REGISTRY: Record<KpiKey, KpiMeta> = {
   ai_visibility: {
     key: 'ai_visibility',
     category: 'visibility',
-    unit: 'percent',
+    unit: 'points',
     direction: 'higher_is_better',
     source: 'tracking',
     defaultTarget: 50,
@@ -144,11 +152,11 @@ export const KPI_TEMPLATES: Record<KpiTemplateKey, KpiKey[]> = {
   custom: [],
 };
 
-/** A target must be positive, and a percent target cannot exceed 100. Used
- *  by both the drawer (to gate Save) and the server action (to reject). */
+/** A target must be positive, and a percent or score target cannot exceed 100.
+ *  Used by both the drawer (to gate Save) and the server action (to reject). */
 export function isValidKpiTarget(key: KpiKey, target: number): boolean {
   if (!Number.isFinite(target) || target <= 0) return false;
-  return KPI_REGISTRY[key].unit !== 'percent' || target <= 100;
+  return !isLevelUnit(KPI_REGISTRY[key].unit) || target <= 100;
 }
 
 /** Days in a timeframe's comparison window. */
