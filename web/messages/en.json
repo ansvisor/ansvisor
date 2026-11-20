@@ -5773,7 +5773,8 @@
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
       "agents": "Agents",
       "agentsShort": "Agents",
-      "agentsLabel": "Agents · in Action Center"
+      "agentsLabel": "Agents · in Action Center",
+      "agentsTip": "Opens Action Center › Agents, outside Chat"
     },
     "actions": {
       "more": "More for {name}",
