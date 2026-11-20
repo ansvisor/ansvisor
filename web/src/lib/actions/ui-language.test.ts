@@ -69,7 +69,7 @@ describe('getUiLanguageState', () => {
     });
   });
 
-  it('offers staff every language and the test one', async () => {
+  it('offers staff every language, Arabic too, and no test language', async () => {
     preview = true;
     const state = await getUiLanguageState();
     expect(state.options).toEqual([
@@ -85,7 +85,7 @@ describe('getUiLanguageState', () => {
       'pl',
       'zh-CN',
       'ko',
-      'en-XA',
+      'ar',
     ]);
     expect(state.preview).toBe(true);
   });
@@ -136,9 +136,9 @@ describe('setUiLanguage', () => {
     expect(cookieJar.ansvisor_ui_locale).toBe('en-XA:user-1');
   });
 
-  it('refuses Arabic even to staff', async () => {
+  it('takes Arabic from staff, as any other language', async () => {
     preview = true;
-    await expect(setUiLanguage('ar')).rejects.toThrow('Unknown language');
+    await expect(setUiLanguage('ar')).resolves.toBeUndefined();
   });
 
   it('refuses anyone signed out', async () => {
@@ -167,10 +167,12 @@ describe('setSignUpUiLanguage', () => {
     expect(cookieJar).toEqual({});
   });
 
-  it('takes any selectable language and en-XA where previews are on, never a hidden one', async () => {
+  it('takes any selectable language where previews are on, Arabic too, never the test language', async () => {
     preview = true;
     await setSignUpUiLanguage('de');
     expect(cookieJar.ansvisor_ui_locale).toBe('de');
-    await expect(setSignUpUiLanguage('ar')).rejects.toThrow('Unknown language');
+    await setSignUpUiLanguage('ar');
+    expect(cookieJar.ansvisor_ui_locale).toBe('ar');
+    await expect(setSignUpUiLanguage('en-XA')).rejects.toThrow('Unknown language');
   });
 });
