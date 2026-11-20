@@ -4,7 +4,7 @@ import { sendEmail } from '../email.js';
 import { translator, uiLanguagesOf } from '../i18n.js';
 import { actionCode } from '../action-center/action-code.js';
 import { emailsOf } from '../pulse/audience.js';
-import { brandAudience, choosing } from './choices.js';
+import { brandAudience, choosing, ofActiveWorkspaces } from './choices.js';
 import { claimSend, dayKey, markSent } from './sends.js';
 import { appOrigin, notificationHtml } from './email-shell.js';
 
@@ -38,8 +38,9 @@ async function criticalSince(since) {
       'id, brand_id, action_no, brand_no, category, created_at, brands!inner(name, organization_id)',
     )
     .eq('priority_level', 'critical')
-    // Nobody is mailed about a demo brand.
+    // Nobody is mailed about a demo brand, or one turned off.
     .eq('brands.is_demo', false)
+    .eq('brands.is_active', true)
     .in('status', OPEN)
     .gte('created_at', since.toISOString())
     .order('created_at', { ascending: true });
@@ -125,7 +126,8 @@ async function readers(ids) {
 export async function sendCriticalActionAlerts(now = new Date()) {
   if (!emailReady()) return 0;
   let sent = 0;
-  for (const group of byBrand(await criticalSince(new Date(now - INSTANT_WINDOW_MS)))) {
+  const groups = byBrand(await criticalSince(new Date(now - INSTANT_WINDOW_MS)));
+  for (const group of await ofActiveWorkspaces(groups)) {
     try {
       const audience = await brandAudience(group.organizationId, group.brandId, KIND);
       for (const person of await readers(choosing(audience, 'instant'))) {
@@ -160,7 +162,8 @@ export async function sendCriticalActionSummaries(now = new Date()) {
   if (!emailReady()) return 0;
   let sent = 0;
   const day = dayKey(now);
-  for (const group of byBrand(await criticalSince(new Date(now - 24 * 60 * 60 * 1000)))) {
+  const groups = byBrand(await criticalSince(new Date(now - 24 * 60 * 60 * 1000)));
+  for (const group of await ofActiveWorkspaces(groups)) {
     try {
       const audience = await brandAudience(group.organizationId, group.brandId, KIND);
       for (const person of await readers(choosing(audience, 'daily'))) {

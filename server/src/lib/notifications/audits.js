@@ -3,7 +3,7 @@ import { logger } from '../logger.js';
 import { sendEmail } from '../email.js';
 import { translator, uiLanguagesOf } from '../i18n.js';
 import { emailsOf } from '../pulse/audience.js';
-import { brandAudience, choosing } from './choices.js';
+import { brandAudience, choosing, ofActiveWorkspaces } from './choices.js';
 import { claimSend, dayKey, markSent } from './sends.js';
 import { appOrigin, notificationHtml } from './email-shell.js';
 
@@ -60,8 +60,9 @@ async function completedSince(since) {
     .eq('status', 'completed')
     .not('total_score', 'is', null)
     .gte('completed_at', since.toISOString())
-    // Nobody is mailed about a demo brand.
+    // Nobody is mailed about a demo brand, or one turned off.
     .eq('brands.is_demo', false)
+    .eq('brands.is_active', true)
     .order('completed_at', { ascending: true });
   if (error) throw new Error(`site_audits: ${error.message}`);
   return data ?? [];
@@ -192,7 +193,7 @@ async function sendBrand({ kind, which, group, choice, dayKeyed }) {
 /** Both kinds over `audits`: finished as they are, dropped once checked against the page's last audit. */
 async function sendAll(audits, choice, dayKeyed) {
   let sent = 0;
-  for (const group of byBrand(audits)) {
+  for (const group of await ofActiveWorkspaces(byBrand(audits))) {
     try {
       sent += await sendBrand({ kind: FINISHED_KIND, which: 'finished', group, choice, dayKeyed });
       const fallen = await drops(group.audits);
