@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = vi.hoisted(() => ({ due: [], week: [] }));
+const db = vi.hoisted(() => ({ due: [], week: [], pages: 0 }));
 vi.mock('../../config/supabase.js', () => ({
   default: {
     from: () => {
@@ -13,7 +13,11 @@ vi.mock('../../config/supabase.js', () => ({
         eq: () => chain,
         order: () => chain,
         or: () => ((kind = 'week'), chain),
-        then: (resolve) => resolve({ data: kind === 'week' ? db.week : db.due, error: null }),
+        // PostgREST's pages: at most 1,000 rows a request.
+        range: async (from, to) => {
+          db.pages += 1;
+          return { data: (kind === 'week' ? db.week : db.due).slice(from, to + 1), error: null };
+        },
       };
       return chain;
     },
@@ -23,6 +27,7 @@ const audience = vi.hoisted(() => ({ map: new Map() }));
 vi.mock('./choices.js', async (importOriginal) => ({
   ...(await importOriginal()),
   brandAudience: async () => audience.map,
+  ofActiveWorkspaces: async (groups) => groups,
 }));
 const claims = vi.hoisted(() => ({ taken: new Set() }));
 vi.mock('./sends.js', async (importOriginal) => ({
@@ -66,6 +71,7 @@ beforeEach(() => {
   vi.stubEnv('RESEND_FROM_EMAIL', 'hi@ansvisor.test');
   db.due = [];
   db.week = [];
+  db.pages = 0;
   claims.taken = new Set();
   sendEmail.mockClear();
 });
@@ -137,5 +143,17 @@ describe('Weekly action summary (weekly_actions)', () => {
     // The highest priority first.
     expect(mail.html.indexOf('AC-02')).toBeLessThan(mail.html.indexOf('AC-01'));
     expect(await sendWeeklyActions(MONDAY)).toBe(0);
+  });
+});
+
+describe('more actions than one page (PostgREST’s 1,000 rows)', () => {
+  it('reads every page, so the weekly summary counts them all', async () => {
+    db.week = Array.from({ length: 1200 }, (_, i) =>
+      action(`a${i}`, i + 1, { status: 'new', priority_score: i }),
+    );
+    audience.map = new Map([['ana', 'weekly']]);
+    expect(await sendWeeklyActions(MONDAY)).toBe(1);
+    expect(db.pages).toBe(2);
+    expect(sendEmail.mock.calls[0][0].html).toMatch(/1,?200 are open/);
   });
 });

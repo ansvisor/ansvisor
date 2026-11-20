@@ -17,10 +17,12 @@ vi.mock('../../config/supabase.js', () => ({
     },
   },
 }));
-const audience = vi.hoisted(() => ({ map: new Map() }));
+const audience = vi.hoisted(() => ({ map: new Map(), canceled: new Set() }));
 vi.mock('./choices.js', async (importOriginal) => ({
   ...(await importOriginal()),
   brandAudience: async () => audience.map,
+  ofActiveWorkspaces: async (groups) =>
+    groups.filter((group) => !audience.canceled.has(group.organizationId)),
 }));
 const claims = vi.hoisted(() => ({ taken: new Set(), sent: [] }));
 vi.mock('./sends.js', async (importOriginal) => ({
@@ -68,6 +70,7 @@ beforeEach(() => {
     ['bo', 'daily'],
     ['cy', 'off'],
   ]);
+  audience.canceled = new Set();
   claims.taken = new Set();
   claims.sent = [];
   sendEmail.mockClear();
@@ -98,6 +101,16 @@ describe('a new Critical action (critical_action)', () => {
     vi.stubEnv('RESEND_API_KEY', '');
     claims.taken.clear();
     expect(await sendCriticalActionAlerts()).toBe(0);
+  });
+
+  it('mails nothing for a workspace whose plan is canceled', async () => {
+    db.actions = [action('a1', 12)];
+    audience.canceled = new Set(['o1']);
+    expect(await sendCriticalActionAlerts(new Date('2026-11-20T10:00:00Z'))).toBe(0);
+    db.drafts = [{ id: 'd1', brand_id: 'b1', title: 'x', updated_at: '', brands: brand }];
+    audience.map = new Map([['ana', 'daily']]);
+    expect(await sendDraftsReview(new Date('2026-11-17T08:00:00Z'))).toBe(0);
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it('sends the day’s actions in one e-mail per brand to those who chose Daily summary', async () => {

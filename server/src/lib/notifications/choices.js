@@ -1,6 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { brandReaders } from '../access.js';
+import { isSubscriptionActive } from '../../config/plans.js';
 
 /**
  * Who gets a notification e-mail of a brand, and how often (Settings ›
@@ -62,6 +63,33 @@ export async function brandAudience(organizationId, brandId, kind) {
     if (choice) choices.set(id, choice);
   }
   return choices;
+}
+
+/**
+ * Of `orgIds`, the workspaces whose plan is active or trialing, as the Pulse
+ * checks (self-hosted, every one): a canceled workspace is mailed nothing.
+ * @param {Iterable<string>} orgIds
+ * @returns {Promise<Set<string>>}
+ */
+export async function activeOrgIds(orgIds) {
+  const ids = [...new Set(orgIds)];
+  if (ids.length === 0) return new Set();
+  const { data, error } = await supabaseAdmin
+    .from('organizations')
+    .select('id, subscription_status')
+    .in('id', ids);
+  if (error) throw new Error(`organizations: ${error.message}`);
+  return new Set(
+    (data ?? [])
+      .filter((org) => isSubscriptionActive(org.subscription_status))
+      .map((org) => org.id),
+  );
+}
+
+/** `groups` (each with its organizationId) of workspaces that are active. */
+export async function ofActiveWorkspaces(groups) {
+  const active = await activeOrgIds(groups.map((group) => group.organizationId));
+  return groups.filter((group) => active.has(group.organizationId));
 }
 
 /** The ids of the people whose choice is `frequency`. */
