@@ -14,6 +14,55 @@
     "upgrade": "Upgrade",
     "choosePlan": "Choose a plan"
   },
+  "locationPicker": {
+    "label": "Locations",
+    "tracked": "tracked",
+    "count": "· {count} {noun}",
+    "countOf": "· {count} of {max} available",
+    "country": "Country",
+    "countryMissing": "Country · not on {engines}",
+    "usState": "United States · state",
+    "city": "City · {country}",
+    "atCap": "Plan limit reached",
+    "add": "Add a country, US state or city",
+    "search": "Search locations…",
+    "empty": "No locations match.",
+    "already": "Already {noun}",
+    "atCapHint": "Plan limit reached — remove a location or upgrade",
+    "remove": "Remove {location}",
+    "cityNote": "A city is asked by Google AI Mode, AI Overview and the API models. ChatGPT, Gemini and Grok answer per country, so track the country too to see them."
+  },
+  "promptCard": {
+    "save": "Save changes",
+    "cancelEdit": "Cancel edit",
+    "edit": "Edit prompt",
+    "delete": "Delete prompt",
+    "deleteTitle": "Delete Prompt",
+    "deleteBody": "Are you sure you want to delete this prompt? This action cannot be undone.",
+    "cancel": "Cancel",
+    "confirmDelete": "Delete"
+  },
+  "brandGuard": {
+    "noBrandsTitle": "No brands yet",
+    "noBrandsBody": "Create your first brand to start tracking how AI engines talk about you.",
+    "createBrand": "Create Brand",
+    "selectTitle": "Select a brand",
+    "selectBody": "Choose which brand you want to work with."
+  },
+  "runSingle": {
+    "title": "Run Single Prompt",
+    "description": "Pick a prompt to test. Only that prompt will run across your enabled platforms.",
+    "empty": "No active prompts found. Add prompts in brand settings first.",
+    "loadFailed": "Failed to load prompts",
+    "runFailed": "Failed to run prompt"
+  },
+  "responseDetail": {
+    "response": "AI Response",
+    "showLess": "Show less",
+    "showFull": "Show full response",
+    "citations": "Citations ({count})",
+    "fanOut": "Query fan-out ({count})"
+  },
   "serverErrors": {
     "invalid": "That didn't go through: something in it isn't valid. Check it and try again.",
     "too_large": "That's too large. Try something smaller.",
