@@ -5274,7 +5274,7 @@
         },
         {
           "heading": "Sections",
-          "text": "The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, AI-sourced pipeline, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. **AI-sourced pipeline** comes with the Growth plan and above. The AI executive summary is always included: it isn't a section you pick. If it can't be written, the report is saved with its figures and no summary."
+          "text": "The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, AI-sourced pipeline, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. **AI-sourced pipeline** comes with the Growth plan and above. The AI executive summary is always included: it isn't a section you pick. If it can't be written, the report is saved with its figures and no summary. A section that can't be gathered is tried once more; if it still fails, the report is saved without it and doesn't mention it, so nothing in it tells a client data is missing. Admins see a short note about it above the report, which the PDF leaves out."
         },
         {
           "heading": "Read a report",
