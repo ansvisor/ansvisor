@@ -4,7 +4,7 @@ route: /dashboard/action-center/actions
 keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number, action code, previously, translated, your language]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work, order actions, newest first, oldest first]
 plan: all
-updated: 2026-11-19
+updated: 2026-11-20
 last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
@@ -21,10 +21,10 @@ What to do today is on the **Today** tab: **Today's focus** lists your three hig
 
 When Chat is on, the **Agent work** gear beside **Today's focus** sets how far your workspace's agents go without a person:
 
-- **I approve first**, where every workspace starts: every change an agent makes waits for someone to approve it, whatever the agent's mode.
-- **Agent starts on its own**: each agent works in its own mode, **Ask me first**, **Auto** or **Full auto**.
+- **I approve first**, where every workspace starts: each change an agent makes waits for someone's OK.
+- **Agent starts on its own**: each agent follows its own mode, **Ask me first**, **Auto** or **Full auto**.
 
-Neither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. It is also in **Settings › Chat**.
+Either way, agents always ask before publishing or sending. The exception is an agent an Admin has allowed to publish and send on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. The panel opens above the gear, clear of the focus rows' buttons. It is also in **Settings › Chat**.
 
 ## Action categories
 

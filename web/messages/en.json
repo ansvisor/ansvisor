@@ -1881,14 +1881,15 @@
       "choices": {
         "approve_first": {
           "label": "I approve first",
-          "note": "Every change an agent makes waits for someone's approval, whatever the agent's mode."
+          "note": "Each change an agent makes waits for someone's OK."
         },
         "auto_start": {
           "label": "Agent starts on its own",
-          "note": "Each agent works in its own mode: Ask me first, Auto or Full auto."
+          "note": "Each agent follows its own mode: Ask me first, Auto or Full auto."
         }
       },
-      "goLive": "Neither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own.",
+      "goLive": "Agents always ask before publishing or sending.",
+      "goLiveAdmin": "The exception: an agent an Admin has allowed to publish and send on its own.",
       "changedBy": "Changed by {name} · {date}",
       "someone": "someone no longer in the workspace",
       "neverChanged": "Not changed yet: every workspace starts on I approve first.",
