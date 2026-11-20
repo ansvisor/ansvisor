@@ -1145,6 +1145,7 @@
         "goal_reached": "Goal Reached"
       },
       "pointsChange": "{value} pts",
+      "score": "{value}/100",
       "vsGoalAria": "{progress}% of goal",
       "editKpis": "Edit KPIs",
       "addKpi": "Add KPI",
@@ -1217,7 +1218,8 @@
       },
       "targets": "Targets",
       "targetAria": "Target for {name}",
-      "invalidTarget": "Targets must be positive; percent targets can't exceed 100.",
+      "invalidTarget": "Targets must be positive; percent and score targets can't exceed 100.",
+      "scoreSuffix": "/100",
       "callout": {
         "title": "This KPI framework will drive your Action Center.",
         "description": "Actions and recommendations are prioritized based on your KPI goals."

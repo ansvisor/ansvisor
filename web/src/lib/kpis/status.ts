@@ -1,4 +1,4 @@
-import type { KpiDirection, KpiUnit } from './registry';
+import { isLevelUnit, type KpiDirection, type KpiUnit } from './registry';
 
 /**
  * Status is derived, never stored. A stored badge can go stale against the
@@ -63,8 +63,8 @@ export function isImprovement(change: number, direction: KpiDirection): boolean 
  * The target to hold a KPI against when the viewed window differs from the
  * goal's own timeframe. Flow metrics (counts, sessions) accumulate, so a
  * monthly 100 viewed over a week is ~23 — the week's slice of the goal.
- * Percent metrics are levels, not flows: a 50% visibility goal is 50% over
- * any window, so it never scales.
+ * Percent and score metrics are levels, not flows: a visibility goal of 50
+ * is 50 over any window, so it never scales.
  */
 export function scaleTargetToWindow(
   target: number,
@@ -72,6 +72,6 @@ export function scaleTargetToWindow(
   windowDays: number,
   timeframeDays: number,
 ): number {
-  if (unit === 'percent' || windowDays <= 0 || timeframeDays <= 0) return target;
+  if (isLevelUnit(unit) || windowDays <= 0 || timeframeDays <= 0) return target;
   return Math.max(1, Math.round(target * (windowDays / timeframeDays)));
 }

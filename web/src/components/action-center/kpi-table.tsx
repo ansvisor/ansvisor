@@ -78,10 +78,18 @@ const STATUS_BAR: Record<KpiStatus, string> = {
   goal_reached: 'bg-emerald-500',
 };
 
-function formatKpiValue(value: number, unit: KpiSnapshot['unit']): string {
-  if (unit === 'percent') {
-    return `${Math.round(value * 10) / 10}%`;
-  }
+/**
+ * A KPI's value or target in its unit: "12.5%" for a share, "29.9/100" for
+ * the Visibility score (a score, never a %: AC-02, D2), compact counts.
+ */
+function formatKpiValue(
+  value: number,
+  unit: KpiSnapshot['unit'],
+  score: (value: number) => string,
+): string {
+  const tenth = Math.round(value * 10) / 10;
+  if (unit === 'percent') return `${tenth}%`;
+  if (unit === 'points') return score(tenth);
   return formatCompactNumber(value);
 }
 
@@ -143,6 +151,7 @@ export function KpiTable({
   const editable = Boolean(onEdit && onRemove);
   const t = useTranslations('actionCenter.kpis');
   const tRegistry = useTranslations('actionCenter.registry');
+  const scoreOf = (value: number) => t('score', { value });
 
   return (
     <div className="overflow-x-auto rounded-lg border bg-card">
@@ -182,7 +191,7 @@ export function KpiTable({
                   </div>
                 </TableCell>
                 <TableCell className="text-sm font-semibold tabular-nums">
-                  {formatKpiValue(kpi.value, kpi.unit)}
+                  {formatKpiValue(kpi.value, kpi.unit, scoreOf)}
                 </TableCell>
                 <TableCell>
                   <KpiChange snapshot={kpi} />
@@ -202,7 +211,7 @@ export function KpiTable({
                   </Badge>
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground tabular-nums">
-                  {formatKpiValue(kpi.target, kpi.unit)}
+                  {formatKpiValue(kpi.target, kpi.unit, scoreOf)}
                 </TableCell>
                 <TableCell>
                   <GoalProgress snapshot={kpi} />

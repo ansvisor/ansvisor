@@ -1,10 +1,10 @@
 ---
 title: Track KPIs in the Action Center
 route: /dashboard/action-center/kpis
-keywords: [kpis, goals, targets, edit kpis, kpi status, goal reached]
+keywords: [kpis, goals, targets, edit kpis, kpi status, goal reached, visibility score, out of 100]
 synonyms: [key metrics, objectives, set goals, performance targets]
 plan: all
-updated: 2026-11-11
+updated: 2026-11-20
 last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
@@ -16,6 +16,8 @@ sources: [docs/guides/action-center.mdx]
 ## KPIs you can track
 
 AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic and Positive Sentiment.
+
+AI Visibility is your Visibility score over the KPI period (Today shows it for the latest run): a score out of 100, such as "29.9/100", not a percentage of prompts. Its goal is out of 100 too, and its change, here and in History results, is in points. Share of Voice and Positive Sentiment are percentages.
 
 A brand that never had KPIs starts with a suggested set: AI Visibility, Citations, Mentions, Share of Voice and Positive Sentiment, plus AI Referral Traffic when Google Analytics is connected. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. It is saved the first time an admin or manager opens KPIs.
 
