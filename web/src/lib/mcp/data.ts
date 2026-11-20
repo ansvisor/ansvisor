@@ -47,9 +47,11 @@ import {
   currentPriorityReason,
   currentTaskParams,
   readEntityCounts,
+  readKeptEntities,
   withEntityCounts,
   withoutTargetIds,
 } from '@/lib/action-center/entity-counts';
+import { affectedOf, affectedSignals, type Affected } from '@/lib/action-center/affected';
 import {
   parseTaskDetails,
   withTemplateCheck,
@@ -4267,8 +4269,40 @@ export interface ActionDetailForMcp {
     depends_on: string[];
     details: ReturnType<typeof mcpTaskDetails>;
   }>;
+  /**
+   * What it is about, item by item, as the drawer's Affected tab lists it
+   * (AC-003): its prompts by text, its pages, competitors and topics. A
+   * `prompt_total` above the prompts listed counts the ones a grouped
+   * finding names no further.
+   */
+  affected: ActionAffectedForMcp;
   signals: Record<string, unknown>[];
   events: Array<{ event: string; data: Record<string, unknown>; created_at: string }>;
+}
+
+export interface ActionAffectedForMcp {
+  prompts: Array<{ id: string | null; text: string }>;
+  prompt_total: number;
+  pages: string[];
+  page_total: number;
+  competitors: string[];
+  topics: string[];
+}
+
+/**
+ * The Affected list in get_action's compact form: names and ids only, so a
+ * long one still fits beside the rest of the action (CH-02). What each row
+ * says beyond that (platforms, leaders, lost pages) is in the signals.
+ */
+export function mcpAffected(affected: Affected): ActionAffectedForMcp {
+  return {
+    prompts: affected.prompts.map((p) => ({ id: p.id, text: p.text })),
+    prompt_total: Math.max(affected.promptTotal, affected.prompts.length),
+    pages: affected.pages.map((p) => p.url),
+    page_total: Math.max(affected.pageTotal, affected.pages.length),
+    competitors: affected.competitors,
+    topics: affected.topics,
+  };
 }
 
 /** A library task's Done when from its template (AC-010), in English as the rest of the output. */
@@ -4361,7 +4395,9 @@ export async function getActionFor(
   const action = data as unknown as ActionDetailRow | null;
   if (!action || !(await mayUseBrand(auth, action.brand_id))) return null;
 
-  const [tasksRes, signalsRes, eventsRes, names, entityCounts] = await Promise.all([
+  // Every read below is keyed by this action, found above in the run's
+  // organization and a brand the person may use (CLAUDE.md rule 3).
+  const [tasksRes, signalsRes, eventsRes, names, entityCounts, kept] = await Promise.all([
     supabaseAdmin
       .from('action_tasks')
       .select(
@@ -4385,6 +4421,8 @@ export async function getActionFor(
     assigneeNames([action.assignee_id]),
     // Its list (AC-009): the count left, and what was removed since.
     readEntityCounts(supabaseAdmin, [actionId]),
+    // And its rows, for the Affected list (AC-009).
+    readKeptEntities(supabaseAdmin, action.id),
   ]);
   if (tasksRes.error) throw new Error(tasksRes.error.message);
   if (signalsRes.error) throw new Error(signalsRes.error.message);
@@ -4392,6 +4430,16 @@ export async function getActionFor(
   const payload = withEntityCounts(
     (action.payload ?? {}) as Record<string, unknown>,
     entityCounts.get(actionId),
+  );
+  const signalRows = (signalsRes.data ?? []) as Record<string, unknown>[];
+  // The Affected list as the drawer works it out (action-export.ts does the
+  // same): from the signals that support it, its kept list, its payload. The
+  // prompts' names come from the signals' payloads, so their places (where
+  // each is tracked) aren't read.
+  const affected = affectedOf(
+    affectedSignals(mapSignalRows(signalRows as unknown as SignalRow[]), action.id),
+    payload,
+    kept,
   );
 
   return {
@@ -4407,7 +4455,8 @@ export async function getActionFor(
     net_of_control: netOfControl(action.validation),
     // Only while it is dismissed: another status leaves an earlier reason in place.
     dismiss_reason: action.status === 'dismissed' ? dismissReasonOf(action.dismiss_reason) : null,
-    payload,
+    // Without the up to a thousand ids a group keeps for its count: `affected` lists them.
+    payload: withoutTargetIds({ payload }).payload,
     kpi_keys: action.kpi_keys ?? [],
     assignee: action.assignee_id
       ? { id: action.assignee_id, full_name: names.get(action.assignee_id) ?? null }
@@ -4439,8 +4488,11 @@ export async function getActionFor(
       // it's checked (AC-010); an Improve task's body and evidence.
       details: mcpTaskDetails(t.details, t.task_key ?? null),
     })),
+    // Before the signals and events: a result cut for size (chat's fit.ts)
+    // shortens the top-level lists, so the prompts' names outlast them (CH-02).
+    affected: mcpAffected(affected),
     // The join that found them is not part of a signal.
-    signals: ((signalsRes.data ?? []) as Record<string, unknown>[]).map((row) =>
+    signals: signalRows.map((row) =>
       withoutTargetIds(
         Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'action_signals')),
       ),

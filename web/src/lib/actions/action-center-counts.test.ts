@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The open-action count beside Action Center › Actions (SIMPLE_NAV): the
- * actions Today ranks for the person, read as them, one number back.
+ * The open-action count (AC-01): Today's Actions step and the Actions list's
+ * All pill on Open read one predicate, new + in progress + on hold, anyone's.
  */
 
 let user: { id: string } | null;
-let result: { count: number | null; error: { message: string } | null };
+let result: {
+  data: { status: string; assignee_id: string | null }[] | null;
+  error: { message: string } | null;
+};
 let calls: [string, ...unknown[]][];
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -15,46 +18,58 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => {
       calls.push(['from', table]);
       const chain: Record<string, unknown> = {};
-      for (const method of ['select', 'eq', 'in', 'is', 'or']) {
+      for (const method of ['select', 'eq', 'in', 'is', 'limit']) {
         chain[method] = (...args: unknown[]) => (calls.push([method, ...args]), chain);
       }
-      chain.then = (resolve: (value: unknown) => unknown) => resolve({ data: null, ...result });
+      chain.then = (resolve: (value: unknown) => unknown) => resolve(result);
       return chain;
     },
   })),
 }));
 
-const { getMyOpenActionCount } = await import('./action-center-counts');
+const { getOpenActionCounts } = await import('./action-center-counts');
 
 beforeEach(() => {
   user = { id: 'u1' };
-  result = { count: 4, error: null };
+  result = {
+    data: [
+      { status: 'new', assignee_id: null },
+      { status: 'in_progress', assignee_id: 'u1' },
+      { status: 'on_hold', assignee_id: 'u2' },
+      { status: 'on_hold', assignee_id: 'u1' },
+      { status: 'new', assignee_id: 'u2' },
+    ],
+    error: null,
+  };
   calls = [];
 });
 
-describe('getMyOpenActionCount', () => {
-  it('counts the brand’s new and in-progress actions, unassigned or the person’s, not deleted', async () => {
-    expect(await getMyOpenActionCount('b1')).toBe(4);
+describe('getOpenActionCounts', () => {
+  it('counts the brand’s new, in-progress and on-hold actions, anyone’s, not deleted', async () => {
+    expect(await getOpenActionCounts('b1')).toEqual({ open: 5, onHold: 2, mine: 2 });
     expect(calls).toEqual([
       ['from', 'actions'],
-      ['select', 'id', { count: 'exact', head: true }],
+      ['select', 'status, assignee_id'],
       ['eq', 'brand_id', 'b1'],
-      ['in', 'status', ['new', 'in_progress']],
+      ['in', 'status', ['new', 'in_progress', 'on_hold']],
       ['is', 'deleted_at', null],
-      ['or', 'assignee_id.is.null,assignee_id.eq.u1'],
+      ['limit', 1000],
     ]);
   });
 
-  it('is 0 when the count fails or comes back empty', async () => {
-    result = { count: null, error: { message: 'boom' } };
-    expect(await getMyOpenActionCount('b1')).toBe(0);
-    result = { count: null, error: null };
-    expect(await getMyOpenActionCount('b1')).toBe(0);
+  it('is all zeros with no open actions', async () => {
+    result = { data: null, error: null };
+    expect(await getOpenActionCounts('b1')).toEqual({ open: 0, onHold: 0, mine: 0 });
+  });
+
+  it('throws when the read fails, so the cell shows nothing', async () => {
+    result = { data: null, error: { message: 'boom' } };
+    await expect(getOpenActionCounts('b1')).rejects.toThrow('boom');
   });
 
   it('reads nothing without a signed-in person', async () => {
     user = null;
-    expect(await getMyOpenActionCount('b1')).toBe(0);
+    await expect(getOpenActionCounts('b1')).rejects.toThrow('Not authenticated');
     expect(calls).toEqual([]);
   });
 });

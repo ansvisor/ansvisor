@@ -207,6 +207,7 @@ const overview: TodayOverview = {
   lastRunAt: new Date(Date.now() - 3600_000).toISOString(),
   trackedPrompts: 12,
   openActions: 3,
+  openBreakdown: { onHold: 1, mine: 2 },
   doneThisWeek: 1,
 };
 const standing: TodayStanding = {
@@ -429,7 +430,7 @@ describe('Action Center › Today', () => {
     expect(cells).toEqual([
       '1 · Prompts12 tracked',
       '2 · AI answersUpdated today',
-      '3 · Actions3 open',
+      '3 · Actions3 open1 on hold · 2 yours',
       '4 · Done1 this week',
       '5 · Results53.9/100 +0.4',
     ]);
@@ -455,9 +456,9 @@ describe('Action Center › Today', () => {
       'Finish setting up',
     ]);
     expect(summaryRow()).toEqual(['waiting', 'stand']);
-    expect(text('[data-today-part="waiting"] a[href="/dashboard/content/library"]')).toBe(
-      'Review 2 drafts',
-    );
+    expect(
+      text('[data-today-part="waiting"] a[href="/dashboard/content/library?tab=in_review"]'),
+    ).toBe('Review 2 drafts');
     for (const section of container.querySelectorAll('section')) {
       const id = section.getAttribute('aria-labelledby');
       expect(id && container.querySelector(`[id="${id}"]`)).toBeTruthy();
@@ -748,8 +749,12 @@ describe('Action Center › Today', () => {
     const link = (type: string) => container.querySelector(`[data-waiting="${type}"] a`);
     expect(rows[0].textContent).toContain('An agent is waiting for your OK on “Comparison page”.');
     expect(link('agent')?.getAttribute('href')).toBe('/dashboard/chat/c1');
+    // Every draft in review, whoever wrote it, linked to Library › In review (AC-03).
+    expect(rows[1].textContent).toContain(
+      '2 drafts waiting for your review. Nothing goes live without your OK.',
+    );
     expect(link('drafts')?.textContent).toBe('Review 2 drafts');
-    expect(link('drafts')?.getAttribute('href')).toBe('/dashboard/content/library');
+    expect(link('drafts')?.getAttribute('href')).toBe('/dashboard/content/library?tab=in_review');
     expect(rows[2].textContent).toContain('Due today: Validate across AI platforms.');
     expect(link('due')?.getAttribute('href')).toBe('/dashboard/action-center/actions?action=a7');
     expect(link('review')?.getAttribute('href')).toBe('/dashboard/action-center/review');
@@ -1274,7 +1279,7 @@ describe('Action Center › Today', () => {
         'Northbound Roasters still leads by 6.2 points. 3 actions are ready to close it.',
       );
       expect(text('[data-today-part="saved"]')).toContain(
-        '1 draft from your agent: The low-acid buying guide.',
+        '1 draft waiting for your review: The low-acid buying guide.',
       );
       // The focus is read-only: no Skip, no Start; "Needs a plan" opens the upgrade dialog.
       expect(button('Skip for now')).toBeUndefined();

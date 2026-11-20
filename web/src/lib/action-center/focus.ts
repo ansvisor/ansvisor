@@ -1,4 +1,5 @@
 import type { FocusPin } from '@/lib/user-brand-state';
+import { PRIORITY_LEVELS, type PriorityLevel } from '@/lib/action-center/priority';
 
 /**
  * Today's focus (simplification plan PR 7): the 3 actions a
@@ -110,6 +111,33 @@ export function pickFocus(input: {
     slots.length !== pins.length ||
     slots.some((slot, i) => slot.id !== pins[i].id || slot.addedAt !== pins[i].addedAt);
   return { slots, changed };
+}
+
+/** What orders the focus as shown: the impact its card says, then its priority score. */
+export interface FocusRank {
+  priorityLevel: PriorityLevel | null;
+  priorityScore: number | null;
+}
+
+/**
+ * The focus as Today shows it (AC-04): highest impact first (Critical, High,
+ * Medium, Low, then none), then the higher priority score, then as kept.
+ * Only the order shown: the actions the person keeps stay the same.
+ */
+export function byImpact<T extends { action: FocusRank }>(cards: readonly T[]): T[] {
+  const level = (rank: FocusRank) => {
+    const index = rank.priorityLevel ? PRIORITY_LEVELS.indexOf(rank.priorityLevel) : -1;
+    return index === -1 ? PRIORITY_LEVELS.length : index;
+  };
+  return cards
+    .map((card, index) => ({ card, index }))
+    .sort(
+      (a, b) =>
+        level(a.card.action) - level(b.card.action) ||
+        (b.card.action.priorityScore ?? -Infinity) - (a.card.action.priorityScore ?? -Infinity) ||
+        a.index - b.index,
+    )
+    .map(({ card }) => card);
 }
 
 /** The server's ranking, read defensively: Today's then the Next's ids, each once. */

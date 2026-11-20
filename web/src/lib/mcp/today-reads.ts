@@ -17,6 +17,7 @@ import { isMondayIn } from '@/lib/action-center/last-week';
 import { priorityReasonText } from '@/lib/action-center/priority';
 import { changeDirection } from '@/lib/action-center/since';
 import {
+  LIBRARY_IN_REVIEW,
   finishOne,
   waitingRows,
   type WaitingAction,
@@ -215,7 +216,7 @@ function waitingRow(row: WaitingRow) {
         open:
           row.count === 1
             ? `/dashboard/content/editor/${encodeURIComponent(row.draftId)}`
-            : '/dashboard/content/library',
+            : LIBRARY_IN_REVIEW,
       };
     case 'due':
       return {
