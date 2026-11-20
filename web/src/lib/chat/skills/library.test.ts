@@ -99,7 +99,8 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
   },
   quality: {
     title: 'Quality pass',
-    description: 'E-E-A-T, Trust and Readability fixes. Leaves only what you alone can give.',
+    description:
+      'E-E-A-T, Trust and Readability fixes. Flags the parts only you can add (experience, data).',
   },
   faq: {
     title: 'FAQ from fan-outs',

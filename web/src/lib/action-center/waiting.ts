@@ -114,6 +114,12 @@ export interface WaitingInput {
   broken?: readonly BrokenReason[] | null;
 }
 
+/**
+ * Where the drafts row sends more than one draft: the Library's In review
+ * tab, every draft in review whoever wrote it, as the row counts them (AC-03).
+ */
+export const LIBRARY_IN_REVIEW = '/dashboard/content/library?tab=in_review';
+
 /** The rows, in order. */
 export function waitingRows(input: WaitingInput): WaitingRow[] {
   const rows: WaitingRow[] = (input.broken ?? []).map((reason) => ({ type: 'fix', reason }));
