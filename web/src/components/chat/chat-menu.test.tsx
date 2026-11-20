@@ -438,7 +438,7 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openChat')).toHaveLength(4);
   });
 
-  it('names Agents for screen readers "Agents · in Action Center", and keeps Agents at work', async () => {
+  it('names Agents "Agents · in Action Center", marks it as leaving Chat, and keeps Agents at work', async () => {
     const chats = [
       chat('a', { state: 'needsYou', progress: { done: 3, total: 6 } }),
       chat('b', { state: 'running' }),
@@ -449,6 +449,9 @@ describe('ChatMenuView', () => {
     expect(agents.getAttribute('href')).toBe('/dashboard/agents');
     expect(agents.textContent).toBe('AgentsNew');
     expect(agents.getAttribute('aria-label')).toBe('Agents · in Action Center');
+    // It leaves Chat (CH-05): an arrow, and a tooltip saying where it goes.
+    expect(agents.querySelector('[data-slot="leaves-chat"]')).not.toBeNull();
+    expect(agents.getAttribute('title')).toBe('Opens Action Center › Agents, outside Chat');
     expect(text()).toContain('Agents at work2');
     expect(text()).toContain('Waiting for your OK · step 4 of 6');
   });

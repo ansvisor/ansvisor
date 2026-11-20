@@ -1177,7 +1177,7 @@
         },
         {
           "heading": "Open Agents",
-          "text": "Click **Agents** under **Action Center** on the left menu. It is also in the chat menu, under **Inbox**, as **Agents**, with **New** until you first open it. Old links to Agent Center still open it.\n\n**Your agents** comes first, with **Ready to use** under it. **Ask Chat to make one** opens Chat with a request filled in for you to send; **New agent** opens the form. In **Your agents**, the filters above the list show how many agents each holds:\n\n- **Mine**: the agents you own.\n- **Workspace**: the agents shared with everyone in your workspace. Admins also see their teammates' private agents here.\n- **Paused** and **Archived**: agents that are off.\n\nType in **Search by name or skill** to find an agent by its name or by a skill it uses."
+          "text": "Click **Agents** under **Action Center** on the left menu. It is also in the chat menu, under **Inbox**, as **Agents** with an arrow ↗, since it opens outside Chat, and **New** until you first open it. Old links to Agent Center still open it.\n\n**Your agents** comes first, with **Ready to use** under it. **Ask Chat to make one** opens Chat with a request filled in for you to send; **New agent** opens the form. In **Your agents**, the filters above the list show how many agents each holds:\n\n- **Mine**: the agents you own.\n- **Workspace**: the agents shared with everyone in your workspace. Admins also see their teammates' private agents here.\n- **Paused** and **Archived**: agents that are off.\n\nType in **Search by name or skill** to find an agent by its name or by a skill it uses."
         },
         {
           "heading": "Ready-to-use agents",
