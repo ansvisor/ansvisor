@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatListItem } from './conversations';
-import { anyUnderWay, chatMenuLists, dayGroupOf, needsYouCount } from './menu-groups';
+import { anyUnderWay, chatMenuLists, inboxChats, dayGroupOf, needsYouCount } from './menu-groups';
 
 /**
  * The chat menu's lists (CHAT-01 agentic update): Agents at work — needs
@@ -48,7 +48,7 @@ describe('dayGroupOf', () => {
 });
 
 describe('chatMenuLists', () => {
-  it('lists Agents at work as needs you, running, then unread, each newest first', () => {
+  it('lists Agents at work as needs you, then running or paused, each newest first; a finished answer is not at work', () => {
     const { atWork } = chatMenuLists(
       [
         chat('done', { state: 'done', unread: true, lastMessageAt: '2026-10-30T11:00:00' }),
@@ -60,7 +60,17 @@ describe('chatMenuLists', () => {
       ],
       NOW,
     );
-    expect(atWork.map((c) => c.id)).toEqual(['need', 'run-new', 'run-old', 'paused', 'done']);
+    expect(atWork.map((c) => c.id)).toEqual(['need', 'run-new', 'run-old', 'paused']);
+  });
+
+  it('keeps the Inbox’s unread results after the work, newest first (UX audit CH-03)', () => {
+    const rows = inboxChats([
+      chat('done', { state: 'done', unread: true, lastMessageAt: '2026-10-30T11:00:00' }),
+      chat('read', { state: 'done' }),
+      chat('need', { state: 'needsYou' }),
+      chat('theirs', { state: 'needsYou', mine: false }),
+    ]);
+    expect(rows.map((c) => c.id)).toEqual(['need', 'done']);
   });
 
   it('puts every other chat once: Pinned first, then by day, newest first', () => {

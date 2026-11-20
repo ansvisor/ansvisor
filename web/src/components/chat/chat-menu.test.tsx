@@ -417,25 +417,25 @@ describe('ChatMenuView', () => {
         progress: { done: 1, total: 5 },
       }),
       chat('c', { state: 'running' }),
+      chat('p', { state: 'paused' }),
       chat('d', { state: 'done', unread: true, finishedAt: '2026-10-30T08:02:00' }),
       chat('e'),
     ];
     await render(menu(chats));
-    // The Inbox counts what Agents at work lists, with a dot while one needs the person.
+    // The Inbox counts its own and their unread results, with a dot while one needs the person.
     const inbox = action('chatMenu.openInbox')[0];
-    expect(inbox.textContent).toBe('Inbox4');
-    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 4 items · 1 needs you');
+    expect(inbox.textContent).toBe('Inbox5');
+    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 5 items · 1 needs you');
+    // Agents at work: what is under way or waits (UX audit CH-03), not a finished answer.
     expect(text()).toContain('Agents at work4');
     expect(text()).toContain('Waiting for your OK · step 4 of 6');
     expect(text()).toContain('Step 2 of 5 · Comparing cited pages');
-    expect(text()).not.toContain('Chat d');
     await act(async () => action('chatMenu.seeAllRuns')[0].click());
-    expect(text()).toContain('Done · 08:02');
     expect(action('chatMenu.showLessRuns')).toHaveLength(1);
     await act(async () => action('chatMenu.showLessRuns')[0].click());
-    expect(text()).not.toContain('Chat d');
-    // A chat at work isn't listed again below.
-    expect(action('chatMenu.openChat')).toHaveLength(4);
+    // The finished one is under its day, with its result, never in Agents at work.
+    expect(text()).toContain('Done · 08:02');
+    expect(action('chatMenu.openChat')).toHaveLength(5);
   });
 
   it('names Agents for screen readers "Agents · in Action Center", and keeps Agents at work', async () => {
@@ -463,7 +463,8 @@ describe('ChatMenuView', () => {
       chat('e'),
     ];
     await render(menu(chats));
-    await act(async () => action('chatMenu.seeAllRuns')[0].click());
+    // Three at work fit without See all; the finished ones are under their day.
+    expect(action('chatMenu.seeAllRuns')).toHaveLength(0);
     const dotOf = (id: string) => {
       const row = [...action('chatMenu.openChat')].find(
         (link) => link.getAttribute('href') === `/dashboard/chat/${id}`,
