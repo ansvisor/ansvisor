@@ -786,7 +786,7 @@
         "ai sessions"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -822,7 +822,7 @@
         },
         {
           "heading": "Weekly AI Traffic e-mail",
-          "text": "Every Monday, an e-mail about the week before goes to each brand's Daily Pulse recipients, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.\n\nTo turn it off for a brand, untick **AI Traffic weekly digest** in **Settings › Notifications**; admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only."
+          "text": "Every Monday, an e-mail about the week before goes to each brand's Daily Pulse recipients, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.\n\nTo turn it off for a brand, untick the brand under **AI Traffic weekly digest** in **Settings › Notifications**; it's saved at once, and admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only."
         }
       ]
     },
@@ -5087,7 +5087,7 @@
         "stop the emails"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -5095,7 +5095,7 @@
         },
         {
           "heading": "Choose how often it comes",
-          "text": "Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily**: after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable** (the default): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings. Brands that never chose a frequency use this; a brand whose admin saved **Daily** keeps it.\n- **Off**: no email, no webhook and no Slack post."
+          "text": "Open **Settings › Notifications**. The page has two sections: **Daily Pulse** and **AI Traffic weekly digest**. Under **Daily Pulse**, every active brand has its own card with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily**: after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable** (the default): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings. Brands that never chose a frequency use this; a brand whose admin saved **Daily** keeps it.\n- **Off**: no email, no webhook and no Slack post."
         },
         {
           "heading": "Choose who gets it",
@@ -5103,7 +5103,7 @@
         },
         {
           "heading": "AI Traffic weekly digest",
-          "text": "Each brand's row also has **AI Traffic weekly digest**: every Monday, last week's AI visits in one summary line, with the top three changes. It goes to the same recipients, and isn't sent while the Daily Pulse is **Off**."
+          "text": "The **AI Traffic weekly digest** has its own section on the same page, with one tick box per brand: every Monday, last week's AI visits in one summary line, with the top three changes. Each brand's line shows who gets it: the brand's Daily Pulse recipients, or every member when that list is empty. A tick or untick is saved at once. The digest isn't sent while the brand's Daily Pulse is **Off**."
         },
         {
           "heading": "When it is sent",
