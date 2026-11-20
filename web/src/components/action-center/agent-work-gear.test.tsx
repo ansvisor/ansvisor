@@ -69,6 +69,11 @@ describe('AgentWorkGear', () => {
     expect(trigger()!.getAttribute('title')).toBe('Who starts agent work');
     await act(async () => trigger()!.click());
     expect(document.body.textContent).toContain('Who starts agent work?');
+    // Plain about going live (AC-08): the rule, then the Admin's exception.
+    expect(document.body.textContent).toContain('Agents always ask before publishing or sending.');
+    expect(document.body.textContent).toContain(
+      'The exception: an agent an Admin has allowed to publish and send on its own.',
+    );
     const auto = document.body.querySelector<HTMLInputElement>('input[value="auto_start"]')!;
     await act(async () => auto.click());
     const save = [...document.body.querySelectorAll('button')].find(

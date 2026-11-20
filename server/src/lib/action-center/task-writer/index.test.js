@@ -456,6 +456,23 @@ describe('writeTasksForAction', () => {
     expect(generateObject.mock.calls[0][0].prompt).not.toContain('Earlier rounds');
   });
 
+  it('writes about the prompts left, not those removed since the action was created (AC-13)', async () => {
+    db.action_entities = [
+      {
+        action_id: 'a1',
+        entity_type: 'prompts',
+        entity_key: 'p1',
+        label: 'Which coffee subscriptions ship internationally?',
+        removed_at: '2026-11-01T00:00:00Z',
+      },
+    ];
+    generateObject.mockResolvedValueOnce(answer([task()]));
+    await writeTasksForAction('a1', { dryRun: true });
+    const { prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).not.toContain('Which coffee subscriptions ship internationally?');
+    expect(prompt).toContain('blog/shipping');
+  });
+
   it("tells the model the brand's kind of site and its page types, chosen or guessed", async () => {
     db.brands[0] = { ...db.brands[0], site_type: 'ecommerce' };
     generateObject.mockResolvedValueOnce(answer([task()]));

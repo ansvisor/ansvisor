@@ -469,6 +469,34 @@ describe('readSiteTrust', () => {
     expect(writes[0].row.scraped_at).toBe(new Date(later).toISOString());
   });
 
+  it('reads a walled home page through Firecrawl when it is the audit fetcher', async () => {
+    vi.stubEnv('SCRAPEDO_API_KEY', '');
+    vi.stubEnv('AUDIT_FETCHER', 'firecrawl');
+    vi.stubEnv('FIRECRAWL_API_KEY', 'fc_test');
+    const scrape = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: { rawHtml: html('Acme', 'Acme', ORG), metadata: { statusCode: 200 } },
+      }),
+    }));
+    vi.stubGlobal('fetch', scrape);
+    try {
+      const { db } = fakeDb({ ...base, brand_domains: [{ domain: 'acme.com', is_primary: true }] });
+      const fetcher = vi.fn(async () => {
+        throw new PageFetchError('http_error', '403', { status: 403 });
+      });
+      const read = await readSiteTrust('b-firecrawl', { db, fetcher, now: NOW });
+      expect(scrape).toHaveBeenCalledTimes(1);
+      expect(scrape.mock.calls[0][0]).toBe('https://api.firecrawl.dev/v2/scrape');
+      expect(read.checks.organizationSchema.ok).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('reads once for two asks at the same time', async () => {
     const { db, writes } = fakeDb(base);
     const [a, b] = await Promise.all([

@@ -413,3 +413,118 @@ describe('the grid by Visibility score, You in its place (UX audit CP-06)', () =
     expect(grid.querySelector('[data-slot="you-card"]')!.textContent).toContain('You');
   });
 });
+
+describe('the head-to-head over the picker’s days (UX audit CP-02, CP-08)', () => {
+  beforeEach(() => {
+    // The competitor's timeline chart sizes itself; jsdom has no ResizeObserver.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.history.replaceState(null, '', '/');
+  });
+
+  const h2hCall = async () => {
+    const tracking = await import('@/lib/actions/tracking');
+    return vi.mocked(tracking.getHeadToHeadComparison).mock.lastCall;
+  };
+
+  it('reads the open competitor over the same days as the cards', async () => {
+    window.history.replaceState(null, '', '/?competitor=c1&preset=7d');
+    await render(false);
+    const call = (await h2hCall())!;
+    expect(call.slice(0, 2)).toEqual(['b1', 'c1']);
+    // Seven UTC days, today included, as the cards' window.
+    const { dayFrom, dayTo } = call[2]!;
+    expect((Date.parse(dayTo!) - Date.parse(dayFrom!)) / 86_400_000).toBe(6);
+  });
+
+  it('reads all time with All', async () => {
+    window.history.replaceState(null, '', '/?competitor=c1&preset=all');
+    await render(false);
+    expect(await h2hCall()).toEqual(['b1', 'c1', {}]);
+  });
+});
+
+describe('the Prompt-by-Prompt list (UX audit CP-11, CP-12)', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.history.replaceState(null, '', '/');
+  });
+
+  const noParts = {
+    answers: 0,
+    mentionAnswers: 0,
+    citationAnswers: 0,
+    invPosition: 0,
+    positionCount: 0,
+  };
+  const group = (promptId: string, promptText: string) => ({
+    promptId,
+    promptText,
+    platform: 'ChatGPT',
+    rawPlatform: 'chatgpt',
+    modelUsed: '',
+    rawModelUsed: null,
+    runs: 12,
+    brandScore: 20,
+    competitorScore: 60,
+    diff: -40,
+    latestAt: '2026-11-19T10:00:00Z',
+    parts: { brand: noParts, competitor: noParts },
+  });
+
+  it('puts the date range under the header, and searches the prompts, naming case repeats', async () => {
+    const tracking = await import('@/lib/actions/tracking');
+    vi.mocked(tracking.getHeadToHeadComparison).mockResolvedValue({
+      groups: [
+        group('p1', 'Best CRM for startups'),
+        group('p2', 'best crm for startups'),
+        group('p3', 'CRM pricing'),
+      ],
+      platformRows: [],
+      brandAvg: 0,
+      competitorAvg: 0,
+      gaps: [],
+      strengths: [],
+    } as never);
+    window.history.replaceState(null, '', '/?competitor=c1');
+    await render(false);
+    // The range has its own row, not the header's (CP-11).
+    expect(container.querySelector('[data-slot="competitors-filters"]')).not.toBeNull();
+    expect(container.querySelector('[data-slot="prompt-list-count"]')!.textContent).toBe(
+      '3 of 3 prompts',
+    );
+    expect(container.querySelector('[data-slot="prompt-case-repeats"]')!.textContent).toContain(
+      '1 prompt repeats another but for letter case',
+    );
+    const search = container.querySelector<HTMLInputElement>(
+      '[data-action="competitors.searchPrompts"]',
+    )!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        search,
+        'pricing',
+      );
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-slot="prompt-list-count"]')!.textContent).toBe(
+      '1 of 1 prompt',
+    );
+  });
+});

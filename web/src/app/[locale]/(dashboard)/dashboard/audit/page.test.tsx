@@ -469,3 +469,76 @@ describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
     });
   });
 });
+
+describe('SiteAuditPage bulk audit progress', () => {
+  const SINCE = '2026-11-19T10:00:00.000Z';
+  const row = (key: string, status: string) => ({
+    key,
+    host: 'acme.com',
+    path: `/${key}`,
+    url: `https://acme.com/${key}`,
+    auditId: `a-${key}`,
+    score: null,
+    previousScore: null,
+    firstScore: null,
+    firstAuditedAt: null,
+    status,
+    lastAuditedAt: '2026-11-19T10:00:00Z',
+    trend: [],
+    issues: null,
+    runs: [],
+    runCount: 1,
+  });
+  const hubWith = (running: { count: number; since: string | null }) => ({
+    pages: {
+      pages: [row('one', 'running'), row('two', 'running'), row('three', 'good')],
+      total: 3,
+      primaryHost: 'acme.com',
+      running,
+    },
+    quota: { used: 0, limit: 10, remaining: 10 },
+    trend: null,
+    overview: null,
+  });
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  const bar = () => container.querySelector('[role="progressbar"]');
+
+  it('shows N of M done with a bar while audits run', async () => {
+    audits.getAuditHub.mockResolvedValue(hubWith({ count: 2, since: SINCE }));
+    await render(false);
+    await settle();
+    expect(container.textContent).toContain('0 of 2 done');
+    expect(bar()?.getAttribute('aria-valuenow')).toBe('0');
+  });
+
+  it('shows no progress when no audit is running', async () => {
+    audits.getAuditHub.mockResolvedValue(hubWith({ count: 0, since: null }));
+    await render(false);
+    await settle();
+    expect(bar()).toBeNull();
+  });
+
+  it('lists only the batch from its start with This batch, and all pages again after', async () => {
+    audits.getAuditHub.mockResolvedValue(hubWith({ count: 2, since: SINCE }));
+    audits.getAuditPages.mockResolvedValue({
+      pages: [row('one', 'running'), row('two', 'running')],
+      total: 2,
+      primaryHost: 'acme.com',
+      running: { count: 2, since: SINCE },
+    });
+    await render(false);
+    await settle();
+    const toggle = () =>
+      [...container.querySelectorAll('button')].find((b) =>
+        ['This batch', 'All pages'].includes(b.textContent ?? ''),
+      )!;
+    await act(async () => toggle().click());
+    expect(audits.getAuditPages).toHaveBeenLastCalledWith('b1', 0, 50, SINCE);
+    expect(toggle().textContent).toBe('All pages');
+    expect(toggle().getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => toggle().click());
+    expect(audits.getAuditPages).toHaveBeenLastCalledWith('b1', 0, 50, undefined);
+    expect(toggle().textContent).toBe('This batch');
+  });
+});

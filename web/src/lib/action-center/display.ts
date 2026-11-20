@@ -1,5 +1,5 @@
 import type { ActionEvent, ActionItem } from '@/lib/actions/action-center';
-import { isActionKind } from '@/lib/action-center/registry';
+import { OPEN_ACTION_STATUSES, isActionKind } from '@/lib/action-center/registry';
 import { pagePath } from '@/lib/content/overlap';
 import { formatEstimateRange, guessedVolumeEstimate } from '@/lib/volume-estimate';
 import { refreshYears } from '@/lib/content/current-year';
@@ -512,9 +512,13 @@ export function actionContextTags(action: ActionItem, t: Translator): string[] {
   // Actions a person sent (a content opportunity, an Improve set, a topic
   // gap or opportunity) have no detection signals by design; "0 signals" would read as
   // missing evidence.
+  // An open action whose signals all resolved says so, for a person to
+  // review, rather than "0 signals" (AC-12); it isn't closed for them.
   const tags = PERSON_SENT_KINDS.includes(action.kind)
     ? []
-    : [t('tags.signals', { count: action.signalCount })];
+    : action.signalCount === 0 && OPEN_ACTION_STATUSES.includes(action.status)
+      ? [t('tags.signalResolved')]
+      : [t('tags.signals', { count: action.signalCount })];
   const count = num(action.payload ?? {}, 'targetCount');
   const entity = str(action.payload ?? {}, 'targetEntity');
   if (count > 0 && entity) tags.push(t(`tags.${entity}`, { count }));
