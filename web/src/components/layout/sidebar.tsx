@@ -53,6 +53,7 @@ import {
   useMenuDots,
 } from '@/components/layout/menu-dots';
 import { ChevronDown, ChevronsLeft, ChevronsRight, Crown, Lock } from 'lucide-react';
+import { revealInMenu } from './reveal-in-menu';
 
 /** How long the pointer rests on the collapsed sidebar before it opens. */
 const PEEK_DELAY_MS = 150;
@@ -238,9 +239,8 @@ export function Sidebar() {
   }, [pathname]);
   useEffect(() => {
     if (menuScrolledByUser.current) return;
-    asideRef.current
-      ?.querySelector<HTMLElement>('nav [aria-current="page"]')
-      ?.scrollIntoView({ block: 'nearest' });
+    // Only when it is out of view, and only the menu's scroll (UX audit GL-02).
+    revealInMenu(asideRef.current?.querySelector<HTMLElement>('nav [aria-current="page"]'));
   }, [pathname, compact]);
   const markMenuScrolled = () => {
     menuScrolledByUser.current = true;
