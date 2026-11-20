@@ -6,6 +6,7 @@ import type { TaskStatus } from '@/lib/action-center/registry';
 import { attachFileToTask } from '@/lib/actions/chat-action-center';
 import type { ChatTaskStrip } from '@/lib/chat/events';
 import { readStrips, titleOfTask, weekEndIn, type DeliverableTask } from '@/lib/chat/task-strip';
+import { asViewer } from '@/lib/chat/viewer-locale';
 import { isManager } from '@/lib/session-role';
 import { assertWritable, SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -268,12 +269,16 @@ export async function markTaskDoneFromCard(runId: string, n: number): Promise<Ta
         { data, onlyIfChanged: true },
       );
     }
-    return {
-      ok: true,
-      status: 'done',
-      task: { title: titleOfTask(task), state: 'done' },
-      strip: await stripOf(card, runId),
-    };
+    // The task's title and its strip, in the viewer's language.
+    return await asViewer(
+      async (): Promise<TaskCardResult> => ({
+        ok: true,
+        status: 'done',
+        task: { title: titleOfTask(task), state: 'done' },
+        strip: await stripOf(card, runId),
+      }),
+      card.userId,
+    );
   } catch (error) {
     logFailure('mark the task done', error);
     return failure('failed');
@@ -312,12 +317,16 @@ export async function attachOnlyFromCard(runId: string, n: number): Promise<Task
               : 'failed',
       );
     }
-    return {
-      ok: true,
-      status: file.status === 'done' ? 'done' : 'attached',
-      task: { title: titleOfTask(task), state: task.status === 'completed' ? 'done' : 'open' },
-      strip: await stripOf(card, runId),
-    };
+    // The task's title and its strip, in the viewer's language.
+    return await asViewer(
+      async (): Promise<TaskCardResult> => ({
+        ok: true,
+        status: file.status === 'done' ? 'done' : 'attached',
+        task: { title: titleOfTask(task), state: task.status === 'completed' ? 'done' : 'open' },
+        strip: await stripOf(card, runId),
+      }),
+      card.userId,
+    );
   } catch (error) {
     logFailure('attach the file', error);
     return failure('failed');
@@ -409,12 +418,16 @@ export async function undoTaskDoneFromCard(runId: string, n: number): Promise<Ta
         .eq('action_task_id', task.id);
       if (linkError) throw new Error(linkError.message);
     }
-    return {
-      ok: true,
-      status: fileFrom,
-      task: { title: titleOfTask(task), state: 'open' },
-      strip: await stripOf(card, runId),
-    };
+    // The task's title and its strip, in the viewer's language.
+    return await asViewer(
+      async (): Promise<TaskCardResult> => ({
+        ok: true,
+        status: fileFrom,
+        task: { title: titleOfTask(task), state: 'open' },
+        strip: await stripOf(card, runId),
+      }),
+      card.userId,
+    );
   } catch (error) {
     logFailure('undo the mark done', error);
     return failure('failed');

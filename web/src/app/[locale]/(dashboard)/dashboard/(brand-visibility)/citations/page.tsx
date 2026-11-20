@@ -65,7 +65,7 @@ import {
 import { isSingleModel, modelFamilies, modelFamilyValue } from '@/lib/model-families';
 import { toCsv } from '@/lib/csv';
 import type { Topic } from '@/types';
-import { SOURCE_CATEGORY_LABELS, type SourceCategory } from '@/lib/citations/classify';
+import { type SourceCategory } from '@/lib/citations/classify';
 import { inSourceScope } from '@/lib/citations/scope';
 import {
   CategoryBadge,
@@ -170,11 +170,12 @@ function SourceTypeDonut({
   data: { category: SourceCategory; count: number; pct: number }[];
   total: number;
 }) {
+  const t = useTranslations('citations');
   if (data.length === 0 || total === 0) {
     return (
       <div className="flex h-[220px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
         <Layers className="h-8 w-8 opacity-30" />
-        No citation sources yet.
+        {t('page.noSources')}
       </div>
     );
   }
@@ -182,7 +183,7 @@ function SourceTypeDonut({
   const chartData = data.map((d) => ({
     ...d,
     fill: CATEGORY_COLORS[d.category],
-    label: SOURCE_CATEGORY_LABELS[d.category],
+    label: t(`categories.${d.category}`),
   }));
 
   return (
@@ -265,6 +266,7 @@ const DomainsTable = memo(function DomainsTable({
   loadFailed: boolean;
   onRetry: () => void;
 }) {
+  const t = useTranslations('citations.page');
   if (rows.length === 0)
     return (
       <EmptyRows
@@ -288,13 +290,13 @@ const DomainsTable = memo(function DomainsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[56px] text-xs">Rank</TableHead>
-            <TableHead className="text-xs">Domain</TableHead>
-            <TableHead className="text-xs">Platforms</TableHead>
-            <TableHead className="text-xs">Usage</TableHead>
-            <TableHead className="text-end text-xs">Avg Citations</TableHead>
+            <TableHead className="w-[56px] text-xs">{t('columns.rank')}</TableHead>
+            <TableHead className="text-xs">{t('columns.domain')}</TableHead>
+            <TableHead className="text-xs">{t('columns.platforms')}</TableHead>
+            <TableHead className="text-xs">{t('columns.usage')}</TableHead>
+            <TableHead className="text-end text-xs">{t('columns.avgCitations')}</TableHead>
             <TableHead className="w-[44px]">
-              <span className="sr-only">Add as competitor</span>
+              <span className="sr-only">{t('columns.addCompetitor')}</span>
             </TableHead>
           </TableRow>
         </TableHeader>
@@ -317,7 +319,7 @@ const DomainsTable = memo(function DomainsTable({
                         target="_blank"
                         rel="noreferrer noopener"
                         className="inline-flex items-center text-muted-foreground hover:text-foreground"
-                        aria-label={`Open ${row.domain} in a new tab`}
+                        aria-label={t('openDomain', { domain: row.domain })}
                       >
                         <ExternalLink className="h-3 w-3" />
                       </a>
@@ -374,6 +376,7 @@ const UrlsTable = memo(function UrlsTable({
   loadFailed: boolean;
   onRetry: () => void;
 }) {
+  const t = useTranslations('citations.page');
   if (rows.length === 0)
     return (
       <EmptyRows
@@ -397,11 +400,11 @@ const UrlsTable = memo(function UrlsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[56px] text-xs">Rank</TableHead>
-            <TableHead className="text-xs">URL</TableHead>
-            <TableHead className="text-xs">Platforms</TableHead>
-            <TableHead className="text-xs">Usage</TableHead>
-            <TableHead className="text-end text-xs">Citations</TableHead>
+            <TableHead className="w-[56px] text-xs">{t('columns.rank')}</TableHead>
+            <TableHead className="text-xs">{t('columns.url')}</TableHead>
+            <TableHead className="text-xs">{t('columns.platforms')}</TableHead>
+            <TableHead className="text-xs">{t('columns.usage')}</TableHead>
+            <TableHead className="text-end text-xs">{t('columns.citations')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -427,8 +430,8 @@ const UrlsTable = memo(function UrlsTable({
                         target="_blank"
                         rel="noreferrer noopener"
                         className="shrink-0 text-muted-foreground hover:text-foreground"
-                        aria-label="Open cited page in a new tab"
-                        title="Open cited page"
+                        aria-label={t('openPage')}
+                        title={t('openPageTitle')}
                       >
                         <ExternalLink className="h-3 w-3" />
                       </a>
@@ -495,16 +498,17 @@ function EmptyRows({
   loadFailed?: boolean;
   onRetry?: () => void;
 }) {
+  const t = useTranslations('citations.page');
   // ── 0. Load failed — never falls through to the endless "Checking…" spinner (#599) ──
   if (loadFailed) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <AlertCircle className="h-8 w-8 text-destructive/60 mb-3" />
-        <p className="text-sm font-medium">Couldn&apos;t load citation data</p>
-        <p className="mt-1 text-xs text-muted-foreground">Please try again.</p>
+        <p className="text-sm font-medium">{t('loadFailedTitle')}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t('loadFailedBody')}</p>
         <Button variant="outline" size="sm" className="mt-4 gap-2 text-xs" onClick={onRetry}>
           <RotateCw className="h-3.5 w-3.5" />
-          Retry
+          {t('retry')}
         </Button>
       </div>
     );
@@ -515,33 +519,20 @@ function EmptyRows({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/60 mb-3" />
-        <p className="text-xs text-muted-foreground">Checking citation data…</p>
+        <p className="text-xs text-muted-foreground">{t('checking')}</p>
       </div>
     );
   }
 
   // ── 2. Period-aware: data exists outside this window ─────────────────────────
   if (hasAnyCitations && isFiltered) {
-    const periodLabel =
-      datePreset === '24h'
-        ? 'the last 24 hours'
-        : datePreset === '7d'
-          ? 'the last 7 days'
-          : datePreset === '30d'
-            ? 'the last 30 days'
-            : datePreset === '90d'
-              ? 'the last 90 days'
-              : 'the selected period';
-
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <FilterIcon className="h-8 w-8 text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium">No citations in {periodLabel}</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Citation data exists outside this window.
-        </p>
+        <p className="text-sm font-medium">{t('noneInPeriod', { period: datePreset })}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t('outsideWindow')}</p>
         <Button variant="outline" size="sm" className="mt-4 text-xs" onClick={onShowAll}>
-          Show all data
+          {t('showAll')}
         </Button>
       </div>
     );
@@ -551,29 +542,29 @@ function EmptyRows({
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <FilterIcon className="h-8 w-8 text-muted-foreground/40 mb-3" />
-      <p className="text-sm font-medium">No citations match your filters</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Try widening your date range or removing filters.
-      </p>
+      <p className="text-sm font-medium">{t('noMatch')}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{t('noMatchBody')}</p>
     </div>
   );
 }
 
 // ─── Competitor Gaps (#300) ───────────────────────────────────────────────────
 
-const GAP_METHODOLOGY =
-  'Sources that appear in answers mentioning competitors but not you, weighted by how many sources each answer had.';
-
 function StrengthBar({ value, max }: { value: number; max: number }) {
+  const t = useTranslations('citations.page');
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
-    <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden" title={`Strength ${pct}%`}>
+    <div
+      className="h-1.5 w-20 rounded-full bg-muted overflow-hidden"
+      title={t('strengthTitle', { pct })}
+    >
       <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(6, pct)}%` }} />
     </div>
   );
 }
 
 function DomainCell({ domain }: { domain: string }) {
+  const t = useTranslations('citations.page');
   return (
     <div className="flex items-center gap-2 min-w-0">
       <DomainFavicon domain={domain} />
@@ -583,7 +574,7 @@ function DomainCell({ domain }: { domain: string }) {
         target="_blank"
         rel="noreferrer noopener"
         className="inline-flex items-center text-muted-foreground hover:text-foreground"
-        aria-label={`Open ${domain} in a new tab`}
+        aria-label={t('openDomain', { domain })}
       >
         <ExternalLink className="h-3 w-3" />
       </a>
@@ -592,14 +583,13 @@ function DomainCell({ domain }: { domain: string }) {
 }
 
 function GapListTable({ rows }: { rows: CitationGapDomain[] }) {
+  const t = useTranslations('citations.page');
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <Layers className="h-8 w-8 text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium">No gap domains for these filters</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Every domain citing a competitor also cites you, or there isn&apos;t enough data yet.
-        </p>
+        <p className="text-sm font-medium">{t('noGaps')}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t('noGapsBody')}</p>
       </div>
     );
   }
@@ -608,11 +598,11 @@ function GapListTable({ rows }: { rows: CitationGapDomain[] }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="text-xs">Domain</TableHead>
-          <TableHead className="text-xs">Source type</TableHead>
-          <TableHead className="text-end text-xs">Competitor answers</TableHead>
-          <TableHead className="text-xs">Which competitors</TableHead>
-          <TableHead className="text-xs">Strength</TableHead>
+          <TableHead className="text-xs">{t('columns.domain')}</TableHead>
+          <TableHead className="text-xs">{t('columns.sourceType')}</TableHead>
+          <TableHead className="text-end text-xs">{t('columns.competitorAnswers')}</TableHead>
+          <TableHead className="text-xs">{t('columns.whichCompetitors')}</TableHead>
+          <TableHead className="text-xs">{t('columns.strength')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -653,6 +643,7 @@ function ByCompetitorView({
   competitorId: string;
   onSelect: (id: string) => void;
 }) {
+  const t = useTranslations('citations.page');
   const rows = gaps.byCompetitor[competitorId] ?? [];
   const max = rows[0]?.strength ?? 0;
 
@@ -660,10 +651,8 @@ function ByCompetitorView({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <Layers className="h-8 w-8 text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium">No competitor source data yet</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Add competitors (with domains) and let a few tracking runs complete.
-        </p>
+        <p className="text-sm font-medium">{t('noCompetitorData')}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t('noCompetitorDataBody')}</p>
       </div>
     );
   }
@@ -671,7 +660,7 @@ function ByCompetitorView({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Competitor</span>
+        <span className="text-xs text-muted-foreground">{t('competitor')}</span>
         <Select
           value={competitorId}
           onValueChange={(v) => {
@@ -679,8 +668,10 @@ function ByCompetitorView({
           }}
         >
           <SelectTrigger className="h-8 w-56 text-xs">
-            <SelectValue placeholder="Select competitor">
-              {(value) => gaps.competitors.find((c) => c.id === value)?.name ?? 'Select competitor'}
+            <SelectValue placeholder={t('selectCompetitor')}>
+              {(value) =>
+                gaps.competitors.find((c) => c.id === value)?.name ?? t('selectCompetitor')
+              }
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -698,11 +689,11 @@ function ByCompetitorView({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-xs">Domain</TableHead>
-              <TableHead className="text-xs">Source type</TableHead>
-              <TableHead className="text-end text-xs">Answers feeding</TableHead>
-              <TableHead className="text-center text-xs">Also cites us?</TableHead>
-              <TableHead className="text-xs">Strength</TableHead>
+              <TableHead className="text-xs">{t('columns.domain')}</TableHead>
+              <TableHead className="text-xs">{t('columns.sourceType')}</TableHead>
+              <TableHead className="text-end text-xs">{t('columns.answersFeeding')}</TableHead>
+              <TableHead className="text-center text-xs">{t('columns.alsoCitesUs')}</TableHead>
+              <TableHead className="text-xs">{t('columns.strength')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -727,7 +718,7 @@ function ByCompetitorView({
                         : 'text-muted-foreground',
                     )}
                   >
-                    {row.alsoCitesUs ? '✓ Yes' : '✗ No'}
+                    {row.alsoCitesUs ? t('yes') : t('no')}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -755,6 +746,7 @@ function CompetitorGapsTab({
   onRetry: () => void;
 }) {
   const tBrandVisibility = useTranslations('brandVisibility.readError');
+  const t = useTranslations('citations.page');
   const [view, setView] = useState<'list' | 'byCompetitor'>('list');
   // The user's pick; falls back to the first competitor (derived, no effect) so
   // it stays valid when the gaps data changes under a filter switch.
@@ -804,7 +796,7 @@ function CompetitorGapsTab({
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            Gap list
+            {t('gapList')}
           </button>
           <button
             type="button"
@@ -816,21 +808,20 @@ function CompetitorGapsTab({
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            By competitor
+            {t('byCompetitor')}
           </button>
         </div>
         <span
           className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-help"
-          title={GAP_METHODOLOGY}
+          title={t('gapMethodology')}
         >
-          <Info className="h-3.5 w-3.5" /> How this works
+          <Info className="h-3.5 w-3.5" /> {t('howItWorks')}
         </span>
       </div>
 
       {gaps.lowVisibility && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-          Your visibility is low in this window, so this list may be broad — focus on baseline
-          visibility first.
+          {t('lowVisibility')}
         </div>
       )}
 
@@ -1120,11 +1111,11 @@ export default function CitationsPage() {
       if (stale() || kept) return;
       console.error('[citations] load failed', err);
       setLoadFailed(true);
-      toast.error('Failed to load citation data');
+      toast.error(t('page.loadFailedToast'));
     } finally {
       if (!stale()) setIsLoading(false);
     }
-  }, [activeBrandId, overviewFilters, cache, showOverview]);
+  }, [activeBrandId, overviewFilters, cache, showOverview, t]);
 
   useEffect(() => {
     if (!urlRead) return;
@@ -1160,13 +1151,13 @@ export default function CitationsPage() {
         if (!active || cache.get(hasCitationsKey) !== undefined) return;
         console.error('[citations] brandHasCitations failed', err);
         setCheckFailed(true);
-        toast.error('Failed to check citation data');
+        toast.error(t('page.checkFailedToast'));
       });
 
     return () => {
       active = false;
     };
-  }, [activeBrandId, urlRead, checkAttempt, hasCitationsKey, cache]);
+  }, [activeBrandId, urlRead, checkAttempt, hasCitationsKey, cache, t]);
 
   // Retry: the overview again, and the "any citations" check if it failed.
   const retry = useCallback(() => {
@@ -1303,11 +1294,11 @@ export default function CitationsPage() {
         triggerDownload(csv, await exportFileName(`${slug}_citations_gaps_${date}.csv`));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to export CSV');
+      toast.error(err instanceof Error ? err.message : t('page.exportFailed'));
     } finally {
       setIsExporting(false);
     }
-  }, [brand, data, gaps, sourceTab]);
+  }, [brand, data, gaps, sourceTab, t]);
 
   // Chat's side panel sees the page (W1-08): its dates and filters, the
   // source cited most, and the sources table to ask about.
@@ -1420,13 +1411,7 @@ export default function CitationsPage() {
     <div className="space-y-6">
       {/* This tab's Export CSV, in the shared header beside Reports. */}
       <TabHeaderActions>
-        <span
-          title={
-            sourceTab === 'types'
-              ? 'Source Types is a chart breakdown, not exportable — switch to Domains, URLs, or Competitor Gaps to export.'
-              : undefined
-          }
-        >
+        <span title={sourceTab === 'types' ? t('page.typesNotExportable') : undefined}>
           <Button
             variant="outline"
             className="gap-2"
@@ -1509,7 +1494,7 @@ export default function CitationsPage() {
                     <TabsTrigger value="urls">
                       {t('tabUrls')} ({data?.totals.urls ?? 0})
                     </TabsTrigger>
-                    <TabsTrigger value="gaps">Competitor Gaps</TabsTrigger>
+                    <TabsTrigger value="gaps">{t('page.tabGaps')}</TabsTrigger>
                     <TabsTrigger value="types">{t('sourceTypesTitle')}</TabsTrigger>
                   </TabsList>
                   {/* keepMounted: data is already in memory, so mount these panels

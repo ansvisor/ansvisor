@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Firecrawl as an optional Site Audit fetcher and web-research provider.** With `FIRECRAWL_API_KEY` and `AUDIT_FETCHER=firecrawl` set, Site Audit fetches pages through Firecrawl /scrape instead of Scrape.do, and adding `firecrawl` to `WEB_RESEARCH_PROVIDERS` lets Firecrawl /search carry the suggestion research. Both are opt-in, so Scrape.do and Tavily stay the defaults
+
 ## [0.3.0] - 2026-08-24
 
 ### Added

@@ -52,6 +52,15 @@ const SCRAPEDO_RESULTS = {
     { title: 'B', link: 'https://b', snippet: 'b' },
   ],
 };
+const FIRECRAWL_RESULTS = {
+  success: true,
+  data: {
+    web: [
+      { title: 'A', url: 'https://a', description: 'a' },
+      { title: 'B', url: 'https://b', description: 'b' },
+    ],
+  },
+};
 
 describe('webResearch', () => {
   it('carries the search with Tavily when a key is set', async () => {
@@ -128,6 +137,66 @@ describe('webResearch', () => {
     expect(String(state.fetch.mock.calls[2][0])).toContain('api.scrape.do/plugin/google/search');
   });
 
+  it('falls through to Firecrawl when Tavily fails', async () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    vi.stubEnv('FIRECRAWL_API_KEY', 'fc_test');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'tavily,firecrawl');
+    state.generateText.mockImplementation(({ prompt }) =>
+      Promise.resolve(
+        prompt.includes('Use these web research results')
+          ? { text: 'the firecrawl synthesis' }
+          : { text: 'a query' },
+      ),
+    );
+    state.fetch
+      .mockRejectedValueOnce(new Error('tavily down'))
+      .mockResolvedValueOnce({ ok: true, json: async () => FIRECRAWL_RESULTS });
+
+    const result = await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(result).toEqual({ text: 'the firecrawl synthesis', searched: true, sources: 2 });
+    expect(state.fetch).toHaveBeenCalledTimes(2);
+    expect(state.fetch.mock.calls[1][0]).toBe('https://api.firecrawl.dev/v2/search');
+    const init = state.fetch.mock.calls[1][1];
+    expect(init.headers.Authorization).toBe('Bearer fc_test');
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(JSON.parse(init.body)).toMatchObject({ query: 'a query', limit: 8 });
+    const synthesis = state.generateText.mock.calls[1][0].prompt;
+    expect(synthesis).toContain('[A](https://a)\na');
+  });
+
+  it('falls back past Firecrawl when it returns no results', async () => {
+    vi.stubEnv('FIRECRAWL_API_KEY', 'fc_test');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'firecrawl');
+    state.generateText
+      .mockResolvedValueOnce({ text: 'a query' })
+      .mockResolvedValueOnce({ text: 'grounded answer', sources: [{}] });
+    state.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: true, data: { web: [] } }),
+    });
+
+    const result = await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(result).toEqual({ text: 'grounded answer', searched: true, sources: 1 });
+    expect(state.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips Firecrawl when its API key is unset', async () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    vi.stubEnv('FIRECRAWL_API_KEY', '');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'firecrawl,tavily');
+    state.generateText
+      .mockResolvedValueOnce({ text: 'a query' })
+      .mockResolvedValueOnce({ text: 'the synthesis' });
+    state.fetch.mockResolvedValue({ ok: true, json: async () => TAVILY_RESULTS });
+
+    await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(state.fetch).toHaveBeenCalledTimes(1);
+    expect(state.fetch.mock.calls[0][0]).toBe('https://api.tavily.com/search');
+  });
+
   it('skips providers whose API key is unset', async () => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
     state.generateText
@@ -150,6 +219,15 @@ describe('webResearch', () => {
     expect(serpProviderOrder().map((p) => p.name)).toEqual(['cloro', 'tavily', 'scrapedo']);
   });
 
+  it('places Firecrawl where WEB_RESEARCH_PROVIDERS names it', () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    vi.stubEnv('SCRAPEDO_API_KEY', 'sd_test');
+    vi.stubEnv('FIRECRAWL_API_KEY', 'fc_test');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'Firecrawl, tavily, scrapedo');
+
+    expect(serpProviderOrder().map((p) => p.name)).toEqual(['firecrawl', 'tavily', 'scrapedo']);
+  });
+
   it('drops a provider named in WEB_RESEARCH_PROVIDERS with its key unset', () => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
     vi.stubEnv('SCRAPEDO_API_KEY', 'sd_test');
@@ -162,6 +240,7 @@ describe('webResearch', () => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
     vi.stubEnv('CLORO_API_KEY', 'cloro_test');
     vi.stubEnv('SCRAPEDO_API_KEY', 'sd_test');
+    vi.stubEnv('FIRECRAWL_API_KEY', 'fc_test');
 
     expect(serpProviderOrder().map((p) => p.name)).toEqual(['tavily']);
   });

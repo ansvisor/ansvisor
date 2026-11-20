@@ -3,6 +3,7 @@ import messages from '../../../messages/en.json';
 import type { ApiFailure } from '@/lib/api-failure';
 import { agentRunFrom, runUnderWay, shownSteps, stepMessage } from '@/lib/content/agent-runs';
 import { isChatHref, maskIds, type ChatHref } from './events';
+import { inRunLocale } from './run-locale';
 import { toClientStep, type ChatRunStepMemberRow } from './steps';
 
 /**
@@ -136,12 +137,18 @@ export function chatTrayRun(
   };
 }
 
-/** The editor's step words; keys from stepMessage(), so typed loosely. */
-const stepT = createTranslator({
-  locale: 'en',
-  messages,
-  namespace: 'contentEditor.editor.agentCard.steps',
-}) as unknown as (key: string, values: { count: number }) => string;
+/**
+ * The editor's step words, for the person looking at the tray (their
+ * language inside withRunLocale); keys from stepMessage(), so typed loosely.
+ */
+const stepT = inRunLocale(
+  createTranslator({
+    locale: 'en',
+    messages,
+    namespace: 'contentEditor.editor.agentCard.steps',
+  }),
+  'contentEditor.editor.agentCard.steps',
+) as unknown as (key: string, values: { count: number }) => string;
 
 /**
  * A Content Agent run (content_agent_runs, 00249) as the tray shows it: its

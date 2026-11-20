@@ -42,3 +42,6 @@ next-env.d.ts
 
 # claude
 .claude/
+
+# The translation script's per-key cache (web/scripts/translate-messages.mjs): kept by whoever runs it, not in the repo.
+web/messages/.translate-cache/
