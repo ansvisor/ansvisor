@@ -20,7 +20,7 @@ const DAILY_LIMIT = 20;
 
 /**
  * "Suggest a better translation" (LOC-009): keeps one suggestion for the
- * team's review queue (translation_suggestions, 00551). It is written as the
+ * team's review queue (translation_suggestions, 00555). It is written as the
  * person, on their own organization, so row-level security lets only their
  * own rows in and shows them only their own; no admin client. The text is
  * checked here, whatever the form checked.

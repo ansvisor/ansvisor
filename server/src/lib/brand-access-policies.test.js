@@ -109,7 +109,7 @@ const NOT_BRAND_DATA = {
   organizations: 'The Account itself: its plan, billing and members (D1).',
   profiles: "A person's own profile.",
   translation_suggestions:
-    "A person's own suggested better translations of the interface (00551): no brand's.",
+    "A person's own suggested better translations of the interface (00555): no brand's.",
   setting_changes:
     "The Account's settings changes (00481): which setting, its value before and after, who and when; no brand's data.",
   site_audit_auto_runs:

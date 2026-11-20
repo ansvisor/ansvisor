@@ -43,7 +43,7 @@ vi.mock('@/lib/supabase/server', () => ({
     },
   }),
 }));
-// The row is added with the service role, only after the checks (00551 has no insert policy).
+// The row is added with the service role, only after the checks (00555 has no insert policy).
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
     from: (table: string) => {

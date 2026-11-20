@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00551: "Suggest a better translation" (LOC-009)
+-- 00555: "Suggest a better translation" (LOC-009)
 -- ============================================================================
 -- In any language but English, Settings › Account › Language and the account
 -- menu's Language item offer "Suggest a better translation": a form that
