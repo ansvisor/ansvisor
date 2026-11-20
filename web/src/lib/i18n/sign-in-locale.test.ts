@@ -1,7 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 import { uiLocaleCookieOnSignIn } from './sign-in-locale';
+// These tests cover a customer meeting a language that isn't offered yet, so the
+// customer list is pinned to English here (in the app every language is offered).
+vi.mock('@/i18n/locales', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n/locales')>()),
+  TRANSLATED_LOCALES: ['en'],
+}));
 
 /**
  * A person's first signed-in request (the proxy): a language picked while

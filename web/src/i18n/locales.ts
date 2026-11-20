@@ -62,7 +62,9 @@ export type AnyUiLocale = UiLocale | typeof PSEUDO_LOCALE;
  * ones a customer is offered. Add a code here when its file lands;
  * messages.test.ts checks this list against the folder.
  */
-export const TRANSLATED_LOCALES: readonly UiLocale[] = ['en'];
+// Every language opened to customers on 2026-11-21 (owner's decision), once
+// the 12 translations were in; a missing key still shows English.
+export const TRANSLATED_LOCALES: readonly UiLocale[] = SELECTABLE_LOCALES;
 
 /** Each language in its own name, so a person who can't read the current one finds theirs. */
 export const LOCALE_NAMES: Record<AnyUiLocale, string> = {

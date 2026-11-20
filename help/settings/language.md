@@ -17,7 +17,7 @@ Each person picks the language of their own Ansvisor screens. Find it in **Setti
 
 Open **Language** and choose one. Each language is written in its own name, such as **Deutsch** or **Türkçe**, so you can find yours even when you can't read the current one. Your choice is saved as soon as you pick it, and the page reloads in that language. **Automatic** follows your browser's language, and uses English when Ansvisor doesn't have it yet.
 
-Only languages that are ready are listed. More are on the way.
+The languages are English, Türkçe, Deutsch, Français, Español, Italiano, Português, Nederlands, 日本語, Polski, 简体中文, 한국어 and العربية. In Arabic, the screens read right to left.
 
 You can also pick a language while you sign up, in the **Language** field of the sign-up form, once more than one is ready. The sign-up page switches to it, and it is saved as your language the first time you sign in, unless you have already chosen one.
 
