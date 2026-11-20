@@ -18154,8 +18154,6 @@
     "org_description": "Manage your organization name and view plan details.",
     "org_name": "Organization Name",
     "org_namePlaceholder": "Acme Inc.",
-    "org_slug": "Slug",
-    "org_slugHint": "Used in API and integration references. Contact support to change it.",
     "org_plan": "Plan",
     "org_members": "Members",
     "org_adminOnly": "Only admins can rename the organization.",
