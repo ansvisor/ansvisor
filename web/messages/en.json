@@ -5154,6 +5154,8 @@
     "readOnly": "Read-only · {role}",
     "readOnlyTitle": "{role}s ask and read. Admins and Managers make changes. See what you can do.",
     "model": "Model",
+    "modelPrefix": "Model:",
+    "modelTip": "The AI model Chat answers with, and how hard it works. Auto picks one for each step.",
     "modelAuto": "Auto",
     "modelWarn": "Model · {usage}",
     "modelImage": "Image · {model}",
@@ -5295,6 +5297,7 @@
     },
     "mode": {
       "label": "Run mode",
+      "prefix": "Run mode:",
       "current": "Run mode: {mode}",
       "ask_first": "Ask me first",
       "auto": "Auto, ask before changes",

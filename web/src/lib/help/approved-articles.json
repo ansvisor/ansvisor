@@ -1643,7 +1643,7 @@
         },
         {
           "heading": "Ask Chat",
-          "text": "Type in the box and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nOn the left under the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; there it says **Read-only**, linking to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
+          "text": "Type in the box and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nUnder the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Run mode: Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; there it says **Read-only**, linking to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -2265,7 +2265,7 @@
         },
         {
           "heading": "Pick an image model",
-          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.\n\nAfter you pick, the model button under the box reads **Image ·** and the model, such as **Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu."
+          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.\n\nAfter you pick, the model button under the box reads **Model: Image ·** and the model, such as **Model: Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu."
         },
         {
           "heading": "Approve the images",
