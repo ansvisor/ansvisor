@@ -24,6 +24,10 @@ The **Tracked Competitors** card lists every competitor with its domain and:
 
 The **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores. **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
 
+## Order and rank
+
+The cards run from the highest score to the lowest, each with its rank, such as **#2**. Your brand sits among them as **You**, in its place. One named in fewer than 10 prompts in the window shows **Low sample** and no rank, after the ranked ones.
+
 ## Filter and group by type
 
 Once one of your competitors has a type, each card shows it under the domain, and two controls sit above the list:

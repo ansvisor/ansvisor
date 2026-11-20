@@ -3071,6 +3071,10 @@
           "text": "The **Tracked Competitors** card lists every competitor with its domain and:\n\n- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.\n- the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.\n\n**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.\n\nThe **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores. **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations."
         },
         {
+          "heading": "Order and rank",
+          "text": "The cards run from the highest score to the lowest, each with its rank, such as **#2**. Your brand sits among them as **You**, in its place. One named in fewer than 10 prompts in the window shows **Low sample** and no rank, after the ranked ones."
+        },
+        {
           "heading": "Filter and group by type",
           "text": "Once one of your competitors has a type, each card shows it under the domain, and two controls sit above the list:\n\n- the type menu, **All types** at first, shows only the competitors of one type, or those with **No type**;\n- **Group by type** lists them under a heading per type, with how many each has, the ones without a type last.\n\nThey only change which cards show and in what order: scores, the date range and the head-to-head stay as they are. **Export CSV** has a type column. Setting a type is in **Add competitors to track**."
         },

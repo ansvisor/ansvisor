@@ -15586,6 +15586,13 @@
       "scoreTip": "Mentioned in {mentionAnswers} answers · cited in {citationAnswers} · position factor {position} · {mentions} mentions · {citations} citations"
     },
     "selected": "Selected",
+    "rank": {
+      "short": "#{rank}",
+      "label": "Rank {rank} by Visibility score",
+      "you": "You",
+      "lowSample": "Low sample",
+      "lowSampleTip": "Named in fewer than 10 prompts in this period: not ranked yet."
+    },
     "noData": "No data",
     "emptyTitle": "No competitors yet",
     "emptyDescription": "Add competitor domains to compare their AI visibility against yours across all AI platforms.",
