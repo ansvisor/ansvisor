@@ -1981,8 +1981,15 @@
       },
       "removed": {
         "note": "({items} removed since this action was created)",
-        "hover": "No longer tracked since this action was created: {names}",
-        "hoverMore": "No longer tracked since this action was created: {names} and {more} more"
+        "title": "No longer tracked since this action was created",
+        "more": "and {count} more",
+        "reasons": {
+          "deleted": "Deleted",
+          "paused": "Paused"
+        },
+        "replanHint": "More than half of this action's prompts are gone, so its tasks may not fit the {count, plural, one {# prompt} other {# prompts}} left.",
+        "replan": "Re-plan with the remaining prompts",
+        "replanConfirm": "Write this action's tasks again for the prompts left? Done, under-way and hand-added tasks stay."
       },
       "menu": {
         "label": "Actions for this item"
