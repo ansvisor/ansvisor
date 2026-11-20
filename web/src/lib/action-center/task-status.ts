@@ -88,6 +88,12 @@ export async function writeTaskStatus(
   const { data: written, error } = await write.select('id');
   if (error) throw new Error(error.message);
   if (onlyIfChanged && (written ?? []).length === 0) return false;
+  // Work has started: a new action moves to In progress with it (UX audit AC-24).
+  // Before the task's own event, so that event stays the action's latest
+  // (Chat's card reads it for its Undo).
+  if (status === 'in_progress' || status === 'completed') {
+    await startAction(supabase, task.brandId, task.actionId);
+  }
   await logEvent(supabase, task.actionId, 'task_status', {
     taskId: task.taskId,
     to: status,
@@ -95,10 +101,6 @@ export async function writeTaskStatus(
     ...data,
   });
   await touchAction(supabase, task.brandId, task.actionId);
-  // Work has started: a new action moves to In progress with it (UX audit AC-24).
-  if (status === 'in_progress' || status === 'completed') {
-    await startAction(supabase, task.brandId, task.actionId);
-  }
   // The core-loop funnel's last step (docs/analytics/core-loop-funnel.md).
   if (status === 'completed') {
     await captureForSessionUser(supabase, 'task_completed', {

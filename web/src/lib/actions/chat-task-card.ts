@@ -231,8 +231,11 @@ export async function markTaskDoneFromCard(runId: string, n: number): Promise<Ta
     const refused = await brandWritable(card);
     if (refused) return refused;
     const { task, file } = card;
-    const actionStatus = task.actions?.status ?? '';
-    if (CLOSED_ACTIONS.includes(actionStatus)) return failure('closed');
+    const before = task.actions?.status ?? '';
+    if (CLOSED_ACTIONS.includes(before)) return failure('closed');
+    // As the click leaves it: a task done starts a New action (UX audit AC-24),
+    // which its Undo compares with.
+    const actionStatus = before === 'new' && task.status !== 'completed' ? 'in_progress' : before;
     const { data: made, error: linkError } = await supabaseAdmin
       .from('chat_file_task_links')
       .upsert(
@@ -358,9 +361,12 @@ export async function undoTaskDoneFromCard(runId: string, n: number): Promise<Ta
       .select('created_at, event, data')
       .eq('action_id', task.action_id)
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(2);
     if (error) throw new Error(error.message);
-    const last = ((events ?? []) as DoneEvent[])[0];
+    // The latest event, past the one a done task's start of its action wrote (UX audit AC-24).
+    const last = ((events ?? []) as DoneEvent[]).find(
+      (event) => !(event.event === 'status_changed' && event.data?.by === 'task'),
+    );
     const data = last?.data ?? {};
     const ours =
       last?.event === 'task_status' &&
