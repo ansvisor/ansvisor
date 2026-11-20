@@ -600,7 +600,7 @@ describe('RunAnswer', () => {
     expect(text.querySelector('td a')?.textContent).toBe('AC-429');
   });
 
-  it('leaves an AC number as text in code, in a link and in a longer word', async () => {
+  it('links an AC number alone in code marks, and leaves it as text in a code block, a link and a longer word', async () => {
     await render({
       run: run({
         status: 'done',
@@ -616,11 +616,12 @@ describe('RunAnswer', () => {
     expect(
       [...text.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]),
     ).toEqual([
+      // In code marks alone, the code is the action's (UX audit CH-10).
+      ['AC-1497', '/dashboard/action-center/actions/code/AC-1497'],
       ['the plan for AC-59', '/dashboard/citations'],
       ['AC-12', 'https://example.com/AC-12'],
     ]);
     expect(text.querySelector('a a')).toBeNull();
-    expect(text.textContent).toContain('AC-1497');
     expect(text.textContent).toContain('AC-62 stays code');
     expect(text.textContent).toContain('Not AC- alone, XAC-12, AC-12a, AC-1.497 or ac-12.');
   });
