@@ -2,9 +2,10 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { sendEmail } from '../email.js';
 import { translator, uiLanguagesOf } from '../i18n.js';
-import { getAiUsage } from '../plan-guard.js';
+import { aiBudgetOf, getAiUsage } from '../plan-guard.js';
+import { isCloud } from '../../config/plans.js';
 import { emailsOf } from '../pulse/audience.js';
-import { KIND_DEFAULTS, brandAudience } from './choices.js';
+import { KIND_DEFAULTS, brandAudience, ofActiveWorkspaces } from './choices.js';
 import { claimSend, dayKey, markSent } from './sends.js';
 import { appOrigin, notificationHtml } from './email-shell.js';
 
@@ -18,7 +19,7 @@ import { appOrigin, notificationHtml } from './email-shell.js';
  *     may still see. Off by default.
  *   * ai_usage, "AI usage", Admins: the workspace reached 80%, then 100%, of
  *     its monthly AI limit; once per threshold and month. On by default;
- *     never for an unlimited plan.
+ *     never for an unlimited plan, a limit of 0 or a workspace not active.
  */
 
 export const RUN_KIND = 'run_finished';
@@ -50,8 +51,9 @@ async function endedSince(since) {
     .in('status', ENDED)
     .not('acting_user_id', 'is', null)
     .gte('finished_at', since.toISOString())
-    // Nobody is mailed about a demo brand.
+    // Nobody is mailed about a demo brand, or one turned off.
     .eq('brands.is_demo', false)
+    .eq('brands.is_active', true)
     .order('finished_at', { ascending: true });
   if (error) throw new Error(`chat_agent_runs: ${error.message}`);
   const runs = data ?? [];
@@ -121,7 +123,7 @@ function byPersonAndBrand(runs) {
 
 async function sendRuns(runs, choice, day) {
   let sent = 0;
-  for (const group of byPersonAndBrand(runs)) {
+  for (const group of await ofActiveWorkspaces(byPersonAndBrand(runs))) {
     try {
       const audience = await brandAudience(group.organizationId, group.brandId, RUN_KIND);
       if (audience.get(group.userId) !== choice) continue;
@@ -251,11 +253,19 @@ export function renderUsageEmail({ threshold, resetsAt }, locale) {
  */
 export async function sendUsageAlerts() {
   if (!emailReady()) return 0;
-  const { data: orgs, error } = await supabaseAdmin.from('organizations').select('id');
+  // Only workspaces whose plan is active or trialing: the others have no AI
+  // limit to read (getAiUsage refuses them), and get no e-mail.
+  let query = supabaseAdmin.from('organizations').select('id');
+  if (isCloud()) query = query.in('subscription_status', ['active', 'trialing']);
+  const { data: orgs, error } = await query;
   if (error) throw new Error(`organizations: ${error.message}`);
   let sent = 0;
   for (const { id: orgId } of orgs ?? []) {
     try {
+      // No limit, or a limit of 0 (an override that turns AI off): nothing to
+      // warn about, and 0 would read as 100% used at once.
+      const { includedUsd } = await aiBudgetOf(orgId, { credits: false });
+      if (includedUsd === null || !(includedUsd > 0)) continue;
       const usage = await getAiUsage(orgId);
       if (usage.unlimited || usage.percentUsed == null) continue;
       const reached = THRESHOLDS.filter((threshold) => usage.percentUsed >= threshold);

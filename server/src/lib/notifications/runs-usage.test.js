@@ -32,9 +32,15 @@ const audience = vi.hoisted(() => ({ map: new Map() }));
 vi.mock('./choices.js', async (importOriginal) => ({
   ...(await importOriginal()),
   brandAudience: async () => audience.map,
+  ofActiveWorkspaces: async (groups) => groups,
 }));
-const usage = vi.hoisted(() => ({ byOrg: {} }));
-vi.mock('../plan-guard.js', () => ({ getAiUsage: async (orgId) => usage.byOrg[orgId] }));
+const usage = vi.hoisted(() => ({ byOrg: {}, budget: {} }));
+vi.mock('../plan-guard.js', () => ({
+  getAiUsage: async (orgId) => usage.byOrg[orgId],
+  aiBudgetOf: async (orgId) => ({
+    includedUsd: orgId in usage.budget ? usage.budget[orgId] : 25,
+  }),
+}));
 const claims = vi.hoisted(() => ({ taken: new Set() }));
 vi.mock('./sends.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -84,6 +90,7 @@ beforeEach(() => {
   Object.assign(db, { runs: [], chats: [], orgs: [], admins: [], prefs: [] });
   audience.map = new Map([['ana', 'instant']]);
   usage.byOrg = {};
+  usage.budget = {};
   claims.taken = new Set();
   sendEmail.mockClear();
 });
@@ -138,6 +145,13 @@ describe('AI usage (ai_usage, Admins)', () => {
     expect(sendEmail.mock.calls[1][0].subject).toBe(
       'Your workspace has used 100% of its monthly AI limit',
     );
+  });
+
+  it('skips a workspace with no limit or a limit of 0, which would read as used up', async () => {
+    db.orgs = [{ id: 'o1' }, { id: 'o2' }];
+    usage.budget = { o1: 0, o2: null };
+    usage.byOrg = { o1: period(100), o2: period(100) };
+    expect(await sendUsageAlerts()).toBe(0);
   });
 
   it('reaching 100% first sends only that one, never 80% after it', async () => {
