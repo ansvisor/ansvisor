@@ -76,6 +76,12 @@ describe('OrganizationSection', () => {
     expect(org.updateOrganizationName).not.toHaveBeenCalled();
   });
 
+  it('shows no slug: it is made from the first name and nothing reads it', async () => {
+    await renameTo('Acme Inc', false);
+    expect(container.querySelector('#org-slug')).toBeNull();
+    expect(container.textContent).not.toContain('acme');
+  });
+
   it('renames the organization on an active plan', async () => {
     await renameTo('Acme Inc', false);
     expect(org.updateOrganizationName).toHaveBeenCalledWith('Acme Inc');

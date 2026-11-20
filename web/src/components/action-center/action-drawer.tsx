@@ -1,11 +1,13 @@
 'use client';
 
+import { brandGoalText } from '@/lib/kpis/brand-goal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { ChevronRight, Paperclip, Plus, Trash2 } from 'lucide-react';
 import { RemovedNote } from '@/components/action-center/removed-note';
+import { LowConfidenceTag } from '@/components/action-center/low-confidence-tag';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -78,6 +80,7 @@ import { SupportingSignals } from './supporting-signals';
 import { AffectedTab } from './affected-tab';
 import { affectedChips, affectedTotal } from '@/lib/action-center/affected';
 import { useActionStory } from './use-action-story';
+import { goalDatePassed } from '@/lib/action-center/story';
 import { ImproveContext } from './improve-context';
 import { TopicGapContext } from './topic-gap-context';
 import { TopicOpportunityContext } from './topic-opportunity-context';
@@ -538,7 +541,13 @@ export function ActionDrawer({
                     {tag}
                   </Badge>
                 ))}
-            <RemovedNote payload={action.payload ?? {}} />
+            <RemovedNote
+              action={action}
+              onReplanned={async () => {
+                await load();
+                onChanged();
+              }}
+            />
             {isStale(action) && <StalePill />}
           </div>
         </SheetHeader>
@@ -694,7 +703,12 @@ export function ActionDrawer({
               {action.priorityReason && (
                 <>
                   <section>
-                    <p className="text-xs font-medium text-muted-foreground">{t('priority.why')}</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {t('priority.why')}
+                      </p>
+                      <LowConfidenceTag confidence={action.priorityReason.confidence} />
+                    </div>
                     <p className="mt-1">{priorityReasonText(action.priorityReason, tPriority)}</p>
                     {action.priorityReason.confidence && (
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -723,6 +737,29 @@ export function ActionDrawer({
                 <p className="mt-1">
                   {story?.goal ?? actionGoal(action.kind, tTexts, shownAction(action).payload)}
                 </p>
+                {/* A passed goal date is said, never moved (UX audit AC-21, D9). */}
+                {goalDatePassed(story, action.status) && (
+                  <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-amber-700 dark:text-amber-400">
+                    <span className="font-medium">{t('drawer.goalPassed')}</span>
+                    <button
+                      type="button"
+                      className="underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-300"
+                      onClick={() => {
+                        const field = document.getElementById(
+                          'action-drawer-due-date',
+                        ) as HTMLInputElement | null;
+                        field?.focus();
+                        try {
+                          field?.showPicker?.();
+                        } catch {
+                          // Not every browser opens the picker on request; the field has focus.
+                        }
+                      }}
+                    >
+                      {t('drawer.setNewDate')}
+                    </button>
+                  </p>
+                )}
               </section>
               <Separator />
               <section>
@@ -734,8 +771,12 @@ export function ActionDrawer({
                       .map((kpi) => (
                         <div key={kpi.kpiKey} className="rounded-md border px-3 py-2">
                           <p className="text-xs font-medium">{tRegistry(`${kpi.kpiKey}.name`)}</p>
+                          {/* The brand's monthly goal, said so (AC-22, D11). */}
                           <p className="text-xs text-muted-foreground">
-                            {t('drawer.kpiTarget', { target: kpi.target })}
+                            {t('drawer.kpiBrandGoal', {
+                              target: brandGoalText(kpi.kpiKey, kpi.target),
+                              timeframe: kpi.timeframe,
+                            })}
                           </p>
                         </div>
                       ))}

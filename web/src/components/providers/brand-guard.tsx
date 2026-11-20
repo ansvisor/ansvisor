@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { BrandAvatar } from '@/components/brand-avatar';
 import { Button } from '@/components/ui/button';
@@ -69,19 +70,18 @@ function BrandGuardSkeleton() {
 }
 
 function NoBrandsState() {
+  const t = useTranslations('brandGuard');
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
         <Building2 className="h-8 w-8 text-muted-foreground" />
       </div>
-      <h2 className="text-xl font-semibold">No brands yet</h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Create your first brand to start tracking how AI engines talk about you.
-      </p>
+      <h2 className="text-xl font-semibold">{t('noBrandsTitle')}</h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t('noBrandsBody')}</p>
       <AddBrandLink className="mt-6">
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
-          Create Brand
+          {t('createBrand')}
         </Button>
       </AddBrandLink>
     </div>
@@ -100,15 +100,14 @@ function BrandSelector({
   }[];
   onSelect: (id: string) => void;
 }) {
+  const t = useTranslations('brandGuard');
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
         <Building2 className="h-8 w-8 text-muted-foreground" />
       </div>
-      <h2 className="text-xl font-semibold">Select a brand</h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Choose which brand you want to work with.
-      </p>
+      <h2 className="text-xl font-semibold">{t('selectTitle')}</h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t('selectBody')}</p>
 
       <div className="mt-8 grid w-full max-w-md gap-3">
         {brands.map((brand) => (

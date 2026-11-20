@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidKpiTarget } from './registry';
+import { KPI_REGISTRY, isValidKpiTarget } from './registry';
 import { PRESET_KPIS, presetKpiKeys, presetTarget } from './presets';
 
 describe('presetKpiKeys', () => {
@@ -23,8 +23,15 @@ describe('presetTarget', () => {
     expect(presetTarget('ai_referral_traffic', 10)).toBe(12);
   });
 
-  it('keeps a percent target at most 100', () => {
+  it('keeps a percent or score target at most 100', () => {
     expect(presetTarget('share_of_voice', 90)).toBe(100);
+    expect(presetTarget('ai_visibility', 95)).toBe(100);
+  });
+
+  it('gives the Visibility score as a score out of 100, not a percent (AC-02)', () => {
+    expect(KPI_REGISTRY.ai_visibility.unit).toBe('points');
+    expect(isValidKpiTarget('ai_visibility', 100)).toBe(true);
+    expect(isValidKpiTarget('ai_visibility', 101)).toBe(false);
   });
 
   it("starts from the registry's default without a value", () => {

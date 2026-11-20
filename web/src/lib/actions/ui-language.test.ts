@@ -47,7 +47,7 @@ vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => acceptLanguage }),
 }));
 
-const { getUiLanguageState, setUiLanguage } = await import('./ui-language');
+const { getUiLanguageState, setUiLanguage, setSignUpUiLanguage } = await import('./ui-language');
 
 beforeEach(() => {
   signedIn = true;
@@ -145,5 +145,32 @@ describe('setUiLanguage', () => {
     signedIn = false;
     await expect(setUiLanguage('en')).rejects.toThrow('Unauthorized');
     await expect(getUiLanguageState()).rejects.toThrow('Unauthorized');
+  });
+});
+
+describe('setSignUpUiLanguage', () => {
+  it("keeps an offered language in the visitor's cookie, with no person's id, and writes nothing else", async () => {
+    signedIn = false;
+    await setSignUpUiLanguage('en');
+    expect(cookieJar.ansvisor_ui_locale).toBe('en');
+    expect(updates).toEqual([]);
+  });
+
+  it('refuses a language the page does not offer, or one that is none of ours', async () => {
+    signedIn = false;
+    await expect(setSignUpUiLanguage('de')).rejects.toThrow('Unknown language');
+    await expect(setSignUpUiLanguage('en-XA')).rejects.toThrow('Unknown language');
+    await expect(setSignUpUiLanguage('xx' as never)).rejects.toThrow('Unknown language');
+    await expect(setSignUpUiLanguage({ toString: () => 'en' } as never)).rejects.toThrow(
+      'Unknown language',
+    );
+    expect(cookieJar).toEqual({});
+  });
+
+  it('takes any selectable language and en-XA where previews are on, never a hidden one', async () => {
+    preview = true;
+    await setSignUpUiLanguage('de');
+    expect(cookieJar.ansvisor_ui_locale).toBe('de');
+    await expect(setSignUpUiLanguage('ar')).rejects.toThrow('Unknown language');
   });
 });

@@ -3,6 +3,7 @@ import messages from '../../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isTimeZone } from '@/lib/time-zone';
 import type { PlanFacts } from '../plan-facts';
+import { inRunLocale } from '../run-locale';
 import { closeJobNotices } from './deliver';
 import { outsideLockOf, readOutsideEdit, type OutsideRefusal } from './outside';
 import {
@@ -27,12 +28,15 @@ import { readWhen, whenHint, whenPhrase, type ScheduleWhen, type WhenWords } fro
  * free trial, 5 at most (outside.ts). Server only.
  */
 
-const t = createTranslator({ locale: 'en', messages, namespace: 'chatSchedules.page.errors' });
-const whenT = createTranslator({
-  locale: 'en',
-  messages,
-  namespace: 'chatSchedules.when',
-}) as unknown as WhenWords;
+/** Why a change was refused, for the person on the job page: their language inside withRunLocale. */
+const t = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatSchedules.page.errors' }),
+  'chatSchedules.page.errors',
+);
+const whenT = inRunLocale(
+  createTranslator({ locale: 'en', messages, namespace: 'chatSchedules.when' }),
+  'chatSchedules.when',
+) as unknown as WhenWords;
 
 export type ManageResult = { ok: true } | { ok: false; reason: string; message: string };
 

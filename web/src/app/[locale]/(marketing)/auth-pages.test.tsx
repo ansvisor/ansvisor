@@ -52,6 +52,11 @@ vi.mock('@/lib/mcp-oauth/consent-actions', () => ({
 }));
 vi.mock('@/lib/mcp-oauth/authorize', () => ({ CONSENT_ERROR_CODES: ['invalid_request'] }));
 
+// The sign-up page reads the language field's state from the request; only English is offered.
+vi.mock('@/lib/i18n/sign-up-language', () => ({
+  getSignUpLanguageState: async () => ({ options: ['en'], selected: 'en' }),
+}));
+
 const { default: SignUpPage } = await import('./sign-up/page');
 const { default: SignInPage } = await import('./sign-in/page');
 const { default: ForgotPasswordPage } = await import('./forgot-password/page');
@@ -75,8 +80,10 @@ const text = (markup: string) =>
 
 const OLD_PITCH = ['AI visibility platform', 'Drive Growth.', 'Discover new opportunities'];
 
+const signUpPage = await SignUpPage();
+
 describe('the sign-up page (option D)', () => {
-  const markup = html(<SignUpPage />);
+  const markup = html(signUpPage);
   const words = text(markup);
 
   it('leads with one headline, and the card has no title of its own', () => {
@@ -198,7 +205,7 @@ describe('the other pages in the auth frame', () => {
 describe('a browser with no theme yet starts on dark (config/theme.ts)', () => {
   const script = `<script>${newUserThemeScript('dark', 'theme')}</script>`;
   const pages = [
-    ['sign-up', async () => html(<SignUpPage />)],
+    ['sign-up', async () => html(await SignUpPage())],
     ['sign-in', async () => html(await SignInPage({ searchParams: Promise.resolve({}) }))],
     ['forgot password', async () => html(<ForgotPasswordPage />)],
     ['reset password', async () => html(<ResetPasswordPage />)],

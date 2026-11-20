@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { X } from 'lucide-react';
 
@@ -75,10 +76,12 @@ export function LocationPicker({
   value,
   onChange,
   maxSelectable,
-  label = 'Locations',
-  countNoun = 'tracked',
+  label,
+  countNoun,
   allowEmpty = false,
 }: LocationPickerProps) {
+  const t = useTranslations('locationPicker');
+  const noun = countNoun ?? t('tracked');
   // The countries the engines answer from, as the API last read them; until
   // then, or without a read, the picker's own list (PROMPT-015e).
   const engineCountries = useTrackingCountries();
@@ -98,13 +101,15 @@ export function LocationPicker({
               value: country.code,
               // Found by its other names too: "Turkey" or "Turkiye" finds Türkiye.
               label: locationSearchText(country.code),
-              sublabel: missing.length ? `Country · not on ${missing.join(', ')}` : 'Country',
+              sublabel: missing.length
+                ? t('countryMissing', { engines: missing.join(', ') })
+                : t('country'),
             };
           })
       : TRACKING_COUNTRIES.map((region) => ({
           value: region.code,
           label: locationSearchText(region.code),
-          sublabel: 'Country',
+          sublabel: t('country'),
         }));
     // A city only where Google's engines answer from its country.
     const cityCountries = read
@@ -115,7 +120,7 @@ export function LocationPicker({
       ...US_STATES.map((state) => ({
         value: locationCode('US', state.code),
         label: state.label,
-        sublabel: 'United States · state',
+        sublabel: t('usState'),
       })),
       // Cities (PROMPT-015d): asked by Google's engines and the API models.
       ...CITIES.filter((city) => !cityCountries || cityCountries.has(city.country)).map((city) => ({
@@ -123,10 +128,10 @@ export function LocationPicker({
         // Found typed with or without its marks, or by its country: "Ist" finds
         // İstanbul, "Sao" São Paulo, "Turkey" every city in Türkiye.
         label: locationSearchText(cityCode(city.country, city.id)),
-        sublabel: `City · ${regionLabel(city.country)}`,
+        sublabel: t('city', { country: regionLabel(city.country) }),
       })),
     ];
-  }, [engineCountries]);
+  }, [engineCountries, t]);
 
   const selected = new Set(value);
   const atCap = maxSelectable !== null && value.length >= maxSelectable;
@@ -150,24 +155,22 @@ export function LocationPicker({
   return (
     <div>
       <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-        {label}
+        {label ?? t('label')}
         <span className="ms-1 font-normal">
           {maxSelectable === null
-            ? `· ${value.length} ${countNoun}`
-            : `· ${value.length} of ${maxSelectable} available`}
+            ? t('count', { count: value.length, noun })
+            : t('countOf', { count: value.length, max: maxSelectable })}
         </span>
       </label>
 
       <Combobox items={options} value={null} onValueChange={add}>
         <ComboboxTrigger className="w-full">
-          <span className="truncate text-muted-foreground">
-            {atCap ? 'Plan limit reached' : 'Add a country, US state or city'}
-          </span>
+          <span className="truncate text-muted-foreground">{atCap ? t('atCap') : t('add')}</span>
         </ComboboxTrigger>
         <ComboboxContent>
-          <ComboboxInput placeholder="Search locations…" />
+          <ComboboxInput placeholder={t('search')} />
           <ComboboxList>
-            <ComboboxEmpty>No locations match.</ComboboxEmpty>
+            <ComboboxEmpty>{t('empty')}</ComboboxEmpty>
             <ComboboxCollection>
               {(option: LocationOption) => (
                 <ComboboxItem
@@ -179,9 +182,9 @@ export function LocationPicker({
                     <div>{formatRegionDisplay(option.value)}</div>
                     <div className="text-[10px] text-muted-foreground">
                       {selected.has(option.value)
-                        ? `Already ${countNoun}`
+                        ? t('already', { noun })
                         : atCap
-                          ? 'Plan limit reached — remove a location or upgrade'
+                          ? t('atCapHint')
                           : option.sublabel}
                     </div>
                   </div>
@@ -198,7 +201,11 @@ export function LocationPicker({
             <Badge key={code} variant="outline" className="gap-1 text-xs">
               {formatRegionDisplay(code)}
               {canRemove && (
-                <button type="button" onClick={() => remove(code)} aria-label={`Remove ${code}`}>
+                <button
+                  type="button"
+                  onClick={() => remove(code)}
+                  aria-label={t('remove', { location: code })}
+                >
                   <X className="h-3 w-3" />
                 </button>
               )}
@@ -207,12 +214,7 @@ export function LocationPicker({
         </div>
       )}
 
-      {hasCityPick && (
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          A city is asked by Google AI Mode, AI Overview and the API models. ChatGPT, Gemini and
-          Grok answer per country, so track the country too to see them.
-        </p>
-      )}
+      {hasCityPick && <p className="mt-1.5 text-[11px] text-muted-foreground">{t('cityNote')}</p>}
     </div>
   );
 }

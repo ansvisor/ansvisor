@@ -4,7 +4,7 @@ route: /dashboard/action-center/actions
 keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number, action code, previously, translated, your language]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work, order actions, newest first, oldest first]
 plan: all
-updated: 2026-11-19
+updated: 2026-11-20
 last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
@@ -15,16 +15,16 @@ An action is one piece of work with an outcome, built from the evidence behind i
 
 ## Today's focus
 
-What to do today is on the **Today** tab: **Today's focus** lists your three highest-impact open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. The **Actions** tab lists every action; sort it by Priority to see what comes next.
+What to do today is on the **Today** tab: **Today's focus** lists your three highest-impact open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. The **Actions** tab lists every open action; sort it by Priority to see what comes next.
 
 ## Agent work
 
 When Chat is on, the **Agent work** gear beside **Today's focus** sets how far your workspace's agents go without a person:
 
-- **I approve first**, where every workspace starts: every change an agent makes waits for someone to approve it, whatever the agent's mode.
-- **Agent starts on its own**: each agent works in its own mode, **Ask me first**, **Auto** or **Full auto**.
+- **I approve first**, where every workspace starts: each change an agent makes waits for someone's OK.
+- **Agent starts on its own**: each agent follows its own mode, **Ask me first**, **Auto** or **Full auto**.
 
-Neither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. It is also in **Settings › Chat**.
+Either way, agents always ask before publishing or sending. The exception is an agent an Admin has allowed to publish and send on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. The panel opens above the gear, clear of the focus rows' buttons. It is also in **Settings › Chat**.
 
 ## Action categories
 
@@ -55,7 +55,7 @@ The cards at the top count and filter the list, all but **Highest Priority**. Cl
 - **In Progress**: actions someone is working on.
 - **Highest Priority**: the highest level among open actions; it doesn't filter.
 
-Below them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products.
+Below them, filter by category, **Priority**, **Status** (including **Open** and **Stale**) and **Assignee**, or search. **Status** starts on **Open** (new, in progress and on hold, anyone's), the number Today shows; pick **All** to add closed ones. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products.
 
 ## Action codes
 
@@ -79,9 +79,11 @@ Dismissing asks why: it doesn't matter to us, it's already done, the data behind
 
 ## Stale actions
 
-An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: it shows a **Stale** label next to its status, and the **Status** filter's **Stale** lists them all.
+An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: its row keeps one status, **New**, with "No update in 44 d" under it, the open action shows a **Stale** label, and the **Status** filter's **Stale** lists them all.
 
-If it still matters, click **Still relevant** in the open action, or in the row menu. The label goes, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it.
+If it still matters, click **Still relevant** in the open action, or in the row menu. The hint and label go, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it.
+
+An open action whose signals have all resolved shows **Signal resolved, review** instead of a signal count. It stays open: check whether the work is done, then complete or dismiss it.
 
 ## Inside an action
 
@@ -92,6 +94,12 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 - **Tasks**: the work, step by step.
 - **Signals**: the evidence. Click one to open it on the Signals tab.
 - **History**: every change, from status and assignee changes to tasks updated or sent.
+
+The title's count, **Why this action?**, the **Goal**'s "5 of 7 prompts" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows.
+
+## A goal date that has passed
+
+The **Goal** is set for the action's due date, or 30 days after it was raised. Once that day has gone and the action is still open, **Goal date passed** shows under it, with **Set a new date**, which takes you to **Due date**. The date never moves on its own, so a missed goal stays visible.
 
 ## In your language
 
