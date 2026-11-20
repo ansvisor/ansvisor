@@ -4,7 +4,7 @@ import { sendEmail } from '../email.js';
 import { formatLocale, translator, uiLanguagesOf } from '../i18n.js';
 import { actionCode } from '../action-center/action-code.js';
 import { emailsOf } from '../pulse/audience.js';
-import { brandAudience, choosing } from './choices.js';
+import { brandAudience, choosing, ofActiveWorkspaces } from './choices.js';
 import { claimSend, dayKey, markSent, weekKey } from './sends.js';
 import { appOrigin, notificationHtml } from './email-shell.js';
 
@@ -47,6 +47,20 @@ const monthDay = (day, locale) =>
 /** Days from `due` (a date) to `today` (a date): 0 due today, more when late. */
 const daysLate = (due, today) =>
   Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${due}T00:00:00Z`)) / DAY_MS);
+
+/** PostgREST answers at most this many rows a request: longer reads go page by page. */
+const PAGE = 1000;
+
+/** Every row of a query, page by page (`query` builds it afresh for each page). */
+async function allRows(query, what) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await query().range(from, from + PAGE - 1);
+    if (error) throw new Error(`${what}: ${error.message}`);
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < PAGE) return rows;
+  }
+}
 
 /** Each brand of `rows`: brand id → { brandId, brand, organizationId, rows }. */
 function byBrand(rows) {
@@ -118,19 +132,23 @@ export function renderDueEmail({ brand, actions, today }, locale) {
 
 /** Open assigned actions due today or before, with their brand, the latest due first. */
 async function dueActions(today) {
-  const { data, error } = await supabaseAdmin
-    .from('actions')
-    .select(
-      'id, brand_id, action_no, brand_no, category, due_date, assignee_id, brands!inner(name, organization_id)',
-    )
-    .in('status', OPEN)
-    .not('assignee_id', 'is', null)
-    .lte('due_date', today)
-    // Nobody is mailed about a demo brand.
-    .eq('brands.is_demo', false)
-    .order('due_date', { ascending: true });
-  if (error) throw new Error(`actions: ${error.message}`);
-  return data ?? [];
+  return allRows(
+    () =>
+      supabaseAdmin
+        .from('actions')
+        .select(
+          'id, brand_id, action_no, brand_no, category, due_date, assignee_id, brands!inner(name, organization_id)',
+        )
+        .in('status', OPEN)
+        .not('assignee_id', 'is', null)
+        .lte('due_date', today)
+        // Nobody is mailed about a demo brand, or one turned off.
+        .eq('brands.is_demo', false)
+        .eq('brands.is_active', true)
+        .order('due_date', { ascending: true })
+        .order('id', { ascending: true }),
+    'actions',
+  );
 }
 
 /**
@@ -141,7 +159,7 @@ export async function sendDueActions(now = new Date()) {
   if (!emailReady()) return 0;
   const today = dayKey(now);
   let sent = 0;
-  for (const group of byBrand(await dueActions(today))) {
+  for (const group of await ofActiveWorkspaces(byBrand(await dueActions(today)))) {
     try {
       const audience = await brandAudience(group.organizationId, group.brandId, DUE_KIND);
       const assigned = new Map();
@@ -214,16 +232,20 @@ export function renderWeeklyEmail({ brand, completed, open, next }, locale) {
 
 /** Each brand's open actions and those completed since `since`. */
 async function weekOfActions(since) {
-  const { data, error } = await supabaseAdmin
-    .from('actions')
-    .select(
-      'id, brand_id, action_no, brand_no, category, status, priority_score, completed_at, brands!inner(name, organization_id)',
-    )
-    .or(`status.in.(${OPEN.join(',')}),completed_at.gte.${since}`)
-    // Nobody is mailed about a demo brand.
-    .eq('brands.is_demo', false);
-  if (error) throw new Error(`actions: ${error.message}`);
-  return data ?? [];
+  return allRows(
+    () =>
+      supabaseAdmin
+        .from('actions')
+        .select(
+          'id, brand_id, action_no, brand_no, category, status, priority_score, completed_at, brands!inner(name, organization_id)',
+        )
+        .or(`status.in.(${OPEN.join(',')}),completed_at.gte.${since}`)
+        // Nobody is mailed about a demo brand, or one turned off.
+        .eq('brands.is_demo', false)
+        .eq('brands.is_active', true)
+        .order('id', { ascending: true }),
+    'actions',
+  );
 }
 
 /**
@@ -235,7 +257,7 @@ export async function sendWeeklyActions(now = new Date()) {
   const since = new Date(new Date(now) - 7 * DAY_MS).toISOString();
   const key = `weekly:${weekKey(now)}`;
   let sent = 0;
-  for (const group of byBrand(await weekOfActions(since))) {
+  for (const group of await ofActiveWorkspaces(byBrand(await weekOfActions(since)))) {
     try {
       const open = group.rows.filter((a) => OPEN.includes(a.status));
       const what = {
