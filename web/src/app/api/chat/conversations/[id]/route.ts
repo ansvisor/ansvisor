@@ -10,6 +10,7 @@ import {
 } from '@/lib/chat/conversations';
 import { chatActor, runFailure } from '@/lib/chat/run-api';
 import { loadChatThread, type ThreadMessage } from '@/lib/chat/thread';
+import { asViewer } from '@/lib/chat/viewer-locale';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -43,7 +44,8 @@ export async function GET(_req: Request, { params }: Params) {
     const id = chatIdOf((await params).id);
     if (!id) return runFailure(404, 'not_found', 'not_found', 'Not found');
     const chat = await readChat(await createClient(), actor, id);
-    const thread = chat ? await loadChatThread(id) : null;
+    // Its task strips in the viewer's language.
+    const thread = chat ? await asViewer(() => loadChatThread(id), actor.userId) : null;
     if (!chat || !thread) return runFailure(404, 'not_found', 'not_found', 'Not found');
     return NextResponse.json<{ ok: true; chat: ChatListItem; messages: ThreadMessage[] }>({
       ok: true,

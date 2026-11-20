@@ -32,7 +32,7 @@ description: "Common questions about Ansvisor."
   <Accordion title="Why don't you scrape ChatGPT/Gemini directly?">
     For programmable AI engines (OpenAI, Anthropic, Google Gemini API), Ansvisor uses official APIs — most reliable, well-priced, and TOS-compliant. For *web* AI engines that don't have public APIs (like ChatGPT.com search results), Ansvisor uses Cloro as a managed scraping backend. Cloro handles browser fingerprinting, captcha bypass, and rate-limiting at scale.
 
-    These are two distinct fetchers: **Cloro** scrapes the AI answer engines, while **Scrape.do** (via `SCRAPEDO_API_KEY`) fetches your *own* pages for the **Site Audit** feature (proxy + JS render). Self-hosters who want Site Audit need a Scrape.do key.
+    These are two distinct fetchers: **Cloro** scrapes the AI answer engines, while **Scrape.do** (via `SCRAPEDO_API_KEY`) fetches your *own* pages for the **Site Audit** feature (proxy + JS render). Self-hosters who want Site Audit need a Scrape.do key, or can fetch through Firecrawl instead of Scrape.do by setting `FIRECRAWL_API_KEY` and `AUDIT_FETCHER=firecrawl`.
   </Accordion>
 
   <Accordion title="How often does tracking run?">

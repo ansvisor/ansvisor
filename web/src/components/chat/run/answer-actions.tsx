@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { answerFormats, type AnswerExportFormat } from '@/lib/chat/export';
+import { isContentAnswer } from '@/lib/chat/answer-shape';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -68,7 +69,8 @@ function Tip({ label, children }: { label: string; children: ReactElement }) {
  * and Excel when the answer has a table; the server renders the file from
  * the stored answer, so nothing is kept and no AI is used. Save to Files
  * files it for the workspace, once: then it reads "In Files". Open in
- * Content Editor makes a Content draft of it and opens it (item 6). Every
+ * Content Editor makes a Content draft of it and opens it (item 6), on an
+ * answer that reads as a page only (isContentAnswer, UX audit CH-11). Every
  * role may use them all. Send to Action Center (CHAT-09 item 18), on the
  * latest answer for Admins and Managers, asks Chat to propose it as an
  * action, on its approval card.
@@ -96,6 +98,8 @@ export function AnswerActions({
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState(false);
   const formats = useMemo(() => answerFormats(markdown), [markdown]);
+  // Open in Content Editor only on an answer that reads as a page (UX audit CH-11).
+  const page = useMemo(() => isContentAnswer(markdown), [markdown]);
   const extensions = formats.map((format) => `.${format}`).join(' ');
 
   async function copy() {
@@ -237,19 +241,21 @@ export function AnswerActions({
           <Label>{filed ? t('short.inFiles') : t('short.save')}</Label>
         </button>
       </Tip>
-      <Tip label={t('openEditor')}>
-        <button
-          type="button"
-          data-action="answer.openInEditor"
-          aria-label={t('short.openEditor')}
-          aria-disabled={opening}
-          onClick={() => void openInEditor()}
-          className={ICON}
-        >
-          <PenLine className={cn('size-4', opening && 'animate-pulse')} aria-hidden />
-          <Label>{t('short.openEditor')}</Label>
-        </button>
-      </Tip>
+      {page && (
+        <Tip label={t('openEditor')}>
+          <button
+            type="button"
+            data-action="answer.openInEditor"
+            aria-label={t('short.openEditor')}
+            aria-disabled={opening}
+            onClick={() => void openInEditor()}
+            className={ICON}
+          >
+            <PenLine className={cn('size-4', opening && 'animate-pulse')} aria-hidden />
+            <Label>{t('short.openEditor')}</Label>
+          </button>
+        </Tip>
+      )}
       {onSendToActionCenter && (
         <Tip label={t('sendToActionCenter')}>
           <button

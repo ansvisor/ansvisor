@@ -41,12 +41,15 @@ describe('the interface languages', () => {
     expect(Object.keys(LOCALE_NAMES).sort()).toEqual([...LOCALES, PSEUDO_LOCALE].sort());
   });
 
-  it('offer exactly the languages that have a messages file', () => {
+  it('offer only languages that have a messages file, and have a file only for known languages', () => {
     const files = readdirSync(join(__dirname, '../../messages'))
-      .filter((name) => name.endsWith('.json'))
+      .filter((name) => name.endsWith('.json') && name !== 'glossary.json')
       .map((name) => name.replace(/\.json$/, ''))
       .sort();
-    expect([...TRANSLATED_LOCALES].sort()).toEqual(files);
+    // A language is offered once its file is checked on screen; until then it
+    // has a file but isn't listed (LOC-004).
+    for (const locale of TRANSLATED_LOCALES) expect(files).toContain(locale);
+    for (const file of files) expect(LOCALES as readonly string[]).toContain(file);
     // The test language is never a file.
     expect(files).not.toContain(PSEUDO_LOCALE);
   });
@@ -90,9 +93,14 @@ describe('matching the browser’s language', () => {
 });
 
 describe('messages, with English as the fallback', () => {
-  it('shows English for a language that has no messages file, never a raw key', async () => {
-    expect(await loadMessages('de')).toEqual(english);
-    expect(await loadMessages('ja')).toEqual(english);
+  it('lays a language over English: its own words, and every English key, never a raw key', async () => {
+    const keysOf = (tree: unknown, prefix = ''): string[] =>
+      tree && typeof tree === 'object'
+        ? Object.entries(tree).flatMap(([k, v]) => keysOf(v, `${prefix}${k}.`))
+        : [prefix];
+    const german = await loadMessages('de');
+    expect(german).not.toEqual(english);
+    expect(keysOf(german)).toEqual(keysOf(english));
   });
 
   it('keeps English where a language lacks a key, or has it empty', () => {

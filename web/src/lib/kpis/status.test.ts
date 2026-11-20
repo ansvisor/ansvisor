@@ -64,6 +64,8 @@ test('flow targets scale to the viewed window, percent levels never do', () => {
   expect(scaleTargetToWindow(100, 'count', 90, 30)).toBe(300);
   // A rate goal is a level: 50% is 50% over any window.
   expect(scaleTargetToWindow(50, 'percent', 7, 30)).toBe(50);
+  // So is the Visibility score, out of 100.
+  expect(scaleTargetToWindow(40, 'points', 7, 30)).toBe(40);
   // Window equal to the timeframe is a no-op.
   expect(scaleTargetToWindow(100, 'sessions', 30, 30)).toBe(100);
   // A tiny slice never rounds to zero — progress against 0 is undefined.

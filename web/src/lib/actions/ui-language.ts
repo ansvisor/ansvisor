@@ -15,6 +15,7 @@ import {
 } from '@/i18n/locales';
 import { canPreviewLocales } from '@/lib/i18n/preview';
 import { automaticLocale } from '@/lib/i18n/resolve-locale';
+import { signUpLanguageOptions } from '@/lib/i18n/sign-up-language';
 import {
   UI_LOCALE_COOKIE,
   UI_LOCALE_COOKIE_MAX_AGE,
@@ -110,4 +111,22 @@ export async function setUiLanguage(locale: AnyUiLocale | null): Promise<void> {
     sameSite: 'lax',
   });
   revalidatePath('/dashboard', 'layout');
+}
+
+/**
+ * The sign-up page's Language field, before there is an account: the
+ * visitor's own cookie only, with no person's id ("tr"). It needs no session
+ * and writes nothing else. On their first signed-in request the proxy saves it
+ * on their profile, if their profile has no language yet (sign-in-locale.ts).
+ * Only a language the page offers is taken.
+ */
+export async function setSignUpUiLanguage(locale: AnyUiLocale): Promise<void> {
+  const offered = await signUpLanguageOptions();
+  if (typeof locale !== 'string' || !offered.includes(locale)) throw new Error('Unknown language');
+
+  (await cookies()).set(UI_LOCALE_COOKIE, formatUiLocaleCookie(locale, null), {
+    path: '/',
+    maxAge: UI_LOCALE_COOKIE_MAX_AGE,
+    sameSite: 'lax',
+  });
 }
