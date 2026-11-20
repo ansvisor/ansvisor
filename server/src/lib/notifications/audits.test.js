@@ -29,6 +29,7 @@ const audience = vi.hoisted(() => ({ byKind: {} }));
 vi.mock('./choices.js', async (importOriginal) => ({
   ...(await importOriginal()),
   brandAudience: async (_o, _b, kind) => audience.byKind[kind] ?? new Map(),
+  ofActiveWorkspaces: async (groups) => groups,
 }));
 const claims = vi.hoisted(() => ({ taken: new Set() }));
 vi.mock('./sends.js', async (importOriginal) => ({
