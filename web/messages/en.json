@@ -5870,7 +5870,7 @@
         "whatsNew": "What’s new"
       },
       "byFocus": {
-        "rivalRose": "{rival}’s mention rate rose {points, number} points this week.",
+        "rivalRose": "<link>{rival}</link>’s mention rate rose {points, number} points this week.",
         "startTitle": "Start with a question",
         "newForYou": {
           "title": "New for you",
