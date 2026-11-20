@@ -100,7 +100,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'digest',
     fallback: 'weekly',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'weekly_actions',
@@ -109,7 +109,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'weekly',
     fallback: 'weekly',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'run_finished',

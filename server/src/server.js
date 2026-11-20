@@ -91,6 +91,7 @@ import {
   sendCriticalActionSummaries,
 } from './lib/notifications/critical-action.js';
 import { sendDraftsReview } from './lib/notifications/drafts-review.js';
+import { sendDueActions, sendWeeklyActions } from './lib/notifications/actions-digest.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
@@ -495,6 +496,13 @@ async function runDailyTracking() {
       });
       sendDraftsReview().catch((err) => {
         logger.error({ err }, '[notifications] drafts review crashed');
+      });
+      // Actions due or late for their assignee, and Mondays' action summary.
+      sendDueActions().catch((err) => {
+        logger.error({ err }, '[notifications] due actions crashed');
+      });
+      sendWeeklyActions().catch((err) => {
+        logger.error({ err }, '[notifications] weekly actions crashed');
       });
       return sweepAutoAudits({
         readInbox: readOpportunityInbox,
