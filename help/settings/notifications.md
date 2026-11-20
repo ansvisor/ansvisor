@@ -19,7 +19,7 @@ The e-mails are grouped: **Brand Visibility** (the Daily Pulse), **AI Traffic** 
 
 Until you save for the first time, the page shows the e-mails you get today, so nothing changes by itself.
 
-E-mails marked **Coming soon** keep the choice you save and start once they're ready. **Billing and security** e-mails are always sent.
+**Billing and security** e-mails are always sent.
 
 ## Critical actions and drafts in review
 
@@ -42,6 +42,12 @@ Each e-mail comes once, only for brands you can open.
 **Score dropped** tells you when a page's new audit scores 5 points or more below its previous one, such as 70 → 61, **Right away** or in the day's summary. A page's first audit is never a drop.
 
 Both are **Off** until you pick them, and each audit is told once.
+
+## Run finished and AI usage
+
+**Run finished** tells you when an agent's run that acted for you ends, finished, failed or stopped, with the agent's name and a link to the run's chat: **Right away**, gathering the runs that ended in the last few minutes per brand, or in a **Daily summary**. It's **Off** until you pick it.
+
+**AI usage**, for Admins, tells you when the workspace has used 80% of its monthly AI limit, then 100%, once each a month, with a link to **Billing**. It's on until you turn it off; plans without a limit never get it.
 
 ## Set a brand apart
 
