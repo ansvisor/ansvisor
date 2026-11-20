@@ -66,6 +66,22 @@ describe('todayStep', () => {
     });
     expect(todayStep(null)).toBeNull();
   });
+
+  it('names the count the action has now, as its title does (AC-05)', () => {
+    const step = task(1, {
+      task_key: 'map_prompts_to_content',
+      title: null,
+      title_params: { count: 37, entity: 'prompts' },
+    });
+    // 37 when the action was created, 21 removed since: the title says 16.
+    const payload = { targetEntity: 'prompts', targetCount: 16, createdTargetCount: 37 };
+    expect(todayStep(step, payload)?.titleParams).toEqual({ count: 16, entity: 'prompts' });
+    // Nothing removed: the step's own count.
+    expect(todayStep(step, { targetEntity: 'prompts', targetCount: 37 })?.titleParams).toEqual({
+      count: 37,
+      entity: 'prompts',
+    });
+  });
 });
 
 describe('weekStart', () => {
