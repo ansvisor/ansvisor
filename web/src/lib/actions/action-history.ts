@@ -194,7 +194,8 @@ function resultsFrom(validation: ValidationSnapshot | null): ActionResultMetric[
         ...(before === 0
           ? {}
           : { deltaPercent: Math.round(((after - before) / before) * 1000) / 10 }),
-        unit: m.unit as ActionResultMetric['unit'],
+        // The sweep stores the Visibility score as 'percent'; it is a score (D2).
+        unit: m.metric === 'ai_visibility' ? 'points' : (m.unit as ActionResultMetric['unit']),
         // Every metric the sweep measures reads higher-is-better.
         direction: 'higher_is_better',
       } satisfies ActionResultMetric;

@@ -185,7 +185,7 @@ describe('inviteMember', () => {
     for (const brandIds of [[], [OTHER], ['not-an-id']]) {
       expect(
         await inviteMember('cal@acme.test', 'analyst', { scope: 'selected', brandIds }),
-      ).toEqual({ error: 'Choose at least one brand' });
+      ).toEqual({ error: 'Choose at least one brand', code: 'no_brands' });
     }
     expect(inserted('invitations')).toBeUndefined();
   });
@@ -219,14 +219,17 @@ describe('setMemberBrands', () => {
   it('never narrows an admin, the caller included, nor to no brand', async () => {
     expect(await setMemberBrands(ME, { scope: 'selected', brandIds: [ACME] })).toEqual({
       error: 'Admins always have All brands',
+      code: 'admin_all_brands',
     });
     db.targetRole = 'admin';
     expect(await setMemberBrands(BOB, { scope: 'selected', brandIds: [ACME] })).toEqual({
       error: 'Admins always have All brands',
+      code: 'admin_all_brands',
     });
     db.targetRole = 'analyst';
     expect(await setMemberBrands(BOB, { scope: 'selected', brandIds: [OTHER] })).toEqual({
       error: 'Choose at least one brand',
+      code: 'no_brands',
     });
     expect(db.rpcs).toEqual([]);
   });

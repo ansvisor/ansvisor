@@ -25,7 +25,7 @@ Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists A
 
 A card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with "Every Monday at 9:00, /skill" in the box, to change before you send. **Create agent** starts an agent on it.
 
-Admins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it.
+Admins turn a skill on or off for the whole workspace with its **Enabled** switch, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it.
 
 ## When Chat picks a skill
 

@@ -50,7 +50,8 @@ export interface ActionResultMetric {
   after?: number;
   delta?: number;
   deltaPercent?: number;
-  unit: 'percent' | 'number' | 'sessions' | 'citations' | 'mentions' | 'prompts';
+  /** `points`: the Visibility score, out of 100, never shown with a % (AC-02, D2). */
+  unit: 'percent' | 'points' | 'number' | 'sessions' | 'citations' | 'mentions' | 'prompts';
   direction: 'higher_is_better' | 'lower_is_better';
 }
 

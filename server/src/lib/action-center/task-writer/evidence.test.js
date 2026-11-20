@@ -186,6 +186,21 @@ describe('buildEvidence', () => {
   it('has nothing to write about without targets', () => {
     expect(hasTargets(buildEvidence([{ id: 's', kind: 'sharp_drop', payload: {} }]))).toBe(false);
   });
+
+  it('leaves out the prompts removed since the action was created, by id or text (AC-13)', () => {
+    const signals = [
+      lost(),
+      lost({ promptId: 'p2', promptText: 'Is decaf coffee healthy?' }),
+      lost({ promptId: null, promptText: 'Best coffee beans for cold brew?' }),
+    ];
+    const evidence = buildEvidence(signals, {
+      removedPrompts: new Set(['p1', 'Best coffee beans for cold brew?']),
+    });
+    expect(evidence.prompts.map((p) => p.id)).toEqual(['p2']);
+    // The page each lost stays: the tasks can still be about it.
+    expect(evidence.pages).toHaveLength(1);
+    expect([...evidence.pages[0].prompts].map((p) => p.id)).toEqual(['p2']);
+  });
 });
 
 describe('evidenceForPrompt', () => {

@@ -77,19 +77,20 @@ export function ActionCenterTabs() {
               href={tab.href}
               aria-current={isActive ? 'page' : undefined}
               className={cn(
-                '-mb-px border-b-2 pb-2 text-sm font-medium transition-colors',
+                'relative -mb-px border-b-2 pb-2 text-sm font-medium transition-colors',
                 isActive
                   ? 'border-foreground text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground',
               )}
             >
               {t(tab.key)}
-              {/* The count's room is kept from the first paint, empty until it
-                  arrives, so the row doesn't move under an early click. */}
+              {/* The count sits in the gap after its tab, taking no width: every
+                  tab keeps the same gap (UX audit GL-03), and the row doesn't
+                  move under an early click when the count arrives. */}
               {counted && (
                 <span
                   data-count={tab.key}
-                  className="ms-1.5 inline-block min-w-[2ch] font-normal tabular-nums text-muted-foreground"
+                  className="absolute start-full top-0 ms-1.5 font-normal tabular-nums text-muted-foreground"
                 >
                   {count > 0 ? count : null}
                 </span>
