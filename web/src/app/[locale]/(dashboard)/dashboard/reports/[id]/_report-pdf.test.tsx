@@ -136,6 +136,45 @@ describe('ReportPdfDocument', () => {
   });
 });
 
+describe('ReportPdfDocument › Competitor Leaderboard sample (RP-07)', () => {
+  const entry = (name: string, score: number, visiblePrompts: number) => ({
+    name,
+    isOwnBrand: false,
+    avgVisibilityScore: 0,
+    visibilityRate: Math.round((visiblePrompts / 308) * 1000) / 10,
+    visiblePrompts,
+    promptCount: 308,
+    change: null,
+    score,
+    scoreChange: null,
+    mentionAnswers: 0,
+    citationAnswers: 0,
+    totalMentions: 0,
+    totalCitations: 0,
+  });
+  const ranked: Report = {
+    ...report,
+    payload: {
+      ...report.payload,
+      // The audit's case: GeoGenie scored 10.3 from one prompt.
+      competitors: [
+        entry('GeoGenie', 10.3, 1),
+        entry('Opttab', 11, 14),
+        entry('Cognizo', 10.6, 93),
+      ] as unknown as Report['payload']['competitors'],
+    },
+  };
+
+  it('names its metric and lists a brand under the sample last, as Low sample', async () => {
+    const pdf = await draw(null, ranked);
+    const text = pdf.textContent!;
+    expect(text).toContain('Ranked by Visibility score');
+    expect(text.indexOf('Opttab')).toBeLessThan(text.indexOf('Cognizo'));
+    expect(text.indexOf('Cognizo')).toBeLessThan(text.indexOf('GeoGenie'));
+    expect(text).toContain('GeoGenie · Low sample');
+  });
+});
+
 describe('ReportPdfDocument › Site Audit Score', () => {
   const withAudit = (auditScore: NonNullable<Report['payload']['auditScore']>): Report => ({
     ...report,

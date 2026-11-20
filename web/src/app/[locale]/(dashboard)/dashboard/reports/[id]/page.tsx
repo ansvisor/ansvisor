@@ -34,6 +34,7 @@ import {
 import { ArrowLeft, FileDown, Loader2, RotateCw } from 'lucide-react';
 import { formatDate, formatMoney, formatNumber, percentChange } from '@/lib/format';
 import { getPlatformName } from '@/lib/traffic-platforms';
+import { LEADERBOARD_MIN_PROMPTS, leaderboardRows } from '@/lib/reports/leaderboard';
 import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { REPORT_TEMPLATES } from '@/lib/reports/templates';
@@ -495,6 +496,12 @@ export default function ReportDetailPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t('competitorLeaderboard')}</CardTitle>
+              {/* Names the metric the rows are ranked by and the sample rule (RP-07, D8). */}
+              {payload.competitors.some((c) => typeof c.score === 'number') && (
+                <p className="text-sm text-muted-foreground">
+                  {t('leaderboardRankNote', { min: LEADERBOARD_MIN_PROMPTS })}
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               {payload.competitors.length === 0 ? (
@@ -515,12 +522,20 @@ export default function ReportDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {payload.competitors.map((c) => (
+                    {leaderboardRows(payload.competitors).map(({ entry: c, lowSample }) => (
                       <TableRow key={c.name} className={cn(c.isOwnBrand && 'bg-primary/5')}>
                         <TableCell className={cn('font-medium', c.isOwnBrand && 'text-primary')}>
                           {c.name}
                           {c.isOwnBrand && (
                             <span className="ms-2 text-xs text-muted-foreground">{t('you')}</span>
+                          )}
+                          {lowSample && (
+                            <span
+                              className="ms-2 rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
+                              title={t('lowSampleTip', { min: LEADERBOARD_MIN_PROMPTS })}
+                            >
+                              {t('lowSample')}
+                            </span>
                           )}
                         </TableCell>
                         <TableCell className="text-end">
