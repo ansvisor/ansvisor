@@ -22,7 +22,7 @@ The **Tracked Competitors** card lists every competitor with its domain and:
 
 **No data** means no answer in the window was measured for that competitor yet, for example one you've just added.
 
-The **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as "Scores cover the last 7 days." **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
+The **Date Range** under the page's title (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as "Scores cover the last 7 days." **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
 
 ## Filter and group by type
 
@@ -62,6 +62,10 @@ Click a prompt to see each platform once, with its scores, and its locations und
 
 **Export CSV** beside the comparison's title downloads it per prompt and platform: the model, region, runs, both scores, the difference and the latest run.
 
+
+## Find a prompt in the comparison
+
+Above the list, **Search prompts** keeps the prompts with every word you type. Sort them **Most recent first** or **Widest gap first**, and pick a **Category** when your prompts have them. The list shows 20 prompts at a time; **Show more** adds the next ones. When two prompts differ only in letter case, a line says so: pause the extra copy on **Prompts** so their answers count once.
 ## The competitor's pages over time
 
 Below the comparison, a card shows why the competitor may be rising. Its chart shows the answers that mentioned the competitor, and your brand, each week for the last twelve weeks. A marker sits on each week something happened to its pages; the events are listed newest first:

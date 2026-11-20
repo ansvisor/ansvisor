@@ -3072,7 +3072,7 @@
         },
         {
           "heading": "Tracked Competitors",
-          "text": "The **Tracked Competitors** card lists every competitor with its domain and:\n\n- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.\n- the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.\n\n**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.\n\nThe **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as \"Scores cover the last 7 days.\" **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations."
+          "text": "The **Tracked Competitors** card lists every competitor with its domain and:\n\n- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.\n- the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.\n\n**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.\n\nThe **Date Range** under the page's title (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as \"Scores cover the last 7 days.\" **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations."
         },
         {
           "heading": "Filter and group by type",
@@ -3093,6 +3093,10 @@
         {
           "heading": "Prompt-by-Prompt Comparison",
           "text": "**Prompt-by-Prompt Comparison** lists every prompt with **You**, **Them** and **Diff**, the most recently run first, and how many platforms and runs it has.\n\nClick a prompt to see each platform once, with its scores, and its locations under it, each with its runs. A location answered by two models names the model. A score from fewer than 10 runs is marked **Low sample**: one answer can move it a lot. Click a location with more than one run to see its **Previous runs**, with the date, both scores, the difference and the sentiment. The eye icon opens an AI answer.\n\n**Export CSV** beside the comparison's title downloads it per prompt and platform: the model, region, runs, both scores, the difference and the latest run."
+        },
+        {
+          "heading": "Find a prompt in the comparison",
+          "text": "Above the list, **Search prompts** keeps the prompts with every word you type. Sort them **Most recent first** or **Widest gap first**, and pick a **Category** when your prompts have them. The list shows 20 prompts at a time; **Show more** adds the next ones. When two prompts differ only in letter case, a line says so: pause the extra copy on **Prompts** so their answers count once."
         },
         {
           "heading": "The competitor's pages over time",

@@ -16038,7 +16038,19 @@
       "runs": "{count, plural, one {# run} other {# runs}}",
       "noLocation": "No location",
       "lowSample": "Low sample",
-      "lowSampleTip": "Fewer than 10 runs: one answer can move this score a lot."
+      "lowSampleTip": "Fewer than 10 runs: one answer can move this score a lot.",
+      "list": {
+        "search": "Search prompts",
+        "sortLabel": "Sort prompts",
+        "sortRecent": "Most recent first",
+        "sortDiff": "Widest gap first",
+        "categoryLabel": "Category",
+        "allCategories": "All categories",
+        "count": "{shown} of {total, plural, one {# prompt} other {# prompts}}",
+        "noMatch": "No prompt matches.",
+        "more": "Show {count} more",
+        "caseRepeats": "{count, plural, one {# prompt repeats another but for letter case} other {# prompts repeat others but for letter case}}: pause the extra copy on Prompts so their answers count once."
+      }
     },
     "timeline": {
       "title": "{competitor}'s pages over time",

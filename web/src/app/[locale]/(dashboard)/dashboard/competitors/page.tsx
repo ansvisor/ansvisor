@@ -69,6 +69,13 @@ import { exportFileName } from '@/lib/white-label/export-name';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { engineCount, engineRows, lowSample } from '@/lib/competitors/prompt-engines';
 import {
+  PROMPT_PAGE_SIZE,
+  caseRepeats,
+  listPrompts,
+  promptCategories,
+  type PromptSort,
+} from '@/lib/competitors/prompt-list';
+import {
   Plus,
   Sparkles,
   Trash2,
@@ -860,7 +867,24 @@ function PromptComparisonGrouped({
   loadRuns: LoadRuns;
 }) {
   const t = useTranslations('competitors');
-  const groups = groupH2HByPrompt(engineGroups);
+  const all = groupH2HByPrompt(engineGroups);
+  // Search, sort, category and pages (UX audit CP-12).
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<PromptSort>('recent');
+  const [category, setCategory] = useState('');
+  const [shown, setShown] = useState(PROMPT_PAGE_SIZE);
+  const categories = promptCategories(all);
+  const listed = listPrompts(all, { query, category, sort });
+  const groups = listed.slice(0, shown);
+  const repeats = caseRepeats(all);
+  const sortItems = [
+    { value: 'recent', label: t('h2h.list.sortRecent') },
+    { value: 'diff', label: t('h2h.list.sortDiff') },
+  ];
+  const categoryItems = [
+    { value: '', label: t('h2h.list.allCategories') },
+    ...categories.map((name) => ({ value: name, label: name })),
+  ];
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
 
@@ -880,7 +904,7 @@ function PromptComparisonGrouped({
       return next;
     });
 
-  if (groups.length === 0) {
+  if (all.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
         {t('h2h.noPromptData')}
@@ -890,6 +914,68 @@ function PromptComparisonGrouped({
 
   return (
     <div className="space-y-2">
+      <div data-slot="prompt-list-controls" className="flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShown(PROMPT_PAGE_SIZE);
+          }}
+          placeholder={t('h2h.list.search')}
+          aria-label={t('h2h.list.search')}
+          data-action="competitors.searchPrompts"
+          className="h-8 w-full text-xs sm:w-64"
+        />
+        <Select
+          items={sortItems}
+          value={sort}
+          onValueChange={(next: string | null) => setSort(next === 'diff' ? 'diff' : 'recent')}
+        >
+          <SelectTrigger size="sm" className="text-xs" aria-label={t('h2h.list.sortLabel')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {sortItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {categories.length > 0 && (
+          <Select
+            items={categoryItems}
+            value={category}
+            onValueChange={(next: string | null) => {
+              setCategory(next ?? '');
+              setShown(PROMPT_PAGE_SIZE);
+            }}
+          >
+            <SelectTrigger size="sm" className="text-xs" aria-label={t('h2h.list.categoryLabel')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categoryItems.map((item) => (
+                <SelectItem key={item.value || ' all'} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <span className="text-xs text-muted-foreground tabular-nums" data-slot="prompt-list-count">
+          {t('h2h.list.count', { shown: groups.length, total: listed.length })}
+        </span>
+      </div>
+      {repeats > 0 && (
+        <p data-slot="prompt-case-repeats" className="text-xs text-muted-foreground">
+          {t('h2h.list.caseRepeats', { count: repeats })}
+        </p>
+      )}
+      {listed.length === 0 && (
+        <p className="py-6 text-center text-sm text-muted-foreground">{t('h2h.list.noMatch')}</p>
+      )}
       {groups.map((group) => {
         const isOpen = expanded.has(group.promptId);
         const modelGroups = group.groups;
@@ -1000,6 +1086,18 @@ function PromptComparisonGrouped({
           </div>
         );
       })}
+      {listed.length > groups.length && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-action="competitors.morePrompts"
+          className="w-full text-xs"
+          onClick={() => setShown((n) => n + PROMPT_PAGE_SIZE)}
+        >
+          {t('h2h.list.more', { count: Math.min(PROMPT_PAGE_SIZE, listed.length - groups.length) })}
+        </Button>
+      )}
     </div>
   );
 }
@@ -1855,46 +1953,42 @@ export default function CompetitorsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header: the meter and Ask Chat at its bottom, beside the range's buttons. */}
-      <HeaderWithAiUsage align="end">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+      {/* Header as on Visibility (UX audit CP-11): the title and the page's buttons on
+          its row, the meter and Ask Chat at its end; the date range on its own row under it. */}
+      <HeaderWithAiUsage>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <p className="text-muted-foreground">{t('description')}</p>
           </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex items-center gap-2">
-              <DateRangeFilter
-                value={datePreset}
-                presets={COMPETITOR_DATE_PRESETS}
-                onChange={setDatePreset}
-                from={dateFrom}
-                to={dateTo}
-                onFromChange={setDateFrom}
-                onToChange={setDateTo}
-              />
-              {comparisonLoading && (
-                <Loader2
-                  className="mb-2 h-4 w-4 animate-spin text-muted-foreground"
-                  aria-hidden="true"
-                />
-              )}
+          {canManage && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button variant="outline" className="gap-2" onClick={openSuggest}>
+                <Sparkles className="h-4 w-4" />
+                {t('suggestCompetitors')}
+              </Button>
+              <Button className="gap-2" onClick={openAdd}>
+                <Plus className="h-4 w-4" />
+                {t('addCompetitor')}
+              </Button>
             </div>
-            {canManage && (
-              <>
-                <Button variant="outline" className="gap-2" onClick={openSuggest}>
-                  <Sparkles className="h-4 w-4" />
-                  {t('suggestCompetitors')}
-                </Button>
-                <Button className="gap-2" onClick={openAdd}>
-                  <Plus className="h-4 w-4" />
-                  {t('addCompetitor')}
-                </Button>
-              </>
-            )}
-          </div>
+          )}
         </div>
       </HeaderWithAiUsage>
+      <div data-slot="competitors-filters" className="flex flex-wrap items-center gap-2">
+        <DateRangeFilter
+          value={datePreset}
+          presets={COMPETITOR_DATE_PRESETS}
+          onChange={setDatePreset}
+          from={dateFrom}
+          to={dateTo}
+          onFromChange={setDateFrom}
+          onToChange={setDateTo}
+        />
+        {comparisonLoading && (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+        )}
+      </div>
 
       {competitors.length === 0 ? (
         <EmptyState
