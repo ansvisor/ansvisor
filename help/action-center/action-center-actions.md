@@ -21,10 +21,10 @@ What to do today is on the **Today** tab: **Today's focus** lists your three hig
 
 When Chat is on, the **Agent work** gear beside **Today's focus** sets how far your workspace's agents go without a person:
 
-- **I approve first**, where every workspace starts: every change an agent makes waits for someone to approve it, whatever the agent's mode.
-- **Agent starts on its own**: each agent works in its own mode, **Ask me first**, **Auto** or **Full auto**.
+- **I approve first**, where every workspace starts: each change an agent makes waits for someone's OK.
+- **Agent starts on its own**: each agent follows its own mode, **Ask me first**, **Auto** or **Full auto**.
 
-Neither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. It is also in **Settings › Chat**.
+Either way, agents always ask before publishing or sending. The exception is an agent an Admin has allowed to publish and send on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. The panel opens above the gear, clear of the focus rows' buttons. It is also in **Settings › Chat**.
 
 ## Action categories
 
