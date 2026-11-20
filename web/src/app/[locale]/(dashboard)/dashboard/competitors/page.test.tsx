@@ -70,10 +70,14 @@ vi.mock('@/components/filters/date-range-filter', () => ({ DateRangeFilter: () =
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-const { chatPage } = vi.hoisted(() => ({ chatPage: vi.fn() }));
+const { chatPage, chatPanel } = vi.hoisted(() => ({
+  chatPage: vi.fn(),
+  chatPanel: vi.fn((): { available: boolean; fill: (text: string) => void } | null => null),
+}));
 vi.mock('@/components/chat/panel/chat-panel-context', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useChatPageContext: chatPage,
+  useChatPanel: chatPanel,
 }));
 const { default: CompetitorsPage } = await import('./page');
 
@@ -365,5 +369,84 @@ describe('the head-to-head over the picker’s days (UX audit CP-02, CP-08)', ()
     window.history.replaceState(null, '', '/?competitor=c1&preset=all');
     await render(false);
     expect(await h2hCall()).toEqual(['b1', 'c1', {}]);
+  });
+});
+
+describe('a gap’s next steps (UX audit CP-09)', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    chatPanel.mockReset().mockReturnValue(null);
+    window.history.replaceState(null, '', '/');
+  });
+
+  const noParts = {
+    answers: 0,
+    mentionAnswers: 0,
+    citationAnswers: 0,
+    invPosition: 0,
+    positionCount: 0,
+  };
+  const gap = (platform: string) => ({
+    promptId: 'p1',
+    promptText: 'Best CRM for startups',
+    platform,
+    rawPlatform: platform.toLowerCase(),
+    modelUsed: '',
+    rawModelUsed: null,
+    runs: 12,
+    brandScore: 20,
+    competitorScore: 60,
+    diff: -40,
+    latestAt: '2026-11-19T10:00:00Z',
+    parts: { brand: noParts, competitor: noParts },
+  });
+
+  async function openGaps() {
+    const tracking = await import('@/lib/actions/tracking');
+    vi.mocked(tracking.getHeadToHeadComparison).mockResolvedValue({
+      groups: [gap('ChatGPT'), gap('Gemini')],
+      platformRows: [],
+      brandAvg: 0,
+      competitorAvg: 0,
+      gaps: [gap('ChatGPT'), gap('Gemini')],
+      strengths: [],
+    } as never);
+    window.history.replaceState(null, '', '/?competitor=c1');
+    await render(false);
+  }
+
+  it('offers Create action and Ask Chat on each gap, which write the gap in Chat’s box', async () => {
+    const fill = vi.fn();
+    chatPanel.mockReturnValue({ available: true, fill });
+    await openGaps();
+    const create = container.querySelector<HTMLButtonElement>(
+      '[data-action="competitors.gapCreateAction"]',
+    )!;
+    expect(create.textContent).toBe('Create action');
+    await act(async () => create.click());
+    expect(fill).toHaveBeenLastCalledWith(
+      expect.stringContaining('Send this gap to the Action Center'),
+    );
+    expect(fill.mock.lastCall![0]).toContain('“Best CRM for startups”');
+    expect(fill.mock.lastCall![0]).toContain('platforms: ChatGPT, Gemini');
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-action="competitors.gapAskChat"]')!.click(),
+    );
+    expect(fill.mock.lastCall![0]).toMatch(/^Why does Rival score \d+ and we score \d+/);
+  });
+
+  it('shows neither where Chat’s panel isn’t', async () => {
+    await openGaps();
+    expect(container.textContent).toContain('Best CRM for startups');
+    expect(container.querySelector('[data-action="competitors.gapCreateAction"]')).toBeNull();
   });
 });

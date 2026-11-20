@@ -3084,7 +3084,7 @@
         },
         {
           "heading": "Gaps and Strengths",
-          "text": "- **Gaps** lists up to 10 prompt and platform combinations where the competitor scores higher, grouped by prompt, the widest gap first.\n- **Strengths** lists up to 10 where you score higher, your biggest lead first.\n\nA prompt with several platforms opens to show each one."
+          "text": "- **Gaps** lists up to 10 prompt and platform combinations where the competitor scores higher, grouped by prompt, the widest gap first.\n- **Strengths** lists up to 10 where you score higher, your biggest lead first.\n\nA prompt with several platforms opens to show each one.\n\nEach gap has two next steps. **Create action** opens Chat beside the page with a request to send the gap to the Action Center; Chat writes its tasks, checks for an action that already covers it and asks before creating it. **Ask Chat** asks why the competitor is ahead there and what to change first. Both wait in Chat's box for you to send."
         },
         {
           "heading": "Prompt-by-Prompt Comparison",

@@ -54,6 +54,8 @@ At the top of the comparison, **Your Visibility score** and **Their Visibility s
 
 A prompt with several platforms opens to show each one.
 
+Each gap has two next steps. **Create action** opens Chat beside the page with a request to send the gap to the Action Center; Chat writes its tasks, checks for an action that already covers it and asks before creating it. **Ask Chat** asks why the competitor is ahead there and what to change first. Both wait in Chat's box for you to send.
+
 ## Prompt-by-Prompt Comparison
 
 **Prompt-by-Prompt Comparison** lists every prompt with **You**, **Them** and **Diff**, the most recently run first.
