@@ -224,7 +224,7 @@ describe('ReportCardPdfDocument', () => {
     expect(value).toContain(
       'Adds Google AI Overviews and Google AI Mode every day: the Growth band on page 1.',
     );
-    expect(value).toContain('200 prompts tracked every day, 4 brands.');
+    expect(value).toContain('250 prompts tracked every day, 4 brands.');
     expect(value).toContain('5× the AI usage: more content opportunities and drafts');
     expect(value).toContain('Site Audit: 500 pages a month.');
     expect(value).toContain('Full auto: the agents you choose publish on their own.');
