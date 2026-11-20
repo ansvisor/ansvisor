@@ -16282,14 +16282,18 @@
         "trafficConnectLink": "Connect"
       },
       "method": {
-        "label": "How it is measured",
         "baseline": "Baseline: 14 days before ship",
         "checkpoints": "Checkpoints: 7 · 14 · 30 · 90 days",
         "checkpointsTip": "7 days: pending, early signal · 14 days: first verdict · 30 days: confirmed · 90 days: lasting effect",
         "control": "Control: untouched similar prompts",
         "minChange": "Min. change: 3 pts",
         "noCost": "Scheduled tracking data · no extra cost",
-        "correlation": "Correlation, not causation"
+        "correlation": "Correlation, not causation",
+        "howWeMeasure": "How we measure",
+        "shippedDefinition": "Shipped means the change went live: published to your CMS, its pull request merged, or marked as shipped. A draft waiting for review isn't shipped yet.",
+        "baselineHelp": "Each change starts from its target prompts' visibility over those days.",
+        "controlHelp": "They show what would have happened anyway.",
+        "correlationHelp": "A result shows that things moved together, not that the change alone moved them."
       },
       "filterLabel": "Filter by outcome",
       "filters": {
@@ -16359,6 +16363,8 @@
       },
       "capped": "Showing the first {count, number} changes shipped in {month}; the counts above cover only these.",
       "empty": "Nothing shipped in {month}.",
+      "emptyNext": "Ship an action to start measuring impact.",
+      "emptyNextLink": "Open Today's focus",
       "emptyFilter": "No actions with this outcome in {month}.",
       "loadFailed": "Couldn't load what Ansvisor did. Try again.",
       "retry": "Retry",
