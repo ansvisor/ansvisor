@@ -127,7 +127,9 @@
         "targets",
         "edit kpis",
         "kpi status",
-        "goal reached"
+        "goal reached",
+        "visibility score",
+        "out of 100"
       ],
       "synonyms": [
         "key metrics",
@@ -136,7 +138,7 @@
         "performance targets"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -144,7 +146,7 @@
         },
         {
           "heading": "KPIs you can track",
-          "text": "AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic and Positive Sentiment.\n\nA brand that never had KPIs starts with a suggested set: AI Visibility, Citations, Mentions, Share of Voice and Positive Sentiment, plus AI Referral Traffic when Google Analytics is connected. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. It is saved the first time an admin or manager opens KPIs."
+          "text": "AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic and Positive Sentiment.\n\nAI Visibility is your Visibility score over the KPI period (Today shows it for the latest run): a score out of 100, such as \"29.9/100\", not a percentage of prompts. Its goal is out of 100 too, and its change, here and in History results, is in points. Share of Voice and Positive Sentiment are percentages.\n\nA brand that never had KPIs starts with a suggested set: AI Visibility, Citations, Mentions, Share of Voice and Positive Sentiment, plus AI Referral Traffic when Google Analytics is connected. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. It is saved the first time an admin or manager opens KPIs."
         },
         {
           "heading": "KPI status",
