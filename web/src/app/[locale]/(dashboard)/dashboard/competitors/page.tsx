@@ -40,6 +40,9 @@ import { useChatPageContext, useChatPanel } from '@/components/chat/panel/chat-p
 import { rangeChipLabel } from '@/lib/chat/page-context';
 import { viewRows } from '@/lib/chat/page-view';
 import { MODEL_LABELS } from '@/config/platform-labels';
+import { PLANS } from '@/config/plans';
+import { usePlanContext } from '@/components/providers/plan-provider';
+import { breakdownForPlan, planEngineKeys } from '@/lib/competitors/plan-engines';
 import type { Competitor } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -67,6 +70,14 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
+import { engineCount, engineRows, lowSample } from '@/lib/competitors/prompt-engines';
+import {
+  PROMPT_PAGE_SIZE,
+  caseRepeats,
+  listPrompts,
+  promptCategories,
+  type PromptSort,
+} from '@/lib/competitors/prompt-list';
 import {
   Plus,
   Sparkles,
@@ -145,6 +156,21 @@ function ModelBadge({ model, platform }: { model: string; platform?: string }) {
       <AIProviderAvatar provider={provider} />
       <span className="text-xs">{getModelDisplayName(model, platform)}</span>
     </span>
+  );
+}
+
+/** A score from fewer than 10 runs (D8, UX audit CP-05). */
+function LowSampleBadge() {
+  const t = useTranslations('competitors');
+  return (
+    <Badge
+      variant="outline"
+      data-slot="low-sample"
+      title={t('h2h.lowSampleTip')}
+      className="border-amber-200 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+    >
+      {t('h2h.lowSample')}
+    </Badge>
   );
 }
 
@@ -526,6 +552,12 @@ function PlatformBreakdown({
   competitorName: string;
 }) {
   const t = useTranslations('competitors');
+  const { planId, isCloud, allowedModelIds } = usePlanContext();
+  // Only the engines the plan tracks, those without answers too (UX audit CP-04).
+  const { rows, notInPlan } = breakdownForPlan(
+    data.platformRows,
+    isCloud ? planEngineKeys(PLANS[planId]?.limits.allowedScrapers, allowedModelIds) : null,
+  );
 
   return (
     <Card>
@@ -534,12 +566,32 @@ function PlatformBreakdown({
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {data.platformRows.map((row) => {
+          {rows.map((row) => {
             const max = Math.max(row.brandScore, row.competitorScore, 1);
+            const name = (
+              <span className="font-medium">
+                {row.platform}
+                {row.provider === 'copilot' && (
+                  <span className="font-normal text-muted-foreground"> {t('h2h.viaBing')}</span>
+                )}
+              </span>
+            );
+            if (row.noAnswers) {
+              return (
+                <div
+                  key={row.platform}
+                  data-slot="engine-no-answers"
+                  className="flex items-center justify-between text-xs"
+                >
+                  {name}
+                  <span className="text-muted-foreground">{t('h2h.noAnswersEngine')}</span>
+                </div>
+              );
+            }
             return (
               <div key={row.platform} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium">{row.platform}</span>
+                  {name}
                   <DiffBadge diff={row.diff} />
                 </div>
                 <div className="flex gap-1 items-center">
@@ -578,6 +630,11 @@ function PlatformBreakdown({
             {competitorName}
           </div>
         </div>
+        {notInPlan.length > 0 && (
+          <p data-slot="engines-not-in-plan" className="mt-2 text-[11px] text-muted-foreground">
+            {t('h2h.notInPlan', { engines: notInPlan.join(', ') })}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -645,6 +702,7 @@ function ModelSubGroup({
   loadRuns,
   brandName,
   competitorName,
+  showModel = false,
 }: {
   group: HeadToHeadGroup;
   expanded: boolean;
@@ -653,9 +711,12 @@ function ModelSubGroup({
   loadRuns: LoadRuns;
   brandName: string;
   competitorName: string;
+  /** Its location shows twice under its engine: name the model (CP-05). */
+  showModel?: boolean;
 }) {
   const t = useTranslations('competitors');
   const hasHistory = group.runs > 1;
+  const model = MODEL_LABELS[group.modelUsed] ?? group.modelUsed;
   const [runs, setRuns] = useState<HeadToHeadRun[] | null>(null);
   const [runsFailed, setRunsFailed] = useState(false);
   const [openingLatest, setOpeningLatest] = useState(false);
@@ -713,16 +774,16 @@ function ModelSubGroup({
             !hasHistory && 'opacity-0',
           )}
         />
+        {/* A location under its engine (CP-05): the engine is the heading above. */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <ModelBadge model={group.modelUsed || group.platform} platform={group.platform} />
-          {group.region && (
-            <Badge variant="outline" className="text-[10px]">
-              {group.region}
-            </Badge>
-          )}
+          <Badge variant="outline" className="text-[10px]">
+            {group.region ?? t('h2h.noLocation')}
+          </Badge>
+          {showModel && model && <span className="text-[10px] text-muted-foreground">{model}</span>}
           <span className="text-[10px] text-muted-foreground tabular-nums ms-1">
-            {group.runs} run{group.runs !== 1 ? 's' : ''}
+            {t('h2h.runs', { count: group.runs })}
           </span>
+          {lowSample(group.runs) && <LowSampleBadge />}
         </div>
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-end">
@@ -841,7 +902,24 @@ function PromptComparisonGrouped({
   loadRuns: LoadRuns;
 }) {
   const t = useTranslations('competitors');
-  const groups = groupH2HByPrompt(engineGroups);
+  const all = groupH2HByPrompt(engineGroups);
+  // Search, sort, category and pages (UX audit CP-12).
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<PromptSort>('recent');
+  const [category, setCategory] = useState('');
+  const [shown, setShown] = useState(PROMPT_PAGE_SIZE);
+  const categories = promptCategories(all);
+  const listed = listPrompts(all, { query, category, sort });
+  const groups = listed.slice(0, shown);
+  const repeats = caseRepeats(all);
+  const sortItems = [
+    { value: 'recent', label: t('h2h.list.sortRecent') },
+    { value: 'diff', label: t('h2h.list.sortDiff') },
+  ];
+  const categoryItems = [
+    { value: '', label: t('h2h.list.allCategories') },
+    ...categories.map((name) => ({ value: name, label: name })),
+  ];
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
 
@@ -861,7 +939,7 @@ function PromptComparisonGrouped({
       return next;
     });
 
-  if (groups.length === 0) {
+  if (all.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
         {t('h2h.noPromptData')}
@@ -871,6 +949,68 @@ function PromptComparisonGrouped({
 
   return (
     <div className="space-y-2">
+      <div data-slot="prompt-list-controls" className="flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShown(PROMPT_PAGE_SIZE);
+          }}
+          placeholder={t('h2h.list.search')}
+          aria-label={t('h2h.list.search')}
+          data-action="competitors.searchPrompts"
+          className="h-8 w-full text-xs sm:w-64"
+        />
+        <Select
+          items={sortItems}
+          value={sort}
+          onValueChange={(next: string | null) => setSort(next === 'diff' ? 'diff' : 'recent')}
+        >
+          <SelectTrigger size="sm" className="text-xs" aria-label={t('h2h.list.sortLabel')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {sortItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {categories.length > 0 && (
+          <Select
+            items={categoryItems}
+            value={category}
+            onValueChange={(next: string | null) => {
+              setCategory(next ?? '');
+              setShown(PROMPT_PAGE_SIZE);
+            }}
+          >
+            <SelectTrigger size="sm" className="text-xs" aria-label={t('h2h.list.categoryLabel')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categoryItems.map((item) => (
+                <SelectItem key={item.value || ' all'} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <span className="text-xs text-muted-foreground tabular-nums" data-slot="prompt-list-count">
+          {t('h2h.list.count', { shown: groups.length, total: listed.length })}
+        </span>
+      </div>
+      {repeats > 0 && (
+        <p data-slot="prompt-case-repeats" className="text-xs text-muted-foreground">
+          {t('h2h.list.caseRepeats', { count: repeats })}
+        </p>
+      )}
+      {listed.length === 0 && (
+        <p className="py-6 text-center text-sm text-muted-foreground">{t('h2h.list.noMatch')}</p>
+      )}
       {groups.map((group) => {
         const isOpen = expanded.has(group.promptId);
         const modelGroups = group.groups;
@@ -904,10 +1044,12 @@ function PromptComparisonGrouped({
                     </Badge>
                   )}
                   <span className="text-[11px] text-muted-foreground">
-                    {modelGroups.length} platform
-                    {modelGroups.length !== 1 ? 's' : ''} · {group.runs} result
-                    {group.runs !== 1 ? 's' : ''}
+                    {t('h2h.promptCounts', {
+                      engines: engineCount(modelGroups),
+                      runs: group.runs,
+                    })}
                   </span>
+                  {lowSample(group.runs) && <LowSampleBadge />}
                 </div>
               </div>
               <div className="flex items-center gap-4 shrink-0">
@@ -928,27 +1070,69 @@ function PromptComparisonGrouped({
 
             {/* Platform/Model sub-groups */}
             {isOpen && (
-              <div className="border-t px-3 py-2 space-y-1.5 bg-muted/10">
-                {modelGroups.map((mg) => {
-                  const compositeKey = `${group.promptId}::${mg.rawPlatform ?? ''}|${mg.rawModelUsed ?? ''}|${mg.region ?? ''}`;
-                  return (
-                    <ModelSubGroup
-                      key={compositeKey}
-                      group={mg}
-                      expanded={expandedModels.has(compositeKey)}
-                      onToggle={() => toggleModel(compositeKey)}
-                      onViewResult={onViewResult}
-                      loadRuns={loadRuns}
-                      brandName={brandName}
-                      competitorName={competitorName}
-                    />
-                  );
-                })}
+              <div className="border-t px-3 py-2 space-y-3 bg-muted/10">
+                {/* Each engine once, its locations under it (UX audit CP-05). */}
+                {(() => {
+                  const { engines, twice } = engineRows(modelGroups);
+                  return engines.map((engine) => (
+                    <div key={engine.platform} data-slot="h2h-engine" className="space-y-1.5">
+                      <div className="flex items-center gap-3 px-1">
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <ModelBadge model={engine.platform} platform={engine.platform} />
+                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                            {t('h2h.engineCounts', {
+                              locations: engine.locations,
+                              runs: engine.runs,
+                            })}
+                          </span>
+                          {lowSample(engine.runs) && <LowSampleBadge />}
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0 pe-10">
+                          <p className="text-xs font-semibold tabular-nums">{engine.brandScore}</p>
+                          <p className="text-xs font-semibold tabular-nums">
+                            {engine.competitorScore}
+                          </p>
+                          <div className="min-w-[48px] text-end">
+                            <DiffBadge diff={engine.diff} />
+                          </div>
+                        </div>
+                      </div>
+                      {engine.rows.map((mg) => {
+                        const compositeKey = `${group.promptId}::${mg.rawPlatform ?? ''}|${mg.rawModelUsed ?? ''}|${mg.region ?? ''}`;
+                        return (
+                          <ModelSubGroup
+                            key={compositeKey}
+                            group={mg}
+                            expanded={expandedModels.has(compositeKey)}
+                            onToggle={() => toggleModel(compositeKey)}
+                            onViewResult={onViewResult}
+                            loadRuns={loadRuns}
+                            brandName={brandName}
+                            competitorName={competitorName}
+                            showModel={twice.has(mg)}
+                          />
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
               </div>
             )}
           </div>
         );
       })}
+      {listed.length > groups.length && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-action="competitors.morePrompts"
+          className="w-full text-xs"
+          onClick={() => setShown((n) => n + PROMPT_PAGE_SIZE)}
+        >
+          {t('h2h.list.more', { count: Math.min(PROMPT_PAGE_SIZE, listed.length - groups.length) })}
+        </Button>
+      )}
     </div>
   );
 }
@@ -1891,46 +2075,42 @@ export default function CompetitorsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header: the meter and Ask Chat at its bottom, beside the range's buttons. */}
-      <HeaderWithAiUsage align="end">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+      {/* Header as on Visibility (UX audit CP-11): the title and the page's buttons on
+          its row, the meter and Ask Chat at its end; the date range on its own row under it. */}
+      <HeaderWithAiUsage>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <p className="text-muted-foreground">{t('description')}</p>
           </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex items-center gap-2">
-              <DateRangeFilter
-                value={datePreset}
-                presets={COMPETITOR_DATE_PRESETS}
-                onChange={setDatePreset}
-                from={dateFrom}
-                to={dateTo}
-                onFromChange={setDateFrom}
-                onToChange={setDateTo}
-              />
-              {comparisonLoading && (
-                <Loader2
-                  className="mb-2 h-4 w-4 animate-spin text-muted-foreground"
-                  aria-hidden="true"
-                />
-              )}
+          {canManage && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button variant="outline" className="gap-2" onClick={openSuggest}>
+                <Sparkles className="h-4 w-4" />
+                {t('suggestCompetitors')}
+              </Button>
+              <Button className="gap-2" onClick={openAdd}>
+                <Plus className="h-4 w-4" />
+                {t('addCompetitor')}
+              </Button>
             </div>
-            {canManage && (
-              <>
-                <Button variant="outline" className="gap-2" onClick={openSuggest}>
-                  <Sparkles className="h-4 w-4" />
-                  {t('suggestCompetitors')}
-                </Button>
-                <Button className="gap-2" onClick={openAdd}>
-                  <Plus className="h-4 w-4" />
-                  {t('addCompetitor')}
-                </Button>
-              </>
-            )}
-          </div>
+          )}
         </div>
       </HeaderWithAiUsage>
+      <div data-slot="competitors-filters" className="flex flex-wrap items-center gap-2">
+        <DateRangeFilter
+          value={datePreset}
+          presets={COMPETITOR_DATE_PRESETS}
+          onChange={setDatePreset}
+          from={dateFrom}
+          to={dateTo}
+          onFromChange={setDateFrom}
+          onToChange={setDateTo}
+        />
+        {comparisonLoading && (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+        )}
+      </div>
 
       {competitors.length === 0 ? (
         <EmptyState

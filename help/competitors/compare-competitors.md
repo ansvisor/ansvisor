@@ -22,7 +22,7 @@ The **Tracked Competitors** card lists every competitor with its domain and:
 
 **No data** means no answer in the window was measured for that competitor yet, for example one you've just added.
 
-The **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as "Scores cover the last 7 days." **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
+The **Date Range** under the page's title (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as "Scores cover the last 7 days." **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
 
 ## Filter and group by type
 
@@ -45,7 +45,7 @@ When there's nothing to compare yet, it says **No comparison data**: run trackin
 
 At the top of the comparison, **Your Visibility score** and **Their Visibility score** show each side's score out of 100 over the date range, the same numbers as the two cards, and **Difference** shows the gap between them in points.
 
-**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead.
+**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead. It lists the platforms your plan tracks, with **No answers in this period** for one without answers yet. Microsoft Copilot is asked through Bing AI Mode. Platforms outside your plan, such as Claude on Growth, aren't shown; a line under the card names them.
 
 ## Gaps and Strengths
 
@@ -58,12 +58,16 @@ Each gap has two next steps. **Create action** opens Chat beside the page with a
 
 ## Prompt-by-Prompt Comparison
 
-**Prompt-by-Prompt Comparison** lists every prompt with **You**, **Them** and **Diff**, the most recently run first.
+**Prompt-by-Prompt Comparison** lists every prompt with **You**, **Them** and **Diff**, the most recently run first, and how many platforms and runs it has.
 
-Click a prompt to see each platform, with its model and region, and how many runs it has. Click a platform with more than one run to see its **Previous runs**, with the date, both scores, the difference and the sentiment. The eye icon opens an AI answer.
+Click a prompt to see each platform once, with its scores, and its locations under it, each with its runs. A location answered by two models names the model. A score from fewer than 10 runs is marked **Low sample**: one answer can move it a lot. Click a location with more than one run to see its **Previous runs**, with the date, both scores, the difference and the sentiment. The eye icon opens an AI answer.
 
 **Export CSV** beside the comparison's title downloads it per prompt and platform: the model, region, runs, both scores, the difference and the latest run.
 
+
+## Find a prompt in the comparison
+
+Above the list, **Search prompts** keeps the prompts with every word you type. Sort them **Most recent first** or **Widest gap first**, and pick a **Category** when your prompts have them. The list shows 20 prompts at a time; **Show more** adds the next ones. When two prompts differ only in letter case, a line says so: pause the extra copy on **Prompts** so their answers count once.
 ## The competitor's pages over time
 
 Below the comparison, a card shows why the competitor may be rising. Its chart shows the answers that mentioned the competitor, and your brand, each week for the last twelve weeks. A marker sits on each week something happened to its pages; the events are listed newest first:

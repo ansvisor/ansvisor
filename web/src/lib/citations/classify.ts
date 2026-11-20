@@ -27,17 +27,6 @@ export const SOURCE_CATEGORIES: SourceCategory[] = [
   'other',
 ];
 
-export const SOURCE_CATEGORY_LABELS: Record<SourceCategory, string> = {
-  you: 'You',
-  competitor: 'Competitor',
-  editorial: 'Editorial',
-  forum: 'Forum',
-  social: 'Social',
-  review: 'Review',
-  institutional: 'Institutional',
-  other: 'Other',
-};
-
 // Suffix-based matching (matches the domain or any subdomain of it).
 const FORUM_DOMAINS = [
   'reddit.com',

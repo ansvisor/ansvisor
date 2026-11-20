@@ -35,7 +35,11 @@ With a focus, the chips under **For you now** come from your areas, taken in tur
 
 **New for you** lists up to four new skills for your areas, such as **Rival brief** or **Buyer questions**; select one to start a chat with it.
 
-With **Competitors** picked, the line under the greeting can say when a competitor's mention rate rose this week. The skills in the **/** menu list your areas' skills first.
+The skills in the **/** menu list your areas' skills first.
+
+## The competitor line
+
+On the Default view, or with **Competitors** picked, the line under the greeting can say when a competitor's mention rate rose this week. It speaks of your primary rivals, the competitors typed **Direct competitor**, or of any competitor while none is typed so. Click the name to see the numbers on **Competitors**.
 
 ## Change it later
 

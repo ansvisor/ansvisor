@@ -1,4 +1,4 @@
-import { KPI_REGISTRY, type KpiKey } from './registry';
+import { KPI_REGISTRY, isLevelUnit, type KpiKey } from './registry';
 
 /**
  * The ready-made KPIs a brand opens with when it has none: the answer-engine
@@ -25,13 +25,13 @@ export function presetKpiKeys(gaConnected: boolean): KpiKey[] {
 
 /**
  * The first target for a KPI from its last 30 days: 20% more, rounded up to a
- * whole number for counts, to one decimal (between 0.1 and 100) for percents.
+ * whole number for counts, to one decimal (between 0.1 and 100) for percents and scores.
  */
 export function presetTarget(key: KpiKey, value: number | null): number {
   const meta = KPI_REGISTRY[key];
   if (value === null || !Number.isFinite(value) || value <= 0) return meta.defaultTarget;
   const raised = value * PRESET_GROWTH;
   // At least 0.1: a sliver of a percent would otherwise round to a 0 target.
-  if (meta.unit === 'percent') return Math.min(100, Math.max(0.1, Math.round(raised * 10) / 10));
+  if (isLevelUnit(meta.unit)) return Math.min(100, Math.max(0.1, Math.round(raised * 10) / 10));
   return Math.ceil(raised);
 }

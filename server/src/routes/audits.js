@@ -35,8 +35,8 @@ import {
   pageTrendUpTo,
   parseListPage,
 } from '../lib/audit/history.js';
+import { pagesSince, parseSince, runningSummary } from '../lib/audit/batch.js';
 import { readAllRpcRows } from '../lib/rpc-pages.js';
-import { IMPROVE_PLATFORM_LABELS } from '../lib/prompt-improve.js';
 import { AUTHORITY_CATEGORIES, buildOverview, primaryPages } from '../lib/audit/overview.js';
 import {
   aiVisitsByPage,
@@ -111,34 +111,6 @@ function assembleAudit(audit, signalRows) {
     signals,
     recommendations: audit.recommendations ?? [],
   };
-}
-
-/**
- * The AI engines the brand's active prompts are tracked on, by name, for the
- * recommendations' copy. Empty when they can't be read: the copy then names
- * no engine list.
- */
-async function trackedEngineNames(brandId) {
-  try {
-    const { data: sets } = await supabaseAdmin
-      .from('prompt_sets')
-      .select('id')
-      .eq('brand_id', brandId);
-    const ids = (sets ?? []).map((s) => s.id);
-    if (ids.length === 0) return [];
-    const { data: prompts } = await supabaseAdmin
-      .from('prompts')
-      .select('platforms')
-      .in('prompt_set_id', ids)
-      .eq('is_active', true)
-      .limit(1000);
-    const platforms = new Set((prompts ?? []).flatMap((p) => p.platforms ?? []));
-    return Object.entries(IMPROVE_PLATFORM_LABELS)
-      .filter(([id]) => platforms.has(id))
-      .map(([, name]) => name);
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -327,8 +299,6 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
       // The brand's rules (00450) shape what's recommended on any page it audits.
       rules: await readBrandRules(brandId),
       auditId,
-      // Copy names only the engines this brand tracks (a paused one never).
-      engines: await trackedEngineNames(brandId),
     });
 
     const { error: completeErr } = await supabaseAdmin
@@ -807,6 +777,9 @@ router.get('/trend', async (req, res) => {
 // page (repeat audits of a URL share it), most recently audited first, with
 // its latest score, the previous one, its first one, a status, its trend, its
 // open issues and its runs. `total` is the number of pages, for paging.
+// `running` says how many pages have an audit running and when the oldest
+// started (a bulk batch's start); `since=<ISO time>` lists only the pages
+// whose latest audit started at or after it, which is a batch's pages.
 // Registered before /:id so "pages" isn't matched as an audit id.
 router.get('/pages', async (req, res) => {
   const userId = req.user?.id;
@@ -825,7 +798,9 @@ router.get('/pages', async (req, res) => {
     ]);
     if (error) throw error;
 
-    const all = buildAuditPages(rows);
+    const everyPage = buildAuditPages(rows);
+    const sinceMs = parseSince(req.query.since);
+    const all = sinceMs === null ? everyPage : pagesSince(everyPage, sinceMs);
     const pages = all.slice(offset, offset + limit);
     const issues = await countIssues(pages.filter((p) => p.score !== null).map((p) => p.auditId));
     const primaryHost = normStoredDomain(primary);
@@ -840,6 +815,7 @@ router.get('/pages', async (req, res) => {
       })),
       total: all.length,
       primaryHost,
+      running: runningSummary(everyPage),
     });
   } catch (err) {
     if (err.status) {

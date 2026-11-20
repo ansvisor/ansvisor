@@ -31,18 +31,63 @@ const isServerErrorCode = (value: string): value is ServerErrorCode =>
  */
 export function serverErrorKey(body: unknown, status = 0): string | null {
   if (typeof body !== 'object' || body === null) return null;
-  const { code, error } = body as { code?: unknown; error?: unknown };
-  const c = typeof code === 'string' ? code : '';
+  const { code, error, digest, limit } = body as {
+    code?: unknown;
+    error?: unknown;
+    digest?: unknown;
+    limit?: unknown;
+  };
+  // A server action that threw keeps only its digest in production, which
+  // assertWritable's refusals set to their code (lib/subscription-guard.ts).
+  const c = typeof code === 'string' ? code : typeof digest === 'string' ? digest : '';
   const e = typeof error === 'string' ? error : '';
 
   // The same words as the toasts of useFailureToast (apiFailure).
   if (c === 'subscription_inactive' || c === 'demo_brand') return 'apiFailure.subscription';
   if (c === 'not_in_workspace' || c === 'no_brand_access') return 'apiFailure.workspace';
   if (c === 'not_found') return 'apiFailure.not_found';
+  // The plan's prompt locations are full (locationLimitMessage): a count, not a missing feature.
+  if (c === 'plan_limit' && limit === 'locations') return 'serverErrors.location_limit';
+  // Every brand the plan includes is in use (createBrand).
+  if (c === 'plan_limit' && limit === 'brands') return 'serverErrors.brand_limit';
   if (e === 'quota_exhausted' || (e === 'plan_limit' && status === 429)) return 'apiFailure.limit';
   if (e === 'plan_limit' || c === 'plan_limit') return 'apiFailure.plan';
 
   if (c === 'rate_limited' || e === 'rate_limited') return 'serverErrors.rate_limited';
+  // A role the person doesn't have (prompt-swap's not_allowed, the competitor actions'
+  // forbidden_role, the MCP role gate's role_required).
+  if (c === 'not_allowed' || c === 'forbidden_role' || c === 'role_required') {
+    return 'serverErrors.forbidden';
+  }
   if (isServerErrorCode(c)) return `serverErrors.${c}`;
   return null;
+}
+
+/**
+ * A refused call as an error to throw: its message is the body's `error`
+ * (else `fallback`), and it keeps the body's stable code and the status, so
+ * the `catch` that shows it (useCaughtErrorText) can still say a mapped
+ * refusal in the person's language.
+ */
+export function refusalError(body: unknown, fallback: string, status = 0): Error {
+  const { code, error, limit } = (typeof body === 'object' && body !== null ? body : {}) as {
+    code?: unknown;
+    error?: unknown;
+    limit?: unknown;
+  };
+  const message = typeof error === 'string' && error ? error : fallback;
+  return Object.assign(new Error(message), { code, error, limit, status });
+}
+
+/**
+ * What a caught error says when no code maps it: its own message for an
+ * error thrown in the browser (a failed fetch), else `fallback`. A server
+ * action's thrown error carries a digest, and production replaces its
+ * message with Next's English notice, so the caller's translated words
+ * read better than either.
+ */
+export function caughtErrorText(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) return fallback;
+  if (typeof (err as Error & { digest?: unknown }).digest === 'string') return fallback;
+  return err.message || fallback;
 }

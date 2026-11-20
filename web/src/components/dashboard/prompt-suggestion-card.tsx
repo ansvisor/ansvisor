@@ -108,6 +108,7 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
   mode = 'review',
 }: PromptSuggestionCardProps) {
   const ts = useTranslations('prompts.suggestions');
+  const tc = useTranslations('promptCard');
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(text);
   const [editCategory, setEditCategory] = useState(category);
@@ -191,7 +192,7 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                 className="h-7 w-7 shrink-0"
                 onClick={handleSave}
                 disabled={!editText.trim() || !hasAnySelection}
-                aria-label="Save changes"
+                aria-label={tc('save')}
               >
                 <Check className="h-3.5 w-3.5" />
               </Button>
@@ -200,7 +201,7 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                 variant="ghost"
                 className="h-7 w-7 shrink-0"
                 onClick={handleCancel}
-                aria-label="Cancel edit"
+                aria-label={tc('cancelEdit')}
               >
                 <X className="h-3.5 w-3.5" />
               </Button>
@@ -369,7 +370,7 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                 variant="ghost"
                 className="h-7 w-7"
                 onClick={() => setIsEditing(true)}
-                aria-label="Edit prompt"
+                aria-label={tc('edit')}
               >
                 <Pencil className="h-3 w-3" />
               </Button>
@@ -381,7 +382,7 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7 text-destructive hover:text-destructive"
-                        aria-label="Delete prompt"
+                        aria-label={tc('delete')}
                       />
                     }
                   >
@@ -389,18 +390,18 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
-                      <DialogTitle>Delete Prompt</DialogTitle>
-                      <DialogDescription>
-                        Are you sure you want to delete this prompt? This action cannot be undone.
-                      </DialogDescription>
+                      <DialogTitle>{tc('deleteTitle')}</DialogTitle>
+                      <DialogDescription>{tc('deleteBody')}</DialogDescription>
                     </DialogHeader>
                     <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground line-clamp-2">
                       {text}
                     </p>
                     <DialogFooter>
-                      <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                      <DialogClose render={<Button variant="outline" />}>
+                        {tc('cancel')}
+                      </DialogClose>
                       <DialogClose render={<Button variant="destructive" onClick={onDelete} />}>
-                        Delete
+                        {tc('confirmDelete')}
                       </DialogClose>
                     </DialogFooter>
                   </DialogContent>

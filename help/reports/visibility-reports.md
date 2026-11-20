@@ -4,7 +4,7 @@ route: /dashboard/reports
 keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss, score range, plus or minus]
 plan: all
-updated: 2026-11-10
+updated: 2026-11-19
 last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
@@ -15,7 +15,11 @@ The **Reports** page makes point-in-time snapshots of your brand's AI visibility
 
 ## Generate a report
 
-Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Generated reports appear under **Generated Reports** on the same page, newest first. Delete a report with the bin icon there.
+Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Without a title, a report is named after its template, such as Weekly Visibility Summary; its period shows beside it. Generated reports appear under **Generated Reports** on the same page, newest first. To delete one, open its **⋯** menu, choose **Delete report** and confirm.
+
+## Share or download from the list
+
+Each report's **⋯** menu also has **Copy link** and **Download PDF**. **Copy link** copies the report's address: it opens the report for people in your workspace, who sign in to see it. Reports have no public link, so to send one to a client, download the PDF. **Download PDF** saves the same PDF as the report's own page, with your white label kit if you use one.
 
 ## Templates
 
@@ -26,7 +30,7 @@ Click **Generate Report** and pick a template. A template is a default set of se
 
 ## Sections
 
-The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, AI-sourced pipeline, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. **AI-sourced pipeline** comes with the Growth plan and above. The AI executive summary is always included: it isn't a section you pick. If it can't be written, the report is saved with its figures and no summary.
+The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, AI-sourced pipeline, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. **AI-sourced pipeline** comes with the Growth plan and above. The AI executive summary is always included: it isn't a section you pick. If it can't be written, the report is saved with its figures and no summary. A section that can't be gathered is tried once more; if it still fails, the report is saved without it and doesn't mention it, so nothing in it tells a client data is missing. Admins see a short note about it above the report, which the PDF leaves out.
 
 ## Read a report
 
@@ -35,6 +39,12 @@ A report opens with its **Executive Summary**: a short account of what changed v
 ## Site Audit Score
 
 **Site Audit Score** shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. It isn't compared with the previous period. Once the page has three audits by the end date, the score shows its range, such as **64 ± 2**, worked out as in Site Audit's report: half the gap between the lowest and highest score of its last five audits. A line below gives those two scores. Reports made before the range was added don't show it.
+
+## KPIs and the leaderboard
+
+The KPI row leads with your **Visibility score**, out of 100, such as **15.5/100**, never with a % sign. It blends how often AI answers mention you, how often they cite your site and how early they name you. Next to it, **Prompts with a mention** is the share of the period's answered prompts whose answers named or cited you, with the counts under it, such as **112 of 308 prompts**. **Mentions**, **Brand Citations** and **Positive Sentiment** follow. The older **Avg. Score** is no longer shown.
+
+In the **Competitor Leaderboard**, the **Visibility score** column shows each brand's score with its prompts with a mention under it, and **Change** is the score's change in points. A report saved before a figure existed shows only the figures it has.
 
 ## AI-sourced pipeline
 

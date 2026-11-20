@@ -908,7 +908,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'action_center',
     description:
-      "One Action Center action in full: what it is about, why, its priority, signals, tasks (What, Where, Why, How, Done when) and outcome. By its id only: an action the person names by its code is read with list_action_center_tasks' codes first, which gives its id.",
+      "One Action Center action in full: what it is about (`affected`: its prompts by name, pages, competitors and topics, as its Affected tab lists them), why, its priority, signals, tasks (What, Where, Why, How, Done when) and outcome. By its id only: an action the person names by its code is read with list_action_center_tasks' codes first, which gives its id.",
     minRole: 'analyst',
     planGate: null,
     brandOf: { lookup: 'actions', idField: 'action_id' },
