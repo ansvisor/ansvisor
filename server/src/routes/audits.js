@@ -37,7 +37,6 @@ import {
 } from '../lib/audit/history.js';
 import { pagesSince, parseSince, runningSummary } from '../lib/audit/batch.js';
 import { readAllRpcRows } from '../lib/rpc-pages.js';
-import { IMPROVE_PLATFORM_LABELS } from '../lib/prompt-improve.js';
 import { AUTHORITY_CATEGORIES, buildOverview, primaryPages } from '../lib/audit/overview.js';
 import {
   aiVisitsByPage,
@@ -112,34 +111,6 @@ function assembleAudit(audit, signalRows) {
     signals,
     recommendations: audit.recommendations ?? [],
   };
-}
-
-/**
- * The AI engines the brand's active prompts are tracked on, by name, for the
- * recommendations' copy. Empty when they can't be read: the copy then names
- * no engine list.
- */
-async function trackedEngineNames(brandId) {
-  try {
-    const { data: sets } = await supabaseAdmin
-      .from('prompt_sets')
-      .select('id')
-      .eq('brand_id', brandId);
-    const ids = (sets ?? []).map((s) => s.id);
-    if (ids.length === 0) return [];
-    const { data: prompts } = await supabaseAdmin
-      .from('prompts')
-      .select('platforms')
-      .in('prompt_set_id', ids)
-      .eq('is_active', true)
-      .limit(1000);
-    const platforms = new Set((prompts ?? []).flatMap((p) => p.platforms ?? []));
-    return Object.entries(IMPROVE_PLATFORM_LABELS)
-      .filter(([id]) => platforms.has(id))
-      .map(([, name]) => name);
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -328,8 +299,6 @@ async function runAuditJob(auditId, brandId, url, orgId, source = 'user') {
       // The brand's rules (00450) shape what's recommended on any page it audits.
       rules: await readBrandRules(brandId),
       auditId,
-      // Copy names only the engines this brand tracks (a paused one never).
-      engines: await trackedEngineNames(brandId),
     });
 
     const { error: completeErr } = await supabaseAdmin
