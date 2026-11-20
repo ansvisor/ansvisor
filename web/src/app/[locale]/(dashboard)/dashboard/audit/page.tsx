@@ -89,6 +89,7 @@ import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
 import { viewRows } from '@/lib/chat/page-view';
+import { useRubricText } from '@/hooks/use-rubric-text';
 
 type RangePreset = '7d' | '30d' | '90d' | 'all';
 const RANGE_DAYS: Record<RangePreset, number | null> = { '7d': 7, '30d': 30, '90d': 90, all: null };
@@ -120,6 +121,7 @@ function barClass(score: number | null): string {
 
 export default function SiteAuditPage() {
   const t = useTranslations('audit');
+  const rubric = useRubricText();
   const router = useRouter();
   const { askOne, saySkipped } = useRecentAudit();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
@@ -1012,7 +1014,7 @@ export default function SiteAuditPage() {
                 return (
                   <div key={cat.key}>
                     <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="font-medium">{cat.label}</span>
+                      <span className="font-medium">{rubric.category(cat.key, cat.label)}</span>
                       <span className="text-muted-foreground tabular-nums">
                         {p === null ? t('na') : `${p}/100`}
                       </span>

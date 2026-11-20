@@ -6,6 +6,7 @@ import { asScoreRange } from '@/lib/audit/score-range';
 import { CATEGORY_META, ScoreGauge, pct, barColor } from '@/components/audit/audit-report';
 import { useScoreRangeTip } from '@/components/audit/score-range';
 import { cn } from '@/lib/utils';
+import { useRubricText } from '@/hooks/use-rubric-text';
 
 export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
   // The render_audit tool schema uses z.unknown(), so narrow the types here.
@@ -14,6 +15,7 @@ export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
   // The score's range as get_site_audit gave it ("64 ± 2"), as the audit report shows it.
   const range = audit.totalScore === null ? null : asScoreRange(audit.scoreRange);
   const rangeTip = useScoreRangeTip();
+  const rubric = useRubricText();
 
   return (
     <div className="my-3 space-y-5 rounded-lg border bg-card p-4">
@@ -46,7 +48,7 @@ export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
           return (
             <div key={category.key}>
               <div className="mb-1 flex items-center justify-between text-xs">
-                <span>{category.label}</span>
+                <span>{rubric.category(category.key, category.label)}</span>
 
                 <span className="text-muted-foreground">
                   {percentage === null ? 'n/a' : `${percentage}/100`}
