@@ -10,12 +10,79 @@
  * engine, model, region) and loads a group's individual runs only when the
  * user opens it.
  *
- * The summaries come from the daily rollups (head_to_head_daily, 00169), so
- * every answer counts: a read of the raw answers stopped at PostgREST's
- * 1,000-row page and compared large brands on their newest answers only.
+ * The summaries come from the daily rollups (head_to_head_daily, 00169, over
+ * the picker's days since head_to_head_window_daily, 00552), so every answer
+ * counts: a read of the raw answers stopped at PostgREST's 1,000-row page and
+ * compared large brands on their newest answers only.
+ *
+ * Every score is the Visibility score the competitor cards show (0–100, one
+ * decimal; lib/visibility-score), for the brand and the competitor alike over
+ * the brand's answers in the scope: a group, a prompt, a platform, the
+ * comparison as a whole, a single answer (UX audit CP-01, decision D3). It
+ * replaces the per-answer score averaged over each side's own answers, a
+ * different scale the page showed with a "%".
  */
 
 import type { Sentiment } from '@/types';
+import { computeAiVisibilityScore } from '@/lib/visibility-score';
+
+/** What a Visibility score is made of, summed over a scope's answers. */
+export interface ScoreParts {
+  /** The brand's answers in the scope: the denominator for both sides. */
+  answers: number;
+  mentionAnswers: number;
+  citationAnswers: number;
+  /** Sum of 1/position over the answers that name the side, and how many. */
+  invPosition: number;
+  positionCount: number;
+}
+
+const NO_PARTS: ScoreParts = {
+  answers: 0,
+  mentionAnswers: 0,
+  citationAnswers: 0,
+  invPosition: 0,
+  positionCount: 0,
+};
+
+const addParts = (a: ScoreParts, b: ScoreParts): ScoreParts => ({
+  answers: a.answers + b.answers,
+  mentionAnswers: a.mentionAnswers + b.mentionAnswers,
+  citationAnswers: a.citationAnswers + b.citationAnswers,
+  invPosition: a.invPosition + b.invPosition,
+  positionCount: a.positionCount + b.positionCount,
+});
+
+/** The Visibility score of the parts; 0 with no answers. */
+export function scoreOf(parts: ScoreParts): number {
+  return (
+    computeAiVisibilityScore({
+      answers: parts.answers,
+      mentionAnswers: parts.mentionAnswers,
+      citationAnswers: parts.citationAnswers,
+      positionFactor: parts.positionCount > 0 ? parts.invPosition / parts.positionCount : null,
+    }) ?? 0
+  );
+}
+
+/** A difference of two scores, one decimal, as the scores read. */
+const diffOf = (a: number, b: number) => Math.round((a - b) * 10) / 10;
+
+/**
+ * Both sides' scores over several groups (a prompt's engines, a prompt's
+ * gaps): from their summed parts, not an average of their scores.
+ */
+export function foldScores(groups: readonly Pick<HeadToHeadGroup, 'parts'>[]): {
+  brandScore: number;
+  competitorScore: number;
+  diff: number;
+} {
+  const brand = groups.reduce((sum, g) => addParts(sum, g.parts.brand), NO_PARTS);
+  const competitor = groups.reduce((sum, g) => addParts(sum, g.parts.competitor), NO_PARTS);
+  const brandScore = scoreOf(brand);
+  const competitorScore = scoreOf(competitor);
+  return { brandScore, competitorScore, diff: diffOf(brandScore, competitorScore) };
+}
 
 /** One (prompt, engine, model, region) combination, averaged over its runs. */
 export interface HeadToHeadGroup {
@@ -30,10 +97,13 @@ export interface HeadToHeadGroup {
   rawModelUsed: string | null;
   region?: string;
   runs: number;
+  /** Visibility scores (0–100, one decimal) over the group's answers. */
   brandScore: number;
   competitorScore: number;
   diff: number;
   latestAt: string;
+  /** What both scores are made of, so several groups fold into one score. */
+  parts: { brand: ScoreParts; competitor: ScoreParts };
 }
 
 /** One tracked answer inside a group, loaded on demand. */
@@ -61,8 +131,20 @@ export interface HeadToHeadData {
   strengths: HeadToHeadGroup[];
 }
 
-/** One (prompt, engine, model, region) as head_to_head_daily sums it. */
-export interface HeadToHeadRollupGroup {
+/** The Visibility score's parts for both sides, as 00552 sums them. */
+interface RollupScoreParts {
+  brand_mention_answers?: number | null;
+  brand_citation_answers?: number | null;
+  brand_inv_position?: number | null;
+  brand_position_count?: number | null;
+  comp_mention_answers?: number | null;
+  comp_citation_answers?: number | null;
+  comp_inv_position?: number | null;
+  comp_position_count?: number | null;
+}
+
+/** One (prompt, engine, model, region) as head_to_head_window_daily sums it. */
+export interface HeadToHeadRollupGroup extends RollupScoreParts {
   prompt_id: string;
   platform: string | null;
   model_used: string | null;
@@ -76,7 +158,7 @@ export interface HeadToHeadRollupGroup {
 }
 
 /** One (platform, model) over every answer, for the averages. */
-export interface HeadToHeadRollupEngine {
+export interface HeadToHeadRollupEngine extends RollupScoreParts {
   platform: string | null;
   model_used: string | null;
   /** Answers, those without a prompt included. */
@@ -96,7 +178,9 @@ export interface HeadToHeadRollups {
 
 interface CompetitorMention {
   competitor_id?: string;
-  visibility_score?: number;
+  mention_count?: number | null;
+  citation_count?: number | null;
+  mention_position?: number | null;
 }
 
 const GAP_STRENGTH_LIMIT = 10;
@@ -105,51 +189,93 @@ export function emptyHeadToHead(): HeadToHeadData {
   return { groups: [], platformRows: [], brandAvg: 0, competitorAvg: 0, gaps: [], strengths: [] };
 }
 
+/**
+ * One answer's Visibility score for a side that it named or cited (or not):
+ * the score's formula over a single answer.
+ */
+export function answerScore(answer: {
+  mention_count?: number | null;
+  citation_count?: number | null;
+  mention_position?: number | null;
+}): number {
+  const named = (answer.mention_count ?? 0) > 0;
+  const position = answer.mention_position ?? null;
+  return scoreOf({
+    answers: 1,
+    mentionAnswers: named ? 1 : 0,
+    citationAnswers: (answer.citation_count ?? 0) > 0 ? 1 : 0,
+    invPosition: position ? 1 / position : 0,
+    positionCount: position ? 1 : 0,
+  });
+}
+
 /** The competitor's score in one answer, or null when the answer doesn't list it. */
 export function competitorScoreIn(mentions: unknown, competitorId: string): number | null {
   if (!Array.isArray(mentions)) return null;
   const hit = (mentions as CompetitorMention[]).find((m) => m?.competitor_id === competitorId);
-  return hit ? (hit.visibility_score ?? 0) : null;
+  return hit ? answerScore(hit) : null;
+}
+
+const n = (value: number | string | null | undefined) => Number(value ?? 0);
+
+/** Both sides' parts from a rollup row, over `answers` of the brand. */
+function partsOf(
+  row: RollupScoreParts,
+  answers: number,
+): { brand: ScoreParts; competitor: ScoreParts } {
+  return {
+    brand: {
+      answers,
+      mentionAnswers: n(row.brand_mention_answers),
+      citationAnswers: n(row.brand_citation_answers),
+      invPosition: n(row.brand_inv_position),
+      positionCount: n(row.brand_position_count),
+    },
+    competitor: {
+      answers,
+      mentionAnswers: n(row.comp_mention_answers),
+      citationAnswers: n(row.comp_citation_answers),
+      invPosition: n(row.comp_inv_position),
+      positionCount: n(row.comp_position_count),
+    },
+  };
 }
 
 /**
- * The page's summaries from head_to_head_daily (00169). Each group is
- * averaged over its runs, a missing competitor counting 0, as the page always
- * did. The averages per display provider and overall are over every answer
- * for the brand (those without a prompt included) and over the answers that
- * list the competitor for it: an answer from before the competitor was added
- * says nothing about it. Groups come most recently run first, the order the
- * page lists prompts in.
+ * The page's summaries from head_to_head_window_daily (00552). Each group,
+ * each display provider and the comparison as a whole get both sides'
+ * Visibility scores over the brand's answers in them, as the cards score a
+ * competitor. Groups come most recently run first, the order the page lists
+ * prompts in.
  */
 export function headToHeadFromRollups(
   rollups: HeadToHeadRollups,
   resolveProvider: (modelUsed: string | null, platform: string | null) => string,
 ): HeadToHeadData {
-  type Totals = { brandTotal: number; brandCount: number; compTotal: number; compCount: number };
-  const newTotals = (): Totals => ({ brandTotal: 0, brandCount: 0, compTotal: 0, compCount: 0 });
-
   const prompts = new Map(rollups.prompts.map((p) => [p.id, p]));
-  const byProvider = new Map<string, Totals>();
-  const overall = newTotals();
+  type Both = { brand: ScoreParts; competitor: ScoreParts };
+  const add = (a: Both, b: Both): Both => ({
+    brand: addParts(a.brand, b.brand),
+    competitor: addParts(a.competitor, b.competitor),
+  });
+  const none: Both = { brand: NO_PARTS, competitor: NO_PARTS };
 
+  const byProvider = new Map<string, Both>();
+  let overall = none;
   for (const engine of rollups.engines) {
     const provider = resolveProvider(engine.model_used, engine.platform);
-    const providerTotals = byProvider.get(provider) ?? newTotals();
-    byProvider.set(provider, providerTotals);
-    for (const totals of [overall, providerTotals]) {
-      totals.brandTotal += Number(engine.brand_total);
-      totals.brandCount += Number(engine.brand_count);
-      totals.compTotal += Number(engine.comp_total);
-      totals.compCount += Number(engine.comp_count);
-    }
+    const parts = partsOf(engine, n(engine.brand_count));
+    byProvider.set(provider, add(byProvider.get(provider) ?? none, parts));
+    overall = add(overall, parts);
   }
 
   const groupList: HeadToHeadGroup[] = rollups.groups
-    .filter((g) => Number(g.runs) > 0)
+    .filter((g) => n(g.runs) > 0)
     .map((g) => {
-      const runs = Number(g.runs);
-      const brandScore = Number(g.brand_total) / runs;
-      const competitorScore = Number(g.comp_total) / runs;
+      const runs = n(g.runs);
+      const parts = partsOf(g, runs);
+      const brandScore = scoreOf(parts.brand);
+      const competitorScore = scoreOf(parts.competitor);
       const prompt = prompts.get(g.prompt_id);
       return {
         promptId: g.prompt_id,
@@ -163,18 +289,18 @@ export function headToHeadFromRollups(
         runs,
         brandScore,
         competitorScore,
-        diff: brandScore - competitorScore,
+        diff: diffOf(brandScore, competitorScore),
         latestAt: g.latest_at,
+        parts,
       };
     })
     .sort((a, b) => (a.latestAt < b.latestAt ? 1 : a.latestAt > b.latestAt ? -1 : 0));
 
-  const avg = (total: number, count: number) => (count > 0 ? Math.round(total / count) : 0);
   const platformRows = [...byProvider.entries()]
-    .map(([platform, a]) => {
-      const brandScore = avg(a.brandTotal, a.brandCount);
-      const competitorScore = avg(a.compTotal, a.compCount);
-      return { platform, brandScore, competitorScore, diff: brandScore - competitorScore };
+    .map(([platform, parts]) => {
+      const brandScore = scoreOf(parts.brand);
+      const competitorScore = scoreOf(parts.competitor);
+      return { platform, brandScore, competitorScore, diff: diffOf(brandScore, competitorScore) };
     })
     .sort((a, b) => a.platform.localeCompare(b.platform));
 
@@ -182,8 +308,8 @@ export function headToHeadFromRollups(
   return {
     groups: groupList,
     platformRows,
-    brandAvg: avg(overall.brandTotal, overall.brandCount),
-    competitorAvg: avg(overall.compTotal, overall.compCount),
+    brandAvg: scoreOf(overall.brand),
+    competitorAvg: scoreOf(overall.competitor),
     gaps: byDiff.filter((g) => g.diff < 0).slice(0, GAP_STRENGTH_LIMIT),
     strengths: byDiff
       .filter((g) => g.diff > 0)

@@ -50,6 +50,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { ArrowLeft, Check, Globe, Loader2, Plus, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -134,6 +135,8 @@ export default function NewBrandPage() {
   // Prompts past the plan's limit are saved waiting for a spot, not held back.
   const tWaiting = useTranslations('prompts.waiting');
   const t = useTranslations('brands.new');
+  const serverError = useServerErrorText();
+  const caughtError = useCaughtErrorText();
   const tPrompts = useTranslations('onboarding.prompts');
   // The state picker's own "no state" choice, ahead of the states themselves.
   const stateItems = [{ value: 'nationwide', label: t('step2.nationwide') }, ...US_STATE_ITEMS];
@@ -347,7 +350,7 @@ export default function NewBrandPage() {
         });
         if ('error' in result) {
           BRAND_ADD.failed(result.code);
-          toast.error(result.error);
+          toast.error(serverError(result, result.error));
           return;
         }
         const { brand } = result;
@@ -365,7 +368,7 @@ export default function NewBrandPage() {
       }
     } catch (err) {
       BRAND_ADD.failed();
-      toast.error(err instanceof Error ? err.message : t('errors.saveBrand'));
+      toast.error(caughtError(err, t('errors.saveBrand')));
     } finally {
       setIsLoading(false);
     }
@@ -490,7 +493,11 @@ export default function NewBrandPage() {
         BRAND_ADD.failed(result.code);
         // No technical toasts on this step: actionable failures (plan limit)
         // show verbatim inline, anything else gets a friendly retry message.
-        setSaveError(result.code === 'plan_limit' ? result.error : t('errors.savePrompts'));
+        setSaveError(
+          result.code === 'plan_limit'
+            ? serverError(result, result.error)
+            : t('errors.savePrompts'),
+        );
         return;
       }
       trackSavedWaiting('new_brand', result.waiting ?? 0);
@@ -647,7 +654,7 @@ export default function NewBrandPage() {
       router.push('/dashboard');
     } catch (err) {
       BRAND_ADD.failed();
-      toast.error(err instanceof Error ? err.message : t('errors.saveCompetitors'));
+      toast.error(caughtError(err, t('errors.saveCompetitors')));
       setSavingCompetitors(false);
     }
   };

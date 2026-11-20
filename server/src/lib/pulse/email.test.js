@@ -88,7 +88,9 @@ describe('renderPulseEmail', () => {
     });
 
     expect(html).toContain('⚠ Needs attention');
-    expect(html).toContain('Visibility is slipping: <strong>42 → 35</strong> week-over-week');
+    expect(html).toContain(
+      'Visibility score is slipping: <strong>42 → 35</strong> from the 7 days before to the last 7 days',
+    );
   });
 
   it('names the pulse after its window in the subject and heading', () => {
@@ -101,11 +103,15 @@ describe('renderPulseEmail', () => {
       });
 
     const weekly = render(7);
-    expect(weekly.subject).toBe('Acme Weekly Pulse — visibility 42 (+1.2 pts this week)');
+    expect(weekly.subject).toBe(
+      'Acme Weekly Pulse — visibility score 42/100, 7-day average 43/100 (+1.2 pts)',
+    );
     expect(weekly.html).toContain('Weekly Pulse — Acme</h1>');
 
     const daily = render(1);
-    expect(daily.subject).toBe('Acme Daily Pulse — visibility 42 (+1.2 pts this week)');
+    expect(daily.subject).toBe(
+      'Acme Daily Pulse — visibility score 42/100, 7-day average 43/100 (+1.2 pts)',
+    );
     expect(daily.html).toContain('Daily Pulse — Acme</h1>');
   });
 
@@ -117,8 +123,97 @@ describe('renderPulseEmail', () => {
       settingsUrl: 'https://example.com/settings',
     });
 
-    expect(html).toContain('color:#059669;">▲ 0</div>');
-    expect(html).not.toContain('color:#dc2626;">▼ 0</div>');
+    expect(html).toContain('color:#059669;">▲ 0 pts vs the 7 days before</div>');
+    expect(html).not.toContain('color:#dc2626;">▼ 0');
+  });
+
+  // D1/D2/D4 (metric dictionary): the score is points out of 100, the trend
+  // tile says it is a 7-day average and what its change compares, and the
+  // prompt tile names the prompts it counts and their period.
+  it('names each KPI, its unit and its period', () => {
+    const render = (windowDays) =>
+      renderPulseEmail({
+        brandName: 'Acme',
+        metrics: {
+          ...metrics,
+          windowDays,
+          kpis: { ...metrics.kpis, visibilityRate: 28.1, weekRate: 28.3, weekTrend: 0.3 },
+        },
+        insightsUrl: 'https://example.com/insights',
+        settingsUrl: 'https://example.com/settings',
+      }).html;
+
+    const daily = render(1);
+    expect(daily).toContain('>Visibility score</div>');
+    expect(daily).toContain('>28.1/100</div>');
+    expect(daily).toContain('>7-day average</div>');
+    expect(daily).toContain('>28.3/100</div>');
+    expect(daily).toContain('▲ +0.3 pts vs the 7 days before</div>');
+    expect(daily).toContain('>Prompts with a mention</div>');
+    expect(daily).toContain('>4 of 10</div>');
+    expect(daily).toContain('>10 prompts with answers in the last 24 hours</div>');
+    expect(daily).toContain('over the last 24 hours. A line that covers another period names it.');
+    expect(daily).not.toContain('Prompts you appear in');
+    expect(daily).not.toContain('7-day trend');
+
+    const weekly = render(7);
+    expect(weekly).toContain('>10 prompts with answers in the last 7 days</div>');
+
+    const one = renderPulseEmail({
+      brandName: 'Acme',
+      metrics: { ...metrics, kpis: { ...metrics.kpis, visiblePrompts: 1, promptCount: 1 } },
+      insightsUrl: 'https://example.com/insights',
+      settingsUrl: 'https://example.com/settings',
+    }).html;
+    expect(one).toContain('>1 prompt with answers in the last 7 days</div>');
+  });
+
+  it('says the period of every week-on-week highlight and warning', () => {
+    const { html } = renderPulseEmail({
+      brandName: 'Acme',
+      metrics: {
+        ...metrics,
+        highlights: [
+          { type: 'prompt_gain', promptText: 'best crm', gain: 19 },
+          {
+            type: 'competitor_overtaken',
+            competitorName: 'Contoso',
+            brandRate: 34,
+            competitorRate: 30,
+          },
+        ],
+        warnings: [
+          { type: 'sharp_drop', from: 40, to: 20 },
+          { type: 'competitor_surge', competitorName: 'Fabrikam', from: 10, to: 26 },
+          {
+            type: 'competitor_crossed',
+            competitorName: 'Initech',
+            competitorRate: 45,
+            brandRate: 42,
+          },
+        ],
+      },
+      insightsUrl: 'https://example.com/insights',
+      settingsUrl: 'https://example.com/settings',
+    });
+
+    expect(html).toContain(
+      '“best crm” gained <strong>+19 pts</strong> visibility score in the last 7 days, vs the 7 days before',
+    );
+    expect(html).toContain(
+      'You overtook <strong>Contoso</strong> on the leaderboard in the last 7 days (visibility score 34 vs 30)',
+    );
+    expect(html).toContain(
+      'Visibility score dropped sharply: <strong>40 → 20</strong> from the 7 days before to the last 7 days',
+    );
+    expect(html).toContain(
+      '<strong>Fabrikam</strong> surged from 10 (the 7 days before) to 26 (the last 7 days)',
+    );
+    expect(html).toContain(
+      '<strong>Initech</strong> crossed above your visibility score in the last 7 days (45 vs 42)',
+    );
+    expect(html).not.toContain('this week');
+    expect(html).not.toContain('week-over-week');
   });
 
   // The page is Visibility (Brand Visibility until 2026-11-06); its Overview keeps /dashboard/insights.
@@ -184,10 +279,12 @@ describe('the Pulse in the reader’s language (LOC-008)', () => {
 
   it('reads English exactly as before when no language is given', () => {
     const { subject, html } = renderPulseEmail({ brandName: 'Acme', metrics, ...links });
-    expect(subject).toBe('Acme Weekly Pulse — visibility 42 (+1.2 pts this week)');
+    expect(subject).toBe(
+      'Acme Weekly Pulse — visibility score 42/100, 7-day average 43/100 (+1.2 pts)',
+    );
     expect(html).toContain('How your brand showed up in AI answers over the last 7 days.');
     expect(html).toContain('>75%<');
-    expect(html).toContain('>4/10<');
+    expect(html).toContain('>4 of 10<');
   });
 
   it('writes the words and numbers in German, English where German has no text', () => {

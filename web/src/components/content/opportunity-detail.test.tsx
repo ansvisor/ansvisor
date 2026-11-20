@@ -154,6 +154,33 @@ afterEach(() => {
 });
 
 describe('the opportunity panel on a read-only workspace', () => {
+  it('shows the page an opportunity works on, without a group of prompts too (Content test 2026-11-19)', async () => {
+    content.getOpportunity.mockResolvedValue({
+      ...OPPORTUNITY,
+      decision: 'optimize',
+      sourceData: {
+        targetPages: [
+          {
+            url: 'https://acme.example/guides/espresso',
+            title: 'Espresso guide',
+            aiCitations: 3,
+            gaSessions: 40,
+          },
+        ],
+      },
+    });
+    await render(false);
+    const link = container.querySelector('a[href="https://acme.example/guides/espresso"]');
+    expect(link?.textContent).toContain('Espresso guide');
+    expect(container.textContent).toContain('Your Site');
+  });
+
+  it('shows no page for a new one', async () => {
+    content.getOpportunity.mockResolvedValue({ ...OPPORTUNITY, decision: 'create' });
+    await render(false);
+    expect(container.textContent).not.toContain('Your Site');
+  });
+
   it('shows the competitor gap in points, never past 100 (Content test 2026-11-19)', async () => {
     content.getOpportunity.mockResolvedValue({
       ...OPPORTUNITY,

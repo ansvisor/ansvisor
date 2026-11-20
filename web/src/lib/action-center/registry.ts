@@ -168,6 +168,37 @@ export const ACTION_STATUSES: readonly ActionStatus[] = [
 /** Statuses of an action still to be worked on. */
 export const OPEN_ACTION_STATUSES: readonly ActionStatus[] = ['new', 'in_progress', 'on_hold'];
 
+/** Whether an action is still to be worked on: new, in progress or on hold. */
+export const isOpenAction = (status: ActionStatus): boolean =>
+  OPEN_ACTION_STATUSES.includes(status);
+
+/**
+ * "Open actions", the one count Today's Actions step and the Actions list's
+ * All pill show (AC-01): new, in progress and on hold, whoever they're
+ * assigned to. With it, the on-hold ones and the person's own, for the line
+ * under the count ("2 on hold · 5 yours").
+ */
+export interface OpenActionCounts {
+  open: number;
+  onHold: number;
+  /** Assigned to the person. */
+  mine: number;
+}
+
+export function countOpenActions(
+  actions: readonly { status: ActionStatus; assigneeId: string | null }[],
+  userId: string | null,
+): OpenActionCounts {
+  const counts: OpenActionCounts = { open: 0, onHold: 0, mine: 0 };
+  for (const action of actions) {
+    if (!isOpenAction(action.status)) continue;
+    counts.open += 1;
+    if (action.status === 'on_hold') counts.onHold += 1;
+    if (userId && action.assigneeId === userId) counts.mine += 1;
+  }
+  return counts;
+}
+
 export const ACTION_OUTCOMES: readonly ActionOutcome[] = [
   'pending_measurement',
   'improved',

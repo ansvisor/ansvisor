@@ -21,6 +21,8 @@ An opportunity sent from an Action Center task shows that task instead: where, w
 
 **Results** lists the Action Center actions sent from the opportunity, with what changed once their work is complete and measured.
 
+An opportunity on one of your pages (optimize, expand, refresh and the like) shows that page under **Your Site**, with its AI citations and sessions over 30 days, as **Write this** opens it.
+
 ## For a group of prompts
 
 An opportunity built for a group of prompts also shows:

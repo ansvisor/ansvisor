@@ -753,13 +753,23 @@ export interface AuditedPages {
   total: number;
   /** The brand's primary host, whose pages are listed by path alone. */
   primaryHost: string | null;
+  /**
+   * The brand's pages with an audit running (whatever filter the list has) and
+   * when the oldest started, which is when a batch still running began.
+   */
+  running: { count: number; since: string | null };
 }
 
-/** List a page of the brand's audited pages, most recently audited first. */
+/**
+ * List a page of the brand's audited pages, most recently audited first.
+ * With `since` (an ISO time), only the pages audited at or after it: a bulk
+ * batch's pages, from the time its first audit started.
+ */
 export async function getAuditPages(
   brandId: string,
   offset = 0,
   limit = 50,
+  since?: string,
 ): Promise<AuditedPages> {
   const session = await getSession();
 
@@ -768,6 +778,7 @@ export async function getAuditPages(
     limit: String(limit),
     offset: String(offset),
   });
+  if (since) params.set('since', since);
   const res = await fetch(`${AEO_SERVER_URL}/api/audits/pages?${params}`, {
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
@@ -779,7 +790,12 @@ export async function getAuditPages(
 
   const data = await res.json();
   const pages: AuditedPage[] = data.pages ?? [];
-  return { pages, total: data.total ?? pages.length, primaryHost: data.primaryHost ?? null };
+  return {
+    pages,
+    total: data.total ?? pages.length,
+    primaryHost: data.primaryHost ?? null,
+    running: data.running ?? { count: 0, since: null },
+  };
 }
 
 /** The Site Audit hub's main reads: the page shows once they're in. */
@@ -796,9 +812,13 @@ export interface AuditHub {
  * called from the page run one at a time, so separate calls added their
  * times up: 23 s on production (2026-10-19), not the slowest read's 13.
  */
-export async function getAuditHub(brandId: string, pageLimit = 50): Promise<AuditHub> {
+export async function getAuditHub(
+  brandId: string,
+  pageLimit = 50,
+  since?: string,
+): Promise<AuditHub> {
   const [pages, quota, trend, overview] = await Promise.all([
-    getAuditPages(brandId, 0, pageLimit),
+    getAuditPages(brandId, 0, pageLimit, since),
     getAuditQuota(),
     getAuditTrend(brandId),
     getAuditOverview(brandId).catch((err) => {

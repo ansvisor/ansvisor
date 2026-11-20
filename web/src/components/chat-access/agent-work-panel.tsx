@@ -78,7 +78,10 @@ export function AgentWorkPanel({
           );
         })}
       </fieldset>
-      <p className="text-xs text-muted-foreground">{t('goLive')}</p>
+      <div className="grid gap-0.5 text-xs">
+        <p className="font-medium">{t('goLive')}</p>
+        <p className="text-muted-foreground">{t('goLiveAdmin')}</p>
+      </div>
       <p className="text-xs text-muted-foreground">{footer}</p>
       {view.canChange ? (
         <Button

@@ -1,6 +1,5 @@
 import type english from '../../../messages/en.json';
 import { DEFAULT_LOCALE, isUiLocale, type UiLocale } from '@/i18n/locales';
-import { supabaseAdmin } from '@/lib/supabase/admin';
 import { chatTranslator } from './run-locale';
 
 /**
@@ -11,6 +10,9 @@ import { chatTranslator } from './run-locale';
  */
 export async function cardLocaleOf(userId: string): Promise<UiLocale> {
   try {
+    // Loaded here, not at module load: views and actions that import this file
+    // (and their tests) shouldn't need the admin client's server settings.
+    const { supabaseAdmin } = await import('@/lib/supabase/admin');
     const { data } = await supabaseAdmin
       .from('profiles')
       .select('ui_language')
