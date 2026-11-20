@@ -8565,6 +8565,11 @@
       "createAgent": "Create agent",
       "connect": "Connect {name}",
       "notConnected": "{name} · not connected",
+      "catalog": {
+        "name": "A catalog",
+        "connect": "Connect a catalog (Shopify, feed URL, CSV)"
+      },
+      "enabled": "Enabled",
       "toggle": "/{name} on for the workspace",
       "turnedOn": "/{name} is on for the workspace.",
       "turnedOff": "/{name} is off for the workspace.",
