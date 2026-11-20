@@ -149,7 +149,7 @@ describe('ActionDrawer', () => {
       const control = drawer.querySelectorAll(`#${label.htmlFor}`);
       expect(control).toHaveLength(1);
     }
-    expect(drawer.querySelector<HTMLInputElement>('#action-drawer-due-date')!.value).toBe(
+    expect(drawer.querySelector<HTMLElement>('#action-drawer-due-date')!.dataset.value).toBe(
       '2026-11-01',
     );
   });
@@ -233,25 +233,21 @@ describe('ActionDrawer', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
 
-    const dueDate = () => document.querySelector<HTMLInputElement>('#action-drawer-due-date')!;
-    /** What the browser does as a date is picked or typed into the field. */
-    const enter = (value: string) =>
-      act(() => {
-        const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
-        set.call(dueDate(), value);
-        dueDate().dispatchEvent(new Event('input', { bubbles: true }));
-      });
+    const dueDate = () => document.querySelector<HTMLElement>('#action-drawer-due-date')!;
+    /** Opens the app's date picker (AC-25) and picks a day, or Clear. */
+    const pickDay = async (day: string | null) => {
+      await act(async () => dueDate().click());
+      const target = day
+        ? document.querySelector<HTMLButtonElement>(`[data-day="${day}"]`)
+        : document.querySelector<HTMLButtonElement>('[data-action="datePicker.clear"]');
+      await act(async () => target!.click());
+    };
+    const enter = (day: string) => pickDay(day);
     const settle = () => act(async () => void (await vi.advanceTimersByTimeAsync(800)));
 
-    it('shows a due date at once and saves only the one it settles on', async () => {
+    it('saves the day picked at once, and shows it', async () => {
       await renderDrawer();
-      // Typing 18 passes through the 1st.
-      enter('2026-11-01');
-      enter('2026-11-18');
-      expect(dueDate().value).toBe('2026-11-18');
-      expect(server.setActionDueDate).not.toHaveBeenCalled();
-
-      await settle();
+      await enter('2026-11-18');
       expect(server.setActionDueDate).toHaveBeenCalledTimes(1);
       expect(server.setActionDueDate).toHaveBeenCalledWith('b1', 'a1', '2026-11-18');
       expect(onPatched).toHaveBeenCalledWith(
@@ -260,36 +256,22 @@ describe('ActionDrawer', () => {
       );
       // The list isn't read again; the detail is, for its History.
       expect(onChanged).not.toHaveBeenCalled();
+      await settle();
       expect(server.getActionDetail).toHaveBeenCalledTimes(2);
     });
 
-    it("doesn't save a year still being typed, and puts the saved date back on leaving", async () => {
+    it('saves nothing when the same day is picked, and a cleared date as none', async () => {
       await renderDrawer();
-      enter('0002-11-01');
-      await settle();
+      await enter('2026-11-01');
       expect(server.setActionDueDate).not.toHaveBeenCalled();
-
-      act(() => dueDate().dispatchEvent(new FocusEvent('focusout', { bubbles: true })));
-      expect(dueDate().value).toBe('2026-11-01');
-      expect(server.setActionDueDate).not.toHaveBeenCalled();
-    });
-
-    it('saves on leaving the field, and a cleared date as none', async () => {
-      await renderDrawer();
-      enter('2026-12-05');
-      await act(async () => dueDate().dispatchEvent(new FocusEvent('focusout', { bubbles: true })));
-      expect(server.setActionDueDate).toHaveBeenCalledWith('b1', 'a1', '2026-12-05');
-
-      enter('');
-      await settle();
+      await pickDay(null);
       expect(server.setActionDueDate).toHaveBeenLastCalledWith('b1', 'a1', null);
-      expect(server.setActionDueDate).toHaveBeenCalledTimes(2);
     });
 
     it('says so when a save fails, and reads the list again', async () => {
       server.setActionDueDate.mockRejectedValueOnce(new Error('offline'));
       await renderDrawer();
-      enter('2026-12-05');
+      await enter('2026-11-25');
       await settle();
       expect(toast.error).toHaveBeenCalledWith("Couldn't update the action.");
       expect(onChanged).toHaveBeenCalledTimes(1);
@@ -297,9 +279,9 @@ describe('ActionDrawer', () => {
 
     it('changes nothing on a read-only workspace: the due date and Add task open the upgrade dialog', async () => {
       await renderDrawer(action, true);
-      enter('2026-11-18');
+      await enter('2026-11-18');
       expect(openUpgrade).toHaveBeenLastCalledWith('Setting a due date needs a plan');
-      expect(dueDate().value).toBe('2026-11-01');
+      expect(dueDate().dataset.value).toBe('2026-11-01');
       await settle();
       expect(server.setActionDueDate).not.toHaveBeenCalled();
 

@@ -10,6 +10,7 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -135,13 +136,7 @@ const TABS: DrawerTab[] = ['overview', 'tasks', 'signals', 'history'];
 /** With something to list, Affected follows Overview (AC-003). */
 const TABS_WITH_AFFECTED: DrawerTab[] = ['overview', 'affected', 'tasks', 'signals', 'history'];
 
-/**
- * How long a due date has to stay put before it is saved. A date typed digit
- * by digit passes through other valid dates on its way (day 1 before 18):
- * only the one it settles on is saved.
- */
-const DUE_DATE_SETTLE_MS = 800;
-/** A year typed digit by digit starts at 0002; these keep it from being saved. */
+/** The days the due date's picker offers. */
 const DUE_DATE_MIN = '2000-01-01';
 const DUE_DATE_MAX = '2100-12-31';
 
@@ -240,15 +235,10 @@ export function ActionDrawer({
     }
   }, [brandId, action, t]);
 
-  // A due date being typed, until it is saved (null: the saved one shows).
-  const [dueDraft, setDueDraft] = useState<string | null>(null);
-  const dueTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
   useEffect(() => {
     openId.current = action?.id ?? null;
     setTab('overview');
     setDetail(null);
-    setDueDraft(null);
     setDrafts([]);
     if (action) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -452,11 +442,8 @@ export function ActionDrawer({
     void load();
   };
 
-  /** Saves a due date the field settled on, if it changed. */
-  const commitDueDate = (value: string) => {
-    clearTimeout(dueTimer.current);
-    setDueDraft(null);
-    const dueDate = value || null;
+  /** Saves the due date picked (null: cleared), if it changed; shown at once. */
+  const commitDueDate = (dueDate: string | null) => {
     if (dueDate === action.dueDate) return;
     void changeField({ dueDate }, () => setActionDueDate(brandId, action.id, dueDate));
   };
@@ -652,35 +639,18 @@ export function ActionDrawer({
             <Label htmlFor="action-drawer-due-date" className="text-xs text-muted-foreground">
               {t('drawer.dueDate')}
             </Label>
-            <Input
+            {/* The app's own date picker, in its language (UX audit AC-25). */}
+            <DatePicker
               id="action-drawer-due-date"
-              type="date"
-              className="mt-1 h-8 text-xs"
+              className="mt-1"
               min={DUE_DATE_MIN}
               max={DUE_DATE_MAX}
-              value={dueDraft ?? action.dueDate ?? ''}
-              onChange={guard(
-                (e: React.ChangeEvent<HTMLInputElement>) => {
-                  const { value, validity } = e.target;
-                  setDueDraft(value);
-                  clearTimeout(dueTimer.current);
-                  // Cleared, or a whole date in range: saved once it settles.
-                  if (validity.valid) {
-                    dueTimer.current = setTimeout(() => commitDueDate(value), DUE_DATE_SETTLE_MS);
-                  }
-                },
-                { action: tActions('setDueDate') },
-              )}
-              onBlur={(e) => {
-                if (dueDraft === null) return;
-                // Leaving the field saves what it holds now; a half-typed or
-                // out-of-range date goes back to the saved one.
-                if (e.target.validity.valid) commitDueDate(e.target.value);
-                else {
-                  clearTimeout(dueTimer.current);
-                  setDueDraft(null);
-                }
-              }}
+              clearable
+              placeholder={t('drawer.noDueDate')}
+              value={action.dueDate ?? null}
+              onChange={guard((day: string | null) => commitDueDate(day), {
+                action: tActions('setDueDate'),
+              })}
             />
           </div>
         </div>

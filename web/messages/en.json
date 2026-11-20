@@ -2328,6 +2328,7 @@
         "assignee": "Assignee",
         "assignTo": "Assign to teammate",
         "dueDate": "Due date",
+        "noDueDate": "No due date",
         "statusLabel": "Status",
         "events": {
           "created": "{source, select, chat {Action created from Chat} ads {Action created from Ads} other {Action created}}",
@@ -4139,6 +4140,13 @@
     "answerSub": "An answer from scheduled tracking",
     "loading": "Loading…",
     "answerFailed": "This answer couldn't be loaded."
+  },
+  "datePicker": {
+    "placeholder": "Pick a date",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today",
+    "clear": "Clear"
   },
   "chatTools": {
     "profile": { "name": "Read your profile", "step": "Read your profile" },
