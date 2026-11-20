@@ -2187,7 +2187,7 @@
         "why": "Why this action?",
         "goal": "Goal",
         "kpis": "KPIs",
-        "kpiTarget": "target {target}",
+        "kpiBrandGoal": "{timeframe, select, weekly {Brand weekly goal} quarterly {Brand quarterly goal} other {Brand monthly goal}}: {target}",
         "noKpis": "No configured KPIs are linked to this action.",
         "support": "{count, plural, =0 {No open signal supports this action any more.} one {# signal supports this action} other {# signals support this action}}",
         "supportAll": "All signals ({count})",

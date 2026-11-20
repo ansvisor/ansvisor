@@ -1,5 +1,6 @@
 'use client';
 
+import { brandGoalText } from '@/lib/kpis/brand-goal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
@@ -764,8 +765,12 @@ export function ActionDrawer({
                       .map((kpi) => (
                         <div key={kpi.kpiKey} className="rounded-md border px-3 py-2">
                           <p className="text-xs font-medium">{tRegistry(`${kpi.kpiKey}.name`)}</p>
+                          {/* The brand's monthly goal, said so (AC-22, D11). */}
                           <p className="text-xs text-muted-foreground">
-                            {t('drawer.kpiTarget', { target: kpi.target })}
+                            {t('drawer.kpiBrandGoal', {
+                              target: brandGoalText(kpi.kpiKey, kpi.target),
+                              timeframe: kpi.timeframe,
+                            })}
                           </p>
                         </div>
                       ))}
