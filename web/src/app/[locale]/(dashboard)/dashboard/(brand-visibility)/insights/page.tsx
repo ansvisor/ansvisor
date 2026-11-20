@@ -319,11 +319,8 @@ function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
-      <h2 className="text-lg font-semibold">No tracking data yet</h2>
-      <p className="text-muted-foreground text-sm mt-1 max-w-md">
-        Run your prompts through AI platforms to see how your brand appears in AI-generated
-        responses.
-      </p>
+      <h2 className="text-lg font-semibold">{t('page.noDataTitle')}</h2>
+      <p className="text-muted-foreground text-sm mt-1 max-w-md">{t('page.noDataBody')}</p>
       {!isCloud && onRunPrompts && (
         <Button onClick={onRunPrompts} disabled={isRunning} className="mt-6 gap-2">
           {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -335,24 +332,14 @@ function EmptyState({
 }
 
 function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onReset: () => void }) {
-  const labels: Record<DatePreset, string> = {
-    '24h': 'last 24 hours',
-    '7d': 'last 7 days',
-    '30d': 'last 30 days',
-    '90d': 'last 90 days',
-    all: 'selected period',
-    custom: 'selected period',
-  };
+  const t = useTranslations('insights.page');
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <CalendarX2 className="h-10 w-10 text-muted-foreground/40 mb-3" />
-      <h3 className="text-base font-semibold">No results for the {labels[datePreset]}</h3>
-      <p className="text-muted-foreground text-sm mt-1 max-w-sm">
-        There is tracking data available in other time periods. Try a wider range or switch to
-        &quot;All time&quot;.
-      </p>
+      <h3 className="text-base font-semibold">{t('noResults', { period: datePreset })}</h3>
+      <p className="text-muted-foreground text-sm mt-1 max-w-sm">{t('otherPeriods')}</p>
       <Button variant="outline" size="sm" className="mt-4" onClick={onReset}>
-        Show all data
+        {t('showAll')}
       </Button>
     </div>
   );
@@ -367,20 +354,19 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
  * before any competitors are added.
  */
 function NoCompetitorsTeaser() {
+  const t = useTranslations('insights.page');
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-muted-foreground/30 p-8 text-center">
       <Users className="h-8 w-8 text-muted-foreground/40" />
       <div>
-        <p className="text-sm font-medium text-foreground">No competitors tracked yet</p>
-        <p className="mt-0.5 max-w-xs text-xs text-muted-foreground">
-          Add competitors to see how you compare in AI answers.
-        </p>
+        <p className="text-sm font-medium text-foreground">{t('noCompetitorsTitle')}</p>
+        <p className="mt-0.5 max-w-xs text-xs text-muted-foreground">{t('noCompetitorsBody')}</p>
       </div>
       <Link
         href="/dashboard/competitors"
         className="inline-flex items-center gap-1.5 text-xs font-medium text-primary underline-offset-2 hover:underline"
       >
-        Head-to-Head Comparison
+        {t('headToHead')}
         <ArrowRight className="h-3.5 w-3.5" />
       </Link>
     </div>
@@ -607,7 +593,7 @@ export default function InsightsPage() {
         if (!quiet) {
           // The read's route keeps the server's error in its log, so there
           // is nothing more actionable to say than this.
-          toast.error(serverError(err, t('loadFailed')));
+          toast.error(serverError(err, t('page.loadFailed')));
           // Not "No tracking data yet", nor the last filters' figures: the
           // tab says the read failed, with Retry (Brand Visibility).
           setLoadFailed(true);
@@ -729,7 +715,7 @@ export default function InsightsPage() {
           citation_urls: '',
           competitor_mentions: '',
         });
-        toast.warning('Export capped at 50,000 rows to prevent memory issues');
+        toast.warning(t('page.exportCapped'));
       }
 
       const csv = toCsv(rows, INSIGHT_EXPORT_HEADERS);
@@ -745,7 +731,7 @@ export default function InsightsPage() {
 
       URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error(caughtError(err, t('exportFailed')));
+      toast.error(caughtError(err, t('page.exportFailed')));
     } finally {
       setIsExporting(false);
     }
@@ -878,7 +864,7 @@ export default function InsightsPage() {
           <div className="flex justify-center">
             <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
               <FlaskConical className="h-4 w-4" />
-              Or test a single prompt
+              {t('page.testSingle')}
             </Button>
           </div>
         )}

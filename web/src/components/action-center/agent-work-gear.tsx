@@ -64,7 +64,8 @@ export function AgentWorkGear() {
         <Settings2 className="h-3.5 w-3.5" aria-hidden />
         {t('gear')}
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
+      {/* Above the gear, not over the focus rows' Start buttons below it (AC-08). */}
+      <PopoverContent side="top" align="end" className="w-80">
         <AgentWorkPanel
           key={`${view.value}:${view.lastChange?.at ?? ''}`}
           view={view}

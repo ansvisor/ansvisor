@@ -8,7 +8,15 @@ import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
-import { createReport, getReports, deleteReport, type ReportListItem } from '@/lib/actions/reports';
+import {
+  createReport,
+  getReport,
+  getReports,
+  deleteReport,
+  type ReportListItem,
+} from '@/lib/actions/reports';
+import { getReportBranding } from '@/lib/actions/white-label';
+import { saveReportPdf } from './_save-pdf';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { viewRows } from '@/lib/chat/page-view';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,7 +40,25 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Check, Crown, FileBarChart, Loader2, Plus, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { REPORT_TEMPLATE_TITLES } from '@/lib/reports/template-titles';
+import {
+  Check,
+  Crown,
+  FileBarChart,
+  FileDown,
+  Link2,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
@@ -87,6 +113,7 @@ export default function ReportsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
 
   const [template, setTemplate] = useState<ReportTemplateId>('executive_summary');
@@ -207,6 +234,43 @@ export default function ReportsPage() {
     }
   };
 
+  // Share and Download in the row's menu (UX audit RP-09). The link opens the
+  // report for anyone in the workspace; reports have no public link.
+  const handleCopyLink = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/dashboard/reports/${id}`);
+      toast.success(t('linkCopied'));
+    } catch {
+      toast.error(t('copyLinkFailed'));
+    }
+  };
+
+  // The same PDF as the report's page: the saved report and the white label
+  // kit are read first, and a kit that couldn't be read makes no PDF.
+  const handleDownload = async (item: ReportListItem) => {
+    setDownloadingId(item.id);
+    try {
+      const [report, branding] = await Promise.all([
+        getReport(item.id),
+        getReportBranding(item.brandId).catch(() => ({ ok: false }) as const),
+      ]);
+      if (!report) {
+        toast.error(t('notFound'));
+        return;
+      }
+      if (!branding.ok) {
+        toast.error(t('brandingFailed'));
+        return;
+      }
+      await saveReportPdf(report, branding.branding);
+    } catch (err) {
+      console.error('PDF download error:', err);
+      toast.error(t('downloadFailed'));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
@@ -279,7 +343,11 @@ export default function ReportsPage() {
                     <TableRow key={report.id}>
                       <TableCell>
                         <span className="font-medium">{report.title}</span>
+                        {/* The template's name under a title of the person's own;
+                            a default title already is it. */}
                         {KNOWN_TEMPLATE_IDS.has(report.template) &&
+                          report.title !==
+                            REPORT_TEMPLATE_TITLES[report.template as ReportTemplateId] &&
                           t.has(`templates.${report.template}.name`) && (
                             <span className="mt-0.5 block text-xs text-muted-foreground">
                               {t(`templates.${report.template}.name`)}
@@ -301,21 +369,47 @@ export default function ReportsPage() {
                           >
                             {tc('view')}
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-muted-foreground hover:text-destructive"
-                            disabled={deletingId === report.id}
-                            onClick={guard(() => setPendingConfirm(report.id), {
-                              action: tActions('deleteReports'),
-                            })}
-                          >
-                            {deletingId === report.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
+                          {/* Delete sits in the row's menu, away from View, and asks
+                              first (UX audit RP-10). */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              className="rounded p-1.5 text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+                              disabled={deletingId === report.id || downloadingId === report.id}
+                              aria-label={t('rowMenuLabel', { title: report.title })}
+                            >
+                              {deletingId === report.id || downloadingId === report.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MoreHorizontal className="h-4 w-4" />
+                              )}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                data-action="reports.copyLink"
+                                onClick={() => void handleCopyLink(report.id)}
+                              >
+                                <Link2 className="h-4 w-4" />
+                                {t('copyLink')}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                data-action="reports.downloadPdf"
+                                onClick={() => void handleDownload(report)}
+                              >
+                                <FileDown className="h-4 w-4" />
+                                {t('downloadPDF')}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={guard(() => setPendingConfirm(report.id), {
+                                  action: tActions('deleteReports'),
+                                })}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                {t('deleteTitle')}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>

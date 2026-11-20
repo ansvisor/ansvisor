@@ -41,7 +41,7 @@ import {
   ACTION_CATEGORIES,
   ACTION_STATUSES,
   FROM_PRODUCTS_KINDS,
-  OPEN_ACTION_STATUSES,
+  isOpenAction,
   type ActionCategory,
   type ActionDismissReason,
   type ActionStatus,
@@ -91,11 +91,26 @@ import { saveBlob } from '@/lib/download';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
-const isOpen = (action: ActionItem) => OPEN_ACTION_STATUSES.includes(action.status);
+const isOpen = (action: ActionItem) => isOpenAction(action.status);
 
-/** The Status filter: a status, or Stale (New with no one on it for a month, 00432). */
-type StatusChoice = ActionStatus | 'all' | 'stale';
-const STATUS_CHOICES: StatusChoice[] = ['all', ...ACTION_STATUSES, 'stale'];
+/**
+ * The Status filter: Open (new, in progress or on hold, the count Today's
+ * Actions step shows, AC-01), every status, one status, or Stale (New with
+ * no one on it for a month, 00432). Open by default; closed actions are a
+ * choice away and on History.
+ */
+type StatusChoice = ActionStatus | 'open' | 'all' | 'stale';
+const STATUS_CHOICES: StatusChoice[] = ['open', 'all', ...ACTION_STATUSES, 'stale'];
+const DEFAULT_STATUS: StatusChoice = 'open';
+
+const matchesStatus = (action: ActionItem, status: StatusChoice) =>
+  status === 'all'
+    ? true
+    : status === 'open'
+      ? isOpen(action)
+      : status === 'stale'
+        ? isStale(action)
+        : action.status === status;
 
 /**
  * What each summary card counts, one predicate per card.
@@ -191,7 +206,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
   // "From Products" (ECOM-013): only what Product Visibility sent, beside the category.
   const [fromProducts, setFromProducts] = useState(false);
   const [priority, setPriority] = useState<PriorityLevel | 'all'>('all');
-  const [status, setStatus] = useState<StatusChoice>('all');
+  const [status, setStatus] = useState<StatusChoice>(DEFAULT_STATUS);
   const [assignee, setAssignee] = useState<string>('all');
   // Most recently updated first, by the date the list shows (Updated).
   const [sort, setSort] = useState<ActionSort>(DEFAULT_ACTION_SORT);
@@ -219,7 +234,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     setPriority(
       readUrlChoice<PriorityLevel | 'all'>('priority', ['all', ...PRIORITY_LEVELS], 'all'),
     );
-    setStatus(readUrlChoice<StatusChoice>('status', STATUS_CHOICES, 'all'));
+    setStatus(readUrlChoice<StatusChoice>('status', STATUS_CHOICES, DEFAULT_STATUS));
     setAssignee(readUrlParam('assignee') || 'all');
     // An old link's ?sort=newest lands on the one date sort.
     setSort(parseActionSort(readUrlParam('sort')));
@@ -246,7 +261,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           {
             category: 'all',
             priority: 'all',
-            status: 'all',
+            status: DEFAULT_STATUS,
             assignee: 'all',
             sort: DEFAULT_ACTION_SORT,
             from: 'all',
@@ -414,8 +429,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
       if (category !== 'all' && action.category !== category) return false;
       if (fromProducts && !FROM_PRODUCTS_KINDS.includes(action.kind)) return false;
       if (priority !== 'all' && action.priorityLevel !== priority) return false;
-      if (status === 'stale' ? !isStale(action) : status !== 'all' && action.status !== status)
-        return false;
+      if (!matchesStatus(action, status)) return false;
       if (assignee !== 'all') {
         if (assignee === 'unassigned' ? action.assignee !== null : action.assignee?.id !== assignee)
           return false;
@@ -489,16 +503,22 @@ function ActionsContent({ brand }: { brand: Brand }) {
     );
   }, [brand.id, brand.slug, visible, tTexts, tCategories, t, serverError]);
 
+  // The pills count what the Status filter keeps, so All matches the table
+  // and, on Open, Today's "N open" (AC-01).
+  const inStatus = useMemo(
+    () => (actions ?? []).filter((action) => matchesStatus(action, status)),
+    [actions, status],
+  );
   const categoryCounts = useMemo(() => {
     const counts = new Map<ActionCategory, number>();
-    for (const action of actions ?? []) {
+    for (const action of inStatus) {
       counts.set(action.category, (counts.get(action.category) ?? 0) + 1);
     }
     return counts;
-  }, [actions]);
+  }, [inStatus]);
   const fromProductsCount = useMemo(
-    () => (actions ?? []).filter((action) => FROM_PRODUCTS_KINDS.includes(action.kind)).length,
-    [actions],
+    () => inStatus.filter((action) => FROM_PRODUCTS_KINDS.includes(action.kind)).length,
+    [inStatus],
   );
 
   const summary = useMemo(() => {
@@ -517,7 +537,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     focus !== null ||
     category !== 'all' ||
     priority !== 'all' ||
-    status !== 'all' ||
+    status !== DEFAULT_STATUS ||
     assignee !== 'all' ||
     search !== '';
 
@@ -525,7 +545,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     setFocus(null);
     setCategory('all');
     setPriority('all');
-    setStatus('all');
+    setStatus(DEFAULT_STATUS);
     setAssignee('all');
     setSearch('');
   };
@@ -683,7 +703,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
         <div className="flex flex-wrap items-center gap-2">
           <CategoryPill
             label={t('allActions')}
-            count={list.length}
+            count={inStatus.length}
             isActive={category === 'all'}
             onClick={() => setCategory('all')}
           />
@@ -740,7 +760,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           label={t('filters.status')}
           value={status}
           onChange={(v) => setStatus(v as StatusChoice)}
-          options={[...ACTION_STATUSES, 'stale' as const].map((v) => ({
+          options={['open' as const, ...ACTION_STATUSES, 'stale' as const].map((v) => ({
             value: v,
             label: t(`status.${v}`),
           }))}
@@ -806,9 +826,17 @@ function ActionsContent({ brand }: { brand: Brand }) {
         />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-          <p className="text-sm text-muted-foreground">{t('noResults')}</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={clearFilters}>
-            {t('filters.clear')}
+          {/* Open by default: with every action closed, nothing is filtered but the status. */}
+          <p className="text-sm text-muted-foreground">
+            {hasActiveFilters ? t('noResults') : t('noOpen')}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={hasActiveFilters ? clearFilters : () => setStatus('all')}
+          >
+            {hasActiveFilters ? t('filters.clear') : t('showAllStatuses')}
           </Button>
         </div>
       )}

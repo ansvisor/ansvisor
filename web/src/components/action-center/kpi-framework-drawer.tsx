@@ -196,7 +196,7 @@ export function KpiFrameworkDrawer({
 
   // Switching the period rescales flow targets to the new cadence (weekly
   // 23 citations becomes monthly ~99) so the numbers keep meaning the same
-  // goal; percent targets are levels and stay as typed. A non-numeric
+  // goal; percent and score targets are levels and stay as typed. A non-numeric
   // half-typed value is left alone rather than clobbered.
   const handleTimeframeChange = (next: KpiTimeframe) => {
     setDraft((prev) => {
@@ -363,10 +363,17 @@ export function KpiFrameworkDrawer({
                               [key]: { ...prev[key], target: e.target.value },
                             }))
                           }
-                          className={cn('h-9 pe-7 text-sm', isInvalid && 'border-destructive')}
+                          className={cn(
+                            'h-9 text-sm',
+                            KPI_REGISTRY[key].unit === 'points' ? 'pe-11' : 'pe-7',
+                            isInvalid && 'border-destructive',
+                          )}
                         />
+                        {/* The Visibility score is out of 100, never a % (D2). */}
                         <span className="pointer-events-none absolute inset-y-0 end-2.5 flex items-center text-xs text-muted-foreground">
-                          {UNIT_SUFFIX[KPI_REGISTRY[key].unit]}
+                          {KPI_REGISTRY[key].unit === 'points'
+                            ? t('scoreSuffix')
+                            : UNIT_SUFFIX[KPI_REGISTRY[key].unit]}
                         </span>
                       </div>
                     </div>

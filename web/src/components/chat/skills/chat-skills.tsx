@@ -499,6 +499,9 @@ function LibraryCard({
   const t = useTranslations('chatSkills.page');
   const tNames = useTranslations('chatAgents.connections.names');
   const uses = skillOf(skill.name)?.uses ?? [];
+  // A connection's name; "Any catalog source" says what counts here (UX audit CH-13).
+  const nameOf = (key: string) =>
+    key === 'catalog' ? t('catalog.name') : tNames.has(key) ? tNames(key) : key;
   // A Required connection the brand lacks: Connect stands in for Run and Schedule (mockup).
   const missing = kinds
     ? uses.find((use) => use.required && !kinds.has(connectionKindOf(use.key) ?? use.key))
@@ -523,7 +526,7 @@ function LibraryCard({
         <div className="flex flex-wrap gap-1.5" data-slot="skill-connections">
           {uses.map((use) => {
             const on = kinds?.has(connectionKindOf(use.key) ?? use.key);
-            const name = tNames.has(use.key) ? tNames(use.key) : use.key;
+            const name = nameOf(use.key);
             return (
               <span
                 key={use.key}
@@ -548,11 +551,11 @@ function LibraryCard({
           <Link
             href={INTEGRATIONS_HREF}
             data-action="skills.connect"
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+            className={cn(buttonVariants({ size: 'sm' }))}
           >
-            {t('connect', {
-              name: tNames.has(missing.key) ? tNames(missing.key) : missing.key,
-            })}
+            {missing.key === 'catalog'
+              ? t('catalog.connect')
+              : t('connect', { name: nameOf(missing.key) })}
           </Link>
         ) : (
           skill.enabled && (
@@ -574,22 +577,40 @@ function LibraryCard({
         <Link
           href={`/dashboard/agents/new?skill=${encodeURIComponent(skill.name)}`}
           data-action="skills.createAgent"
-          className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
         >
           {t('createAgent')}
         </Link>
-        {canToggle && (
-          <span className="ms-auto">
-            <FormSwitch
-              checked={skill.enabled}
-              label={t('toggle', { name: skill.name })}
-              action="skills.toggle"
-              onChange={onToggle}
-            />
-          </span>
-        )}
+        {canToggle && <SkillSwitch checked={skill.enabled} name={skill.name} onToggle={onToggle} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * A skill's on/off switch, named on screen "Enabled" (UX audit CH-12); a
+ * click on the word works the switch too.
+ */
+function SkillSwitch({
+  checked,
+  name,
+  onToggle,
+}: {
+  checked: boolean;
+  name: string;
+  onToggle: (enabled: boolean) => void;
+}) {
+  const t = useTranslations('chatSkills.page');
+  return (
+    <label className="ms-auto flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+      {t('enabled')}
+      <FormSwitch
+        checked={checked}
+        label={t('toggle', { name })}
+        action="skills.toggle"
+        onChange={onToggle}
+      />
+    </label>
   );
 }
 
@@ -686,14 +707,7 @@ function OwnCard({
           </Link>
         )}
         {skill.can.toggle && skill.status === 'approved' && (
-          <span className="ms-auto">
-            <FormSwitch
-              checked={skill.enabled}
-              label={t('toggle', { name: skill.name })}
-              action="skills.toggle"
-              onChange={onToggle}
-            />
-          </span>
+          <SkillSwitch checked={skill.enabled} name={skill.name} onToggle={onToggle} />
         )}
       </div>
     </div>

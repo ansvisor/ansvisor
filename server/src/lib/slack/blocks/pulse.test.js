@@ -48,33 +48,35 @@ const textOf = (blocks) => JSON.stringify(blocks);
 describe('pulseMessage', () => {
   it("says the day's numbers, highlights and warnings, with its links", () => {
     const { text, blocks } = pulseMessage({ brandName: 'Northwind', metrics: METRICS, ...URLS });
-    expect(text).toBe('Northwind Daily Pulse: visibility 34 (-2.1 pts this week)');
+    expect(text).toBe(
+      'Northwind Daily Pulse: visibility score 34/100, 7-day average 31.2/100 (-2.1 pts)',
+    );
     expect(blocks[0]).toEqual({
       type: 'header',
       text: { type: 'plain_text', text: 'Daily Pulse · Northwind' },
     });
     expect(blocks[1].elements[0].text).toBe(
-      'How Northwind showed up in AI answers over the last 24 hours.',
+      'How Northwind showed up in AI answers over the last 24 hours. A line that covers another period names it.',
     );
     expect(blocks[2].fields.map((f) => f.text)).toEqual([
-      '*Visibility*\n34',
-      '*7-day trend*\n31.2 ▼ -2.1',
+      '*Visibility score*\n34/100',
+      '*7-day average*\n31.2/100 ▼ -2.1 pts vs the 7 days before',
       '*Mentions*\n182 ▲ +6',
       '*Citations*\n47 ▼ -4',
       '*Positive sentiment*\n71%',
-      '*Prompts you appear in*\n17/50',
+      '*Prompts with a mention*\n17 of 50\n50 prompts with answers in the last 24 hours',
     ]);
     expect(blocks[3].text.text).toBe(
       [
         '*Highlights*',
         '• First citation for <https://northwind.test/pricing|northwind.test/pricing> — “best crm for &lt;startups&gt;”',
-        '• “crm &amp; invoicing” gained *+3 pts* visibility this week',
-        '• You overtook *Contoso* on the leaderboard (34 vs 30)',
+        '• “crm &amp; invoicing” gained *+3 pts* visibility score in the last 7 days, vs the 7 days before',
+        '• You overtook *Contoso* on the leaderboard in the last 7 days (visibility score 34 vs 30)',
         '• First appearance on *Perplexity*',
       ].join('\n'),
     );
     expect(blocks[4].text.text).toBe(
-      '*Needs attention*\n• *Fabrikam* surged from 10 to 22 week-over-week',
+      '*Needs attention*\n• *Fabrikam* surged from 10 (the 7 days before) to 22 (the last 7 days)',
     );
     expect(blocks[5].text.text).toBe(
       '<https://app.test/dashboard/insights|Open Visibility>  ·  <https://app.test/dashboard/settings?tab=notifications|Pulse settings>',

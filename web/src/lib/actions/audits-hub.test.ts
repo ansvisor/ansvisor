@@ -65,7 +65,7 @@ describe('getAuditHub', () => {
     ]);
     release();
     expect(await hub).toEqual({
-      pages: { pages: [], total: 0, primaryHost: 'acme.com' },
+      pages: { pages: [], total: 0, primaryHost: 'acme.com', running: { count: 0, since: null } },
       quota: { used: 1, running: 0, limit: 100, remaining: 99 },
       trend: { primaryDomain: 'acme.com', points: [] },
       overview: { pages: 0 },

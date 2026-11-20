@@ -68,14 +68,19 @@ export function platformLabel(slug) {
  * The entities an action's signals name.
  *
  * @param {Array<{ id: string, kind: string, payload: Record<string, unknown> | null }>} signals
- * @param {{ domains?: string[] }} [brand] the brand's domains, so a page named by
- *   its path ("/pricing") and by its URL is one page
+ * @param {{ domains?: string[], removedPrompts?: Set<string> }} [brand] the brand's
+ *   domains, so a page named by its path ("/pricing") and by its URL is one page;
+ *   and the prompts removed from the action since it was created (AC-13), by id
+ *   or text, which its tasks are no longer about
  * @returns {{
  *   pages: object[], prompts: object[], domains: object[], competitors: object[],
  *   topics: object[], byRef: Map<string, object>
  * }}
  */
-export function buildEvidence(signals, { domains: brandDomains = [] } = {}) {
+export function buildEvidence(
+  signals,
+  { domains: brandDomains = [], removedPrompts = new Set() } = {},
+) {
   const pages = new Map();
   const prompts = new Map();
   const domains = new Map();
@@ -110,6 +115,7 @@ export function buildEvidence(signals, { domains: brandDomains = [] } = {}) {
   const prompt = (id, text) => {
     const key = str(id) || (str(text) ? `text:${str(text)}` : '');
     if (!key) return null;
+    if (removedPrompts.has(str(id)) || removedPrompts.has(str(text))) return null;
     let entry = prompts.get(key);
     if (!entry) {
       entry = {

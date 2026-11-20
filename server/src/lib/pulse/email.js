@@ -58,16 +58,24 @@ function numbersIn(locale) {
   return { format, signedIn };
 }
 
-function kpiCell(label, value, change, signedIn) {
+/**
+ * One KPI tile. `changeText` words the signed change ("+0.3 pts vs the 7 days
+ * before"); without it the bare signed number shows. `note` is a small line
+ * under the value that names what the number counts.
+ */
+function kpiCell(label, value, change, signedIn, { changeText = null, note = null } = {}) {
   const roundedChange = change === null ? null : Math.round(change * 10) / 10;
   const changeHtml =
     change === null
       ? ''
-      : `<div style="font-size:12px;color:${roundedChange >= 0 ? '#059669' : '#dc2626'};">${escapeHtml(roundedChange >= 0 ? '▲' : '▼')} ${escapeHtml(signedIn(roundedChange))}</div>`;
+      : `<div style="font-size:12px;color:${roundedChange >= 0 ? '#059669' : '#dc2626'};">${escapeHtml(roundedChange >= 0 ? '▲' : '▼')} ${escapeHtml(changeText ? changeText(signedIn(roundedChange)) : signedIn(roundedChange))}</div>`;
+  const noteHtml = note
+    ? `<div style="font-size:11px;color:#6b7280;">${escapeHtml(note)}</div>`
+    : '';
   return `<td style="padding:12px 16px;border:1px solid #e5e7eb;border-radius:8px;text-align:center;">
     <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(label)}</div>
     <div style="font-size:22px;font-weight:600;color:#111827;">${escapeHtml(value)}</div>
-    ${changeHtml}
+    ${changeHtml}${noteHtml}
   </td>`;
 }
 
@@ -159,12 +167,15 @@ export function renderPulseEmail({
   const windowLabel = windowDays === 7 ? t('pulse.windowWeek') : t('pulse.windowDay');
   // The weekly frequency reads a 7-day window; daily and notable read a day.
   const title = windowDays === 7 ? t('pulse.titleWeek') : t('pulse.titleDay');
+  // The visibility score is points out of 100, never a share of prompts (D2).
+  const score = (value) => t('pulse.score', { value: format(value) });
 
   const trend = kpis.weekTrend;
   const subject = t('pulse.subject', {
     brand: brandName,
     title,
     rate: format(kpis.visibilityRate),
+    weekRate: format(kpis.weekRate),
     trend: signedIn(trend),
   });
 
@@ -189,8 +200,10 @@ export function renderPulseEmail({
 
   <table role="presentation" cellspacing="8" style="border-collapse:separate;width:100%;margin-bottom:8px;">
     <tr>
-      ${kpiCell(t('pulse.kpi.visibility'), format(kpis.visibilityRate), null, signedIn)}
-      ${kpiCell(t('pulse.kpi.trend'), format(kpis.weekRate), kpis.weekTrend, signedIn)}
+      ${kpiCell(t('pulse.kpi.visibility'), score(kpis.visibilityRate), null, signedIn)}
+      ${kpiCell(t('pulse.kpi.trend'), score(kpis.weekRate), kpis.weekTrend, signedIn, {
+        changeText: (change) => t('pulse.trendChange', { change }),
+      })}
     </tr>
     <tr>
       ${kpiCell(t('pulse.kpi.mentions'), format(kpis.mentions), kpis.mentionsChange, signedIn)}
@@ -198,7 +211,7 @@ export function renderPulseEmail({
     </tr>
     <tr>
       ${kpiCell(t('pulse.kpi.sentiment'), formatPercentIn(locale, kpis.sentimentPct, 10), kpis.sentimentChange, signedIn)}
-      ${kpiCell(t('pulse.kpi.prompts'), t('pulse.promptsValue', { visible: format(kpis.visiblePrompts), total: format(kpis.promptCount) }), null, signedIn)}
+      ${kpiCell(t('pulse.kpi.prompts'), t('pulse.promptsValue', { visible: format(kpis.visiblePrompts), total: format(kpis.promptCount) }), null, signedIn, { note: t('pulse.promptsNote', { count: kpis.promptCount, total: format(kpis.promptCount), window: windowLabel }) })}
     </tr>
   </table>
 
