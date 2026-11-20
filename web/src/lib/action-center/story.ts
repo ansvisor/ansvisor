@@ -214,6 +214,7 @@ export function actionStory(
     createdAt,
     dueDate,
     payload = {},
+    affected: shown,
   }: {
     /** The signals the Affected list was built from. */
     signals: Signal[];
@@ -223,6 +224,13 @@ export function actionStory(
     dueDate: string | null;
     /** The action as it reads now (AC-009): what was removed since isn't told. */
     payload?: Record<string, unknown>;
+    /**
+     * The Affected tab's set (affectedOf over every evidence signal, the
+     * action's kept rows and its removals). Given, the counts, the goal's
+     * "N of M" and the demand are told from it, so they match the tab and the
+     * title (UX audit AC-20, AC-23); without it, from the lead family alone.
+     */
+    affected?: Affected;
   },
   t: Translator,
   format: StoryFormat,
@@ -232,7 +240,7 @@ export function actionStory(
   // Told from the lead family's signals alone, so the counts match the verb:
   // a competitor's prompts are not "lost citations".
   const mine = signals.filter((signal) => storyFamily(signal) === family);
-  const affected = affectedOf(mine, removedOnly(payload));
+  const affected = shown ?? affectedOf(mine, removedOnly(payload));
   const subject = subjectOf(affected, family, mine);
 
   // The subject: "7 prompts in AI Rank Tracker (28–42k AI searches a month, estimated)".

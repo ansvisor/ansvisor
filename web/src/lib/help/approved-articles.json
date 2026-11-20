@@ -89,7 +89,7 @@
         },
         {
           "heading": "Inside an action",
-          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent."
+          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent.\n\nThe title's count, **Why this action?**, the **Goal**'s \"5 of 7 prompts\" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows."
         },
         {
           "heading": "In your language",
