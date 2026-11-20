@@ -413,3 +413,28 @@ describe('the grid by Visibility score, You in its place (UX audit CP-06)', () =
     expect(grid.querySelector('[data-slot="you-card"]')!.textContent).toContain('You');
   });
 });
+
+describe('the competitor card (UX audit CP-10)', () => {
+  it('shows Selected as its border only, and its buttons over its corner', async () => {
+    // The competitor's timeline chart sizes itself; jsdom has no ResizeObserver.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    window.history.replaceState(null, '', '/?competitor=c1');
+    await render(false);
+    const card = container.querySelector('.group')!;
+    // "Selected" is for screen readers only: the name keeps its width.
+    expect(card.querySelector('.sr-only')?.textContent).toBe('Selected');
+    expect(card.className).toContain('border-primary');
+    // The buttons sit over the card's corner, not beside the name.
+    const actions = card.querySelector('[data-slot="card-actions"]')!;
+    expect(actions.className).toContain('absolute');
+    expect(actions.querySelector('button[aria-label="Set type for Rival"]')).not.toBeNull();
+    window.history.replaceState(null, '', '/');
+    vi.unstubAllGlobals();
+  });
+});

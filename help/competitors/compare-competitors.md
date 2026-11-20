@@ -15,7 +15,7 @@ The **Competitors** page, under **Analytics** in the sidebar, right after **Visi
 
 ## Tracked Competitors
 
-The **Tracked Competitors** card lists every competitor with its domain and:
+The **Tracked Competitors** card lists every competitor with its logo (its site's icon, or its initials), its domain and:
 
 - its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.
 - the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.
@@ -39,7 +39,7 @@ They only change which cards show and in what order: scores, the date range and 
 
 ## Open a head-to-head comparison
 
-Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.
+Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. The selected card has a dark border. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.
 
 The comparison reads every tracked answer, not just the date range. Its scores are each answer's own visibility score from 0 to 100, for your brand and for the competitor.
 
