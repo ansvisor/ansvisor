@@ -128,8 +128,12 @@ describe('PromptsInfo', () => {
       'Smart AI systems show you what to do next.',
     ]);
     expect(document.querySelector('[data-action="prompts.openGuide"]')?.textContent).toContain(
-      'How to find the best prompts',
+      'Open the step-by-step guide',
     );
+    // A prompt is a question or a request, and suggestions come from the AI platforms too.
+    expect(document.body.textContent).toContain('Compare the best AEO platforms');
+    expect(document.body.textContent).toContain('what the AI platforms themselves answer');
+    expect(document.body.textContent).not.toContain('prompt database');
   });
 
   it('opens the guide with its ten steps, coming-soon ones without a button', async () => {
@@ -138,7 +142,7 @@ describe('PromptsInfo', () => {
 
     expect(document.body.textContent).not.toContain("What's a prompt?");
     expect(document.querySelector('[data-slot="sheet-title"]')?.textContent).toBe(
-      'How to find the best prompts',
+      'How to find the best prompts and get positioned in their answers',
     );
     expect(guideSteps()).toHaveLength(10);
     expect(document.querySelector('[data-guide-progress]')?.textContent).toBe('0 of 10 done');
@@ -161,15 +165,27 @@ describe('PromptsInfo', () => {
     expect(getGettingStartedFacts).toHaveBeenCalledWith('b1');
   });
 
-  it("closes the guide when a step's button is clicked", async () => {
+  it("opens a step's page in a new tab and keeps the guide open", async () => {
     await render();
     await openGuide();
     const link = step('audit')?.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/dashboard/audit');
-    // The mocked Link is a plain anchor: keep jsdom from navigating.
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
     link?.addEventListener('click', (e) => e.preventDefault());
 
     await click(link);
+
+    expect(document.querySelector('[data-slot="sheet-title"]')).not.toBeNull();
+  });
+
+  it('closes the guide on a click outside it', async () => {
+    await render();
+    await openGuide();
+    const backdrop = document.querySelector('[data-slot="sheet-overlay"]');
+    expect(backdrop).not.toBeNull();
+
+    await click(backdrop as Element);
 
     expect(document.querySelector('[data-slot="sheet-title"]')).toBeNull();
   });

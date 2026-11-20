@@ -14830,13 +14830,13 @@
     "info": {
       "button": "How Ansvisor works with prompts",
       "whatTitle": "What's a prompt?",
-      "whatText": "A question your potential customers ask an AI assistant like ChatGPT or Gemini, such as <example>\"What's the best open-source AEO tool?\"</example>",
+      "whatText": "A question or a request your potential customers type into an AI assistant like ChatGPT or Gemini, such as <example>\"What's the best open-source AEO tool?\"</example> or <example>\"Compare the best AEO platforms for a small team\"</example>",
       "howTitle": "How Ansvisor works",
       "systemsLine": "Smart AI systems work for you in the background, every day.",
       "steps": {
         "find": {
           "title": "Finds the best prompts.",
-          "text": "Our AI reads your site, your competitors, what people search (Search Console, Analytics) and our prompt database, and suggests the ones that matter."
+          "text": "Our AI reads your site, your competitors, what people search (Search Console, Analytics) and what the AI platforms themselves answer, and suggests the ones that matter."
         },
         "pick": {
           "title": "You pick what to track.",
@@ -14855,11 +14855,11 @@
           "text": "They catch drops, find content gaps and prepare pages and fixes in Action Center, to win AI visibility, traffic and revenue."
         }
       },
-      "openGuide": "How to find the best prompts"
+      "openGuide": "Open the step-by-step guide"
     },
     "guide": {
-      "title": "How to find the best prompts",
-      "description": "Do these once, then check Suggestions daily. Each step opens where you do it.",
+      "title": "How to find the best prompts and get positioned in their answers",
+      "description": "Do these once, then check Suggestions daily. Each step opens in a new tab, so this guide stays here.",
       "progress": "{done} of {total} done",
       "progressLabel": "Steps done",
       "done": "Done",

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowRight, Check, Info, Sparkles } from 'lucide-react';
-import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
@@ -192,17 +191,18 @@ export function PromptsGuide({
                     {t('comingSoon')}
                   </span>
                 ) : (
-                  <Link
+                  // Opens in a new tab, so the guide stays open here to come back to.
+                  <a
                     href={href}
-                    prefetch={false}
-                    onClick={() => onOpenChange(false)}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className={cn(
                       buttonVariants({ variant: 'outline', size: 'sm' }),
                       'h-8 flex-none px-2.5 text-xs',
                     )}
                   >
                     {t(`steps.${key}.cta`)}
-                  </Link>
+                  </a>
                 )}
               </li>
             );

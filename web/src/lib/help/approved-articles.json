@@ -5034,7 +5034,7 @@
         },
         {
           "heading": "What a prompt is, and the guide",
-          "text": "The **(i)** beside the **Prompts** title explains what a prompt is, with an example, and how Ansvisor works: it finds the best prompts, you pick what to track, it asks the AI platforms every day, builds your own data, and smart AI systems show you what to do next, preparing pages and fixes in Action Center. They work for you in the background, every day.\n\n**How to find the best prompts**, at its bottom, opens a guide of ten steps, such as connecting Search Console and Analytics, adding the AI traffic code, checking Suggestions and running Site Audit. Each step's button opens the page where you do it. A step your brand's data already shows, such as Search Console connected, is ticked, and the guide counts how many of the ten are done. The last two steps are coming soon."
+          "text": "A prompt is a question or a request your potential customers type into an AI assistant. The **(i)** beside the **Prompts** title explains this, with examples, and how Ansvisor works: it finds the best prompts, you pick what to track, it asks the AI platforms every day, builds your own data, and smart AI systems show you what to do next. They work for you in the background, every day.\n\n**Open the step-by-step guide**, at its bottom, opens ten steps to find the best prompts and get positioned in their answers, such as connecting Search Console and Analytics, adding the AI traffic code and running Site Audit. Each step opens its page in a new tab, so the guide stays open. Steps your brand's data already shows are ticked. Click outside the guide to close it."
         },
         {
           "heading": "Where the page's actions are",
