@@ -14394,6 +14394,24 @@
           "query": "Missing addresses have a query: no redirect suggested"
         }
       }
+    },
+    "page": {
+      "subtitle": "AI-referred visits to your website",
+      "range": "{start}–{end} of {total}",
+      "previous": "Previous",
+      "next": "Next",
+      "platformBreakdown": "Platform Breakdown",
+      "referralsByPlatform": "Referrals by Platform",
+      "topLandingPages": "Top Landing Pages",
+      "recentVisits": "Recent AI Referral Visits",
+      "columns": {
+        "platform": "Platform",
+        "page": "Page",
+        "visits": "Visits",
+        "change": "Change",
+        "time": "Time",
+        "country": "Country"
+      }
     }
   },
   "ads": {
