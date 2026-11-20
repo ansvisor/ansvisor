@@ -1,26 +1,39 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import {
+  OPEN_ACTION_STATUSES,
+  countOpenActions,
+  type ActionStatus,
+  type OpenActionCounts,
+} from '@/lib/action-center/registry';
 
 /**
- * How many actions are open for the signed-in person on a brand, as Today
- * ranks them (GET /api/action-center/today, the Inbox's candidates): new or
- * in progress, unassigned or theirs, not deleted. On hold waits on someone
- * else and isn't counted. The count beside Action Center › Actions. Read as the person (RLS), one number
- * back; 0 when it can't be read, so a failed count shows nothing.
+ * A brand's open actions (AC-01): new, in progress or on hold, whoever
+ * they're assigned to, not deleted — the count Today's Actions step shows and
+ * the Actions list's All pill shows on Open. With it, how many are on hold
+ * and how many are the signed-in person's. Read as the person (RLS) and
+ * counted by `countOpenActions`, the helper the Actions list counts with;
+ * the list's 1000-row cap too. Throws when it can't be read, so a failed
+ * count shows nothing.
  */
-export async function getMyOpenActionCount(brandId: string): Promise<number> {
+export async function getOpenActionCounts(brandId: string): Promise<OpenActionCounts> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return 0;
-  const { count, error } = await supabase
+  if (!user) throw new Error('Not authenticated');
+  const { data, error } = await supabase
     .from('actions')
-    .select('id', { count: 'exact', head: true })
+    .select('status, assignee_id')
     .eq('brand_id', brandId)
-    .in('status', ['new', 'in_progress'])
+    .in('status', [...OPEN_ACTION_STATUSES])
     .is('deleted_at', null)
-    .or(`assignee_id.is.null,assignee_id.eq.${user.id}`);
-  return error ? 0 : (count ?? 0);
+    .limit(1000);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as { status: ActionStatus; assignee_id: string | null }[];
+  return countOpenActions(
+    rows.map((row) => ({ status: row.status, assigneeId: row.assignee_id })),
+    user.id,
+  );
 }

@@ -6,6 +6,7 @@ import { Sigma } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { AuditEvidenceLevel } from '@/lib/actions/audits';
+import { useRubricText } from '@/hooks/use-rubric-text';
 
 /** The levels a signal is shown with (SA-010); informational reads as hygiene, left out of the score. */
 const SHOWN_LEVELS = [
@@ -38,6 +39,7 @@ export function ScoreFormula({
   notScored: string[];
 }) {
   const t = useTranslations('audit');
+  const rubric = useRubricText();
   const [open, setOpen] = useState(false);
 
   return (
@@ -57,7 +59,7 @@ export function ScoreFormula({
               <ul className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
                 {categories.map((c) => (
                   <li key={c.key} className="flex justify-between gap-2 whitespace-nowrap">
-                    <span>{c.label}</span>
+                    <span>{rubric.category(c.key, c.label)}</span>
                     <span className="font-medium tabular-nums text-foreground">
                       {t('formula.weight', { weight: Math.round(c.weight * 100) })}
                     </span>

@@ -99,7 +99,9 @@ interface CreateBrandInput {
   domains: { domain: string; country?: string; isPrimary: boolean }[];
 }
 
-export type CreateBrandResult = { brand: Brand } | { error: string; code: 'plan_limit' };
+export type CreateBrandResult =
+  | { brand: Brand }
+  | { error: string; code: 'plan_limit'; limit: 'brands' };
 
 /**
  * Fires the agents' When a brand is added triggers for a new brand once the
@@ -136,6 +138,7 @@ export async function createBrand(input: CreateBrandInput): Promise<CreateBrandR
     const max = plan.limits.maxBrands;
     return {
       code: 'plan_limit',
+      limit: 'brands',
       error: `Your plan includes ${max} brand${max === 1 ? '' : 's'}. Upgrade your plan to add more.`,
     };
   }
@@ -269,7 +272,7 @@ export async function updateBrand(id: string, updates: UpdateBrandInput): Promis
  */
 export async function deleteBrand(
   id: string,
-): Promise<{ deleted: boolean; pending?: boolean } | { error: string }> {
+): Promise<{ deleted: boolean; pending?: boolean } | { error: string; code?: string }> {
   const supabase = await createClient();
   const {
     data: { session },
@@ -284,8 +287,10 @@ export async function deleteBrand(
     deleted?: boolean;
     pending?: boolean;
     error?: string;
+    code?: string;
   };
-  if (!res.ok) return { error: body.error || 'Failed to delete the brand.' };
+  // The server's stable code too, for the browser to say it in the person's language (LOC-008).
+  if (!res.ok) return { error: body.error || 'Failed to delete the brand.', code: body.code };
 
   revalidatePath('/dashboard/brands');
   return { deleted: Boolean(body.deleted), pending: Boolean(body.pending) };

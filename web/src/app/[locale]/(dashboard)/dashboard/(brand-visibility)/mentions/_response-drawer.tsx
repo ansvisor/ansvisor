@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { getMentionResponse } from '@/lib/actions/mentions';
-import { classifyDomain, extractHostname, SOURCE_CATEGORY_LABELS } from '@/lib/citations/classify';
+import { classifyDomain, extractHostname } from '@/lib/citations/classify';
 import { stripEntityMarkup } from '@/lib/entity-markup';
 import { mentionPlatformLabel } from '@/lib/mentions-headline';
 import type { MentionRow, MentionSentiment, SentimentOverride } from '@/lib/mentions-list';
@@ -104,6 +104,7 @@ export function ResponseDrawer({
 }) {
   const t = useTranslations('mentions.drawer');
   const tActions = useTranslations('mentions.actions');
+  const tCategories = useTranslations('citations.categories');
   // Suggesting content costs AI: admins and managers start it.
   const { canManage } = useUserRole();
   const locale = useLocale();
@@ -358,7 +359,7 @@ export function ResponseDrawer({
                                     'border-primary/30 bg-primary/10 text-foreground',
                                 )}
                               >
-                                {SOURCE_CATEGORY_LABELS[category]}
+                                {tCategories(category)}
                               </Badge>
                             </a>
                           </li>

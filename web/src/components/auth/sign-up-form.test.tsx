@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import type { AnyUiLocale } from '@/i18n/locales';
 
 /**
  * Sign-up from an invitation link (`?invite=…&email=…&next=/invite/…`): the
@@ -13,7 +14,14 @@ import messages from '../../../messages/en.json';
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(window.location.search),
 }));
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const router = vi.hoisted(() => ({ push: () => {}, refresh: () => {} }));
+vi.mock('@/i18n/navigation', () => ({ useRouter: () => router }));
+const setSignUpUiLanguage = vi.hoisted(() => ({
+  fn: async (locale: string): Promise<void> => void locale,
+}));
+vi.mock('@/lib/actions/ui-language', () => ({
+  setSignUpUiLanguage: (locale: string) => setSignUpUiLanguage.fn(locale),
+}));
 vi.mock('@/lib/supabase/client', () => ({ createClient: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const oauthNext = vi.hoisted(() => [] as (string | null | undefined)[]);
@@ -45,11 +53,11 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-function render() {
+function render(languages?: { options: AnyUiLocale[]; selected: AnyUiLocale }) {
   act(() =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SignUpForm />
+        <SignUpForm languages={languages} />
       </NextIntlClientProvider>,
     ),
   );
@@ -92,5 +100,57 @@ describe('SignUpForm', () => {
     expect(emailInput().value).toBe('');
     expect(emailInput().disabled).toBe(false);
     expect(oauthNext.at(-1)).toBe('/en/dashboard/chat');
+  });
+});
+
+/**
+ * The Language field: the language of the screens before the account exists,
+ * kept in the visitor's cookie by setSignUpUiLanguage, then the page reloads.
+ */
+describe('SignUpForm: Language', () => {
+  const languageSelect = () => container.querySelector<HTMLSelectElement>('#signup-language');
+
+  async function pick(select: HTMLSelectElement, value: string) {
+    await act(async () => {
+      select.value = value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  it('is hidden while only one language is offered', () => {
+    render({ options: ['en'], selected: 'en' });
+    expect(languageSelect()).toBeNull();
+    render();
+    expect(languageSelect()).toBeNull();
+  });
+
+  it('lists each offered language in its own name, the given one picked', () => {
+    render({ options: ['en', 'tr', 'de'], selected: 'tr' });
+    const select = languageSelect()!;
+    expect([...select.options].map((o) => o.textContent)).toEqual(['English', 'Türkçe', 'Deutsch']);
+    expect(select.value).toBe('tr');
+    expect(container.querySelector('label[for="signup-language"]')?.textContent).toBe('Language');
+  });
+
+  it('keeps a pick through the action, then reloads the page in it', async () => {
+    const picked: string[] = [];
+    setSignUpUiLanguage.fn = async (locale) => {
+      picked.push(locale);
+    };
+    const refresh = vi.spyOn(router, 'refresh');
+    render({ options: ['en', 'tr'], selected: 'en' });
+    await pick(languageSelect()!, 'tr');
+    expect(picked).toEqual(['tr']);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(languageSelect()!.value).toBe('tr');
+  });
+
+  it('goes back to the earlier language when the pick fails', async () => {
+    setSignUpUiLanguage.fn = async () => {
+      throw new Error('Unknown language');
+    };
+    render({ options: ['en', 'tr'], selected: 'en' });
+    await pick(languageSelect()!, 'tr');
+    expect(languageSelect()!.value).toBe('en');
   });
 });

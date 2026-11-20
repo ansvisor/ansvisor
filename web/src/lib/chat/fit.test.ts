@@ -66,6 +66,26 @@ describe('fitResult', () => {
     expect(value.more).toBe(100 - value.items.length);
   });
 
+  it('cuts a nested list only once the top-level ones are cut, saying how many it left out', () => {
+    // get_action (CH-02): the action's prompts, nested, outlast its signals and events.
+    const prompts = Array.from({ length: 30 }, (_, i) => ({ id: `p${i}`, text: `prompt ${i}` }));
+    const kept = fitResult({ affected: { prompts }, signals: rows(300), events: rows(100) }, 4_000)
+      .value as Record<string, Json>;
+    expect(kept.affected).toEqual({ prompts });
+    expect(kept.signals_more).toBe(300 - (kept.signals as Json[]).length);
+    expect(kept.events_more).toBe(100 - (kept.events as Json[]).length);
+
+    // Too long to fit even alone: its first rows, and how many more, not a text cut.
+    const many = Array.from({ length: 400 }, (_, i) => ({ id: `p${i}`, text: `prompt ${i}` }));
+    const fitted = fitResult({ affected: { prompts: many, prompt_total: 400 } }, 2_000);
+    expect(fitted.chars).toBeLessThanOrEqual(2_000);
+    const affected = (fitted.value as Record<string, Json>).affected as Record<string, Json>;
+    const listed = (affected.prompts as Json[]).length;
+    expect(listed).toBeGreaterThan(0);
+    expect(affected).toMatchObject({ prompt_total: 400, prompts_more: 400 - listed });
+    expect(fitted.value).toMatchObject({ truncated: true });
+  });
+
   it('cuts what has no list as text', () => {
     const fitted = fitResult({ a: { b: { c: 'y'.repeat(300).split('').join(' ') } } }, 600);
     expect(fitted.value).toMatchObject({ truncated: true });
