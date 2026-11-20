@@ -93,6 +93,8 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 - **Signals**: the evidence. Click one to open it on the Signals tab.
 - **History**: every change, from status and assignee changes to tasks updated or sent.
 
+The title's count, **Why this action?**, the **Goal**'s "5 of 7 prompts" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows.
+
 ## In your language
 
 Most of an action's words come from the interface, so they follow your language. Actions sent from Chat or Improve carry a title, a "why" and a goal written in English, and an action sent from a content opportunity carries the opportunity's title. When your interface language is another, these show in your language: in English for a moment the first time, then translated. Each is translated once and kept for teammates who use the same language.
