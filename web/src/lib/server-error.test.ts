@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import messages from '../../messages/en.json';
-import { SERVER_ERROR_CODES, serverErrorKey } from './server-error';
+import { SERVER_ERROR_CODES, caughtErrorText, refusalError, serverErrorKey } from './server-error';
 
 /** The text at a dotted key in en.json, or undefined. */
 function text(key: string | null): unknown {
@@ -38,6 +38,52 @@ describe('serverErrorKey (LOC-008)', () => {
     for (const code of SERVER_ERROR_CODES) {
       expect(typeof text(`serverErrors.${code}`), code).toBe('string');
     }
+  });
+
+  it('maps the web actions’ own refusals: a full plan, a missing role, a masked throw', () => {
+    const cases: Array<[unknown, string]> = [
+      [
+        { code: 'plan_limit', limit: 'locations', error: 'Your Growth plan…' },
+        'serverErrors.location_limit',
+      ],
+      [
+        { code: 'plan_limit', limit: 'brands', error: 'Your plan includes 1 brand…' },
+        'serverErrors.brand_limit',
+      ],
+      [{ code: 'not_allowed' }, 'serverErrors.forbidden'],
+      [{ code: 'forbidden_role' }, 'serverErrors.forbidden'],
+      [{ code: 'role_required' }, 'serverErrors.forbidden'],
+      // Production keeps only a thrown server action error's digest.
+      [
+        Object.assign(new Error('masked'), { digest: 'subscription_inactive' }),
+        'apiFailure.subscription',
+      ],
+      [Object.assign(new Error('masked'), { digest: 'plan_limit' }), 'apiFailure.plan'],
+    ];
+    for (const [body, key] of cases) {
+      expect(serverErrorKey(body), JSON.stringify(body)).toBe(key);
+      expect(typeof text(key), key).toBe('string');
+    }
+    expect(serverErrorKey(Object.assign(new Error('masked'), { digest: '1234567' }))).toBeNull();
+  });
+
+  it('keeps a refused call’s code and status on the error it throws', () => {
+    const err = refusalError({ error: 'quota_exhausted' }, 'Failed', 429);
+    expect(err.message).toBe('quota_exhausted');
+    expect(serverErrorKey(err, 429)).toBe('apiFailure.limit');
+    const plain = refusalError({}, 'Couldn’t cancel.', 500);
+    expect(plain.message).toBe('Couldn’t cancel.');
+    expect(serverErrorKey(plain)).toBeNull();
+    expect(refusalError(null, 'Fallback').message).toBe('Fallback');
+  });
+
+  it('says what a caught error said, unless a server action threw it', () => {
+    expect(caughtErrorText(new TypeError('Failed to fetch'), 'Fallback')).toBe('Failed to fetch');
+    expect(caughtErrorText(Object.assign(new Error('masked'), { digest: '1' }), 'Fallback')).toBe(
+      'Fallback',
+    );
+    expect(caughtErrorText('boom', 'Fallback')).toBe('Fallback');
+    expect(caughtErrorText(new Error(''), 'Fallback')).toBe('Fallback');
   });
 
   it('leaves what it does not know to the caller', () => {

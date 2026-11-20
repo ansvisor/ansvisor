@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useFailureToast } from '@/hooks/use-failure-toast';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -198,6 +199,8 @@ export function OpportunityDetail({
 }) {
   const t = useTranslations('content');
   const failureToast = useFailureToast();
+  const serverError = useServerErrorText();
+  const caughtError = useCaughtErrorText();
   const assetTypeLabel = useAssetTypeLabel();
   const locale = useLocale();
   // A read-only workspace (plan not active): every action here opens the
@@ -314,7 +317,11 @@ export function OpportunityDetail({
     try {
       const result = await sendToWebhook(id);
       if (result.success === false) {
-        toast.error(result.error);
+        toast.error(
+          result.code === 'no_webhook'
+            ? t('noWorkflowConnected')
+            : serverError(result, result.error, result.status),
+        );
       } else {
         toast.success(t('sentToWorkflow'));
         const updated = await getOpportunity(id);
@@ -431,7 +438,7 @@ export function OpportunityDetail({
     try {
       const result = await sendOpportunityToActionCenter(id, assetKey);
       if ('error' in result) {
-        toast.error(result.error);
+        toast.error(serverError(result, result.error, result.status));
         return;
       }
       toast.success(result.created ? t('sentToActionCenter') : t('alreadyInActionCenter'));
@@ -465,7 +472,7 @@ export function OpportunityDetail({
       toast.success(t('briefGeneratedToast'));
     } catch (err) {
       console.error('Brief generation failed:', err);
-      toast.error(err instanceof Error ? err.message : t('briefGenerateError'));
+      toast.error(caughtError(err, t('briefGenerateError')));
       // Refresh the counter — the failure may have been a quota rejection.
       getBriefQuota()
         .then(setQuota)

@@ -71,7 +71,9 @@
     "forbidden": "You don't have permission to do this. Ask an Admin.",
     "duplicate": "That already exists.",
     "missing_ai_key": "Add an AI provider key in Settings › AI Providers first.",
-    "server_error": "Something went wrong on our side. Try again."
+    "server_error": "Something went wrong on our side. Try again.",
+    "location_limit": "Your plan's prompt locations are full: each prompt counts once per location it tracks, and paused prompts don't count. Remove or pause some, or upgrade your plan.",
+    "brand_limit": "Your plan's brands are all in use. Upgrade your plan to add more."
   },
   "aiUsage": {
     "meter": {
@@ -14018,7 +14020,8 @@
     "mergedIntoOpen": "Open it",
     "newSignal": "New signal detected",
     "newSignalScoreRose": "Completed earlier, and its opportunity has grown since: the score rose from {from} to {to}.",
-    "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now."
+    "newSignalGainLost": "Completed earlier, but the gain did not hold: visibility on these prompts was {after}% after the work and is {now}% now.",
+    "noWorkflowConnected": "No workflow connected."
   },
   "traffic": {
     "chat": {
@@ -15907,6 +15910,12 @@
         "body": "Get platform-specific suggestions to improve this prompt's position, based on the sub-queries, sources and competitors in each AI answer.",
         "upgrade": "Upgrade plan"
       }
+    },
+    "errors": {
+      "updateFailed": "Failed to update the prompt. Try again.",
+      "noRoomToResume": "Not enough room to resume",
+      "bulkFailed": "{action, select, resume {Failed to resume the prompts.} other {Failed to pause the prompts.}}",
+      "bulkPartial": "{action, select, resume {{failed} of {total} couldn't be resumed.} other {{failed} of {total} couldn't be paused.}}"
     }
   },
   "volumeEstimate": {
@@ -16313,6 +16322,7 @@
     }
   },
   "competitors": {
+    "forbiddenRole": "Only an admin or a manager can merge competitors.",
     "title": "Competitors",
     "description": "Manage competitors and compare AI visibility head-to-head.",
     "addCompetitor": "Add Competitor",
@@ -19074,7 +19084,25 @@
     "org_adminOnly": "Only admins can rename the organization.",
     "org_loadFailed": "Could not load organization details.",
     "org_saveFailed": "Could not save organization name. Please try again.",
-    "accountSaveFailed": "Could not save account details. Please try again."
+    "accountSaveFailed": "Could not save account details. Please try again.",
+    "teamErrors": {
+      "invalid_email": "Enter a valid email address.",
+      "no_brands": "Choose at least one brand.",
+      "already_member": "This person is already a member of your team.",
+      "already_invited": "There's already a pending invitation for this email.",
+      "admin_all_brands": "Admins always have All brands."
+    },
+    "changePlanFailed": "Couldn't change the plan. Try again.",
+    "cancelFailed": "Couldn't cancel the subscription. Try again.",
+    "reactivateFailed": "Couldn't reactivate the subscription. Try again.",
+    "portalFailed": "Couldn't open the billing portal. Try again.",
+    "agent_loadFailed": "Couldn't load your AI providers. Reload the page.",
+    "agent_saveFailed": "Couldn't save. Try again.",
+    "agent_testFailed": "Couldn't test the key. Try again.",
+    "agent_clearFailed": "Couldn't remove the key. Try again.",
+    "integrations_disconnectFailed": "Couldn't disconnect. Try again.",
+    "integrations_propertySaveFailed": "Couldn't save the property. Try again.",
+    "integrations_propertiesLoadFailed": "Couldn't load the properties."
   },
   "brands": {
     "title": "Brands",
@@ -19473,6 +19501,14 @@
         "hint": "Enabled platforms will be queried at the configured frequency to check your brand's prompt visibility.",
         "loadError": "Failed to load AI platform settings.",
         "saveError": "Failed to save AI platform settings."
+      },
+      "errors": {
+        "save": "Failed to save. Try again.",
+        "saveDomains": "Failed to save the domains. Try again.",
+        "loadCompetitors": "Failed to load competitors.",
+        "addCompetitor": "Failed to add the competitor. Try again.",
+        "removeCompetitor": "Failed to remove the competitor. Try again.",
+        "deleteBrand": "Failed to delete the brand. Try again."
       }
     },
     "card": {
