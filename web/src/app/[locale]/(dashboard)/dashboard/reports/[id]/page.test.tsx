@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
 import type { Report } from '@/lib/actions/reports';
 import type { ReportBranding } from '@/lib/white-label/kit';
+import { RoleContext } from '@/components/providers/role-provider';
 
 /**
  * A report's page with a white label kit (00429): the kit's cover above the
@@ -154,6 +155,43 @@ describe('ReportDetailPage with white label', () => {
     await render();
     await download();
     expect(downloaded).toEqual(['acme-agency_northwind_report_2026-10-31.pdf']);
+  });
+});
+
+describe('ReportDetailPage › sections that could not be gathered (RP-06)', () => {
+  const gapped: Report = {
+    ...report,
+    payload: { ...report.payload, missingSections: ['trend', 'citationEvidence'] },
+  };
+
+  async function renderAs(role: 'admin' | 'analyst') {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <RoleContext.Provider value={{ role }}>
+            <ReportDetailPage />
+          </RoleContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+
+  it('never names the gap in the report a client reads', async () => {
+    getReport.mockResolvedValue(gapped);
+    await renderAs('analyst');
+    expect(container.textContent).toContain('Visibility rose.');
+    expect(container.textContent).not.toContain('gathered');
+    expect(container.textContent).not.toContain('Citation Evidence');
+  });
+
+  it('shows an Admin a quiet note outside the report itself', async () => {
+    getReport.mockResolvedValue(gapped);
+    await renderAs('admin');
+    const note = [...container.querySelectorAll('p')].find((p) =>
+      p.textContent?.includes('Only Admins see this'),
+    )!;
+    expect(note.textContent).toContain('Trend, Citation Evidence');
+    expect(container.querySelector('#report-root')?.contains(note)).toBe(false);
   });
 });
 

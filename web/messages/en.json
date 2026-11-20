@@ -16844,7 +16844,7 @@
       "mentionEvidence": "Mention Evidence",
       "citationEvidence": "Citation Evidence"
     },
-    "missingSections": "Some sections could not be gathered and are not in this report:",
+    "missingSectionsAdmin": "Only Admins see this: {sections} couldn't be gathered, even on a second try, so the report leaves them out.",
     "brandLabel": "Brand",
     "sectionsLabel": "Sections",
     "selectSections": "Pick at least one section",

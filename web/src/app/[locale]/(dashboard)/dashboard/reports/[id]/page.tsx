@@ -42,6 +42,7 @@ import { ScoreRangeMark, useScoreRangeTip } from '@/components/audit/score-range
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
+import { useUserRole } from '@/hooks/use-user-role';
 
 const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
 
@@ -145,6 +146,7 @@ export default function ReportDetailPage() {
   const t = useTranslations('reports');
   const tCommon = useTranslations('common');
   const rangeTip = useScoreRangeTip();
+  const { canAdmin } = useUserRole();
 
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
@@ -339,24 +341,21 @@ export default function ReportDetailPage() {
         </div>
       </HeaderWithAiUsage>
 
+      {/* A section that could not be gathered, even on a second try, is left
+          out of the report a client reads (UX audit RP-06). Only an Admin
+          sees a quiet note, outside the report and the PDF. */}
+      {canAdmin && payload.missingSections && payload.missingSections.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {t('missingSectionsAdmin', {
+            sections: payload.missingSections.map((s) => t(`sections.${s}`)).join(', '),
+          })}
+        </p>
+      )}
+
       {/* Everything below renders from the immutable saved payload; the
           container id is the future PDF capture root. */}
       <div id="report-root" className="space-y-6">
         {branding && <ReportCover branding={branding} brandName={payload.brandName} />}
-
-        {/* A section that could not be gathered is named here rather than
-            silently absent — otherwise the report reads as though the brand
-            had no data for it. */}
-        {payload.missingSections && payload.missingSections.length > 0 && (
-          <Card className="border-amber-500/40">
-            <CardContent className="py-4 text-sm text-muted-foreground">
-              {t('missingSections')}{' '}
-              <span className="text-foreground">
-                {payload.missingSections.map((s) => t(`sections.${s}`)).join(', ')}
-              </span>
-            </CardContent>
-          </Card>
-        )}
 
         <Card>
           <CardHeader>
