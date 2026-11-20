@@ -943,7 +943,7 @@
           "openNewest": "Open the newest in Chat"
         },
         "drafts": {
-          "line": "An agent drafted {count, plural, one {a page} other {# pages}}. Nothing goes live without your OK.",
+          "line": "{count, plural, one {# draft} other {# drafts}} waiting for your review. Nothing goes live without your OK.",
           "open": "{count, plural, one {Review the draft} other {Review # drafts}}"
         },
         "due": {
@@ -1085,8 +1085,8 @@
         },
         "saved": {
           "title": "Saved for you",
-          "drafts": "{count, plural, one {1 draft from your agent} other {# drafts from your agents}}: {title}.",
-          "draftsUntitled": "{count, plural, one {1 draft from your agent} other {# drafts from your agents}} waiting for review.",
+          "drafts": "{count, plural, one {1 draft} other {# drafts}} waiting for your review: {title}.",
+          "draftsUntitled": "{count, plural, one {1 draft} other {# drafts}} waiting for your review.",
           "kept": "Choose a plan to review and publish them. Your {prompts, plural, one {# prompt} other {# prompts}} and {competitors, plural, one {# competitor} other {# competitors}} are kept."
         },
         "plan": {

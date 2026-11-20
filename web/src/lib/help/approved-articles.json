@@ -661,7 +661,7 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -677,7 +677,7 @@
         },
         {
           "heading": "Waiting for you and Where you stand",
-          "text": "Under the loop strip, two cards sit side by side, one under the other on a narrow screen:\n\n- **Waiting for you**: this brand's agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.\n- **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand. Before a score is in, it says so.\n\nEach card keeps its place while Today loads and fills in as soon as its own data is in. To ask about any of it, use **Ask Chat** in the header, on every page."
+          "text": "Under the loop strip, two cards sit side by side, one under the other on a narrow screen:\n\n- **Waiting for you**: this brand's agent work waiting for your OK, drafts waiting for your review (whoever wrote them, linked to **Library › In review**), tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.\n- **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand. Before a score is in, it says so.\n\nEach card keeps its place while Today loads and fills in as soon as its own data is in. To ask about any of it, use **Ask Chat** in the header, on every page."
         },
         {
           "heading": "Since yesterday and Today's focus",

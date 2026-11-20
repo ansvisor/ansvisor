@@ -296,7 +296,11 @@ describe('get_today', () => {
         line: 'An agent is waiting for your OK on “Fix FAQ”.',
         open: '/dashboard/chat/c2',
       }),
-      expect.objectContaining({ type: 'drafts', count: 1 }),
+      expect.objectContaining({
+        type: 'drafts',
+        count: 1,
+        line: '1 draft waiting for your review. Nothing goes live without your OK.',
+      }),
       expect.objectContaining({ type: 'due', ref: 'AC-20', due: '2026-11-15' }),
       expect.objectContaining({ type: 'review', count: 2 }),
     ]);
