@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isManager } from '@/lib/session-role';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { REPORT_TEMPLATE_TITLES } from '@/lib/reports/template-titles';
@@ -1124,6 +1123,9 @@ export async function renameReport(id: string, title: string): Promise<boolean> 
   if (accessError) throw new Error(accessError.message);
   if (allowed !== true) return false;
   await assertWritable({ brandId: report.brand_id });
+  // Loaded here, not at the top: the service-role client needs its key, which
+  // the module's other reads (and their tests) never do.
+  const { supabaseAdmin } = await import('@/lib/supabase/admin');
   const { data: renamed, error } = await supabaseAdmin
     .from('reports')
     .update({ title: name })
