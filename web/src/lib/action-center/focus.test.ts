@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  byImpact,
   pickFocus,
   rankedIds,
   skippedActions,
   standingFrom,
   type FocusCandidate,
+  type FocusRank,
   type StandingSummary,
 } from './focus';
 
@@ -130,6 +132,26 @@ describe("Today's focus", () => {
       }),
     ).toEqual(['a', 'b', 'c']);
     expect(rankedIds(null)).toEqual([]);
+  });
+
+  it('shows the highest impact first, then the higher priority (AC-04)', () => {
+    const card = (id: string, priorityLevel: FocusRank['priorityLevel'], score: number | null) => ({
+      id,
+      action: { priorityLevel, priorityScore: score },
+    });
+    const shown = byImpact([
+      card('medium', 'medium', 55),
+      card('high-60', 'high', 60),
+      card('none', null, null),
+      card('high-72', 'high', 72),
+      card('critical', 'critical', 90),
+    ]);
+    expect(shown.map((c) => c.id)).toEqual(['critical', 'high-72', 'high-60', 'medium', 'none']);
+    // Same impact and score: kept as the person keeps them.
+    expect(byImpact([card('a', 'high', 70), card('b', 'high', 70)]).map((c) => c.id)).toEqual([
+      'a',
+      'b',
+    ]);
   });
 });
 

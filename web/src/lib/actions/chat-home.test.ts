@@ -392,6 +392,36 @@ describe('readFocusFill (CHAT-24 §4)', () => {
     expect(gte).toEqual(['insights_competitor_daily', 'gte', 'day', '2026-10-18']);
   });
 
+  it('speaks of the primary rivals only, typed Direct competitor, or of all with none typed so (CH-06)', async () => {
+    // Kestrel rose most, but only Lumora is a primary rival: Home names Lumora, which fell.
+    db.answers.competitors = {
+      data: [
+        { id: 'c1', name: 'Kestrel CRM', type: 'indirect' },
+        { id: 'c2', name: 'Lumora', type: 'direct' },
+        { id: 'c3', name: 'Corvio', type: null },
+      ],
+      error: null,
+    };
+    expect(await readFocusFill(BRAND, ['comp'])).toEqual({
+      ok: true,
+      fill: { rival: 'Lumora', topic: null, market: null },
+      rivalMove: null,
+    });
+    expect(db.calls).toContainEqual(['competitors', 'select', 'id, name, type']);
+    // None typed Direct: every competitor, as before.
+    db.answers.competitors = {
+      data: [
+        { id: 'c1', name: 'Kestrel CRM', type: 'indirect' },
+        { id: 'c2', name: 'Lumora', type: null },
+      ],
+      error: null,
+    };
+    expect(await readFocusFill(BRAND, ['comp'])).toMatchObject({
+      fill: { rival: 'Lumora' },
+      rivalMove: { name: 'Kestrel CRM', points: 10 },
+    });
+  });
+
   it('reads only what the picked areas use', async () => {
     expect(await readFocusFill(BRAND, ['lead', 'growth'])).toEqual({
       ok: true,

@@ -5,7 +5,7 @@ import { resolveAgentAuth } from '@/lib/agent/auth';
 import { getVisibilitySummaryFor } from '@/lib/mcp/data';
 import { runDayWindow } from '@/lib/citations/rollup-window';
 import { getActivePromptCount } from '@/lib/actions/prompt';
-import { getMyOpenActionCount } from '@/lib/actions/action-center-counts';
+import { getOpenActionCounts } from '@/lib/actions/action-center-counts';
 import { standingFrom, type TodayStanding } from '@/lib/action-center/focus';
 import { hasFullWeek, isMondayIn, lastWeekOf } from '@/lib/action-center/last-week';
 import { effectiveTimeZone } from '@/lib/time-zone';
@@ -39,7 +39,7 @@ export interface TodayEnded {
   done: number | null;
   /** Actions whose result came in improved. */
   improved: { count: number; actions: NamedAction[] } | null;
-  /** Open actions, the person's or no one's. */
+  /** Open actions: new, in progress or on hold, anyone's (AC-01). */
   open: number | null;
   /** Drafts in review in the Library. */
   drafts: { count: number; title: string | null } | null;
@@ -216,7 +216,7 @@ export async function getTodayEnded(brandId: string): Promise<TodayEnded> {
         if (error) throw new Error(error.message);
         return { count: n ?? 0, actions: named(data) };
       }),
-    getMyOpenActionCount(brandId),
+    getOpenActionCounts(brandId).then((counts) => counts.open),
     supabase
       .from('content_drafts')
       .select('title', { count: 'exact' })

@@ -3,6 +3,7 @@ import messages from '../../../../messages/en.json';
 import { readChosenTimeZone } from '@/lib/account-time-zone';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { LoadedRun } from '../engine-store';
+import { inEnglish } from '../run-locale';
 import { readStrips, weekEndIn } from '../task-strip';
 import { startTouchedBrands } from '../touched-brands';
 import { emailJobProblem, emailRunResult } from './email';
@@ -298,8 +299,12 @@ export async function readyByParts(
   zone: string,
   now: Date,
 ): Promise<{ ready: string[]; rest: string[] }> {
-  if (job.conversation_id) {
-    const strips = await readStrips(supabaseAdmin, job.conversation_id, weekEndIn(now, zone));
+  const conversationId = job.conversation_id;
+  if (conversationId) {
+    // The e-mail's task names stay English, inside a run's language too.
+    const strips = await inEnglish(() =>
+      readStrips(supabaseAdmin, conversationId, weekEndIn(now, zone)),
+    );
     const tasks = [...strips.values()].flatMap((strip) => strip.tasks);
     if (tasks.length > 0) {
       const ready = (status: string) => status === 'ready_for_review' || status === 'done';
