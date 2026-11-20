@@ -436,7 +436,7 @@ export async function updatePrompt(
 
 export type UpdatePromptLocationsResult =
   | { prompt: Prompt }
-  | { error: string; code?: 'plan_limit' };
+  | { error: string; code?: 'plan_limit'; limit?: 'locations' };
 
 /**
  * Retarget a prompt's tracking locations (#691).
@@ -488,7 +488,7 @@ export async function updatePromptLocations(
     const plan = await getOrgPlan(orgId);
     const usage = await getOrgLocationUsage(supabase, orgId);
     const limitError = locationLimitMessage(plan, usage.total, delta);
-    if (limitError) return { error: limitError, code: 'plan_limit' };
+    if (limitError) return { error: limitError, code: 'plan_limit', limit: 'locations' };
   }
 
   const { data, error } = await supabase
@@ -528,7 +528,7 @@ export interface BulkLocationSummary {
 
 export type BulkUpdatePromptLocationsResult =
   | BulkLocationSummary
-  | { error: string; code?: 'plan_limit' };
+  | { error: string; code?: 'plan_limit'; limit?: 'locations' };
 
 /**
  * Add or remove one or more tracking locations across a selection of prompts
@@ -605,7 +605,7 @@ export async function bulkUpdatePromptLocations(
       getOrgLocationUsage(supabase, orgId),
     ]);
     const limitError = locationLimitMessage(orgPlan, usage.total, plan.delta);
-    if (limitError) return { error: limitError, code: 'plan_limit' };
+    if (limitError) return { error: limitError, code: 'plan_limit', limit: 'locations' };
   }
 
   const { data: written, error } = await supabase.rpc('apply_prompt_locations', {
@@ -920,7 +920,9 @@ export async function addPromptToBrand(
   return result.waiting ? { prompt: result.prompt, waiting: true } : { prompt: result.prompt };
 }
 
-export type SetPromptActiveResult = { prompt: Prompt } | { error: string; code?: 'plan_limit' };
+export type SetPromptActiveResult =
+  | { prompt: Prompt }
+  | { error: string; code?: 'plan_limit'; limit?: 'locations' };
 
 type ResumeRow = {
   regions: unknown;
@@ -936,7 +938,7 @@ type ResumeRow = {
 async function resumeLimitError(
   supabase: Awaited<ReturnType<typeof createClient>>,
   rows: ResumeRow[],
-): Promise<{ error: string; code?: 'plan_limit' } | null> {
+): Promise<{ error: string; code?: 'plan_limit'; limit?: 'locations' } | null> {
   const adding = activationDelta(
     rows.map((row) => ({
       isActive: row.is_active !== false,
@@ -964,7 +966,7 @@ async function resumeLimitError(
   } catch {
     return { error: "Couldn't check your plan's prompt limit. Please try again." };
   }
-  return limitError ? { code: 'plan_limit', error: limitError } : null;
+  return limitError ? { code: 'plan_limit', limit: 'locations', error: limitError } : null;
 }
 
 /**
@@ -1422,7 +1424,9 @@ export async function deletePrompt(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-export type SetPromptsActiveResult = { updated: number } | { error: string; code?: 'plan_limit' };
+export type SetPromptsActiveResult =
+  | { updated: number }
+  | { error: string; code?: 'plan_limit'; limit?: 'locations' };
 
 /**
  * Pause or resume several prompts in one write, from the prompts table's

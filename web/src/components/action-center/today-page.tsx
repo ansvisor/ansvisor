@@ -255,7 +255,11 @@ export function TodayPage() {
         : {
             prompts,
             answers,
-            actions: { value: count(ready?.openActions, 'open') },
+            actions: {
+              value: count(ready?.openActions, 'open'),
+              // What the one open count holds (AC-01): "2 on hold · 5 yours".
+              note: ready?.openBreakdown ? tLoop('openBreakdown', ready.openBreakdown) : null,
+            },
             done: { value: count(ready?.doneThisWeek, 'doneWeek') },
             results: {
               value:

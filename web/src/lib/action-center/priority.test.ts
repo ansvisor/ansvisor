@@ -8,6 +8,7 @@ import {
   confidenceNote,
   highestPriorityLevel,
   isStale,
+  quietDays,
   parsePriorityReason,
   priorityConfidenceText,
   priorityLevelOf,
@@ -147,6 +148,14 @@ describe('isStale', () => {
     expect(isStale({ status: 'new', staleAt: null })).toBe(false);
     expect(isStale({ status: 'new' })).toBe(false);
     expect(isStale({ status: 'in_progress', staleAt: '2026-10-31T03:00:00Z' })).toBe(false);
+  });
+
+  it('counts the days with no update: the month to go stale, plus the days since (AC-10)', () => {
+    const now = new Date('2026-11-14T09:00:00Z');
+    expect(quietDays({ status: 'new', staleAt: '2026-10-31T03:00:00Z' }, now)).toBe(44);
+    expect(quietDays({ status: 'new', staleAt: '2026-11-14T03:00:00Z' }, now)).toBe(30);
+    expect(quietDays({ status: 'new', staleAt: null }, now)).toBeNull();
+    expect(quietDays({ status: 'on_hold', staleAt: '2026-10-31T03:00:00Z' }, now)).toBeNull();
   });
 });
 

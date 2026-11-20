@@ -19,6 +19,8 @@ const signals = vi.hoisted(() => ({
   updateSignalStatus: vi.fn(),
 }));
 vi.mock('@/lib/actions/signals', () => signals);
+const reads = vi.hoisted(() => ({ getTrackingWindow: vi.fn() }));
+vi.mock('@/lib/visibility-reads', () => reads);
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: { getActiveBrand: () => unknown }) => unknown) =>
     select({ getActiveBrand: () => ({ id: 'b1', slug: 'acme', name: 'Acme' }) }),
@@ -94,6 +96,7 @@ beforeEach(() => {
     signal('s3', { brandNo: 12, kind: 'competitor_surge', category: 'competitor' }),
   ]);
   signals.getSignalsSummary.mockResolvedValue(SUMMARY);
+  reads.getTrackingWindow.mockResolvedValue({ lastRunAt: null });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -160,5 +163,34 @@ describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
   it('sends no rows while it reads', async () => {
     signals.getSignals.mockReturnValue(new Promise(() => {}));
     expect((await render()).view).toEqual({});
+  });
+});
+
+describe('what the page says about its signals', () => {
+  it('says the signals come from the latest AI answer run, and how long ago (AC-40)', async () => {
+    reads.getTrackingWindow.mockResolvedValue({
+      lastRunAt: new Date(Date.now() - 15 * 3_600_000).toISOString(),
+    });
+    await render();
+    expect(reads.getTrackingWindow).toHaveBeenCalledWith('b1');
+    expect(container.textContent).toContain(
+      'Signals from your latest AI answer run (15 hours ago). They drive your Action Center.',
+    );
+    expect(container.textContent).not.toContain('Real-time');
+  });
+
+  it('before a first run, says where signals come from without a time', async () => {
+    await render();
+    expect(container.textContent).toContain(
+      'Signals from your AI answers, your site and the web. They drive your Action Center.',
+    );
+  });
+
+  it('explains why Resolved can be more than New (AC-42)', async () => {
+    await render();
+    const note = container.querySelector('[title^="Can be more than New"]');
+    expect(note?.getAttribute('title')).toBe(
+      'Can be more than New: it includes signals opened before this period and resolved in it.',
+    );
   });
 });

@@ -1,6 +1,6 @@
 ---
 name: quality
-description: "E-E-A-T, Trust and Readability fixes. Leaves only what you alone can give."
+description: "E-E-A-T, Trust and Readability fixes. Flags the parts only you can add (experience, data)."
 license: MIT
 metadata:
   title: "Quality pass"
