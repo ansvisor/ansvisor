@@ -19,8 +19,8 @@ const TrendChart = dynamic(
 import { toast } from 'sonner';
 import { getReport, type Report } from '@/lib/actions/reports';
 import { getReportBranding } from '@/lib/actions/white-label';
-import { reportFileName, reportLook, type ReportBranding } from '@/lib/white-label/kit';
-import { pdfImage } from '@/lib/white-label/pdf-image';
+import { reportLook, type ReportBranding } from '@/lib/white-label/kit';
+import { saveReportPdf } from '../_save-pdf';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -269,9 +269,7 @@ export default function ReportDetailPage() {
   const auditScore = payload.auditScore ? auditScoreView(payload.auditScore) : null;
 
   // Render a true vector PDF from the saved payload with @react-pdf/renderer
-  // (selectable text, exact layout — no screenshot artifacts). The renderer
-  // and the document component both load on demand: PDF export is rare and
-  // the library is heavy.
+  // (selectable text, exact layout — no screenshot artifacts); see _save-pdf.
   const handleDownloadPdf = async () => {
     setDownloading(true);
     try {
@@ -287,19 +285,7 @@ export default function ReportDetailPage() {
         kit = read.branding;
         setBranding(kit);
       }
-      const [{ reportPdf }, logo, clientLogo] = await Promise.all([
-        import('./_report-pdf'),
-        pdfImage(kit?.logo ?? null),
-        pdfImage(kit?.clientLogo ?? null),
-      ]);
-      const blob = await reportPdf(report, kit && { ...kit, logo, clientLogo });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = reportFileName(kit, payload.brandName, report.dateTo);
-      a.click();
-      URL.revokeObjectURL(url);
+      await saveReportPdf(report, kit);
     } catch (err) {
       console.error('PDF download error:', err);
       toast.error(t('downloadFailed'));
