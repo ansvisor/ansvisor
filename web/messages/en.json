@@ -1965,7 +1965,7 @@
         "keep": "Still relevant",
         "kept": "Kept: it's no longer stale"
       },
-      "taskProgress": "{completed}/{total} tasks",
+      "taskProgress": "{completed}/{total} tasks done",
       "everyone": "Everyone",
       "everyoneTitle": "Everyone in the workspace: no one is assigned yet",
       "tags": {
@@ -3895,6 +3895,9 @@
         "inProgress": "In Progress",
         "noImprovement": "No Improvement",
         "dismissed": "Dismissed",
+        "onHold": "On Hold",
+        "closed": "Closed Actions",
+        "closedSub": "closed in this window",
         "ofTotal": "{percent}% of total"
       },
       "pagination": {

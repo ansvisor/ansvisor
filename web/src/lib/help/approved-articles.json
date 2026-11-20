@@ -259,15 +259,15 @@
         "did it work"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
-          "text": "The **History** tab lists actions once they are In Progress, On Hold, Completed or Dismissed, with what they were meant to do and what has been measured since. A result is measured after the action, not proven to be caused by it."
+          "text": "The **History** tab lists actions once they are In Progress, On Hold, Completed or Dismissed (an action moves to In Progress when one of its tasks starts), with what they were meant to do and what has been measured since. A result is measured after the action, not proven to be caused by it."
         },
         {
           "heading": "Find an action in History",
-          "text": "Filter by range (7d, 30d, 90d, All), **Status**, **Type**, **Priority** and **Source**, and sort by Newest, Oldest or Priority. The cards count total, completed, in-progress, no-improvement and dismissed actions in the window.\n\nClick an action to see **What was the goal?**, **What happened?** (the signals it was built from), its affected items and tasks, and its **Result**."
+          "text": "Filter by range (7d, 30d, 90d, All), **Status**, **Type**, **Priority** and **Source**, and sort by Newest, Oldest or Priority. The range is when things happened: a completed action by when it was completed, a dismissed one by when it was dismissed, and one in progress or on hold by its last change, however long ago it was raised. The cards count total, completed, in-progress, on-hold, no-improvement and dismissed actions in the range.\n\nClick an action to see **What was the goal?**, **What happened?** (the signals it was built from), its affected items and tasks, and its **Result**."
         },
         {
           "heading": "How a result is measured",
@@ -283,7 +283,7 @@
         },
         {
           "heading": "The Scorecard",
-          "text": "Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand over the range, 90 days unless you pick another. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only."
+          "text": "Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand over the range, 90 days unless you pick another. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only, and its cards count the same closed actions: **Closed Actions**, completed, no improvement and dismissed."
         },
         {
           "heading": "The Scorecard by play",
