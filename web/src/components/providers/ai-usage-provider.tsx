@@ -46,6 +46,19 @@ const AiUsageContext = createContext<AiUsageState>({ usage: null, refresh: () =>
  * Reaching 80% of the allowance toasts once a period in a browser (spec §4);
  * the banners under the header rows stay.
  */
+/** The longest the first read of the meter waits for the page's own reads. */
+const FIRST_READ_WAIT_MS = 3_000;
+
+/** Runs `run` once the browser is idle (or after FIRST_READ_WAIT_MS); returns its cancel. */
+function whenIdle(run: () => void): () => void {
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(run, { timeout: FIRST_READ_WAIT_MS });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(run, FIRST_READ_WAIT_MS / 2);
+  return () => window.clearTimeout(id);
+}
+
 export function AiUsageProvider({ children }: { children: ReactNode }) {
   const metered = isCloud();
   const pathname = usePathname();
@@ -73,7 +86,13 @@ export function AiUsageProvider({ children }: { children: ReactNode }) {
   }, [metered]);
 
   useEffect(() => {
-    if (Date.now() - readAt.current >= AI_USAGE_STALE_MS) void read();
+    if (Date.now() - readAt.current < AI_USAGE_STALE_MS) return;
+    // The first read waits for the page's own, as the browser is idle (or
+    // FIRST_READ_WAIT_MS at most): the meter is a status beside the page,
+    // and read at once it competed with what the page opens with (Content
+    // test 2026-11-19, item 9). Later reads go at once.
+    if (readAt.current === 0) return whenIdle(() => void read());
+    void read();
   }, [pathname, read]);
 
   useEffect(() => {

@@ -782,6 +782,10 @@ describe('Home by focus (CHAT-24 §4)', () => {
     expect(host.querySelector('h1 + p')?.textContent).toBe(
       'Kestrel CRM’s mention rate rose 4 points this week.',
     );
+    // The rival opens its numbers on Competitors (CH-06).
+    const rival = host.querySelector<HTMLAnchorElement>('[data-action="home.openRival"]')!;
+    expect(rival.textContent).toBe('Kestrel CRM');
+    expect(rival.getAttribute('href')).toBe('/dashboard/competitors');
     await render(
       view({
         focus: focus('comp'),

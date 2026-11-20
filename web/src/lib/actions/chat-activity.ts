@@ -6,14 +6,16 @@ import { readMemberAuth } from '@/lib/member-emails';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { parseTeamRole } from '@/lib/chat/precedence';
-import { activitySummary } from '@/lib/chat/activity';
+import { activitySummary, activityWords, deniedToolName } from '@/lib/chat/activity';
 import { undoChange } from '@/lib/chat/undo';
 import { CHAT_TOOLS, chatToolByKey } from '@/lib/chat/registry/tools';
+import { asViewer } from '@/lib/chat/viewer-locale';
 import type { ToolArea } from '@/lib/chat/registry/define-tool';
 import {
   ACTIVITY_PAGE_SIZE,
   ACTIVITY_EXPORT_MAX,
   activityCsv,
+  shownParams,
   type ActivityFilters,
   type ActivityRow,
 } from '@/lib/chat/activity-view';
@@ -262,12 +264,17 @@ export async function undoActivity(
   try {
     const who = await viewer();
     if (!who) return { ok: false, failure: 'chat_off' };
-    const result = await undoChange({
-      activityId,
-      userId: who.userId,
-      organizationId: who.organizationId,
-      surface: 'chat',
-    });
+    // What Undo says, in the viewer's language.
+    const result = await asViewer(
+      () =>
+        undoChange({
+          activityId,
+          userId: who.userId,
+          organizationId: who.organizationId,
+          surface: 'chat',
+        }),
+      who.userId,
+    );
     return {
       ok: true,
       code: result.code,
@@ -291,13 +298,19 @@ export async function exportActivityCsv(
     const ids = [...new Set(rows.map((row) => row.user_id).filter((id): id is string => !!id))];
     const names = await namesOf(who.organizationId, ids);
     const now = Date.now();
-    return {
-      ok: true,
-      csv: activityCsv(
-        rows.map((row) => toRow(row, who, names, now, new Map())),
-        (key, params) => activitySummary(key, params),
-      ),
-    };
+    // The cells in the viewer's words; a denial's saved tool name named again in them.
+    const csv = await asViewer(
+      async () =>
+        activityCsv(
+          rows
+            .map((row) => toRow(row, who, names, now, new Map()))
+            .map((row) => ({ ...row, summaryParams: shownParams(row, deniedToolName) })),
+          (key, params) => activitySummary(key, params),
+          activityWords,
+        ),
+      who.userId,
+    );
+    return { ok: true, csv };
   } catch {
     return { ok: false, failure: 'failed' };
   }

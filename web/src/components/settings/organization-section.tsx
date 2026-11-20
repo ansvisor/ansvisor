@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useCaughtErrorText } from '@/hooks/use-server-error';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,9 +23,9 @@ import {
  * Settings → Organization.
  *
  * Replaces the inert "Project" tab (#753).  Admins can rename the
- * organisation; all other fields are read-only.  The slug is intentionally
- * not exposed for editing — it is used in external integrations and must
- * remain stable.
+ * organisation; all other fields are read-only.  The slug isn't shown: it's
+ * made from the name the workspace was first created with, never changes on
+ * a rename, and nothing reads it, so it only confused people.
  *
  * Follows the TeamSection / AiProvidersSection pattern exactly:
  *   - load via useEffect / useCallback
@@ -43,6 +44,7 @@ export function OrganizationSection() {
   // A read-only workspace (plan not active): Save opens the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
 
   const loadOrg = useCallback(async () => {
     try {
@@ -68,7 +70,7 @@ export function OrganizationSection() {
       setOrg((prev) => (prev ? { ...prev, name: nameInput.trim() } : prev));
       toast.success(t('saved'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('org_saveFailed'));
+      toast.error(caughtError(err, t('org_saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -112,13 +114,6 @@ export function OrganizationSection() {
             ) : (
               <Input id="org-name" value={org?.name ?? ''} disabled />
             )}
-          </div>
-
-          {/* Slug — always read-only */}
-          <div className="space-y-2">
-            <Label htmlFor="org-slug">{t('org_slug')}</Label>
-            <Input id="org-slug" value={org?.slug ?? ''} disabled />
-            <p className="text-xs text-muted-foreground">{t('org_slugHint')}</p>
           </div>
 
           <Separator />

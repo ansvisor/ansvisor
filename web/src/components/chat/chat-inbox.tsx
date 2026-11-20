@@ -19,7 +19,7 @@ import type { ChatNotice } from '@/lib/actions/chat-notices';
 import type { OutsideEmail } from '@/lib/actions/chat-outbound';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { agoOf } from '@/lib/chat/home';
-import { chatMenuLists } from '@/lib/chat/menu-groups';
+import { inboxChats } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import type { ChatListStatus } from './chat-list-provider';
 import { INBOX_ROW, SuggestionRows, SuggestionsPanel, type InboxDaily } from './inbox-suggestions';
@@ -29,11 +29,11 @@ import { OutsideEmailRows } from './inbox-outside';
 
 /**
  * The Inbox's rows: what needs the person, what runs, and unread results —
- * their own chats in Agents at work. A teammate's shared chat waits on its
+ * their own chats (inboxChats). A teammate's shared chat waits on its
  * author, who alone can answer it, so it is never one that "needs you".
  */
-export function inboxItems(chats: ChatListItem[], now = new Date()): ChatListItem[] {
-  return chatMenuLists(chats, now).atWork.filter((chat) => chat.mine);
+export function inboxItems(chats: ChatListItem[]): ChatListItem[] {
+  return inboxChats(chats);
 }
 
 /**

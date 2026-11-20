@@ -160,7 +160,8 @@ Deploy Ansvisor on your own infrastructure and maintain control over your enviro
 | Service | Purpose | Where to get |
 |---------|---------|--------------|
 | **DataForSEO** | Keyword volume data for prompt analysis | [dataforseo.com](https://dataforseo.com/) |
-| **Scrape.do** | Page fetching for Site Audit (proxy + JS render); required only if you use Site Audit | [scrape.do](https://scrape.do/) |
+| **Firecrawl** | Alternative page fetcher for Site Audit and optional web-research provider | [firecrawl.dev](https://www.firecrawl.dev/?utm_source=ansvisor&utm_medium=integration) |
+| **Scrape.do** | Page fetching for Site Audit (proxy + JS render); required only if you use Site Audit without Firecrawl | [scrape.do](https://scrape.do/) |
 | **Stripe** | Payments, including the email sent 3 days before a trial ends (cloud mode only, not needed for self-hosted) | [stripe.com](https://stripe.com/) |
 
 ### Setup

@@ -149,7 +149,11 @@ describe('InfoTip', () => {
   /** Hovers an icon whose box starts at `left`, and returns where the tooltip is centred. */
   function tooltipCentreFor(left: number) {
     act(() => {
-      root.render(<InfoTip content="What this counts" />);
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <InfoTip content="What this counts" />
+        </NextIntlClientProvider>,
+      );
     });
     const icon = container.querySelector<HTMLElement>('[aria-label="More information"]')!;
     icon.getBoundingClientRect = () => ({ left, width: 12, bottom: 100 }) as DOMRect;

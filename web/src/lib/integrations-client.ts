@@ -30,7 +30,7 @@ const GOOGLE_CALL_TIMEOUT_MS = 20_000;
 export type IntegrationFailure = 'timeout' | 'forbidden' | 'subscription' | 'failed';
 export type IntegrationResult<T> =
   | { ok: true; value: T }
-  | { ok: false; reason: IntegrationFailure; error?: string };
+  | { ok: false; reason: IntegrationFailure; error?: string; code?: string };
 
 /** Which integrations this server has credentials for: env only, no Composio round trip. */
 export interface IntegrationsConfig {
@@ -77,6 +77,8 @@ async function call<T>(
       ok: false,
       reason: 'failed',
       ...(typeof body.error === 'string' ? { error: body.error } : {}),
+      // Its stable code, for the page to say it in the person's language (LOC-008).
+      ...(typeof body.code === 'string' ? { code: body.code } : {}),
     };
   } catch (err) {
     if (isTimeout(err)) return { ok: false, reason: 'timeout' };

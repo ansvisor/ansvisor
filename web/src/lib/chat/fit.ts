@@ -233,6 +233,30 @@ export function fitResult(
       }
       if (size(record) <= maxChars) return done(record);
     }
+    // 2b. Then the lists one level down, the longest first: only once every
+    // top-level list is cut, so a list a tool nests (get_action's affected
+    // prompts) outlasts its long top-level ones (CH-02), still saying how many
+    // it leaves out (`{list}_more`), not cut as text.
+    const nested = Object.entries(record)
+      .filter((entry): entry is [string, Record<string, Json>] => isRecord(entry[1]))
+      .flatMap(([parent, inner]) =>
+        Object.entries(inner)
+          .filter((entry): entry is [string, Json[]] => Array.isArray(entry[1]))
+          .map(([key, list]) => ({ parent, key, list })),
+      )
+      .sort((a, b) => size(b.list) - size(a.list));
+    for (const { parent, key, list } of nested) {
+      const inner = { ...(record[parent] as Record<string, Json>) };
+      const others = size({ ...record, [parent]: { ...inner, [key]: [], [`${key}_more`]: 0 } });
+      const latest = oldestFirst(list);
+      const kept = keepFitting(list, Math.max(0, room - others), latest);
+      if (kept < list.length) {
+        inner[key] = keepOf(list, kept, latest);
+        inner[`${key}_more`] = moreOf(inner[`${key}_more`], list.length - kept);
+        record[parent] = inner;
+      }
+      if (size(record) <= maxChars) return done(record);
+    }
   }
 
   // 3. As text, within maxChars once escaped (its quotes and backslashes grow).

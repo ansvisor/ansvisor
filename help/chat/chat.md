@@ -42,7 +42,7 @@ In the free trial, and while you explore the demo brand, a welcome card sits abo
 
 Type in the box and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.
 
-On the left under the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
+Under the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** (shown as **Run mode: Ask before changes**) reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish alone (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
 
 Analysts and Agency partners only read; there it says **Read-only**, linking to their role.
 
@@ -324,7 +324,7 @@ The steps it finished show as one grey line above the answer, such as **✓ Read
 
 Once Chat is done, **Data used** under the answer names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
 
-Each Action Center action an answer names comes with its title, and its code, such as AC-07, is a link: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both.
+Each Action Center action an answer names comes with its title, and its code, such as AC-07, is a link, also when it's written as code: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both.
 
 ## Big requests in parts
 
@@ -368,7 +368,9 @@ Tabs on top, each with its count, show **All**, your **Daily suggestions**, what
 
 The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Settings**, closed until you click it, holds **General** (your own Chat settings), the **Activity** log, **What Chat can do** and the **Tool policy**.
 
-**Agents at work** lists the chats that need your OK, the ones still working, and finished results you haven't opened yet, with the step each one is on. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.
+## Agents at work and Chats
+
+**Agents at work** lists the chats that need your OK and the ones still working or paused, with the step each one is on. A finished chat isn't listed there: it stays under its day with a green dot until you open it, and the **Inbox** lists it too. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.
 
 **Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat.
 
@@ -390,7 +392,11 @@ Pages under Chat, such as **Inbox** and **All chats**, show **← Back to Chat**
 
 Esc closes only the box or menu on top, such as search or a **⋯** menu, and never leaves the page.
 
-In Chat, the main menu on the left is a narrow bar of icons, so the chat has room. Point at it to see it whole, or click the Ansvisor logo to keep it open; click the logo again to make it narrow. Chat remembers your choice on every device.
+## The main menu in Chat
+
+In Chat, the main menu on the left is a narrow bar of icons, so the chat has room. It stays narrow when you point at it, so it never covers the chat menu; point at an icon to see its name. Click the Ansvisor logo to open the menu whole, and again to make it narrow. Chat remembers your choice on every device.
+
+On other pages, a narrow main menu opens over the page when you rest the pointer on it, and closes when you move away, press Esc or click outside it.
 
 ## Manage a chat
 
@@ -418,7 +424,7 @@ Every role can copy, download and save answers it can open.
 
 When Chat makes something for you, such as a page saved as a Content draft, it shows under the answer as a card with its name and type. It is also kept in **Files** for your whole workspace, and the card says **In Files**. From the card, **Copy** copies it, **Download** gives it in the formats it has (for a page: HTML, Markdown, Word or PDF), and **Open in Content Editor** opens the page to keep working on it. When storage is full, the card says it wasn't saved to Files, with **Get more storage** to add a storage pack. Click **Files** in the chat menu to find, copy or download everything kept there.
 
-The pen button under an answer, **Open in Content Editor**, turns the answer itself into a new Content draft in your brand and opens it.
+The pen button under an answer, **Open in Content Editor**, turns the answer itself into a new Content draft in your brand and opens it. It shows only on an answer that reads as a page.
 
 ## A page's title from Chat
 

@@ -18,7 +18,7 @@ vi.mock('next-themes', () => ({ useTheme: () => ({ resolvedTheme: 'dark' }) }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
 vi.mock('@/i18n/navigation', () => ({
   usePathname: () => '/dashboard/reports',
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), prefetch: vi.fn() }),
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
       {children}
