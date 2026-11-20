@@ -5469,6 +5469,10 @@
         {
           "heading": "Purchases and invoices",
           "text": "Admins see **Purchases**: the date, the pack, the price, its status (**Processing**, **Active**, **Used up**, **Expired**, **Ended** or **Refunded**), what is left, and a download for its invoice. Refunds are made by the Ansvisor team; a refund takes back what the pack hasn't used yet."
+        },
+        {
+          "heading": "What the monthly AI allowance covers",
+          "text": "The plan cards in **Settings › Billing** give a rough guide: Starter's monthly AI allowance writes up to 25 new pages or optimizes up to 50 pages, and Growth's up to 125 or 250. The allowance is shared with Chat, agents and the other AI features, so using those leaves fewer pages. Longer pages and a costlier AI model use more of it."
         }
       ]
     },
