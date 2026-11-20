@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Sigma } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { POSITION_SUPPORT_ANSWERS, VISIBILITY_SCORE_WEIGHTS } from '@/lib/visibility-score';
@@ -36,132 +37,83 @@ function Formula({ children }: { children: React.ReactNode }) {
  */
 export function FormulaDialog() {
   const [open, setOpen] = useState(false);
+  const t = useTranslations('insights.formulas');
+  const b = (chunks: React.ReactNode) => (
+    <span className="font-medium text-foreground">{chunks}</span>
+  );
 
   return (
     <>
       <Button variant="outline" className="gap-2" onClick={() => setOpen(true)}>
         <Sigma className="h-4 w-4" />
-        Formulas
+        {t('button')}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>How metrics are calculated</DialogTitle>
+            <DialogTitle>{t('title')}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-5">
-            <Section title="Visibility (0–100)">
-              <p>
-                A single score for how visible your brand is across all AI answers matching the
-                current filters. Every answer counts — including ones where you don&apos;t appear —
-                so growing the score means showing up more, being cited more, and being named
-                earlier.
-              </p>
+            <Section title={t('visibility.title')}>
+              <p>{t('visibility.body')}</p>
               <Formula>
-                Visibility = 100 × ({VISIBILITY_SCORE_WEIGHTS.mention} × mention rate +{' '}
-                {VISIBILITY_SCORE_WEIGHTS.citation} × citation rate +{' '}
-                {VISIBILITY_SCORE_WEIGHTS.position} × position factor × confidence)
+                {t('visibility.formula', {
+                  mention: VISIBILITY_SCORE_WEIGHTS.mention,
+                  citation: VISIBILITY_SCORE_WEIGHTS.citation,
+                  position: VISIBILITY_SCORE_WEIGHTS.position,
+                })}
                 <br />
-                confidence = answers mentioning you ÷ (answers mentioning you +{' '}
-                {POSITION_SUPPORT_ANSWERS})
+                {t('visibility.confidence', { support: POSITION_SUPPORT_ANSWERS })}
               </Formula>
               <ul className="list-disc ps-5 space-y-1">
-                <li>
-                  <span className="font-medium text-foreground">Mention rate ({PCT.mention}%)</span>{' '}
-                  — share of AI answers that mention your brand by name.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">
-                    Citation rate ({PCT.citation}%)
-                  </span>{' '}
-                  — share of answers that cite your website as a source.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">
-                    Position factor ({PCT.position}%)
-                  </span>{' '}
-                  — how early you&apos;re named in the answers that mention you: named first = 1,
-                  second = 0.5, third = 0.33, and so on, averaged. The confidence factor weights it
-                  by how many answers actually mention the brand, so a perfect position in a handful
-                  of answers can&apos;t outrank brands that consistently show up.
-                </li>
+                <li>{t.rich('visibility.mentionRate', { b, pct: PCT.mention })}</li>
+                <li>{t.rich('visibility.citationRate', { b, pct: PCT.citation })}</li>
+                <li>{t.rich('visibility.positionFactor', { b, pct: PCT.position })}</li>
               </ul>
-              <p>
-                Competitors on the leaderboard are scored with the exact same formula over the same
-                set of answers, so the numbers are directly comparable.
-              </p>
+              <p>{t('visibility.competitors')}</p>
             </Section>
 
-            <Section title="Visibility trend chart">
-              <p>
-                Each point is the Visibility computed over the selected time window ending on that
-                day (a rolling window). That&apos;s why the newest point always matches the
-                Visibility card above. With &quot;All time&quot; selected, each point covers
-                everything up to that day.
-              </p>
+            <Section title={t('trend.title')}>
+              <p>{t('trend.body')}</p>
             </Section>
 
-            <Section title="Mentions">
-              <p>Total number of times your brand was referenced by name in AI answers.</p>
+            <Section title={t('mentions.title')}>
+              <p>{t('mentions.body')}</p>
             </Section>
 
-            <Section title="Citations">
-              <p>
-                Total number of times your website was linked as a source in AI answers. Mentions
-                count your name; citations count your domain.
-              </p>
+            <Section title={t('citations.title')}>
+              <p>{t('citations.body')}</p>
             </Section>
 
-            <Section title="Net sentiment">
-              <p>
-                Of the answers that name you, the share that is positive minus the share that is
-                negative, in points. Answers that only cite your site aren&apos;t counted: they are
-                always neutral. Sentiment is shown alongside Visibility but is not part of the
-                score.
-              </p>
-              <Formula>
-                Net sentiment = positive answers % − negative answers % (of answers naming you, as
-                on the Mentions page)
-              </Formula>
+            <Section title={t('sentiment.title')}>
+              <p>{t('sentiment.body')}</p>
+              <Formula>{t('sentiment.formula')}</Formula>
             </Section>
 
-            <Section title="Avg. position">
-              <p>
-                Where you&apos;re named in the answers that mention you, averaged. Lower is better:
-                #1 means you&apos;re usually named first.
-              </p>
-              <Formula>Avg. position = sum of your positions ÷ answers that name you</Formula>
+            <Section title={t('position.title')}>
+              <p>{t('position.body')}</p>
+              <Formula>{t('position.formula')}</Formula>
             </Section>
 
-            <Section title="Citation rate">
-              <p>The share of AI answers that link to your website as a source.</p>
-              <Formula>Citation rate = answers citing your domain ÷ all answers × 100</Formula>
+            <Section title={t('citationRate.title')}>
+              <p>{t('citationRate.body')}</p>
+              <Formula>{t('citationRate.formula')}</Formula>
             </Section>
 
-            <Section title="Share of Voice">
-              <p>
-                Your slice of the total brand conversation: of all brand mentions in AI answers —
-                yours plus your tracked competitors&apos; — the share that are yours.
-              </p>
-              <Formula>SOV = your mentions ÷ (your mentions + competitor mentions) × 100</Formula>
+            <Section title={t('shareOfVoice.title')}>
+              <p>{t('shareOfVoice.body')}</p>
+              <Formula>{t('shareOfVoice.formula')}</Formula>
             </Section>
 
-            <Section title="Coverage">
-              <p>
-                The share of tracked prompts where you showed up (named or cited) at least once in
-                the selected period, against all prompts that produced results.
-              </p>
-              <Formula>Coverage = prompts you appeared in ÷ prompts answered × 100</Formula>
+            <Section title={t('coverage.title')}>
+              <p>{t('coverage.body')}</p>
+              <Formula>{t('coverage.formula')}</Formula>
             </Section>
 
-            <Section title="Changes">
-              <p>
-                Each card&apos;s change compares the selected period with the period of the same
-                length just before it, over the prompts answered in both periods only, so adding
-                prompts doesn&apos;t inflate it; the numbers themselves still cover every prompt.
-                With &quot;All time&quot; there is no earlier period, so no change is shown.
-              </p>
+            <Section title={t('changes.title')}>
+              <p>{t('changes.body')}</p>
             </Section>
           </div>
         </DialogContent>

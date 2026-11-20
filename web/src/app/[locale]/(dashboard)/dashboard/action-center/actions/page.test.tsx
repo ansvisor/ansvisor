@@ -192,6 +192,48 @@ describe('the Stale filter (00432)', () => {
   });
 });
 
+describe('the Open status (AC-01)', () => {
+  const allPill = () =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent?.startsWith('allActions'));
+  const actions: ActionItem[] = [
+    action,
+    { ...action, id: 'a2', status: 'in_progress' },
+    { ...action, id: 'a3', status: 'on_hold' },
+    { ...action, id: 'a4', status: 'completed' },
+    { ...action, id: 'a5', status: 'dismissed' },
+  ];
+
+  it('opens on new, in progress and on hold actions, and All counts them as Today does', async () => {
+    window.history.replaceState(null, '', '/');
+    getActions.mockResolvedValue(actions);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    expect(allPill()?.textContent).toBe('allActions3');
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a1', 'a2', 'a3']);
+  });
+
+  it('lists every status on All, from the URL', async () => {
+    window.history.replaceState(null, '', '/?status=all');
+    getActions.mockResolvedValue(actions);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    expect(allPill()?.textContent).toBe('allActions5');
+  });
+
+  it('says there are no open actions when every action is closed', async () => {
+    window.history.replaceState(null, '', '/');
+    getActions.mockResolvedValue([{ ...action, status: 'completed' }]);
+    await render();
+    expect(container.textContent).toContain('noOpen');
+    const showAll = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'showAllStatuses',
+    );
+    await act(async () => showAll!.click());
+    expect(container.textContent).not.toContain('noOpen');
+  });
+});
+
 describe('the From Products chip (ECOM-013)', () => {
   const chip = () =>
     [...container.querySelectorAll('button')].find((b) =>
@@ -391,7 +433,8 @@ describe('what Chat’s side panel sees (W1-08)', () => {
     const page = setPage.mock.lastCall![0];
     expect(page).toMatchObject({
       pageName: 'title',
-      filters: [],
+      // The list opens on Open (AC-01), and Chat is told so.
+      filters: [{ key: 'status', label: 'status.open', value: 'open' }],
       referenceables: [{ type: 'task', id: action.id }],
     });
     expect(page.suggestions).toEqual(expect.arrayContaining(['actionsImpact', 'actionsWeek']));

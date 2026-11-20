@@ -1,7 +1,7 @@
 ---
 title: Run a site audit
 route: /dashboard/audit
-keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audit again, bulk audit, audit all]
+keywords: [site audit, run audit, audit a page, auto-audit, audit settings, audit again, bulk audit, audit all, your language]
 synonyms: [page audit, check my page, scan a page, AI readiness check]
 plan: all
 updated: 2026-11-19
@@ -37,9 +37,15 @@ Audits started in bulk run a few at a time.
 
 Audit selected, Audit all and Re-audit ask first. They list the pages and say how many of the month's audits they use.
 
-**Audit all** leaves out pages audited in the last 7 days; untick **Leave out** to include them. Pages you pick yourself are all audited, recent ones too, since a change across the site, such as robots.txt or a template, moves their scores; tick **Leave out** to skip them.
+Pages audited in the last 7 days are left out, since a page that hasn't changed scores the same. Untick **Leave out** to include them.
 
 When fewer audits are left than pages, the most valuable go now (on Pages, the first in the list) and the rest wait for next month.
+
+## Following a bulk audit
+
+While a bulk audit runs, a bar above the lists shows **12 of 235 done · about 70 min left**. The time left is worked out from how fast the audits have finished since you opened the page, so it appears once the first one is done and settles as more finish. Audits run a few at a time, so a large batch takes a while.
+
+Click **This batch** to list only the pages in the bulk audit on **Pages**, and **All pages** to go back. When every audit is done the bar says so until you dismiss it.
 
 ## The Pages list during a bulk audit
 
@@ -64,6 +70,10 @@ Each completed audit uses one of your plan's monthly audits. An audit still runn
 Auto-audit spends a quarter of your monthly audits on the top pages of the **Opportunities** tab, in five runs on days 1, 7, 14, 21 and 28 of your billing month. On a plan without a monthly limit, auto-audit is off until you turn it on.
 
 Pages you fixed go first: a page whose Site Audit fix you completed in the Action Center in the last 30 days, and that hasn't been audited since, so the action's result says whether the fix took. Pinned pages come next. Pages audited in the last 30 days wait for a later run. After a run, a notice sums it up with **View pages**, and its audits show **Auto** in the Pages list.
+
+## Reports in your language
+
+The report's categories and checks (each check's name, what it looks for, why it matters and how to fix it) follow your interface language. A check added since your language was last updated shows in English until it's translated.
 
 ## Site Audit settings
 

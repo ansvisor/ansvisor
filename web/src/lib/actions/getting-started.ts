@@ -15,6 +15,7 @@ import {
   buildGettingStarted,
   isPageOpenedStep,
   parseGettingStartedFacts,
+  type GettingStartedFacts,
   type GettingStartedStatus,
 } from '@/lib/getting-started/steps';
 import { assertWritable } from '@/lib/subscription-guard';
@@ -29,6 +30,18 @@ export async function getGettingStarted(brandId: string): Promise<GettingStarted
   if (error) throw new Error(error.message);
   const facts = parseGettingStartedFacts(data);
   return facts ? buildGettingStarted(facts) : null;
+}
+
+/**
+ * The brand's facts as read, for a list that ticks its own steps from them
+ * (the Prompts page's guide, lib/prompts-guide.ts); null for a brand the
+ * caller can't see. A read: RLS decides the brand (security invoker).
+ */
+export async function getGettingStartedFacts(brandId: string): Promise<GettingStartedFacts | null> {
+  const supabase = await dbClient();
+  const { data, error } = await supabase.rpc('getting_started_facts', { p_brand_id: brandId });
+  if (error) throw new Error(error.message);
+  return parseGettingStartedFacts(data);
 }
 
 /** A page opened, as recorded: whether it counts now (or did before), or why it couldn't be. */

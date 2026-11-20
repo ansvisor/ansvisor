@@ -39,6 +39,9 @@ const onFiled = vi.fn();
 let answer: (url: string, init?: RequestInit) => Response;
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) => answer(url, init));
 
+/** An answer that reads as a page: Open in Editor shows on it (UX audit CH-11). */
+const PAGE = '# Win back your pricing citations\n\nTwo pages lost most of it.';
+
 async function render(
   markdown = 'Two pages lost most of it.',
   filed = false,
@@ -99,7 +102,7 @@ afterEach(() => {
 
 describe('AnswerActions', () => {
   it('names each button by its short label: Copy, Download, Save, Open in Editor', async () => {
-    await render();
+    await render(PAGE);
     expect(
       [...container.querySelectorAll('[role="toolbar"] [aria-label]')].map((b) =>
         b.getAttribute('aria-label'),
@@ -109,7 +112,7 @@ describe('AnswerActions', () => {
 
   /** Each button carries a short label; a narrow row (the side panel) hides it behind the tooltip. */
   it('labels each button, shown only where the row is wide enough', async () => {
-    await render(undefined, false, vi.fn());
+    await render(PAGE, false, vi.fn());
     const toolbar = container.querySelector('[role="toolbar"]')!;
     expect(toolbar.className).toContain('@container');
     const labels = [...toolbar.querySelectorAll('button > span')];
@@ -224,10 +227,17 @@ describe('AnswerActions', () => {
     getMore.open = null;
   });
 
+  it('offers Open in Editor on an answer that reads as a page only, not a plain answer (CH-11)', async () => {
+    await render();
+    expect(container.querySelector('[data-action="answer.openInEditor"]')).toBeNull();
+    await render(PAGE);
+    expect(container.querySelector('[data-action="answer.openInEditor"]')).not.toBeNull();
+  });
+
   it('opens the answer in the Content Editor as a new draft, in the brand open', async () => {
     answer = () =>
       Response.json({ ok: true, href: '/dashboard/content/editor/d1' }, { status: 201 });
-    await render();
+    await render(PAGE);
     await click(button('answer.openInEditor'));
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`/api/chat/runs/${RUN}/content-draft`);

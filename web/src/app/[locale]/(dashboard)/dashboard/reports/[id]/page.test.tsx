@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
 import type { Report } from '@/lib/actions/reports';
 import type { ReportBranding } from '@/lib/white-label/kit';
+import { RoleContext } from '@/components/providers/role-provider';
 
 /**
  * A report's page with a white label kit (00429): the kit's cover above the
@@ -197,6 +198,43 @@ describe('ReportDetailPage › Competitor Leaderboard sample (RP-07)', () => {
   });
 });
 
+describe('ReportDetailPage › sections that could not be gathered (RP-06)', () => {
+  const gapped: Report = {
+    ...report,
+    payload: { ...report.payload, missingSections: ['trend', 'citationEvidence'] },
+  };
+
+  async function renderAs(role: 'admin' | 'analyst') {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <RoleContext.Provider value={{ role }}>
+            <ReportDetailPage />
+          </RoleContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+
+  it('never names the gap in the report a client reads', async () => {
+    getReport.mockResolvedValue(gapped);
+    await renderAs('analyst');
+    expect(container.textContent).toContain('Visibility rose.');
+    expect(container.textContent).not.toContain('gathered');
+    expect(container.textContent).not.toContain('Citation Evidence');
+  });
+
+  it('shows an Admin a quiet note outside the report itself', async () => {
+    getReport.mockResolvedValue(gapped);
+    await renderAs('admin');
+    const note = [...container.querySelectorAll('p')].find((p) =>
+      p.textContent?.includes('Only Admins see this'),
+    )!;
+    expect(note.textContent).toContain('Trend, Citation Evidence');
+    expect(container.querySelector('#report-root')?.contains(note)).toBe(false);
+  });
+});
+
 describe('ReportDetailPage › Site Audit Score', () => {
   const auditCard = () =>
     [...container.querySelectorAll('[data-slot="card"]')].find((c) =>
@@ -376,6 +414,70 @@ describe('ReportDetailPage › AI-sourced pipeline (#2140)', () => {
     getReport.mockResolvedValue(report);
     await render();
     expect(pipelineCard()).toBeUndefined();
+  });
+});
+
+describe('ReportDetailPage › KPIs and leaderboard (RP-01, RP-02)', () => {
+  const insights = {
+    avgVisibilityScore: 2.3,
+    visibilityChange: 0.4,
+    totalMentions: 120,
+    mentionsChange: null,
+    totalCitations: 40,
+    citationsChange: null,
+    positiveSentimentPct: 60,
+    sentimentChange: null,
+  };
+  const competitor = (name: string, isOwnBrand: boolean) => ({
+    name,
+    isOwnBrand,
+    score: isOwnBrand ? 15.5 : 11,
+    scoreChange: isOwnBrand ? 1.2 : null,
+    change: isOwnBrand ? 9 : null,
+    visibilityRate: 36.4,
+    visiblePrompts: 112,
+    promptCount: 308,
+    avgVisibilityScore: 2.3,
+    totalMentions: 120,
+    totalCitations: 40,
+  });
+  const kpiCards = () =>
+    [...container.querySelectorAll('[data-slot="card"]')]
+      .map((c) => c.textContent ?? '')
+      .filter((text) => /^(Visibility score|Prompts with a mention|Avg\. Score)/.test(text));
+
+  it('shows the score out of 100 and the prompt share, and no Avg. Score', async () => {
+    getReport.mockResolvedValue({
+      ...report,
+      payload: {
+        ...report.payload,
+        insights,
+        visibilityRate: { score: 15.5, ratePct: 36.4, visiblePrompts: 112, promptCount: 308 },
+      },
+    });
+    await render();
+    expect(kpiCards()).toEqual([
+      'Visibility score15.5/100',
+      'Prompts with a mention36.4%112 of 308 prompts',
+    ]);
+    expect(container.textContent).not.toContain('2.3%');
+  });
+
+  it('names the leaderboard’s column for the score, and shows the score’s change', async () => {
+    getReport.mockResolvedValue({
+      ...report,
+      payload: {
+        ...report.payload,
+        competitors: [competitor('Northwind', true), competitor('Rival', false)],
+      },
+    });
+    await render();
+    const table = container.querySelector('table')!;
+    expect(table.querySelector('thead')!.textContent).toContain('Visibility score');
+    const own = table.querySelector('tbody tr')!.textContent!;
+    expect(own).toContain('15.5112 of 308 prompts with a mention');
+    expect(own).toContain('+1.2');
+    expect(own).not.toContain('+9');
   });
 });
 

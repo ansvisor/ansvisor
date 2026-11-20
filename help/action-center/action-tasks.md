@@ -1,11 +1,11 @@
 ---
 title: Action tasks and how they are checked
 route: /dashboard/action-center/actions
-keywords: [tasks, task status, check now, regenerate tasks, done when, how we check, attached from chat, ready for review]
+keywords: [tasks, task status, check now, regenerate tasks, done when, how we check, attached from chat, ready for review, removed prompts, re-plan]
 synonyms: [steps, subtasks, to-do items, task checks]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-20
+last_checked: 2026-11-20
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -70,6 +70,12 @@ Each attachment is also a line in the action's **History**, as is a task Chat se
 Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence, in your brand's terms, by the **Site type** in the brand settings. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance, so it's for admins and managers.
 
 The AI also reads this brand's last three closed rounds of the same action. It builds on what improved results here, and doesn't hand out again a task that was done without effect. A task it writes without its URL, Change, Done when or How we check waits on **Needs review**.
+
+## Prompts removed since the action was created
+
+An action keeps the prompts it was made for. When some are deleted or paused later, the action says so next to its count, such as "(4 prompts removed since this action was created)", in the list and in the open action. Click that note to see which prompts they are, each marked **Deleted** or **Paused**.
+
+When more than half of an action's prompts are gone, its tasks may no longer fit. Admins and managers then see **Re-plan with the remaining prompts** under the list. It works like **Regenerate tasks**: it asks first, writes the tasks again for the prompts left, and keeps done, under-way and hand-added tasks. Regenerated tasks never cover removed prompts.
 
 ## Tasks Ansvisor does itself
 
