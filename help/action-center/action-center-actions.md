@@ -95,6 +95,10 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 
 The title's count, **Why this action?**, the **Goal**'s "5 of 7 prompts" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows.
 
+## A goal date that has passed
+
+The **Goal** is set for the action's due date, or 30 days after it was raised. Once that day has gone and the action is still open, **Goal date passed** shows under it, with **Set a new date**, which takes you to **Due date**. The date never moves on its own, so a missed goal stays visible.
+
 ## In your language
 
 Most of an action's words come from the interface, so they follow your language. Actions sent from Chat or Improve carry a title, a "why" and a goal written in English, and an action sent from a content opportunity carries the opportunity's title. When your interface language is another, these show in your language: in English for a moment the first time, then translated. Each is translated once and kept for teammates who use the same language.

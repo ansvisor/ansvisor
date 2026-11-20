@@ -1,4 +1,5 @@
 import type { Signal } from '@/lib/signals/map';
+import { OPEN_ACTION_STATUSES } from './registry';
 import { signalWhereValue } from '@/lib/signals/detail';
 import { SIGNAL_KINDS, isSignalKind } from '@/lib/signals/registry';
 import { platformName } from '@/lib/signals/names';
@@ -201,6 +202,23 @@ export interface ActionStory {
   family: StoryFamily;
   why: string;
   goal: string;
+  /** The day the goal is set for: the due date, or 30 days after the action was raised. */
+  goalDate: Date;
+}
+
+/**
+ * Whether an open action's goal date has passed (UX audit AC-21, decision
+ * D9): the day is before today. It is flagged, never moved: the date stays
+ * what was set, so a missed goal stays visible and the scorecard keeps it.
+ */
+export function goalDatePassed(
+  story: Pick<ActionStory, 'goalDate'> | null,
+  status: string,
+  now: Date = new Date(),
+): boolean {
+  if (!story || !(OPEN_ACTION_STATUSES as readonly string[]).includes(status)) return false;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return story.goalDate.getTime() < today.getTime();
 }
 
 /**
@@ -369,5 +387,5 @@ export function actionStory(
     now: now ?? 0,
   };
   const key = subject ? family : `${family}All`;
-  return { family, why: t(`why.${key}`, values), goal: t(`goal.${key}`, values) };
+  return { family, why: t(`why.${key}`, values), goal: t(`goal.${key}`, values), goalDate };
 }

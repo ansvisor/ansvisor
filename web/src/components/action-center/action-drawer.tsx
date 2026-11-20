@@ -77,6 +77,7 @@ import { SupportingSignals } from './supporting-signals';
 import { AffectedTab } from './affected-tab';
 import { affectedChips, affectedTotal } from '@/lib/action-center/affected';
 import { useActionStory } from './use-action-story';
+import { goalDatePassed } from '@/lib/action-center/story';
 import { ImproveContext } from './improve-context';
 import { TopicGapContext } from './topic-gap-context';
 import { TopicOpportunityContext } from './topic-opportunity-context';
@@ -753,6 +754,29 @@ export function ActionDrawer({
                 <p className="mt-1">
                   {story?.goal ?? actionGoal(action.kind, tTexts, shownAction(action).payload)}
                 </p>
+                {/* A passed goal date is said, never moved (UX audit AC-21, D9). */}
+                {goalDatePassed(story, action.status) && (
+                  <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-amber-700 dark:text-amber-400">
+                    <span className="font-medium">{t('drawer.goalPassed')}</span>
+                    <button
+                      type="button"
+                      className="underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-300"
+                      onClick={() => {
+                        const field = document.getElementById(
+                          'action-drawer-due-date',
+                        ) as HTMLInputElement | null;
+                        field?.focus();
+                        try {
+                          field?.showPicker?.();
+                        } catch {
+                          // Not every browser opens the picker on request; the field has focus.
+                        }
+                      }}
+                    >
+                      {t('drawer.setNewDate')}
+                    </button>
+                  </p>
+                )}
               </section>
               <Separator />
               <section>
