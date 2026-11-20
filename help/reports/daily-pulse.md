@@ -15,7 +15,7 @@ The Daily Pulse is a short digest for each brand that goes out after its schedul
 
 ## Choose how often it comes
 
-Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.
+Open **Settings › Notifications**. The page has two sections: **Daily Pulse** and **AI Traffic weekly digest**. Under **Daily Pulse**, every active brand has its own card with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.
 
 - **Daily**: after every scheduled daily tracking run.
 - **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.
@@ -28,7 +28,7 @@ Enter email addresses separated by commas. Leave the field empty to send to ever
 
 ## AI Traffic weekly digest
 
-Each brand's row also has **AI Traffic weekly digest**: every Monday, last week's AI visits in one summary line, with the top three changes. It goes to the same recipients, and isn't sent while the Daily Pulse is **Off**.
+The **AI Traffic weekly digest** has its own section on the same page, with one tick box per brand: every Monday, last week's AI visits in one summary line, with the top three changes. Each brand's line shows who gets it: the brand's Daily Pulse recipients, or every member when that list is empty. A tick or untick is saved at once. The digest isn't sent while the brand's Daily Pulse is **Off**.
 
 ## When it is sent
 
