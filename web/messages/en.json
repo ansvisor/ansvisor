@@ -909,6 +909,17 @@
           "rival": "Rival"
         },
         "actionAdded": "<link>An action was added</link>.",
+        "group": {
+          "competitor_leads": "{count} rivals are mentioned far more than you",
+          "competitor_momentum": "{count} rivals are gaining fast",
+          "competitor_surge": "{count} rivals' visibility surged",
+          "competitor_crossed": "{count} rivals passed your visibility",
+          "competitor_overtaken": "You overtook {count} rivals",
+          "other": "{title} and {more, plural, one {# similar change} other {# similar changes}}"
+        },
+        "groupActions": "{count, plural, one {# action} other {# actions}}",
+        "showGroup": "Show all {count}",
+        "hideGroup": "Hide",
         "quiet": {
           "none": "No big changes.",
           "held": "No big changes. Your score held at {score}.",
