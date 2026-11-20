@@ -1,6 +1,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../messages/en.json';
 import type { Brand } from '@/types';
 
 /**
@@ -48,7 +50,13 @@ const demo = {
 } as unknown as Brand;
 
 function render(ui: React.ReactNode) {
-  act(() => root.render(ui));
+  act(() =>
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        {ui}
+      </NextIntlClientProvider>,
+    ),
+  );
 }
 
 const page = <BrandGuard>page</BrandGuard>;

@@ -96,12 +96,44 @@ const toolName = (key: string | null) =>
     : '';
 
 /**
+ * The CSV's cells in words. English by default; the server passes the
+ * viewer's (activity.ts activityWords), as this file is the browser's too
+ * and stays free of the server's language scope.
+ */
+export interface ActivityWords {
+  /** A tool's name (chatTools.{key}.name); '' for a key with no words. */
+  tool: (key: string | null) => string;
+  approval: (label: ApprovalLabel) => string;
+  status: (status: ActivityRow['status']) => string;
+}
+
+const ENGLISH_WORDS: ActivityWords = {
+  tool: toolName,
+  approval: (label) => t(`approval.${label}`),
+  status: (status) => t(`status.${status}`),
+};
+
+/**
+ * A row's summary values as the viewer reads them: a denial's tool name,
+ * saved with the row in English, named again in `toolName`'s words (none:
+ * the saved name).
+ */
+export function shownParams(
+  row: Pick<ActivityRow, 'kind' | 'toolKey' | 'summaryParams'>,
+  toolName: (key: string | null) => string,
+): Record<string, string> {
+  const name = row.kind === 'access.denied' ? toolName(row.toolKey) : '';
+  return name ? { ...row.summaryParams, tool: name } : row.summaryParams;
+}
+
+/**
  * An Admin's export: one line per row, in words, as the page shows it. The
  * cells are escaped by lib/csv (formulas included).
  */
 export function activityCsv(
   rows: ActivityRow[],
   summaryOf: (key: string, params: Record<string, string>) => string,
+  words: ActivityWords = ENGLISH_WORDS,
 ): string {
   const headers = [
     'time',
@@ -120,11 +152,11 @@ export function activityCsv(
       person: row.person,
       surface: row.surface,
       event: row.summaryKey ? summaryOf(row.summaryKey, row.summaryParams) : '',
-      tool: toolName(row.toolKey),
+      tool: words.tool(row.toolKey),
       class: row.kind === 'access.denied' ? 'denied' : row.class,
       mode: row.mode ?? '',
-      approval: t(`approval.${approvalLabel(row)}`),
-      status: t(`status.${row.status}`),
+      approval: words.approval(approvalLabel(row)),
+      status: words.status(row.status),
     })),
     headers,
   );

@@ -40,8 +40,12 @@ export type ApproveGroupResult =
 /** The person's draft groups on the brand: drafts several runs wait on. */
 export async function listDraftApprovalGroups(brandId: string): Promise<ListGroupsResult> {
   try {
-    const { readDraftGroups } = await import('@/lib/chat/approve-all');
-    return await readDraftGroups(brandId);
+    const [{ readDraftGroups }, { asViewer }] = await Promise.all([
+      import('@/lib/chat/approve-all'),
+      import('@/lib/chat/viewer-locale'),
+    ]);
+    // Each change's summary and agent in the viewer's language.
+    return await asViewer(() => readDraftGroups(brandId));
   } catch (error) {
     console.error('[chat/approve-all] could not read the groups:', error);
     return { ok: false };
@@ -66,6 +70,10 @@ export async function approveGroup(
     }
     throw error;
   }
-  const { approveDraftGroup } = await import('@/lib/chat/approve-all');
-  return approveDraftGroup(brandId, groupKey, version);
+  const [{ approveDraftGroup }, { asViewer }] = await Promise.all([
+    import('@/lib/chat/approve-all'),
+    import('@/lib/chat/viewer-locale'),
+  ]);
+  // What wasn't made, named in the viewer's language; each run keeps its own (driveRun).
+  return asViewer(() => approveDraftGroup(brandId, groupKey, version));
 }

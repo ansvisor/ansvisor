@@ -146,7 +146,8 @@ function readLastChat(): string | null {
 const PILL_OF: Partial<Record<string, StatusPillState>> = {
   running: 'working',
   needsYou: 'needsYou',
-  done: 'done',
+  // No "Done" on a finished chat: a status shows only while it works, waits
+  // or failed, so a plain question's answer has none (UX audit CH-09).
   failed: 'failed',
 };
 

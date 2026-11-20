@@ -83,10 +83,11 @@ const topicAgg = (topicId: string, answers: number, mentions: number, competitor
   daily: { '2026-11-15': { visible: mentions, count: answers } },
 });
 
-/** One (prompt, engine, model, region) of head_to_head_daily (00169). */
+/** One (prompt, engine, model, region) of head_to_head_window_daily (00552, 00169's read). */
 const group = (
   promptId: string,
   platform: string,
+  /** Of the group's 2 answers, how many name the brand, and the competitor. */
   brand: number,
   comp: number,
   latest: string,
@@ -96,8 +97,10 @@ const group = (
   model_used: null,
   region: 'US',
   runs: 2,
-  brand_total: brand * 2,
-  comp_total: comp * 2,
+  brand_total: brand * 50,
+  comp_total: comp * 50,
+  brand_mention_answers: brand,
+  comp_mention_answers: comp,
   latest_at: latest,
 });
 
@@ -259,13 +262,14 @@ function seed() {
     { query: 'Best CRM', engines: ['chatgpt-web'], times_searched: 4 },
   ]);
   rpc('ae_fanout_gaps', () => [{ query: 'free crm', results: 1, prompts: 0, competitor_only: 1 }]);
-  rpc('head_to_head_daily', (args) =>
+  // All time, as the page's all-time view: no day bounds (00552).
+  rpc('head_to_head_window_daily', (args) =>
     args.p_competitor_id === C1
       ? {
           groups: [
-            group(P[0], 'chatgpt-web', 20, 60, '2026-11-15T06:00:00Z'),
-            group(P[1], 'chatgpt-web', 70, 30, '2026-11-16T06:00:00Z'),
-            group(P[1], 'perplexity', 10, 15, '2026-11-14T06:00:00Z'),
+            group(P[0], 'chatgpt-web', 0, 2, '2026-11-15T06:00:00Z'),
+            group(P[1], 'chatgpt-web', 2, 1, '2026-11-16T06:00:00Z'),
+            group(P[1], 'perplexity', 0, 1, '2026-11-14T06:00:00Z'),
           ],
           engines: [
             {
@@ -275,6 +279,8 @@ function seed() {
               brand_total: 180,
               comp_count: 4,
               comp_total: 180,
+              brand_mention_answers: 2,
+              comp_mention_answers: 3,
             },
           ],
           prompts: [
@@ -573,8 +579,15 @@ describe("Competitors' head-to-head (get_competitor_head_to_head)", () => {
     });
     expect(both).toMatchObject({ competitors: [{ competitor_id: C1 }, { competitor_id: C2 }] });
     expect(
-      rpcCalls.filter((c) => c.name === 'head_to_head_daily').map((c) => c.args.p_competitor_id),
-    ).toEqual([C2, C2, C2, C2]);
+      rpcCalls
+        .filter((c) => c.name === 'head_to_head_window_daily')
+        .map((c) => [c.args.p_competitor_id, c.args.p_day_from, c.args.p_day_to]),
+    ).toEqual([
+      [C2, null, null],
+      [C2, null, null],
+      [C2, null, null],
+      [C2, null, null],
+    ]);
   });
 });
 

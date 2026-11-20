@@ -90,3 +90,62 @@ describe('AuditResultCard score range', () => {
     expect(mark()).toBeNull();
   });
 });
+
+describe('AuditResultCard copy', () => {
+  it('words its headings and counts from the messages, in the reader’s language', () => {
+    const audit = messages.audit;
+    act(() => {
+      root.render(
+        <NextIntlClientProvider
+          locale="tr"
+          messages={{
+            ...messages,
+            audit: {
+              ...audit,
+              title: 'Site Denetimi',
+              signalsEvaluated: 'sinyal değerlendirildi',
+              categoryBreakdown: 'Kategori dökümü',
+              na: 'yok',
+              topRecommendations: 'Öne çıkan öneriler',
+            },
+          }}
+          timeZone="UTC"
+        >
+          <AuditResultCard
+            audit={spec({
+              categoryScores: { structure: { score: null, evaluated: 0, total: 14 } },
+              recommendations: [
+                {
+                  signalKey: 'faq-schema',
+                  label: 'FAQ schema',
+                  category: 'structure',
+                  priority: 'high',
+                  recommendation: 'Add an FAQ block.',
+                  draft: null,
+                },
+              ],
+            })}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    const text = container.textContent ?? '';
+    for (const words of [
+      'Site Denetimi',
+      '45 / 48 sinyal değerlendirildi',
+      'Kategori dökümü',
+      'yok',
+      'Öne çıkan öneriler',
+    ]) {
+      expect(text).toContain(words);
+    }
+    for (const english of [
+      'Site Audit',
+      'signals evaluated',
+      'Category breakdown',
+      'Top recommendations',
+    ]) {
+      expect(text).not.toContain(english);
+    }
+  });
+});

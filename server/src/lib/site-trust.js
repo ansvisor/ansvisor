@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import supabaseAdmin from '../config/supabase.js';
-import { fetchViaScrapeDo } from './audit/fetcher.js';
+import { fetchViaScrapeDo, proxyFetcherConfigured } from './audit/fetcher.js';
 import { jsonLd, typesOf } from './audit/signals/helpers.js';
 import { PageFetchError, fetchPage } from './safe-fetch.js';
 import { looksBlocked } from './site-pages.js';
@@ -402,7 +402,7 @@ export async function readSiteTrust(
     keptOnly = false,
     db = supabaseAdmin,
     fetcher = fetchPage,
-    scraper = process.env.SCRAPEDO_API_KEY ? scrapeHome : null,
+    scraper = proxyFetcherConfigured() ? scrapeHome : null,
     now = Date.now(),
   } = {},
 ) {
