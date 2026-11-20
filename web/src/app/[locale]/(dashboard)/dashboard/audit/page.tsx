@@ -77,6 +77,8 @@ import {
 } from './_opportunity-filter';
 import { AuditSettingsDialog } from './_settings-dialog';
 import { AutoRunNotice } from './_auto-run-notice';
+import { BatchProgress } from './_batch-progress';
+import { nextBatch, type Batch } from '@/lib/audit/batch-progress';
 import { AuditSummaryStrip } from './_summary-strip';
 import { EmptyPoolMessage } from './_quota-meter';
 import { usePagesExport } from './_use-pages-export';
@@ -148,6 +150,11 @@ export default function SiteAuditPage() {
   const [overview, setOverview] = useState<AuditOverview | null>(null);
   const [range, setRange] = useState<RangePreset>('30d');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  // The bulk audit under way, or just done: "N of M done · about X min left", and This batch.
+  const [batch, setBatch] = useState<Batch | null>(null);
+  const [batchNow, setBatchNow] = useState(() => Date.now());
+  // Pages lists only the batch's pages (read from the time its first audit started).
+  const [thisBatchOnly, setThisBatchOnly] = useState(false);
   const [opps, setOpps] = useState<AuditOpportunities | null>(null);
   // The inbox loads after the rest of the hub (getAuditHubExtras).
   const [oppsLoading, setOppsLoading] = useState(true);
@@ -248,6 +255,8 @@ export default function SiteAuditPage() {
     setSelected(new Set());
     setOppSelected(new Set());
     setOppFilter('all');
+    setBatch(null);
+    setThisBatchOnly(false);
     // The store may only know the brand after the first render: that's the one it opened with.
     linked.current.brandId ??= activeBrandId;
     setTab(activeBrandId === linked.current.brandId ? linked.current.tab : null);
@@ -268,6 +277,7 @@ export default function SiteAuditPage() {
         setPages(hub.pages.pages);
         setPagesTotal(hub.pages.total);
         setPrimaryHost(hub.pages.primaryHost);
+        applyRunning(hub.pages.running);
         setQuota(hub.quota);
         setTrend(hub.trend);
         setOverview(hub.overview);
@@ -407,13 +417,51 @@ export default function SiteAuditPage() {
     { action: tActions('runAudit') },
   );
 
+  // The reads that follow a bulk audit say how many audits still run; the
+  // batch is what they add up to (lib/audit/batch-progress.ts). The ref gives
+  // the polling timer the batch's start, which its closure would hold stale.
+  const sinceRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    sinceRef.current = thisBatchOnly && batch ? batch.since : undefined;
+  }, [thisBatchOnly, batch]);
+  const applyRunning = (running: { count: number; since: string | null } | undefined) => {
+    if (!running) return;
+    const now = Date.now();
+    setBatchNow(now);
+    setBatch((prev) => nextBatch(prev, running, now));
+  };
+
+  // This batch on or off: the Pages list is read again, from the batch's
+  // start or in full. Selected pages stay selected, kept by page key.
+  const showBatchOnly = async (on: boolean) => {
+    if (!activeBrandId) return;
+    const since = on && batch ? batch.since : undefined;
+    sinceRef.current = since;
+    setThisBatchOnly(on);
+    setLoadingMore(true);
+    try {
+      const res = await getAuditPages(activeBrandId, 0, 50, since);
+      setPages(res.pages);
+      setPagesTotal(res.total);
+      setPrimaryHost(res.primaryHost);
+      applyRunning(res.running);
+      if (on) showList('pages');
+    } catch (err) {
+      sinceRef.current = undefined;
+      setThisBatchOnly(false);
+      toast.error(err instanceof Error ? err.message : t('failed'));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   // Append the next page of the Pages list. Dedupe by page: a page audited
   // since the first read moves to the top and shifts offsets by one.
   const handleLoadMore = async () => {
     if (!activeBrandId) return;
     setLoadingMore(true);
     try {
-      const next = await getAuditPages(activeBrandId, pages.length);
+      const next = await getAuditPages(activeBrandId, pages.length, 50, sinceRef.current);
       setPages((current) => {
         const seen = new Set(current.map((p) => p.key));
         return [...current, ...next.pages.filter((p) => !seen.has(p.key))];
@@ -437,7 +485,8 @@ export default function SiteAuditPage() {
   }, [pages.length]);
   const reloadInPlace = async (brandId: string) => {
     const shown = Math.max(shownRef.current, 50);
-    const hub = await getAuditHub(brandId, Math.min(shown, HUB_PAGES_MAX));
+    const since = sinceRef.current;
+    const hub = await getAuditHub(brandId, Math.min(shown, HUB_PAGES_MAX), since);
     const data = hub.pages;
     // The hub reads the first rows only; the rest of what's shown is read in chunks.
     let fresh = data.pages;
@@ -446,14 +495,18 @@ export default function SiteAuditPage() {
         brandId,
         fresh.length,
         Math.min(HUB_PAGES_MAX, shown - fresh.length),
+        since,
       );
       if (more.pages.length === 0) break;
       fresh = [...fresh, ...more.pages];
     }
-    const complete = fresh.length >= data.total;
+    // With This batch on, the read covers the batch only, so it can't say a
+    // page outside it is gone: rows and selection are kept as they are.
+    const complete = !since && fresh.length >= data.total;
     setPages((current) => mergePages(current, fresh, complete));
     setPagesTotal(data.total);
     setPrimaryHost(data.primaryHost);
+    applyRunning(data.running);
     setQuota(hub.quota);
     setTrend(hub.trend);
     setOverview(hub.overview);
@@ -847,6 +900,20 @@ export default function SiteAuditPage() {
         dot={autoDot}
         onSetUp={canManage ? () => setSettingsOpen(true) : undefined}
       />
+
+      {/* A bulk audit's progress: N of M done, the time left, and This batch */}
+      {batch && (
+        <BatchProgress
+          batch={batch}
+          now={batchNow}
+          thisBatch={thisBatchOnly}
+          onToggleThisBatch={() => void showBatchOnly(!thisBatchOnly)}
+          onDismiss={() => {
+            setBatch(null);
+            if (thisBatchOnly) void showBatchOnly(false);
+          }}
+        />
+      )}
 
       {/* KPI cards, as in the v2 mockup (SA-018) */}
       {(loading || overview) && (
