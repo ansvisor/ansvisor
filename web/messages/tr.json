@@ -2944,11 +2944,7 @@
             "Konular, Prompt'larınızı gruplandırır ve nerede önde veya geride olduğunuzu gösterir.",
             "Öneriler sitenizden ve pazarınızdan gelir."
           ],
-          "how": [
-            "Konular'ı açın",
-            "Sattıklarınızla eşleşen 3 konu seçin",
-            "Bunları ekleyin"
-          ]
+          "how": ["Konular'ı açın", "Sattıklarınızla eşleşen 3 konu seçin", "Bunları ekleyin"]
         },
         "prompts": {
           "title": "Konu başına 3 Prompt ekleyin",
@@ -2992,11 +2988,7 @@
             "Hangi AI ziyaretlerinin etkileşim ve dönüşüm sağladığını gösterir.",
             "Trafik ve dönüşüm raporları için gereklidir."
           ],
-          "how": [
-            "Bağla'ya tıklayın",
-            "GA4 mülkünüzü seçin",
-            "Salt okunur erişime izin verin"
-          ]
+          "how": ["Bağla'ya tıklayın", "GA4 mülkünüzü seçin", "Salt okunur erişime izin verin"]
         },
         "snippet": {
           "title": "AI Trafik kod parçacığını ekleyin",
@@ -3033,14 +3025,8 @@
           "summary": "Prompt başına yanıtlar ve devam aramaları.",
           "open": "Prompts'u açın",
           "doneWhen": "Sayfa açıldı",
-          "why": [
-            "Yapay zekanın alıcılarınıza tam olarak ne söylediğini görün."
-          ],
-          "how": [
-            "Prompts'u açın",
-            "Bir prompt açın",
-            "Yanıtı ve devam aramalarını okuyun"
-          ]
+          "why": ["Yapay zekanın alıcılarınıza tam olarak ne söylediğini görün."],
+          "how": ["Prompts'u açın", "Bir prompt açın", "Yanıtı ve devam aramalarını okuyun"]
         },
         "data_prompts": {
           "title": "Yüksek değerli prompt önerilerini takip edin",
@@ -3062,48 +3048,31 @@
           "summary": "Bahsedilmeler ve ton.",
           "open": "Bahsedilmeler'i açın",
           "doneWhen": "Sayfa açıldı",
-          "why": [
-            "Yapay zekanın sizden ne sıklıkla ve hangi tonda bahsettiği."
-          ],
-          "how": [
-            "Bahsedilmeler'i açın",
-            "Payınızı ve duyarlılığınızı kontrol edin"
-          ]
+          "why": ["Yapay zekanın sizden ne sıklıkla ve hangi tonda bahsettiği."],
+          "how": ["Bahsedilmeler'i açın", "Payınızı ve duyarlılığınızı kontrol edin"]
         },
         "citations": {
           "title": "Yapay zekanın kimden alıntı yaptığını görün",
           "summary": "Yapay zekanın kaynak olarak kullandığı sayfalar ve siteler.",
           "open": "Atıflar'ı Aç",
           "doneWhen": "Sayfa açıldı",
-          "why": [
-            "Yapay zekanın güvendiği kaynaklar. Listelenmeniz gereken yerler."
-          ],
-          "how": [
-            "Atıflar'ı Aç",
-            "Yapay zekanın en çok hangi sitelerden alıntı yaptığını görün"
-          ]
+          "why": ["Yapay zekanın güvendiği kaynaklar. Listelenmeniz gereken yerler."],
+          "how": ["Atıflar'ı Aç", "Yapay zekanın en çok hangi sitelerden alıntı yaptığını görün"]
         },
         "traffic": {
           "title": "Yapay zekadan gelen ziyaretleri görün",
           "summary": "Hangi platformlar hangi sayfalara ziyaretçi gönderiyor.",
           "open": "AI Trafik Analitiği'ni Aç",
           "doneWhen": "Sayfa açıldı",
-          "why": [
-            "Hangi yapay zeka platformlarının hangi sayfalara ziyaretçi gönderdiği."
-          ],
-          "how": [
-            "AI Trafik Analitiği'ni Aç",
-            "En popüler sayfalarınızı kontrol edin"
-          ]
+          "why": ["Hangi yapay zeka platformlarının hangi sayfalara ziyaretçi gönderdiği."],
+          "how": ["AI Trafik Analitiği'ni Aç", "En popüler sayfalarınızı kontrol edin"]
         },
         "pick_content": {
           "title": "Önerilerden içerik seçin",
           "summary": "1–3 öneri seçin.",
           "open": "İçerik'i Aç",
           "doneWhen": "1 öneri seçildi",
-          "why": [
-            "Öneriler, prompt'larınızdan ve aramalarınızdan oluşturulur."
-          ],
+          "why": ["Öneriler, prompt'larınızdan ve aramalarınızdan oluşturulur."],
           "how": [
             "İçerik'i Aç",
             "1–3 öneri seçin: bunları inceleyin, bir brief oluşturun veya Aksiyon Merkezi'ne gönderin"
@@ -3114,9 +3083,7 @@
           "summary": "İçerik Planınızın ilk sıraya koyduğu yeni sayfayı başlatın.",
           "open": "Planı Aç",
           "doneWhen": "Yeni bir sayfa hazır veya yayınlandı olarak işaretlendiğinde ya da CMS'inize gönderildiğinde",
-          "why": [
-            "İçerik, daha fazla yanıtta görünmenin temel yoludur."
-          ],
+          "why": ["İçerik, daha fazla yanıtta görünmenin temel yoludur."],
           "how": [
             "Planı açın: en üstteki yeni sayfa Başlangıç'ta açılır",
             "Kimin yazacağını seçin: siz, İçerik Ajanı veya ekibiniz",
@@ -3142,12 +3109,8 @@
           "summary": "Yapay zeka aksiyonları burada görünmeye başlar.",
           "open": "Sırada ne olduğunu görün",
           "doneWhen": "Otomatik",
-          "why": [
-            "Bundan böyle AI, sinyallerinizi burada aksiyonlara dönüştürür."
-          ],
-          "how": [
-            "Aksiyon Merkezi'ni her hafta kontrol etmeye devam edin"
-          ]
+          "why": ["Bundan böyle AI, sinyallerinizi burada aksiyonlara dönüştürür."],
+          "how": ["Aksiyon Merkezi'ni her hafta kontrol etmeye devam edin"]
         }
       },
       "panel": {
@@ -18482,12 +18445,8 @@
       "starter": {
         "tagline": "AI Görünürlük takibi ve optimizasyonuna yeni başlayan küçük ekipler için.",
         "engines": "ChatGPT ve Gemini takibi",
-        "extras": [
-          "MCP ve API erişimi"
-        ],
-        "extrasChat": [
-          "Sohbet ve Ajanlar"
-        ]
+        "extras": ["MCP ve API erişimi"],
+        "extrasChat": ["Sohbet ve Ajanlar"]
       },
       "growth": {
         "tagline": "AI Görünürlük takibi yapmak ve içeriklerini AI araması için optimize etmek isteyen büyüyen ekipler için.",
@@ -18497,10 +18456,7 @@
           "White-label Raporlar ve dışa aktarmalar",
           "Looker Studio"
         ],
-        "extrasChat": [
-          "Sohbet ve Ajanlar",
-          "Kendi başına yayın yapan ajanlarla tam otomatik"
-        ]
+        "extrasChat": ["Sohbet ve Ajanlar", "Kendi başına yayın yapan ajanlarla tam otomatik"]
       },
       "brands": "{count, plural, one {# marka} other {# marka}}",
       "unlimitedBrands": "Sınırsız marka",
