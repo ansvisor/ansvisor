@@ -18088,8 +18088,8 @@
       "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance.",
       "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you.",
       "aiUsageHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. Your own AI key comes with Enterprise only. The free trial comes with a smaller allowance.",
-    "contentEstimate": "Up to {pages, number} new pages or {optimizations, number} page optimizations a month",
-    "contentEstimateHint": "Uses your monthly AI allowance, shared with Chat and agents. Actual numbers vary with page length and the AI model you choose.",
+      "contentEstimate": "Up to {pages, number} new pages or {optimizations, number} page optimizations a month",
+      "contentEstimateHint": "Uses your monthly AI allowance, shared with Chat and agents. Actual numbers vary with page length and the AI model you choose.",
       "aiUsageCustomHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. On Enterprise, Chat can also run on your own AI key. Ansvisor sets the amount with you."
     },
     "contactUs": "Contact Us",
