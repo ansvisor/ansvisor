@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { saveBusinessHubSnapshot } from '@/lib/actions/business-hub';
 import {
@@ -184,13 +185,13 @@ export function BusinessHubDialog({
               </fieldset>
               <div className="space-y-1.5">
                 <Label htmlFor="bh-last-day">{t('dialog.lastDay')}</Label>
-                <Input
+                <DatePicker
                   id="bh-last-day"
-                  type="date"
-                  value={draft.periodEnd}
+                  value={draft.periodEnd || null}
                   disabled={Boolean(entry)}
                   aria-invalid={Boolean(problems.periodEnd)}
-                  onChange={(event) => set({ periodEnd: event.target.value })}
+                  onChange={(day) => set({ periodEnd: day ?? '' })}
+                  className="h-9 text-sm"
                 />
                 <p className="text-xs text-muted-foreground">{t('dialog.lastDayHint')}</p>
                 {error('periodEnd')}

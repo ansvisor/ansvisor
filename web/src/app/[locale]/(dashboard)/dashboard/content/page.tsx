@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -1571,22 +1572,20 @@ export default function ContentPage() {
                   </DropdownMenu>
                   {suggestedRange === 'custom' && (
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Input
-                        type="date"
+                      <DatePicker
                         aria-label={t('suggestedRange.from')}
-                        value={customFrom}
+                        value={customFrom || null}
                         max={customTo || undefined}
-                        onChange={(e) => setCustomFrom(e.target.value)}
-                        className="h-8 w-[140px] text-xs"
+                        onChange={(day) => setCustomFrom(day ?? '')}
+                        className="w-[140px]"
                       />
                       –
-                      <Input
-                        type="date"
+                      <DatePicker
                         aria-label={t('suggestedRange.to')}
-                        value={customTo}
+                        value={customTo || null}
                         min={customFrom || undefined}
-                        onChange={(e) => setCustomTo(e.target.value)}
-                        className="h-8 w-[140px] text-xs"
+                        onChange={(day) => setCustomTo(day ?? '')}
+                        className="w-[140px]"
                       />
                     </span>
                   )}
