@@ -5450,11 +5450,11 @@
         "credit pack"
       ],
       "plan": "starter",
-      "updated": "2026-11-18",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds extra tracking, extra brands and AI usage top-ups, picked together and paid once. **Add-ons** sells AI credit and storage packs. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice."
+          "text": "**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds extra tracking, extra brands and AI usage top-ups, picked together and paid once. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice."
         },
         {
           "heading": "Add more to your plan (Growth)",
@@ -5470,7 +5470,7 @@
         },
         {
           "heading": "Storage packs",
-          "text": "Your storage holds Chat's files and the images you upload or generate in the Content Editor. A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly."
+          "text": "Your storage holds Chat's files and the images you upload or generate in the Content Editor. A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly. They're sold in the **Get more** window, not in Billing."
         },
         {
           "heading": "Get more from where a limit shows",
@@ -5482,7 +5482,7 @@
         },
         {
           "heading": "Buy a pack",
-          "text": "1. Open **Settings › Billing** and find **Add-ons**.\n2. Pick a storage pack. **Most picked** marks the one most workspaces choose.\n3. Click **Continue to payment**, then confirm with **Add to plan**.\n\nOnce the payment is confirmed, the pack is listed under **Purchases**."
+          "text": "1. Click **Get more storage**, for example on the Files page's storage meter.\n2. On **Storage**, pick a pack. **Most picked** marks the one most workspaces choose.\n3. Click **Continue to payment**, then confirm with **Add to plan**.\n\nOnce the payment is confirmed, the pack is listed under **Purchases**."
         },
         {
           "heading": "Who can buy",
