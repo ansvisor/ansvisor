@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { brandPromptsLink, pickOnOpen, TRACKED_PROMPTS_HREF } from './brand-prompts-link';
+import {
+  brandPromptsLink,
+  brandTopicsLink,
+  pickOnOpen,
+  PROMPTS_TOPICS_HREF,
+  TRACKED_PROMPTS_HREF,
+} from './brand-prompts-link';
 
 describe('brandPromptsLink', () => {
   it('opens Tracked Prompts, never the brand’s own prompts page', () => {
@@ -33,5 +39,16 @@ describe('pickOnOpen', () => {
     handlers.onClick();
     handlers.onAuxClick({ button: 1 });
     expect(pick).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('brandTopicsLink', () => {
+  it('opens Prompts › Topics and picks the brand', () => {
+    const setActiveBrand = vi.fn();
+    const link = brandTopicsLink('b1', setActiveBrand);
+    expect(link.href).toBe(PROMPTS_TOPICS_HREF);
+    expect(PROMPTS_TOPICS_HREF).toBe('/dashboard/prompts/topics');
+    link.onClick();
+    expect(setActiveBrand).toHaveBeenCalledWith('b1');
   });
 });

@@ -17,6 +17,7 @@ const content = vi.hoisted(() => ({
   getGenerationJobStatus: vi.fn(),
   getContentUsage: vi.fn(),
   getOpportunities: vi.fn(),
+  getOpportunityAvailability: vi.fn(),
   getOpportunityPrompts: vi.fn(),
   getOpportunityTopics: vi.fn(),
   updateOpportunityStatus: vi.fn(),
@@ -173,6 +174,15 @@ beforeEach(() => {
   content.getOpportunityPrompts.mockResolvedValue([]);
   content.getOpportunityTopics.mockResolvedValue([]);
   content.getContentUsage.mockResolvedValue(null);
+  content.getOpportunityAvailability.mockResolvedValue({
+    needs: 3,
+    open: 1,
+    covered: 2,
+    noAnswers: 0,
+    angles: 0,
+    topics: {},
+    promptOpportunity: {},
+  });
   content.bulkUpdateStatus.mockResolvedValue({ updated: 1 });
   content.getWebhookConfig.mockResolvedValue({
     webhookUrl: 'https://hooks.example/acme',
@@ -201,6 +211,7 @@ describe('Content Opportunities loading order (Content test 2026-11-19, item 9)'
       content.getOpportunityPrompts,
       content.getOpportunityTopics,
       content.getContentUsage,
+      content.getOpportunityAvailability,
     ]) {
       expect(first(later)).toBeGreaterThan(list);
     }
@@ -299,6 +310,7 @@ describe('the usage card and New without an active plan', () => {
     expect(container.textContent).toContain('No active plan');
     expect(container.textContent).not.toContain('Limit reached');
     expect(container.textContent).not.toContain('Growth plan');
+    expect(container.textContent).not.toContain('used up');
     // The usage card: the counts used, no red bar or line.
     const card = [...container.querySelectorAll('[data-slot="card"]')].find((el) =>
       el.textContent?.includes('This billing period'),
@@ -332,6 +344,33 @@ describe('the usage card and New without an active plan', () => {
       "Unused allowance doesn't carry over. Both reset on Nov 1, when your subscription renews.",
     );
     expect(buttonNamed('New').disabled).toBe(true);
+    // The note says nightly runs stop too, until the renewal.
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(
+      "This month's new opportunities are used up. Nightly runs add more again from Nov 1.",
+    );
+  });
+});
+
+describe('Content Opportunities note on why none arrive overnight', () => {
+  it('says every need has an opportunity once none is left open', async () => {
+    content.getOpportunityAvailability.mockResolvedValue({
+      needs: 3,
+      open: 0,
+      covered: 3,
+      noAnswers: 0,
+      angles: 0,
+      topics: {},
+      promptOpportunity: {},
+    });
+    await render(false);
+    const note = container.querySelector('[role="status"]');
+    expect(note?.textContent).toContain('Every need you track already has an opportunity');
+    expect(note?.querySelector('a')?.getAttribute('href')).toBe('/dashboard/prompts');
+  });
+
+  it('shows no note while needs are still open', async () => {
+    await render(false);
+    expect(container.textContent).not.toContain('already has an opportunity');
   });
 });
 

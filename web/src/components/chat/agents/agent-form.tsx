@@ -658,7 +658,12 @@ function AgentFormBody({
     }
     // The AEO Operator's preset only while it is on for the workspace (the page checks it too).
     if (preset && (operatorOn || !isOperatorSkills(preset.skills))) {
-      return named(formFromPreset(setup, preset, { timeZone: zone, brandId: activeBrandId }));
+      // A preset's own instructions, where it has some (Agency Client Reporter: last month).
+      const key = `presets.${preset.id}.instructions` as const;
+      const instructions = tAgents.has(key) ? tAgents(key) : undefined;
+      return named(
+        formFromPreset(setup, preset, { timeZone: zone, brandId: activeBrandId, instructions }),
+      );
     }
     const skill =
       initialSkill &&
