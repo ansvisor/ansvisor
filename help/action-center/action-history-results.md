@@ -39,11 +39,11 @@ An action sent from a prompt's Improve tab reports on how many platforms its pos
 
 ## The Scorecard
 
-Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand over the range, 90 days unless you pick another. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only.
+Switch History from **Past actions**, the actions one by one, to **Results by kind** to see what each kind of action did at this brand over the range, 90 days unless you pick another. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only.
 
 ## The Scorecard by play
 
-When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. On the **Scorecard**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result.
+When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. In **Results by kind**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result.
 
 ## When a problem comes back
 
