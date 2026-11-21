@@ -29,11 +29,11 @@ export type UiLocale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: UiLocale = 'en';
 
 /**
- * Languages the app knows but does not offer anyone yet, not even staff:
- * Arabic reads right to left, and the app has no RTL layout support. Turning
- * one on is its own job (see localeDirection).
+ * Languages the app knows but offers no one, not even staff. Empty since
+ * 2026-11-21: Arabic is listed like the others now that the layout follows
+ * the reading direction (RTL work, #2553–#2558, #2638).
  */
-export const HIDDEN_LOCALES: readonly UiLocale[] = ['ar'];
+export const HIDDEN_LOCALES: readonly UiLocale[] = [];
 
 /** The languages a person can pick (the list in the switcher, before the translation check). */
 export const SELECTABLE_LOCALES: readonly UiLocale[] = LOCALES.filter(
@@ -43,12 +43,7 @@ export const SELECTABLE_LOCALES: readonly UiLocale[] = LOCALES.filter(
 /** Languages written right to left. */
 const RTL_LOCALES: readonly string[] = ['ar'];
 
-/**
- * The text direction for <html dir>. Only the attribute is ready: before a
- * right-to-left language is turned on (HIDDEN_LOCALES), the layout needs RTL
- * support (logical margins and padding, mirrored icons and charts), which is
- * not built yet.
- */
+/** The text direction for <html dir>: Arabic reads right to left, and the layout follows it. */
 export function localeDirection(locale: string): 'ltr' | 'rtl' {
   return RTL_LOCALES.includes(locale.split('-')[0]) ? 'rtl' : 'ltr';
 }
@@ -67,7 +62,9 @@ export type AnyUiLocale = UiLocale | typeof PSEUDO_LOCALE;
  * ones a customer is offered. Add a code here when its file lands;
  * messages.test.ts checks this list against the folder.
  */
-export const TRANSLATED_LOCALES: readonly UiLocale[] = ['en'];
+// Every language opened to customers on 2026-11-21 (owner's decision), once
+// the 12 translations were in; a missing key still shows English.
+export const TRANSLATED_LOCALES: readonly UiLocale[] = SELECTABLE_LOCALES;
 
 /** Each language in its own name, so a person who can't read the current one finds theirs. */
 export const LOCALE_NAMES: Record<AnyUiLocale, string> = {
@@ -77,7 +74,7 @@ export const LOCALE_NAMES: Record<AnyUiLocale, string> = {
   fr: 'Français',
   es: 'Español',
   it: 'Italiano',
-  'pt-BR': 'Português (Brasil)',
+  'pt-BR': 'Português',
   nl: 'Nederlands',
   ja: '日本語',
   pl: 'Polski',

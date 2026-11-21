@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { useUpgradeDialog } from '@/components/providers/upgrade-gate';
@@ -49,6 +50,7 @@ export function useInboxDaily(
 ): InboxDaily | null {
   const t = useTranslations('chatShell.inbox.suggestions');
   const tReadOnly = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const dialog = useUpgradeDialog();
   const readOnly = !!dialog?.isLocked && !dialog.isDemo;
@@ -125,13 +127,13 @@ export function useInboxDaily(
           return;
         }
         await reload();
-      } catch {
-        toast.error(t('changeFailed'));
+      } catch (err) {
+        toast.error(serverError(err, t('changeFailed')));
       } finally {
         setBusy(false);
       }
     },
-    [readOnly, openUpgrade, reload, t, tReadOnly],
+    [readOnly, openUpgrade, reload, t, tReadOnly, serverError],
   );
 
   if (!read) return null;

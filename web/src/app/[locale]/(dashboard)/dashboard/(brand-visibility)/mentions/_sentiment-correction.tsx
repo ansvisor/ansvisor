@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,6 +46,7 @@ export function SentimentCorrection({
   // A read-only workspace (plan not active): the upgrade dialog instead of the form.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
 
   const save = async () => {
     if (!choice) return;
@@ -53,7 +55,14 @@ export function SentimentCorrection({
     setSaving(false);
     if ('error' in result) {
       toast.error(t('failed'), {
-        description: result.error === 'forbidden' ? t('forbidden') : result.message,
+        description:
+          result.error === 'forbidden'
+            ? t('forbidden')
+            : // Invalid or gone in the person's language; else the database's words (LOC-008).
+              serverError(
+                { code: result.error === 'missing' ? 'not_found' : result.error },
+                result.message,
+              ),
       });
       return;
     }

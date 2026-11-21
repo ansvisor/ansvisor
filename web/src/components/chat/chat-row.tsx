@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { ListProgress } from '@/components/agentic/list-dot';
 import type { ChatListItem } from '@/lib/chat/conversations';
+import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useChatActions } from './chat-actions';
 import { ChatDot, chatDotOf } from './chat-dot';
@@ -82,6 +83,14 @@ export function chatLineOf(
  * renames it in place. The whole row opens the chat; `actions` (the row's ⋯)
  * sit over its right edge on hover and focus.
  */
+/** A repeated title's lead: its time today, else its day ("08:02", "Nov 19"). */
+function whenOf(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  return at.toDateString() === now.toDateString()
+    ? at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    : formatMonthDay(iso);
+}
+
 export function ChatRow({
   chat,
   active,
@@ -89,6 +98,7 @@ export function ChatRow({
   actions,
   className,
   now,
+  dated = false,
 }: {
   chat: ChatListItem;
   active: boolean;
@@ -97,6 +107,8 @@ export function ChatRow({
   className?: string;
   /** The menu's clock, so a row's time and the day groups agree. */
   now?: Date;
+  /** Another chat in the list has its title: its date leads it (UX audit CH-08). */
+  dated?: boolean;
 }) {
   const t = useTranslations('chatShell.menu');
   const { line, tone: lineTone } = chatLineOf(chat, t, now);
@@ -167,6 +179,11 @@ export function ChatRow({
               !chat.title && 'animate-pulse text-muted-foreground motion-reduce:animate-none',
             )}
           >
+            {dated && (
+              <span data-slot="chat-row-date" className="font-normal text-muted-foreground">
+                {t('datedTitle', { when: whenOf(chat.lastMessageAt, now) })}
+              </span>
+            )}
             {title}
           </span>
           {(line || chat.ownerInitials) && (

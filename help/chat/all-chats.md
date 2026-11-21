@@ -15,7 +15,9 @@ Chat keeps every chat, so you can find one again by a word in its name or in any
 
 ## Search chats
 
-Type in **Search chats** under **Chats** in the chat menu. The menu then lists the chats whose name or messages have every word you typed, newest first, in place of the days. A few letters are enough: "citat" finds "citations". Click **Clear filters**, or press Esc, to see your chats by day again. Archived chats are left out of the search.
+Type in **Search chats** under **New chat** at the top of the chat menu, which stays there as you scroll. The menu then lists the chats whose name or messages have every word you typed, newest first, in place of the days. A few letters are enough: "citat" finds "citations". Click **Clear filters**, or press Esc, to see your chats by day again. Archived chats are left out of the search.
+
+When two chats in the menu have the same name, each shows its date first, or its time for today's, so you can tell them apart.
 
 ## Search from anywhere in Chat
 

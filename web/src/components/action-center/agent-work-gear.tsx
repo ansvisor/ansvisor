@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Settings2 } from 'lucide-react';
 import { getAgentWorkView, setAgentWork } from '@/lib/actions/chat-settings';
@@ -16,6 +17,7 @@ import { AgentWorkPanel } from '@/components/chat-access/agent-work-panel';
  */
 export function AgentWorkGear() {
   const t = useTranslations('actionCenter.agentWork');
+  const serverError = useServerErrorText();
   const [view, setView] = useState<AgentWorkView | null>(null);
   const [version, setVersion] = useState(0);
   const [open, setOpen] = useState(false);
@@ -45,8 +47,8 @@ export function AgentWorkGear() {
       } else {
         toast.error(t(`failures.${result.failure}`));
       }
-    } catch {
-      toast.error(t('failures.failed'));
+    } catch (err) {
+      toast.error(serverError(err, t('failures.failed')));
     } finally {
       setSaving(false);
       setVersion((n) => n + 1);

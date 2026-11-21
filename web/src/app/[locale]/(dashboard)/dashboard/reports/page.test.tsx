@@ -153,6 +153,38 @@ describe('Reports', () => {
     expect(reports.deleteReport).not.toHaveBeenCalled();
   });
 
+  it('asks before a second report of the same template and days: Open it, or Generate anyway (UX audit RP-11)', async () => {
+    // The dialog opens on the Executive summary over 30 days: a saved one covers them.
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 30);
+    const [dateFrom, dateTo] = [from.toISOString(), to.toISOString()];
+    reports.getReports.mockResolvedValue([
+      {
+        id: 'r9',
+        brandId: 'b1',
+        title: 'Monthly summary',
+        template: 'executive_summary',
+        dateFrom,
+        dateTo,
+        createdAt: '2026-11-19T00:00:00Z',
+      },
+    ]);
+    reports.createReport.mockResolvedValue({ id: 'r10' });
+    await render(false);
+    await act(async () => generate().click());
+    const submit = () =>
+      [...dialog()!.querySelectorAll('button')].find((b) => b.textContent === 'Generate Report')!;
+    await act(async () => submit().click());
+    expect(reports.createReport).not.toHaveBeenCalled();
+    const notice = document.querySelector('[data-slot="report-duplicate"]')!;
+    expect(notice.textContent).toContain('Same period as an existing report, “Monthly summary”.');
+    await act(async () =>
+      document.querySelector<HTMLElement>('[data-action="reports.generateAnyway"]')!.click(),
+    );
+    expect(reports.createReport).toHaveBeenCalledTimes(1);
+  });
+
   it('opens Generate Report on an active plan', async () => {
     await render(false);
     await act(async () => generate().click());

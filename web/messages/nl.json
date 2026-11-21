@@ -14,6 +14,67 @@
     "upgrade": "Upgraden",
     "choosePlan": "Kies een abonnement"
   },
+  "locationPicker": {
+    "label": "Locaties",
+    "tracked": "gevolgd",
+    "count": "· {count} {noun}",
+    "countOf": "· {count} van {max} beschikbaar",
+    "country": "Land",
+    "countryMissing": "Land · niet beschikbaar bij {engines}",
+    "usState": "Verenigde Staten · staat",
+    "city": "Stad · {country}",
+    "atCap": "Planlimiet bereikt",
+    "add": "Voeg een land, Amerikaanse staat of stad toe",
+    "search": "Locaties zoeken…",
+    "empty": "Geen locaties gevonden.",
+    "already": "Al {noun}",
+    "atCapHint": "Planlimiet bereikt — verwijder een locatie of upgrade uw plan",
+    "remove": "{location} verwijderen",
+    "cityNote": "Een stad wordt bevraagd door Google AI Mode, AI Overview en de API-modellen. ChatGPT, Gemini en Grok antwoorden per land, dus volg ook het land om ze te zien."
+  },
+  "promptCard": {
+    "save": "Wijzigingen opslaan",
+    "cancelEdit": "Bewerken annuleren",
+    "edit": "Prompt bewerken",
+    "delete": "Prompt verwijderen",
+    "deleteTitle": "Prompt verwijderen",
+    "deleteBody": "Weet u zeker dat u deze Prompt wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
+    "cancel": "Annuleren",
+    "confirmDelete": "Verwijderen"
+  },
+  "brandGuard": {
+    "noBrandsTitle": "Nog geen merken",
+    "noBrandsBody": "Maak uw eerste merk aan om te volgen hoe AI-engines over u praten.",
+    "createBrand": "Merk aanmaken",
+    "selectTitle": "Selecteer een merk",
+    "selectBody": "Kies met welk merk u wilt werken."
+  },
+  "runSingle": {
+    "title": "Enkele Prompt uitvoeren",
+    "description": "Kies een Prompt om te testen. Alleen deze Prompt wordt uitgevoerd op uw ingeschakelde platforms.",
+    "empty": "Geen actieve Prompts gevonden. Voeg eerst Prompts toe in de merkinstellingen.",
+    "loadFailed": "Prompts laden mislukt",
+    "runFailed": "Prompt uitvoeren mislukt"
+  },
+  "responseDetail": {
+    "response": "AI-antwoord",
+    "showLess": "Minder tonen",
+    "showFull": "Volledig antwoord tonen",
+    "citations": "Bronvermeldingen ({count})",
+    "fanOut": "Query fan-out ({count})"
+  },
+  "serverErrors": {
+    "invalid": "Dat is niet gelukt: er is iets ongeldig. Controleer het en probeer het opnieuw.",
+    "too_large": "Dat is te groot. Probeer iets kleiners.",
+    "too_long": "Dat is te lang. Kort het in en probeer het opnieuw.",
+    "rate_limited": "U doet dat vaak achter elkaar. Wacht een paar minuten en probeer het opnieuw.",
+    "forbidden": "U heeft hier geen toestemming voor. Vraag het aan een Beheerder.",
+    "duplicate": "Dat bestaat al.",
+    "missing_ai_key": "Voeg eerst een AI-providersleutel toe via Instellingen › AI-providers.",
+    "server_error": "Er is iets misgegaan aan onze kant. Probeer het opnieuw.",
+    "location_limit": "De Prompt-locaties van uw abonnement zijn vol: elke Prompt telt één keer per locatie die wordt gevolgd, en gepauzeerde Prompts tellen niet mee. Verwijder of pauzeer er een aantal, of upgrade uw abonnement.",
+    "brand_limit": "De merken van uw abonnement zijn allemaal in gebruik. Upgrade uw abonnement om er meer toe te voegen."
+  },
   "aiUsage": {
     "meter": {
       "ai": "AI",
@@ -41,6 +102,19 @@
       "startPlan": "Start uw abonnement"
     },
     "getMoreWindow": {
+      "topUp": {
+        "title": "AI-gebruik bijkopen",
+        "label": "AI-gebruik bijkopen",
+        "buy": "Koop {option} · {price}",
+        "confirm": "Nu {price} betalen met de opgeslagen kaart? Dit wordt toegevoegd aan deze periode tot uw abonnement wordt verlengd.",
+        "pay": "Betaal {price}",
+        "cancel": "Annuleren",
+        "paying": "Betalen…",
+        "done": "Bijkoop gelukt. Deze telt mee zodra de betaling is bevestigd.",
+        "starter": "Growth bevat 5× zoveel AI-gebruik, en AI-bijkopen wanneer u meer nodig heeft.",
+        "seeGrowth": "Bekijk Growth",
+        "oldCredits": "AI-creditpakketten worden niet meer verkocht; credits die u heeft gekocht blijven geldig tot ze verlopen."
+      },
       "titleAi": "Meer AI-credits krijgen",
       "titleStorage": "Meer opslagruimte krijgen",
       "description": "Uw abonnement, de status van uw limieten en de bundels voor uitbreiding.",
@@ -49,7 +123,7 @@
       "aiLine": "AI-verbruik deze maand: {percent} · {plan} · wordt gereset op {date}",
       "aiLineNoDate": "AI-verbruik deze maand: {percent} · {plan}",
       "ownKey": "Gebruik uw eigen sleutel",
-      "askAi": "Koop een AI-creditbundel",
+      "askAi": "AI-gebruik bijkopen",
       "askStorage": "Koop een opslagbundel",
       "estimates": {
         "title": "Wat een bundel ongeveer kan dekken",
@@ -673,6 +747,7 @@
     "billing": "Abonnementen en facturering",
     "whatsNew": "Wat is er nieuw",
     "whatsNewUnread": "Nieuwe updates",
+    "language": "Taal",
     "help": "Help",
     "signOut": "Uitloggen"
   },
@@ -841,6 +916,7 @@
         "starting": "Begint",
         "notYet": "Nog niet",
         "open": "{count} open",
+        "openBreakdown": "{onHold} in de wacht · {mine} van u",
         "doneWeek": "{count} deze week",
         "noChange": "geen wijziging",
         "tomorrow": "Morgen"
@@ -919,7 +995,7 @@
           "openNewest": "Nieuwste openen in Chat"
         },
         "drafts": {
-          "line": "Een agent heeft {count, plural, one {een pagina} other {# pagina's}} opgesteld. Er gaat niets live zonder uw akkoord.",
+          "line": "{count, plural, one {# concept wacht} other {# concepten wachten}} op uw beoordeling. Niets gaat live zonder uw akkoord.",
           "open": "{count, plural, one {Concept beoordelen} other {# concepten beoordelen}}"
         },
         "due": {
@@ -1061,8 +1137,8 @@
         },
         "saved": {
           "title": "Voor u opgeslagen",
-          "drafts": "{count, plural, one {1 concept van uw agent} other {# concepten van uw agents}}: {title}.",
-          "draftsUntitled": "{count, plural, one {1 concept van uw agent} other {# concepten van uw agents}} wachtend op beoordeling.",
+          "drafts": "{count, plural, one {1 concept wacht} other {# concepten wachten}} op uw beoordeling: {title}.",
+          "draftsUntitled": "{count, plural, one {1 concept wacht} other {# concepten wachten}} op uw beoordeling.",
           "kept": "Kies een abonnement om ze te beoordelen en te publiceren. Uw {prompts, plural, one {# Prompt} other {# Prompts}} en {competitors, plural, one {# concurrent} other {# concurrenten}} blijven bewaard."
         },
         "plan": {
@@ -1099,6 +1175,16 @@
       "content": "Content"
     },
     "kpis": {
+      "newGoal": {
+        "prompt": "Doel bereikt · Stel een nieuw doel in",
+        "title": "Nieuw doel voor {name}",
+        "description": "De waarde is {value}, voorbij het doel van {goal}. Het nieuwe doel ligt 20% boven de huidige waarde; pas het gerust aan.",
+        "label": "Nieuw doel",
+        "cancel": "Annuleren",
+        "save": "Doel opslaan",
+        "saved": "Nieuw doel opgeslagen",
+        "failed": "Het doel kon niet worden opgeslagen. Probeer het opnieuw."
+      },
       "title": "KPI's",
       "subtitle": "Volg de statistieken die ertoe doen, afgestemd op uw doelen.",
       "allKpis": "Alle KPI's",
@@ -1121,6 +1207,7 @@
         "goal_reached": "Doel bereikt"
       },
       "pointsChange": "{value} pt.",
+      "score": "{value}/100",
       "vsGoalAria": "{progress}% van doel",
       "editKpis": "KPI's bewerken",
       "addKpi": "KPI toevoegen",
@@ -1193,7 +1280,8 @@
       },
       "targets": "Streefwaarden",
       "targetAria": "Streefwaarde voor {name}",
-      "invalidTarget": "Streefwaarden moeten positief zijn; percentagestreefwaarden mogen niet hoger zijn dan 100.",
+      "invalidTarget": "Doelen moeten positief zijn; doelen in procenten en scores mogen niet hoger zijn dan 100.",
+      "scoreSuffix": "/100",
       "callout": {
         "title": "Dit KPI-framework stuurt uw Action Center aan.",
         "description": "Acties en aanbevelingen worden geprioriteerd op basis van uw KPI-doelen."
@@ -1244,7 +1332,8 @@
     },
     "signalsPage": {
       "title": "Signalen",
-      "subtitle": "Realtime signalen van AI Search, uw site en het web. Deze signalen sturen uw Action Center aan.",
+      "subtitle": "Signalen uit uw AI-antwoorden, uw site en het web. Ze sturen uw Actiecentrum aan.",
+      "subtitleRun": "Signalen uit uw laatste run van AI-antwoorden ({ago}). Ze sturen uw Actiecentrum aan.",
       "cards": {
         "total": "Totaal aantal signalen",
         "totalPopulation": "actief in de afgelopen {days, plural, one {dag} other {# dagen}}",
@@ -1254,6 +1343,7 @@
         "newPopulation": "gedetecteerd in de afgelopen {days, plural, one {dag} other {# dagen}}",
         "resolved": "Opgeloste signalen",
         "resolvedPopulation": "opgelost in de afgelopen {days, plural, one {dag} other {# dagen}}",
+        "resolvedNote": "Kan hoger zijn dan Nieuw: dit omvat signalen die vóór deze periode zijn geopend en in deze periode zijn opgelost.",
         "avgImpact": "Gem. signaalimpact",
         "avgImpactPopulation": "over signalen actief in de afgelopen {days, plural, one {dag} other {# dagen}}",
         "noPrev": "geen eerdere gegevens",
@@ -1857,14 +1947,15 @@
       "choices": {
         "approve_first": {
           "label": "Ik keur eerst goed",
-          "note": "Elke wijziging die een agent voorstelt wacht op iemands goedkeuring, ongeacht de modus van de agent."
+          "note": "Elke wijziging die een agent doorvoert, wacht op goedkeuring van iemand."
         },
         "auto_start": {
           "label": "Agent start zelfstandig",
-          "note": "Elke agent werkt in zijn eigen modus: Vraag mij eerst, Automatisch of Volledig automatisch."
+          "note": "Elke agent volgt zijn eigen modus: Eerst vragen, Auto of Volledig automatisch."
         }
       },
-      "goLive": "Geen van beide keuzes heeft invloed op het live gaan: een agent publiceert of verstuurt alleen na een menselijke klik, tenzij een Beheerder zelfstandig publiceren heeft toegestaan.",
+      "goLive": "Agents vragen altijd eerst toestemming voordat ze publiceren of verzenden.",
+      "goLiveAdmin": "De uitzondering: een agent die een Beheerder zelfstandig mag laten publiceren en verzenden.",
       "changedBy": "Gewijzigd door {name} · {date}",
       "someone": "iemand die geen lid meer is van de werkruimte",
       "neverChanged": "Nog niet gewijzigd: elke werkruimte begint met Ik keur eerst goed.",
@@ -1927,6 +2018,7 @@
         "actions": "Acties"
       },
       "status": {
+        "open": "Open",
         "new": "Nieuw",
         "in_progress": "In behandeling",
         "on_hold": "In de wacht",
@@ -1937,6 +2029,7 @@
       "stale": {
         "pill": "Verouderd",
         "hint": "Al {days} dagen of langer nieuw, zonder dat er iemand aan werkt",
+        "quiet": "Al {days} d geen update",
         "notice": "Verouderd: deze actie staat al {days} dagen of langer op Nieuw en niemand heeft eraan gewerkt. Deze is niet gesloten: behoud deze als het nog relevant is, of wijs deze af.",
         "keep": "Nog steeds relevant",
         "kept": "Behouden: niet meer verouderd"
@@ -1946,6 +2039,7 @@
       "everyoneTitle": "Iedereen in de werkruimte: er is nog niemand toegewezen",
       "tags": {
         "signals": "{count, plural, one {1 signaal} other {# signalen}}",
+        "signalResolved": "Signaal opgelost, controleren",
         "prompts": "{count, plural, one {1 prompt} other {# prompts}}",
         "pages": "{count, plural, one {1 pagina} other {# pagina's}}",
         "sources": "{count, plural, one {# bron} other {# bronnen}}",
@@ -1957,8 +2051,15 @@
       },
       "removed": {
         "note": "({items} verwijderd sinds deze actie is aangemaakt)",
-        "hover": "Niet meer gevolgd sinds deze actie is aangemaakt: {names}",
-        "hoverMore": "Niet meer gevolgd sinds deze actie is aangemaakt: {names} en nog {more}"
+        "title": "Niet meer gevolgd sinds deze actie is aangemaakt",
+        "more": "en nog {count}",
+        "reasons": {
+          "deleted": "Verwijderd",
+          "paused": "Gepauzeerd"
+        },
+        "replanHint": "Meer dan de helft van de prompts van deze actie is verdwenen, dus de taken passen mogelijk niet meer bij de {count, plural, one {# resterende prompt} other {# resterende prompts}}.",
+        "replan": "Opnieuw plannen met de resterende prompts",
+        "replanConfirm": "De taken van deze actie opnieuw schrijven voor de resterende prompts? Voltooide, lopende en handmatig toegevoegde taken blijven behouden."
       },
       "menu": {
         "label": "Acties voor dit item"
@@ -1983,6 +2084,8 @@
         "description": "Acties worden gegenereerd op basis van uw signalen na dagelijkse trackingruns. Wanneer er zinvol werk naar voren komt, verschijnt het hier — kwaliteit boven kwantiteit."
       },
       "noResults": "Er zijn geen acties die overeenkomen met deze filters.",
+      "noOpen": "Geen open acties. Voltooide en afgewezen acties vindt u onder Alle statussen.",
+      "showAllStatuses": "Alle statussen tonen",
       "error": {
         "title": "We konden uw acties niet laden.",
         "retry": "Opnieuw proberen"
@@ -2002,6 +2105,10 @@
         },
         "notScored": "Nog niet beoordeeld",
         "why": "Waarom deze prioriteit?",
+        "lowConfidence": {
+          "tip": "Gebaseerd op {why}. Betrouwbaarheid is slechts één onderdeel van de score, dus impact en vraag kunnen deze nog steeds hoog laten scoren. Controleer dit voordat u actie onderneemt.",
+          "sentTip": "Beoordeeld op basis van wat is meegestuurd, niet op basis van gedetecteerde bevindingen. Controleer dit voordat u actie onderneemt."
+        },
         "reason": {
           "change": {
             "lost": "Terrein verloren op {subject}",
@@ -2163,7 +2270,7 @@
         "why": "Waarom deze actie?",
         "goal": "Doel",
         "kpis": "KPI's",
-        "kpiTarget": "doel {target}",
+        "kpiBrandGoal": "{timeframe, select, weekly {Wekelijks merkdoel} quarterly {Kwartaaldoel van het merk} other {Maandelijks merkdoel}}: {target}",
         "noKpis": "Er zijn geen geconfigureerde KPI's gekoppeld aan deze actie.",
         "support": "{count, plural, =0 {Geen enkel open signaal ondersteunt deze actie meer.} one {# signaal ondersteunt deze actie} other {# signalen ondersteunen deze actie}}",
         "supportAll": "Alle signalen ({count})",
@@ -2304,6 +2411,8 @@
         "assignee": "Toegewezen aan",
         "assignTo": "Toewijzen aan teamlid",
         "dueDate": "Vervaldatum",
+        "goalPassed": "Doeldatum verstreken",
+        "setNewDate": "Nieuwe datum instellen",
         "statusLabel": "Status",
         "events": {
           "created": "{source, select, chat {Actie gemaakt vanuit Chat} ads {Actie gemaakt vanuit Ads} other {Actie gemaakt}}",
@@ -5301,7 +5410,7 @@
       "addedLabel": "Toegevoegd aan een actie in Action Center",
       "createdNote": "Action Center bepaalt de prioriteitsscore. U rondt de taken daar af.",
       "addedNote": "Toegevoegd als bewijs. De doelen veranderen niet.",
-      "open": "Openen in Acties",
+      "open": "Openen in Action Center",
       "toastCreated": "Verzonden naar Action Center",
       "toastAdded": "Toegevoegd aan de actie in Action Center"
     },
@@ -5376,6 +5485,8 @@
     "readOnly": "Alleen-lezen · {role}",
     "readOnlyTitle": "{role}s kunnen vragen stellen en lezen. Beheerders en Managers kunnen wijzigingen aanbrengen. Bekijk wat u kunt doen.",
     "model": "Model",
+    "modelPrefix": "Model:",
+    "modelTip": "Het AI-model waarmee Chat antwoordt en hoe intensief het werkt. Auto kiest per stap een model.",
     "modelAuto": "Automatisch",
     "modelWarn": "Model · {usage}",
     "modelImage": "Afbeelding · {model}",
@@ -5535,6 +5646,7 @@
     },
     "mode": {
       "label": "Uitvoeringsmodus",
+      "prefix": "Uitvoermodus:",
       "current": "Uitvoeringsmodus: {mode}",
       "ask_first": "Eerst vragen",
       "auto": "Automatisch, vragen voor wijzigingen",
@@ -5677,7 +5789,7 @@
       "save": "Opslaan",
       "inFiles": "In Bestanden",
       "openEditor": "Openen in Editor",
-      "sendToActionCenter": "Naar Acties sturen"
+      "sendToActionCenter": "Naar Action Center sturen"
     }
   },
   "chatDeliverable": {
@@ -6070,7 +6182,8 @@
       "scheduledLabel": "Gepland, {count, plural, one {# taak} other {# taken}} ingeschakeld",
       "agents": "Agents",
       "agentsShort": "Agents",
-      "agentsLabel": "Agents · in Actiecentrum"
+      "agentsLabel": "Agents · in Actiecentrum",
+      "agentsTip": "Opent Action Center › Agents, buiten Chat"
     },
     "actions": {
       "more": "Meer voor {name}",
@@ -6167,7 +6280,7 @@
         "whatsNew": "Wat is er nieuw"
       },
       "byFocus": {
-        "rivalRose": "Het vermeldingspercentage van {rival} is deze week met {points, number} punten gestegen.",
+        "rivalRose": "Het vermeldingspercentage van <link>{rival}</link> is deze week met {points, number} punten gestegen.",
         "startTitle": "Begin met een vraag",
         "newForYou": {
           "title": "Nieuw voor u",
@@ -8833,6 +8946,11 @@
       "createAgent": "Agent maken",
       "connect": "{name} verbinden",
       "notConnected": "{name} · niet verbonden",
+      "catalog": {
+        "name": "Een catalogus",
+        "connect": "Een catalogus koppelen (Shopify, feed-URL, CSV)"
+      },
+      "enabled": "Ingeschakeld",
       "toggle": "/{name} aan voor de werkruimte",
       "turnedOn": "/{name} staat aan voor de werkruimte.",
       "turnedOff": "/{name} is uitgeschakeld voor de werkruimte.",
@@ -9503,7 +9621,7 @@
       "pagesSubOther": "+ {count} op andere sites",
       "coverageOf": "van {count, plural, one {# sitepagina} other {# sitepagina's}}",
       "coverageSub": "{never} nooit geaudit · {stale} niet in {days} dagen",
-      "coverageTip": "Pagina's van uw site met een audit in de afgelopen {days} dagen, van de pagina's die Ansvisor bijhoudt vanuit uw sitemap, Google Analytics en de pagina's die AI citeert (maximaal 500). Pagina's die u uitsluit in de instellingen voor Site-audit, en afreken-, inlog- en juridische pagina's, worden niet meegeteld.",
+      "coverageTip": "Pagina's van uw site met een audit (pagina's die de afgelopen {days} dagen niet zijn gecontroleerd, staan ernaast vermeld), van de pagina's die Ansvisor bewaart uit uw sitemap, Google Analytics en de pagina's die AI citeert (maximaal 500). Pagina's die u uitsluit in de Site Audit-instellingen, en afreken-, inlog- en juridische pagina's worden niet meegeteld.",
       "seeNotAudited": "Bekijk de {count} niet-geaudite →",
       "authority": "Autoriteit · E-E-A-T",
       "authorityTip": "De autoriteits- en E-E-A-T-scores, gemiddeld over de recentste audit van elke pagina, en de signalen die op de meeste pagina's mislukken of waarschuwingen geven.",
@@ -9579,6 +9697,17 @@
       "saveFailed": "Kan instellingen niet opslaan",
       "loadFailed": "Kan instellingen niet laden"
     },
+    "batch": {
+      "title": "Bulkaudit",
+      "progress": "{done} van {total} voltooid",
+      "timeLeft": "nog ongeveer {minutes} min",
+      "estimating": "resterende tijd wordt berekend…",
+      "finished": "Alle {total, plural, one {# audit is} other {# audits zijn}} voltooid",
+      "thisBatch": "Deze batch",
+      "thisBatchTip": "Alleen de pagina's uit deze bulkaudit tonen",
+      "allPages": "Alle pagina's",
+      "dismiss": "Verwijderen"
+    },
     "autoRun": {
       "label": "Automatische audit",
       "done": "{pages, plural, one {# pagina} other {# pagina's}} gecontroleerd · {issues, plural, one {# kritiek probleem} other {# kritieke problemen}}",
@@ -9609,7 +9738,7 @@
       },
       "list": "{pages}{count, plural, =0 {} other { en nog #}}",
       "recent": "De {count, plural, one {# pagina} other {# pagina's}} weglaten die in de afgelopen {days} dagen zijn geaudit",
-      "recentPages": "{pages}{count, plural, =0 {} other { en nog #}}. Een pagina die niet is gewijzigd, scoort hetzelfde.",
+      "recentPages": "{pages}{count, plural, =0 {} other { en # meer}}. Controleer ze opnieuw na een wijziging die de hele site raakt, zoals robots.txt of een template.",
       "recentPage": "{page} op {date}",
       "noLimit": "Uw abonnement heeft geen maandelijkse limiet. Een pagina die al wordt geaudit, wordt niet dubbel gestart.",
       "noneLeft": "Geen audits meer over deze maand.",
@@ -9745,7 +9874,7 @@
       "counts": {
         "official": "Overheids- en academische sites: .gov, .edu, .mil en hun landspecifieke vormen, zoals .gov.tr, .edu.tr, .ac.uk",
         "international": "Internationale organisaties: elke .int-site, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
-        "research": "Referentie en onderzoek: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
+        "research": "Naslagwerken, onderzoek, standaarden en platformdocumentatie: wikipedia.org, doi.org, arxiv.org, nature.com, iso.org, w3.org, rfc-editor.org, schema.org, developers.google.com, developer.mozilla.org",
         "news": "Grote nieuwsbronnen: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post",
         "trusted": "Uw vertrouwde bronnen:"
       },
@@ -9785,6 +9914,7 @@
       "firewall": "{count, plural, one {{bots} wordt} other {{bots} worden}} geblokkeerd door uw CDN of firewall, hoewel robots.txt {count, plural, one {deze} other {ze}} toestaat.",
       "robots": "robots.txt houdt {bots} tegen.",
       "allLetIn": "Elke geteste AI-bot werd toegelaten.",
+      "unnamed": "robots.txt noemt de AI-bots niet, dus de audit kan niet bevestigen dat ze welkom zijn. Voeg voor elke bot een groep toe (bijvoorbeeld \"User-agent: GPTBot\" met \"Allow: /\").",
       "inconclusive": "Uw site heeft het verzoek van Ansvisor zelf geweigerd ({status}), waardoor de bots niet zijn getest.",
       "note": "Eenmaal opgevraagd als elke bot, vanaf de servers van Ansvisor. Een firewall die de eigen adressen van een crawler controleert, kan de echte crawler anders behandelen.",
       "cell": {
@@ -9827,6 +9957,7 @@
       "tipSame": "De laatste {audits} audits van deze pagina scoorden allemaal {low}."
     },
     "aiRecommendations": "AI-aanbevelingen",
+    "topRecommendations": "Belangrijkste aanbevelingen",
     "signals": "Signalen",
     "onlyIssues": "Alleen problemen",
     "allSignals": "Alle signalen",
@@ -9839,6 +9970,327 @@
     "emptyTitle": "Audit elke pagina op gereedheid voor AI-zoeken",
     "emptyBody": "Voer hierboven een URL in om deze te scoren op basis van 48 AEO/GEO-signalen en AI-gegenereerde oplossingen te ontvangen."
   },
+  "auditRubric": {
+    "categories": {
+      "structure": {
+        "label": "Structuur",
+        "description": "Hoe goed een AI-engine uw pagina kan parsen. Schema, koppen, lijsten, tabellen, alt-tekst, OG-meta. De basis die al het andere leesbaar maakt."
+      },
+      "authority": {
+        "label": "Autoriteit",
+        "description": "Of uw pagina overkomt als geschreven door een expert die echte bronnen aanhaalt. Auteursregels, bronvermeldingen, statistieken, citaten, actualiteit, vakterminologie."
+      },
+      "content": {
+        "label": "Content",
+        "description": "Of de pagina de zoekvraag van de koper echt beantwoordt: direct, volledig en in het juiste register. BLUF, dekking van de zoekvraag, dekking van deelvragen, leesbaarheid en, bij productpagina's, de opening van de beschrijving."
+      },
+      "trust": {
+        "label": "Vertrouwen",
+        "description": "Vertrouwenssignalen tijdens crawlen en delen: HTTPS, canonical, viewport, toegang voor AI-bots via robots.txt en een live fetch als elke AI-bot, Twitter-card, metabeschrijving. llms.txt wordt alleen ter informatie getoond."
+      },
+      "eeat": {
+        "label": "E-E-A-T",
+        "description": "Het raamwerk van Google voor Experience, Expertise, Authoritativeness en Trustworthiness. Ervaringsbewijs in de eerste persoon, casestudy's, referenties van auteurs, merkentiteit in Wikidata, vermeldingen in de pers, privacybeleid, contactgegevens."
+      }
+    },
+    "signals": {
+      "structural-depth": {
+        "label": "Structurele diepte (GEO-SFE)",
+        "what": "Koppenhiërarchie en diepte van geneste structuur: H1→H2→H3-nesting die een echte inhoudsopgave weerspiegelt.",
+        "why": "arXiv:2603.29979 toont een toename van 17,3% in citaties voor pagina's met meetbare structurele diepte ten opzichte van platte documenten.",
+        "howToFix": "Groepeer uw content onder benoemde H2-subsecties. Gebruik H3 voor deelpunten. Sla geen niveaus over."
+      },
+      "internal-linking": {
+        "label": "Interne links",
+        "what": "Links van deze pagina naar andere pagina's op uw site: een signaal van een navigeerbare structuur.",
+        "why": "AI-crawlers breiden context uit via interne links, net zoals ze crawlen. Geïsoleerde pagina's worden onvoldoende geïndexeerd.",
+        "howToFix": "Voeg 5–10 interne links per pagina toe naar verwante concepten, woordenlijsttermen of ondersteunende pagina's."
+      },
+      "page-weight": {
+        "label": "Paginagewicht",
+        "what": "Totale HTML-grootte, lager is beter. Pagina's boven 500 KB markeren we.",
+        "why": "AI-renderbots hebben kortere timeouts dan mensen. Zware pagina's worden afgekapt of overgeslagen.",
+        "howToFix": "Verwijder ongebruikte JS, stel afbeeldingen buiten beeld uit en verwijder renderblokkerende scripts van derden."
+      },
+      "no-js-content": {
+        "label": "Hoofdtekst zonder JavaScript",
+        "what": "Hoeveel van de hoofdtekst van de pagina in de HTML staat die een AI-bot ontvangt voordat JavaScript wordt uitgevoerd, vergeleken met de pagina zoals een browser die rendert. Maximaal 10% verborgen is goed; tot 30% geeft een waarschuwing.",
+        "why": "AI-crawlers zoals GPTBot, ClaudeBot en PerplexityBot voeren geen JavaScript uit: tekst die pas verschijnt zodra JavaScript draait, zien ze nooit.",
+        "howToFix": "Render de hoofdcontent op de server (server-side rendering of statische pagina's) of prerender die voor bots, in plaats van de content met JavaScript te laden."
+      },
+      "json-ld-presence": {
+        "label": "Aanwezigheid van JSON-LD",
+        "what": "Of de pagina minstens één schema.org JSON-LD-blok bevat.",
+        "why": "Schema.org is het signaal met de grootste impact op geschiktheid voor AI Overviews: engines parsen het vóór de tekst.",
+        "howToFix": "Voeg minimaal een Organization- of Article-blok toe. Onze /tools/schema-generator genereert geldige JSON-LD."
+      },
+      "json-ld-validity": {
+        "label": "Geldigheid van JSON-LD",
+        "what": "Of de JSON-LD te parsen is, @context = schema.org heeft en een geldig @type.",
+        "why": "Foutieve JSON-LD is erger dan geen JSON-LD: engines loggen een parseerfout en verlagen het vertrouwen.",
+        "howToFix": "Test uw JSON-LD met de Rich Results Test van Google voordat u live gaat."
+      },
+      "json-ld-relevance": {
+        "label": "Relevantie van JSON-LD-type",
+        "what": "Of de @type overeenkomt met het doel van de pagina (Article op een blog, Product op een productpagina, FAQPage op een FAQ).",
+        "why": "Schema van het verkeerde type wordt genegeerd — Article-markup op een homepage wordt als ruis geïnterpreteerd.",
+        "howToFix": "Kies het schema.org-type dat het best past bij de daadwerkelijke inhoud van de pagina, niet een algemeen vangnet."
+      },
+      "faq-schema": {
+        "label": "FAQ-schema",
+        "what": "FAQPage JSON-LD met minimaal 2 vraag-en-antwoordparen.",
+        "why": "Volgens Google's eigen SGE-richtlijnen levert FAQPage de grootste winst op van alle typen voor citaties in AI Overviews.",
+        "howToFix": "Voeg FAQPage-schema toe met 3–5 vraag-en-antwoordparen die echte zoekvragen van kopers weerspiegelen."
+      },
+      "h1-quality": {
+        "label": "H1-kwaliteit",
+        "what": "Precies één H1 van 20–70 tekens met een primair zoekwoord.",
+        "why": "AI-engines beschouwen de H1 als de kernboodschap van de pagina — meerdere H1's verwarren het onderwerpmodel.",
+        "howToFix": "Eén H1 per pagina, beschrijvend, 30–60 tekens, met het hoofdonderwerp van de pagina."
+      },
+      "h2-coverage": {
+        "label": "H2-dekking",
+        "what": "≥3 H2-subsecties die de inhoud opdelen voor vlot scannen.",
+        "why": "AI-engines gebruiken H2's als sectie-ankers — pagina's zonder H2's zijn moeilijker samen te vatten.",
+        "howToFix": "Verdeel de inhoud in 3–6 H2-subsecties, die elk een deelvraag beantwoorden."
+      },
+      "lists": {
+        "label": "Lijsten",
+        "what": "≥1 <ul> of <ol> met ≥3 items.",
+        "why": "Lijsten zijn de eenheid die AI-engines bij voorkeur extraheren voor zoekopdrachten als 'hoe X' en 'beste Y'.",
+        "howToFix": "Zet minstens één alinea met opgesomde redenen of stappen om in een echte <ul>/<ol>."
+      },
+      "tables": {
+        "label": "Tabellen",
+        "what": "≥1 <table> met correcte <thead>/<tbody> voor gestructureerde gegevens.",
+        "why": "Tabellen hebben het hoogste extractiepercentage voor vergelijkingen en specificatiezoekopdrachten.",
+        "howToFix": "Toon specificaties, prijzen of vergelijkingen als echte <table>'s, niet als afbeeldingen."
+      },
+      "alt-text": {
+        "label": "Alt-tekst",
+        "what": "≥80% van de relevante <img>-tags heeft een niet-lege alt-attribuut. Decoratieve afbeeldingen (alt=\"\", role=\"presentation\" of aria-hidden) worden buiten beschouwing gelaten.",
+        "why": "Multimodale engines (Gemini, Claude, GPT-4o) lezen alt-tekst als semantische context van de pagina.",
+        "howToFix": "Voeg een beschrijvende alt toe aan elke relevante afbeelding. Decoratieve afbeeldingen krijgen alt=\"\"."
+      },
+      "open-graph": {
+        "label": "Open Graph-metadata",
+        "what": "og:title, og:description, og:image en og:type zijn allemaal aanwezig.",
+        "why": "Linkvoorbeelden van AI-engines en social shares gebruiken OG-meta als citatiekaart.",
+        "howToFix": "Voeg de 4 OG-tags toe. Gebruik een og:image van 1200×630. Onze /tools/og-checker valideert ze."
+      },
+      "outbound-authority-links": {
+        "label": "Uitgaande autoriteitslinks",
+        "what": "Links naar officiële sites (overheid, wetenschap of internationale organisaties), referentie- en onderzoekssites of grote nieuwsmedia.",
+        "why": "Linken naar betrouwbare bronnen draagt autoriteit terug over (effect van de citatiegraaf).",
+        "howToFix": "Citeer primaire bronnen met echte <a>-tags, niet met kale tekstverwijzingen. Streef naar 2–3 per lange pagina."
+      },
+      "citation-density": {
+        "label": "Citatiedichtheid",
+        "what": "Inline citaties per 1000 woorden (doel ≥2).",
+        "why": "Pagina's die bronnen citeren, worden zelf als bron geciteerd. Citatiedichtheid is het sterkste autoriteitssignaal naast links.",
+        "howToFix": "Vervang 'studies tonen aan' door 'een Stanford-studie uit 2024 (link)'. Specifiek zijn wint."
+      },
+      "statistic-density": {
+        "label": "Statistiekdichtheid",
+        "what": "Kwantitatieve beweringen met cijfers per 1000 woorden (streefwaarde ≥3).",
+        "why": "AI-engines citeren bij voorkeur content met meetbare beweringen boven vage tekst.",
+        "howToFix": "Voeg echte cijfers toe aan uw beweringen, zoals percentages, bedragen in dollars of tijdsduren."
+      },
+      "quotations": {
+        "label": "Directe citaten",
+        "what": "Inline <blockquote> of geciteerde bronvermeldingen.",
+        "why": "Citaten wijzen op primair onderzoek. Ze verhogen het aantal citaties met ~12% in de testset van het GEO-paper.",
+        "howToFix": "Citeer per lange pagina één klant, één expert of één primaire bron."
+      },
+      "author-byline": {
+        "label": "Auteursvermelding",
+        "what": "Een auteur met ten minste een echte naam in het gedeelte voor de auteursvermelding.",
+        "why": "Anonieme content wordt gezien als laag op E-E-A-T. AI-engines tonen bij voorkeur content met een auteur.",
+        "howToFix": "Voeg bovenaan 'Door [Naam]' toe. Link naar een echte auteurspagina. Gebruik Person-schema."
+      },
+      "date-markup": {
+        "label": "Datummarkering",
+        "what": "datePublished + dateModified in JSON-LD of <time datetime>.",
+        "why": "Engines straffen content zonder datum af omdat deze mogelijk verouderd is. Content met een datum krijgt een versheidsscore.",
+        "howToFix": "Voeg datePublished + dateModified toe in JSON-LD, of een zichtbare <time datetime>-tag."
+      },
+      "freshness": {
+        "label": "Versheid",
+        "what": "Wijzigingsdatum binnen de afgelopen 365 dagen.",
+        "why": "Verouderde content zakt in de rangschikking bij tijdgevoelige zoekopdrachten. Door datums opnieuw te publiceren begint de teller opnieuw.",
+        "howToFix": "Ververs uw topPagina's minstens jaarlijks en werk dan dateModified bij."
+      },
+      "technical-terms": {
+        "label": "Dichtheid van vakterminologie",
+        "what": "Vakspecifieke terminologie die echte expertise aantoont, in plaats van oppervlakkig geschreven tekst.",
+        "why": "Pagina's met precieze vakterminologie wijzen op echte expertise.",
+        "howToFix": "Gebruik de daadwerkelijke vaktaal van het vakgebied. Link naar een woordenlijst of verklaar de eerste vermelding."
+      },
+      "direct-answer": {
+        "label": "Direct antwoord op de zoekopdracht",
+        "what": "Of de zoekopdracht van de koper beantwoord lijkt in de eerste 200 tekens.",
+        "why": "AI-engines halen bij voorkeur directe antwoorden op. Een verstopt antwoord = geen citatie.",
+        "howToFix": "Begin de pagina met een direct antwoord van 1–2 zinnen op de primaire zoekopdracht. Werk het daarna verder uit."
+      },
+      "bluf-answer": {
+        "label": "BLUF (Bottom Line Up Front)",
+        "what": "Een duidelijke stelling in de eerste alinea die de hoofdbewering van de pagina weergeeft.",
+        "why": "Schrijfstijl uit de militaire doctrine: BLUF verbetert de extraheerbaarheid voor AI aanzienlijk.",
+        "howToFix": "Open met 'Het antwoord is X. Dit is waarom.' Bewaar de kern niet voor later."
+      },
+      "query-coverage": {
+        "label": "Dekking van zoektermen",
+        "what": "Aandeel van de zoektermen dat voorkomt in de paginatekst (streefwaarde ≥80%).",
+        "why": "Dekking is een basissignaal voor relevantie. Ontbrekende termen betekenen dat de pagina de zoekopdracht mist.",
+        "howToFix": "Zorg dat elke relevante zoekterm minstens één keer in de lopende tekst voorkomt."
+      },
+      "entity-coverage": {
+        "label": "Entiteitsdekking",
+        "what": "Genoemde entiteiten die passen bij de entiteitsruimte van de zoekopdracht.",
+        "why": "AI-engines bouwen per pagina een entiteitengraaf op. Ontbrekende gerelateerde entiteiten verminderen de thematische autoriteit.",
+        "howToFix": "Als de pagina over X gaat, noem dan de bekende gerelateerde entiteiten van X (personen, plaatsen, producten)."
+      },
+      "readability": {
+        "label": "Leesbaarheid",
+        "what": "Leesbaarheidsscore in de taal van de pagina: Flesch Reading Ease voor Engels (doel 50–70), Ateşman voor Turks (50 of hoger), Amstad, Kandel–Moles of Fernández-Huerta voor Duits, Frans of Spaans (60 of hoger); andere talen op basis van zins- en woordlengte.",
+        "why": "Engines halen informatie uit content die mensen kunnen lezen. Dichte, academische tekst presteert slechter; in het Engels kan zeer eenvoudige tekst (boven 70) de details missen die lezers verwachten.",
+        "howToFix": "Onder het doel: kort zinnen in en gebruik eenvoudigere woorden, ongeveer 16 woorden per zin. Engels boven 70: schrijf vollere zinnen met de details die lezers verwachten."
+      },
+      "length": {
+        "label": "Paginalengte",
+        "what": "Aantal woorden in de hoofdcontent (doel 800–3000).",
+        "why": "Te kort = te mager; te lang = engines kappen af. De ideale lengte is middellang tot lang.",
+        "howToFix": "Minder dan 600 woorden: breid uit met voorbeelden en subsecties. Meer dan 4000: splits op in een hub en bijbehorende subpagina's."
+      },
+      "info-density": {
+        "label": "Informatiedichtheid",
+        "what": "Verhouding tussen inhoudelijke content en opvulling.",
+        "why": "Dichte content wordt bij voorkeur geciteerd. Engines modelleren impliciet 'waarde per token'.",
+        "howToFix": "Schrap inleidende omhaal. Vervang 'Het is belangrijk om op te merken dat' door de eigenlijke boodschap."
+      },
+      "mega-page-coverage": {
+        "label": "Mega-pagina-dekking",
+        "what": "Of de pagina meerdere nauw verwante subonderwerpen onder één URL behandelt.",
+        "why": "Mega-pagina's scoren beter dan magere pagina's in AI-engines omdat ze entiteitsclusters afdekken.",
+        "howToFix": "Voeg 3 magere pagina's samen tot één uitgebreide pagina met subonderwerpen opgedeeld in H2's."
+      },
+      "youtube-embed": {
+        "label": "YouTube-embed",
+        "what": "Ingesloten YouTube-video naast het artikel.",
+        "why": "Multimodale engines wegen pagina's met onderwerpgerelateerde video zwaarder. Correlatie van 0,737 met citatiegraad.",
+        "howToFix": "Maak of sluit een video van 2–4 minuten over het paginaonderwerp in. Markeer deze met VideoObject-schema."
+      },
+      "product-description-opening": {
+        "label": "Opening van productbeschrijving",
+        "what": "Op een productpagina noemen de eerste 40 woorden (of 250 tekens) van de beschrijving het producttype en minstens twee belangrijke kenmerken: een maat, een materiaal, een pasvorm of een gebruik.",
+        "why": "ChatGPT lijkt alleen de eerste ongeveer 50 tokens van een productbeschrijving te lezen wanneer het producten koppelt aan een winkelvraag. Een beschrijving die opent met het verhaal van het merk wordt mogelijk nooit gematcht.",
+        "howToFix": "Zet het producttype en de belangrijkste kenmerken in de eerste 40 woorden."
+      },
+      "sub-query-coverage": {
+        "label": "Subvraagdekking",
+        "what": "Aandeel van de opgesplitste subvragen dat in de hoofdtekst wordt beantwoord.",
+        "why": "Engines splitsen zoekvragen op in 4–6 subvragen (Profound 'fanouts'); ontbrekende antwoorden = ontbrekende citaties.",
+        "howToFix": "Voeg een Q&A-sectie toe die de top 5 subvragen over je onderwerp expliciet beantwoordt."
+      },
+      "definitions": {
+        "label": "Definities in de tekst",
+        "what": "Termen die bij eerste vermelding direct in de tekst worden gedefinieerd ('X (definitie…)').",
+        "why": "Pagina's met definities ter plekke worden geciteerd als woordenlijstbronnen. AI-engines linken er bij voorkeur naar.",
+        "howToFix": "Definieer de 3–5 belangrijkste termen bij eerste gebruik, in de tekst."
+      },
+      "ai-bot-access": {
+        "label": "Toegang voor AI-bots",
+        "what": "Of robots.txt de AI-bots toelaat en of de pagina hen antwoord geeft: de pagina wordt eenmaal opgehaald als GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot en ClaudeBot om CDN- of firewallblokkades op te sporen.",
+        "why": "Een bot die door je CDN of firewall wordt geweigerd, leest de pagina nooit, wat robots.txt ook zegt. Door de AI-bots in robots.txt te noemen, laat je zien dat ze welkom zijn.",
+        "howToFix": "Sta GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot en Google-Extended toe in robots.txt en in de botregels van je CDN of firewall."
+      },
+      "llms-txt-presence": {
+        "label": "Aanwezigheid van llms.txt",
+        "what": "Of /llms.txt in de hoofdmap van de site bestaat, volgens het voorstel van llmstxt.org. Alleen ter informatie: het verandert de score niet.",
+        "why": "Voorgesteld als een platte-tekstkaart van een site voor AI-engines.",
+        "howToFix": "Optioneel. Voeg /llms.txt toe in de hoofdmap van je site als je dat wilt; het verandert de score niet.",
+        "evidenceNote": "Zwak bewijs: Ahrefs ontdekte dat 97% van de llms.txt-bestanden nooit wordt opgevraagd, en Google zegt dat het geen effect heeft."
+      },
+      "https": {
+        "label": "HTTPS",
+        "what": "De site reageert correct via TLS zonder mixed content.",
+        "why": "AI-crawlers weigeren pagina's met mixed content te crawlen. HTTPS is een basisvereiste.",
+        "howToFix": "Migreer naar HTTPS. Forceer een redirect met HSTS. Los waarschuwingen over mixed content op."
+      },
+      "canonical": {
+        "label": "Canonical URL",
+        "what": "<link rel=canonical> die naar de voorkeurs-URL van de pagina verwijst.",
+        "why": "Zonder canonical kunnen AI-engines citaties over dubbele URL's verdelen en elke URL lager rangschikken.",
+        "howToFix": "Voeg <link rel=canonical href=…> toe aan elke pagina. Gebruik een zelfverwijzende canonical op canonical pagina's."
+      },
+      "viewport": {
+        "label": "Viewport-meta",
+        "what": "<meta name=viewport content=…> aanwezig.",
+        "why": "Signaal voor mobiele weergave: AI-crawlers geven de voorkeur aan mobile-first content.",
+        "howToFix": "Voeg <meta name=viewport content=\"width=device-width, initial-scale=1\"> toe."
+      },
+      "twitter-card": {
+        "label": "Twitter-card",
+        "what": "<meta name=twitter:card> + twitter:image aanwezig.",
+        "why": "AI-engines vallen terug op de Twitter-card op platforms zonder OG-ondersteuning.",
+        "howToFix": "Voeg twitter:card=summary_large_image + twitter:image toe (og:image kan hergebruikt worden)."
+      },
+      "meta-description": {
+        "label": "Metabeschrijving",
+        "what": "<meta name=description> met een samenvatting van 80–160 tekens.",
+        "why": "AI-engines gebruiken de metabeschrijving als primaire samenvattingskandidaat bij het genereren van citaties.",
+        "howToFix": "Schrijf voor elke pagina een metabeschrijving van 130 tekens. Neem de belangrijkste zoekopdracht op."
+      },
+      "first-person": {
+        "label": "Bewijs uit eerste hand",
+        "what": "Zinnen in de eerste persoon die echte ervaring tonen: 'we hebben getest', 'ik heb gebouwd', en in het Turks werkwoordsuitgangen zoals 'gezdik' of 'düşünüyoruz'. Twee of meer is voldoende. Citaten en standaardzinnen zoals 'Neem contact met ons op' tellen niet mee. Gelezen in het Engels en Turks.",
+        "why": "De E-E-A-T-update van Google geeft voorrang aan opgedane ervaring. De eerste persoon signaleert dat.",
+        "howToFix": "Gebruik de eerste persoon spaarzaam maar precies: 'we hebben getest', 'naar onze ervaring', 'ik ontdekte dat…'."
+      },
+      "case-study-evidence": {
+        "label": "Bewijs uit casestudy's",
+        "what": "Resultaten van met naam genoemde klanten, cijfers of voor-en-nabewijs in de tekst.",
+        "why": "Casestudy's zijn het E-E-A-T-signaal met de hoogste conversie: bewijs het, beweer het niet alleen.",
+        "howToFix": "Noem één klant. Citeer één resultaat met cijfers. 'We hielpen X van Y → Z.'"
+      },
+      "author-credentials": {
+        "label": "Kwalificaties van de auteur",
+        "what": "De auteur heeft zichtbare kwalificaties (jaren ervaring, eerdere functie, opleiding, certificeringen) in een byline, een auteursblok ergens op de pagina of Person JSON-LD (jobTitle, description).",
+        "why": "Anonieme bylines falen voor E-E-A-T. Auteurs met kwalificaties worden als deskundige bronnen behandeld.",
+        "howToFix": "Elke auteurspagina vermeldt kwalificaties, eerdere functies, jaren in het vakgebied en links naar LinkedIn/Twitter."
+      },
+      "byline-depth": {
+        "label": "Diepgang van byline",
+        "what": "De byline linkt naar een echte auteursbiopagina met voldoende detail, of naar het profiel van de auteur elders (LinkedIn, Person JSON-LD sameAs).",
+        "why": "De keten byline → biopagina → auteur met kwalificaties is de E-E-A-T-graaf die engines volgen.",
+        "howToFix": "Laat elke byline linken naar /authors/[name] met bio, foto, kwalificaties en eerder werk."
+      },
+      "brand-entity": {
+        "label": "Merkentiteit in Wikidata",
+        "what": "Het merk heeft een Wikidata-entiteit (Q-nummer) die AI-engines kunnen opvragen.",
+        "why": "Wikidata is de canonieke entiteitendatabase: engines gebruiken die om merkidentiteit te valideren. Geen entiteit = geen vertrouwensanker.",
+        "howToFix": "Zorg voor een Wikidata-vermelding: hiervoor zijn 2–3 persvermeldingen als bronnen nodig. Dien in op wikidata.org."
+      },
+      "press-mentions": {
+        "label": "Vermeldingen in de pers",
+        "what": "Verwijzingen naar of links van topmedia (NYT, WaPo, Bloomberg, FT, enz.).",
+        "why": "Vermeldingen in de pers dragen autoriteit over via de citatiegraaf en bevestigen de entiteitsclaims van het merk.",
+        "howToFix": "Verdien persaandacht. Toon logo's. Link terug naar het oorspronkelijke artikel (niet naar uw casestudy)."
+      },
+      "privacy-terms": {
+        "label": "Privacy + voorwaarden",
+        "what": "Gelinkt privacybeleid + gebruiksvoorwaarden vanaf elke pagina.",
+        "why": "YMYL-categorieën (Your-Money-Your-Life) vereisen deze – en zoekmachines beschouwen ze overal als signalen van betrouwbaarheid.",
+        "howToFix": "Plaats links naar privacybeleid en voorwaarden in de footer van elke pagina. Echte pagina's, geen 'binnenkort beschikbaar'-pagina's."
+      },
+      "contact-info": {
+        "label": "Contactgegevens",
+        "what": "Echte contactgegevens – e-mail, telefoon of adres zichtbaar op de pagina of via een link naar /contact.",
+        "why": "Anonieme merken falen op E-E-A-T. Echte contactgegevens tonen dat er een echte entiteit achter de content zit.",
+        "howToFix": "Voeg een e-mailadres + fysiek adres (echt of statutair) toe aan de footer."
+      }
+    }
+  },
   "auth": {
     "signIn": "Inloggen",
     "signUp": "Aanmelden",
@@ -9848,6 +10300,8 @@
     "email": "E-mailadres",
     "workEmail": "Zakelijk e-mailadres",
     "workEmailSuggested": "Zakelijk e-mailadres aanbevolen",
+    "language": "Taal",
+    "languageFailed": "Kan de taal niet wijzigen. Probeer het opnieuw.",
     "password": "Wachtwoord",
     "forgotPassword": "Wachtwoord vergeten?",
     "noAccount": "Nog geen account?",
@@ -9986,6 +10440,53 @@
     },
     "errorRetry": "Start de verbinding opnieuw vanuit de app. Als dit blijft gebeuren, ondersteunt de app mogelijk geen aanmelding bij Ansvisor: gebruik in plaats daarvan een API-sleutel.",
     "errorCode": "Code: {code}"
+  },
+  "invite": {
+    "fallbackTeam": "dit team",
+    "invalid": {
+      "not_found": {
+        "title": "Uitnodiging niet gevonden",
+        "description": "De link die u hebt gevolgd is ongeldig."
+      },
+      "expired": {
+        "title": "Uitnodiging verlopen",
+        "description": "Vraag de beheerder van uw team om een nieuwe uitnodiging te sturen."
+      },
+      "accepted": {
+        "title": "Uitnodiging al gebruikt",
+        "description": "Deze uitnodiging is al geaccepteerd."
+      },
+      "revoked": {
+        "title": "Uitnodiging ingetrokken",
+        "description": "Deze uitnodiging is ingetrokken door de beheerder van het team."
+      },
+      "pending": {
+        "title": "Uitnodiging niet beschikbaar",
+        "description": "Probeer het opnieuw of neem contact op met de beheerder van uw team."
+      }
+    },
+    "card": {
+      "title": "Word lid van {organization}",
+      "invitedAs": "U bent uitgenodigd als <b>{role}</b>",
+      "invitedEmail": "Uitgenodigd e-mailadres",
+      "signedInAs": "Ingelogd als",
+      "wrongAccount": "Deze uitnodiging is verzonden naar <b>{email}</b>, maar u bent ingelogd als {current}. Wissel van account om door te gaan.",
+      "switching": "Wisselen...",
+      "switchAccount": "Uitloggen en juiste account gebruiken",
+      "fullName": "Volledige naam",
+      "namePlaceholder": "Uw naam",
+      "password": "Stel een wachtwoord in",
+      "passwordPlaceholder": "Minimaal 8 tekens",
+      "confirmPassword": "Bevestig wachtwoord",
+      "confirmPlaceholder": "Herhaal het wachtwoord",
+      "joining": "Deelnemen...",
+      "accept": "Accepteren en lid worden van {organization}",
+      "passwordNote": "U gebruikt dit wachtwoord de volgende keer dat u inlogt.",
+      "passwordTooShort": "Het wachtwoord moet uit minimaal 8 tekens bestaan",
+      "passwordsDiffer": "Wachtwoorden komen niet overeen",
+      "welcome": "Welkom bij {organization}!",
+      "failed": "Uitnodiging accepteren mislukt"
+    }
   },
   "dashboard": {
     "overview": "Overzicht",
@@ -10376,6 +10877,114 @@
         "failed": "Kan het bestand niet importeren. Er is niets opgeslagen.",
         "back": "Terug"
       }
+    },
+    "formulas": {
+      "button": "Formules",
+      "title": "Hoe statistieken worden berekend",
+      "visibility": {
+        "title": "Zichtbaarheid (0–100)",
+        "body": "Eén score voor hoe zichtbaar uw merk is in alle AI-antwoorden die aan de huidige filters voldoen. Elk antwoord telt mee, ook antwoorden waarin u niet voorkomt. Een hogere score betekent dus vaker voorkomen, vaker geciteerd worden en eerder genoemd worden.",
+        "formula": "Zichtbaarheid = 100 × ({mention} × vermeldingspercentage + {citation} × citatiepercentage + {position} × positiefactor × betrouwbaarheid)",
+        "confidence": "betrouwbaarheid = antwoorden die u vermelden ÷ (antwoorden die u vermelden + {support})",
+        "mentionRate": "<b>Vermeldingspercentage ({pct}%)</b> — aandeel AI-antwoorden dat uw merk bij naam noemt.",
+        "citationRate": "<b>Citatiepercentage ({pct}%)</b> — aandeel antwoorden dat uw website als bron citeert.",
+        "positionFactor": "<b>Positiefactor ({pct}%)</b> — hoe vroeg u wordt genoemd in de antwoorden die u vermelden: als eerste genoemd = 1, tweede = 0,5, derde = 0,33, enzovoort, gemiddeld. De betrouwbaarheidsfactor weegt dit mee op basis van hoeveel antwoorden het merk daadwerkelijk vermelden, zodat een perfecte positie in een handvol antwoorden merken die consequent verschijnen niet kan overtreffen.",
+        "competitors": "Concurrenten in het klassement worden met exact dezelfde formule en over dezelfde set antwoorden beoordeeld, zodat de cijfers direct vergelijkbaar zijn."
+      },
+      "trend": {
+        "title": "Grafiek zichtbaarheidstrend",
+        "body": "Elk punt is de Zichtbaarheid berekend over de geselecteerde periode die op die dag eindigt (een voortschrijdend venster). Daarom komt het nieuwste punt altijd overeen met de Zichtbaarheid-kaart hierboven. Bij \"Alle tijd\" omvat elk punt alles tot en met die dag."
+      },
+      "mentions": {
+        "title": "Vermeldingen",
+        "body": "Totaal aantal keren dat uw merk bij naam is genoemd in AI-antwoorden."
+      },
+      "citations": {
+        "title": "Citaties",
+        "body": "Totaal aantal keren dat uw website als bron is gelinkt in AI-antwoorden. Vermeldingen tellen uw naam; citaties tellen uw domein."
+      },
+      "sentiment": {
+        "title": "Nettosentiment",
+        "body": "Van de antwoorden die u noemen: het aandeel positief minus het aandeel negatief, in punten. Antwoorden die alleen uw site citeren tellen niet mee: die zijn altijd neutraal. Sentiment wordt naast Zichtbaarheid getoond, maar maakt geen deel uit van de score.",
+        "formula": "Nettosentiment = % positieve antwoorden − % negatieve antwoorden (van antwoorden die u noemen, zoals op de pagina Vermeldingen)"
+      },
+      "position": {
+        "title": "Gem. positie",
+        "body": "Waar u wordt genoemd in de antwoorden die u vermelden, gemiddeld. Lager is beter: #1 betekent dat u meestal als eerste wordt genoemd.",
+        "formula": "Gem. positie = som van uw posities ÷ antwoorden die u noemen"
+      },
+      "citationRate": {
+        "title": "Citatiepercentage",
+        "body": "Het aandeel AI-antwoorden dat naar uw website linkt als bron.",
+        "formula": "Citatiepercentage = antwoorden die uw domein citeren ÷ alle antwoorden × 100"
+      },
+      "shareOfVoice": {
+        "title": "Share of Voice",
+        "body": "Uw deel van het totale merkgesprek: van alle merkvermeldingen in AI-antwoorden, die van u plus die van uw gevolgde concurrenten, het aandeel dat van u is.",
+        "formula": "SOV = uw vermeldingen ÷ (uw vermeldingen + vermeldingen van concurrenten) × 100"
+      },
+      "coverage": {
+        "title": "Dekking",
+        "body": "Het aandeel gevolgde Prompts waarin u in de geselecteerde periode minstens één keer verscheen (genoemd of geciteerd), ten opzichte van alle Prompts die resultaten opleverden.",
+        "formula": "Dekking = Prompts waarin u verscheen ÷ beantwoorde Prompts × 100"
+      },
+      "changes": {
+        "title": "Wijzigingen",
+        "body": "De wijziging op elke kaart vergelijkt de geselecteerde periode met de even lange periode ervoor, alleen over de Prompts die in beide perioden zijn beantwoord, zodat het toevoegen van Prompts de wijziging niet opblaast; de cijfers zelf omvatten wel alle Prompts. Bij \"Alle tijd\" is er geen eerdere periode, dus wordt er geen wijziging getoond."
+      }
+    },
+    "breakdownSheet": {
+      "title": "{metric, select, mentions {Vermeldingen} other {Zichtbaarheid}} uitgesplitst",
+      "compareHint": "Vergelijking van de geselecteerde periode met de vorige periode van gelijke lengte.",
+      "allTimeHint": "Alle tijd. Er is geen eerdere periode van dezelfde lengte om mee te vergelijken.",
+      "lastVsPrevious": "{days, plural, one {Laatste # dag vs vorige # dag} other {Laatste # dagen vs vorige # dagen}}",
+      "loadFailed": "Overzicht laden mislukt",
+      "allTime": "Alle tijd",
+      "current": "Huidig {days}d",
+      "noSamePrompt": "Er is in beide periodes geen Prompt beantwoord",
+      "samePrompts": "{count, plural, one {Dezelfde # Prompt:} other {Dezelfde # Prompts:}}",
+      "vsPrevious": "vs vorige",
+      "noData": "geen gegevens",
+      "newNotCounted": "{count, plural, one {Niet meegeteld in de wijziging: # nieuwe Prompt in deze periode.} other {Niet meegeteld in de wijziging: # nieuwe Prompts in deze periode.}}",
+      "newIncluded": "{count, plural, one {De wijziging omvat # nieuwe Prompt die in deze periode is toegevoegd.} other {De wijziging omvat # nieuwe Prompts die in deze periode zijn toegevoegd.}}",
+      "tabs": {
+        "prompts": "Prompts",
+        "platforms": "Platforms",
+        "topics": "Onderwerpen"
+      },
+      "biggest": "{direction, select, down {Grootste daling} other {Grootste stijging}}:",
+      "topPlatform": "Platform met {direction, select, down {grootste daling} other {grootste stijging}}: {platform}",
+      "empty": "Nog geen gegevens in dit tijdvenster.",
+      "columns": {
+        "name": "Naam",
+        "prev": "Vorige",
+        "cur": "Huidig",
+        "change": "Wijziging"
+      },
+      "pts": "pnt",
+      "signedPts": "{value} pnt",
+      "contributionPts": "{direction, select, down {daalde met} other {steeg met}} {value} pnt",
+      "contributionMentions": "{direction, select, down {verloor} other {won}} {count, plural, one {# vermelding} other {# vermeldingen}}"
+    },
+    "page": {
+      "noDataTitle": "Nog geen trackinggegevens",
+      "noDataBody": "Voer uw Prompts uit via AI-platforms om te zien hoe uw merk voorkomt in door AI gegenereerde antwoorden.",
+      "testSingle": "Of test een enkele Prompt",
+      "noResults": "Geen resultaten voor {period, select, 24h {de afgelopen 24 uur} 7d {de afgelopen 7 dagen} 30d {de afgelopen 30 dagen} 90d {de afgelopen 90 dagen} other {de geselecteerde periode}}",
+      "otherPeriods": "Er zijn trackinggegevens beschikbaar in andere periodes. Probeer een ruimer bereik of schakel over naar \"Alle tijd\".",
+      "showAll": "Alle gegevens tonen",
+      "noCompetitorsTitle": "Nog geen concurrenten gevolgd",
+      "noCompetitorsBody": "Voeg concurrenten toe om te zien hoe u presteert in AI-antwoorden.",
+      "headToHead": "Rechtstreekse vergelijking",
+      "loadFailed": "Inzichten laden mislukt — probeer het opnieuw",
+      "exportCapped": "Export beperkt tot 50.000 rijen om geheugenproblemen te voorkomen",
+      "exportFailed": "CSV exporteren mislukt",
+      "noTrend": "Nog geen trendgegevens beschikbaar",
+      "yourBrand": "Uw merk",
+      "avgCompetitor": "Gem. concurrent",
+      "noShareOfVoice": "Geen share of voice-gegevens beschikbaar",
+      "moreInfo": "Meer informatie",
+      "overallShareOfVoice": "Totale share of voice"
     }
   },
   "topics": {
@@ -10659,7 +11268,7 @@
         "note": "Shopping-kansen worden getoond voor winkels met een productcatalogus. De overige rijen van het Plan blijven hieronder staan."
       },
       "assign": {
-        "title": "Assign “{title}”",
+        "title": "“{title}” toewijzen",
         "description": "Dit wordt als taak voor dit teamlid naar het Actiecentrum gestuurd.",
         "member": "Teamlid",
         "pick": "Kies een teamlid",
@@ -10883,7 +11492,7 @@
         "sending": "Verzenden"
       },
       "deleteDialog": {
-        "title": "Delete “{title}”?",
+        "title": "“{title}” verwijderen?",
         "description": "Het wordt definitief verwijderd uit de bibliotheek, inclusief versies en suggesties. Een Action Center-taak waar het als concept naartoe is gestuurd, blijft behouden. Dit kan niet ongedaan worden gemaakt.",
         "cancel": "Annuleren",
         "confirm": "Verwijderen"
@@ -11076,6 +11685,7 @@
     },
     "editor": {
       "back": "Terug naar de bibliotheek",
+      "newContent": "Nieuwe content",
       "closeHere": "Sluiten",
       "untitled": "Naamloos",
       "newPage": "Nieuwe pagina",
@@ -11545,7 +12155,8 @@
           "attach": "Bestand bijvoegen"
         },
         "openLink": "Open de link in een nieuw tabblad (of ⌘/Ctrl + klik erop in de pagina)",
-        "counter": "{count} / {target} tekens · {words, plural, one {# woord} other {# woorden}}"
+        "counter": "{count} / {target} tekens · {words, plural, one {# woord} other {# woorden}}",
+        "counterRange": "{count} / {min}–{max} tekens · {words, plural, one {# woord} other {# woorden}}"
       },
       "link": {
         "title": "Link toevoegen",
@@ -12777,6 +13388,7 @@
         "tooShort": "Schrijf een paar alinea's: Leesbaarheid wordt direct vanaf de pagina gemeten terwijl u schrijft.",
         "tooShortShort": "Nog te kort",
         "notScored": "Nog niet beoordeeld",
+        "needsAuthor": "Wordt beoordeeld zodra de pagina een auteur heeft",
         "site": {
           "label": "Sitevertrouwen",
           "score": "Sitevertrouwen {score}/5",
@@ -13055,8 +13667,8 @@
           },
           "avgSentence": {
             "line": "Zinnen bevatten gemiddeld {words, number} woorden",
-            "detail": "Streef naar 15–20 woorden: kortere zinnen lezen vlotter, en AI-antwoorden citeren ze in hun geheel.",
-            "detailShort": "Streef naar 15–20 woorden: voeg enkele korte zinnen samen, zodat elke zin één volledige gedachte uitdrukt."
+            "detail": "Streef naar maximaal 20 woorden: kortere zinnen lezen sneller en AI-antwoorden citeren ze volledig.",
+            "detailShort": "Gemiddeld minder dan 8 woorden leest hakkelig: voeg enkele korte zinnen samen, zodat elke zin één volledig punt maakt."
           },
           "longSentences": {
             "line": "{count, plural, one {# zin} other {# zinnen}} langer dan 35 woorden",
@@ -13372,11 +13984,12 @@
     "autoGeneratedHint": "Kansen worden automatisch gegenereerd naarmate uw trackinggegevens binnenkomen.",
     "generating": "Genereren…",
     "sendToWorkflow": "Versturen naar workflow",
-    "generateBrief": "Briefing genereren",
-    "generatingBrief": "Briefing genereren...",
-    "briefGenerated": "Briefing gegenereerd",
+    "generateBrief": "Brief opstellen",
+    "generatingBrief": "Brief opstellen…",
+    "briefGenerated": "Brief opgesteld",
+    "briefEmpty": "Stel een AI-gestuurde contentbrief op met een voorgestelde titel, opzet, doelzoekwoorden en inzichten over concurrenten.",
     "briefLimitReached": "U heeft de contentbriefings van deze maand opgebruikt",
-    "sendToActions": "Versturen naar Acties",
+    "sendToActions": "Naar Action Center sturen",
     "draftCheckFailed": "Kon niet controleren op een concept · Opnieuw proberen",
     "sendToEditor": "Versturen naar Editor",
     "writeThis": {
@@ -13391,7 +14004,7 @@
         "draftDetail": "De Content Agent schrijft de pagina aan de hand van de briefing, volgens uw regels en die van het paginatype.",
         "draftDetailPage": "De Content Agent stelt op basis van de briefing wijzigingen voor aan {page}, volgens uw regels en die van het paginatype.",
         "review": "U controleert het",
-        "reviewDetail": "De editor wordt geopend terwijl er wordt geschreven, inclusief een gratis schatting van de Site Audit-score. Er wordt niets gepubliceerd."
+        "reviewDetail": "De editor opent terwijl er wordt geschreven. Wanneer u de tekst als gereed markeert, ontvangt u een gratis schatting van de Site Audit-score. Er wordt niets gepubliceerd."
       },
       "usage": "Verbruikt ongeveer <b>{estimate}</b> van uw {trial, select, yes {proefperiode-AI-tegoed} other {maandelijkse AI-verbruik}} · tot nu toe {used} gebruikt",
       "usageSmall": "Verbruikt minder dan <b>1%</b> van uw {trial, select, yes {proefperiode-AI-tegoed} other {maandelijkse AI-verbruik}} · tot nu toe {used} gebruikt",
@@ -13415,7 +14028,7 @@
       "word": "Word exporteren",
       "failed": "Kon deze kans niet exporteren. Probeer het opnieuw."
     },
-    "openInActions": "Openen in Acties",
+    "openInActions": "Openen in Action Center",
     "sendAgain": "Opnieuw verzenden",
     "copyAllData": "Alle gegevens kopiëren",
     "copiedToast": "Gekopieerd naar klembord",
@@ -13476,7 +14089,9 @@
       "avgScore": "Gem. score",
       "shown": "{count} weergegeven",
       "opportunities": "kansen",
+      "opportunitiesAll": "alle statussen, ook voltooide",
       "outOf100": "van de 100",
+      "outOf100All": "van 100 · alle statussen",
       "fromSignals": "uit {count, plural, one {# signaal} other {# signalen}} geanalyseerd"
     },
     "filters": {
@@ -13665,6 +14280,7 @@
       "sentAt": "Verzonden op {date}",
       "webhookResponse": "Webhook-reactie",
       "topCompetitor": "Sterkste concurrent",
+      "gapPoints": "{gap, number} pt.",
       "basketTitle": "Kansenbundel",
       "basketSummary": "{prompts, plural, one {# prompt} other {# prompts}} · {included} zoekopdrachten inbegrepen · {excluded} uitgesloten",
       "basketIncluded": "Zoekopdrachten die AI-engines voor deze prompts hebben uitgevoerd",
@@ -13781,7 +14397,8 @@
     "mergedIntoOpen": "Openen",
     "newSignal": "Nieuw signaal gedetecteerd",
     "newSignalScoreRose": "Eerder voltooid en de kans is sindsdien gegroeid: de score steeg van {from} naar {to}.",
-    "newSignalGainLost": "Eerder voltooid, maar de winst bleef niet behouden: de zichtbaarheid op deze prompts was {after}% na het werk en is nu {now}%."
+    "newSignalGainLost": "Eerder voltooid, maar de winst bleef niet behouden: de zichtbaarheid op deze prompts was {after}% na het werk en is nu {now}%.",
+    "noWorkflowConnected": "Geen workflow gekoppeld."
   },
   "traffic": {
     "chat": {
@@ -14620,6 +15237,24 @@
           "query": "Ontbrekende adressen bevatten een query: geen omleiding voorgesteld"
         }
       }
+    },
+    "page": {
+      "subtitle": "Door AI doorverwezen bezoeken aan uw website",
+      "range": "{start}–{end} van {total}",
+      "previous": "Vorige",
+      "next": "Volgende",
+      "platformBreakdown": "Verdeling per platform",
+      "referralsByPlatform": "Verwijzingen per platform",
+      "topLandingPages": "Beste landingspagina's",
+      "recentVisits": "Recente bezoeken via AI-verwijzingen",
+      "columns": {
+        "platform": "Platform",
+        "page": "Pagina",
+        "visits": "Bezoeken",
+        "change": "Verandering",
+        "time": "Tijd",
+        "country": "Land"
+      }
     }
   },
   "ads": {
@@ -14923,7 +15558,10 @@
         "bodyUnlimited": "Uw abonnement heeft hier ruimte voor. Wachtende prompts starten niet vanzelf: kies er een om te volgen.",
         "show": "Weergeven",
         "freeUp": "Plek vrijmaken",
-        "track": "Wachtende prompt volgen"
+        "track": "Wachtende prompt volgen",
+        "addTracking": "Meer tracking toevoegen",
+        "moved": "{count, plural, one {Een daarvan werd gevolgd tot {date}} other {# daarvan werden gevolgd tot {date}}}, toen de tracking van uw abonnement daalde naar {limit, number} promptlocaties.",
+        "movedNoLimit": "{count, plural, one {Een daarvan werd gevolgd tot {date}} other {# daarvan werden gevolgd tot {date}}}, toen de tracking van uw abonnement afnam."
       },
       "dialog": {
         "pill": "Promptlimiet bereikt · {used} van {max}",
@@ -14936,6 +15574,7 @@
         "needs": "Deze wordt gevolgd op {count} locaties, dus er zijn {count} plekken nodig.",
         "howStarter": "Om deze te volgen, pauzeert u een prompt die u minder nodig hebt, of stapt u over naar een groter abonnement.",
         "howContact": "Om deze te volgen, pauzeert u een prompt die u minder nodig hebt, of neemt u contact met ons op om uw limiet te verhogen.",
+        "howGrowth": "Om het te volgen, pauzeert u een Prompt die u minder nodig heeft, of voegt u meer tracking toe aan uw abonnement.",
         "room": "Uw abonnement heeft er ruimte voor. Wachtende prompts starten niet vanzelf, dus deze wacht tot u begint met volgen.",
         "candidates": "Prompts die u kunt pauzeren",
         "candidatesMany": "Prompts die u kunt pauzeren: kies er genoeg om {count} plekken vrij te maken",
@@ -14954,6 +15593,7 @@
         "pauseMany": "Pauzeer er {count} en volg de nieuwe",
         "trackNow": "Volgen",
         "seeGrowth": "Bekijk Growth: {count} prompts",
+        "addTracking": "Meer tracking toevoegen",
         "contact": "Neem contact op",
         "keepWaiting": "Laat wachten",
         "keepPaused": "Gepauzeerd houden",
@@ -15152,6 +15792,7 @@
       "showUsage": "Verbruik tonen",
       "hideUsage": "Verbruik verbergen",
       "locationsUsed": "{used} / {limit} prompt-locaties gebruikt",
+      "planEnded": "Uw abonnement is beëindigd: Prompts worden niet gevolgd totdat u een abonnement kiest",
       "view": {
         "label": "Prompt-lijst",
         "tracked": "Gevolgde",
@@ -15170,6 +15811,95 @@
         "analyzing": "Analyseren…",
         "analyzingProgress": "Analyseren {done}/{total}…",
         "limitReached": "Maandelijkse limiet bereikt"
+      }
+    },
+    "info": {
+      "button": "Hoe Ansvisor met Prompts werkt",
+      "whatTitle": "Wat is een Prompt?",
+      "whatText": "Een vraag of verzoek die uw potentiële klanten intypen in een AI-assistent zoals ChatGPT of Gemini, zoals <example>\"Wat is de beste open-source AEO-tool?\"</example> of <example>\"Vergelijk de beste AEO-platforms\"</example>",
+      "howTitle": "Hoe Ansvisor werkt",
+      "systemsLine": "Slimme AI-systemen werken elke dag op de achtergrond voor u.",
+      "steps": {
+        "find": {
+          "title": "Vindt de beste Prompts.",
+          "text": "Onze AI leest uw site, uw concurrenten, waarnaar mensen zoeken (Search Console, Analytics) en wat de AI-platforms zelf antwoorden, en stelt de Prompts voor die ertoe doen."
+        },
+        "pick": {
+          "title": "U kiest wat u volgt.",
+          "text": "Druk op <b>+</b> bij een suggestie."
+        },
+        "ask": {
+          "title": "Bevraagt elke dag de AI-platforms.",
+          "text": "ChatGPT, Gemini, Google AI Overviews en meer: noemen ze u, linken ze naar uw site, plaatsen ze u boven concurrenten?"
+        },
+        "data": {
+          "title": "Bouwt uw eigen data op.",
+          "text": "Elk antwoord wordt bewaard, zodat trends, hiaten en bewegingen van uw concurrenten in de loop van de tijd zichtbaar worden."
+        },
+        "next": {
+          "title": "Slimme AI-systemen laten u zien wat u hierna moet doen.",
+          "text": "Ze signaleren dalingen, vinden contenthiaten en bereiden pagina's en oplossingen voor in het Action Center, om AI-zichtbaarheid, verkeer en omzet te winnen."
+        }
+      },
+      "openGuide": "Open de stapsgewijze handleiding"
+    },
+    "guide": {
+      "title": "Hoe vindt u de beste Prompts en komt u terecht in hun antwoorden",
+      "description": "Doe dit één keer en bekijk daarna dagelijks de suggesties. Elke stap opent in een nieuw tabblad, zodat deze handleiding blijft staan.",
+      "progress": "{done} van {total} voltooid",
+      "progressLabel": "Voltooide stappen",
+      "done": "Klaar",
+      "comingSoon": "Binnenkort beschikbaar",
+      "footer": "Vraag Chat om een stap voor u uit te voeren: “Koppel mijn Search Console”.",
+      "steps": {
+        "gsc": {
+          "title": "Google Search Console koppelen",
+          "text": "Zie waarop mensen al zoeken om u te vinden; wij maken er Prompts van.",
+          "cta": "Koppelen"
+        },
+        "ga": {
+          "title": "Google Analytics 4 koppelen",
+          "text": "Zie welke pagina's bezoekers opleveren, om de Prompts te vinden die ertoe doen.",
+          "cta": "Koppelen"
+        },
+        "trafficCode": {
+          "title": "Voeg de AI-verkeerscode toe aan uw site",
+          "text": "Tel de bezoeken die AI-assistenten u sturen en de AI-bots die uw pagina's lezen.",
+          "cta": "Code ophalen"
+        },
+        "suggestions": {
+          "title": "Bekijk elke dag de suggesties",
+          "text": "Nieuwe Prompts van uw site, concurrenten en zoekopdrachten. Druk op + om de goede te volgen.",
+          "cta": "Suggesties openen"
+        },
+        "content": {
+          "title": "Maak content op basis van suggesties",
+          "text": "Schrijf de pagina's die AI-antwoorden voor uw Prompts missen.",
+          "cta": "Content openen"
+        },
+        "optimize": {
+          "title": "Optimaliseer uw pagina's",
+          "text": "Verbeter bestaande pagina's in de Editor zodat AI-antwoorden ernaar verwijzen.",
+          "cta": "Editor openen"
+        },
+        "audit": {
+          "title": "Technische problemen oplossen",
+          "text": "Voer een Site Audit uit en los op wat voorkomt dat AI uw site kan lezen.",
+          "cta": "Audit uitvoeren"
+        },
+        "moreTracking": {
+          "title": "Meer Prompts volgen",
+          "text": "Voeg meer Prompts, locaties of AI-platformen toe aan uw abonnement.",
+          "cta": "Meer tracking nemen"
+        },
+        "mentions": {
+          "title": "Word genoemd op andere sites",
+          "text": "Word genoemd op de externe sites die AI-antwoorden vertrouwen."
+        },
+        "ads": {
+          "title": "AI-advertenties draaien",
+          "text": "Verschijn in gesponsorde AI-antwoorden."
+        }
       }
     },
     "trackNow": {
@@ -15219,6 +15949,7 @@
       "unlimited": "Onbeperkt",
       "cta": {
         "upgrade_growth": "Upgraden naar Growth",
+        "add_more": "Meer toevoegen",
         "upgrade": "Abonnement upgraden",
         "contact": "Neem contact met ons op",
         "choose_plan": "Kies een abonnement"
@@ -15444,7 +16175,7 @@
       "unlimited": "{used} → {after} gevolgde locaties · geen limiet op uw abonnement",
       "usageHint": "Elke prompt op elke locatie telt als één gevolgde locatie binnen uw abonnement en wordt dagelijks gecontroleerd. Gepauzeerde prompts tellen niet mee.",
       "over": "Hiervoor {adding, plural, one {is nog # gevolgde locatie} other {zijn nog # gevolgde locaties}} nodig; er {left, plural, =0 {is er geen} one {is er nog #} other {zijn er nog #}} over binnen uw {plan}-abonnement.",
-      "overHint": "Kies minder prompts of locaties. {plan, select, starter {Of upgrade uw abonnement, of neem contact met ons op voor een abonnement op maat.} growth {Of neem contact met ons op voor een abonnement op maat.} other {Of neem contact met ons op om uw limiet te verhogen.}}",
+      "overHint": "Kies minder Prompts of plaatsen. {plan, select, starter {Of upgrade uw abonnement, of neem contact met ons op voor een abonnement op maat.} growth {Of voeg meer tracking toe aan uw abonnement.} other {Of neem contact met ons op om uw limiet te verhogen.}}",
       "nothing": "Deze prompts worden al gevolgd op deze locaties.",
       "cityBlocked": "Geen van deze prompts gebruikt een zoekmachine die antwoordt vanuit een stad (Google AI Mode, AI Overviews of een API-model). Voeg eerst een van die zoekmachines toe aan de prompts.",
       "cityPartly": "{count, plural, one {# van deze prompts gebruikt} other {# van deze prompts gebruiken}} geen zoekmachine die antwoordt vanuit een stad; een stad telt mee voor uw abonnement, maar wordt daar niet opgevraagd.",
@@ -15495,7 +16226,79 @@
         "usedUp": "Het suggestiebudget van deze maand is opgebruikt. Het wordt gereset wanneer uw abonnement wordt verlengd.",
         "upgrade": "Upgrade voor meer",
         "startPlan": "Start uw abonnement"
+      },
+      "loadFailed": "Suggesties laden mislukt.",
+      "generateFailed": "Suggesties genereren mislukt.",
+      "notConfigured": "AI-suggesties zijn op deze server nog niet ingesteld: er ontbreekt een sleutel van een AI-provider.",
+      "retry": "Opnieuw proberen",
+      "introTitle": "Ontvang platformspecifieke suggesties",
+      "introBody": "Analyseert de antwoorden van deze periode op elk platform (de subvragen die zijn uitgevoerd, de bronnen die zijn aangehaald en de concurrenten die boven u staan) en stelt voor wat u kunt doen waar het merk ontbreekt of laag staat.",
+      "generate": "Suggesties genereren",
+      "generating": "Suggesties genereren op basis van de antwoorden van deze periode… dit kan tot 15 seconden duren.",
+      "stale": "Sinds het genereren van deze suggesties zijn er nieuwe runs binnengekomen.",
+      "regenerate": "Opnieuw genereren",
+      "noRuns": "Geen runs in deze periode, dus er valt nog niets te verbeteren.",
+      "allWell": "Geen verbeteringen nodig: het merk wordt in deze periode op elk platform als eerste genoemd en vroeg aangehaald.",
+      "selection": "{selected} van {total} geselecteerd · {platforms, plural, one {# platform} other {# platformen}}",
+      "generated": "Gegenereerd op {date}",
+      "sent": "Verzonden op {date} · {code}",
+      "discardConfirm": "Uw wijzigingen verwerpen?",
+      "keepEditing": "Blijven bewerken",
+      "discardRegenerate": "Verwerpen en opnieuw genereren",
+      "openInActions": "Openen in Acties",
+      "sendActions": "Acties verzenden",
+      "sentToast": "{count, plural, one {Actie aangemaakt met # taak} other {Actie aangemaakt met # taken}}",
+      "open": "Openen",
+      "states": {
+        "no_runs": "Geen runs in deze periode",
+        "not_mentioned": "Niet genoemd",
+        "mentioned_late": "Genoemd · Laat",
+        "not_cited": "Vroeg genoemd · niet aangehaald",
+        "doing_well": "Goed bezig"
+      },
+      "mentionRate": "vermeld in {mentioned} van {runs, plural, one {# run} other {# runs}}",
+      "avgPosition": "gem. #{position} · {rate}",
+      "avgPositionOf": "gem. #{position} van {total} · {rate}",
+      "citedAt": "geciteerd op gem. #{rank} van {total} bronnen · {rate}",
+      "notCited": "niet geciteerd · {rate}",
+      "inputs": {
+        "fanouts": "{count, plural, one {# fan-out} other {# fan-outs}}",
+        "citedDomains": "{count, plural, one {# geciteerd domein} other {# geciteerde domeinen}}",
+        "competitorUrls": "{count, plural, one {# concurrent-URL} other {# concurrent-URL's}}",
+        "answer": "AI-antwoord",
+        "basedOn": "Gebaseerd op {parts}",
+        "basedOnAnswer": "Gebaseerd op het AI-antwoord",
+        "noFanouts": "Geen fan-outs vastgelegd. {based}"
+      },
+      "doingWell": "Goed bezig: geen suggesties.",
+      "noneHeldUp": "Geen enkele suggestie hield stand tegen het bewijs van dit platform. Voeg zelf een suggestie toe of genereer opnieuw.",
+      "addOwn": "Eigen suggestie toevoegen",
+      "removed": "Verwijderd: {title}",
+      "removedUntitled": "Verwijderd: uw suggestie",
+      "undo": "Ongedaan maken",
+      "titlePlaceholder": "Titel",
+      "bodyPlaceholder": "Wat te doen en waarom",
+      "select": "Selecteer \"{title}\"",
+      "edit": "Suggestie bewerken",
+      "remove": "Suggestie verwijderen",
+      "alreadySent": "Al verzonden",
+      "yourSuggestion": "Uw suggestie",
+      "sources": {
+        "fanout": "Fan-out: {ref}",
+        "answer": "AI-antwoord",
+        "brandPage": "Uw pagina: {url}"
+      },
+      "locked": {
+        "title": "Improve is beschikbaar in Growth",
+        "body": "Ontvang platformspecifieke suggesties om de positie van deze Prompt te verbeteren, op basis van de subquery's, bronnen en concurrenten in elk AI-antwoord.",
+        "upgrade": "Abonnement upgraden"
       }
+    },
+    "errors": {
+      "updateFailed": "Bijwerken van de Prompt mislukt. Probeer het opnieuw.",
+      "noRoomToResume": "Niet genoeg ruimte om te hervatten",
+      "bulkFailed": "{action, select, resume {Hervatten van de Prompts mislukt.} other {Pauzeren van de Prompts mislukt.}}",
+      "bulkPartial": "{action, select, resume {{failed} van {total} kon niet worden hervat.} other {{failed} van {total} kon niet worden gepauzeerd.}}"
     }
   },
   "volumeEstimate": {
@@ -15902,6 +16705,7 @@
     }
   },
   "competitors": {
+    "forbiddenRole": "Alleen een beheerder of een manager kan concurrenten samenvoegen.",
     "title": "Concurrenten",
     "description": "Beheer concurrenten en vergelijk AI-zichtbaarheid direct met elkaar.",
     "addCompetitor": "Concurrent toevoegen",
@@ -15914,7 +16718,7 @@
     "citations": "Citaties",
     "trackedCompetitors": "Gevolgde concurrenten",
     "selectToCompare": "Selecteer een concurrent om een directe vergelijking te zien.",
-    "windowLast30Days": "Scores hebben betrekking op de afgelopen 30 dagen.",
+    "windowLastDays": "{days, plural, one {Scores omvatten de afgelopen dag.} other {Scores omvatten de afgelopen # dagen.}}",
     "windowAllTime": "Scores hebben betrekking op de gehele gevolgde geschiedenis.",
     "windowSelectedRange": "Scores weerspiegelen het geselecteerde datumbereik.",
     "selected": "Geselecteerd",
@@ -16015,10 +16819,15 @@
     },
     "h2h": {
       "title": "{brand} vs {competitor}",
-      "yourAvg": "Uw gem. score",
-      "theirAvg": "Hun gem. score",
-      "overallDiff": "Scoreverschil",
+      "yourAvg": "Uw Visibility-score",
+      "theirAvg": "Hun Visibility-score",
+      "overallDiff": "Verschil",
+      "points": "{value} pnt",
+      "scoreTip": "Zichtbaarheidsscore, 0–100: hoe vaak antwoorden in deze periode het merk noemen, de site ervan citeren en hoe vroeg het merk wordt genoemd, over uw antwoorden. Dezelfde score als op de kaarten.",
       "platformBreakdown": "Uitsplitsing per platform",
+      "viaBing": "· via Bing AI Mode",
+      "noAnswersEngine": "Geen antwoorden in deze periode",
+      "notInPlan": "Niet in uw abonnement, dus niet getoond: {engines}.",
       "promptByPrompt": "Vergelijking per Prompt",
       "promptByPromptDesc": "Klik op een prompt om uit te vouwen en de uitsplitsing per platform te bekijken.",
       "comparison": "Vergelijking",
@@ -16034,7 +16843,25 @@
       "noPromptData": "Geen gegevens op promptniveau beschikbaar. Voer eerst een trackingcontrole uit.",
       "noDataTitle": "Geen vergelijkingsgegevens",
       "noDataDescription": "Voer een trackingcontrole uit vanuit Zichtbaarheid om vergelijkingsgegevens voor deze concurrent te genereren.",
-      "loadError": "Laden van vergelijkingsgegevens mislukt."
+      "loadError": "Laden van vergelijkingsgegevens mislukt.",
+      "promptCounts": "{engines, plural, one {# platform} other {# platforms}} · {runs, plural, one {# run} other {# runs}}",
+      "engineCounts": "{locations, plural, one {# locatie} other {# locaties}} · {runs, plural, one {# run} other {# runs}}",
+      "runs": "{count, plural, one {# run} other {# runs}}",
+      "noLocation": "Geen locatie",
+      "lowSample": "Kleine steekproef",
+      "lowSampleTip": "Minder dan 10 runs: één antwoord kan deze score sterk beïnvloeden.",
+      "list": {
+        "search": "Prompts zoeken",
+        "sortLabel": "Prompts sorteren",
+        "sortRecent": "Meest recente eerst",
+        "sortDiff": "Grootste verschil eerst",
+        "categoryLabel": "Categorie",
+        "allCategories": "Alle categorieën",
+        "count": "{shown} van {total, plural, one {# Prompt} other {# Prompts}}",
+        "noMatch": "Geen Prompt gevonden.",
+        "more": "{count} meer tonen",
+        "caseRepeats": "{count, plural, one {# Prompt herhaalt een andere Prompt, alleen met een ander hoofdlettergebruik} other {# Prompts herhalen andere Prompts, alleen met een ander hoofdlettergebruik}}: pauzeer de extra kopie bij Prompts zodat de antwoorden één keer meetellen."
+      }
     },
     "timeline": {
       "title": "Pagina's van {competitor} in de loop van de tijd",
@@ -16084,7 +16911,127 @@
     "excludeOwnDomain": "Eigen domein uitsluiten",
     "competitorsOnly": "Alleen concurrenten",
     "noBrandTitle": "Geen merk geselecteerd",
-    "noBrandDescription": "Selecteer of maak een merk aan om te zien welke citaten AI-platforms gebruiken bij antwoorden erover."
+    "noBrandDescription": "Selecteer of maak een merk aan om te zien welke citaten AI-platforms gebruiken bij antwoorden erover.",
+    "addCompetitor": {
+      "added": "{domain} toegevoegd als concurrent",
+      "failed": "Dit domein kon niet als concurrent worden toegevoegd. Probeer het opnieuw.",
+      "ariaLabel": "{domain} toevoegen als concurrent",
+      "button": "Toevoegen als concurrent",
+      "title": "{domain} toevoegen als concurrent?",
+      "description": "Volg dit domein als concurrent. U kunt de naam hieronder aanpassen.",
+      "name": "Naam",
+      "namePlaceholder": "Naam van concurrent",
+      "add": "Toevoegen"
+    },
+    "url": {
+      "back": "Citaties",
+      "noUrl": "Geen URL opgegeven. Open deze pagina vanuit een citatierij op het tabblad Citaties van Zichtbaarheid.",
+      "noBrand": "Selecteer eerst een merk in de keuzelijst bovenaan.",
+      "owned": "Eigen",
+      "loadFailed": "Deze URL kon niet worden geladen. Probeer het opnieuw.",
+      "empty": "Geen citaties vastgelegd voor deze URL in de geselecteerde periode.",
+      "kpis": {
+        "citations": "Totaal citaties",
+        "citationsSub": "{answers, plural, one {in # antwoord} other {in # antwoorden}}",
+        "answers": "Antwoorden met citatie",
+        "answersSub": "AI-antwoorden bevatten deze URL",
+        "prompts": "Prompts",
+        "promptsSub": "unieke prompts die dit activeren",
+        "platforms": "Platforms",
+        "lastSeen": "Laatst gezien",
+        "firstSeen": "eerst gezien op {date}"
+      },
+      "targeted": "{count, plural, one {Getarget in # prompt} other {Getarget in # prompts}}",
+      "targetedSub": "Prompts die deze URL als doel volgen in de promptworkflow",
+      "notTargeted": "Nog niet getarget — voeg deze toe via de kaart Doel-URL's van een prompt.",
+      "citedCount": "{count}× geciteerd",
+      "visits": "Bezoeken via AI",
+      "visitsSub": "Bezoeken aan deze pagina vanaf AI-platforms in de geselecteerde periode",
+      "noVisits": "Er zijn nog geen bezoeken via AI geregistreerd voor deze pagina.",
+      "unknownPlatform": "Onbekend",
+      "citedIn": "Geciteerd in",
+      "citedInSub": "Alle AI-antwoorden die deze URL citeren in de geselecteerde periode",
+      "columns": {
+        "date": "Datum",
+        "platform": "Platform",
+        "prompt": "Prompt",
+        "sentiment": "Sentiment",
+        "brandMentioned": "Merk genoemd",
+        "position": "Positie",
+        "answers": "Antwoorden",
+        "citations": "Citaten",
+        "lastSeen": "Laatst gezien"
+      },
+      "sentiments": {
+        "positive": "Positief",
+        "neutral": "Neutraal",
+        "negative": "Negatief",
+        "mixed": "Gemengd"
+      },
+      "breakdown": "Overzicht van Prompts",
+      "breakdownSub": "De zoekopdrachten waarop deze pagina scoort, gegroepeerd per prompt",
+      "noPrompts": "Geen prompts geregistreerd voor deze URL in de geselecteerde periode."
+    },
+    "categories": {
+      "you": "U",
+      "competitor": "Concurrent",
+      "editorial": "Redactioneel",
+      "forum": "Forum",
+      "social": "Social",
+      "review": "Review",
+      "institutional": "Institutioneel",
+      "other": "Overig"
+    },
+    "page": {
+      "noSources": "Nog geen bronvermeldingen.",
+      "columns": {
+        "rank": "Rang",
+        "domain": "Domein",
+        "url": "URL",
+        "platforms": "Platforms",
+        "usage": "Gebruik",
+        "avgCitations": "Gem. vermeldingen",
+        "citations": "Vermeldingen",
+        "addCompetitor": "Toevoegen als concurrent",
+        "sourceType": "Brontype",
+        "competitorAnswers": "Antwoorden van concurrenten",
+        "whichCompetitors": "Welke concurrenten",
+        "strength": "Sterkte",
+        "answersFeeding": "Bijdragende antwoorden",
+        "alsoCitesUs": "Citeert ook u?"
+      },
+      "openDomain": "{domain} openen in een nieuw tabblad",
+      "openPage": "Geciteerde pagina openen in een nieuw tabblad",
+      "openPageTitle": "Geciteerde pagina openen",
+      "loadFailedTitle": "Kan vermeldingsgegevens niet laden",
+      "loadFailedBody": "Probeer het opnieuw.",
+      "retry": "Opnieuw proberen",
+      "checking": "Vermeldingsgegevens controleren…",
+      "noneInPeriod": "Geen vermeldingen in {period, select, 24h {de afgelopen 24 uur} 7d {de afgelopen 7 dagen} 30d {de afgelopen 30 dagen} 90d {de afgelopen 90 dagen} other {de geselecteerde periode}}",
+      "outsideWindow": "Er zijn vermeldingsgegevens buiten deze periode.",
+      "showAll": "Alle gegevens tonen",
+      "noMatch": "Geen vermeldingen komen overeen met uw filters",
+      "noMatchBody": "Probeer uw datumbereik te vergroten of filters te verwijderen.",
+      "gapMethodology": "Bronnen die voorkomen in antwoorden waarin concurrenten worden genoemd maar u niet, gewogen naar het aantal bronnen per antwoord.",
+      "strengthTitle": "Sterkte {pct}%",
+      "noGaps": "Geen gapdomeinen voor deze filters",
+      "noGapsBody": "Elk domein dat een concurrent citeert, citeert ook u, of er zijn nog onvoldoende gegevens.",
+      "noCompetitorData": "Nog geen brongegevens van concurrenten",
+      "noCompetitorDataBody": "Voeg concurrenten (met domeinen) toe en laat een paar trackingruns voltooien.",
+      "competitor": "Concurrent",
+      "selectCompetitor": "Concurrent selecteren",
+      "yes": "✓ Ja",
+      "no": "✗ Nee",
+      "gapList": "Gaplijst",
+      "byCompetitor": "Per concurrent",
+      "howItWorks": "Zo werkt het",
+      "lowVisibility": "Uw zichtbaarheid is laag in deze periode, dus deze lijst kan breed zijn — richt u eerst op de basiszichtbaarheid.",
+      "loadFailedToast": "Citatiegegevens laden mislukt",
+      "checkFailedToast": "Citatiegegevens controleren mislukt",
+      "exportFailed": "CSV exporteren mislukt",
+      "typesNotExportable": "Brontypen is een grafiekweergave en kan niet worden geëxporteerd — schakel over naar Domeinen, URL's of Concurrentiekloven om te exporteren.",
+      "tabGaps": "Concurrentiekloven"
+    }
   },
   "shopping": {
     "title": "Productzichtbaarheid",
@@ -16588,6 +17535,16 @@
       "verifiedLabel": "Geverifieerde verkoper in ChatGPT",
       "verifiedStatus": "Onbekend",
       "verifiedDetail": "OpenAI heeft niet bekendgemaakt hoe de status van geverifieerde verkoper wordt toegekend, en in vroege tests werden winkels zonder deze status weggelaten uit antwoorden. Stuur een directe productfeed totdat er meer bekend is."
+    },
+    "page": {
+      "allTime": "Altijd",
+      "last": "Laatste {period}",
+      "allPlatforms": "Alle platforms",
+      "allRegions": "Alle regio's",
+      "noProducts": "Geen producten gevonden die overeenkomen met de filters.",
+      "appearances": "{count, plural, one {# vermelding} other {# vermeldingen}}",
+      "brandAppearances": "{brand} • {count, plural, one {# vermelding} other {# vermeldingen}}",
+      "viewPrompt": "Promptdetails bekijken"
     }
   },
   "reports": {
@@ -16616,14 +17573,18 @@
         "trafficConnectLink": "Koppelen"
       },
       "method": {
-        "label": "Hoe het wordt gemeten",
         "baseline": "Nulmeting: 14 dagen voor uitvoering",
         "checkpoints": "Meetpunten: 7 · 14 · 30 · 90 dagen",
         "checkpointsTip": "7 dagen: in behandeling, vroeg signaal · 14 dagen: eerste oordeel · 30 dagen: bevestigd · 90 dagen: blijvend effect",
         "control": "Controlegroep: ongewijzigde vergelijkbare Prompts",
         "minChange": "Min. verandering: 3 pt",
         "noCost": "Geplande trackinggegevens · geen extra kosten",
-        "correlation": "Correlatie, geen causaliteit"
+        "correlation": "Correlatie, geen causaliteit",
+        "howWeMeasure": "Hoe wij meten",
+        "shippedDefinition": "Verzonden betekent dat de wijziging live is gegaan: gepubliceerd in uw CMS, de bijbehorende pull request is samengevoegd, of de wijziging is als verzonden gemarkeerd. Een concept dat op beoordeling wacht, is nog niet verzonden.",
+        "baselineHelp": "Elke wijziging start vanaf de zichtbaarheid van de doel-Prompts over die dagen.",
+        "controlHelp": "Ze laten zien wat er toch al zou zijn gebeurd.",
+        "correlationHelp": "Een resultaat toont dat dingen samen bewogen, niet dat de wijziging alleen ze heeft doen bewegen."
       },
       "filterLabel": "Filteren op resultaat",
       "filters": {
@@ -16693,6 +17654,8 @@
       },
       "capped": "De eerste {count, number} live gegane wijzigingen in {month} worden getoond; bovenstaande aantallen hebben alleen hierop betrekking.",
       "empty": "Niets live gegaan in {month}.",
+      "emptyNext": "Verzend een actie om impact te meten.",
+      "emptyNextLink": "Open Focus van vandaag",
       "emptyFilter": "Geen acties met dit resultaat in {month}.",
       "loadFailed": "Kon niet laden wat Ansvisor heeft gedaan. Probeer het opnieuw.",
       "retry": "Opnieuw proberen",
@@ -16771,6 +17734,10 @@
     "deleteTitle": "Rapport verwijderen",
     "deleteConfirm": "Dit rapport verwijderen?",
     "deleteFailed": "Verwijderen van rapport mislukt",
+    "rowMenuLabel": "Meer acties voor {title}",
+    "copyLink": "Link kopiëren",
+    "linkCopied": "Link gekopieerd. Hij opent het rapport voor mensen in uw werkruimte.",
+    "copyLinkFailed": "Kon de link niet kopiëren. Open het rapport en kopieer in plaats daarvan het adres.",
     "selectDates": "Kies een begin- en einddatum",
     "templateLabel": "Template",
     "templates": {
@@ -16807,7 +17774,7 @@
       "mentionEvidence": "Vermeldingsbewijs",
       "citationEvidence": "Citatiebewijs"
     },
-    "missingSections": "Sommige secties konden niet worden verzameld en ontbreken in dit rapport:",
+    "missingSectionsAdmin": "Alleen Beheerders zien dit: {sections} kon(den) niet worden verzameld, ook niet na een tweede poging, dus het rapport laat ze weg.",
     "brandLabel": "Merk",
     "sectionsLabel": "Secties",
     "selectSections": "Kies ten minste één sectie",
@@ -16886,9 +17853,11 @@
     "generatedOn": "Gegenereerd op",
     "executiveSummary": "Managementsamenvatting",
     "kpi": {
-      "visibility": "Zichtbaarheid",
-      "visibilityRate": "Zichtbaarheid",
-      "visibilityRateSub": "{visible}/{total} Prompts",
+      "visibilityScore": "Zichtbaarheidsscore",
+      "scoreValue": "{score}/100",
+      "promptsWithMention": "Prompts met een vermelding",
+      "promptsWithMentionSub": "{visible} van {total} Prompts",
+      "leaderboardPromptsSub": "{visible} van {total} Prompts met een vermelding",
       "avgScore": "Gem. score",
       "mentions": "Vermeldingen",
       "citations": "Merkvermeldingen",
@@ -17146,7 +18115,10 @@
       }
     },
     "notifications": "Meldingen",
-    "notificationsDescription": "Daily Pulse — een kort overzicht per merk na elke trackingrun, met hoogtepunten en waarschuwingen.",
+    "notificationsDescription": "Elk merk kan twee e-mails versturen: de Daily Pulse na de trackingruns en het wekelijkse AI Traffic-overzicht elke maandag. Beide gaan naar de Daily Pulse-ontvangers van het merk.",
+    "pulseSection": "Daily Pulse",
+    "pulseSectionDescription": "Een kort overzicht per merk na elke trackingrun, met hoogtepunten en waarschuwingen. Kies hoe vaak u het ontvangt en wie het krijgt.",
+    "pulseFrequencyLabel": "Hoe vaak de Daily Pulse van {brand} komt",
     "pulseFrequency_daily": "Dagelijks",
     "pulseFrequency_weekly": "Wekelijks",
     "pulseFrequency_notable": "Alleen bij bijzonderheden",
@@ -17157,7 +18129,9 @@
     "pulseRecipientsHint": "Kommagescheiden e-mailadressen. Laat leeg om naar elk Lid van de organisatie te sturen.",
     "pulseRecipientsInvalid": "Geen geldig e-mailadres: {emails}. Corrigeer of verwijder dit voor het opslaan.",
     "trafficDigest": "Wekelijks AI Traffic-overzicht",
-    "trafficDigestHint": "Elke maandag: de AI-bezoeken van vorige week in één samenvattende regel, met de top drie veranderingen. Verzonden naar bovenstaande ontvangers.",
+    "trafficDigestDescription": "Elke maandag: de AI-bezoeken van vorige week in één samenvattende regel, met de drie belangrijkste wijzigingen. Het gaat naar de Daily Pulse-ontvangers van elk merk en wordt opgeslagen zodra u het aan- of uitvinkt.",
+    "trafficDigestTo": "Aan {emails}",
+    "trafficDigestToEveryone": "Aan elk lid van de organisatie",
     "trafficDigestPulseOff": "Wordt niet verzonden zolang de Daily Pulse uitgeschakeld is. Schakel de pulse weer in om deze te ontvangen.",
     "pulseSaved": "Meldingsinstellingen opgeslagen",
     "pulseSaveFailed": "Kon meldingsinstellingen niet opslaan. Probeer het opnieuw.",
@@ -17175,6 +18149,17 @@
       "empty": "Geen overeenkomende tijdzones gevonden.",
       "saved": "Tijdzone opgeslagen",
       "saveFailed": "Kan uw tijdzone niet opslaan. Probeer het opnieuw."
+    },
+    "language": {
+      "label": "Taal",
+      "automatic": "Automatisch ({language})",
+      "hint": "De taal van de schermen van Ansvisor, alleen voor u. De contenttaal van uw merken verandert niet.",
+      "loading": "Talen laden…",
+      "moreSoon": "Er komen meer talen aan.",
+      "preview": "Medewerkers en testversies zien ook de talen die nog geen vertaling hebben, en een testtaal met langere teksten. Ontbrekende tekst wordt in het Engels getoond.",
+      "testLanguage": "{language} · test",
+      "saved": "Taal opgeslagen",
+      "saveFailed": "Uw taal kon niet worden opgeslagen. Probeer het opnieuw."
     },
     "save": "Wijzigingen opslaan",
     "saved": "Wijzigingen opgeslagen!",
@@ -17294,6 +18279,81 @@
         }
       }
     },
+    "planAddOns": {
+      "title": "Voeg meer toe aan uw abonnement",
+      "description": "Extra tracking, extra merken en AI-gebruikstoppers voor uw Growth-abonnement. Alles wat u kiest wordt eenmalig afgeschreven van de opgeslagen kaart.",
+      "tracking": {
+        "title": "Extra tracking",
+        "description": "Meer Prompt-locaties, dagelijks gevolgd op de engines van uw abonnement. Eén niveau tegelijk; u kunt het op elk moment wijzigen of verwijderen.",
+        "label": "Extra trackingniveaus",
+        "none": "Geen",
+        "tier": "+{units} Prompt-locaties",
+        "price": "{price}/{interval, select, year {jr} other {mnd}}",
+        "contactSales": "Neem contact op met sales",
+        "yearly": "Jaarprijzen: 2 maanden gratis."
+      },
+      "brands": {
+        "title": "Extra merken",
+        "description": "Elk merk krijgt eigen onderwerpen, concurrenten en white-label rapporten. {price} per {interval, select, year {jaar} other {maand}} per merk.",
+        "count": "{count} extra",
+        "fewer": "Eén merk minder",
+        "more": "Eén merk meer",
+        "note": "U kunt niet onder het aantal merken dat u heeft komen: verwijder eerst een merk bij Merken."
+      },
+      "topUp": {
+        "title": "AI-gebruikstopper",
+        "description": "Eén betaling. Voegt AI-gebruik, briefings en kansen toe tot uw abonnement wordt verlengd op {date}; wordt zelf niet verlengd.",
+        "descriptionNoDate": "Eén betaling. Voegt AI-gebruik, briefings en kansen toe tot uw abonnement wordt verlengd; wordt zelf niet verlengd.",
+        "label": "AI-gebruikstoppers",
+        "none": "Geen",
+        "option": "+{multiplier}x",
+        "adds": "{multiplier}× het AI-gebruik van deze maand · +{briefs} briefings · +{opportunities} kansen"
+      },
+      "summary": "{prompts} Prompt-locaties · {brands} merken",
+      "nothing": "Kies hierboven wat u wilt wijzigen.",
+      "review": "Controleren en betalen",
+      "reviewing": "Prijs controleren…",
+      "dialog": {
+        "title": "Controleer uw add-ons",
+        "newLimits": "Nieuwe limieten",
+        "tracking": "Extra tracking",
+        "trackingNone": "Geen extra tracking",
+        "brands": "{count, plural, =0 {Geen extra merken} one {# extra merk} other {# extra merken}}",
+        "topUp": "AI-gebruikstopper +{multiplier}x, eenmalige betaling",
+        "dueToday": "Vandaag te betalen",
+        "dueTodayNote": "Het resterende deel van deze periode voor extra tracking en merken, en een opwaardering in volledig bedrag.",
+        "total": "Vanaf de volgende verlenging",
+        "totalValue": "{price} per {interval, select, year {jaar} other {maand}}",
+        "credit": "Een lager niveau of minder merken levert tegoed op voor uw volgende facturen.",
+        "pay": "Betaal {price}",
+        "confirm": "Bevestigen",
+        "cancel": "Annuleren",
+        "processing": "Bezig met verwerken…"
+      },
+      "done": "Uw add-ons zijn bijgewerkt. Een opwaardering telt mee zodra de betaling is bevestigd.",
+      "states": {
+        "not_admin": "Alleen beheerders kunnen add-ons wijzigen. Vraag het aan een beheerder van uw werkruimte.",
+        "starter": "Add-ons zijn beschikbaar bij het Growth-abonnement. Upgrade naar Growth om tracking, merken en AI-gebruik toe te voegen.",
+        "enterprise": "Uw contract bepaalt uw limieten. Neem contact op met uw accountmanager voor meer.",
+        "trial": "Add-ons kunnen worden gekocht zodra uw abonnement is gestart.",
+        "no_plan": "Add-ons kunnen worden gekocht zolang uw abonnement actief is.",
+        "ending": "Uw abonnement staat op het punt te eindigen. Behoud uw abonnement om de add-ons te wijzigen."
+      },
+      "errors": {
+        "not_cloud": "Add-ons zijn hier niet beschikbaar.",
+        "admin_only": "Alleen beheerders kunnen add-ons wijzigen.",
+        "not_growth": "Add-ons zijn beschikbaar bij het Growth-abonnement.",
+        "trial": "Add-ons kunnen worden gekocht zodra uw abonnement is gestart.",
+        "no_plan": "Add-ons kunnen worden gekocht zolang uw abonnement actief is.",
+        "ending": "Uw abonnement staat op het punt te eindigen. Behoud uw abonnement om de add-ons te wijzigen.",
+        "contact_sales": "Dit niveau wordt verkocht door ons salesteam.",
+        "unavailable": "Deze add-on kan momenteel niet worden gekocht.",
+        "below_usage": "U gebruikt {prompts} Prompt-locaties en {brands} merken; de nieuwe limieten zijn {limitPrompts} en {limitBrands}. Pauzeer eerst Prompts of verwijder merken.",
+        "payment_failed": "De betaling is niet gelukt.",
+        "failed": "Uw add-ons konden niet worden gewijzigd. Probeer het opnieuw."
+      },
+      "readFailed": "Uw add-ons konden niet worden gelezen. Probeer het later opnieuw."
+    },
     "cancelsOn": "Abonnement eindigt op {date}",
     "changePlan": "Abonnement wijzigen",
     "upgradeTo": "Upgraden naar {plan}",
@@ -17374,14 +18434,13 @@
     "planChanged": "Abonnement succesvol bijgewerkt.",
     "subscriptionCanceled": "Uw abonnement is geannuleerd.",
     "needCustomPlan": "Een op maat gemaakt abonnement nodig?",
-    "customPlanDescription": "Voor grote bedrijven en bureaus die AI-zichtbaarheid op grote schaal beheren. Vanaf $ 499/maand.",
+    "customPlanDescription": "Voor grote bedrijven en bureaus die AI-zichtbaarheid op schaal beheren. Vanaf ${price}/maand.",
     "customPlanPoints": [
-      "Onbeperkt aantal merken in een aangepaste werkruimte",
-      "Alle antwoordmachines, inclusief Claude",
-      "Aangepaste tracking van prompts en locaties",
-      "Aangepaste KPI-kaders en gegevensintegraties",
-      "Prioritaire ondersteuning en onboarding-sessies",
-      "SSO / SAML en aangepaste functieverzoeken",
+      "1 merk en 3.000 Prompts om mee te beginnen, meer via contract",
+      "Elke antwoord-engine, Claude via contract",
+      "Onbeperkte contentbriefings, kansen en site-audits",
+      "SSO / SAML, prioriteitsondersteuning en een SLA",
+      "Facturatie op rekening en API-toegang",
       "Uw eigen AI-sleutels: OpenAI, Anthropic, Google, Azure of OpenRouter"
     ],
     "customPlanPointsChat": [
@@ -17389,6 +18448,8 @@
       "Volledig automatisch, met agents die zelfstandig publiceren"
     ],
     "planCards": {
+      "expandable": "+ add-ons",
+      "expandableHint": "Growth kan op elk moment meer hiervan toevoegen, via Instellingen › Facturatie: extra tracking, extra merken en opwaarderingen van AI-gebruik.",
       "starter": {
         "tagline": "Voor kleine teams die beginnen met het monitoren en optimaliseren van AI-zichtbaarheid.",
         "engines": "ChatGPT- & Gemini-tracking",
@@ -17600,6 +18661,8 @@
     "integrations_connectForbidden": "Alleen Beheerders en Managers kunnen integraties verbinden.",
     "integrations_statusFailed": "Kon niet controleren of {label} is verbonden. Probeer het zo opnieuw.",
     "integrations_statusTimedOut": "Het controleren van {label} duurde te lang. Probeer het over een ogenblik opnieuw.",
+    "integrations_propertiesFailed": "Eigenschappen van {source} konden niet worden geladen.",
+    "integrations_propertiesNoAccess": "Google heeft Ansvisor geen toegang gegeven tot {source}: een selectievakje in het scherm van Google was niet aangevinkt. Verbreek de verbinding hierboven, maak opnieuw verbinding en vink alle vakjes aan.",
     "integrations_propertiesTimedOut": "Het ophalen van de properties duurde te lang. Probeer het over een ogenblik opnieuw.",
     "integrations_retry": "Opnieuw proberen",
     "integrations_propertyMapping": "Property-toewijzing",
@@ -18409,14 +19472,30 @@
     "org_description": "Beheer uw organisatienaam en bekijk abonnementsgegevens.",
     "org_name": "Organisatienaam",
     "org_namePlaceholder": "Acme Inc.",
-    "org_slug": "Slug",
-    "org_slugHint": "Gebruikt in API- en integratiereferenties. Neem contact op met support om dit te wijzigen.",
     "org_plan": "Abonnement",
     "org_members": "Leden",
     "org_adminOnly": "Alleen beheerders kunnen de organisatienaam wijzigen.",
     "org_loadFailed": "Kan organisatiegegevens niet laden.",
     "org_saveFailed": "Kan organisatienaam niet opslaan. Probeer het opnieuw.",
-    "accountSaveFailed": "Kan accountgegevens niet opslaan. Probeer het opnieuw."
+    "accountSaveFailed": "Kan accountgegevens niet opslaan. Probeer het opnieuw.",
+    "teamErrors": {
+      "invalid_email": "Voer een geldig e-mailadres in.",
+      "no_brands": "Kies ten minste één merk.",
+      "already_member": "Deze persoon is al lid van uw team.",
+      "already_invited": "Er staat al een openstaande uitnodiging voor dit e-mailadres.",
+      "admin_all_brands": "Beheerders hebben altijd toegang tot Alle merken."
+    },
+    "changePlanFailed": "Het abonnement kon niet worden gewijzigd. Probeer het opnieuw.",
+    "cancelFailed": "Het abonnement kon niet worden opgezegd. Probeer het opnieuw.",
+    "reactivateFailed": "Het abonnement kon niet worden hervat. Probeer het opnieuw.",
+    "portalFailed": "De factureringsportal kon niet worden geopend. Probeer het opnieuw.",
+    "agent_loadFailed": "Uw AI-providers konden niet worden geladen. Laad de pagina opnieuw.",
+    "agent_saveFailed": "Opslaan is mislukt. Probeer het opnieuw.",
+    "agent_testFailed": "De sleutel kon niet worden getest. Probeer het opnieuw.",
+    "agent_clearFailed": "De sleutel kon niet worden verwijderd. Probeer het opnieuw.",
+    "integrations_disconnectFailed": "Verbinding verbreken is mislukt. Probeer het opnieuw.",
+    "integrations_propertySaveFailed": "De property kon niet worden opgeslagen. Probeer het opnieuw.",
+    "integrations_propertiesLoadFailed": "De properties konden niet worden geladen."
   },
   "brands": {
     "title": "Merken",
@@ -18513,6 +19592,7 @@
     },
     "description": "Beheer alle merken die u volgt op verschillende AI-platformen.",
     "addBrand": "Merk toevoegen",
+    "addBrandAddOn": "Voeg een merk toe aan uw abonnement",
     "showAllBrands": "Al mijn merken tonen",
     "visitBrandSettings": "Merkinstellingen openen",
     "workspaceSettings": "Werkruimte-instellingen",
@@ -18814,6 +19894,14 @@
         "hint": "Ingeschakelde platformen worden met de ingestelde frequentie bevraagd om de Prompt-zichtbaarheid van uw merk te controleren.",
         "loadError": "Laden van AI-platforminstellingen mislukt.",
         "saveError": "Opslaan van AI-platforminstellingen mislukt."
+      },
+      "errors": {
+        "save": "Opslaan is mislukt. Probeer het opnieuw.",
+        "saveDomains": "De domeinen konden niet worden opgeslagen. Probeer het opnieuw.",
+        "loadCompetitors": "Concurrenten laden is mislukt.",
+        "addCompetitor": "De concurrent kon niet worden toegevoegd. Probeer het opnieuw.",
+        "removeCompetitor": "De concurrent kon niet worden verwijderd. Probeer het opnieuw.",
+        "deleteBrand": "Het merk kon niet worden verwijderd. Probeer het opnieuw."
       }
     },
     "card": {
