@@ -241,7 +241,7 @@ describe('AgentImpactCard: with results', () => {
     expect(all('[data-action="agent.openImpactRun"]')).toHaveLength(1);
   });
 
-  it('counts the drafts not live yet, and gives the method', async () => {
+  it('counts the drafts not live yet, and gives the method and Open in Reports', async () => {
     await render();
     expect(text('[data-slot="agent-impact-drafts"]')).toBe(
       "3 drafts from this agent aren't live yet. Drafts aren't measured until they go live.",
@@ -249,7 +249,9 @@ describe('AgentImpactCard: with results', () => {
     expect(text('[data-slot="agent-impact-method"] span')).toBe(
       'Baseline: 14 days before ship · Control: untouched similar prompts · Min. change: 3 pts · Correlation, not causation',
     );
-    expect(one('[data-action="agent.openReports"]')).toBeNull();
+    const reports = one('[data-action="agent.openReports"]');
+    expect(reports?.getAttribute('href')).toBe('/dashboard/reports/impact');
+    expect(reports?.textContent).toBe('Open in Reports →');
   });
 
   it('names a teammate who left as a teammate, and a change with no run by how it went live', async () => {
@@ -335,7 +337,7 @@ describe('AgentImpactCard: nothing live yet', () => {
     draftsNotLive,
   });
 
-  it('says what will show and when, with the method', async () => {
+  it('says what will show and when, with the method and Open in Reports', async () => {
     answer = reply(empty(0));
     await render();
     expect(text('[data-slot="agent-impact-empty"]')).toBe(
@@ -343,7 +345,7 @@ describe('AgentImpactCard: nothing live yet', () => {
     );
     expect(one('[data-slot="agent-impact-kpis"]')).toBeNull();
     expect(one('[data-slot="agent-impact-drafts"]')).toBeNull();
-    expect(one('[data-slot="agent-impact-method"]')).not.toBeNull();
+    expect(one('[data-action="agent.openReports"]')).not.toBeNull();
   });
 
   it('counts its drafts not live yet, without saying twice that they aren’t measured', async () => {

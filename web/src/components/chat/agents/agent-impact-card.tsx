@@ -327,6 +327,13 @@ export function AgentImpactCard({ id }: { id: string }) {
               tReport('method.correlation'),
             ].join(' · ')}
           </span>
+          <Link
+            href="/dashboard/reports/impact"
+            data-action="agent.openReports"
+            className="font-medium text-foreground underline-offset-2 hover:underline"
+          >
+            {t('openReports')} →
+          </Link>
         </div>
       </div>
     </section>

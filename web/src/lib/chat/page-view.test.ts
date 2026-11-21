@@ -201,6 +201,7 @@ describe('the pages of one item, by the id in their path', () => {
     for (const route of [
       '/dashboard/prompts/topics',
       '/dashboard/prompts/tracked',
+      '/dashboard/reports/impact',
       `/dashboard/content/editor/${ID}`,
       `/dashboard/agents/${ID}/edit`,
       `/dashboard/brands/${ID}/topics`,

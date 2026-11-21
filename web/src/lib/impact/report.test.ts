@@ -425,10 +425,13 @@ describe('the words (CHAT-22 §2 acceptance)', () => {
         ? Object.values(node).flatMap(stringsOf)
         : [];
 
-  it('never say a change caused anything, in its words or in the agents Help', () => {
+  it('never say a change caused anything, on the page or in its Help', () => {
     const page = stringsOf((messages as { reports: { impact: unknown } }).reports.impact);
     expect(page.length).toBeGreaterThan(50);
-    const help = readFileSync(path.join(__dirname, '../../../../help/chat/agents.md'), 'utf8');
+    const help = readFileSync(
+      path.join(__dirname, '../../../../help/reports/what-ansvisor-did.md'),
+      'utf8',
+    );
     for (const text of [...page, help]) {
       expect(text).not.toMatch(/\bcaus(e|ed|es|ing)\b|because of/i);
     }

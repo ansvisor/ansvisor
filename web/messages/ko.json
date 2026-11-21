@@ -8714,6 +8714,7 @@
         "draftsNote": "초안은 게시되기 전까지 측정되지 않습니다.",
         "emptyTitle": "이 에이전트에서 아직 게시된 내용이 없습니다.",
         "emptyBody": "에이전트 실행을 통해 생성된 페이지가 게시되면 여기에 표시됩니다. 7일 후 초기 신호가 나타나고, 14일 후에 첫 번째 평가가 제공됩니다.",
+        "openReports": "보고서에서 열기",
         "loadFailed": "이 에이전트의 작업 내역을 불러오지 못했습니다."
       }
     },
@@ -17522,6 +17523,7 @@
     }
   },
   "reports": {
+    "impactLink": "Ansvisor의 기여 내역",
     "impact": {
       "title": "Ansvisor의 기여 내역",
       "subtitle": "{brand} · 수정되지 않은 유사한 Prompt와 비교 측정한 적용 조치",

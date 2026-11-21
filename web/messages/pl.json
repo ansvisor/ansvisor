@@ -8733,6 +8733,7 @@
         "draftsNote": "Wersje robocze nie są mierzone, dopóki nie zostaną opublikowane.",
         "emptyTitle": "Nic od tego agenta nie zostało jeszcze opublikowane.",
         "emptyBody": "Gdy strona z jednego z jego uruchomień zostanie opublikowana, pojawi się tutaj: wstępny sygnał po 7 dniach, pierwszy wynik po 14 dniach.",
+        "openReports": "Otwórz w Raportach",
         "loadFailed": "Nie udało się załadować działań tego agenta."
       }
     },
@@ -17541,6 +17542,7 @@
     }
   },
   "reports": {
+    "impactLink": "Co Ansvisor dla Ciebie zrobił",
     "impact": {
       "title": "Co Ansvisor dla Ciebie zrobił",
       "subtitle": "{brand} · wdrożone działania mierzone względem nietkniętych podobnych Prompts",

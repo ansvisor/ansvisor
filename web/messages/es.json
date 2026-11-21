@@ -8737,6 +8737,7 @@
         "draftsNote": "Los borradores no se miden hasta que se publican.",
         "emptyTitle": "Aún no se ha publicado nada de este agente.",
         "emptyBody": "Cuando una página de una de sus ejecuciones se publica, aparece aquí: una señal inicial a los 7 días y el primer veredicto a los 14 días.",
+        "openReports": "Abrir en Informes",
         "loadFailed": "No se pudo cargar la actividad de este agente."
       }
     },
@@ -17545,6 +17546,7 @@
     }
   },
   "reports": {
+    "impactLink": "Qué hizo Ansvisor por usted",
     "impact": {
       "title": "Qué hizo Ansvisor por usted",
       "subtitle": "{brand} · acciones implementadas medidas frente a Prompts similares sin cambios",

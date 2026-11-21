@@ -8743,6 +8743,7 @@
         "draftsNote": "Les brouillons ne sont mesurés qu'une fois mis en ligne.",
         "emptyTitle": "Aucun élément de cet agent n'est encore en ligne.",
         "emptyBody": "Lorsqu'une page issue de l'une de ses exécutions est mise en ligne, elle apparaît ici : un premier signal après 7 jours, puis le premier verdict à 14 jours.",
+        "openReports": "Ouvrir dans Rapports",
         "loadFailed": "Impossible de charger l'activité de cet agent."
       }
     },
@@ -17551,6 +17552,7 @@
     }
   },
   "reports": {
+    "impactLink": "Ce qu'Ansvisor a fait pour vous",
     "impact": {
       "title": "Ce qu'Ansvisor a fait pour vous",
       "subtitle": "{brand} · actions déployées mesurées par rapport à des Prompts similaires inchangés",
