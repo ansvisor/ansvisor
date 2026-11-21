@@ -8,6 +8,7 @@
  * not "not mentioned"; several answers on one day count that day once).
  */
 import { PLANS, PLAN_ORDER, type Plan } from '@/config/plans';
+import { ENGINE_NAMES } from '@/config/platform-labels';
 import { extractHostname, normalizeDomain } from '@/lib/citations/classify';
 import { pageKey } from '@/lib/content/sources';
 import { dayIn, nextDay, startOfDayIn } from '@/lib/time-zone';
@@ -20,13 +21,13 @@ import type { Sentiment } from '@/types';
  * would stay empty, or offer an upgrade to an engine no plan tracks.
  */
 export const POSITION_PLATFORMS = [
-  { id: 'chatgpt-web', label: 'ChatGPT' },
-  { id: 'gemini-web', label: 'Gemini' },
-  { id: 'google-aio', label: 'Google AI Overviews' },
-  { id: 'google-aimode', label: 'Google AI Mode' },
-  { id: 'grok-web', label: 'Grok' },
+  { id: 'chatgpt-web', label: ENGINE_NAMES['chatgpt-web'] },
+  { id: 'gemini-web', label: ENGINE_NAMES['gemini-web'] },
+  { id: 'google-aio', label: ENGINE_NAMES['google-aio'] },
+  { id: 'google-aimode', label: ENGINE_NAMES['google-aimode'] },
+  { id: 'grok-web', label: ENGINE_NAMES['grok-web'] },
   // API-model tracking stores its answers under this platform.
-  { id: 'claude', label: 'Claude' },
+  { id: 'claude', label: ENGINE_NAMES.claude },
 ] as const;
 
 export type PositionPlatformId = (typeof POSITION_PLATFORMS)[number]['id'];

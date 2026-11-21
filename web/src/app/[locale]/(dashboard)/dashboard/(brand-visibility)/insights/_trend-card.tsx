@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useLocale, useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -70,6 +71,7 @@ export function TrendCard({
   // A read-only workspace (plan not active): pinning opens the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -97,9 +99,9 @@ export function TrendCard({
     setSaving(true);
     try {
       onPinnedChange(await setPinnedCompetitors(brandId, next));
-    } catch {
+    } catch (err) {
       onPinnedChange(previous);
-      toast.error(t('pinFailed'));
+      toast.error(serverError(err, t('pinFailed')));
     } finally {
       setSaving(false);
     }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Check, Copy, Loader2, TriangleAlert, Upload } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -316,6 +317,7 @@ export function BotsDialog({
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const tReadOnly = useTranslations('readOnly');
+  const serverError = useServerErrorText();
 
   const close = (next: boolean) => {
     if (!next) {
@@ -331,7 +333,11 @@ export function BotsDialog({
       const result = await createBotConnection(brandId, kind);
       setCreating(false);
       if ('error' in result) {
-        toast.error(result.code === 'plan_limit' ? t('planLimit') : result.error);
+        toast.error(
+          result.code === 'plan_limit'
+            ? t('planLimit')
+            : serverError(result, result.error, result.status),
+        );
         return;
       }
       setCreated(result);
@@ -346,7 +352,7 @@ export function BotsDialog({
     setRevoking(null);
     setConfirming(null);
     if ('error' in result) {
-      toast.error(result.error);
+      toast.error(serverError(result, result.error, result.status));
       return;
     }
     toast.success(t('revoked'));

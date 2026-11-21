@@ -41,6 +41,27 @@ export async function touchAction(supabase: Client, brandId: string, actionId: s
 }
 
 /**
+ * Moves a new action to In progress once one of its tasks is started or
+ * done (UX audit AC-24, decision D13): a task under way on an action still
+ * marked New left the list saying "New" and History leaving it out. Only a
+ * New action moves, never one a person put on hold or closed; the change is
+ * in its History as any status change is. Best effort: the task's own write
+ * has already happened.
+ */
+export async function startAction(supabase: Client, brandId: string, actionId: string) {
+  const { data } = await supabase
+    .from('actions')
+    .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+    .eq('brand_id', brandId)
+    .eq('id', actionId)
+    .eq('status', 'new')
+    .select('id');
+  if ((data ?? []).length > 0) {
+    await logEvent(supabase, actionId, 'status_changed', { to: 'in_progress', by: 'task' });
+  }
+}
+
+/**
  * A task's status, as the drawer sets it: the row (a skip with why, any
  * other status clearing it), its `task_status` event with what `data` adds
  * (Chat's source and file), and the action's Updated stamp. `onlyIfChanged`
@@ -67,6 +88,12 @@ export async function writeTaskStatus(
   const { data: written, error } = await write.select('id');
   if (error) throw new Error(error.message);
   if (onlyIfChanged && (written ?? []).length === 0) return false;
+  // Work has started: a new action moves to In progress with it (UX audit AC-24).
+  // Before the task's own event, so that event stays the action's latest
+  // (Chat's card reads it for its Undo).
+  if (status === 'in_progress' || status === 'completed') {
+    await startAction(supabase, task.brandId, task.actionId);
+  }
   await logEvent(supabase, task.actionId, 'task_status', {
     taskId: task.taskId,
     to: status,

@@ -405,6 +405,7 @@ describe('sendMentionsToActionCenter', () => {
     );
     await expect(sendMentionsToActionCenter('b1', [{ id: 'r1', excerpt: '' }])).resolves.toEqual({
       error: 'No answers naming the brand',
+      status: 404,
     });
     session = null;
     await expect(sendMentionsToActionCenter('b1', [{ id: 'r1', excerpt: '' }])).resolves.toEqual({

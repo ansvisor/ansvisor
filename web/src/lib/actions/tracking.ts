@@ -2651,15 +2651,16 @@ const MODEL_TO_PROVIDER: Record<string, string> = {
   'gemini-2.5-flash': 'Gemini',
 };
 
+// The scrapers by their engine's name; the OpenAI API platform groups with ChatGPT.
 const SCRAPER_PROVIDER: Record<string, string> = {
   chatgpt: 'ChatGPT',
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overviews',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'perplexity-web': 'Perplexity',
-  'gemini-web': 'Gemini',
+  'chatgpt-web': PLATFORM_LABELS['chatgpt-web'],
+  'google-aio': PLATFORM_LABELS['google-aio'],
+  'google-aimode': PLATFORM_LABELS['google-aimode'],
+  'copilot-web': PLATFORM_LABELS['copilot-web'],
+  'grok-web': PLATFORM_LABELS['grok-web'],
+  'perplexity-web': PLATFORM_LABELS['perplexity-web'],
+  'gemini-web': PLATFORM_LABELS['gemini-web'],
 };
 
 function resolveProvider(modelUsed: string | null | undefined, platform?: string | null): string {

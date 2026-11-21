@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -53,6 +54,7 @@ export function ShoppingOpportunities({
   hidden?: boolean;
 }) {
   const t = useTranslations('contentEditor.plan.shopping');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const [read, setRead] = useState<Read | null>(null);
   const [creating, setCreating] = useState<string | null>(null);
@@ -96,7 +98,7 @@ export function ShoppingOpportunities({
       router.push(contentEditorPath(id));
     } catch (err) {
       console.error('Failed to start the buying guide:', err);
-      toast.error(t('createFailed'));
+      toast.error(serverError(err, t('createFailed')));
       setCreating(null);
     }
   };

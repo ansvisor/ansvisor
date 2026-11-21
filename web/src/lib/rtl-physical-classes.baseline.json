@@ -7,7 +7,6 @@
   "components/ui/avatar.tsx": 1,
   "components/ui/dialog.tsx": 2,
   "components/ui/sheet.tsx": 4,
-  "i18n/locales.ts": 1,
   "lib/actions/menu-access.ts": 1,
   "lib/brand-prompts-link.ts": 1,
   "lib/chat/fit.ts": 1,

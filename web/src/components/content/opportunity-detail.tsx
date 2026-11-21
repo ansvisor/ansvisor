@@ -282,8 +282,8 @@ export function OpportunityDetail({
       toast.success(t('sentToPlan'), {
         action: { label: t('openPlan'), onClick: () => router.push('/dashboard/content/plan') },
       });
-    } catch {
-      toast.error(t('sendToPlanError'));
+    } catch (err) {
+      toast.error(serverError(err, t('sendToPlanError')));
     }
   };
 
@@ -302,7 +302,7 @@ export function OpportunityDetail({
       })
       .catch((err) => {
         console.error('Failed to load opportunity:', err);
-        toast.error(t('loadOpportunityError'));
+        toast.error(serverError(err, t('loadOpportunityError')));
       })
       .finally(() => setLoading(false));
 
@@ -310,7 +310,7 @@ export function OpportunityDetail({
     getBriefQuota()
       .then(setQuota)
       .catch(() => setQuota(null));
-  }, [id, t]);
+  }, [id, t, serverError]);
 
   const handleSend = async () => {
     setSending(true);
@@ -330,7 +330,7 @@ export function OpportunityDetail({
       }
     } catch (err) {
       console.error('Send failed:', err);
-      toast.error(t('sendError'));
+      toast.error(serverError(err, t('sendError')));
     } finally {
       setSending(false);
     }
@@ -341,8 +341,8 @@ export function OpportunityDetail({
       await updateOpportunityStatus(id, 'reviewed');
       setOpportunity(await getOpportunity(id));
       onChanged?.();
-    } catch {
-      toast.error(t('reviewedError'));
+    } catch (err) {
+      toast.error(serverError(err, t('reviewedError')));
     }
   };
 
@@ -386,7 +386,7 @@ export function OpportunityDetail({
       idempotencyKey: crypto.randomUUID(),
     }).catch((err: unknown) => ({
       ok: false as const,
-      error: err instanceof Error ? err.message : t('alternative.failed'),
+      error: caughtError(err, t('alternative.failed')),
       failure: 'failed' as const,
       quotaExhausted: false,
       noCluster: false,
@@ -420,14 +420,14 @@ export function OpportunityDetail({
               const restored = await getOpportunity(id);
               setOpportunity(restored);
               onChanged?.();
-            } catch {
-              toast.error(t('undoFailed'));
+            } catch (err) {
+              toast.error(serverError(err, t('undoFailed')));
             }
           },
         },
       });
-    } catch {
-      toast.error(t('dismissError'));
+    } catch (err) {
+      toast.error(serverError(err, t('dismissError')));
     }
   };
 
@@ -444,8 +444,8 @@ export function OpportunityDetail({
       toast.success(result.created ? t('sentToActionCenter') : t('alreadyInActionCenter'));
       setOpportunity(await getOpportunity(id));
       onChanged?.();
-    } catch {
-      toast.error(t('sendToActionCenterError'));
+    } catch (err) {
+      toast.error(serverError(err, t('sendToActionCenterError')));
     } finally {
       setSendingAction(null);
     }
@@ -457,8 +457,8 @@ export function OpportunityDetail({
       setOpportunity(await getOpportunity(id));
       onChanged?.();
       toast.success(t('restoredToast'));
-    } catch {
-      toast.error(t('restoreError'));
+    } catch (err) {
+      toast.error(serverError(err, t('restoreError')));
     }
   };
 
@@ -529,7 +529,7 @@ export function OpportunityDetail({
       }
     } catch (err) {
       console.error('Export failed:', err);
-      toast.error(t('exportOne.failed'));
+      toast.error(serverError(err, t('exportOne.failed')));
     }
   };
 
