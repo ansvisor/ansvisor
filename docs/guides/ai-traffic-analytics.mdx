@@ -142,7 +142,7 @@ The suggested redirect is a working page: a **Similar page**, **The page above i
 
 ### AI bots reading your site
 
-From your own Cloudflare, Vercel, Fastly or any server's logs. Only verified bots count: the user agent and the operator's published IP ranges must both match. Today that's OpenAI's GPTBot, OAI-SearchBot and ChatGPT-User, Anthropic's ClaudeBot, Claude-SearchBot and Claude-User, and Perplexity's PerplexityBot and Perplexity-User.
+From your own Cloudflare, Vercel, Fastly, Netlify or any server's logs. Only verified bots count: the user agent and the operator's published IP ranges must both match. Today that's OpenAI's GPTBot, OAI-SearchBot and ChatGPT-User, Anthropic's ClaudeBot, Claude-SearchBot and Claude-User, and Perplexity's PerplexityBot and Perplexity-User.
 
 - **By bot type** — hits, pages read and last seen for **Training**, **Search index** and **User fetch**, with the bots under each.
 - **Pages AI bots read** — hits per page, and when each type last read it.
@@ -199,6 +199,14 @@ In your Fastly service, add an **HTTPS logging endpoint** and set:
 ```
 
 Activate the service configuration. Ansvisor automatically answers Fastly's domain-control challenge at `/.well-known/fastly/logging/challenge`, so you do not need to add a DNS record for the API endpoint. Fastly sends request logs; Ansvisor checks the user agent against its AI-bot list and the client IP against that bot operator's published ranges. Only verified bots are stored. The host is included so requests for other domains on the same Fastly service are not attributed to this brand. Every incoming record, including non-bot requests, counts toward the monthly raw-log cap.
+
+#### Netlify log drain
+
+Netlify log drains are available on Enterprise plans. Choose **Netlify log drain** in the connection dialog. **Create connection** shows the endpoint and the one-time bearer header to copy. The secret is shown once; if it is lost, revoke the connection and create another.
+
+In your Netlify site, open **Log drains** and add a **General HTTP endpoint** drain. Set the endpoint URL, choose **JSON** as the format, and add the **Authorization** header with the bearer value. Netlify's [General HTTP endpoint supports Authorization headers](https://docs.netlify.com/manage/monitoring/log-drains/#general-http-endpoint).
+
+Netlify sends every request log; all records count toward the monthly raw-log cap. Ansvisor stores only requests whose user agent and source IP match a known AI bot and its published ranges.
 
 #### Send logs from any server
 
@@ -397,11 +405,3 @@ AI-bot requests, from Cloudflare, Vercel, Fastly, the webhook or an upload, are 
 <Card title="Continue: Competitors" icon="arrow-right" href="/guides/competitors">
   Benchmark your AI presence against named rivals.
 </Card>
-
-#### Netlify log drain
-
-Netlify log drains are available on Enterprise plans. Choose **Netlify log drain** in the connection dialog. **Create connection** shows the endpoint and the one-time bearer header to copy. The secret is shown once; if it is lost, revoke the connection and create another.
-
-In your Netlify site, open **Log drains** and add a **General HTTP endpoint** drain. Set the endpoint URL, choose **JSON** as the format, and add the **Authorization** header with the bearer value.
-
-Netlify sends every request log; all records count toward the monthly raw-log cap. Ansvisor stores only requests whose user agent and source IP match a known AI bot and its published ranges.

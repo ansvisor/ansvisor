@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00553: Netlify log drain for AI bot traffic (#2167)
+-- 00557: Netlify log drain for AI bot traffic (#2167)
 -- ============================================================================
 -- A Netlify log drain (Enterprise plans) posts JSON or NDJSON request logs to
 -- /bots/ingest with the connection's Authorization bearer secret. Its records
