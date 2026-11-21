@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { brandPagePath } from '@/lib/brand-path';
-import { brandPromptsLink } from '@/lib/brand-prompts-link';
+import { brandPromptsLink, brandTopicsLink } from '@/lib/brand-prompts-link';
 import { cn } from '@/lib/utils';
 import {
   ArrowLeft,
@@ -30,15 +30,20 @@ import {
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 /**
- * The brand's tabs. Topics and Settings are pages of this brand; Prompts
- * leaves them for the Prompts page (Tracked Prompts), with this brand picked,
- * as the brand card's prompts row does: the brand's own prompts page is going
- * away. That page's address keeps the tab marked only when someone lands
- * there.
+ * The brand's tabs. Settings is a page of this brand; Topics and Prompts
+ * leave it for the Prompts page (its Topics tab, and Tracked Prompts), with
+ * this brand picked, as the brand card's prompts row does. The brand's own
+ * prompts page is going away; its Topics page stays for Manage topics. Their
+ * addresses keep the tab marked only when someone lands there.
  */
 const SUB_NAV = [
-  { href: 'topics', label: 'Topics', icon: Tag },
-  { href: 'prompts', label: 'Prompts', icon: MessageSquareText, opensPromptsPage: true },
+  { href: 'topics', label: 'Topics', icon: Tag, opensPromptsPage: brandTopicsLink },
+  {
+    href: 'prompts',
+    label: 'Prompts',
+    icon: MessageSquareText,
+    opensPromptsPage: brandPromptsLink,
+  },
   { href: 'settings', label: 'Settings', icon: Settings },
 ] as const;
 
@@ -126,7 +131,7 @@ export default function BrandDetailLayout({
           const leaves = 'opensPromptsPage' in item;
           const link = leaves
             ? {
-                ...brandPromptsLink(id, setActiveBrand),
+                ...item.opensPromptsPage(id, setActiveBrand),
                 'aria-describedby': promptsHintId,
                 title: t('opensPromptsPage'),
               }

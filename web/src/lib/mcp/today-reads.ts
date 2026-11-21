@@ -277,6 +277,10 @@ const standingOf = (standing: TodayStanding | null) =>
     change: standing.change,
     rank: standing.rank,
     of: standing.of,
+    // Which brands `of` counts (AC-02): primary rivals, competitors named in
+    // 10+ prompts, or the five named most.
+    rank_among: standing.set,
+    ...(standing.runAt ? { run_at: standing.runAt } : {}),
     neighbour: standing.neighbour,
     competitors: standing.competitors,
   };

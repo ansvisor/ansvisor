@@ -1,4 +1,5 @@
 import { act, type ReactElement, type ReactNode } from 'react';
+import { pickDate } from '@/components/ui/date-picker-testing';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -982,12 +983,6 @@ describe('QuestionCard as the range card (owner request 2026-11-11)', () => {
   };
   const day = (offset: number) =>
     new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
-  const setDate = async (input: HTMLInputElement, value: string) => {
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-  };
   const ranges = () => $$('[data-action="question.pickRange"]') as HTMLButtonElement[];
   const press = async (k: string) => {
     await act(async () => {
@@ -1035,16 +1030,16 @@ describe('QuestionCard as the range card (owner request 2026-11-11)', () => {
     const onAnswer = vi.fn();
     await render(<QuestionCard ask={RANGE} onAnswer={onAnswer} />);
     await click(action('question.customRange'));
-    const [from, to] = $$('[data-slot="range-custom"] input') as HTMLInputElement[];
-    expect(to.max).toBe(day(0));
+    const pickers = () =>
+      $$('[data-slot="range-custom"] [data-slot="date-picker"]') as HTMLElement[];
     expect(action('question.useDates')!.disabled).toBe(true);
-    await setDate(from, day(-5));
-    await setDate(to, day(-10));
+    await pickDate(pickers()[0], day(-5));
+    // The app's date picker (AC-25) won't take a last day before the first: nothing is picked.
+    await pickDate(pickers()[1], day(-10));
+    expect(pickers()[1].dataset.value).toBe('');
     expect(action('question.useDates')!.disabled).toBe(true);
-    expect($('[data-slot="range-custom"] [role="alert"]')!.textContent).toContain(
-      'the first not after the last',
-    );
-    await setDate(to, day(-1));
+    await act(async () => pickers()[1].click());
+    await pickDate(pickers()[1], day(-1));
     await click(action('question.useDates'));
     expect(onAnswer).toHaveBeenCalledWith({
       selected: [],

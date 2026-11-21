@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Activity,
   ArrowLeft,
@@ -125,6 +126,7 @@ function DateRangeBar({
   onCustomFrom: (v: string) => void;
   onCustomTo: (v: string) => void;
 }) {
+  const tCommon = useTranslations('common');
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div>
@@ -151,20 +153,20 @@ function DateRangeBar({
         <>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">From</label>
-            <Input
-              type="date"
-              value={customFrom}
-              onChange={(e) => onCustomFrom(e.target.value)}
-              className="h-8 w-36 text-xs"
+            <DatePicker
+              aria-label={tCommon('from')}
+              value={customFrom || null}
+              onChange={(day) => onCustomFrom(day ?? '')}
+              className="w-36"
             />
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">To</label>
-            <Input
-              type="date"
-              value={customTo}
-              onChange={(e) => onCustomTo(e.target.value)}
-              className="h-8 w-36 text-xs"
+            <DatePicker
+              aria-label={tCommon('to')}
+              value={customTo || null}
+              onChange={(day) => onCustomTo(day ?? '')}
+              className="w-36"
             />
           </div>
         </>

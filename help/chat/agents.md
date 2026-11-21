@@ -67,6 +67,10 @@ Agents made for the site type of the brand you have open are marked **For your s
 
 **Crawler & Technical Fixer** runs when you click **Run now**, on **Ask me first**. It is made for AEO and developer roles. It reads each page's latest **Site Audit** and lists what keeps AI crawlers out: AI bots your robots.txt blocks, bots your CDN or firewall turns away, main text that only appears once JavaScript runs, and missing HTTPS or canonical tags. For each issue it writes the fix ready for your developer, such as the robots.txt lines to add. It never changes your site and doesn't open pull requests. Sending a fix to the Action Center is a card you approve. A page with no audit isn't checked; with no audit at all, it offers to audit your home page, which uses one of the month's audits. In Chat, the same skill is **/tech-fix**.
 
+## Agency Client Reporter
+
+**Agency Client Reporter** runs on the 1st of each month at 09:00 on **Auto, ask before changes**. It is made for agencies. It starts on **All brands**, so each run writes one report per brand in its scope: last month against the month before, with citations, mentions, share of voice, what changed and the next actions. Its skill is **Weekly report** (**/report**), and its instructions ask for the month instead of the week; you can change them. Narrow it to a few client brands under **Scope**. Search Console is optional.
+
 ## What each card shows
 
 In **Your agents**, each agent has a card with:

@@ -1,4 +1,5 @@
 import { act, type ReactNode } from 'react';
+import { pickDate } from '@/components/ui/date-picker-testing';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -338,11 +339,11 @@ describe('AgentForm: new agent', () => {
     await click(one('[data-skill="faq"]')!);
     await next();
     await type(one('[data-action="agentNew.repeat"]')!, 'once');
-    await type(one('[data-action="agentNew.date"]')!, '2026-10-01');
+    await pickDate(one('[data-action="agentNew.date"]')!, '2026-10-01');
     await next();
     expect(step()).toBe('1');
     expect(errors()).toContain('A one-time schedule has to be in the future.');
-    await type(one('[data-action="agentNew.date"]')!, '2026-11-05');
+    await pickDate(one('[data-action="agentNew.date"]')!, '2026-11-05');
     expect(errors()).toEqual([]);
 
     // A second trigger, made a KPI: "Citations −10% in a week".
