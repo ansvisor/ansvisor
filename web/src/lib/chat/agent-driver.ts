@@ -374,13 +374,15 @@ function runScope(
       chips.push(
         fire.kind === 'page_published'
           ? { key: 'page', label: runnerT('chip.page'), value: fire.ref.slice(0, 200) }
-          : fire.kind === 'signal'
-            ? {
-                key: 'signal',
-                label: runnerT('chip.signal'),
-                value: [fire.signalKind, fire.ref].filter(Boolean).join(' ').slice(0, 200),
-              }
-            : { key: 'slot', label: runnerT('chip.slot'), value: fire.ref.slice(0, 200) },
+          : fire.kind === 'catalog_synced'
+            ? { key: 'catalog', label: runnerT('chip.catalog'), value: fire.ref.slice(0, 200) }
+            : fire.kind === 'signal'
+              ? {
+                  key: 'signal',
+                  label: runnerT('chip.signal'),
+                  value: [fire.signalKind, fire.ref].filter(Boolean).join(' ').slice(0, 200),
+                }
+              : { key: 'slot', label: runnerT('chip.slot'), value: fire.ref.slice(0, 200) },
       );
     }
     if (evidence.earlier.length > 0) {

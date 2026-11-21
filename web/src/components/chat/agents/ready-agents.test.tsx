@@ -163,8 +163,8 @@ describe('Ready to use', () => {
     expect(shown[8].getAttribute('data-preset')).toBe('fanout-gap-filler');
     expect(shown[9].getAttribute('data-preset')).toBe('prompt-portfolio');
     expect(shown[10].getAttribute('data-preset')).toBe('onboarding-help');
-    expect(shown.slice(8, 25).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
-    expect(shown.slice(25).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
+    expect(shown.slice(8, 26).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
+    expect(shown.slice(26).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
     // Not the AEO Operator: the browser reads CHAT_OPERATOR off, and the page hands it in when on.
     expect(shown).toHaveLength(38);
     expect(ids()).not.toContain('aeo-operator');
@@ -236,7 +236,11 @@ describe('Ready to use', () => {
     expect(card('localization').querySelector('[data-cell="trigger"]')?.textContent).toBe(
       'TriggerWhen a page is published',
     );
-    expect(action('agents.usePreset')).toHaveLength(25);
+    // Shopping Readiness (00558): /shopping on each catalog sync that changes products.
+    expect(card('shopping-readiness').querySelector('[data-cell="trigger"]')?.textContent).toBe(
+      'TriggerWhen the catalog syncs',
+    );
+    expect(action('agents.usePreset')).toHaveLength(26);
 
     // Fan-out Gap Filler: its skills on Mondays, in its mode.
     const added = card('fanout-gap-filler');

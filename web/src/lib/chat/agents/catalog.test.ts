@@ -98,6 +98,7 @@ describe('the preset files', () => {
       'fanout-gap-filler',
       'prompt-portfolio',
       'onboarding-help',
+      'shopping-readiness',
       'localization',
       'aeo-operator',
       'paid-opportunity',
@@ -115,7 +116,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(13);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(12);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {

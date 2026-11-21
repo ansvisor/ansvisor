@@ -82,9 +82,17 @@ const TRIGGERED_KINDS = [
   'watch_rule',
   'brand_added',
   'page_published',
+  'catalog_synced',
 ] as const;
 /** Triggers that count toward the daily limit and the cooldown (§E item 24). */
-const EVENT_KINDS = ['signal', 'kpi', 'watch_rule', 'brand_added', 'page_published'] as const;
+const EVENT_KINDS = [
+  'signal',
+  'kpi',
+  'watch_rule',
+  'brand_added',
+  'page_published',
+  'catalog_synced',
+] as const;
 
 /** Whether a run's trigger started it by itself, not a person (Run now, Run agent). */
 export const isTriggered = (kind: string) => (TRIGGERED_KINDS as readonly string[]).includes(kind);
@@ -94,8 +102,16 @@ const isEvent = (kind: string) => (EVENT_KINDS as readonly string[]).includes(ki
 
 /** One fire, as a run's evidence lists it (chat_agent_runs.evidence_json). */
 const fireSchema = z.object({
-  kind: z.enum(['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added', 'page_published']),
-  /** What fired: a signal's id, a schedule's slot, the brand added, the page published. */
+  kind: z.enum([
+    'schedule',
+    'signal',
+    'kpi',
+    'watch_rule',
+    'brand_added',
+    'page_published',
+    'catalog_synced',
+  ]),
+  /** What fired: a signal's id, a schedule's slot, the brand added, the page published, the catalog source synced. */
   ref: z.string().max(200),
   at: z.string(),
   /** A signal's kind and its Action Center definitions. */
@@ -988,35 +1004,48 @@ export async function fireBrandAdded(
   return counts;
 }
 
-// ─── A page published ────────────────────────────────────────────────────────
+// ─── A page published, a catalog synced ──────────────────────────────────────
 
-/** Events on a brand the API server reports (00558): a page live in its CMS. */
-export const BRAND_EVENT_KINDS = ['page_published'] as const;
+/** Events on a brand the API server reports (00558): a page live in its CMS, a catalog synced. */
+export const BRAND_EVENT_KINDS = ['page_published', 'catalog_synced'] as const;
 export type BrandEventKind = (typeof BRAND_EVENT_KINDS)[number];
+
+/** A catalog sync's own id: its source's, then the sync's time. */
+const SYNC_REF =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/i;
 
 /**
  * An event as the API server reports it: its kind, the brand and the
- * event's own id (a page's send), and the page it is about. Ids only: no
- * text written outside the workspace reaches the run from here; the run
- * reads the page with its own tools, whose results are untrusted
- * (untrusted.ts).
+ * event's own id (a page's send, a source's sync), and what it is about
+ * (the page, the catalog source). Ids only: no text written outside the
+ * workspace reaches the run from here; the run reads the page or the
+ * catalog with its own tools, whose results are untrusted (untrusted.ts).
  */
-export const brandEventSchema = z.strictObject({
-  kind: z.enum(BRAND_EVENT_KINDS),
-  brandId: z.guid(),
-  ref: z.guid(),
-  draftId: z.guid(),
-});
+export const brandEventSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('page_published'),
+    brandId: z.guid(),
+    ref: z.guid(),
+    draftId: z.guid(),
+  }),
+  z.strictObject({
+    kind: z.literal('catalog_synced'),
+    brandId: z.guid(),
+    ref: z.string().regex(SYNC_REF),
+    sourceId: z.guid(),
+  }),
+]);
 export type BrandEvent = z.infer<typeof brandEventSchema>;
 
 /**
  * Fires the triggers of an event on a brand (00558: When a page is
- * published): each enabled one of the kind, of an active agent whose scope
+ * published, When the catalog syncs): each enabled one of the kind, of an active agent whose scope
  * has the brand and whose owner may use it (fireBrands), in a workspace
  * where Chat is on and that isn't read-only, once per agent and event
  * (claimOnce, by the event's ref); never for the demo brand. The caps, the
  * cooldown, the daily limit and the AI limit apply as for any event. The
- * run's evidence names the page (its draft's id) for the run to read. Then
+ * run's evidence names the page (its draft's id) or the catalog source for
+ * the run to read. Then
  * the workspace starts what it has room for, with a driver; without one
  * the runs wait for the minute tick.
  */
@@ -1060,7 +1089,13 @@ export async function fireBrandEvent(
         agent,
         brandRow.id,
         { id: trigger.id, kind: event.kind },
-        [{ kind: event.kind, ref: event.draftId, at: now.toISOString() }],
+        [
+          {
+            kind: event.kind,
+            ref: event.kind === 'page_published' ? event.draftId : event.sourceId,
+            at: now.toISOString(),
+          },
+        ],
         org.limits,
         now,
       );

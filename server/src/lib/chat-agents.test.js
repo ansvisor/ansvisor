@@ -308,3 +308,37 @@ describe('a page published, for When a page is published triggers (00558)', () =
     ).resolves.toBeNull();
   });
 });
+
+describe('a catalog synced, for When the catalog syncs triggers (00558)', () => {
+  const SOURCE = '55555555-5555-4555-8555-555555555555';
+  const AT = '2026-11-21T09:00:00.000Z';
+
+  it('sends the brand, the source and the sync as ids', async () => {
+    await agents.notifyChatAgentsOfCatalogSync({ brandId: BRAND, sourceId: SOURCE, syncedAt: AT });
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0].url).toBe('https://app.example.com/api/internal/chat/agents/events');
+    expect(fetchCalls[0].body).toEqual({
+      kind: 'catalog_synced',
+      brandId: BRAND,
+      ref: `${SOURCE}@${AT}`,
+      sourceId: SOURCE,
+    });
+  });
+
+  it('sends nothing for a workspace without the new Chat, and never throws', async () => {
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '99999999-9999-4999-8999-999999999999');
+    expect(
+      await agents.notifyChatAgentsOfCatalogSync({
+        brandId: BRAND,
+        sourceId: SOURCE,
+        syncedAt: AT,
+      }),
+    ).toBeNull();
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    tables.fail = true;
+    await expect(
+      agents.notifyChatAgentsOfCatalogSync({ brandId: BRAND, sourceId: SOURCE, syncedAt: AT }),
+    ).resolves.toBeNull();
+    expect(fetchCalls).toEqual([]);
+  });
+});
