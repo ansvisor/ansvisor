@@ -372,7 +372,7 @@ The chat menu on the left of Chat lists your chats. **New chat** starts a new on
 
 **Agents at work** lists the chats that need your OK and the ones still working or paused, with the step each one is on. A finished chat isn't listed there: it stays under its day with a green dot until you open it, and the **Inbox** lists it too. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.
 
-**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat.
+**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** at the top finds a chat by its words, and **All chats** and **Archived** at the end list every chat.
 
 ## Dots on chats
 
@@ -384,7 +384,7 @@ Click **Settings** in the chat menu to show or hide its pages: **General**, your
 
 ## Hide the chat menu
 
-Click the panel button next to **New chat**, or press Ctrl+\ (⌘\ on a Mac), to hide the menu and give the chat the whole width. A small bar at the top then keeps **New chat** and your runs at hand. Chat remembers your choice on every device. On a narrow window the menu opens over the page instead. Ctrl+Shift+O (⌘⇧O) starts a new chat from anywhere in Chat.
+Click the panel button next to **New chat**, or press Ctrl+\ (⌘\ on a Mac), to hide the menu and give the chat the whole width. A small bar at the top then keeps **New chat** and your runs at hand. The runs button, at the top right while the menu shows, reads **Runs · 2 running**, or **Runs · none running**; click it to see each run. Chat remembers your choice on every device. On a narrow window the menu opens over the page instead. Ctrl+Shift+O (⌘⇧O) starts a new chat from anywhere in Chat.
 
 ## Move around Chat
 

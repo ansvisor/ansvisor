@@ -1378,7 +1378,7 @@
         },
         {
           "heading": "Search chats",
-          "text": "Type in **Search chats** under **Chats** in the chat menu. The menu then lists the chats whose name or messages have every word you typed, newest first, in place of the days. A few letters are enough: \"citat\" finds \"citations\". Click **Clear filters**, or press Esc, to see your chats by day again. Archived chats are left out of the search."
+          "text": "Type in **Search chats** under **New chat** at the top of the chat menu, which stays there as you scroll. The menu then lists the chats whose name or messages have every word you typed, newest first, in place of the days. A few letters are enough: \"citat\" finds \"citations\". Click **Clear filters**, or press Esc, to see your chats by day again. Archived chats are left out of the search.\n\nWhen two chats in the menu have the same name, each shows its date first, or its time for today's, so you can tell them apart."
         },
         {
           "heading": "Search from anywhere in Chat",
@@ -1862,7 +1862,7 @@
         },
         {
           "heading": "Agents at work and Chats",
-          "text": "**Agents at work** lists the chats that need your OK and the ones still working or paused, with the step each one is on. A finished chat isn't listed there: it stays under its day with a green dot until you open it, and the **Inbox** lists it too. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.\n\n**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** above them finds a chat by its words, and **All chats** and **Archived** at the end list every chat."
+          "text": "**Agents at work** lists the chats that need your OK and the ones still working or paused, with the step each one is on. A finished chat isn't listed there: it stays under its day with a green dot until you open it, and the **Inbox** lists it too. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.\n\n**Chats** lists every other chat, newest first, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month. A chat a teammate shared shows their initials. **Search chats** at the top finds a chat by its words, and **All chats** and **Archived** at the end list every chat."
         },
         {
           "heading": "Dots on chats",
@@ -1874,7 +1874,7 @@
         },
         {
           "heading": "Hide the chat menu",
-          "text": "Click the panel button next to **New chat**, or press Ctrl+\\ (⌘\\ on a Mac), to hide the menu and give the chat the whole width. A small bar at the top then keeps **New chat** and your runs at hand. Chat remembers your choice on every device. On a narrow window the menu opens over the page instead. Ctrl+Shift+O (⌘⇧O) starts a new chat from anywhere in Chat."
+          "text": "Click the panel button next to **New chat**, or press Ctrl+\\ (⌘\\ on a Mac), to hide the menu and give the chat the whole width. A small bar at the top then keeps **New chat** and your runs at hand. The runs button, at the top right while the menu shows, reads **Runs · 2 running**, or **Runs · none running**; click it to see each run. Chat remembers your choice on every device. On a narrow window the menu opens over the page instead. Ctrl+Shift+O (⌘⇧O) starts a new chat from anywhere in Chat."
         },
         {
           "heading": "Move around Chat",

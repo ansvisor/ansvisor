@@ -508,6 +508,25 @@ describe('ChatMenuView', () => {
     expect(inbox.getAttribute('aria-label')).toBeNull();
   });
 
+  it('leads a title more than one chat has with its date, and keeps one menu scroll (CH-08, CH-15)', async () => {
+    await render(
+      menu([
+        chat('a', { title: 'What’s new in Ansvisor', lastMessageAt: '2026-10-30T10:00:00' }),
+        chat('b', { title: 'What’s new in Ansvisor', lastMessageAt: '2026-10-28T09:00:00' }),
+        chat('c', { title: 'Pricing citations', lastMessageAt: '2026-10-30T09:00:00' }),
+      ]),
+    );
+    const dates = [...host.querySelectorAll('[data-slot="chat-row-date"]')].map(
+      (el) => el.textContent,
+    );
+    expect(dates).toEqual(['10:00 · ', 'Oct 28 · ']);
+    // New chat and Search chats sit at the top of the one scroll area: the Chats list has none of its own.
+    const nav = host.querySelector('nav')!;
+    expect(nav.className).toContain('overflow-y-auto');
+    expect(host.querySelector('[data-slot="chat-menu-top"] #chat-menu-search')).not.toBeNull();
+    expect(nav.querySelectorAll('.overflow-y-auto')).toHaveLength(0);
+  });
+
   it('groups the other chats by day, bold while unread, and folds Chats', async () => {
     await render(
       menu([
