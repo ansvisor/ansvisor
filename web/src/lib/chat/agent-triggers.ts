@@ -75,9 +75,24 @@ const MAX_FIRES = 50;
 const MAX_WAITING = 3;
 
 /** Triggers that start a run by themselves: they act as the agent's owner (§H item 38). */
-const TRIGGERED_KINDS = ['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added'] as const;
+const TRIGGERED_KINDS = [
+  'schedule',
+  'signal',
+  'kpi',
+  'watch_rule',
+  'brand_added',
+  'page_published',
+  'catalog_synced',
+] as const;
 /** Triggers that count toward the daily limit and the cooldown (§E item 24). */
-const EVENT_KINDS = ['signal', 'kpi', 'watch_rule', 'brand_added'] as const;
+const EVENT_KINDS = [
+  'signal',
+  'kpi',
+  'watch_rule',
+  'brand_added',
+  'page_published',
+  'catalog_synced',
+] as const;
 
 /** Whether a run's trigger started it by itself, not a person (Run now, Run agent). */
 export const isTriggered = (kind: string) => (TRIGGERED_KINDS as readonly string[]).includes(kind);
@@ -87,8 +102,16 @@ const isEvent = (kind: string) => (EVENT_KINDS as readonly string[]).includes(ki
 
 /** One fire, as a run's evidence lists it (chat_agent_runs.evidence_json). */
 const fireSchema = z.object({
-  kind: z.enum(['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added']),
-  /** What fired: a signal's id, a schedule's slot, the brand added. */
+  kind: z.enum([
+    'schedule',
+    'signal',
+    'kpi',
+    'watch_rule',
+    'brand_added',
+    'page_published',
+    'catalog_synced',
+  ]),
+  /** What fired: a signal's id, a schedule's slot, the brand added, the page published, the catalog source synced. */
   ref: z.string().max(200),
   at: z.string(),
   /** A signal's kind and its Action Center definitions. */
@@ -238,7 +261,7 @@ async function activeAgents(ids: readonly string[]): Promise<Map<string, FiringA
  * doesn't read is left out.
  */
 async function enabledTriggers(
-  kind: 'schedule' | 'signal' | 'brand_added',
+  kind: 'schedule' | 'signal' | 'brand_added' | BrandEventKind,
   agentIds?: readonly string[],
 ): Promise<(TriggerRow & { input: AgentTriggerInput })[]> {
   const page = (slice: string[] | null) =>
@@ -868,17 +891,18 @@ export async function fireSignals(
 // ─── A brand added ───────────────────────────────────────────────────────────
 
 /**
- * Claims a fire that happens once per agent and brand (00482): its row in
- * chat_agent_trigger_claims, inserted with "on conflict do nothing". True
- * for the one fire that inserted it; a retry, or a second server at once,
- * finds it taken.
+ * Claims a fire that happens once per agent, brand and event (00482,
+ * 00558): its row in chat_agent_trigger_claims, inserted with "on conflict
+ * do nothing". True for the one fire that inserted it; a retry, or a second
+ * server at once, finds it taken. A brand added has one event, its ref ''.
  */
 async function claimOnce(
   agentId: string,
-  kind: 'brand_added',
+  kind: 'brand_added' | BrandEventKind,
   brandId: string,
   triggerId: string,
   now: Date,
+  ref = '',
 ): Promise<boolean> {
   const { data, error } = await supabaseAdmin
     .from('chat_agent_trigger_claims')
@@ -887,10 +911,11 @@ async function claimOnce(
         agent_id: agentId,
         kind,
         brand_id: brandId,
+        ref,
         trigger_id: triggerId,
         claimed_at: now.toISOString(),
       },
-      { onConflict: 'agent_id,kind,brand_id', ignoreDuplicates: true },
+      { onConflict: 'agent_id,kind,brand_id,ref', ignoreDuplicates: true },
     )
     .select('agent_id');
   if (error) throw new Error(`Could not claim the fire: ${error.message}`);
@@ -967,6 +992,121 @@ export async function fireBrandAdded(
     } catch (err) {
       counts.failed += 1;
       console.error('[chat/agents] a brand-added trigger failed:', err);
+    }
+  }
+  if (queued) {
+    try {
+      await startQueuedAgentRuns(brandRow.organization_id, org.limits.runsAtOnce, driver);
+    } catch (err) {
+      console.error('[chat/agents] could not start a workspace’s runs:', err);
+    }
+  }
+  return counts;
+}
+
+// ─── A page published, a catalog synced ──────────────────────────────────────
+
+/** Events on a brand the API server reports (00558): a page live in its CMS, a catalog synced. */
+export const BRAND_EVENT_KINDS = ['page_published', 'catalog_synced'] as const;
+export type BrandEventKind = (typeof BRAND_EVENT_KINDS)[number];
+
+/** A catalog sync's own id: its source's, then the sync's time. */
+const SYNC_REF =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/i;
+
+/**
+ * An event as the API server reports it: its kind, the brand and the
+ * event's own id (a page's send, a source's sync), and what it is about
+ * (the page, the catalog source). Ids only: no text written outside the
+ * workspace reaches the run from here; the run reads the page or the
+ * catalog with its own tools, whose results are untrusted (untrusted.ts).
+ */
+export const brandEventSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('page_published'),
+    brandId: z.guid(),
+    ref: z.guid(),
+    draftId: z.guid(),
+  }),
+  z.strictObject({
+    kind: z.literal('catalog_synced'),
+    brandId: z.guid(),
+    ref: z.string().regex(SYNC_REF),
+    sourceId: z.guid(),
+  }),
+]);
+export type BrandEvent = z.infer<typeof brandEventSchema>;
+
+/**
+ * Fires the triggers of an event on a brand (00558: When a page is
+ * published, When the catalog syncs): each enabled one of the kind, of an active agent whose scope
+ * has the brand and whose owner may use it (fireBrands), in a workspace
+ * where Chat is on and that isn't read-only, once per agent and event
+ * (claimOnce, by the event's ref); never for the demo brand. The caps, the
+ * cooldown, the daily limit and the AI limit apply as for any event. The
+ * run's evidence names the page (its draft's id) or the catalog source for
+ * the run to read. Then
+ * the workspace starts what it has room for, with a driver; without one
+ * the runs wait for the minute tick.
+ */
+export async function fireBrandEvent(
+  event: BrandEvent,
+  now: Date,
+  driver: AgentRunDriver | null,
+): Promise<FireCounts> {
+  const counts = noFires();
+  const { data: brand, error } = await supabaseAdmin
+    .from('brands')
+    .select('id, organization_id, is_demo')
+    .eq('id', event.brandId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the brand: ${error.message}`);
+  const brandRow = brand as { id: string; organization_id: string; is_demo: boolean } | null;
+  if (!brandRow || brandRow.is_demo) return counts;
+  const org = (await readArmedOrgs([brandRow.organization_id])).get(brandRow.organization_id);
+  if (!org) return counts;
+
+  const ids = await activeAgentIds(brandRow.organization_id);
+  if (ids.length === 0) return counts;
+  const triggers = await enabledTriggers(event.kind, ids);
+  if (triggers.length === 0) return counts;
+  const agents = await activeAgents(triggers.map((t) => t.agent_id));
+
+  let queued = false;
+  for (const trigger of triggers) {
+    const agent = agents.get(trigger.agent_id);
+    if (!agent || trigger.input.kind !== event.kind) continue;
+    // One trigger's failure is its own: the others still fire.
+    try {
+      const brands = await fireBrands(agent);
+      if (!brands.some((b) => b.id === brandRow.id)) continue;
+      if (!(await claimOnce(agent.id, event.kind, brandRow.id, trigger.id, now, event.ref))) {
+        continue;
+      }
+      counts.fired += 1;
+      if ((await keyCapUsed(agent)) || (await monthCapUsed(agent))) continue;
+      const outcome = await queueTriggeredRun(
+        agent,
+        brandRow.id,
+        { id: trigger.id, kind: event.kind },
+        [
+          {
+            kind: event.kind,
+            ref: event.kind === 'page_published' ? event.draftId : event.sourceId,
+            at: now.toISOString(),
+          },
+        ],
+        org.limits,
+        now,
+      );
+      count(counts, outcome);
+      if (outcome.kind === 'queued') {
+        queued = true;
+        await markFired(trigger.id, event.kind, now);
+      }
+    } catch (err) {
+      counts.failed += 1;
+      console.error(`[chat/agents] a ${event.kind} trigger failed:`, err);
     }
   }
   if (queued) {

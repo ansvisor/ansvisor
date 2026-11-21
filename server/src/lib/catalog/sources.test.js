@@ -159,6 +159,37 @@ describe('syncSource', () => {
     });
     expect(afterSync).not.toHaveBeenCalled();
   });
+
+  it("tells Chat's agents of a sync that changed products, not of one that changed none (00558)", async () => {
+    const onChanged = vi.fn();
+    const sync = () =>
+      syncSource(source, {
+        db: fake.db,
+        now: NOW,
+        fetch: async () => ({ html: fixture('google-feed.xml') }),
+        afterSync: vi.fn(),
+        onChanged,
+      });
+    await sync();
+    expect(onChanged).toHaveBeenCalledWith({
+      brandId: 'brand-1',
+      sourceId: source.id,
+      syncedAt: NOW.toISOString(),
+    });
+    onChanged.mockClear();
+    // The same feed again: every product unchanged.
+    await sync();
+    expect(onChanged).not.toHaveBeenCalled();
+    // A feed that doesn't read changes nothing either.
+    await syncSource(source, {
+      db: fake.db,
+      now: NOW,
+      fetch: async () => ({ html: 'name,email\nAda,ada@example.com' }),
+      afterSync: vi.fn(),
+      onChanged,
+    });
+    expect(onChanged).not.toHaveBeenCalled();
+  });
 });
 
 describe('syncSource for a store (00282)', () => {

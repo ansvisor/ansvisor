@@ -89,6 +89,15 @@ vi.mock('./indexnow.js', () => ({
   },
 }));
 
+// Chat's agents (00558): told once a page went live; what they do is chat-agents.test.js's.
+const toldAgents = [];
+vi.mock('./chat-agents.js', () => ({
+  notifyChatAgentsOfPagePublished: async (page) => {
+    toldAgents.push(page);
+    return null;
+  },
+}));
+
 const {
   liveAddress,
   markDeliveryPublished,
@@ -411,8 +420,9 @@ describe('markDeliveryPublished', () => {
     expect(tables.action_events[0].actor_id).toBeNull();
   });
 
-  it('tells IndexNow of the page once it is published, never for an older send or a repeat (#2142)', async () => {
+  it('tells IndexNow and Chat’s agents of the page once it is published, never for an older send or a repeat (#2142, 00558)', async () => {
     announced.length = 0;
+    toldAgents.length = 0;
     // The page's latest send first, as its newest-first read answers.
     tables.content_draft_deliveries = [
       { id: 'x1', draft_id: 'dr1', status: 'sent', created_at: '2026-10-02T00:00:00Z' },
@@ -423,6 +433,7 @@ describe('markDeliveryPublished', () => {
       LIVE,
     );
     expect(announced).toEqual([{ draftId: 'dr1', url: LIVE }]);
+    expect(toldAgents).toEqual([{ draftId: 'dr1', deliveryId: 'x1' }]);
     // An older send's late word moves nothing: no announcement either.
     await markDeliveryPublished(
       { id: 'x0', draft_id: 'dr1', status: 'sent', published_url: null },
@@ -434,6 +445,7 @@ describe('markDeliveryPublished', () => {
       LIVE,
     );
     expect(announced).toHaveLength(1);
+    expect(toldAgents).toHaveLength(1);
   });
 
   it('puts the publish into the impact ledger once the delivery is published, and not again', async () => {

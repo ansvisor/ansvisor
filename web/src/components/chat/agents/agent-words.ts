@@ -92,6 +92,10 @@ export function useAgentWords(now: Date, timeZone?: string) {
           return t('trigger.watchRule');
         case 'brand_added':
           return t('trigger.brandAdded');
+        case 'page_published':
+          return t('trigger.pagePublished');
+        case 'catalog_synced':
+          return t('trigger.catalogSynced');
       }
     };
 
