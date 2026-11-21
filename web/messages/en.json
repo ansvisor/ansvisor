@@ -17532,6 +17532,7 @@
     "citationsSectionNote": "All sources AI answers cited around your brand — not just your own site.",
     "mentionEvidence": "Mention Evidence",
     "mentionEvidenceDescription": "The answers that mentioned you most in this period, with the passage around the mention.",
+    "newestFirst": "Newest first.",
     "citationEvidence": "Citation Evidence",
     "citationEvidenceDescription": "The URLs AI answers cited most in this period, and which tracked prompts surfaced them."
   },
