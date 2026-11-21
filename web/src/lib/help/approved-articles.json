@@ -698,7 +698,7 @@
         },
         {
           "heading": "The top of the page",
-          "text": "The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones: new, in progress or on hold, whoever has them, the same number as **All** on the Actions tab; under it, how many are on hold and how many are yours), **Done** (this week) and **Results** (your score and its change)."
+          "text": "The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked: active prompts only, not paused ones or those waiting for a spot), **AI answers**, **Actions** (open ones: new, in progress or on hold, whoever has them, the same number as **All** on the Actions tab; under it, how many are on hold and how many are yours), **Done** (this week) and **Results** (your score and its change)."
         },
         {
           "heading": "Waiting for you and Where you stand",
@@ -3142,6 +3142,10 @@
         {
           "heading": "Close a visibility gap",
           "text": "1. On **Gaps**, find the prompts where the competitor leads most.\n2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on Visibility's **Citations** tab lists the sources AI cites with the competitor and not with you.\n3. Create content for that prompt in **Content**.\n4. Publish it, earn placements on those sources, and watch the prompt in the comparison as new answers are tracked."
+        },
+        {
+          "heading": "Which prompts a count is out of",
+          "text": "Point at a card's prompt count, such as 12/40 prompts, to see which prompts it's out of: \"40 prompts with answers in the last 30 days\". It counts the prompts that got an AI answer in the date range, so it changes with the range. A report counts its own period, and Today counts the prompts you track now, active ones only, so their numbers can differ from this one."
         }
       ]
     },

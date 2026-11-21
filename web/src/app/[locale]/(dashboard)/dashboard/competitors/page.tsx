@@ -410,6 +410,7 @@ function CompetitorCard({
   onSetType,
   onDelete,
   deleting,
+  period,
 }: {
   competitor: Competitor;
   /** The names and domains merged into it (00543), counted as its own. */
@@ -431,8 +432,11 @@ function CompetitorCard({
   /** Absent for a member who isn't an admin or a manager: no delete button. */
   onDelete?: () => void;
   deleting: boolean;
+  /** The picker's range in words ("the last 30 days"), for the prompt count's tooltip. */
+  period: string;
 }) {
   const t = useTranslations('competitors');
+  const tMetrics = useTranslations('metrics');
 
   return (
     <div
@@ -481,15 +485,21 @@ function CompetitorCard({
         {stats ? (
           <div
             className="text-end"
-            title={`Mentioned in ${stats.mentionAnswers} answers · cited in ${stats.citationAnswers}${
-              stats.positionFactor !== null
-                ? ` · position factor ${stats.positionFactor.toFixed(2)}`
-                : ''
-            } · ${stats.mentions} mentions · ${stats.citations} citations`}
+            title={t('card.scoreTip', {
+              mentionAnswers: stats.mentionAnswers,
+              citationAnswers: stats.citationAnswers,
+              position: stats.positionFactor?.toFixed(2) ?? '—',
+              mentions: stats.mentions,
+              citations: stats.citations,
+            })}
           >
             <div className="text-sm font-semibold tabular-nums">{stats.score ?? '—'}</div>
-            <div className="text-[10px] text-muted-foreground tabular-nums">
-              {stats.visiblePrompts}/{stats.promptCount} prompts
+            {/* Which prompts the count is out of (UX audit CP-03, decision D4). */}
+            <div
+              className="text-[10px] text-muted-foreground tabular-nums"
+              title={tMetrics('promptsAnswered', { count: stats.promptCount, period })}
+            >
+              {t('card.prompts', { visible: stats.visiblePrompts, count: stats.promptCount })}
             </div>
           </div>
         ) : (
@@ -1531,6 +1541,14 @@ export default function CompetitorsPage() {
   const [loading, setLoading] = useState(true);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [datePreset, setDatePreset] = useState<CompetitorDatePreset>('30d');
+  const tMetrics = useTranslations('metrics');
+  // The picker's range in words, for the counts it scopes (UX audit CP-03).
+  const periodWords =
+    datePreset === 'all'
+      ? tMetrics('period.all')
+      : datePreset === 'custom'
+        ? tMetrics('period.custom')
+        : tMetrics('period.lastDays', { days: { '7d': 7, '30d': 30, '90d': 90 }[datePreset] });
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [dateParamsReady, setDateParamsReady] = useState(false);
@@ -2152,6 +2170,7 @@ export default function CompetitorsPage() {
                         {group.items.map((comp) => (
                           <CompetitorCard
                             key={comp.id}
+                            period={periodWords}
                             competitor={comp}
                             aliases={aliasesOf(comp.id)}
                             stats={scoreMap.get(comp.name) ?? null}

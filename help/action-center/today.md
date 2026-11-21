@@ -21,7 +21,7 @@ Beside **Agents** is how many of your agent runs wait for you.
 
 ## The top of the page
 
-The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones: new, in progress or on hold, whoever has them, the same number as **All** on the Actions tab; under it, how many are on hold and how many are yours), **Done** (this week) and **Results** (your score and its change).
+The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked: active prompts only, not paused ones or those waiting for a spot), **AI answers**, **Actions** (open ones: new, in progress or on hold, whoever has them, the same number as **All** on the Actions tab; under it, how many are on hold and how many are yours), **Done** (this week) and **Results** (your score and its change).
 
 ## Waiting for you and Where you stand
 

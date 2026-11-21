@@ -14,6 +14,14 @@
     "upgrade": "Upgrade",
     "choosePlan": "Choose a plan"
   },
+  "metrics": {
+    "promptsAnswered": "{count, plural, one {# prompt with answers in {period}} other {# prompts with answers in {period}}}",
+    "period": {
+      "lastDays": "{days, plural, one {the last day} other {the last # days}}",
+      "all": "all tracked history",
+      "custom": "the selected range"
+    }
+  },
   "locationPicker": {
     "label": "Locations",
     "tracked": "tracked",
@@ -16347,6 +16355,10 @@
     "windowLastDays": "{days, plural, one {Scores cover the last day.} other {Scores cover the last # days.}}",
     "windowAllTime": "Scores cover all tracked history.",
     "windowSelectedRange": "Scores reflect the selected date range.",
+    "card": {
+      "prompts": "{visible}/{count} prompts",
+      "scoreTip": "Mentioned in {mentionAnswers} answers · cited in {citationAnswers} · position factor {position} · {mentions} mentions · {citations} citations"
+    },
     "selected": "Selected",
     "noData": "No data",
     "emptyTitle": "No competitors yet",
