@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { readAgentsSeen } from './agents/agents-seen';
 import { ConnectionsMenu } from './connections/connections-menu';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
+import { useChatActions } from './chat-actions';
 import { ChatRowMenu } from './chat-menus';
 import { ChatRow } from './chat-row';
 import { useChatSearch } from './chat-search';
@@ -255,6 +256,8 @@ export interface ChatMenuViewProps {
   onNavigate?: () => void;
   /** Each row's ⋯ menu. */
   rowActions?: (chat: ChatListItem) => ReactNode;
+  /** A day's Clear: deletes the person's own chats under it, after asking. */
+  onClearGroup?: (chats: ChatListItem[], label: string) => void;
   now?: Date;
   /** The person's scheduled jobs that are on (W3-03): Scheduled's count. */
   scheduled?: number;
@@ -289,6 +292,7 @@ export function ChatMenuView({
   onRetry,
   onNavigate,
   rowActions,
+  onClearGroup,
   now: nowProp,
   scheduled = 0,
 }: ChatMenuViewProps) {
@@ -627,12 +631,32 @@ export function ChatMenuView({
                 {status === 'ready' && groups.length === 0 && atWork.length === 0 && (
                   <p className="px-2 py-1 text-xs text-muted-foreground">{t('empty')}</p>
                 )}
-                {groups.map((group) => (
-                  <div key={group.key}>
-                    <SectionHead>{groupLabel(group.group, t, now)}</SectionHead>
-                    {group.chats.map(row)}
-                  </div>
-                ))}
+                {groups.map((group) => {
+                  const label = groupLabel(group.group, t, now);
+                  // Pinned chats were kept on purpose: no Clear there.
+                  const own = group.chats.filter((chat) => chat.mine);
+                  const clearable = onClearGroup && group.group.kind !== 'pinned' && own.length > 0;
+                  return (
+                    <div key={group.key}>
+                      <SectionHead>
+                        {label}
+                        {clearable && (
+                          <button
+                            type="button"
+                            data-action="chatMenu.clearGroup"
+                            aria-label={t('clearGroupLabel', { where: label, count: own.length })}
+                            title={t('clearGroupLabel', { where: label, count: own.length })}
+                            onClick={() => onClearGroup(own, label)}
+                            className="ms-auto rounded-md px-1.5 text-[11px] tracking-normal normal-case outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                          >
+                            {t('clearGroup')}
+                          </button>
+                        )}
+                      </SectionHead>
+                      {group.chats.map(row)}
+                    </div>
+                  );
+                })}
               </>
             )}
             {status === 'ready' && (
@@ -670,6 +694,7 @@ export function ChatMenu(
   >,
 ) {
   const { status, chats, total, archived, refresh } = useChatList();
+  const actions = useChatActions();
   const pathname = usePathname();
   // Scheduled's count: read again as the person moves between Chat's pages.
   const [scheduled, setScheduled] = useState(0);
@@ -686,6 +711,7 @@ export function ChatMenu(
     <ChatMenuView
       scheduled={scheduled}
       rowActions={(chat) => <ChatRowMenu chat={chat} />}
+      onClearGroup={actions ? (own, where) => actions.askDeleteMany(own, { where }) : undefined}
       {...props}
       status={status}
       chats={chats}

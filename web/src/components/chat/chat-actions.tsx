@@ -54,6 +54,13 @@ export interface ChatActions {
   toggleShare: (chat: ChatListItem) => Promise<void>;
   archive: (chat: ChatListItem) => Promise<void>;
   askDelete: (chat: ChatListItem) => void;
+  /**
+   * Clear a day's chats in the menu, or Delete selected in All chats: asks
+   * first, then deletes the person's own chats among `chats` together, with
+   * Undo. `where` names the day in the confirm; `onDone` hears once the
+   * chats are deleted or back.
+   */
+  askDeleteMany: (chats: ChatListItem[], options?: { where?: string; onDone?: () => void }) => void;
   openNewWindow: (chat: ChatListItem) => void;
   /** Whether the person may change it: their own chat. */
   canEdit: (chat: ChatListItem) => boolean;
@@ -83,6 +90,11 @@ export function ChatActionsProvider({
   const { update, refresh } = useChatList();
   const [renaming, setRenaming] = useState<ChatActions['renaming']>(null);
   const [deleting, setDeleting] = useState<ChatListItem | null>(null);
+  const [clearing, setClearing] = useState<{
+    chats: ChatListItem[];
+    where?: string;
+    onDone?: () => void;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
@@ -199,6 +211,67 @@ export function ChatActionsProvider({
     });
   }, [busy, deleting, pathname, refresh, restore, router, t, update, onGone]);
 
+  /** Sends a Clear or its Undo; answers the ids changed, or null when it failed. */
+  const sendBulk = useCallback(
+    async (action: 'delete' | 'restore', ids: string[]): Promise<string[] | null> => {
+      const res = await fetch('/api/chat/conversations/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids }),
+      }).catch(() => null);
+      const body = (await res?.json().catch(() => null)) as
+        | { ok: true; ids: string[] }
+        | { ok: false }
+        | null;
+      return res?.ok && body?.ok ? body.ids : null;
+    },
+    [],
+  );
+
+  const confirmClear = useCallback(async () => {
+    const what = clearing;
+    if (!what || busy) return;
+    setBusy(true);
+    const ids = await sendBulk(
+      'delete',
+      what.chats.map((c) => c.id),
+    );
+    setBusy(false);
+    setClearing(null);
+    if (!ids) {
+      toast.error(t('failed'));
+      return;
+    }
+    const gone = new Set(ids);
+    update((chats) => chats.filter((c) => !gone.has(c.id)));
+    for (const chat of what.chats) if (gone.has(chat.id)) onGone?.(chat);
+    // The chat that was open went with them: Chat Home instead.
+    if (what.chats.some((c) => gone.has(c.id) && pathname === chatHref(c))) {
+      router.push('/dashboard/chat');
+    }
+    void refresh();
+    what.onDone?.();
+    if (ids.length === 0) return;
+    toast(t('deletedMany', { count: ids.length }), {
+      duration: DELETE_UNDO_TOAST_MS,
+      action: {
+        label: t('undo'),
+        onClick: () =>
+          void sendBulk('restore', ids).then((back) => {
+            if (!back) {
+              toast.error(t('failed'));
+              return;
+            }
+            toast(back.length < ids.length ? t('undoTooLate') : t('undone'), {
+              duration: TOAST_MS,
+            });
+            void refresh();
+            what.onDone?.();
+          }),
+      },
+    });
+  }, [busy, clearing, onGone, pathname, refresh, router, sendBulk, t, update]);
+
   const value = useMemo<ChatActions>(
     () => ({
       renaming,
@@ -209,6 +282,11 @@ export function ChatActionsProvider({
       toggleShare,
       archive,
       askDelete: (chat) => setDeleting(chat),
+      askDeleteMany: (chats, options) => {
+        // Only the person's own chats: a teammate's shared chat stays.
+        const mine = chats.filter((c) => c.mine);
+        if (mine.length > 0) setClearing({ chats: mine, ...options });
+      },
       openNewWindow: (chat) => {
         window.open(chatHref(chat), '_blank', 'noopener');
       },
@@ -243,6 +321,34 @@ export function ChatActionsProvider({
               className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
             >
               {t('delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={clearing !== null} onOpenChange={(open) => !open && setClearing(null)}>
+        <DialogContent showCloseButton={false} initialFocus={cancelRef} className="sm:max-w-md">
+          <DialogTitle>
+            {clearing?.where
+              ? t('clearTitle', { count: clearing.chats.length, where: clearing.where })
+              : t('deleteManyTitle', { count: clearing?.chats.length ?? 0 })}
+          </DialogTitle>
+          <DialogDescription>{t('deleteManyBody')}</DialogDescription>
+          <DialogFooter>
+            <Button
+              ref={cancelRef}
+              variant="outline"
+              data-action="modal.cancel"
+              onClick={() => setClearing(null)}
+            >
+              {t('cancel')}
+            </Button>
+            <Button
+              data-action="confirm.ok"
+              disabled={busy}
+              onClick={() => void confirmClear()}
+              className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
+            >
+              {t('deleteMany', { count: clearing?.chats.length ?? 0 })}
             </Button>
           </DialogFooter>
         </DialogContent>
