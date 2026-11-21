@@ -47,9 +47,9 @@ describe('add-ons in the plan’s limits', () => {
     for (const subscription_status of ['active', 'trialing']) {
       expect(
         limits({ plan: 'growth', subscription_status, add_on_prompts: 1000, add_on_brands: 3 }),
-      ).toEqual([1200, 7]);
+      ).toEqual([1250, 7]);
     }
-    expect(limits({ plan: 'growth', subscription_status: 'active' })).toEqual([200, 4]);
+    expect(limits({ plan: 'growth', subscription_status: 'active' })).toEqual([250, 4]);
   });
 
   it('count only on Growth: Starter and Enterprise keep their own limits', () => {
@@ -76,7 +76,7 @@ describe('add-ons in the plan’s limits', () => {
     };
     expect(limits(org)).toEqual([50, 1]);
     const { plan, ended } = usagePlanFromOrgRow(org);
-    expect([plan.limits.maxPrompts, plan.limits.maxBrands, ended]).toEqual([200, 4, true]);
+    expect([plan.limits.maxPrompts, plan.limits.maxBrands, ended]).toEqual([250, 4, true]);
   });
 
   it('ignore what isn’t a whole count above 0, and a self-hosted install', () => {
@@ -84,7 +84,7 @@ describe('add-ons in the plan’s limits', () => {
     for (const bad of [-5, 0, 2.5, '100', null]) {
       expect(
         limits({ plan: 'growth', subscription_status: 'active', add_on_prompts: bad }),
-      ).toEqual([200, 4]);
+      ).toEqual([250, 4]);
     }
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     expect(limits({ plan: 'growth', subscription_status: 'active', add_on_prompts: 100 })).toEqual([

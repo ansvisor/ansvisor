@@ -1867,3 +1867,19 @@ export async function getTrackedPromptCount(brandId: string): Promise<number> {
   if (error) throw new Error(error.message);
   return count ?? 0;
 }
+
+/**
+ * The brand's tracked prompts as Today counts them (UX audit CP-03,
+ * decision D4): the active ones only. A paused prompt, and one waiting for a
+ * spot under the plan's limit (00535), is left out.
+ */
+export async function getActivePromptCount(brandId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)', { count: 'exact', head: true })
+    .eq('prompt_sets.brand_id', brandId)
+    .eq('is_active', true);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}

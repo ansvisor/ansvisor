@@ -266,7 +266,7 @@ describe('PlatformTable', () => {
     expect(rows.map((r) => r.querySelector('td')?.textContent)).toEqual([
       'ChatGPT',
       'Gemini (negative net sentiment)',
-      'Claude',
+      'Claude API',
     ]);
     expect(rows[1].className).toContain('bg-red-50');
     expect(rows[1].textContent).toContain('−6↓ 18');

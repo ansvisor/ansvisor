@@ -330,6 +330,90 @@ describe("what Chat's side panel sees (the owner's plan, step 9)", () => {
   });
 });
 
+describe('the prompt set under each card’s score (UX audit CP-03)', () => {
+  it('names the prompts the count is out of, and the picker’s range', async () => {
+    const tracking = await import('@/lib/actions/tracking');
+    const entry = (name: string, isOwnBrand: boolean, competitorId?: string) => ({
+      name,
+      isOwnBrand,
+      competitorId,
+      avgVisibilityScore: 0,
+      visibilityRate: 0,
+      visiblePrompts: 12,
+      promptCount: 227,
+      change: null,
+      score: 37.4,
+      scoreChange: null,
+      mentionAnswers: 40,
+      citationAnswers: 5,
+      positionFactor: 0.5,
+      totalMentions: 60,
+      totalCitations: 5,
+      resultCount: 300,
+    });
+    vi.mocked(tracking.getCompetitorComparison).mockResolvedValue({
+      brands: [entry('Acme', true), entry('Rival', false, 'c1')],
+      providerRows: [],
+    });
+    await render(false);
+    const count = [...container.querySelectorAll<HTMLElement>('[title]')].find(
+      (el) => el.textContent === '12/227 prompts',
+    );
+    expect(count?.title).toBe('227 prompts with answers in the last 30 days');
+  });
+});
+
+describe('the grid by Visibility score, You in its place (UX audit CP-06)', () => {
+  it('ranks the cards highest first with You among them, and leaves a low sample unranked', async () => {
+    const tracking = await import('@/lib/actions/tracking');
+    competitorActions.getCompetitors.mockResolvedValue([
+      { id: 'c1', brandId: 'b1', name: 'Rival', domain: 'rival.com', type: null },
+      { id: 'c2', brandId: 'b1', name: 'Bigger', domain: 'big.example', type: null },
+      { id: 'c3', brandId: 'b1', name: 'Tiny', domain: 'tiny.example', type: null },
+    ]);
+    const entry = (name: string, isOwnBrand: boolean, score: number, visiblePrompts = 20) => ({
+      name,
+      isOwnBrand,
+      avgVisibilityScore: 0,
+      visibilityRate: 0,
+      visiblePrompts,
+      promptCount: 100,
+      change: null,
+      score,
+      scoreChange: null,
+      mentionAnswers: 10,
+      citationAnswers: 1,
+      positionFactor: 0.5,
+      totalMentions: 10,
+      totalCitations: 1,
+      resultCount: 100,
+    });
+    vi.mocked(tracking.getCompetitorComparison).mockResolvedValue({
+      brands: [
+        entry('Acme', true, 40),
+        entry('Rival', false, 30),
+        entry('Bigger', false, 55),
+        entry('Tiny', false, 80, 2),
+      ],
+      providerRows: [],
+    });
+    await render(false);
+    const grid = container.querySelector('[data-slot="you-card"]')!.parentElement!;
+    const rows = [...grid.children].map((card) => [
+      card.querySelector('[data-slot="grid-rank"]')?.textContent,
+      card.querySelector('span.text-sm.font-medium')?.textContent,
+      !!card.querySelector('[data-slot="low-sample"]'),
+    ]);
+    expect(rows).toEqual([
+      ['#1', 'Bigger', false],
+      ['#2', 'Acme', false],
+      ['#3', 'Rival', false],
+      ['', 'Tiny', true],
+    ]);
+    expect(grid.querySelector('[data-slot="you-card"]')!.textContent).toContain('You');
+  });
+});
+
 describe('the head-to-head over the picker’s days (UX audit CP-02, CP-08)', () => {
   beforeEach(() => {
     // The competitor's timeline chart sizes itself; jsdom has no ResizeObserver.
@@ -442,5 +526,30 @@ describe('the Prompt-by-Prompt list (UX audit CP-11, CP-12)', () => {
     expect(container.querySelector('[data-slot="prompt-list-count"]')!.textContent).toBe(
       '1 of 1 prompt',
     );
+  });
+});
+
+describe('the competitor card (UX audit CP-10)', () => {
+  it('shows Selected as its border only, and its buttons over its corner', async () => {
+    // The competitor's timeline chart sizes itself; jsdom has no ResizeObserver.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    window.history.replaceState(null, '', '/?competitor=c1');
+    await render(false);
+    const card = container.querySelector('.group')!;
+    // "Selected" is for screen readers only: the name keeps its width.
+    expect(card.querySelector('.sr-only')?.textContent).toBe('Selected');
+    expect(card.className).toContain('border-primary');
+    // The buttons sit over the card's corner, not beside the name.
+    const actions = card.querySelector('[data-slot="card-actions"]')!;
+    expect(actions.className).toContain('absolute');
+    expect(actions.querySelector('button[aria-label="Set type for Rival"]')).not.toBeNull();
+    window.history.replaceState(null, '', '/');
+    vi.unstubAllGlobals();
   });
 });

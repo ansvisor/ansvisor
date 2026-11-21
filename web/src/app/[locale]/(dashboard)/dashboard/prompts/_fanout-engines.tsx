@@ -4,11 +4,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { AlertTriangle, Info } from 'lucide-react';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
-import {
-  API_MODEL_PLATFORMS,
-  FANOUT_MIN_SILENT_ANSWERS,
-  fanoutSharing,
-} from '@/config/fanout-platforms';
+import { FANOUT_MIN_SILENT_ANSWERS, fanoutSharing } from '@/config/fanout-platforms';
 import type { FanoutEngineCoverage } from '@/lib/actions/fanout';
 import { cn } from '@/lib/utils';
 
@@ -21,9 +17,7 @@ import { cn } from '@/lib/utils';
  */
 
 export function platformLabel(platform: string): string {
-  const label = PLATFORM_LABELS[platform] ?? platform;
-  // "ChatGPT API" beside the ChatGPT app, never two plain "ChatGPT"s.
-  return API_MODEL_PLATFORMS.includes(platform) ? `${label} API` : label;
+  return PLATFORM_LABELS[platform] ?? platform;
 }
 
 /** A share of answers as a whole percent; a small non-zero one isn't "0%". */

@@ -9,7 +9,7 @@ import { NewPill } from '@/components/agentic/new-pill';
 import { Skeleton } from '@/components/ui/skeleton';
 import { countChatSchedules } from '@/lib/actions/chat-schedules';
 import type { ChatListItem } from '@/lib/chat/conversations';
-import { AT_WORK_ROWS, chatMenuLists, inboxChats, type DayGroup } from '@/lib/chat/menu-groups';
+import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
 import { CHAT_SETTINGS_TABS } from '@/lib/chat/settings-tabs';
 import { cn } from '@/lib/utils';
 import { readAgentsSeen } from './agents/agents-seen';
@@ -293,7 +293,6 @@ export function ChatMenuView({
   scheduled = 0,
 }: ChatMenuViewProps) {
   const t = useTranslations('chatShell.menu');
-  const tAttention = useTranslations('agentic.attention');
   const isMac = useIsMac();
   const [folded, setFolded] = useState<Record<Section, boolean>>(FOLDED);
   // Settings' list folds as the sections do, with one difference: open on
@@ -335,18 +334,23 @@ export function ChatMenuView({
     const at = nowProp ?? new Date();
     return { now: at, ...chatMenuLists(chats, at) };
   }, [chats, nowProp]);
-  // The Inbox holds the person's own chats at work and their unread results:
-  // its count, with an amber dot while any needs them.
-  const inboxRows = useMemo(() => inboxChats(chats), [chats]);
-  const needsYou = inboxRows.filter((chat) => chat.state === 'needsYou').length;
-  const inbox = inboxRows.length;
-  const inboxLabel = needsYou
-    ? t('inboxLabelNeedsYou', { count: inbox, needsYou })
-    : t('inboxLabel', { count: inbox });
+  // The Inbox's badge counts the person's own chats that need them, as its
+  // Needs you tab does (UX audit CH-04): none, no badge.
+  const needsYou = atWork.filter((chat) => chat.mine && chat.state === 'needsYou').length;
+  const inboxLabel = t('inboxLabel', { needsYou });
   const shownRuns = allRuns ? atWork : atWork.slice(0, AT_WORK_ROWS);
+  // Titles more than one chat has ("What's new in Ansvisor and…"): their date leads them (CH-08).
+  const repeated = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const chat of chats) {
+      if (chat.title) seen.set(chat.title, (seen.get(chat.title) ?? 0) + 1);
+    }
+    return new Set([...seen].filter(([, count]) => count > 1).map(([title]) => title));
+  }, [chats]);
   const row = (chat: ChatListItem) => (
     <ChatRow
       key={chat.id}
+      dated={!!chat.title && repeated.has(chat.title)}
       chat={chat}
       active={pathname === `/dashboard/chat/${chat.id}`}
       onOpen={onNavigate}
@@ -356,38 +360,67 @@ export function ChatMenuView({
   );
 
   return (
-    <nav aria-label={t('label')} className="flex h-full min-h-0 flex-col gap-1 p-3 text-[13px]">
-      <div className="mb-2 flex items-center gap-1.5">
-        <button
-          type="button"
-          data-action="chatMenu.toggle"
-          aria-label={open ? t('hide') : t('show')}
-          title={t(open ? 'hideTip' : 'showTip', { keys: shortcutLabel('menu', isMac) })}
-          aria-expanded={open}
-          aria-controls="chat-menu"
-          onClick={onToggle}
-          className="flex size-7 shrink-0 items-center justify-center rounded-lg border bg-card text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none"
-        >
-          <MenuToggleIcon />
-        </button>
-        <button
-          type="button"
-          data-action="chat.new"
-          title={t('newChatTip', { keys: shortcutLabel('new', isMac) })}
-          onClick={onNewChat}
-          className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[10px] border bg-card px-2.5 font-medium outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          <span aria-hidden>＋</span>
-          {t('newChat')}
-          <kbd className="ms-auto font-sans text-[11px] text-muted-foreground">
-            {shortcutLabel('new', isMac)}
-          </kbd>
-        </button>
+    // One scroll area, the whole menu: New chat and Search chats stay at its top (UX audit CH-15).
+    <nav
+      aria-label={t('label')}
+      className="chat-scroll flex h-full min-h-0 flex-col gap-1 overflow-y-auto px-3 pb-3 text-[13px]"
+    >
+      <div
+        data-slot="chat-menu-top"
+        className="sticky top-0 z-10 -mx-3 mb-1 bg-sidebar px-3 pt-3 pb-1"
+      >
+        <div className="mb-1 flex items-center gap-1.5">
+          <button
+            type="button"
+            data-action="chatMenu.toggle"
+            aria-label={open ? t('hide') : t('show')}
+            title={t(open ? 'hideTip' : 'showTip', { keys: shortcutLabel('menu', isMac) })}
+            aria-expanded={open}
+            aria-controls="chat-menu"
+            onClick={onToggle}
+            className="flex size-7 shrink-0 items-center justify-center rounded-lg border bg-card text-muted-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none"
+          >
+            <MenuToggleIcon />
+          </button>
+          <button
+            type="button"
+            data-action="chat.new"
+            title={t('newChatTip', { keys: shortcutLabel('new', isMac) })}
+            onClick={onNewChat}
+            className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[10px] border bg-card px-2.5 font-medium outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <span aria-hidden>＋</span>
+            {t('newChat')}
+            <kbd className="ms-auto font-sans text-[11px] text-muted-foreground">
+              {shortcutLabel('new', isMac)}
+            </kbd>
+          </button>
+        </div>
+        {status === 'ready' && (
+          <input
+            id="chat-menu-search"
+            type="search"
+            data-action="chatMenu.searchChats"
+            aria-label={t('searchLabel')}
+            title={t('searchTip', { keys: shortcutLabel('search', isMac) })}
+            placeholder={t('searchPlaceholder', { keys: shortcutLabel('search', isMac) })}
+            autoComplete="off"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && query) {
+                event.stopPropagation();
+                setQuery('');
+              }
+            }}
+            className="mt-1.5 mb-1 block w-full rounded-lg border bg-background px-2.5 py-1.5 text-[12.5px] outline-none placeholder:text-muted-foreground focus:border-foreground/30 [&::-webkit-search-cancel-button]:hidden"
+          />
+        )}
       </div>
 
       <SectionHead className="mt-0">
         {t('menu')}
-        {folded.menu && inbox > 0 && (
+        {folded.menu && needsYou > 0 && (
           <Link
             href="/dashboard/chat/inbox"
             data-action="chatMenu.openInbox"
@@ -396,10 +429,8 @@ export function ChatMenuView({
             onClick={onNavigate}
             className="ms-auto inline-flex items-center gap-1 rounded-md bg-foreground/10 px-1.5 text-[10.5px] leading-4 tracking-normal text-foreground/80 normal-case outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            {needsYou > 0 && (
-              <span aria-hidden className="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400" />
-            )}
-            {inbox}
+            <span aria-hidden className="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400" />
+            {needsYou}
           </Link>
         )}
         <FoldButton
@@ -425,20 +456,17 @@ export function ChatMenuView({
             action="chatMenu.openInbox"
             active={pathname === '/dashboard/chat/inbox'}
             onNavigate={onNavigate}
-            label={inbox > 0 ? inboxLabel : undefined}
+            label={needsYou > 0 ? inboxLabel : undefined}
           >
             {t('inbox')}
-            {inbox > 0 && (
+            {needsYou > 0 && (
               <span className="ms-auto inline-flex items-center gap-1.5">
-                {needsYou > 0 && (
-                  <span
-                    aria-hidden
-                    title={tAttention('needsYou', { count: needsYou })}
-                    className="size-[7px] rounded-full bg-amber-600 dark:bg-amber-400"
-                  />
-                )}
+                <span
+                  aria-hidden
+                  className="size-[7px] rounded-full bg-amber-600 dark:bg-amber-400"
+                />
                 <span className="min-w-[22px] rounded-md bg-foreground/10 px-1.5 text-center text-[11px] leading-[18px] text-foreground/80 tabular-nums">
-                  {inbox}
+                  {needsYou}
                 </span>
               </span>
             )}
@@ -523,9 +551,7 @@ export function ChatMenuView({
           </SectionHead>
           {!folded.atWork && (
             <div id="chat-menu-at-work">
-              <div className={cn(allRuns && 'max-h-[260px] overflow-y-auto chat-scroll')}>
-                {shownRuns.map(row)}
-              </div>
+              <div>{shownRuns.map(row)}</div>
               {atWork.length > AT_WORK_ROWS && (
                 <button
                   type="button"
@@ -543,7 +569,7 @@ export function ChatMenuView({
         </>
       )}
 
-      <div className="chat-scroll -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+      <div>
         <SectionHead>
           {t('chats')}
           {status === 'ready' && <Count value={total} />}
@@ -575,26 +601,6 @@ export function ChatMenuView({
                   {t('retry')}
                 </button>
               </p>
-            )}
-            {status === 'ready' && (
-              <input
-                id="chat-menu-search"
-                type="search"
-                data-action="chatMenu.searchChats"
-                aria-label={t('searchLabel')}
-                title={t('searchTip', { keys: shortcutLabel('search', isMac) })}
-                placeholder={t('searchPlaceholder', { keys: shortcutLabel('search', isMac) })}
-                autoComplete="off"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape' && query) {
-                    event.stopPropagation();
-                    setQuery('');
-                  }
-                }}
-                className="mt-1.5 mb-1 block w-full rounded-lg border bg-background px-2.5 py-1.5 text-[12.5px] outline-none placeholder:text-muted-foreground focus:border-foreground/30 [&::-webkit-search-cancel-button]:hidden"
-              />
             )}
             {searching ? (
               <div role="region" aria-label={t('searchResults')} aria-live="polite">

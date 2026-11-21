@@ -27,7 +27,7 @@ import { type SourceCategory } from '@/lib/citations/classify';
 import { auditSnapshotFrom, type AuditSnapshotRow } from '@/lib/reports/audit-score';
 import { readEarlierPageAudits } from '@/lib/audit/page-trend';
 import type { ScoreRange } from '@/lib/audit/score-range';
-import { stripEntityMarkup } from '@/lib/entity-markup';
+import { markdownToPlainText } from '@/lib/markdown-plain';
 import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { LOW_SAMPLE_VISITS } from '@/lib/traffic-change';
 import {
@@ -705,23 +705,13 @@ const REPORT_EVIDENCE_COUNT = 10;
 /** How many sourcing prompts each cited URL lists. */
 const EVIDENCE_PROMPTS_PER_URL = 3;
 
-/** Light markdown/URL/entity-tag strip so excerpts read as prose. */
-function stripMarkdown(text: string): string {
-  return stripEntityMarkup(text)
-    .replace(/\[([^\]]*)\]\([^)]+\)/g, '$1')
-    .replace(/https?:\/\/[^\s)>\]]+/g, '')
-    .replace(/[*_#`]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 /**
  * The passage of an answer around the first brand mention — the "how was I
  * mentioned" a KPI total can't convey. Falls back to the answer's opening
  * when the mention came via a domain rather than the brand name.
  */
 function mentionExcerpt(response: string, brandName: string): string {
-  const clean = stripMarkdown(response);
+  const clean = markdownToPlainText(response);
   const idx = clean.toLowerCase().indexOf(brandName.toLowerCase());
   if (idx === -1) {
     return clean.length > 180 ? `${clean.slice(0, 180).trimEnd()}…` : clean;
@@ -776,13 +766,16 @@ async function getMentionEvidence(
     for (const p of promptRows ?? []) promptTextById.set(p.id as string, p.text as string);
   }
 
-  return results.map((r) => ({
-    promptText: (r.prompt_id && promptTextById.get(r.prompt_id)) || '(deleted prompt)',
-    platform: r.platform ?? '',
-    date: r.created_at,
-    mentionCount: r.mention_count ?? 0,
-    excerpt: mentionExcerpt(r.response ?? '', brandName),
-  }));
+  // The most mentioning answers, listed newest first (UX audit RP-04).
+  return results
+    .map((r) => ({
+      promptText: (r.prompt_id && promptTextById.get(r.prompt_id)) || '(deleted prompt)',
+      platform: r.platform ?? '',
+      date: r.created_at,
+      mentionCount: r.mention_count ?? 0,
+      excerpt: mentionExcerpt(r.response ?? '', brandName),
+    }))
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
 }
 
 /**

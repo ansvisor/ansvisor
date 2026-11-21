@@ -81,7 +81,7 @@ export function MobileNav() {
         <Menu className="h-5 w-5" />
         <span className="sr-only">{t('toggleMenu')}</span>
       </SheetTrigger>
-      <SheetContent side="left" className="flex w-64 flex-col p-0">
+      <SheetContent side="start" className="flex w-64 flex-col p-0">
         <div className="flex gap-2 h-16 items-center border-b px-4">
           <Image
             src={logoSrc}

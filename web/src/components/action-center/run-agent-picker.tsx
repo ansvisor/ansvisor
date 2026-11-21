@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Loader2, MessageSquare, Plus } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -58,6 +59,7 @@ export function RunAgentPicker({
   const tCategories = useTranslations('actionCenter.actionCategories');
   const tModes = useTranslations('chatAgents.modes');
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const { openUpgrade } = useUpgradeGate();
   const [picker, setPicker] = useState<Picker>({ kind: 'loading' });
   const [busy, setBusy] = useState<Busy>(null);
@@ -74,12 +76,13 @@ export function RunAgentPicker({
         onClose();
         openUpgrade(tActions('runAgentOnAction'));
       } else if (answer.denial) setPicker({ kind: 'denied', denial: answer.denial });
-      else setPicker({ kind: 'failed', message: answer.message });
+      else
+        setPicker({ kind: 'failed', message: serverError(answer, answer.message ?? t('failed')) });
     });
     return () => {
       live = false;
     };
-  }, [action.id, onClose, openUpgrade, tActions]);
+  }, [action.id, onClose, openUpgrade, tActions, serverError, t]);
 
   /** The run's chat: in the side panel beside the action, else on Chat's own page. */
   const showChat = useShowChat();
@@ -92,10 +95,10 @@ export function RunAgentPicker({
       } else if (answer.denial) {
         setPicker({ kind: 'denied', denial: answer.denial });
       } else {
-        toast.error(answer.message ?? t('toast.failed'));
+        toast.error(serverError(answer, answer.message ?? t('toast.failed')));
       }
     },
-    [onClose, openUpgrade, t, tActions],
+    [onClose, openUpgrade, t, tActions, serverError],
   );
 
   const runAgent = useCallback(

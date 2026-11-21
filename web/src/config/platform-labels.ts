@@ -1,27 +1,19 @@
 /**
- * Canonical platform display-name map.
+ * Every engine's display name, by the platform id answers are stored under
+ * (`prompt_results.platform`, `prompts.platforms`): the one place an engine's
+ * name is written (GL-05, D10). Every screen, export and e-mail reads it from
+ * here, so `gemini-web` is "Gemini" everywhere. The ids never change.
  *
- * Centralized here so the insights charts, the page-level labels, and the CSV
- * export all render the same human-readable names instead of raw slugs. Always
- * look up with a fallback (`PLATFORM_LABELS[slug] ?? slug`) so unknown
- * platforms stay visible rather than disappearing.
+ * The API-model platforms (`chatgpt`, `gemini`, `claude`, see
+ * resolveModelPlatform in the tracking worker) carry an " API" suffix, so
+ * "ChatGPT API" stands beside the ChatGPT app, never two plain "ChatGPT"s.
  *
- * It also carries a few model-slug labels, because a couple of chart/progress
- * spots reuse this map to label models when no platform is available.
+ * The server keeps a copy for its e-mails and model prompts,
+ * `server/src/config/engine-names.json`; platform-labels.test.ts keeps the
+ * two the same.
  */
-export const PLATFORM_LABELS: Record<string, string> = {
-  // Generic platform slugs.
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  claude: 'Claude',
-  grok: 'Grok',
-  copilot: 'Microsoft Copilot',
-  'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI Overviews',
-  'google-ai-mode': 'Google AI Mode',
-
-  // Tracked scraper platform slugs, as stored in `prompt_results.platform`.
+export const ENGINE_NAMES: Readonly<Record<string, string>> = {
+  // Tracked scraper platform slugs.
   'chatgpt-web': 'ChatGPT',
   'chatgpt-shopping': 'ChatGPT Shopping',
   'google-aio': 'Google AI Overviews',
@@ -29,7 +21,35 @@ export const PLATFORM_LABELS: Record<string, string> = {
   'copilot-web': 'Microsoft Copilot',
   'grok-web': 'Grok',
   'perplexity-web': 'Perplexity',
-  'gemini-web': 'Google Gemini',
+  'gemini-web': 'Gemini',
+
+  // API-model platforms.
+  chatgpt: 'ChatGPT API',
+  gemini: 'Gemini API',
+  claude: 'Claude API',
+
+  // Older generic platform slugs.
+  perplexity: 'Perplexity',
+  grok: 'Grok',
+  copilot: 'Microsoft Copilot',
+  'meta-ai': 'Meta AI',
+  'google-ai-overviews': 'Google AI Overviews',
+  'google-ai-mode': 'Google AI Mode',
+};
+
+/**
+ * Platform display-name map: the engines above plus a few model slugs.
+ *
+ * Centralized here so the insights charts, the page-level labels, and the CSV
+ * export all render the same human-readable names instead of raw slugs. Always
+ * look up with a fallback (`PLATFORM_LABELS[slug] ?? slug`, or `platformLabel`)
+ * so unknown platforms stay visible rather than disappearing.
+ *
+ * The model slugs are here because a couple of chart/progress spots reuse
+ * this map to label models when no platform is available.
+ */
+export const PLATFORM_LABELS: Record<string, string> = {
+  ...ENGINE_NAMES,
 
   // Model slugs reused as a fallback label in a few chart/progress spots.
   'gpt-5-chat-latest': 'GPT-5',
@@ -40,6 +60,11 @@ export const PLATFORM_LABELS: Record<string, string> = {
   'gemini-2.5-pro': 'Gemini 2.5 Pro',
   'gemini-2.5-flash': 'Gemini 2.5 Flash',
 };
+
+/** A platform's display name, or its id when it isn't known. */
+export function platformLabel(id: string): string {
+  return PLATFORM_LABELS[id] ?? id;
+}
 
 /**
  * Model slug → provider-level display name ("claude-sonnet-5" → "Claude").
@@ -63,13 +88,15 @@ export const MODEL_PROVIDER_LABELS: Record<string, string> = {
   'gemini-2.5-flash': 'Gemini 2.5 Flash',
   'grok-3': 'Grok',
   'grok-4-auto': 'Grok',
-  'chatgpt-web': 'ChatGPT',
-  'perplexity-web': 'Perplexity',
-  'google-aio': 'Google AI Overviews',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'gemini-web': 'Google Gemini',
+  'chatgpt-web': ENGINE_NAMES['chatgpt-web'],
+  'perplexity-web': ENGINE_NAMES['perplexity-web'],
+  'google-aio': ENGINE_NAMES['google-aio'],
+  'google-aimode': ENGINE_NAMES['google-aimode'],
+  'copilot-web': ENGINE_NAMES['copilot-web'],
+  'grok-web': ENGINE_NAMES['grok-web'],
+  'gemini-web': ENGINE_NAMES['gemini-web'],
+  // Claude's API platform, so it names the family its models are in.
+  claude: 'Claude',
 };
 
 /**

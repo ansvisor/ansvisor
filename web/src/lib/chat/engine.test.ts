@@ -7429,6 +7429,16 @@ describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
     }
   });
 
+  it('names the action it read on its step, for Data used (UX audit CH-10)', async () => {
+    fakes.readRun.mockResolvedValueOnce({ id: 'a-top', code: 'AC-12', data_as_of: DATA_AS_OF });
+    useModels(
+      [calls(toolCall('r1', 'get_action', { brand_id: BRAND, action_id: 'a-top' })), READY],
+      [text('AC-12 is about /pricing.')],
+    );
+    const runId = await turn(ADMIN, 'What is AC-12?');
+    expect(stepsOf(runId)[0].scope_json).toMatchObject({ record: 'AC-12' });
+  });
+
   it('queues the week’s tasks, marks the opened action Writing, and settles as the run ends', async () => {
     useModels(
       [

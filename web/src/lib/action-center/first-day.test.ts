@@ -27,10 +27,10 @@ describe("a brand's first day", () => {
   it('names the engines the prompts track that the plan allows, in the app’s order', () => {
     expect(engineNames(['gemini-web', 'chatgpt-web', 'chatgpt-shopping'], null)).toEqual([
       'ChatGPT',
-      'Google Gemini',
+      'Gemini',
     ]);
     expect(engineNames(['gemini-web', 'grok-web'], ['chatgpt-web', 'gemini-web'])).toEqual([
-      'Google Gemini',
+      'Gemini',
     ]);
   });
 
