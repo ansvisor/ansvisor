@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
@@ -56,6 +57,7 @@ export function WriteThisDialog({
 }) {
   const t = useTranslations('content.writeThis');
   const tStart = useTranslations('contentEditor.newContent.start');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const describeRule = useRuleDescriber();
   const brandId = opportunity?.brandId;
@@ -103,7 +105,7 @@ export function WriteThisDialog({
     } catch (err) {
       console.error('Failed to start a draft for Write this:', err);
       CONTENT_GENERATE.failed();
-      toast.error(tStart('failed'));
+      toast.error(serverError(err, tStart('failed')));
       setStarting(false);
       return;
     }

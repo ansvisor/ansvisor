@@ -30,7 +30,7 @@ import {
   type HeadToHeadGroup,
   type HeadToHeadRun,
 } from '@/lib/head-to-head';
-import { getFaviconUrl } from '@/lib/favicon';
+import { rankWithYou } from '@/lib/competitors/grid-rank';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
@@ -70,6 +70,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
+import { BrandAvatar } from '@/components/brand-avatar';
 import { engineCount, engineRows, lowSample } from '@/lib/competitors/prompt-engines';
 import {
   PROMPT_PAGE_SIZE,
@@ -84,7 +85,6 @@ import {
   Trash2,
   Loader2,
   Users,
-  Globe,
   Crown,
   AlertCircle,
   ArrowUpRight,
@@ -401,6 +401,117 @@ function DiffBadge({ diff }: { diff: number }) {
 
 // ─── Competitor Cards (Management) ────────────────────────────────────────────
 
+/** A card's numbers: the Visibility score and its parts, over the picker's period. */
+interface CardStats {
+  score: number | null;
+  mentionAnswers: number;
+  citationAnswers: number;
+  positionFactor: number | null;
+  visiblePrompts: number;
+  promptCount: number;
+  mentions: number;
+  citations: number;
+}
+
+/** Its place by Visibility score (UX audit CP-06): "#2", blank when not ranked. */
+function RankNumber({ rank }: { rank: number | null }) {
+  const t = useTranslations('competitors');
+  return (
+    <span
+      data-slot="grid-rank"
+      className="w-6 shrink-0 text-center text-xs font-medium text-muted-foreground tabular-nums"
+      aria-label={rank ? t('rank.label', { rank }) : undefined}
+    >
+      {rank ? t('rank.short', { rank }) : ''}
+    </span>
+  );
+}
+
+/** The card's score and prompt count, marked when too few prompts name it to rank (D8). */
+function CardScore({
+  stats,
+  period,
+  lowSample,
+}: {
+  stats: CardStats | null;
+  period: string;
+  lowSample: boolean;
+}) {
+  const t = useTranslations('competitors');
+  const tMetrics = useTranslations('metrics');
+  if (!stats) {
+    return (
+      <div className="text-end">
+        <span className="text-xs text-muted-foreground">{t('noData')}</span>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="text-end"
+      title={t('card.scoreTip', {
+        mentionAnswers: stats.mentionAnswers,
+        citationAnswers: stats.citationAnswers,
+        position: stats.positionFactor?.toFixed(2) ?? '—',
+        mentions: stats.mentions,
+        citations: stats.citations,
+      })}
+    >
+      <div className="text-sm font-semibold tabular-nums">{stats.score ?? '—'}</div>
+      {/* Which prompts the count is out of (UX audit CP-03, decision D4). */}
+      <div
+        className="text-[10px] text-muted-foreground tabular-nums"
+        title={tMetrics('promptsAnswered', { count: stats.promptCount, period })}
+      >
+        {t('card.prompts', { visible: stats.visiblePrompts, count: stats.promptCount })}
+      </div>
+      {lowSample && (
+        <div
+          data-slot="low-sample"
+          title={t('rank.lowSampleTip')}
+          className="text-[10px] text-amber-700 dark:text-amber-400"
+        >
+          {t('rank.lowSample')}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The brand's own card in the grid, in its place by score ("You"). */
+function YouCard({
+  name,
+  stats,
+  rank,
+  lowSample,
+  period,
+}: {
+  name: string;
+  stats: CardStats | null;
+  rank: number | null;
+  lowSample: boolean;
+  period: string;
+}) {
+  const t = useTranslations('competitors');
+  return (
+    <div
+      data-slot="you-card"
+      className="flex items-center gap-3 rounded-lg border border-dashed bg-muted/30 p-3"
+    >
+      <RankNumber rank={rank} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium">{name}</span>
+          <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+            {t('rank.you')}
+          </Badge>
+        </div>
+      </div>
+      <CardScore stats={stats} period={period} lowSample={lowSample} />
+    </div>
+  );
+}
+
 function CompetitorCard({
   competitor,
   aliases,
@@ -410,20 +521,17 @@ function CompetitorCard({
   onSetType,
   onDelete,
   deleting,
+  period,
+  rank = null,
+  lowSample = false,
 }: {
   competitor: Competitor;
   /** The names and domains merged into it (00543), counted as its own. */
   aliases?: readonly CompetitorAlias[];
-  stats: {
-    score: number | null;
-    mentionAnswers: number;
-    citationAnswers: number;
-    positionFactor: number | null;
-    visiblePrompts: number;
-    promptCount: number;
-    mentions: number;
-    citations: number;
-  } | null;
+  stats: CardStats | null;
+  /** Its place by Visibility score, null when not ranked (CP-06). */
+  rank?: number | null;
+  lowSample?: boolean;
   isSelected: boolean;
   onSelect: () => void;
   /** Absent for a member who isn't an admin or a manager: no Set type button. */
@@ -431,6 +539,8 @@ function CompetitorCard({
   /** Absent for a member who isn't an admin or a manager: no delete button. */
   onDelete?: () => void;
   deleting: boolean;
+  /** The picker's range in words ("the last 30 days"), for the prompt count's tooltip. */
+  period: string;
 }) {
   const t = useTranslations('competitors');
 
@@ -442,33 +552,22 @@ function CompetitorCard({
       )}
       onClick={onSelect}
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-        {competitor.domain ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={getFaviconUrl(competitor.domain)}
-            alt=""
-            className="h-5 w-5 rounded-sm"
-            onError={(e) => {
-              const el = e.target as HTMLImageElement;
-              el.style.display = 'none';
-              el.parentElement!.innerHTML =
-                '<svg class="h-5 w-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" /></svg>';
-            }}
-          />
-        ) : (
-          <Globe className="h-5 w-5 text-muted-foreground" />
-        )}
-      </div>
+      <RankNumber rank={rank} />
+      {/* Its favicon, then its initials: never a generic globe (UX audit CP-14). */}
+      <BrandAvatar
+        name={competitor.name}
+        primaryDomain={competitor.domain || undefined}
+        className="h-9 w-9 shrink-0 rounded-md"
+        fallbackClassName="rounded-md text-xs"
+      />
 
       <div className="flex-1 min-w-0">
+        {/* Selected shows as the card's border, so the name keeps its width (UX audit CP-10). */}
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium truncate">{competitor.name}</span>
-          {isSelected && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-              {t('selected')}
-            </Badge>
-          )}
+          <span className="text-sm font-medium truncate" title={competitor.name}>
+            {competitor.name}
+          </span>
+          {isSelected && <span className="sr-only">{t('selected')}</span>}
         </div>
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="text-xs text-muted-foreground truncate">{competitor.domain || '—'}</span>
@@ -478,63 +577,53 @@ function CompetitorCard({
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
-        {stats ? (
-          <div
-            className="text-end"
-            title={`Mentioned in ${stats.mentionAnswers} answers · cited in ${stats.citationAnswers}${
-              stats.positionFactor !== null
-                ? ` · position factor ${stats.positionFactor.toFixed(2)}`
-                : ''
-            } · ${stats.mentions} mentions · ${stats.citations} citations`}
-          >
-            <div className="text-sm font-semibold tabular-nums">{stats.score ?? '—'}</div>
-            <div className="text-[10px] text-muted-foreground tabular-nums">
-              {stats.visiblePrompts}/{stats.promptCount} prompts
-            </div>
-          </div>
-        ) : (
-          <div className="text-end">
-            <span className="text-xs text-muted-foreground">{t('noData')}</span>
-          </div>
-        )}
-
-        {onSetType && (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t('type.setFor', { name: competitor.name })}
-            title={t('type.setFor', { name: competitor.name })}
-            className="h-7 w-7 text-muted-foreground transition-opacity sm:opacity-0 sm:group-hover:opacity-70 hover:opacity-100 focus-visible:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSetType();
-            }}
-          >
-            <Tag className="h-3.5 w-3.5" />
-          </Button>
-        )}
-
-        {onDelete && (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t('delete')}
-            title={t('delete')}
-            className="h-7 w-7 opacity-0 group-hover:opacity-70 hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            disabled={deleting}
-          >
-            {deleting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Trash2 className="h-3.5 w-3.5" />
-            )}
-          </Button>
-        )}
+        <CardScore stats={stats} period={period} lowSample={lowSample} />
       </div>
+
+      {/* Its buttons over the card's corner on hover or focus: they take no width from the name (CP-10). */}
+      {(onSetType || onDelete) && (
+        <div
+          data-slot="card-actions"
+          className="absolute end-1 top-1 flex gap-0.5 rounded-md bg-card/95 shadow-sm transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+        >
+          {onSetType && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('type.setFor', { name: competitor.name })}
+              title={t('type.setFor', { name: competitor.name })}
+              className="h-7 w-7 text-muted-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSetType();
+              }}
+            >
+              <Tag className="h-3.5 w-3.5" />
+            </Button>
+          )}
+
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('delete')}
+              title={t('delete')}
+              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1531,6 +1620,14 @@ export default function CompetitorsPage() {
   const [loading, setLoading] = useState(true);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [datePreset, setDatePreset] = useState<CompetitorDatePreset>('30d');
+  const tMetrics = useTranslations('metrics');
+  // The picker's range in words, for the counts it scopes (UX audit CP-03).
+  const periodWords =
+    datePreset === 'all'
+      ? tMetrics('period.all')
+      : datePreset === 'custom'
+        ? tMetrics('period.custom')
+        : tMetrics('period.lastDays', { days: { '7d': 7, '30d': 30, '90d': 90 }[datePreset] });
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [dateParamsReady, setDateParamsReady] = useState(false);
@@ -1774,33 +1871,23 @@ export default function CompetitorsPage() {
   // Build score map from comparison data. The headline number is the AI
   // Visibility Score — the same metric as the Insights leaderboard — with
   // coverage kept for the sub-line and components in the tooltip.
-  const scoreMap = new Map<
-    string,
-    {
-      score: number | null;
-      mentionAnswers: number;
-      citationAnswers: number;
-      positionFactor: number | null;
-      visiblePrompts: number;
-      promptCount: number;
-      mentions: number;
-      citations: number;
-    }
-  >();
+  const scoreMap = new Map<string, CardStats>();
+  // The brand's own numbers, for its card among them (UX audit CP-06).
+  let ownStats: CardStats | null = null;
   if (comparisonData) {
     for (const entry of comparisonData.brands) {
-      if (!entry.isOwnBrand) {
-        scoreMap.set(entry.name, {
-          score: entry.score,
-          mentionAnswers: entry.mentionAnswers,
-          citationAnswers: entry.citationAnswers,
-          positionFactor: entry.positionFactor,
-          visiblePrompts: entry.visiblePrompts,
-          promptCount: entry.promptCount,
-          mentions: entry.totalMentions,
-          citations: entry.totalCitations,
-        });
-      }
+      const stats: CardStats = {
+        score: entry.score,
+        mentionAnswers: entry.mentionAnswers,
+        citationAnswers: entry.citationAnswers,
+        positionFactor: entry.positionFactor,
+        visiblePrompts: entry.visiblePrompts,
+        promptCount: entry.promptCount,
+        mentions: entry.totalMentions,
+        citations: entry.totalCitations,
+      };
+      if (entry.isOwnBrand) ownStats = stats;
+      else scoreMap.set(entry.name, stats);
     }
   }
 
@@ -2148,34 +2235,54 @@ export default function CompetitorsPage() {
                           </span>
                         </h3>
                       )}
+                      {/* By Visibility score, You in its place, each ranked (UX audit CP-06). */}
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {group.items.map((comp) => (
-                          <CompetitorCard
-                            key={comp.id}
-                            competitor={comp}
-                            aliases={aliasesOf(comp.id)}
-                            stats={scoreMap.get(comp.name) ?? null}
-                            isSelected={selectedCompetitorId === comp.id}
-                            onSelect={() =>
-                              selectCompetitor(selectedCompetitorId === comp.id ? null : comp.id)
-                            }
-                            onSetType={
-                              canManage
-                                ? guard(() => setTypeFor(comp), {
-                                    action: tActions('setCompetitorTypes'),
-                                  })
-                                : undefined
-                            }
-                            onDelete={
-                              canManage
-                                ? guard(() => setConfirmDelete(comp), {
-                                    action: tActions('deleteCompetitors'),
-                                  })
-                                : undefined
-                            }
-                            deleting={deleting === comp.id}
-                          />
-                        ))}
+                        {rankWithYou(
+                          group.items,
+                          (comp) => scoreMap.get(comp.name) ?? null,
+                          (comp) => comp.name,
+                          ownStats,
+                        ).map(({ item: comp, rank, lowSample }) =>
+                          comp === null ? (
+                            <YouCard
+                              key=" you"
+                              name={brand.name}
+                              stats={ownStats}
+                              rank={rank}
+                              lowSample={lowSample}
+                              period={periodWords}
+                            />
+                          ) : (
+                            <CompetitorCard
+                              key={comp.id}
+                              rank={rank}
+                              lowSample={lowSample}
+                              period={periodWords}
+                              competitor={comp}
+                              aliases={aliasesOf(comp.id)}
+                              stats={scoreMap.get(comp.name) ?? null}
+                              isSelected={selectedCompetitorId === comp.id}
+                              onSelect={() =>
+                                selectCompetitor(selectedCompetitorId === comp.id ? null : comp.id)
+                              }
+                              onSetType={
+                                canManage
+                                  ? guard(() => setTypeFor(comp), {
+                                      action: tActions('setCompetitorTypes'),
+                                    })
+                                  : undefined
+                              }
+                              onDelete={
+                                canManage
+                                  ? guard(() => setConfirmDelete(comp), {
+                                      action: tActions('deleteCompetitors'),
+                                    })
+                                  : undefined
+                              }
+                              deleting={deleting === comp.id}
+                            />
+                          ),
+                        )}
                       </div>
                     </section>
                   ))}

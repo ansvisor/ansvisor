@@ -655,7 +655,8 @@ export async function sendTopicOpportunityToActionCenter(
 ): Promise<
   | { actionId: string; actionNo: number; brandNo?: number | null; created: boolean }
   // 'stale': none of the suggestions is still open in the topic (409).
-  | { error: string; code?: 'stale' }
+  // Else the API's stable code, if any, for the browser's words (LOC-008).
+  | { error: string; code?: string; status?: number }
 > {
   const supabase = await createClient();
   const {
@@ -676,7 +677,12 @@ export async function sendTopicOpportunityToActionCenter(
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const error = body.details || body.error || `Server error: ${res.status}`;
-    return res.status === 409 ? { error, code: 'stale' } : { error };
+    if (res.status === 409) return { error, code: 'stale' };
+    return {
+      error,
+      ...(typeof body.code === 'string' ? { code: body.code } : {}),
+      status: res.status,
+    };
   }
   return res.json();
 }

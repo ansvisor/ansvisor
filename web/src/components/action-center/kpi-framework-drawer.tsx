@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import {
   BarChart3,
@@ -120,6 +121,7 @@ export function KpiFrameworkDrawer({
   // A read-only workspace (plan not active): Save & Apply opens the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -156,13 +158,13 @@ export function KpiFrameworkDrawer({
           }),
         ) as Draft,
       );
-    } catch {
-      toast.error(t('loadFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('loadFailed')));
       onOpenChange(false);
     } finally {
       setIsLoading(false);
     }
-  }, [brandId, onOpenChange, t]);
+  }, [brandId, onOpenChange, t, serverError]);
 
   useEffect(() => {
     if (open) void prefill();
@@ -223,8 +225,8 @@ export function KpiFrameworkDrawer({
         onOpenChange(false);
         onSaved();
         toast.success(t('saved'));
-      } catch {
-        toast.error(t('saveFailed'));
+      } catch (err) {
+        toast.error(serverError(err, t('saveFailed')));
       } finally {
         setIsSaving(false);
       }

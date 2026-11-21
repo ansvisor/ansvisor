@@ -149,7 +149,7 @@ describe('getSwapOptions', () => {
       waiting: true,
     });
     expect(options.plan).toEqual({ id: 'starter', name: 'Starter', max: 4, used: 4 });
-    expect(options.growthPrompts).toBe(200);
+    expect(options.growthPrompts).toBe(250);
     // Demand in thirds of each brand's own (as Today's first day reads it):
     // of two, the higher is high and the lower medium.
     expect(options.candidates.map((c) => [c.id, c.current, c.demand, c.mentions])).toEqual([

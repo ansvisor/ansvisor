@@ -79,7 +79,9 @@ export function isLost(prompt: ImpactPrompt): boolean {
 
 /** Platform names for a prompt row: where it cites the page now, or did before it was lost. */
 export function platformNames(platforms: string[]): string[] {
-  return [...new Set(platforms.map((p) => PLATFORM_LABELS[p] ?? p))];
+  // One name per AI platform: a page's impact counts the app and its API
+  // answers together ("ChatGPT", not "ChatGPT" and "ChatGPT API").
+  return [...new Set(platforms.map((p) => (PLATFORM_LABELS[p] ?? p).replace(/ API$/, '')))];
 }
 
 /**

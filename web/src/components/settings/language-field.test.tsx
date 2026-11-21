@@ -83,17 +83,17 @@ describe('LanguageField', () => {
     expect(container.textContent).toContain('content language doesn’t change');
   });
 
-  it('shows staff every language in its own name, the test ones marked', async () => {
+  it('shows staff every language in its own name, with no test mark', async () => {
     actions.getUiLanguageState.mockResolvedValue(staff);
     await render();
-    expect(row('tr').textContent).toBe('Türkçe · test');
-    expect(row('de').textContent).toBe('Deutsch · test');
-    expect(row('ja').textContent).toBe('日本語 · test');
-    expect(row('zh-CN').textContent).toBe('简体中文 · test');
-    expect(row('ko').textContent).toBe('한국어 · test');
+    expect(row('tr').textContent).toBe('Türkçe');
+    expect(row('de').textContent).toBe('Deutsch');
+    expect(row('ja').textContent).toBe('日本語');
+    expect(row('zh-CN').textContent).toBe('简体中文');
+    expect(row('ko').textContent).toBe('한국어');
     expect(container.querySelector('[data-locale="ar"]')).toBeNull();
     expect(row('en').textContent).toBe('English');
-    expect(row('en-XA').textContent).toBe('Pseudo-English · test');
+    expect(row('en-XA').textContent).toBe('Pseudo-English');
   });
 
   it('saves a pick as it is made, reloads the page and says so', async () => {

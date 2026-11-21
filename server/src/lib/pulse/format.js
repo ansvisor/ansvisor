@@ -3,20 +3,11 @@
  * (lib/slack/blocks/pulse.js, #2139). Pure.
  */
 
-// Display names for platform slugs used in the Pulse's copy. Keep in sync with
-// PLATFORM_LABELS in web/src/config/platform-labels.ts.
-const PLATFORM_LABELS = {
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overviews',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'perplexity-web': 'Perplexity',
-  'gemini-web': 'Google Gemini',
-};
+import { engineName } from '../../config/engine-names.js';
 
+/** A platform slug's display name in the Pulse's copy. */
 export function platformLabel(slug) {
-  return PLATFORM_LABELS[slug] ?? slug;
+  return engineName(slug);
 }
 
 /** A change with its sign, to one decimal: "+2.1", "-4", "0". */

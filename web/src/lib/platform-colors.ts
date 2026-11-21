@@ -58,6 +58,7 @@ export const PLATFORM_COLORS: Readonly<Record<string, string>> = {
  */
 const PLATFORM_ALIASES: Readonly<Record<string, string>> = {
   chatgpt: 'chatgpt.com',
+  'chatgpt api': 'chatgpt.com',
   'chatgpt-web': 'chatgpt.com',
   'chatgpt-shopping': 'chatgpt.com',
   'chatgpt shopping': 'chatgpt.com',
@@ -70,6 +71,7 @@ const PLATFORM_ALIASES: Readonly<Record<string, string>> = {
   'ai mode': 'google-ai-mode',
   'google-aimode': 'google-ai-mode',
   gemini: 'gemini.google.com',
+  'gemini api': 'gemini.google.com',
   'google gemini': 'gemini.google.com',
   'gemini-web': 'gemini.google.com',
   bard: 'gemini.google.com',
@@ -81,6 +83,7 @@ const PLATFORM_ALIASES: Readonly<Record<string, string>> = {
   perplexity: 'perplexity.ai',
   'perplexity-web': 'perplexity.ai',
   claude: 'claude.ai',
+  'claude api': 'claude.ai',
   grok: 'grok.com',
   'grok-web': 'grok.com',
   deepseek: 'deepseek.com',
