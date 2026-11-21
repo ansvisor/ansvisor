@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useAuthStore } from '@/stores/use-auth-store';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import type { ChatPageFilter } from '@/lib/chat/page-context';
 import { viewRows } from '@/lib/chat/page-view';
@@ -34,6 +35,14 @@ import {
   type ActionItem,
 } from '@/lib/actions/action-center';
 import { listBrandMembers, type TeamMember } from '@/lib/actions/team';
+import { getClosedThisWeekCount } from '@/lib/actions/action-center-counts';
+import {
+  CLOSED_WEEK_DAYS,
+  isClosedThisWeek,
+  isNewSinceVisit,
+  readActionsVisit,
+  writeActionsVisit,
+} from '@/lib/action-center/actions-visit';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { actionCode, matchesActionCode } from '@/lib/action-center/action-ref';
 import {
@@ -125,6 +134,8 @@ const CARD_FILTERS = {
     isOpen(action) && (action.category === 'recover' || action.category === 'fix'),
   opportunities: (action: ActionItem) => isOpen(action) && action.category === 'growth',
   inProgress: (action: ActionItem) => action.status === 'in_progress',
+  // The summary's "closed this week", shown under Status: All.
+  closedWeek: (action: ActionItem) => isClosedThisWeek(action, new Date()),
 } as const;
 
 /** Top Actions is the five highest-priority open actions (AC-006), not a predicate. */
@@ -223,6 +234,21 @@ function ActionsContent({ brand }: { brand: Brand }) {
     };
   }, []);
   const [focus, setFocus] = useState<CardFocus | null>(null);
+
+  // The person's last visit to this list on the brand, read once per visit
+  // and then moved to now: this visit's New marks stay until the next one.
+  // undefined until read; null when none is kept (nothing is marked New).
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const [lastVisit, setLastVisit] = useState<string | null | undefined>(undefined);
+  const visitRead = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    const key = `${userId}:${brand.id}`;
+    if (visitRead.current === key) return;
+    visitRead.current = key;
+    setLastVisit(readActionsVisit(userId, brand.id));
+    writeActionsVisit(userId, brand.id, new Date());
+  }, [userId, brand.id]);
 
   // Filters, sort and search live in the URL (#896) so a refresh keeps them
   // and a filtered view can be shared. Read after mount; defaults stay out.
@@ -531,6 +557,35 @@ function ActionsContent({ brand }: { brand: Brand }) {
     };
   }, [actions, topIds]);
 
+  const newIds = useMemo(
+    () =>
+      new Set(
+        (actions ?? [])
+          .filter((action) => isNewSinceVisit(action, lastVisit ?? null))
+          .map((action) => action.id),
+      ),
+    [actions, lastVisit],
+  );
+
+  // "Closed this week" counted on the server, read again when the list's
+  // own closed rows change; null until read or when the read failed.
+  const closedHere = (actions ?? []).filter(CARD_FILTERS.closedWeek).length;
+  const [closedCount, setClosedCount] = useState<number | null>(null);
+  useEffect(() => {
+    let current = true;
+    getClosedThisWeekCount(brand.id)
+      .then((count) => current && setClosedCount(count))
+      .catch(() => current && setClosedCount(null));
+    return () => {
+      current = false;
+    };
+  }, [brand.id, closedHere]);
+
+  const showClosedWeek = () => {
+    setStatus('all');
+    setFocus(focus === 'closedWeek' ? null : 'closedWeek');
+  };
+
   const hasActiveFilters =
     focus !== null ||
     category !== 'all' ||
@@ -697,6 +752,38 @@ function ActionsContent({ brand }: { brand: Brand }) {
         </Card>
       </div>
 
+      {/* Where the actions went: the open count stays level as new ones come
+          and others close, so the summary says both. */}
+      <p
+        data-actions-summary=""
+        className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground"
+      >
+        <span>{t('summary.open', { count: list.filter(isOpen).length })}</span>
+        {closedCount !== null && (
+          <>
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              onClick={showClosedWeek}
+              aria-pressed={focus === 'closedWeek'}
+              title={t('summary.closedHint', { days: CLOSED_WEEK_DAYS })}
+              className={cn(
+                'underline-offset-2 hover:text-foreground hover:underline',
+                focus === 'closedWeek' && 'font-medium text-foreground underline',
+              )}
+            >
+              {t('summary.closed', { count: closedCount })}
+            </button>
+          </>
+        )}
+        {typeof lastVisit === 'string' && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{t('summary.new', { count: newIds.size })}</span>
+          </>
+        )}
+      </p>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <CategoryPill
@@ -812,6 +899,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
       {visible.length > 0 ? (
         <ActionTable
           actions={visible}
+          newIds={newIds}
           onSelect={(action) => selectAction(action.id)}
           onStatusChange={changeStatus}
           onKeep={keepAction}

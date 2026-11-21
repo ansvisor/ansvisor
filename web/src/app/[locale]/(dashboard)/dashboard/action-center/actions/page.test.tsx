@@ -52,15 +52,18 @@ const action: ActionItem = {
   priorityReason: null,
 };
 
-const { getActions, getActionsAffected, role, saveBlob, toast, firstRun } = vi.hoisted(() => ({
-  getActions: vi.fn(),
-  getActionsAffected: vi.fn(),
-  role: { canManage: true },
-  saveBlob: vi.fn(),
-  toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
-  // Who listens for the end of the brand's first run.
-  firstRun: { finished: new Set<(brandId: string) => void>() },
-}));
+const { getActions, getActionsAffected, role, saveBlob, toast, firstRun, closedCount } = vi.hoisted(
+  () => ({
+    getActions: vi.fn(),
+    closedCount: vi.fn(),
+    getActionsAffected: vi.fn(),
+    role: { canManage: true },
+    saveBlob: vi.fn(),
+    toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+    // Who listens for the end of the brand's first run.
+    firstRun: { finished: new Set<(brandId: string) => void>() },
+  }),
+);
 
 // No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
 vi.mock('@/lib/actions/white-label', () => ({
@@ -68,8 +71,13 @@ vi.mock('@/lib/actions/white-label', () => ({
 }));
 vi.mock('next-intl', () => ({
   // Chat's "How do I finish …" names its action: the test reads which one.
-  useTranslations: () => (key: string, values?: { title?: string }) =>
-    key === 'actionHow' ? `${key}: ${values?.title}` : key,
+  // The summary's counts are read too: "summary.open:3".
+  useTranslations: () => (key: string, values?: { title?: string; count?: number }) =>
+    key === 'actionHow'
+      ? `${key}: ${values?.title}`
+      : key.startsWith('summary.') && values?.count !== undefined
+        ? `${key}:${values.count}`
+        : key,
 }));
 const setActiveBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/stores/use-brand-store', () => ({
@@ -87,6 +95,22 @@ vi.mock('@/stores/use-brand-store', () => ({
     }),
 }));
 vi.mock('@/lib/actions/action-center', () => ({ getActions, getActionsAffected }));
+vi.mock('@/lib/actions/action-center-counts', () => ({ getClosedThisWeekCount: closedCount }));
+vi.mock('@/stores/use-auth-store', () => ({
+  useAuthStore: (selector: (state: { user: { id: string } }) => unknown) =>
+    selector({ user: { id: 'user-id' } }),
+}));
+// The last visit is kept in the browser: an in-memory one here.
+const visits = vi.hoisted(() => new Map<string, string>());
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem: (key: string) => visits.get(key) ?? null,
+    setItem: (key: string, value: string) => void visits.set(key, value),
+    removeItem: (key: string) => void visits.delete(key),
+    clear: () => visits.clear(),
+  },
+});
 // A row's Start now (AC plan P-3) reads its work through content-drafts, which needs the
 // server's Supabase client; the list's rows are stubbed here.
 vi.mock('@/components/action-center/start-now', () => ({
@@ -111,6 +135,7 @@ vi.mock('@/components/action-center/action-center-tabs', () => ({ ActionCenterTa
 const table = vi.hoisted(() => ({
   props: null as {
     actions: ActionItem[];
+    newIds?: Set<string>;
     sort?: string;
     onSortChange?: (sort: string) => void;
   } | null,
@@ -159,6 +184,8 @@ async function render(isLocked = false) {
 beforeEach(() => {
   window.history.replaceState(null, '', '/');
   getActions.mockReset().mockResolvedValue([action]);
+  closedCount.mockReset().mockResolvedValue(0);
+  visits.clear();
   role.canManage = true;
   container = document.createElement('div');
   document.body.append(container);
@@ -648,5 +675,74 @@ describe('finding an action by its code', () => {
     window.history.replaceState(null, '', '/');
     await render();
     expect(ids()).toHaveLength(4);
+  });
+});
+
+/**
+ * The count stayed level while new actions came, so people thought older
+ * ones were deleted: the summary says what is open, what closed this week
+ * and what is new since the last visit, and the rows say New.
+ */
+describe('the summary and the New marks', () => {
+  const visitKey = 'aeo:actions-visit:user-id:brand-id';
+  const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+  const summary = () => container.querySelector('[data-actions-summary]')?.textContent ?? '';
+  const closedButton = () =>
+    [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.startsWith('summary.closed'),
+    )!;
+
+  it('counts the open actions and those closed this week, and marks nothing on a first visit', async () => {
+    closedCount.mockResolvedValue(12);
+    table.props = null;
+    await render();
+    expect(closedCount).toHaveBeenCalledWith('brand-id');
+    expect(summary()).toContain('summary.open:1');
+    expect(summary()).toContain('summary.closed:12');
+    expect(summary()).not.toContain('summary.new');
+    expect(table.props!.newIds!.size).toBe(0);
+    // This visit is kept for the next one.
+    expect(Date.parse(visits.get(visitKey)!)).toBeGreaterThan(Date.now() - 60_000);
+  });
+
+  it('marks the actions created since the last visit, not those only updated since', async () => {
+    visits.set(visitKey, daysAgo(2));
+    getActions.mockResolvedValue([
+      { ...action, id: 'fresh', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
+      { ...action, id: 'touched', createdAt: daysAgo(10), updatedAt: daysAgo(1) },
+    ]);
+    table.props = null;
+    await render();
+    expect([...table.props!.newIds!]).toEqual(['fresh']);
+    expect(summary()).toContain('summary.new:1');
+  });
+
+  it('leaves the closed count out when it cannot be read', async () => {
+    closedCount.mockRejectedValue(new Error('offline'));
+    await render();
+    expect(summary()).toContain('summary.open:1');
+    expect(summary()).not.toContain('summary.closed');
+  });
+
+  it('lists the actions closed this week on a click, and lets them go on a second', async () => {
+    closedCount.mockResolvedValue(2);
+    getActions.mockResolvedValue([
+      action,
+      { ...action, id: 'done', status: 'completed', updatedAt: daysAgo(1) },
+      { ...action, id: 'dropped', status: 'dismissed', updatedAt: daysAgo(3) },
+      { ...action, id: 'old', status: 'completed', updatedAt: daysAgo(30) },
+    ]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    await act(async () => closedButton().click());
+    expect(closedButton().getAttribute('aria-pressed')).toBe('true');
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['done', 'dropped']);
+
+    // Again: every status, as the click left the Status filter.
+    await act(async () => closedButton().click());
+    expect(closedButton().getAttribute('aria-pressed')).toBe('false');
+    await act(async () => exportButton().click());
+    expect(getActionsAffected.mock.lastCall![1]).toHaveLength(4);
   });
 });

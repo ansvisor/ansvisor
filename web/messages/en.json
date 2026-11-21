@@ -2086,6 +2086,16 @@
       "noResults": "No actions match these filters.",
       "noOpen": "No open actions. Completed and dismissed ones are under every status.",
       "showAllStatuses": "Show every status",
+      "summary": {
+        "open": "{count} open",
+        "closed": "{count} closed this week",
+        "closedHint": "Completed or dismissed in the last {days} days. Click to list them.",
+        "new": "{count} new since your last visit"
+      },
+      "newMark": {
+        "label": "New",
+        "hint": "Created since your last visit"
+      },
       "error": {
         "title": "We couldn't load your actions.",
         "retry": "Try again"
