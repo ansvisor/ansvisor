@@ -86,6 +86,13 @@ import { scheduleDemandCollect, sweepPromptDemand } from './lib/prompt-demand.js
 import { runGaSync } from './lib/ga-sync.js';
 import { runHubspotPipelineSync } from './lib/hubspot/pipeline-sync.js';
 import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
+import {
+  sendCriticalActionAlerts,
+  sendCriticalActionSummaries,
+} from './lib/notifications/critical-action.js';
+import { sendDraftsReview } from './lib/notifications/drafts-review.js';
+import { sendDueActions, sendWeeklyActions } from './lib/notifications/actions-digest.js';
+import { sendAuditAlerts, sendAuditSummaries } from './lib/notifications/audits.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
@@ -481,6 +488,26 @@ async function runDailyTracking() {
       // last Sunday's Analytics numbers are in. Cloud only, like the pulse.
       sendTrafficDigests().catch((err) => {
         logger.error({ err }, '[traffic-digest] weekly sweep crashed');
+      });
+      // The notification e-mails people chose (Settings › Notifications):
+      // the day's Critical actions, and drafts waiting for review (daily, or
+      // Mondays for Weekly). Each goes once (notification_sends, 00556).
+      sendCriticalActionSummaries().catch((err) => {
+        logger.error({ err }, '[notifications] critical summaries crashed');
+      });
+      sendDraftsReview().catch((err) => {
+        logger.error({ err }, '[notifications] drafts review crashed');
+      });
+      // Actions due or late for their assignee, and Mondays' action summary.
+      sendDueActions().catch((err) => {
+        logger.error({ err }, '[notifications] due actions crashed');
+      });
+      sendWeeklyActions().catch((err) => {
+        logger.error({ err }, '[notifications] weekly actions crashed');
+      });
+      // The day's finished audits and dropped scores, for Daily summary.
+      sendAuditSummaries().catch((err) => {
+        logger.error({ err }, '[notifications] audit summaries crashed');
       });
       return sweepAutoAudits({
         readInbox: readOpportunityInbox,
@@ -942,6 +969,16 @@ server.listen(PORT, async () => {
   // (00118), and the Insights days of deleted prompts (00192), within
   // minutes, not at the nightly sweep. An empty queue costs one select, and
   // each function refuses to overlap with a run of its own still in progress.
+  // A new Critical action, Right away (Settings › Notifications): every ten
+  // minutes, each to the people who chose it, once (notification_sends).
+  cron.schedule('*/10 * * * *', () => {
+    sendCriticalActionAlerts().catch((err) =>
+      logger.error({ err }, '[notifications] critical alerts crashed'),
+    );
+    // Finished audits and dropped scores, Right away, the same way.
+    sendAuditAlerts().catch((err) => logger.error({ err }, '[notifications] audit alerts crashed'));
+  });
+
   cron.schedule(REBUILD_QUEUE_SCHEDULE, () => {
     rebuildQueuedCitationRollups().catch((err) =>
       logger.error({ err }, '[citations-rollups] scheduled rebuild crashed'),

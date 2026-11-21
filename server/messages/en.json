@@ -34,6 +34,66 @@
     "footer": "You get this as an Admin of the workspace, by your Chat settings' Notify me when an agent needs me.",
     "fallbackWorkspace": "your workspace"
   },
+  "notifications": {
+    "change": "Change your e-mails",
+    "categories": {
+      "growth": "Growth",
+      "protect": "Protect",
+      "recover": "Recover",
+      "fix": "Fix",
+      "compete": "Compete"
+    },
+    "critical": {
+      "subjectOne": "{brand}: a new Critical action, {code}",
+      "subjectMany": "{brand}: {count, plural, one {# new Critical action} other {# new Critical actions}}",
+      "title": "{count, plural, one {A new Critical action} other {# new Critical actions}}",
+      "item": "{code} · {category}",
+      "lineOne": "{brand} has a new Critical action, {item}: one of the most important things to do now.",
+      "lineMany": "{brand} has {count, plural, one {# new Critical action} other {# new Critical actions}} since yesterday:",
+      "button": "{count, plural, one {Open the action} other {Open Actions}}",
+      "why": "You get this because you chose to hear about new Critical actions."
+    },
+    "due": {
+      "subject": "{brand}: {count, plural, one {# action} other {# actions}} assigned to you {late, plural, =0 {due today} other {due or late}}",
+      "title": "{count, plural, one {An action of yours is due} other {# actions of yours are due}}",
+      "line": "In {brand}, {count, plural, one {# action assigned to you is} other {# actions assigned to you are}} due today or late:",
+      "item": "{code} · {category} · {late, plural, =0 {due today} one {due {date}, # day late} other {due {date}, # days late}}",
+      "button": "{count, plural, one {Open the action} other {Open Actions}}",
+      "why": "You get this because you chose to hear about actions assigned to you that are due or late."
+    },
+    "weekly": {
+      "subject": "{brand}: your week in the Action Center",
+      "title": "{brand}: the week in the Action Center",
+      "line": "In the last seven days, {completed, plural, one {# action was completed} other {# actions were completed}}; {open, plural, one {# is open} other {# are open}}.",
+      "next": "Next, by priority:",
+      "item": "{code} · {category}",
+      "button": "Open Actions",
+      "why": "You get this because you chose the weekly action summary."
+    },
+    "audits": {
+      "finishedSubject": "{brand}: {count, plural, one {# audit finished} other {# audits finished}}",
+      "finishedTitle": "{count, plural, one {An audit finished} other {# audits finished}}",
+      "finishedLine": "{brand}: {count, plural, one {# page audited} other {# pages audited}}, {average} on average:",
+      "finishedItem": "{page}: {score}",
+      "finishedWhy": "You get this because you chose to hear when audits finish.",
+      "droppedSubject": "{brand}: {count, plural, one {a page's score dropped} other {# pages' scores dropped}}",
+      "droppedTitle": "{count, plural, one {A page's score dropped} other {# pages' scores dropped}}",
+      "droppedLine": "{brand}: {count, plural, one {# page} other {# pages}} scored {points} points or more below {count, plural, one {its} other {their}} last audit:",
+      "droppedItem": "{page}: {before} → {score}",
+      "droppedWhy": "You get this because you chose to hear when a page's score drops.",
+      "more": "and {count} more",
+      "button": "{count, plural, one {Open the audit} other {Open Site Audit}}"
+    },
+    "drafts": {
+      "subject": "{brand}: {count, plural, one {# draft waits} other {# drafts wait}} for your review",
+      "title": "{count, plural, one {# draft waits for your review} other {# drafts wait for your review}}",
+      "line": "{brand} has {count, plural, one {# draft} other {# drafts}} in review in the Content Library:",
+      "untitled": "Untitled draft",
+      "more": "and {count} more",
+      "button": "Open Library › In review",
+      "why": "You get this because you chose to hear about drafts waiting for your review."
+    }
+  },
   "autoAudit": {
     "subject": "Site Audit: {summary}",
     "title": "Auto-audit finished",
