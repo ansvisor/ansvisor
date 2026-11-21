@@ -15,14 +15,14 @@ The **Competitors** page, under **Analytics** in the sidebar, right after **Visi
 
 ## Tracked Competitors
 
-The **Tracked Competitors** card lists every competitor with its domain and:
+The **Tracked Competitors** card lists every competitor with its logo (its site's icon or initials), its domain and:
 
-- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.
+- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover it for its answers, citations and position factor.
 - the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.
 
-**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.
+**No data** means no answer in the window was measured for that competitor yet, such as one you've just added.
 
-The **Date Range** under the page's title (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as "Scores cover the last 7 days." **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
+The **Date Range** under the page's title (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as "Scores cover the last 7 days." **Export CSV** on the card downloads every brand's scores, visible prompts, mentions and citations.
 
 ## Order and rank
 
@@ -39,7 +39,7 @@ They only change which cards show and in what order: scores, the date range and 
 
 ## Open a head-to-head comparison
 
-Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.
+Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. The selected card has a dark border. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.
 
 The comparison reads the same **Date Range** as the cards: its scores, **Gaps**, **Strengths**, **Prompt-by-Prompt** and the runs you open cover those days, and change with it. Its scores are the same AI Visibility Score as the cards, from 0 to 100 and not a percentage, for your brand and for the competitor alike over your answers: for the whole comparison, each platform, each prompt and each answer.
 

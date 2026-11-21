@@ -30,7 +30,6 @@ import {
   type HeadToHeadGroup,
   type HeadToHeadRun,
 } from '@/lib/head-to-head';
-import { getFaviconUrl } from '@/lib/favicon';
 import { rankWithYou } from '@/lib/competitors/grid-rank';
 import { toCsv } from '@/lib/csv';
 import { slugify } from '@/lib/slug';
@@ -71,6 +70,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
+import { BrandAvatar } from '@/components/brand-avatar';
 import { engineCount, engineRows, lowSample } from '@/lib/competitors/prompt-engines';
 import {
   PROMPT_PAGE_SIZE,
@@ -85,7 +85,6 @@ import {
   Trash2,
   Loader2,
   Users,
-  Globe,
   Crown,
   AlertCircle,
   ArrowUpRight,
@@ -554,33 +553,21 @@ function CompetitorCard({
       onClick={onSelect}
     >
       <RankNumber rank={rank} />
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-        {competitor.domain ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={getFaviconUrl(competitor.domain)}
-            alt=""
-            className="h-5 w-5 rounded-sm"
-            onError={(e) => {
-              const el = e.target as HTMLImageElement;
-              el.style.display = 'none';
-              el.parentElement!.innerHTML =
-                '<svg class="h-5 w-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" /></svg>';
-            }}
-          />
-        ) : (
-          <Globe className="h-5 w-5 text-muted-foreground" />
-        )}
-      </div>
+      {/* Its favicon, then its initials: never a generic globe (UX audit CP-14). */}
+      <BrandAvatar
+        name={competitor.name}
+        primaryDomain={competitor.domain || undefined}
+        className="h-9 w-9 shrink-0 rounded-md"
+        fallbackClassName="rounded-md text-xs"
+      />
 
       <div className="flex-1 min-w-0">
+        {/* Selected shows as the card's border, so the name keeps its width (UX audit CP-10). */}
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium truncate">{competitor.name}</span>
-          {isSelected && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-              {t('selected')}
-            </Badge>
-          )}
+          <span className="text-sm font-medium truncate" title={competitor.name}>
+            {competitor.name}
+          </span>
+          {isSelected && <span className="sr-only">{t('selected')}</span>}
         </div>
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="text-xs text-muted-foreground truncate">{competitor.domain || '—'}</span>
@@ -591,44 +578,52 @@ function CompetitorCard({
 
       <div className="flex items-center gap-3 shrink-0">
         <CardScore stats={stats} period={period} lowSample={lowSample} />
-
-        {onSetType && (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t('type.setFor', { name: competitor.name })}
-            title={t('type.setFor', { name: competitor.name })}
-            className="h-7 w-7 text-muted-foreground transition-opacity sm:opacity-0 sm:group-hover:opacity-70 hover:opacity-100 focus-visible:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSetType();
-            }}
-          >
-            <Tag className="h-3.5 w-3.5" />
-          </Button>
-        )}
-
-        {onDelete && (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t('delete')}
-            title={t('delete')}
-            className="h-7 w-7 opacity-0 group-hover:opacity-70 hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            disabled={deleting}
-          >
-            {deleting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Trash2 className="h-3.5 w-3.5" />
-            )}
-          </Button>
-        )}
       </div>
+
+      {/* Its buttons over the card's corner on hover or focus: they take no width from the name (CP-10). */}
+      {(onSetType || onDelete) && (
+        <div
+          data-slot="card-actions"
+          className="absolute end-1 top-1 flex gap-0.5 rounded-md bg-card/95 shadow-sm transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+        >
+          {onSetType && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('type.setFor', { name: competitor.name })}
+              title={t('type.setFor', { name: competitor.name })}
+              className="h-7 w-7 text-muted-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSetType();
+              }}
+            >
+              <Tag className="h-3.5 w-3.5" />
+            </Button>
+          )}
+
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('delete')}
+              title={t('delete')}
+              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

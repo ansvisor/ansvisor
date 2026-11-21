@@ -16416,7 +16416,7 @@
     },
     "merge": {
       "open": "Merge",
-      "openHint": "Merge competitors that are the same company",
+      "openHint": "Merge duplicate competitors (e.g. two domains of one brand)",
       "title": "Merge competitors",
       "description": "Pick the competitors that are the same company, then the one to keep.",
       "pickLabel": "Same company",
