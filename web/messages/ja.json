@@ -14,6 +14,67 @@
     "upgrade": "アップグレード",
     "choosePlan": "プランを選択"
   },
+  "locationPicker": {
+    "label": "ロケーション",
+    "tracked": "トラッキング中",
+    "count": "· {count}件の{noun}",
+    "countOf": "· 利用可能 {max} 件中 {count} 件",
+    "country": "国",
+    "countryMissing": "国 · {engines}では未対応",
+    "usState": "アメリカ合衆国 · 州",
+    "city": "都市 · {country}",
+    "atCap": "プランの上限に達しました",
+    "add": "国、米国の州、または都市を追加",
+    "search": "ロケーションを検索…",
+    "empty": "一致するロケーションはありません。",
+    "already": "{noun}として追加済み",
+    "atCapHint": "プランの上限に達しました — ロケーションを削除するか、プランをアップグレードしてください",
+    "remove": "{location}を削除",
+    "cityNote": "都市は Google AI Mode、AI Overviews、API モデルに送信されます。ChatGPT、Gemini、Grok は国単位で回答するため、それらを確認するには国もトラッキングしてください。"
+  },
+  "promptCard": {
+    "save": "変更を保存",
+    "cancelEdit": "編集をキャンセル",
+    "edit": "Promptを編集",
+    "delete": "Promptを削除",
+    "deleteTitle": "Promptを削除",
+    "deleteBody": "このPromptを削除してもよろしいですか？この操作は元に戻せません。",
+    "cancel": "キャンセル",
+    "confirmDelete": "削除"
+  },
+  "brandGuard": {
+    "noBrandsTitle": "ブランドがまだありません",
+    "noBrandsBody": "最初のブランドを作成して、AIエンジンがあなたについてどう語っているかのトラッキングを始めましょう。",
+    "createBrand": "ブランドを作成",
+    "selectTitle": "ブランドを選択",
+    "selectBody": "作業するブランドを選択してください。"
+  },
+  "runSingle": {
+    "title": "単一のPromptを実行",
+    "description": "テストするPromptを選択してください。選択したPromptのみが、有効なプラットフォーム全体で実行されます。",
+    "empty": "有効なPromptが見つかりません。先にブランド設定でPromptを追加してください。",
+    "loadFailed": "Promptの読み込みに失敗しました",
+    "runFailed": "Promptの実行に失敗しました"
+  },
+  "responseDetail": {
+    "response": "AIの回答",
+    "showLess": "表示を減らす",
+    "showFull": "回答全文を表示",
+    "citations": "引用 ({count})",
+    "fanOut": "クエリ fan-out ({count})"
+  },
+  "serverErrors": {
+    "invalid": "処理を完了できませんでした。入力内容に無効な部分があります。確認してもう一度お試しください。",
+    "too_large": "サイズが大きすぎます。小さくしてもう一度お試しください。",
+    "too_long": "長すぎます。短くしてもう一度お試しください。",
+    "rate_limited": "操作の回数が多すぎます。数分待ってからもう一度お試しください。",
+    "forbidden": "この操作を行う権限がありません。管理者にお問い合わせください。",
+    "duplicate": "すでに存在しています。",
+    "missing_ai_key": "まず「設定 › AI Providers」でAIプロバイダーのキーを追加してください。",
+    "server_error": "サーバー側で問題が発生しました。もう一度お試しください。",
+    "location_limit": "プランのPromptロケーション枠が上限に達しています。各Promptは追跡するロケーションごとに1回カウントされ、一時停止中のPromptはカウントされません。いくつか削除または一時停止するか、プランをアップグレードしてください。",
+    "brand_limit": "プランのブランド枠をすべて使用しています。追加するにはプランをアップグレードしてください。"
+  },
   "aiUsage": {
     "meter": {
       "ai": "AI",
@@ -41,6 +102,19 @@
       "startPlan": "プランを開始"
     },
     "getMoreWindow": {
+      "topUp": {
+        "title": "AI使用量のトップアップ",
+        "label": "AI使用量のトップアップ",
+        "buy": "{option}を購入 · {price}",
+        "confirm": "登録済みのカードで今すぐ{price}を支払いますか？プランが更新されるまで、今期の分に追加されます。",
+        "pay": "{price}を支払う",
+        "cancel": "キャンセル",
+        "paying": "お支払い中…",
+        "done": "トップアップを購入しました。支払いが確認され次第、反映されます。",
+        "starter": "GrowthではAI使用量が5倍になり、さらに必要なときはAIトップアップも利用できます。",
+        "seeGrowth": "Growthを見る",
+        "oldCredits": "AIクレジットパックの販売は終了しました。購入済みのクレジットは有効期限まで使用できます。"
+      },
       "titleAi": "AIクレジットを追加",
       "titleStorage": "ストレージを追加",
       "description": "現在のプラン、利用状況の上限、追加可能なパックをご確認いただけます。",
@@ -49,7 +123,7 @@
       "aiLine": "今月のAI使用量: {percent} · {plan} · リセット日: {date}",
       "aiLineNoDate": "今月のAI使用量: {percent} · {plan}",
       "ownKey": "独自のキーを使用",
-      "askAi": "AIクレジットパックを購入",
+      "askAi": "AI使用量のトップアップを購入",
       "askStorage": "ストレージパックを購入",
       "estimates": {
         "title": "各パックの利用目安",
@@ -673,6 +747,7 @@
     "billing": "プランと請求",
     "whatsNew": "新機能・更新情報",
     "whatsNewUnread": "新しいアップデート",
+    "language": "言語",
     "help": "ヘルプ",
     "signOut": "サインアウト"
   },
@@ -841,6 +916,7 @@
         "starting": "開始中",
         "notYet": "未着手",
         "open": "未対応 {count}件",
+        "openBreakdown": "保留中 {onHold}件 · あなたの担当 {mine}件",
         "doneWeek": "今週 {count}件",
         "noChange": "変動なし",
         "tomorrow": "明日"
@@ -919,7 +995,7 @@
           "openNewest": "最新をチャットで開く"
         },
         "drafts": {
-          "line": "エージェントが{count, plural, other {#ページの}}下書きを作成しました。承認なしで公開されることはありません。",
+          "line": "{count, plural, other {#件の下書き}}がレビュー待ちです。承認なしで公開されるものはありません。",
           "open": "{count, plural, other {#件の下書きを確認}}"
         },
         "due": {
@@ -1061,8 +1137,8 @@
         },
         "saved": {
           "title": "保存されたアイテム",
-          "drafts": "{count, plural, other {エージェントからの下書き#件}}: {title}。",
-          "draftsUntitled": "{count, plural, other {エージェントからの下書き#件}}がレビュー待ちです。",
+          "drafts": "{count, plural, other {#件の下書き}}がレビュー待ちです：{title}。",
+          "draftsUntitled": "{count, plural, other {#件の下書き}}がレビュー待ちです。",
           "kept": "プランを選択してレビューおよび公開を行ってください。{prompts, plural, other {#件のPrompt}}と{competitors, plural, other {#件の競合}}は保持されます。"
         },
         "plan": {
@@ -1099,6 +1175,16 @@
       "content": "コンテンツ"
     },
     "kpis": {
+      "newGoal": {
+        "prompt": "目標を達成しました · 新しい目標を設定",
+        "title": "{name}の新しい目標",
+        "description": "現在の値は{value}で、目標の{goal}を超えています。新しい目標は現在の値より20%高く設定されます。必要に応じて変更してください。",
+        "label": "新しい目標",
+        "cancel": "キャンセル",
+        "save": "目標を保存",
+        "saved": "新しい目標を保存しました",
+        "failed": "目標を保存できませんでした。もう一度お試しください。"
+      },
       "title": "KPI",
       "subtitle": "目標に合わせて、重要な指標を追跡します。",
       "allKpis": "すべてのKPI",
@@ -1121,6 +1207,7 @@
         "goal_reached": "目標達成"
       },
       "pointsChange": "{value} pt",
+      "score": "{value}/100",
       "vsGoalAria": "目標の{progress}%",
       "editKpis": "KPIを編集",
       "addKpi": "KPIを追加",
@@ -1193,7 +1280,8 @@
       },
       "targets": "目標値",
       "targetAria": "{name}の目標値",
-      "invalidTarget": "目標値には正の値を指定してください。パーセントの目標値は100以下である必要があります。",
+      "invalidTarget": "目標値は正の数にしてください。パーセントとスコアの目標値は100を超えられません。",
+      "scoreSuffix": "/100",
       "callout": {
         "title": "このKPIフレームワークに基づいてアクションセンターが運用されます。",
         "description": "アクションや提案は、KPI目標に基づいて優先順位が付けられます。"
@@ -1244,7 +1332,8 @@
     },
     "signalsPage": {
       "title": "シグナル",
-      "subtitle": "AI検索、サイト、ウェブからのリアルタイムシグナルです。これらのシグナルがアクションセンターを動かします。",
+      "subtitle": "AIの回答、サイト、Webから得たシグナルです。Action Centerの基になります。",
+      "subtitleRun": "最新のAI回答の実行（{ago}）から得たシグナルです。Action Centerの基になります。",
       "cards": {
         "total": "シグナル総数",
         "totalPopulation": "過去{days, plural, other {#日間}}アクティブ",
@@ -1254,6 +1343,7 @@
         "newPopulation": "過去{days, plural, other {#日間}}に検出",
         "resolved": "解決済みシグナル",
         "resolvedPopulation": "過去{days, plural, other {#日間}}に解決済み",
+        "resolvedNote": "新規より多くなる場合があります。この期間より前に発生し、この期間中に解決されたシグナルも含まれるためです。",
         "avgImpact": "平均シグナルインパクト",
         "avgImpactPopulation": "過去{days, plural, other {#日間}}にアクティブだったシグナル全体",
         "noPrev": "過去のデータなし",
@@ -1857,14 +1947,15 @@
       "choices": {
         "approve_first": {
           "label": "まず承認する",
-          "note": "エージェントのモードにかかわらず、エージェントによるすべての変更は誰かの承認を待ちます。"
+          "note": "エージェントが行う変更は、すべて誰かの承認を待ちます。"
         },
         "auto_start": {
           "label": "エージェントが自動で開始する",
-          "note": "各エージェントは独自のモード（「事前に確認」、「自動」、または「完全自動」）で動作します。"
+          "note": "各エージェントは、それぞれのモード(先に確認する、自動、完全自動)に従います。"
         }
       },
-      "goLive": "どちらの設定でも本番公開は自動化されません。管理者が自動公開を許可していない限り、エージェントが公開または送信するには人のクリックが必要です。",
+      "goLive": "エージェントは、公開や送信の前に必ず確認します。",
+      "goLiveAdmin": "例外:管理者が単独での公開と送信を許可したエージェント。",
       "changedBy": "変更者: {name} · {date}",
       "someone": "ワークスペースに存在しないユーザー",
       "neverChanged": "まだ変更されていません: すべてのワークスペースは「まず承認する」から始まります。",
@@ -1927,6 +2018,7 @@
         "actions": "アクション"
       },
       "status": {
+        "open": "未完了",
         "new": "新規",
         "in_progress": "進行中",
         "on_hold": "保留中",
@@ -1937,6 +2029,7 @@
       "stale": {
         "pill": "放置",
         "hint": "{days}日以上「新規」のままで、誰も対応していません",
+        "quiet": "{days}日間更新なし",
         "notice": "放置: このアクションは{days}日以上「新規」のままで、誰も対応していません。完了にはなっていません。必要な場合は保持し、不要な場合は却下してください。",
         "keep": "現在も必要",
         "kept": "保持済み: 放置状態が解除されました"
@@ -1946,6 +2039,7 @@
       "everyoneTitle": "ワークスペースの全員: まだ担当者が割り当てられていません",
       "tags": {
         "signals": "{count, plural, other {#件のシグナル}}",
+        "signalResolved": "シグナル解消済み、要確認",
         "prompts": "{count, plural, other {#件のPrompt}}",
         "pages": "{count, plural, other {#ページ}}",
         "sources": "{count, plural, other {# 件のソース}}",
@@ -1957,8 +2051,15 @@
       },
       "removed": {
         "note": "(このアクションの作成後に {items} が削除されました)",
-        "hover": "このアクションの作成後に追跡対象外となりました: {names}",
-        "hoverMore": "このアクションの作成後に追跡対象外となりました: {names}、他 {more} 件"
+        "title": "このアクションの作成後に追跡対象から外れました",
+        "more": "ほか{count}件",
+        "reasons": {
+          "deleted": "削除済み",
+          "paused": "一時停止中"
+        },
+        "replanHint": "このアクションのPromptの半数以上がなくなったため、残りの{count, plural, other {#件のPrompt}}にタスクが合わない可能性があります。",
+        "replan": "残りのPromptで再計画",
+        "replanConfirm": "残りのPromptに合わせて、このアクションのタスクを書き直しますか?完了済み、進行中、手動で追加したタスクは残ります。"
       },
       "menu": {
         "label": "この項目のアクション"
@@ -1983,6 +2084,8 @@
         "description": "アクションは毎日の追跡実行後、シグナルから生成されます。対応すべき重要なタスクが発生すると、ここに表示されます（量より質を重視）。"
       },
       "noResults": "これらのフィルターに一致するアクションはありません。",
+      "noOpen": "未完了のアクションはありません。完了済みや却下したものは「すべてのステータス」にあります。",
+      "showAllStatuses": "すべてのステータスを表示",
       "error": {
         "title": "アクションを読み込めませんでした。",
         "retry": "再試行"
@@ -2002,6 +2105,10 @@
         },
         "notScored": "未スコア",
         "why": "この優先度の理由",
+        "lowConfidence": {
+          "tip": "{why}に基づいています。信頼度はスコアの一部にすぎないため、影響度や需要によっては上位に表示されることもあります。対応する前に確認してください。",
+          "sentTip": "検出された結果ではなく、送信時の内容から評価されています。対応する前に確認してください。"
+        },
         "reason": {
           "change": {
             "lost": "{subject}で後退",
@@ -2163,7 +2270,7 @@
         "why": "このアクションが必要な理由",
         "goal": "目標",
         "kpis": "KPI",
-        "kpiTarget": "目標値: {target}",
+        "kpiBrandGoal": "{timeframe, select, weekly {ブランドの週間目標} quarterly {ブランドの四半期目標} other {ブランドの月間目標}}:{target}",
         "noKpis": "このアクションにリンクされた設定済みKPIはありません。",
         "support": "{count, plural, =0 {このアクションを裏付ける未解決のシグナルはもうありません。} other {# 件のシグナルがこのアクションを裏付けています}}",
         "supportAll": "すべてのシグナル（{count}）",
@@ -2304,6 +2411,8 @@
         "assignee": "担当者",
         "assignTo": "チームメンバーに割り当て",
         "dueDate": "期日",
+        "goalPassed": "目標日を過ぎました",
+        "setNewDate": "新しい日付を設定",
         "statusLabel": "ステータス",
         "events": {
           "created": "{source, select, chat {Chatからアクションを作成しました} ads {Adsからアクションを作成しました} other {アクションを作成しました}}",
@@ -5294,7 +5403,7 @@
       "addedLabel": "Action Centerのアクションに追加済み",
       "createdNote": "Action Centerで優先度スコアが設定されます。タスクの完了処理はそこで行います。",
       "addedNote": "エビデンスとして追加されました。ターゲットは変更されません。",
-      "open": "アクションで開く",
+      "open": "Action Centerで開く",
       "toastCreated": "Action Centerに送信しました",
       "toastAdded": "Action Centerのアクションに追加しました"
     },
@@ -5369,6 +5478,8 @@
     "readOnly": "読み取り専用 · {role}",
     "readOnlyTitle": "{role}は質問と閲覧のみ可能です。変更は管理者とマネージャーが行えます。権限の詳細を確認する。",
     "model": "モデル",
+    "modelPrefix": "モデル:",
+    "modelTip": "Chatが回答に使うAIモデルと、その処理の深さです。「自動」では各ステップに合わせて選ばれます。",
     "modelAuto": "自動",
     "modelWarn": "モデル · {usage}",
     "modelImage": "画像 · {model}",
@@ -5528,6 +5639,7 @@
     },
     "mode": {
       "label": "実行モード",
+      "prefix": "実行モード:",
       "current": "実行モード: {mode}",
       "ask_first": "毎回確認",
       "auto": "自動（変更前に確認）",
@@ -5670,7 +5782,7 @@
       "save": "保存",
       "inFiles": "ファイル内",
       "openEditor": "エディターで開く",
-      "sendToActionCenter": "アクションに送信"
+      "sendToActionCenter": "Action Centerに送信"
     }
   },
   "chatDeliverable": {
@@ -6063,7 +6175,8 @@
       "scheduledLabel": "スケジュール設定済み、{count, plural, other {#件のジョブ}}が有効",
       "agents": "エージェント",
       "agentsShort": "エージェント",
-      "agentsLabel": "エージェント · アクションセンター"
+      "agentsLabel": "エージェント · アクションセンター",
+      "agentsTip": "Chatの外で Action Center › エージェント を開きます"
     },
     "actions": {
       "more": "{name}の詳細",
@@ -6160,7 +6273,7 @@
         "whatsNew": "新着情報"
       },
       "byFocus": {
-        "rivalRose": "今週、{rival}の言及率が{points, number}ポイント上昇しました。",
+        "rivalRose": "今週、<link>{rival}</link>の言及率が{points, number}ポイント上昇しました。",
         "startTitle": "質問から始める",
         "newForYou": {
           "title": "おすすめ",
@@ -8826,6 +8939,11 @@
       "createAgent": "エージェントを作成",
       "connect": "{name}を連携",
       "notConnected": "{name} · 未連携",
+      "catalog": {
+        "name": "カタログ",
+        "connect": "カタログを接続(Shopify、フィードURL、CSV)"
+      },
+      "enabled": "有効",
       "toggle": "ワークスペースで/{name}を有効にする",
       "turnedOn": "ワークスペースで/{name}が有効になっています。",
       "turnedOff": "/{name} はワークスペースでオフになっています。",
@@ -9496,7 +9614,7 @@
       "pagesSubOther": "+ 他サイトの{count}件",
       "coverageOf": "/ {count, plural, other {#サイトページ}}",
       "coverageSub": "未監査: {never} · {days}日間監査なし: {stale}",
-      "coverageTip": "サイトマップ、Google アナリティクス、AIが引用したページからAnsvisorが保持するページ（最大500件）のうち、過去{days}日以内に監査されたサイトのページです。サイト監査設定で除外したページ、チェックアウト、ログイン、法的表記のページはカウントされません。",
+      "coverageTip": "Ansvisorがサイトマップ、Google Analytics、AIが引用するページ(最大500件)から保持しているページのうち、監査済みのページ数です(過去{days}日間に監査されていないものは横に表示されます)。サイト監査の設定で除外したページ、およびチェックアウト、ログイン、法務関連のページは含まれません。",
       "seeNotAudited": "未監査の{count}件を表示 →",
       "authority": "オーソリティ · E-E-A-T",
       "authorityTip": "各ページの最新監査で平均化されたオーソリティとE-E-A-Tのスコア、および最も多くのページで不合格または警告となっているシグナル。",
@@ -9572,6 +9690,17 @@
       "saveFailed": "設定を保存できませんでした",
       "loadFailed": "設定を読み込めませんでした"
     },
+    "batch": {
+      "title": "一括監査",
+      "progress": "{total}件中{done}件完了",
+      "timeLeft": "残り約{minutes}分",
+      "estimating": "残り時間を計算中…",
+      "finished": "{total, plural, other {#件の監査}}がすべて完了しました",
+      "thisBatch": "このバッチ",
+      "thisBatchTip": "この一括監査のページのみ表示",
+      "allPages": "すべてのページ",
+      "dismiss": "非表示にする"
+    },
     "autoRun": {
       "label": "自動監査",
       "done": "{pages, plural, other {# ページ}}を監査完了 · {issues, plural, other {# 件の重大な問題}}",
@@ -9602,7 +9731,7 @@
       },
       "list": "{pages}{count, plural, =0 {} other {、他#件}}",
       "recent": "過去{days}日以内に監査された{count, plural, other {#ページ}}を除外する",
-      "recentPages": "{pages}{count, plural, =0 {} other {、他#件}}。変更のないページのスコアは変わりません。",
+      "recentPages": "{pages}{count, plural, =0 {} other { ほか#件}}。robots.txt やテンプレートなど、サイト全体に影響する変更を行った後は、再度監査してください。",
       "recentPage": "{date}の{page}",
       "noLimit": "ご利用のプランには月間上限がありません。すでに監査中のページが重複して開始されることはありません。",
       "noneLeft": "今月の残り監査枠はありません。",
@@ -9738,7 +9867,7 @@
       "counts": {
         "official": "政府および教育機関のサイト: .gov、.edu、.mil、および.gov.tr、.edu.tr、.ac.ukなどの各国向けドメイン",
         "international": "国際機関: すべての.intサイト、un.org、unesco.org、europa.eu、oecd.org、worldbank.org、imf.org",
-        "research": "参考資料および研究: wikipedia.org、doi.org、arxiv.org、nature.com、sciencedirect.com、iso.org、w3.org",
+        "research": "リファレンス、研究、標準規格、プラットフォームのドキュメント: wikipedia.org、doi.org、arxiv.org、nature.com、iso.org、w3.org、rfc-editor.org、schema.org、developers.google.com、developer.mozilla.org",
         "news": "主要ニュースメディア: Reuters、Bloomberg、Financial Times、BBC、The New York Times、The Washington Post",
         "trusted": "信頼できるソース:"
       },
@@ -9778,6 +9907,7 @@
       "firewall": "robots.txtでは許可されているものの、{count, plural, other {{bots}が}}CDNまたはファイアウォールによってブロックされています。",
       "robots": "robots.txtによって{bots}が除外されています。",
       "allLetIn": "テストされたすべてのAIボットのアクセスが許可されました。",
+      "unnamed": "robots.txt に AI ボットが明記されていないため、監査ではアクセスが許可されていることを確認できません。各ボットのグループを追加してください(例: \"User-agent: GPTBot\" と \"Allow: /\")。",
       "inconclusive": "サイトがAnsvisor自身のリクエストを拒否したため（{status}）、ボットはテストされませんでした。",
       "note": "Ansvisorのサーバーから各ボットとして1回ずつリクエストを送信しました。クローラーのIPアドレスを照合するファイアウォールの場合、実際のクローラーとは異なる動作をする可能性があります。",
       "cell": {
@@ -9820,6 +9950,7 @@
       "tipSame": "このページの直近 {audits} 回の監査スコアは、すべて {low} でした。"
     },
     "aiRecommendations": "AIの改善提案",
+    "topRecommendations": "主な推奨事項",
     "signals": "シグナル",
     "onlyIssues": "問題のみ",
     "allSignals": "すべてのシグナル",
@@ -9832,6 +9963,327 @@
     "emptyTitle": "任意のページでAI検索への適合性を監査",
     "emptyBody": "上記にURLを入力して、48個のAEO/GEOシグナルでスコアリングし、AIによる修正案を取得します。"
   },
+  "auditRubric": {
+    "categories": {
+      "structure": {
+        "label": "構造",
+        "description": "AI エンジンがページをどれだけ解析しやすいか。スキーマ、見出し、リスト、表、代替テキスト、OG メタ。他のすべてを読み取り可能にする土台です。"
+      },
+      "authority": {
+        "label": "権威性",
+        "description": "ページが専門家によって執筆され、信頼できる情報源を引用しているように読めるか。署名、引用、統計、引用文、鮮度、専門用語。"
+      },
+      "content": {
+        "label": "コンテンツ",
+        "description": "ページが購入者の質問に、直接的かつ網羅的に、適切なトーンで答えているか。BLUF、クエリのカバー率、サブ質問のカバー率、可読性、商品ページでは説明文の冒頭。"
+      },
+      "trust": {
+        "label": "信頼性",
+        "description": "クロール時と共有時の信頼シグナル: HTTPS、canonical、viewport、robots.txt および各 AI ボットとしてのライブ取得による AI ボットのアクセス、Twitter カード、メタディスクリプション。llms.txt は参考情報としてのみ表示されます。"
+      },
+      "eeat": {
+        "label": "E-E-A-T",
+        "description": "Google の経験、専門性、権威性、信頼性のフレームワーク。一人称の体験談、事例紹介、著者の資格、Wikidata のブランドエンティティ、報道での言及、プライバシーポリシー、連絡先情報。"
+      }
+    },
+    "signals": {
+      "structural-depth": {
+        "label": "構造の深さ (GEO-SFE)",
+        "what": "見出し階層とネスト構造の深さ。実際のアウトラインを反映した H1→H2→H3 の入れ子構造です。",
+        "why": "arXiv:2603.29979 によると、構造の深さが測定できるページは、フラットな文書に比べて引用が 17.3% 増加します。",
+        "howToFix": "コンテンツを名前付きの H2 サブセクションにまとめ、細かな要点には H3 を使用してください。階層を飛ばさないでください。"
+      },
+      "internal-linking": {
+        "label": "内部リンク",
+        "what": "このページからサイト内の他のページへのリンク。ナビゲートしやすいグラフ構造を示すシグナルです。",
+        "why": "AI クローラーはクロールと同様に、内部リンクをたどってコンテキストを広げます。孤立したページはインデックスされにくくなります。",
+        "howToFix": "関連する概念、用語集、補足ページへの内部リンクを、1ページあたり 5〜10 件追加してください。"
+      },
+      "page-weight": {
+        "label": "ページサイズ",
+        "what": "HTML の合計サイズ。小さいほど良好です。500 KB を超えるページを警告します。",
+        "why": "AI のレンダリングボットは人間よりタイムアウトが短く、重いページは途中で切り捨てられるかスキップされます。",
+        "howToFix": "未使用の JS を削除し、ファーストビュー外の画像を遅延読み込みし、レンダリングをブロックするサードパーティ製スクリプトを排除してください。"
+      },
+      "no-js-content": {
+        "label": "JavaScript なしでの本文",
+        "what": "JavaScript が実行される前に AI ボットが取得する HTML に、ブラウザーで表示されるページと比べて本文がどれだけ含まれているか。非表示が 10% 以下で合格、30% までは警告です。",
+        "why": "GPTBot、ClaudeBot、PerplexityBot などの AI クローラーは JavaScript を実行しないため、実行後にのみ表示されるテキストは認識されません。",
+        "howToFix": "本文を JavaScript で読み込むのではなく、サーバー側でレンダリングする(サーバーサイドレンダリングまたは静的ページ)か、ボット向けにプリレンダリングしてください。"
+      },
+      "json-ld-presence": {
+        "label": "JSON-LD の有無",
+        "what": "ページに schema.org の JSON-LD ブロックが少なくとも1つあるか。",
+        "why": "Schema.org は AI Overviews の対象となるための最も効果の高いシグナルです。エンジンはテキストより先にこれを解析します。",
+        "howToFix": "最低限、Organization または Article ブロックを追加してください。/tools/schema-generator で有効な JSON-LD を生成できます。"
+      },
+      "json-ld-validity": {
+        "label": "JSON-LD の有効性",
+        "what": "JSON-LD が解析でき、@context が schema.org で、有効な @type があるか。",
+        "why": "不正な JSON-LD は存在しないより悪い結果を招きます。エンジンが解析エラーを記録し、信頼性の評価を下げます。",
+        "howToFix": "公開する前に、Google のリッチリザルト テストで JSON-LD を確認してください。"
+      },
+      "json-ld-relevance": {
+        "label": "JSON-LD タイプの関連性",
+        "what": "@type がページの意図に合っているか(ブログには Article、PDP には Product、FAQ には FAQPage)。",
+        "why": "タイプが合っていないスキーマは無視されます。トップページの Article マークアップはノイズとして解析されます。",
+        "howToFix": "汎用的な万能タイプではなく、ページの実際のコンテンツに最も近い schema.org のタイプを選んでください。"
+      },
+      "faq-schema": {
+        "label": "FAQスキーマ",
+        "what": "2組以上のQ&Aを含む FAQPage JSON-LD。",
+        "why": "Google 自身の SGE ガイダンスによると、FAQPage は AI Overviews での引用に対して単一タイプとして最も高い効果があります。",
+        "howToFix": "実際の購入者の検索クエリを反映した3〜5組の質問と回答を含む FAQPage スキーマを追加してください。"
+      },
+      "h1-quality": {
+        "label": "H1の品質",
+        "what": "H1が1つだけで、長さが20〜70文字、主要なクエリ語を含んでいること。",
+        "why": "AI エンジンは H1 をページの主張として扱うため、H1 が複数あるとトピックモデルが混乱します。",
+        "howToFix": "1ページにつきH1は1つ。内容が分かる30〜60文字で、ページの主要トピックを含めてください。"
+      },
+      "h2-coverage": {
+        "label": "H2のカバレッジ",
+        "what": "コンテンツを区切って流し読みしやすくする3つ以上のH2サブセクション。",
+        "why": "AI エンジンは H2 をセクションのアンカーとして抽出するため、H2 がないページは要約しにくくなります。",
+        "howToFix": "コンテンツを3〜6個のH2サブセクションに分け、それぞれで1つの小さな問いに答えてください。"
+      },
+      "lists": {
+        "label": "リスト",
+        "what": "3項目以上の <ul> または <ol> が1つ以上あること。",
+        "why": "リストは、「how to X」や「best Y」のようなクエリで AI エンジンが優先的に抽出する単位です。",
+        "howToFix": "理由や手順を列挙した段落を少なくとも1つ、本物の <ul>/<ol> に変換してください。"
+      },
+      "tables": {
+        "label": "テーブル",
+        "what": "構造化データ用に、適切な <thead>/<tbody> を持つ <table> が1つ以上あること。",
+        "why": "テーブルは、比較や仕様表のクエリで最も抽出率の高い形式です。",
+        "howToFix": "仕様、価格、比較がある場合は、画像ではなく本物の <table> で表示してください。"
+      },
+      "alt-text": {
+        "label": "代替テキスト",
+        "what": "意味のある <img> タグの80%以上に、空でない alt 属性があること。装飾画像(alt=\"\"、role=\"presentation\"、または aria-hidden)は対象外です。",
+        "why": "マルチモーダルエンジン(Gemini、Claude、GPT-4o)は、alt テキストをページの意味的コンテキストとして読み取ります。",
+        "howToFix": "意味のあるすべての画像に、内容を説明する alt を追加してください。装飾画像には alt=\"\" を指定します。"
+      },
+      "open-graph": {
+        "label": "Open Graphメタデータ",
+        "what": "og:title、og:description、og:image、og:type がすべて設定されていること。",
+        "why": "AI エンジンのリンクプレビューやソーシャルシェアでは、OG メタデータが引用カードとして使われます。",
+        "howToFix": "4つのOGタグを追加してください。og:image は 1200×630 を使用します。/tools/og-checker で検証できます。"
+      },
+      "outbound-authority-links": {
+        "label": "外部の権威あるリンク",
+        "what": "公式サイト(政府、学術機関、国際機関)、リファレンスや調査サイト、主要ニュースへのリンク。",
+        "why": "信頼できる情報源へのリンクは、権威性を逆方向に伝えます(引用グラフ効果)。",
+        "howToFix": "テキストだけの参照ではなく、本物の <a> タグで一次情報源を引用してください。長いページでは2〜3件が目安です。"
+      },
+      "citation-density": {
+        "label": "引用密度",
+        "what": "1000語あたりのインライン引用数(目標は2以上)。",
+        "why": "情報源を引用するページは、情報源として引用されます。引用密度は、リンク以外で最も強力な権威性シグナルです。",
+        "howToFix": "「研究で示されています」を「2024年のスタンフォード大学の研究(リンク)」のように置き換えてください。具体性が重要です。"
+      },
+      "statistic-density": {
+        "label": "統計の密度",
+        "what": "1000語あたりの数値を含む定量的な主張の数(目標は3以上)。",
+        "why": "AIエンジンは、曖昧な文章よりも測定可能な主張を含むコンテンツを優先的に引用します。",
+        "howToFix": "主張に、割合、金額、期間などの具体的な数値を追加してください。"
+      },
+      "quotations": {
+        "label": "直接引用",
+        "what": "インラインの<blockquote>または引用元付きの引用。",
+        "why": "引用は一次調査を示唆します。GEOの論文のテストセットでは、引用率が約12%向上しました。",
+        "howToFix": "長いページごとに、顧客、専門家、または一次情報源の引用を1つ入れてください。"
+      },
+      "author-byline": {
+        "label": "著者表記",
+        "what": "著者名の表示エリアに、少なくとも実名の著者が記載されていること。",
+        "why": "匿名のコンテンツはE-E-A-Tが低いと見なされます。AIエンジンは著者が明示されたコンテンツを優先して表示します。",
+        "howToFix": "冒頭に「By [名前]」を追加し、実在の著者プロフィールページへリンクして、Personスキーマを使用してください。"
+      },
+      "date-markup": {
+        "label": "日付マークアップ",
+        "what": "JSON-LDのdatePublishedとdateModified、または<time datetime>。",
+        "why": "エンジンは日付のないコンテンツを古い可能性があるものとして減点します。日付のあるコンテンツは鮮度が評価されます。",
+        "howToFix": "JSON-LDのdatePublishedとdateModified、または表示される<time datetime>タグを追加してください。"
+      },
+      "freshness": {
+        "label": "鮮度",
+        "what": "更新日が過去365日以内であること。",
+        "why": "古いコンテンツは、時事性の高いクエリで順位が下がります。日付を再公開すると基準がリセットされます。",
+        "howToFix": "主要ページは少なくとも年1回更新し、その際にdateModifiedも更新してください。"
+      },
+      "technical-terms": {
+        "label": "専門用語の密度",
+        "what": "表面的な文章ではなく、真の専門性を示す分野固有の用語。",
+        "why": "正確な専門用語を使用しているページは、確かな専門性を示します。",
+        "howToFix": "その分野で実際に使われる専門用語を使用し、初出の用語は用語集へのリンクまたは定義を付けてください。"
+      },
+      "direct-answer": {
+        "label": "クエリへの直接的な回答",
+        "what": "購入者のクエリへの回答が、最初の200文字以内に含まれているかどうか。",
+        "why": "AIエンジンは直接的な回答を優先して抽出します。回答を後半に埋もれさせると引用されません。",
+        "howToFix": "ページの冒頭に、主要なクエリへの1〜2文の直接的な回答を置き、その後で詳しく説明してください。"
+      },
+      "bluf-answer": {
+        "label": "BLUF(結論先出し)",
+        "what": "最初の段落で、ページの主な主張を明確に述べた主題文。",
+        "why": "軍事ドクトリン由来の文体で、BLUFはAIによる抽出しやすさを大幅に向上させます。",
+        "howToFix": "「答えはXです。理由は次のとおりです。」のように書き出し、結論を後回しにしないでください。"
+      },
+      "query-coverage": {
+        "label": "クエリトークンのカバー率",
+        "what": "ページ本文に含まれるクエリトークンの割合(目標は80%以上)。",
+        "why": "カバー率は基本的な関連性のシグナルです。トークンが欠けている場合、そのページはクエリに合致していません。",
+        "howToFix": "意味のあるクエリトークンがすべて、本文に少なくとも1回は含まれるようにしてください。"
+      },
+      "entity-coverage": {
+        "label": "エンティティのカバー率",
+        "what": "クエリのエンティティ領域に一致する固有表現が言及されていること。",
+        "why": "AIエンジンはページごとにエンティティグラフを構築します。関連エンティティが欠けていると、トピックの権威性が低下します。",
+        "howToFix": "ページがXに関するものなら、Xに関連する既知のエンティティ(人物、場所、製品)にも言及してください。"
+      },
+      "readability": {
+        "label": "読みやすさ",
+        "what": "ページの言語に合わせた読みやすさスコア：英語は Flesch Reading Ease（目標 50〜70）、トルコ語は Ateşman（50以上）、ドイツ語・フランス語・スペイン語はそれぞれ Amstad、Kandel–Moles、Fernández-Huerta（60以上）。その他の言語は文と単語の長さで評価します。",
+        "why": "検索エンジンは人が読めるコンテンツから情報を抽出します。専門的で密度の高い文章は評価が下がります。英語では、非常に平易な文章（70超）だと、読者が期待する詳細が不足することがあります。",
+        "howToFix": "目標を下回る場合：文を短くし、平易な言葉を使って、1文あたり約16語にします。英語で70を超える場合：読者が期待する詳細を盛り込み、より充実した文で書きます。"
+      },
+      "length": {
+        "label": "ページの長さ",
+        "what": "メインコンテンツの単語数（目標 800〜3000）。",
+        "why": "短すぎると内容が薄くなり、長すぎるとエンジンに切り捨てられます。最適なのは中〜長めの分量です。",
+        "howToFix": "600語未満の場合は、例とサブセクションを加えて拡充します。4000語を超える場合は、ハブページと関連ページに分割します。"
+      },
+      "info-density": {
+        "label": "情報密度",
+        "what": "中身のある内容と水増しの割合。",
+        "why": "密度の高いコンテンツは優先的に引用されます。エンジンは「トークンあたりの価値」を暗黙的にモデル化しています。",
+        "howToFix": "前置きだけの文を削ります。「～ということに注意が必要です」のような表現は、実際の要点に置き換えます。"
+      },
+      "mega-page-coverage": {
+        "label": "メガページのカバレッジ",
+        "what": "1つのURLで、関連性の高い複数のサブトピックを扱っているかどうか。",
+        "why": "メガページはエンティティの関連領域を網羅するため、AIエンジンでは内容の薄いページより上位に表示されます。",
+        "howToFix": "内容の薄い3ページを、H2でサブトピックを区切った1つの総合ページに統合します。"
+      },
+      "youtube-embed": {
+        "label": "YouTube埋め込み",
+        "what": "記事と併せて埋め込まれたYouTube動画。",
+        "why": "マルチモーダルなエンジンは、テーマに沿った動画があるページを重視します。引用率との相関は0.737です。",
+        "howToFix": "ページのテーマに合った2〜4分の動画を作成または埋め込みます。VideoObjectスキーマでマークアップします。"
+      },
+      "product-description-opening": {
+        "label": "商品説明の冒頭",
+        "what": "商品ページで、説明の最初の40語（または250文字）に、商品の種類と、寸法・素材・フィット感・用途などの主要な属性が少なくとも2つ含まれていること。",
+        "why": "ChatGPTは、ショッピングの質問に商品を照合する際、商品説明の最初の約50トークンしか読まないようです。ブランドの物語で始まる説明は、照合されない可能性があります。",
+        "howToFix": "商品の種類と主要な属性を、最初の40語に入れます。"
+      },
+      "sub-query-coverage": {
+        "label": "サブクエリのカバレッジ",
+        "what": "分解されたサブ質問のうち、本文で回答しているものの割合。",
+        "why": "エンジンは元のクエリを4〜6個のサブクエリに分解します（Profoundの「fanouts」）。回答が欠けると引用も失われます。",
+        "howToFix": "テーマに関する上位5つのサブ質問に明確に答えるQ&Aセクションを追加します。"
+      },
+      "definitions": {
+        "label": "インライン定義",
+        "what": "初出の用語をその場で定義していること（「X（定義…）」）。",
+        "why": "その場で定義されたページは、用語集の情報源として引用されます。AIエンジンは優先的にリンクします。",
+        "howToFix": "重要な3〜5個の用語を、初出時にインラインで定義します。"
+      },
+      "ai-bot-access": {
+        "label": "AIボットのアクセス",
+        "what": "robots.txtでAIボットが許可されているか、またページが応答するか。CDNやファイアウォールによるブロックを検出するため、GPTBot、OAI-SearchBot、ChatGPT-User、PerplexityBot、ClaudeBotとして1回ずつ取得します。",
+        "why": "CDNやファイアウォールが拒否するボットは、robots.txtの設定にかかわらずページを読めません。robots.txtでAIボットを明示すると、歓迎していることを示せます。",
+        "howToFix": "robots.txt、およびCDNやファイアウォールのボットルールで、GPTBot、OAI-SearchBot、ChatGPT-User、PerplexityBot、ClaudeBot、Google-Extendedを許可します。"
+      },
+      "llms-txt-presence": {
+        "label": "llms.txtの有無",
+        "what": "llmstxt.orgの提案に従い、サイトのルートに /llms.txt があるかどうか。参考情報としてのみ表示され、スコアには影響しません。",
+        "why": "AIエンジン向けのサイトのプレーンテキスト形式のマップとして提案されています。",
+        "howToFix": "任意です。必要な場合は、サイトのルートに /llms.txt を追加してください。スコアには影響しません。",
+        "evidenceNote": "根拠は弱いです。Ahrefsは、llms.txtファイルの97%が一度もリクエストされていないと報告しており、Googleは効果がないとしています。"
+      },
+      "https": {
+        "label": "HTTPS",
+        "what": "サイトが混在コンテンツなしで TLS 経由で正しく応答します。",
+        "why": "AI クローラーは混在コンテンツのページをクロールしません。HTTPS は最低条件です。",
+        "howToFix": "HTTPS に移行し、HSTS で強制リダイレクトを設定し、混在コンテンツの警告を修正してください。"
+      },
+      "canonical": {
+        "label": "正規 URL(canonical)",
+        "what": "ページの優先 URL を指す <link rel=canonical>。",
+        "why": "canonical がないと、AI エンジンが重複 URL に引用を分散させ、それぞれの評価を下げる可能性があります。",
+        "howToFix": "すべてのページに <link rel=canonical href=…> を追加してください。正規ページには自己参照の canonical を設定します。"
+      },
+      "viewport": {
+        "label": "Viewport メタタグ",
+        "what": "<meta name=viewport content=…> が存在します。",
+        "why": "モバイル表示のシグナルです。AI クローラーはモバイルファーストのコンテンツを優先します。",
+        "howToFix": "<meta name=viewport content=\"width=device-width, initial-scale=1\"> を追加してください。"
+      },
+      "twitter-card": {
+        "label": "Twitter カード",
+        "what": "<meta name=twitter:card> と twitter:image が存在します。",
+        "why": "OG に対応していないプラットフォームでは、AI エンジンは Twitter カードを代替として使用します。",
+        "howToFix": "twitter:card=summary_large_image と twitter:image を追加してください(og:image を再利用できます)。"
+      },
+      "meta-description": {
+        "label": "メタディスクリプション",
+        "what": "80〜160 文字の要約テキストを持つ <meta name=description>。",
+        "why": "AI エンジンは、引用を生成する際にメタディスクリプションを主要な要約候補として使用します。",
+        "howToFix": "すべてのページに 130 文字程度のメタディスクリプションを記述し、主要なクエリを含めてください。"
+      },
+      "first-person": {
+        "label": "一人称の実体験",
+        "what": "実際の経験を示す一人称の文です(例:「テストしました」「私が構築しました」、トルコ語では 'gezdik' や 'düşünüyoruz' などの動詞語尾)。2 つ以上で合格です。引用や「お問い合わせ」などの定型句は対象外です。英語とトルコ語で判定します。",
+        "why": "Google の E-E-A-T アップデートは実体験を重視します。一人称はそのシグナルになります。",
+        "howToFix": "一人称は控えめに、かつ的確に使ってください。例:「私たちがテストしたところ」「経験上」「私が見つけたのは…」。"
+      },
+      "case-study-evidence": {
+        "label": "ケーススタディの根拠",
+        "what": "顧客名、成果、数値、または導入前後の比較が本文中に示されています。",
+        "why": "ケーススタディは最もコンバージョンに寄与する E-E-A-T シグナルです。主張するだけでなく証明してください。",
+        "howToFix": "顧客を 1 社明記し、数値で成果を 1 つ示してください。例:「X 社が Y から Z に向上するのを支援しました。」"
+      },
+      "author-credentials": {
+        "label": "著者の資格・経歴",
+        "what": "著者の経験年数、前職、学歴、資格などが、署名欄、ページ内の著者ボックス、または Person JSON-LD(jobTitle、description)で確認できます。",
+        "why": "匿名の署名は E-E-A-T を満たしません。資格のある著者は専門的な情報源として扱われます。",
+        "howToFix": "各著者ページに、資格、前職、業界経験年数、LinkedIn/Twitter へのリンクを掲載してください。"
+      },
+      "byline-depth": {
+        "label": "署名の充実度",
+        "what": "署名が、十分な情報を持つ実在の著者プロフィールページ、または他所の著者プロフィール(LinkedIn、Person JSON-LD の sameAs)にリンクしています。",
+        "why": "署名→プロフィールページ→資格のある著者という連鎖が、エンジンがたどる E-E-A-T グラフです。",
+        "howToFix": "すべての署名から、経歴、写真、資格、過去の実績を載せた /authors/[name] にリンクしてください。"
+      },
+      "brand-entity": {
+        "label": "Wikidata のブランドエンティティ",
+        "what": "ブランドが、AI エンジンが参照できる Wikidata エンティティ(Q 番号)を持っています。",
+        "why": "Wikidata は正規のエンティティデータベースで、エンジンはブランドの実在確認に使用します。エンティティがないと信頼の拠り所がありません。",
+        "howToFix": "Wikidata にエントリーを作成してください。出典として 2〜3 件の報道での言及が必要です。wikidata.org から申請します。"
+      },
+      "press-mentions": {
+        "label": "プレスでの言及",
+        "what": "主要メディア(NYT、WaPo、Bloomberg、FTなど)からの言及やリンク。",
+        "why": "プレスでの言及は、引用グラフ全体に権威性を伝え、ブランドエンティティに関する主張の裏付けとなります。",
+        "howToFix": "プレス掲載を獲得しましょう。ロゴを表示し、(自社の事例ではなく)元の記事へリンクしてください。"
+      },
+      "privacy-terms": {
+        "label": "プライバシーと利用規約",
+        "what": "すべてのページからリンクされたプライバシーポリシーと利用規約。",
+        "why": "YMYL(Your-Money-Your-Life)カテゴリではこれらが必須であり、検索エンジンはあらゆる場面で正当性のシグナルとして扱います。",
+        "howToFix": "すべてのページのフッターにプライバシーポリシーと利用規約へのリンクを設置してください。「準備中」のページではなく、実際のページを用意してください。"
+      },
+      "contact-info": {
+        "label": "連絡先情報",
+        "what": "メールアドレス、電話番号、住所など、ページ上に表示された、または /contact からリンクされた実際の連絡先情報。",
+        "why": "匿名のブランドはE-E-A-Tの評価に失敗します。実際の連絡先情報は、コンテンツの背後に実在する主体がいることを示します。",
+        "howToFix": "フッターにメールアドレスと所在地(実際の住所または登記上の事務所)を追加してください。"
+      }
+    }
+  },
   "auth": {
     "signIn": "サインイン",
     "signUp": "サインアップ",
@@ -9841,6 +10293,8 @@
     "email": "メールアドレス",
     "workEmail": "勤務先メールアドレス",
     "workEmailSuggested": "会社用メールアドレスを推奨",
+    "language": "言語",
+    "languageFailed": "言語を変更できませんでした。もう一度お試しください。",
     "password": "パスワード",
     "forgotPassword": "パスワードをお忘れですか？",
     "noAccount": "アカウントをお持ちでないですか？",
@@ -9979,6 +10433,53 @@
     },
     "errorRetry": "アプリから再度連携を開始してください。問題が解決しない場合、そのアプリがAnsvisorへのサインインに対応していない可能性があります。代わりにAPIキーを使用してください。",
     "errorCode": "コード: {code}"
+  },
+  "invite": {
+    "fallbackTeam": "このチーム",
+    "invalid": {
+      "not_found": {
+        "title": "招待が見つかりません",
+        "description": "アクセスしたリンクは無効です。"
+      },
+      "expired": {
+        "title": "招待の有効期限が切れました",
+        "description": "チームの管理者に新しい招待の送信を依頼してください。"
+      },
+      "accepted": {
+        "title": "招待は使用済みです",
+        "description": "この招待はすでに承認されています。"
+      },
+      "revoked": {
+        "title": "招待が取り消されました",
+        "description": "この招待はチームの管理者によって取り消されました。"
+      },
+      "pending": {
+        "title": "招待は利用できません",
+        "description": "もう一度お試しいただくか、チームの管理者にお問い合わせください。"
+      }
+    },
+    "card": {
+      "title": "{organization}に参加",
+      "invitedAs": "<b>{role}</b>として参加するよう招待されました",
+      "invitedEmail": "招待先メールアドレス",
+      "signedInAs": "ログイン中のアカウント",
+      "wrongAccount": "この招待は<b>{email}</b>宛てに送信されましたが、現在は{current}でログインしています。続行するにはアカウントを切り替えてください。",
+      "switching": "切り替え中...",
+      "switchAccount": "ログアウトして正しいアカウントを使用",
+      "fullName": "氏名",
+      "namePlaceholder": "お名前",
+      "password": "パスワードを設定",
+      "passwordPlaceholder": "8文字以上",
+      "confirmPassword": "パスワードを確認",
+      "confirmPlaceholder": "パスワードをもう一度入力",
+      "joining": "参加中...",
+      "accept": "承認して{organization}に参加",
+      "passwordNote": "このパスワードは次回のサインイン時に使用します。",
+      "passwordTooShort": "パスワードは8文字以上で入力してください",
+      "passwordsDiffer": "パスワードが一致しません",
+      "welcome": "{organization}へようこそ!",
+      "failed": "招待の承諾に失敗しました"
+    }
   },
   "dashboard": {
     "overview": "概要",
@@ -10369,6 +10870,114 @@
         "failed": "ファイルをインポートできませんでした。何も保存されませんでした。",
         "back": "戻る"
       }
+    },
+    "formulas": {
+      "button": "計算式",
+      "title": "指標の計算方法",
+      "visibility": {
+        "title": "Visibility(0〜100)",
+        "body": "現在のフィルターに一致するすべてのAI回答において、ブランドがどれだけ表示されているかを示す単一のスコアです。自社が登場しない回答も含めてすべての回答が対象となるため、スコアを伸ばすには、より多く登場し、より多く引用され、より早い位置で言及されることが必要です。",
+        "formula": "Visibility = 100 × ({mention} × 言及率 + {citation} × 引用率 + {position} × 順位係数 × 信頼度)",
+        "confidence": "信頼度 = 自社に言及している回答数 ÷ (自社に言及している回答数 + {support})",
+        "mentionRate": "<b>言及率({pct}%)</b> — ブランド名が言及されたAI回答の割合です。",
+        "citationRate": "<b>引用率({pct}%)</b> — 御社のウェブサイトが情報源として引用された回答の割合です。",
+        "positionFactor": "<b>順位係数({pct}%)</b> — 自社に言及する回答のなかで、どれだけ早く名前が挙がるかを示します。1番目 = 1、2番目 = 0.5、3番目 = 0.33、のように計算し、平均します。信頼度係数により、実際にブランドに言及した回答数で重み付けされるため、少数の回答で順位が完璧でも、継続的に登場するブランドを上回ることはありません。",
+        "competitors": "リーダーボードの競合他社も、同じ回答セットに対して全く同じ計算式でスコア化されるため、数値を直接比較できます。"
+      },
+      "trend": {
+        "title": "Visibility推移チャート",
+        "body": "各ポイントは、その日で終わる選択期間(ローリング期間)で計算したVisibilityです。そのため、最新のポイントは常に上のVisibilityカードと一致します。「全期間」を選択した場合、各ポイントはその日までのすべてを対象とします。"
+      },
+      "mentions": {
+        "title": "言及数",
+        "body": "AI回答でブランド名が言及された合計回数です。"
+      },
+      "citations": {
+        "title": "引用数",
+        "body": "AI回答で御社のウェブサイトが情報源としてリンクされた合計回数です。言及数はブランド名、引用数はドメインをカウントします。"
+      },
+      "sentiment": {
+        "title": "ネットセンチメント",
+        "body": "自社名が挙がった回答のうち、ポジティブな回答の割合からネガティブな回答の割合を引いた値(ポイント)です。サイトが引用されただけの回答は常に中立のため、対象外です。センチメントはVisibilityと並べて表示されますが、スコアには含まれません。",
+        "formula": "ネットセンチメント = ポジティブ回答の割合(%) − ネガティブ回答の割合(%)(言及ページと同様、自社名が挙がった回答が対象)"
+      },
+      "position": {
+        "title": "平均順位",
+        "body": "自社に言及した回答のなかで、名前が挙がる位置の平均です。低いほど良く、1位は通常最初に名前が挙がることを意味します。",
+        "formula": "平均順位 = 自社の順位の合計 ÷ 自社名が挙がった回答数"
+      },
+      "citationRate": {
+        "title": "引用率",
+        "body": "御社のウェブサイトを情報源としてリンクしたAI回答の割合です。",
+        "formula": "引用率 = 自社ドメインを引用した回答数 ÷ 全回答数 × 100"
+      },
+      "shareOfVoice": {
+        "title": "シェアオブボイス",
+        "body": "ブランドに関する会話全体における自社の割合です。AI回答での全ブランド言及(自社と追跡中の競合他社の合計)のうち、自社が占める割合を示します。",
+        "formula": "SOV = 自社の言及数 ÷ (自社の言及数 + 競合の言及数) × 100"
+      },
+      "coverage": {
+        "title": "カバレッジ",
+        "body": "選択期間中、結果が得られたすべてのPromptのうち、自社が少なくとも1回は登場(言及または引用)したPromptの割合です。",
+        "formula": "カバレッジ = 自社が登場したPrompt数 ÷ 回答されたPrompt数 × 100"
+      },
+      "changes": {
+        "title": "変化",
+        "body": "各カードの変化は、選択期間を直前の同じ長さの期間と比較したもので、両期間で回答があったPromptのみが対象です。そのため、Promptを追加しても数値が水増しされることはありません。ただし、数値自体はすべてのPromptを対象としています。「全期間」にはそれ以前の期間がないため、変化は表示されません。"
+      }
+    },
+    "breakdownSheet": {
+      "title": "{metric, select, mentions {言及数} other {Visibility}}の内訳",
+      "compareHint": "選択した期間を、直前の同じ長さの期間と比較しています。",
+      "allTimeHint": "全期間です。比較できる同じ長さの過去の期間はありません。",
+      "lastVsPrevious": "{days, plural, other {過去#日間と前の#日間の比較}}",
+      "loadFailed": "内訳の読み込みに失敗しました",
+      "allTime": "全期間",
+      "current": "現在の{days}日間",
+      "noSamePrompt": "両方の期間で回答されたPromptはありません",
+      "samePrompts": "{count, plural, other {同一のPrompt（#件）:}}",
+      "vsPrevious": "前期間比",
+      "noData": "データなし",
+      "newNotCounted": "{count, plural, other {変化には含まれません：今期の新規Promptが#件あります。}}",
+      "newIncluded": "{count, plural, other {変化には今期に追加された新規Prompt（#件）が含まれています。}}",
+      "tabs": {
+        "prompts": "Prompts",
+        "platforms": "プラットフォーム",
+        "topics": "トピック"
+      },
+      "biggest": "{direction, select, down {最大の減少} other {最大の増加}}:",
+      "topPlatform": "プラットフォーム別{direction, select, down {減少} other {増加}}トップ: {platform}",
+      "empty": "この期間のデータはまだありません。",
+      "columns": {
+        "name": "名前",
+        "prev": "前期間",
+        "cur": "今期間",
+        "change": "変化"
+      },
+      "pts": "pt",
+      "signedPts": "{value} pt",
+      "contributionPts": "{value} pt{direction, select, down {減少} other {上昇}}",
+      "contributionMentions": "{count, plural, other {#件}}の言及{direction, select, down {減少} other {増加}}"
+    },
+    "page": {
+      "noDataTitle": "トラッキングデータはまだありません",
+      "noDataBody": "AIプラットフォームでPromptsを実行して、AIが生成する回答にブランドがどのように表示されるかを確認しましょう。",
+      "testSingle": "または単一のPromptをテスト",
+      "noResults": "{period, select, 24h {過去24時間} 7d {過去7日間} 30d {過去30日間} 90d {過去90日間} other {選択した期間}}の結果はありません",
+      "otherPeriods": "他の期間にはトラッキングデータがあります。より広い範囲を選択するか、「全期間」に切り替えてください。",
+      "showAll": "すべてのデータを表示",
+      "noCompetitorsTitle": "トラッキング中の競合はまだありません",
+      "noCompetitorsBody": "競合を追加して、AIの回答での比較を確認しましょう。",
+      "headToHead": "直接比較",
+      "loadFailed": "インサイトの読み込みに失敗しました。もう一度お試しください",
+      "exportCapped": "メモリの問題を防ぐため、エクスポートは50,000行までに制限されています",
+      "exportFailed": "CSVのエクスポートに失敗しました",
+      "noTrend": "トレンドデータはまだありません",
+      "yourBrand": "自社ブランド",
+      "avgCompetitor": "競合平均",
+      "noShareOfVoice": "シェアオブボイスのデータがありません",
+      "moreInfo": "詳細情報",
+      "overallShareOfVoice": "全体のシェアオブボイス"
     }
   },
   "topics": {
@@ -11069,6 +11678,7 @@
     },
     "editor": {
       "back": "ライブラリに戻る",
+      "newContent": "新規コンテンツ",
       "closeHere": "閉じる",
       "untitled": "無題",
       "newPage": "新しいページ",
@@ -11538,7 +12148,8 @@
           "attach": "ファイルを添付"
         },
         "openLink": "リンクを新しいタブで開く（またはページ内で ⌘/Ctrl + クリック）",
-        "counter": "{count} / {target} 文字 · {words, plural, other {# 単語}}"
+        "counter": "{count} / {target} 文字 · {words, plural, other {# 単語}}",
+        "counterRange": "{count} / {min}–{max} 文字 · {words, plural, other {# 語}}"
       },
       "link": {
         "title": "リンクを追加",
@@ -12770,6 +13381,7 @@
         "tooShort": "数段落入力してください。書き進めるにつれて読みやすさが自動判定されます。",
         "tooShortShort": "文字数が不足しています",
         "notScored": "未評価",
+        "needsAuthor": "ページに著者が設定されるとスコアが算出されます",
         "site": {
           "label": "サイトの信頼度",
           "score": "サイトの信頼度 {score}/5",
@@ -13048,8 +13660,8 @@
           },
           "avgSentence": {
             "line": "1文の平均単語数: {words, number}単語",
-            "detail": "15〜20単語を目指してください。短い文のほうが素早く読まれ、AIの回答でもそのまま引用されやすくなります。",
-            "detailShort": "15〜20単語を目指してください。短い文をいくつか結合し、それぞれで1つの完結した内容を伝えるようにします。"
+            "detail": "20語以下を目安にしましょう。短い文の方が読みやすく、AIの回答にもそのまま引用されます。",
+            "detailShort": "平均8語未満だと文が細切れに感じられます。短い文をいくつか結合して、1文で1つのまとまった内容を伝えましょう。"
           },
           "longSentences": {
             "line": "35単語を超える文が{count, plural, other {#件}}あります",
@@ -13365,11 +13977,12 @@
     "autoGeneratedHint": "トラッキングデータの収集に合わせて、機会が自動的に生成されます。",
     "generating": "生成中…",
     "sendToWorkflow": "Workflowへ送信",
-    "generateBrief": "構成案を生成",
-    "generatingBrief": "生成中...",
-    "briefGenerated": "構成案が生成されました",
+    "generateBrief": "ブリーフを作成",
+    "generatingBrief": "ブリーフを作成中…",
+    "briefGenerated": "ブリーフを作成しました",
+    "briefEmpty": "タイトル案、構成案、ターゲットキーワード、競合分析を含むAI搭載のコンテンツブリーフを作成します。",
     "briefLimitReached": "今月のコンテンツ構成案の上限に達しました",
-    "sendToActions": "Actionsへ送信",
+    "sendToActions": "アクションセンターに送信",
     "draftCheckFailed": "下書きを確認できませんでした · 再試行",
     "sendToEditor": "エディターへ送信",
     "writeThis": {
@@ -13384,7 +13997,7 @@
         "draftDetail": "Content Agentが、設定したルールとページタイプに従って構成案からページを作成します。",
         "draftDetailPage": "コンテンツエージェントが、ブリーフ、お客様のルール、ページタイプに基づいて{page}への変更を提案します。",
         "review": "内容を確認",
-        "reviewDetail": "執筆中にエディターが開き、Site Auditスコアの無料推定値が表示されます。自動で公開されることはありません。"
+        "reviewDetail": "執筆中にエディターが開きます。準備完了にすると、サイト監査スコアの無料見積もりが表示されます。公開はされません。"
       },
       "usage": "{trial, select, yes {お試しAIクレジット} other {月間AI使用量}}の約<b>{estimate}</b>を消費 · 現在まで{used}使用済み",
       "usageSmall": "{trial, select, yes {お試しAIクレジット} other {月間AI使用量}}の<b>1%未満</b>を消費 · 現在まで{used}使用済み",
@@ -13408,7 +14021,7 @@
       "word": "Wordをエクスポート",
       "failed": "この機会をエクスポートできませんでした。もう一度お試しください。"
     },
-    "openInActions": "アクションで開く",
+    "openInActions": "アクションセンターで開く",
     "sendAgain": "再送信",
     "copyAllData": "すべてのデータをコピー",
     "copiedToast": "クリップボードにコピーしました",
@@ -13469,7 +14082,9 @@
       "avgScore": "平均スコア",
       "shown": "{count}件表示中",
       "opportunities": "件の機会",
+      "opportunitiesAll": "すべてのステータス(完了済みを含む)",
       "outOf100": "/ 100",
+      "outOf100All": "100点満点 · すべてのステータス",
       "fromSignals": "分析された{count, plural, other {#件のシグナル}}に基づく"
     },
     "filters": {
@@ -13658,6 +14273,7 @@
       "sentAt": "{date}に送信済み",
       "webhookResponse": "Webhook レスポンス",
       "topCompetitor": "最強の競合",
+      "gapPoints": "{gap, number} pt",
       "basketTitle": "機会バスケット",
       "basketSummary": "{prompts, plural, other {# 件の Prompt}} · 含まれる検索 {included} 件 · 除外 {excluded} 件",
       "basketIncluded": "AI エンジンがこれらの Prompt で実行した検索",
@@ -13774,7 +14390,8 @@
     "mergedIntoOpen": "開く",
     "newSignal": "新しいシグナルを検出しました",
     "newSignalScoreRose": "以前に完了しましたが、その後オポチュニティが拡大しました。スコアが{from}から{to}に上昇しました。",
-    "newSignalGainLost": "以前に完了しましたが、効果は維持されませんでした。これらのPromptsでの可視性は対応後に{after}%でしたが、現在は{now}%です。"
+    "newSignalGainLost": "以前に完了しましたが、効果は維持されませんでした。これらのPromptsでの可視性は対応後に{after}%でしたが、現在は{now}%です。",
+    "noWorkflowConnected": "ワークフローが接続されていません。"
   },
   "traffic": {
     "chat": {
@@ -14613,6 +15230,24 @@
           "query": "存在しないアドレスにクエリが含まれています: リダイレクトは提案されません"
         }
       }
+    },
+    "page": {
+      "subtitle": "AI経由のウェブサイトへの訪問",
+      "range": "{total} 件中 {start}–{end} 件",
+      "previous": "前へ",
+      "next": "次へ",
+      "platformBreakdown": "プラットフォーム別内訳",
+      "referralsByPlatform": "プラットフォーム別の参照数",
+      "topLandingPages": "上位ランディングページ",
+      "recentVisits": "最近のAI参照訪問",
+      "columns": {
+        "platform": "プラットフォーム",
+        "page": "ページ",
+        "visits": "訪問数",
+        "change": "変化",
+        "time": "時間",
+        "country": "国"
+      }
     }
   },
   "ads": {
@@ -14916,7 +15551,10 @@
         "bodyUnlimited": "プランに空きがあります。枠待ちのPromptは自動では開始されません。追跡するものを選択してください。",
         "show": "表示する",
         "freeUp": "枠を空ける",
-        "track": "枠待ちのPromptを追跡する"
+        "track": "枠待ちのPromptを追跡する",
+        "addTracking": "トラッキングを追加",
+        "moved": "{count, plural, other {そのうち#件}}は{date}までトラッキングされていましたが、プランのトラッキングが{limit, number}件のPrompt地点に減少しました。",
+        "movedNoLimit": "{count, plural, other {そのうち#件}}は{date}までトラッキングされていましたが、プランのトラッキングが減少しました。"
       },
       "dialog": {
         "pill": "Promptの上限に達しました · {max} 件中 {used} 件",
@@ -14929,6 +15567,7 @@
         "needs": "{count} か所のロケーションで追跡されるため、{count} 個の枠が必要です。",
         "howStarter": "追跡するには、優先度の低いPromptを一時停止するか、上位プランに移行してください。",
         "howContact": "追跡するには、優先度の低いPromptを一時停止するか、上限引き上げについてお問い合わせください。",
+        "howGrowth": "トラッキングするには、あまり必要でないPromptを一時停止するか、プランにトラッキングを追加してください。",
         "room": "プランに空きがあります。枠待ちのPromptは自動では開始されないため、追跡を開始するまで待機します。",
         "candidates": "一時停止できるPrompts",
         "candidatesMany": "一時停止できるPrompts: {count}枠分空けるために選択してください",
@@ -14947,6 +15586,7 @@
         "pauseMany": "{count}件を一時停止して対象を追跡する",
         "trackNow": "追跡する",
         "seeGrowth": "Growthプランを見る: {count} Prompts",
+        "addTracking": "トラッキングを追加",
         "contact": "お問い合わせ",
         "keepWaiting": "待機状態のままにする",
         "keepPaused": "一時停止状態のままにする",
@@ -15145,6 +15785,7 @@
       "showUsage": "使用量を表示",
       "hideUsage": "使用量を非表示",
       "locationsUsed": "{used} / {limit} 件のPrompt地域を使用中",
+      "planEnded": "プランが終了しました。プランを選択するまでPromptはトラッキングされません",
       "view": {
         "label": "Prompt一覧",
         "tracked": "追跡中",
@@ -15163,6 +15804,95 @@
         "analyzing": "分析中…",
         "analyzingProgress": "{done}/{total}件を分析中…",
         "limitReached": "月間上限に達しました"
+      }
+    },
+    "info": {
+      "button": "AnsvisorでのPromptの仕組み",
+      "whatTitle": "Promptとは?",
+      "whatText": "潜在顧客がChatGPTやGeminiなどのAIアシスタントに入力する質問やリクエストのことです。例: <example>\"What's the best open-source AEO tool?\"</example>、<example>\"Compare the best AEO platforms\"</example>",
+      "howTitle": "Ansvisorの仕組み",
+      "systemsLine": "スマートなAIシステムが、バックグラウンドで毎日あなたのために働きます。",
+      "steps": {
+        "find": {
+          "title": "最適なPromptを見つけます。",
+          "text": "AIがあなたのサイト、競合他社、ユーザーの検索内容(Search Console、アナリティクス)、AIプラットフォーム自身の回答を分析し、重要なPromptを提案します。"
+        },
+        "pick": {
+          "title": "追跡するものを選びます。",
+          "text": "提案の<b>+</b>を押してください。"
+        },
+        "ask": {
+          "title": "毎日AIプラットフォームに質問します。",
+          "text": "ChatGPT、Gemini、Google AI Overviewsなど:あなたに言及しているか、サイトへリンクしているか、競合より上位に表示しているかを確認します。"
+        },
+        "data": {
+          "title": "あなた独自のデータを蓄積します。",
+          "text": "すべての回答を保存するため、トレンド、ギャップ、競合の動きを時間の経過とともに確認できます。"
+        },
+        "next": {
+          "title": "スマートなAIシステムが次にすべきことを示します。",
+          "text": "順位の低下を検知し、コンテンツのギャップを見つけ、Action Centerでページや修正案を準備して、AIでの可視性、トラフィック、売上の獲得を支援します。"
+        }
+      },
+      "openGuide": "ステップバイステップガイドを開く"
+    },
+    "guide": {
+      "title": "最適なPromptを見つけて回答内で上位に表示される方法",
+      "description": "これらを一度実施し、その後は毎日Suggestionsを確認してください。各ステップは新しいタブで開くので、このガイドはそのまま残ります。",
+      "progress": "{total}件中{done}件完了",
+      "progressLabel": "完了したステップ",
+      "done": "完了",
+      "comingSoon": "近日公開",
+      "footer": "Chatにステップの実行を依頼できます:「Search Consoleを接続して」。",
+      "steps": {
+        "gsc": {
+          "title": "Google Search Consoleを接続",
+          "text": "ユーザーがあなたを見つけるために検索している内容を確認し、Promptに変換します。",
+          "cta": "接続"
+        },
+        "ga": {
+          "title": "Google Analytics 4を接続",
+          "text": "訪問者を集めているページを確認し、重要なPromptを見つけます。",
+          "cta": "接続"
+        },
+        "trafficCode": {
+          "title": "AIトラフィックコードをサイトに追加",
+          "text": "AIアシスタントからの訪問数と、ページを読み取るAIボットをカウントします。",
+          "cta": "コードを取得"
+        },
+        "suggestions": {
+          "title": "毎日Suggestionsを確認",
+          "text": "サイト、競合他社、検索から得られた新しいPromptです。良いものは+を押して追跡しましょう。",
+          "cta": "Suggestionsを開く"
+        },
+        "content": {
+          "title": "提案からコンテンツを作成",
+          "text": "AIの回答に不足しているページを、あなたのPrompt向けに作成します。",
+          "cta": "Contentを開く"
+        },
+        "optimize": {
+          "title": "ページを最適化",
+          "text": "既存のページをEditorで改善し、AIの回答に引用されやすくします。",
+          "cta": "Editorを開く"
+        },
+        "audit": {
+          "title": "技術的な問題を修正",
+          "text": "サイト監査を実行し、AIがサイトを読み取れない原因を修正しましょう。",
+          "cta": "監査を実行"
+        },
+        "moreTracking": {
+          "title": "より多くのPromptを追跡",
+          "text": "プランにPrompt、地域、AIプラットフォームを追加できます。",
+          "cta": "追跡を増やす"
+        },
+        "mentions": {
+          "title": "他のサイトで言及される",
+          "text": "AIの回答が信頼する第三者サイトで名前を取り上げてもらいましょう。"
+        },
+        "ads": {
+          "title": "AI広告を実行",
+          "text": "スポンサー付きのAI回答に表示されます。"
+        }
       }
     },
     "trackNow": {
@@ -15212,6 +15942,7 @@
       "unlimited": "無制限",
       "cta": {
         "upgrade_growth": "Growthにアップグレード",
+        "add_more": "追加する",
         "upgrade": "プランをアップグレード",
         "contact": "お問い合わせ",
         "choose_plan": "プランを選択"
@@ -15437,7 +16168,7 @@
       "unlimited": "追跡地域数: {used} → {after} · ご利用プランでは無制限",
       "usageHint": "各地域におけるPromptごとにプランの追跡地域が1つカウントされ、毎日チェックされます。一時停止中のPromptはカウントされません。",
       "over": "これにはさらに{adding, plural, other {#箇所の追跡地域}}が必要です。現在の{plan}プランの残数は{left, plural, =0 {0箇所} other {#箇所}}です。",
-      "overHint": "Promptまたは地域の選択数を減らしてください。{plan, select, starter {または、プランをアップグレードするか、カスタムプランについてお問い合わせください。} growth {または、カスタムプランについてお問い合わせください。} other {または、上限の引き上げについてお問い合わせください。}}",
+      "overHint": "Promptまたは地域の数を減らしてください。{plan, select, starter {または、プランをアップグレードするか、カスタムプランについてお問い合わせください。} growth {または、プランに追跡を追加してください。} other {または、上限の引き上げについてお問い合わせください。}}",
       "nothing": "これらのPromptはすでにこれらのロケーションで追跡されています。",
       "cityBlocked": "これらのPromptには、都市単位で回答するエンジン（Google AI Mode、AI Overviews、またはAPIモデル）を実行しているものがありません。まずそれらのエンジンのいずれかをPromptに追加してください。",
       "cityPartly": "{count, plural, other {これらのPromptのうち#件}}は都市単位で回答するエンジンを実行していません。プラン上のロケーション数としてはカウントされますが、その都市では質問されません。",
@@ -15488,7 +16219,79 @@
         "usedUp": "今月の提案予算の上限に達しました。サブスクリプションの更新時にリセットされます。",
         "upgrade": "アップグレードして上限を増やす",
         "startPlan": "プランを開始"
+      },
+      "loadFailed": "提案の読み込みに失敗しました。",
+      "generateFailed": "提案の生成に失敗しました。",
+      "notConfigured": "このサーバーではAI提案がまだ設定されていません。AIプロバイダーのキーがありません。",
+      "retry": "再試行",
+      "introTitle": "プラットフォーム別の提案を取得",
+      "introBody": "この期間の全プラットフォームの回答(実行されたサブクエリ、引用されたソース、上位に表示された競合)を分析し、ブランドが言及されていない、または順位が低い場合の対策を提案します。",
+      "generate": "提案を生成",
+      "generating": "この期間の回答から提案を生成しています… 最大15秒かかる場合があります。",
+      "stale": "これらの提案の生成後に新しい実行が追加されました。",
+      "regenerate": "再生成",
+      "noRuns": "この期間には実行がないため、改善できる点はまだありません。",
+      "allWell": "改善は不要です。この期間、すべてのプラットフォームでブランドが最初に言及され、早い段階で引用されています。",
+      "selection": "{total}件中{selected}件を選択 · {platforms, plural, other {#プラットフォーム}}",
+      "generated": "生成日: {date}",
+      "sent": "送信日: {date} · {code}",
+      "discardConfirm": "編集内容を破棄しますか?",
+      "keepEditing": "編集を続ける",
+      "discardRegenerate": "破棄して再生成",
+      "openInActions": "アクションで開く",
+      "sendActions": "アクションを送信",
+      "sentToast": "{count, plural, other {#件のタスクを含むアクションを作成しました}}",
+      "open": "開く",
+      "states": {
+        "no_runs": "この期間の実行なし",
+        "not_mentioned": "言及なし",
+        "mentioned_late": "言及あり · 後半",
+        "not_cited": "早期に言及 · 引用なし",
+        "doing_well": "好調"
+      },
+      "mentionRate": "{runs, plural, other {#回の実行}}中{mentioned}回で言及",
+      "avgPosition": "平均 #{position} 位 · {rate}",
+      "avgPositionOf": "平均 #{position} 位/{total} 件中 · {rate}",
+      "citedAt": "{total} 件のソース中、平均 #{rank} 位で引用 · {rate}",
+      "notCited": "未引用 · {rate}",
+      "inputs": {
+        "fanouts": "{count, plural, other {# 件のfan-out}}",
+        "citedDomains": "{count, plural, other {# 件の引用ドメイン}}",
+        "competitorUrls": "{count, plural, other {# 件の競合URL}}",
+        "answer": "AIの回答",
+        "basedOn": "{parts}に基づく",
+        "basedOnAnswer": "AIの回答に基づく",
+        "noFanouts": "fan-outは記録されていません。{based}"
+      },
+      "doingWell": "好調です：提案はありません。",
+      "noneHeldUp": "このプラットフォームの根拠に耐えた提案はありませんでした。ご自身で追加するか、再生成してください。",
+      "addOwn": "独自の提案を追加",
+      "removed": "削除しました：{title}",
+      "removedUntitled": "削除しました：あなたの提案",
+      "undo": "元に戻す",
+      "titlePlaceholder": "タイトル",
+      "bodyPlaceholder": "何をするか、その理由",
+      "select": "「{title}」を選択",
+      "edit": "提案を編集",
+      "remove": "提案を削除",
+      "alreadySent": "送信済み",
+      "yourSuggestion": "あなたの提案",
+      "sources": {
+        "fanout": "Fan-out：{ref}",
+        "answer": "AIの回答",
+        "brandPage": "あなたのページ：{url}"
+      },
+      "locked": {
+        "title": "ImproveはGrowthプランでご利用いただけます",
+        "body": "各AI回答のサブクエリ、ソース、競合に基づいて、このPromptの順位を改善するためのプラットフォーム別の提案を受け取れます。",
+        "upgrade": "プランをアップグレード"
       }
+    },
+    "errors": {
+      "updateFailed": "Promptを更新できませんでした。もう一度お試しください。",
+      "noRoomToResume": "再開するための空きが足りません",
+      "bulkFailed": "{action, select, resume {Promptを再開できませんでした。} other {Promptを一時停止できませんでした。}}",
+      "bulkPartial": "{action, select, resume {{total} 件中 {failed} 件を再開できませんでした。} other {{total} 件中 {failed} 件を一時停止できませんでした。}}"
     }
   },
   "volumeEstimate": {
@@ -15895,6 +16698,7 @@
     }
   },
   "competitors": {
+    "forbiddenRole": "競合の統合は管理者またはマネージャーのみ行えます。",
     "title": "競合他社",
     "description": "競合他社を管理し、AI可視性を直接比較します。",
     "addCompetitor": "競合他社を追加",
@@ -15907,7 +16711,7 @@
     "citations": "引用数",
     "trackedCompetitors": "追跡中の競合他社",
     "selectToCompare": "直接比較を表示する競合他社を選択してください。",
-    "windowLast30Days": "スコアは過去30日間を対象としています。",
+    "windowLastDays": "{days, plural, other {スコアは過去 # 日間が対象です。}}",
     "windowAllTime": "スコアは追跡された全履歴を対象としています。",
     "windowSelectedRange": "スコアは選択した日付範囲を反映しています。",
     "selected": "選択中",
@@ -16008,10 +16812,15 @@
     },
     "h2h": {
       "title": "{brand} vs {competitor}",
-      "yourAvg": "あなたの平均スコア",
-      "theirAvg": "競合の平均スコア",
-      "overallDiff": "スコア差",
+      "yourAvg": "あなたの可視性スコア",
+      "theirAvg": "競合の可視性スコア",
+      "overallDiff": "差",
+      "points": "{value} pt",
+      "scoreTip": "可視性スコア(0〜100):この期間の回答のうち、ブランド名が挙がる頻度、サイトが引用される頻度、そして名前が挙がる順番の早さを、回答全体に対して示します。カードと同じスコアです。",
       "platformBreakdown": "プラットフォーム別内訳",
+      "viaBing": "· Bing AI Mode 経由",
+      "noAnswersEngine": "この期間の回答はありません",
+      "notInPlan": "ご利用のプランに含まれていないため表示されません:{engines}。",
       "promptByPrompt": "Promptごとの比較",
       "promptByPromptDesc": "Promptをクリックして展開すると、プラットフォーム別の内訳を表示できます。",
       "comparison": "比較",
@@ -16027,7 +16836,25 @@
       "noPromptData": "Promptレベルのデータがありません。まずトラッキングチェックを実行してください。",
       "noDataTitle": "比較データがありません",
       "noDataDescription": "この競合の比較データを生成するには、「可視性」からトラッキングチェックを実行してください。",
-      "loadError": "比較データの読み込みに失敗しました。"
+      "loadError": "比較データの読み込みに失敗しました。",
+      "promptCounts": "{engines, plural, other {#個のプラットフォーム}} · {runs, plural, other {#回の実行}}",
+      "engineCounts": "{locations, plural, other {#か所のロケーション}} · {runs, plural, other {#回の実行}}",
+      "runs": "{count, plural, other {#回の実行}}",
+      "noLocation": "ロケーションなし",
+      "lowSample": "サンプル数が少ない",
+      "lowSampleTip": "実行回数が10回未満:1件の回答でスコアが大きく変動する可能性があります。",
+      "list": {
+        "search": "Promptを検索",
+        "sortLabel": "Promptを並べ替え",
+        "sortRecent": "新しい順",
+        "sortDiff": "差が大きい順",
+        "categoryLabel": "カテゴリ",
+        "allCategories": "すべてのカテゴリ",
+        "count": "{total, plural, other {#件のPrompt}}中 {shown}件",
+        "noMatch": "一致するPromptはありません。",
+        "more": "さらに{count}件を表示",
+        "caseRepeats": "{count, plural, other {#件のPromptが大文字・小文字の違いのみで他のPromptと重複しています}}。回答が重複して集計されないよう、Promptsで余分なコピーを一時停止してください。"
+      }
     },
     "timeline": {
       "title": "時系列での{competitor}のページ",
@@ -16077,7 +16904,127 @@
     "excludeOwnDomain": "自社ドメインを除外",
     "competitorsOnly": "競合のみ",
     "noBrandTitle": "ブランドが選択されていません",
-    "noBrandDescription": "AIプラットフォームが言及時に使用する引用を確認するには、ブランドを選択または作成してください。"
+    "noBrandDescription": "AIプラットフォームが言及時に使用する引用を確認するには、ブランドを選択または作成してください。",
+    "addCompetitor": {
+      "added": "{domain} を競合として追加しました",
+      "failed": "このドメインを競合として追加できませんでした。もう一度お試しください。",
+      "ariaLabel": "{domain} を競合として追加",
+      "button": "競合として追加",
+      "title": "{domain} を競合として追加しますか?",
+      "description": "このドメインを競合としてトラッキングします。名前は下で編集できます。",
+      "name": "名前",
+      "namePlaceholder": "競合名",
+      "add": "追加"
+    },
+    "url": {
+      "back": "引用",
+      "noUrl": "URLが指定されていません。Visibilityの「引用」タブの引用行からこのページを開いてください。",
+      "noBrand": "先に上部の切り替えからブランドを選択してください。",
+      "owned": "自社所有",
+      "loadFailed": "このURLを読み込めませんでした。もう一度お試しください。",
+      "empty": "選択した期間内に、このURLの引用は記録されていません。",
+      "kpis": {
+        "citations": "引用の合計",
+        "citationsSub": "{answers, plural, other {#件の回答にわたる}}",
+        "answers": "引用している回答",
+        "answersSub": "このURLを含むAI回答",
+        "prompts": "Prompts",
+        "promptsSub": "この URL をトリガーしている個別の Prompts",
+        "platforms": "プラットフォーム",
+        "lastSeen": "最終確認",
+        "firstSeen": "初回確認 {date}"
+      },
+      "targeted": "{count, plural, other {#件の Prompt でターゲット設定}}",
+      "targetedSub": "Prompt ワークフローでこの URL をターゲットとして追跡している Prompts",
+      "notTargeted": "まだターゲットに設定されていません。Prompt のターゲット URL カードから追加してください。",
+      "citedCount": "{count}回引用",
+      "visits": "AI経由の訪問",
+      "visitsSub": "選択期間内にAIプラットフォームからこのページへ訪問した数",
+      "noVisits": "このページのAI経由の訪問はまだ記録されていません。",
+      "unknownPlatform": "不明",
+      "citedIn": "引用元",
+      "citedInSub": "選択期間内にこの URL を引用したすべてのAI回答",
+      "columns": {
+        "date": "日付",
+        "platform": "プラットフォーム",
+        "prompt": "Prompt",
+        "sentiment": "センチメント",
+        "brandMentioned": "ブランド言及",
+        "position": "順位",
+        "answers": "回答",
+        "citations": "引用",
+        "lastSeen": "最終確認"
+      },
+      "sentiments": {
+        "positive": "ポジティブ",
+        "neutral": "中立",
+        "negative": "ネガティブ",
+        "mixed": "混在"
+      },
+      "breakdown": "Prompt の内訳",
+      "breakdownSub": "このページが獲得しているクエリを Prompt ごとにグループ化",
+      "noPrompts": "選択期間内にこの URL で記録された Prompts はありません。"
+    },
+    "categories": {
+      "you": "自社",
+      "competitor": "競合",
+      "editorial": "編集記事",
+      "forum": "フォーラム",
+      "social": "ソーシャル",
+      "review": "レビュー",
+      "institutional": "機関",
+      "other": "その他"
+    },
+    "page": {
+      "noSources": "引用元はまだありません。",
+      "columns": {
+        "rank": "順位",
+        "domain": "ドメイン",
+        "url": "URL",
+        "platforms": "プラットフォーム",
+        "usage": "使用状況",
+        "avgCitations": "平均引用数",
+        "citations": "引用数",
+        "addCompetitor": "競合として追加",
+        "sourceType": "ソースタイプ",
+        "competitorAnswers": "競合の回答",
+        "whichCompetitors": "対象の競合",
+        "strength": "強度",
+        "answersFeeding": "反映されている回答",
+        "alsoCitesUs": "自社も引用している?"
+      },
+      "openDomain": "{domain} を新しいタブで開く",
+      "openPage": "引用されたページを新しいタブで開く",
+      "openPageTitle": "引用されたページを開く",
+      "loadFailedTitle": "引用データを読み込めませんでした",
+      "loadFailedBody": "もう一度お試しください。",
+      "retry": "再試行",
+      "checking": "引用データを確認しています…",
+      "noneInPeriod": "{period, select, 24h {過去24時間} 7d {過去7日間} 30d {過去30日間} 90d {過去90日間} other {選択した期間}}に引用はありません",
+      "outsideWindow": "この期間外に引用データがあります。",
+      "showAll": "すべてのデータを表示",
+      "noMatch": "フィルターに一致する引用はありません",
+      "noMatchBody": "日付範囲を広げるか、フィルターを解除してください。",
+      "gapMethodology": "競合に言及しているがあなたには言及していない回答に表示されるソースを、各回答のソース数で重み付けしたものです。",
+      "strengthTitle": "強度 {pct}%",
+      "noGaps": "このフィルターに該当するギャップドメインはありません",
+      "noGapsBody": "競合を引用しているドメインはすべて自社も引用しているか、まだデータが十分ではありません。",
+      "noCompetitorData": "競合のソースデータはまだありません",
+      "noCompetitorDataBody": "競合(ドメイン付き)を追加し、トラッキングの実行が数回完了するまでお待ちください。",
+      "competitor": "競合",
+      "selectCompetitor": "競合を選択",
+      "yes": "✓ はい",
+      "no": "✗ いいえ",
+      "gapList": "ギャップ一覧",
+      "byCompetitor": "競合別",
+      "howItWorks": "仕組みについて",
+      "lowVisibility": "この期間のあなたの可視性は低いため、このリストは広範囲になる可能性があります。まずは基本的な可視性の向上に注力してください。",
+      "loadFailedToast": "引用データの読み込みに失敗しました",
+      "checkFailedToast": "引用データの確認に失敗しました",
+      "exportFailed": "CSVのエクスポートに失敗しました",
+      "typesNotExportable": "ソースタイプはグラフの内訳のため、エクスポートできません。エクスポートするには、ドメイン、URL、競合ギャップのいずれかに切り替えてください。",
+      "tabGaps": "競合ギャップ"
+    }
   },
   "shopping": {
     "title": "製品の可視性",
@@ -16581,6 +17528,16 @@
       "verifiedLabel": "ChatGPTの認証済みセラー",
       "verifiedStatus": "不明",
       "verifiedDetail": "OpenAIは認証済みセラーフラグの付与基準を公表しておらず、初期のテストではこのフラグを持たないショップが回答から除外されていました。詳細が発表されるまでは、ダイレクト製品フィードを送信してください。"
+    },
+    "page": {
+      "allTime": "全期間",
+      "last": "過去{period}",
+      "allPlatforms": "すべてのプラットフォーム",
+      "allRegions": "すべての地域",
+      "noProducts": "フィルターに一致する商品が見つかりません。",
+      "appearances": "{count, plural, other {#件の表示}}",
+      "brandAppearances": "{brand} • {count, plural, other {#件の表示}}",
+      "viewPrompt": "Promptの詳細を見る"
     }
   },
   "reports": {
@@ -16609,14 +17566,18 @@
         "trafficConnectLink": "連携"
       },
       "method": {
-        "label": "測定方法について",
         "baseline": "ベースライン: 実施前の14日間",
         "checkpoints": "チェックポイント: 7日 · 14日 · 30日 · 90日",
         "checkpointsTip": "7日: 保留、初期の兆候 · 14日: 初回判定 · 30日: 確定 · 90日: 持続効果",
         "control": "対照群: 変更を加えていない類似Prompts",
         "minChange": "最小変動幅: 3 pt",
         "noCost": "定期トラッキングデータ · 追加費用なし",
-        "correlation": "相関関係（因果関係ではありません）"
+        "correlation": "相関関係（因果関係ではありません）",
+        "howWeMeasure": "測定方法",
+        "shippedDefinition": "「公開済み」とは、変更が実際に反映されたことを指します。CMSへの公開、プルリクエストのマージ、または公開済みとしてマークされた状態です。レビュー待ちの下書きはまだ公開済みではありません。",
+        "baselineHelp": "各変更は、その期間における対象Promptsの可視性を基準として開始されます。",
+        "controlHelp": "何もしなくても起きていたであろう変化を示します。",
+        "correlationHelp": "結果は、複数の指標が連動して動いたことを示すもので、その変更だけが原因であることを示すものではありません。"
       },
       "filterLabel": "結果で絞り込み",
       "filters": {
@@ -16686,6 +17647,8 @@
       },
       "capped": "{month}にリリースされた最初の{count, number}件の変更を表示しています。上記の数値はこれらのみを対象としています。",
       "empty": "{month}にリリースされたものはありません。",
+      "emptyNext": "アクションを公開して、インパクトの測定を開始しましょう。",
+      "emptyNextLink": "今日の重点を開く",
       "emptyFilter": "{month}にはこの結果のアクションはありません。",
       "loadFailed": "Ansvisorのアクションを読み込めませんでした。もう一度お試しください。",
       "retry": "再試行",
@@ -16764,6 +17727,10 @@
     "deleteTitle": "レポートを削除",
     "deleteConfirm": "このレポートを削除しますか？",
     "deleteFailed": "レポートの削除に失敗しました",
+    "rowMenuLabel": "{title}のその他の操作",
+    "copyLink": "リンクをコピー",
+    "linkCopied": "リンクをコピーしました。ワークスペースのメンバーがレポートを開けます。",
+    "copyLinkFailed": "リンクをコピーできませんでした。レポートを開いてアドレスをコピーしてください。",
     "selectDates": "開始日と終了日を選択してください",
     "templateLabel": "テンプレート",
     "templates": {
@@ -16800,7 +17767,7 @@
       "mentionEvidence": "言及のエビデンス",
       "citationEvidence": "引用のエビデンス"
     },
-    "missingSections": "一部のセクションは収集できなかったため、このレポートには含まれていません:",
+    "missingSectionsAdmin": "管理者のみに表示されます：{sections}は再試行しても取得できなかったため、レポートから除外されています。",
     "brandLabel": "ブランド",
     "sectionsLabel": "セクション",
     "selectSections": "セクションを少なくとも1つ選択してください",
@@ -16879,9 +17846,11 @@
     "generatedOn": "生成日",
     "executiveSummary": "エグゼクティブサマリー",
     "kpi": {
-      "visibility": "可視性",
-      "visibilityRate": "可視性",
-      "visibilityRateSub": "{visible}/{total}件のPrompt",
+      "visibilityScore": "可視性スコア",
+      "scoreValue": "{score}/100",
+      "promptsWithMention": "言及のあるPrompts",
+      "promptsWithMentionSub": "{total}件中{visible}件のPrompts",
+      "leaderboardPromptsSub": "言及のある{total}件中{visible}件のPrompts",
       "avgScore": "平均スコア",
       "mentions": "言及数",
       "citations": "ブランドの引用数",
@@ -17139,7 +18108,10 @@
       }
     },
     "notifications": "通知",
-    "notificationsDescription": "Daily Pulse — 各トラッキング実行後のブランドごとのダイジェスト。ハイライトと警告をお知らせします。",
+    "notificationsDescription": "各ブランドは2種類のメールを送信できます。トラッキング実行後のDaily Pulseと、毎週月曜日のAIトラフィック週間ダイジェストです。どちらもブランドのDaily Pulse受信者に送信されます。",
+    "pulseSection": "Daily Pulse",
+    "pulseSectionDescription": "トラッキング実行ごとに、ブランド別のハイライトと警告をまとめた短いダイジェストが届きます。頻度と受信者を選択してください。",
+    "pulseFrequencyLabel": "{brand}のDaily Pulseの頻度",
     "pulseFrequency_daily": "毎日",
     "pulseFrequency_weekly": "毎週",
     "pulseFrequency_notable": "注目すべき変更時のみ",
@@ -17150,7 +18122,9 @@
     "pulseRecipientsHint": "カンマ区切りのメールアドレス。組織の全メンバーに送信する場合は空欄にしてください。",
     "pulseRecipientsInvalid": "無効なメールアドレスです: {emails}。修正または削除してから保存してください。",
     "trafficDigest": "AI Traffic 週次ダイジェスト",
-    "trafficDigestHint": "毎週月曜日: 前週のAI経由の訪問を1行で要約し、上位3つの変動をお知らせします。上記の宛先に送信されます。",
+    "trafficDigestDescription": "毎週月曜日に、先週のAI経由の訪問数を1行にまとめ、上位3件の変化とともにお届けします。各ブランドのDaily Pulse受信者に送信され、チェックのオン・オフを切り替えるとすぐに保存されます。",
+    "trafficDigestTo": "宛先：{emails}",
+    "trafficDigestToEveryone": "組織のメンバー全員に送信",
     "trafficDigestPulseOff": "Daily Pulseがオフの間は送信されません。再度受信するにはPulseをオンにしてください。",
     "pulseSaved": "通知設定を保存しました",
     "pulseSaveFailed": "通知設定を保存できませんでした。もう一度お試しください。",
@@ -17168,6 +18142,17 @@
       "empty": "一致するタイムゾーンがありません。",
       "saved": "タイムゾーンを保存しました",
       "saveFailed": "タイムゾーンを保存できませんでした。もう一度お試しください。"
+    },
+    "language": {
+      "label": "言語",
+      "automatic": "自動（{language}）",
+      "hint": "Ansvisorの画面の表示言語です（あなたのみに適用）。ブランドのコンテンツ言語は変わりません。",
+      "loading": "言語を読み込んでいます…",
+      "moreSoon": "今後、対応言語を追加予定です。",
+      "preview": "スタッフ版とテスト版では、まだ翻訳がない言語や、テキストが長めのテスト用言語も表示されます。テキストがない箇所は英語で表示されます。",
+      "testLanguage": "{language}・テスト",
+      "saved": "言語を保存しました",
+      "saveFailed": "言語を保存できませんでした。もう一度お試しください。"
     },
     "save": "変更を保存",
     "saved": "変更を保存しました！",
@@ -17287,6 +18272,81 @@
         }
       }
     },
+    "planAddOns": {
+      "title": "プランにオプションを追加",
+      "description": "Growthプラント向けの追加トラッキング、追加ブランド、AI使用量のチャージです。選択した内容は、登録済みのカードに一度だけ請求されます。",
+      "tracking": {
+        "title": "追加トラッキング",
+        "description": "プランのエンジンで毎日トラッキングされる Prompt ロケーションを増やせます。一度に選べるのは1つのティアで、いつでも変更や削除ができます。",
+        "label": "追加トラッキングのティア",
+        "none": "なし",
+        "tier": "+{units} Prompt ロケーション",
+        "price": "{price}/{interval, select, year {年} other {月}}",
+        "contactSales": "営業に問い合わせる",
+        "yearly": "年額プランは2か月分無料です。"
+      },
+      "brands": {
+        "title": "追加ブランド",
+        "description": "各ブランドに専用のトピック、競合、ホワイトラベルレポートが用意されます。1ブランドあたり{interval, select, year {年額} other {月額}}{price}です。",
+        "count": "{count}件追加",
+        "fewer": "ブランドを1つ減らす",
+        "more": "ブランドを1つ増やす",
+        "note": "現在のブランド数より少なくはできません。先にブランドで1つ削除してください。"
+      },
+      "topUp": {
+        "title": "AI使用量のチャージ",
+        "description": "1回払いです。{date}にプランが更新されるまで、AI使用量、ブリーフ、機会が追加されます。自動更新はされません。",
+        "descriptionNoDate": "1回払いです。プランが更新されるまで、AI使用量、ブリーフ、機会が追加されます。自動更新はされません。",
+        "label": "AI使用量のチャージ",
+        "none": "なし",
+        "option": "+{multiplier}倍",
+        "adds": "今月のAI使用量の{multiplier}倍 ・ ブリーフ+{briefs}件 ・ 機会+{opportunities}件"
+      },
+      "summary": "{prompts} Prompt ロケーション・{brands}ブランド",
+      "nothing": "上で変更する内容を選択してください。",
+      "review": "確認して支払う",
+      "reviewing": "料金を確認中…",
+      "dialog": {
+        "title": "オプションの確認",
+        "newLimits": "新しい上限",
+        "tracking": "追加トラッキング",
+        "trackingNone": "追加トラッキングなし",
+        "brands": "{count, plural, =0 {追加ブランドなし} other {追加ブランド#件}}",
+        "topUp": "AI使用量のチャージ +{multiplier}倍(1回払い)",
+        "dueToday": "本日のお支払い",
+        "dueTodayNote": "追加トラッキングとブランドの今期の残り期間分と、チャージの全額です。",
+        "total": "次回の更新から",
+        "totalValue": "{interval, select, year {年額} other {月額}} {price}",
+        "credit": "下位のティアへの変更やブランド数の削減を行うと、差額は次回以降の請求書にクレジットとして反映されます。",
+        "pay": "{price}を支払う",
+        "confirm": "確認",
+        "cancel": "キャンセル",
+        "processing": "処理中…"
+      },
+      "done": "アドオンを更新しました。追加購入分は、支払いが確認され次第すぐに反映されます。",
+      "states": {
+        "not_admin": "アドオンを変更できるのは管理者のみです。ワークスペースの管理者にご依頼ください。",
+        "starter": "アドオンはGrowthプランでご利用いただけます。Growthにアップグレードすると、トラッキング、ブランド、AI使用量を追加できます。",
+        "enterprise": "上限は契約内容によって定められています。追加をご希望の場合は、担当のアカウントマネージャーにお問い合わせください。",
+        "trial": "アドオンはプランの開始後に購入できます。",
+        "no_plan": "アドオンはプランが有効な間に購入できます。",
+        "ending": "プランは終了する予定です。アドオンを変更するには、プランを継続してください。"
+      },
+      "errors": {
+        "not_cloud": "ここではアドオンをご利用いただけません。",
+        "admin_only": "アドオンを変更できるのは管理者のみです。",
+        "not_growth": "アドオンはGrowthプランでご利用いただけます。",
+        "trial": "アドオンはプランの開始後に購入できます。",
+        "no_plan": "アドオンはプランが有効な間に購入できます。",
+        "ending": "プランは終了する予定です。アドオンを変更するには、プランを継続してください。",
+        "contact_sales": "このティアは営業チームが販売しています。",
+        "unavailable": "このアドオンは現在購入できません。",
+        "below_usage": "現在、{prompts}件のPromptロケーションと{brands}件のブランドを使用していますが、新しい上限は{limitPrompts}件と{limitBrands}件です。先にPromptを一時停止するか、ブランドを削除してください。",
+        "payment_failed": "お支払いを完了できませんでした。",
+        "failed": "アドオンを変更できませんでした。もう一度お試しください。"
+      },
+      "readFailed": "アドオンを読み取れませんでした。しばらくしてからもう一度お試しください。"
+    },
     "cancelsOn": "サブスクリプションは {date} に終了します",
     "changePlan": "プランを変更",
     "upgradeTo": "{plan} にアップグレード",
@@ -17367,21 +18427,22 @@
     "planChanged": "プランが正常に更新されました。",
     "subscriptionCanceled": "サブスクリプションがキャンセルされました。",
     "needCustomPlan": "カスタムプランが必要ですか？",
-    "customPlanDescription": "大規模にAI可視性を管理する大企業や代理店向け。月額499ドルから。",
+    "customPlanDescription": "AIの可視性を大規模に管理する大企業や代理店向けです。月額${price}から。",
     "customPlanPoints": [
-      "カスタムワークスペース内で無制限のブランド",
-      "Claudeを含むすべての回答エンジン",
-      "カスタムPromptおよびロケーションの追跡",
-      "カスタムKPIフレームワークおよびデータ連携",
-      "優先サポートおよびオンボーディングセッション",
-      "SSO / SAMLおよびカスタム機能リクエスト",
-      "独自のAIキー：OpenAI、Anthropic、Google、Azure、OpenRouter"
+      "最初は1ブランドと3,000 Prompts、追加は契約により対応",
+      "すべての回答エンジンに対応、Claudeは契約により対応",
+      "コンテンツブリーフ、機会、サイト監査が無制限",
+      "SSO / SAML、優先サポート、SLA",
+      "請求書払いとAPIアクセス",
+      "独自のAIキーを利用可能:OpenAI、Anthropic、Google、Azure、OpenRouter"
     ],
     "customPlanPointsChat": [
       "チャットとエージェント",
       "自律的に公開するエージェントによるフルオートメーション"
     ],
     "planCards": {
+      "expandable": "+ アドオン",
+      "expandableHint": "Growthでは、設定 › 請求から、トラッキング、ブランド、AI使用量のチャージをいつでも追加できます。",
       "starter": {
         "tagline": "AI可視性のモニタリングと最適化を始める小規模チーム向け。",
         "engines": "ChatGPTおよびGeminiの追跡",
@@ -17586,6 +18647,8 @@
     "integrations_connectForbidden": "連携を接続できるのは管理者とマネージャーのみです。",
     "integrations_statusFailed": "{label} が接続されているか確認できませんでした。しばらくしてからもう一度お試しください。",
     "integrations_statusTimedOut": "{label}の確認に時間がかかりすぎました。しばらくしてからもう一度お試しください。",
+    "integrations_propertiesFailed": "{source}のプロパティを読み込めませんでした。",
+    "integrations_propertiesNoAccess": "GoogleがAnsvisorに{source}へのアクセスを許可しませんでした。Googleの画面でチェックボックスが1つオフのままになっています。上で連携を解除してから再接続し、すべてのボックスにチェックを入れてください。",
     "integrations_propertiesTimedOut": "プロパティの読み込みに時間がかかりすぎました。しばらくしてからもう一度お試しください。",
     "integrations_retry": "再試行",
     "integrations_propertyMapping": "プロパティのマッピング",
@@ -18395,14 +19458,30 @@
     "org_description": "組織名の管理やプラン詳細の確認を行えます。",
     "org_name": "組織名",
     "org_namePlaceholder": "Acme Inc.",
-    "org_slug": "スラッグ",
-    "org_slugHint": "APIや連携での参照に使用されます。変更するにはサポートにお問い合わせください。",
     "org_plan": "プラン",
     "org_members": "メンバー",
     "org_adminOnly": "組織名を変更できるのは管理者のみです。",
     "org_loadFailed": "組織の詳細を読み込めませんでした。",
     "org_saveFailed": "組織名を保存できませんでした。もう一度お試しください。",
-    "accountSaveFailed": "アカウントの詳細を保存できませんでした。もう一度お試しください。"
+    "accountSaveFailed": "アカウントの詳細を保存できませんでした。もう一度お試しください。",
+    "teamErrors": {
+      "invalid_email": "有効なメールアドレスを入力してください。",
+      "no_brands": "ブランドを1つ以上選択してください。",
+      "already_member": "このユーザーはすでにチームのメンバーです。",
+      "already_invited": "このメールアドレス宛ての招待がすでに保留中です。",
+      "admin_all_brands": "管理者は常にすべてのブランドにアクセスできます。"
+    },
+    "changePlanFailed": "プランを変更できませんでした。もう一度お試しください。",
+    "cancelFailed": "サブスクリプションをキャンセルできませんでした。もう一度お試しください。",
+    "reactivateFailed": "サブスクリプションを再開できませんでした。もう一度お試しください。",
+    "portalFailed": "請求ポータルを開けませんでした。もう一度お試しください。",
+    "agent_loadFailed": "AIプロバイダーを読み込めませんでした。ページを再読み込みしてください。",
+    "agent_saveFailed": "保存できませんでした。もう一度お試しください。",
+    "agent_testFailed": "キーをテストできませんでした。もう一度お試しください。",
+    "agent_clearFailed": "キーを削除できませんでした。もう一度お試しください。",
+    "integrations_disconnectFailed": "接続を解除できませんでした。もう一度お試しください。",
+    "integrations_propertySaveFailed": "プロパティを保存できませんでした。もう一度お試しください。",
+    "integrations_propertiesLoadFailed": "プロパティを読み込めませんでした。"
   },
   "brands": {
     "title": "ブランド",
@@ -18499,6 +19578,7 @@
     },
     "description": "AIプラットフォーム全体で追跡するすべてのブランドを管理します。",
     "addBrand": "ブランドを追加",
+    "addBrandAddOn": "プランにブランドを追加",
     "showAllBrands": "すべてのブランドを表示",
     "visitBrandSettings": "ブランド設定に移動",
     "workspaceSettings": "ワークスペース設定",
@@ -18800,6 +19880,14 @@
         "hint": "有効なプラットフォームは、設定された頻度でクエリが実行され、ブランドのPrompt可視性をチェックします。",
         "loadError": "AIプラットフォーム設定の読み込みに失敗しました。",
         "saveError": "AIプラットフォーム設定の保存に失敗しました。"
+      },
+      "errors": {
+        "save": "保存に失敗しました。もう一度お試しください。",
+        "saveDomains": "ドメインの保存に失敗しました。もう一度お試しください。",
+        "loadCompetitors": "競合の読み込みに失敗しました。",
+        "addCompetitor": "競合の追加に失敗しました。もう一度お試しください。",
+        "removeCompetitor": "競合の削除に失敗しました。もう一度お試しください。",
+        "deleteBrand": "ブランドの削除に失敗しました。もう一度お試しください。"
       }
     },
     "card": {

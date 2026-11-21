@@ -14,6 +14,67 @@
     "upgrade": "Yükselt",
     "choosePlan": "Bir plan seçin"
   },
+  "locationPicker": {
+    "label": "Konumlar",
+    "tracked": "takip ediliyor",
+    "count": "· {count} {noun}",
+    "countOf": "· {max} kullanılabilir konumdan {count} tanesi",
+    "country": "Ülke",
+    "countryMissing": "Ülke · {engines} üzerinde yok",
+    "usState": "Amerika Birleşik Devletleri · eyalet",
+    "city": "Şehir · {country}",
+    "atCap": "Plan limitine ulaşıldı",
+    "add": "Ülke, ABD eyaleti veya şehir ekleyin",
+    "search": "Konum ara…",
+    "empty": "Eşleşen konum yok.",
+    "already": "Zaten {noun}",
+    "atCapHint": "Plan limitine ulaşıldı — bir konumu kaldırın veya planınızı yükseltin",
+    "remove": "{location} konumunu kaldır",
+    "cityNote": "Şehir bazlı sorguları Google AI Mode, AI Overviews ve API modelleri yanıtlar. ChatGPT, Gemini ve Grok ülke bazında yanıt verir; bu yüzden onları görmek için ülkeyi de takip edin."
+  },
+  "promptCard": {
+    "save": "Değişiklikleri kaydet",
+    "cancelEdit": "Düzenlemeyi iptal et",
+    "edit": "Prompt'u düzenle",
+    "delete": "Prompt'u sil",
+    "deleteTitle": "Prompt'u Sil",
+    "deleteBody": "Bu Prompt'u silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
+    "cancel": "İptal",
+    "confirmDelete": "Sil"
+  },
+  "brandGuard": {
+    "noBrandsTitle": "Henüz marka yok",
+    "noBrandsBody": "AI motorlarının sizden nasıl bahsettiğini takip etmeye başlamak için ilk markanızı oluşturun.",
+    "createBrand": "Marka Oluştur",
+    "selectTitle": "Bir marka seçin",
+    "selectBody": "Üzerinde çalışmak istediğiniz markayı seçin."
+  },
+  "runSingle": {
+    "title": "Tek Prompt Çalıştır",
+    "description": "Test edilecek bir Prompt seçin. Yalnızca bu Prompt etkin platformlarınızda çalıştırılır.",
+    "empty": "Aktif Prompt bulunamadı. Önce marka ayarlarından Prompt ekleyin.",
+    "loadFailed": "Prompt'lar yüklenemedi",
+    "runFailed": "Prompt çalıştırılamadı"
+  },
+  "responseDetail": {
+    "response": "AI Yanıtı",
+    "showLess": "Daha az göster",
+    "showFull": "Yanıtın tamamını göster",
+    "citations": "Atıflar ({count})",
+    "fanOut": "Query fan-out ({count})"
+  },
+  "serverErrors": {
+    "invalid": "İşlem tamamlanamadı: girdiğiniz bilgilerden biri geçerli değil. Kontrol edip tekrar deneyin.",
+    "too_large": "Bu çok büyük. Daha küçük bir şey deneyin.",
+    "too_long": "Bu çok uzun. Kısaltıp tekrar deneyin.",
+    "rate_limited": "Bu işlemi çok sık yapıyorsunuz. Birkaç dakika bekleyip tekrar deneyin.",
+    "forbidden": "Bu işlem için yetkiniz yok. Bir Admin'e danışın.",
+    "duplicate": "Bu zaten mevcut.",
+    "missing_ai_key": "Önce Ayarlar › AI Sağlayıcıları bölümünden bir AI sağlayıcı anahtarı ekleyin.",
+    "server_error": "Bizim tarafımızda bir sorun oluştu. Tekrar deneyin.",
+    "location_limit": "Planınızdaki Prompt konum hakkı doldu: her Prompt, takip ettiği her konum için bir kez sayılır ve duraklatılan Prompt'lar sayılmaz. Bazılarını kaldırın veya duraklatın ya da planınızı yükseltin.",
+    "brand_limit": "Planınızdaki tüm marka hakları kullanımda. Daha fazla eklemek için planınızı yükseltin."
+  },
   "aiUsage": {
     "meter": {
       "ai": "AI",
@@ -41,6 +102,19 @@
       "startPlan": "Planınızı başlatın"
     },
     "getMoreWindow": {
+      "topUp": {
+        "title": "AI kullanım ek paketi",
+        "label": "AI kullanım ek paketleri",
+        "buy": "{option} satın al · {price}",
+        "confirm": "{price} tutarı, kayıtlı karttan şimdi ödensin mi? Planınız yenilenene kadar bu döneme eklenir.",
+        "pay": "{price} öde",
+        "cancel": "İptal",
+        "paying": "Ödeniyor…",
+        "done": "Ek paket satın alındı. Ödeme onaylanır onaylanmaz kullanımınıza eklenir.",
+        "starter": "Growth, 5 kat daha fazla AI kullanımı ve daha fazlasına ihtiyaç duyduğunuzda AI ek paketleri sunar.",
+        "seeGrowth": "Growth'u gör",
+        "oldCredits": "AI kredi paketleri artık satılmıyor; satın aldığınız krediler süresi dolana kadar geçerlidir."
+      },
       "titleAi": "Daha fazla AI kredisi alın",
       "titleStorage": "Daha fazla depolama alanı alın",
       "description": "Planınız, limitlerinizin durumu ve daha fazlasını ekleyen paketler.",
@@ -49,7 +123,7 @@
       "aiLine": "Bu ayki AI kullanımı: {percent} · {plan} · sıfırlanma: {date}",
       "aiLineNoDate": "Bu ayki AI kullanımı: {percent} · {plan}",
       "ownKey": "Kendi anahtarınızı kullanın",
-      "askAi": "Bir AI kredi paketi satın alın",
+      "askAi": "AI kullanım ek paketi satın al",
       "askStorage": "Bir depolama paketi satın alın",
       "estimates": {
         "title": "Bir paketin kabaca karşılayabilecekleri",
@@ -673,6 +747,7 @@
     "billing": "Planlar ve faturalandırma",
     "whatsNew": "Yenilikler",
     "whatsNewUnread": "Yeni güncellemeler",
+    "language": "Dil",
     "help": "Yardım",
     "signOut": "Çıkış yap"
   },
@@ -841,6 +916,7 @@
         "starting": "Başlatılıyor",
         "notYet": "Henüz değil",
         "open": "{count} açık",
+        "openBreakdown": "{onHold} beklemede · {mine} sizde",
         "doneWeek": "bu hafta {count}",
         "noChange": "değişiklik yok",
         "tomorrow": "Yarın"
@@ -919,7 +995,7 @@
           "openNewest": "En yenisini Sohbette Aç"
         },
         "drafts": {
-          "line": "Bir aracı {count, plural, one {bir sayfa taslağı} other {# sayfa taslağı}} hazırladı. Sizin onayınız olmadan hiçbir şey yayına girmez.",
+          "line": "{count, plural, one {# taslak} other {# taslak}} incelemenizi bekliyor. Onayınız olmadan hiçbir şey yayına girmez.",
           "open": "{count, plural, one {Taslağı inceleyin} other {# taslağı inceleyin}}"
         },
         "due": {
@@ -1061,8 +1137,8 @@
         },
         "saved": {
           "title": "Sizin için kaydedildi",
-          "drafts": "{count, plural, one {Temsilcinizden 1 taslak} other {Temsilcilerinizden # taslak}}: {title}.",
-          "draftsUntitled": "{count, plural, one {Temsilcinizden 1 taslak} other {Temsilcilerinizden # taslak}} inceleme bekliyor.",
+          "drafts": "{count, plural, one {1 taslak} other {# taslak}} incelemenizi bekliyor: {title}.",
+          "draftsUntitled": "{count, plural, one {1 taslak} other {# taslak}} incelemenizi bekliyor.",
           "kept": "Bunları incelemek ve yayınlamak için bir plan seçin. {prompts, plural, one {# prompt} other {# prompt}} ve {competitors, plural, one {# rakip} other {# rakip}} bilginiz korunur."
         },
         "plan": {
@@ -1099,6 +1175,16 @@
       "content": "İçerik"
     },
     "kpis": {
+      "newGoal": {
+        "prompt": "Hedef aşıldı · Yeni hedef belirleyin",
+        "title": "{name} için yeni hedef",
+        "description": "Şu an {value} değerinde, {goal} hedefini aştı. Yeni hedef mevcut değerin %20 üzerinden başlar; isterseniz değiştirebilirsiniz.",
+        "label": "Yeni hedef",
+        "cancel": "İptal",
+        "save": "Hedefi kaydet",
+        "saved": "Yeni hedef kaydedildi",
+        "failed": "Hedef kaydedilemedi. Tekrar deneyin."
+      },
       "title": "KPI'lar",
       "subtitle": "Hedefleriniz doğrultusunda önemli metrikleri takip edin.",
       "allKpis": "Tüm KPI'lar",
@@ -1121,6 +1207,7 @@
         "goal_reached": "Hedefe Ulaşıldı"
       },
       "pointsChange": "{value} puan",
+      "score": "{value}/100",
       "vsGoalAria": "Hedefin %{progress}'i",
       "editKpis": "KPI'ları Düzenle",
       "addKpi": "KPI Ekle",
@@ -1193,7 +1280,8 @@
       },
       "targets": "Hedefler",
       "targetAria": "{name} hedefi",
-      "invalidTarget": "Hedefler pozitif olmalıdır; yüzde hedefleri 100'ü aşamaz.",
+      "invalidTarget": "Hedefler pozitif olmalıdır; yüzde ve skor hedefleri 100'ü aşamaz.",
+      "scoreSuffix": "/100",
       "callout": {
         "title": "Bu KPI çerçevesi Aksiyon Merkezi'nizi yönlendirecektir.",
         "description": "Eylemler ve öneriler KPI hedeflerinize göre önceliklendirilir."
@@ -1244,7 +1332,8 @@
     },
     "signalsPage": {
       "title": "Sinyaller",
-      "subtitle": "AI Aramalarından, sitenizden ve web'den gerçek zamanlı sinyaller. Bu sinyaller Aksiyon Merkezinizi besler.",
+      "subtitle": "AI yanıtlarınızdan, sitenizden ve web'den gelen sinyaller. Aksiyon Merkezi'nizi bunlar yönlendirir.",
+      "subtitleRun": "En son AI yanıt çalıştırmanızdan ({ago}) gelen sinyaller. Aksiyon Merkezi'nizi bunlar yönlendirir.",
       "cards": {
         "total": "Toplam Sinyal",
         "totalPopulation": "son {days, plural, one {# günde} other {# günde}} aktif",
@@ -1254,6 +1343,7 @@
         "newPopulation": "son {days, plural, one {# günde} other {# günde}} tespit edildi",
         "resolved": "Çözülen Sinyaller",
         "resolvedPopulation": "son {days, plural, one {# günde} other {# günde}} çözüldü",
+        "resolvedNote": "Yeni değerinden büyük olabilir: bu dönemden önce açılıp bu dönemde çözülen sinyalleri de içerir.",
         "avgImpact": "Ort. Sinyal Etkisi",
         "avgImpactPopulation": "son {days, plural, one {# günde} other {# günde}} aktif olan sinyaller genelinde",
         "noPrev": "önceki veri yok",
@@ -1857,14 +1947,15 @@
       "choices": {
         "approve_first": {
           "label": "Önce ben onaylarım",
-          "note": "Ajanın modu ne olursa olsun, yaptığı her değişiklik birinin onayını bekler."
+          "note": "Bir ajanın yaptığı her değişiklik, birinin onayını bekler."
         },
         "auto_start": {
           "label": "Ajan kendi kendine başlar",
-          "note": "Her ajan kendi modunda çalışır: Önce bana sor, Otomatik veya Tam otomatik."
+          "note": "Her ajan kendi moduna göre çalışır: Önce bana sor, Otomatik veya Tam otomatik."
         }
       },
-      "goLive": "Her iki değişiklik de hemen yayına alınmaz: bir Admin kendi başına yayınlamasına izin vermedikçe, bir aracı yalnızca bir kullanıcının tıklamasıyla yayınlar veya gönderir.",
+      "goLive": "Ajanlar yayınlamadan veya göndermeden önce her zaman sorar.",
+      "goLiveAdmin": "İstisna: Bir Admin'in kendi başına yayınlama ve gönderme izni verdiği ajan.",
       "changedBy": "{name} tarafından değiştirildi · {date}",
       "someone": "artık çalışma alanında bulunmayan biri",
       "neverChanged": "Henüz değiştirilmedi: her çalışma alanı 'Önce ben onaylarım' ile başlar.",
@@ -1927,6 +2018,7 @@
         "actions": "Aksiyonlar"
       },
       "status": {
+        "open": "Açık",
         "new": "Yeni",
         "in_progress": "Devam Ediyor",
         "on_hold": "Beklemede",
@@ -1937,6 +2029,7 @@
       "stale": {
         "pill": "Eski",
         "hint": "{days} gündür veya daha uzun süredir Yeni durumda ve üzerinde kimse çalışmıyor",
+        "quiet": "{days} gündür güncelleme yok",
         "notice": "Eski: Bu aksiyon {days} gündür veya daha uzun süredir Yeni durumda ve üzerinde kimse çalışmadı. Kapatılmadı: Hâlâ gerekliyse saklayın veya yoksayın.",
         "keep": "Hâlâ geçerli",
         "kept": "Saklandı: Artık eski değil"
@@ -1946,6 +2039,7 @@
       "everyoneTitle": "Çalışma alanındaki herkes: Henüz kimse atanmadı",
       "tags": {
         "signals": "{count, plural, one {1 sinyal} other {# sinyal}}",
+        "signalResolved": "Sinyal çözüldü, inceleyin",
         "prompts": "{count, plural, one {1 Prompt} other {# Prompt}}",
         "pages": "{count, plural, one {1 sayfa} other {# sayfa}}",
         "sources": "{count, plural, one {# kaynak} other {# kaynak}}",
@@ -1957,8 +2051,15 @@
       },
       "removed": {
         "note": "({items} bu aksiyon oluşturulduğundan beri kaldırıldı)",
-        "hover": "Bu aksiyon oluşturulduğundan beri artık takip edilmiyor: {names}",
-        "hoverMore": "Bu aksiyon oluşturulduğundan beri artık takip edilmiyor: {names} ve {more} tane daha"
+        "title": "Bu aksiyon oluşturulduğundan beri artık izlenmiyor",
+        "more": "ve {count} tane daha",
+        "reasons": {
+          "deleted": "Silindi",
+          "paused": "Duraklatıldı"
+        },
+        "replanHint": "Bu aksiyonun Prompt'larının yarısından fazlası kalmadı, bu nedenle görevleri kalan {count, plural, other {# Prompt}} için uygun olmayabilir.",
+        "replan": "Kalan Prompt'larla yeniden planla",
+        "replanConfirm": "Bu aksiyonun görevleri kalan Prompt'lar için yeniden yazılsın mı? Tamamlanan, devam eden ve elle eklenen görevler korunur."
       },
       "menu": {
         "label": "Bu öğe için aksiyonlar"
@@ -1983,6 +2084,8 @@
         "description": "Aksiyonlar, günlük takip çalışmalarının ardından sinyallerinizden oluşturulur. Anlamlı bir iş çıktığında burada görünür — nicelikten ziyade nitelik."
       },
       "noResults": "Bu filtrelerle eşleşen aksiyon bulunamadı.",
+      "noOpen": "Açık aksiyon yok. Tamamlananlar ve reddedilenler Tüm durumlar altında yer alır.",
+      "showAllStatuses": "Tüm durumları göster",
       "error": {
         "title": "Aksiyonlarınız yüklenemedi.",
         "retry": "Tekrar dene"
@@ -2002,6 +2105,10 @@
         },
         "notScored": "Henüz puanlanmadı",
         "why": "Neden bu öncelik?",
+        "lowConfidence": {
+          "tip": "{why} temel alınmıştır. Güven puanın yalnızca bir parçasıdır; bu yüzden etki ve talep yine de üst sıralara taşıyabilir. İşlem yapmadan önce kontrol edin.",
+          "sentTip": "Tespit edilen bulgulara göre değil, birlikte gönderildiği içeriğe göre derecelendirildi. İşlem yapmadan önce kontrol edin."
+        },
         "reason": {
           "change": {
             "lost": "{subject} konusunda zemin kaybedildi",
@@ -2163,7 +2270,7 @@
         "why": "Neden bu aksiyon?",
         "goal": "Hedef",
         "kpis": "KPI'lar",
-        "kpiTarget": "hedef {target}",
+        "kpiBrandGoal": "{timeframe, select, weekly {Marka haftalık hedefi} quarterly {Marka üç aylık hedefi} other {Marka aylık hedefi}}: {target}",
         "noKpis": "Bu aksiyona bağlı yapılandırılmış KPI yok.",
         "support": "{count, plural, =0 {Bu aksiyonu artık destekleyen açık sinyal yok.} one {# sinyal bu aksiyonu destekliyor} other {# sinyal bu aksiyonu destekliyor}}",
         "supportAll": "Tüm sinyaller ({count})",
@@ -2304,6 +2411,8 @@
         "assignee": "Atanan Kişi",
         "assignTo": "Ekip arkadaşına ata",
         "dueDate": "Bitiş tarihi",
+        "goalPassed": "Hedef tarihi geçti",
+        "setNewDate": "Yeni tarih belirle",
         "statusLabel": "Durum",
         "events": {
           "created": "{source, select, chat {Aksiyon Chat üzerinden oluşturuldu} ads {Aksiyon Ads üzerinden oluşturuldu} other {Aksiyon oluşturuldu}}",
@@ -5293,7 +5402,7 @@
       "addedLabel": "Bir Aksiyon Merkezi aksiyonuna eklendi",
       "createdNote": "Aksiyon Merkezi, Öncelik Puanını belirler. Görevlerini oradan kapatabilirsiniz.",
       "addedNote": "Kanıt olarak eklendi. Hedefleri değişmez.",
-      "open": "Aksiyonlar'da aç",
+      "open": "Aksiyon Merkezi'nde aç",
       "toastCreated": "Aksiyon Merkezi'ne gönderildi",
       "toastAdded": "Aksiyon Merkezi'ndeki aksiyona eklendi"
     },
@@ -5368,6 +5477,8 @@
     "readOnly": "Salt okunur · {role}",
     "readOnlyTitle": "{role}ler sorar ve okur. Adminler ve Yöneticiler değişiklik yapar. Neler yapabileceğinizi görün.",
     "model": "Model",
+    "modelPrefix": "Model:",
+    "modelTip": "Chat'in yanıt verdiği AI modeli ve ne kadar yoğun çalışacağı. Otomatik, her adım için birini seçer.",
     "modelAuto": "Otomatik",
     "modelWarn": "Model · {usage}",
     "modelImage": "Görsel · {model}",
@@ -5527,6 +5638,7 @@
     },
     "mode": {
       "label": "Çalıştırma modu",
+      "prefix": "Çalıştırma modu:",
       "current": "Çalıştırma modu: {mode}",
       "ask_first": "Önce bana sor",
       "auto": "Otomatik, değişikliklerden önce sor",
@@ -5669,7 +5781,7 @@
       "save": "Kaydet",
       "inFiles": "Dosyalar'da",
       "openEditor": "Düzenleyicide Aç",
-      "sendToActionCenter": "Aksiyonlara Gönder"
+      "sendToActionCenter": "Aksiyon Merkezi'ne gönder"
     }
   },
   "chatDeliverable": {
@@ -6062,7 +6174,8 @@
       "scheduledLabel": "Zamanlanmış, {count, plural, one {# iş} other {# iş}} etkin",
       "agents": "Ajanlar",
       "agentsShort": "Ajanlar",
-      "agentsLabel": "Ajanlar · Aksiyon Merkezi içinde"
+      "agentsLabel": "Ajanlar · Aksiyon Merkezi içinde",
+      "agentsTip": "Chat dışında Aksiyon Merkezi › Ajanlar'ı açar"
     },
     "actions": {
       "more": "{name} için daha fazla seçenek",
@@ -6159,7 +6272,7 @@
         "whatsNew": "Yenilikler"
       },
       "byFocus": {
-        "rivalRose": "{rival} için bahsedilme oranı bu hafta {points, number} puan arttı.",
+        "rivalRose": "<link>{rival}</link> rakibinin bahsedilme oranı bu hafta {points, number} puan arttı.",
         "startTitle": "Bir soruyla başlayın",
         "newForYou": {
           "title": "Sizin için yeni",
@@ -8825,6 +8938,11 @@
       "createAgent": "Ajan oluştur",
       "connect": "{name} bağla",
       "notConnected": "{name} · bağlı değil",
+      "catalog": {
+        "name": "Bir katalog",
+        "connect": "Katalog bağla (Shopify, feed URL'si, CSV)"
+      },
+      "enabled": "Etkin",
       "toggle": "Çalışma alanı için /{name} açık",
       "turnedOn": "/{name} çalışma alanı için açık.",
       "turnedOff": "/{name} çalışma alanı için kapalı.",
@@ -9495,7 +9613,7 @@
       "pagesSubOther": "+ diğer sitelerde {count}",
       "coverageOf": "/ {count, plural, one {# site sayfası} other {# site sayfası}}",
       "coverageSub": "{never} hiç denetlenmedi · {stale} {days} gündür denetlenmedi",
-      "coverageTip": "Site haritanızdan, Google Analytics'ten ve yapay zekanın atıfta bulunduğu sayfalardan (en fazla 500) Ansvisor tarafından tutulanlar arasından, son {days} gün içinde denetlenen sayfalar. Site Denetimi ayarlarında hariç tuttuğunuz sayfalar ile ödeme, giriş ve yasal sayfalar sayılmaz.",
+      "coverageTip": "Sitenizde denetimi yapılmış sayfalar (son {days} günde denetlenmeyenler yanında belirtilir); Ansvisor'ın site haritanızdan, Google Analytics'ten ve AI'ın atıf yaptığı sayfalardan (en fazla 500) tuttuğu sayfalar arasından. Site Denetimi ayarlarında hariç tuttuğunuz sayfalar ile ödeme, giriş ve yasal sayfalar sayılmaz.",
       "seeNotAudited": "Denetlenmeyen {count} sayfayı gör →",
       "authority": "Otorite · E-E-A-T",
       "authorityTip": "Her sayfanın en son denetimi üzerinden ortalaması alınan Otorite ve E-E-A-T skorları ile en çok sayfada başarısız olan veya uyarı veren sinyaller.",
@@ -9571,6 +9689,17 @@
       "saveFailed": "Ayarlar kaydedilemedi",
       "loadFailed": "Ayarlar yüklenemedi"
     },
+    "batch": {
+      "title": "Toplu denetim",
+      "progress": "{done}/{total} tamamlandı",
+      "timeLeft": "yaklaşık {minutes} dk kaldı",
+      "estimating": "kalan süre hesaplanıyor…",
+      "finished": "Tüm {total, plural, other {# denetim}} tamamlandı",
+      "thisBatch": "Bu toplu işlem",
+      "thisBatchTip": "Yalnızca bu toplu denetimdeki sayfaları listele",
+      "allPages": "Tüm sayfalar",
+      "dismiss": "Kapat"
+    },
     "autoRun": {
       "label": "Otomatik denetim",
       "done": "{pages, plural, one {# sayfa} other {# sayfa}} denetlendi · {issues, plural, one {# kritik sorun} other {# kritik sorun}}",
@@ -9601,7 +9730,7 @@
       },
       "list": "{pages}{count, plural, =0 {} other { ve # sayfa daha}}",
       "recent": "Son {days} gün içinde denetlenen {count, plural, one {# sayfayı} other {# sayfayı}} hariç tut",
-      "recentPages": "{pages}{count, plural, =0 {} other { ve # sayfa daha}}. Değişmeyen bir sayfa aynı puanı alır.",
+      "recentPages": "{pages}{count, plural, =0 {} other { ve # sayfa daha}}. Sitenin genelinde robots.txt veya bir şablon gibi bir değişiklik yaptıktan sonra bunları yeniden denetleyin.",
       "recentPage": "{date} tarihinde {page}",
       "noLimit": "Planınızda aylık sınır yoktur. Zaten denetlenmekte olan bir sayfa iki kez başlatılmaz.",
       "noneLeft": "Bu ay hiç denetim hakkı kalmadı.",
@@ -9737,7 +9866,7 @@
       "counts": {
         "official": "Devlet ve akademik siteler: .gov, .edu, .mil ve bunların .gov.tr, .edu.tr, .ac.uk gibi ülke uzantıları",
         "international": "Uluslararası kuruluşlar: tüm .int siteleri, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
-        "research": "Referans ve araştırma: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
+        "research": "Referans, araştırma, standart ve platform dokümanları: wikipedia.org, doi.org, arxiv.org, nature.com, iso.org, w3.org, rfc-editor.org, schema.org, developers.google.com, developer.mozilla.org",
         "news": "Önde gelen haberler: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post",
         "trusted": "Güvenilir kaynaklarınız:"
       },
@@ -9777,6 +9906,7 @@
       "firewall": "robots.txt {count, plural, one {kendisine} other {onlara}} izin verse de {count, plural, one {{bots}} other {{bots}}}, CDN veya güvenlik duvarınız tarafından engelleniyor.",
       "robots": "robots.txt {bots} erişimini engelliyor.",
       "allLetIn": "Test edilen tüm yapay zeka botlarının erişimine izin verildi.",
+      "unnamed": "robots.txt AI botlarını adıyla belirtmiyor, bu yüzden denetim botların kabul edildiğini doğrulayamıyor. Her biri için bir grup ekleyin (örneğin \"User-agent: GPTBot\" ve \"Allow: /\").",
       "inconclusive": "Siteniz Ansvisor'ın kendi isteğini geri çevirdi ({status}), bu nedenle botlar test edilemedi.",
       "note": "Ansvisor sunucularından her bir bot kimliğiyle bir kez sorgulandı. Bir tarayıcının kendi adreslerini kontrol eden bir güvenlik duvarı, gerçek tarayıcıya farklı davranabilir.",
       "cell": {
@@ -9819,6 +9949,7 @@
       "tipSame": "Bu sayfanın son {audits} denetiminin tümü {low} puan aldı."
     },
     "aiRecommendations": "AI Önerileri",
+    "topRecommendations": "En önemli öneriler",
     "signals": "Sinyaller",
     "onlyIssues": "Yalnızca sorunlar",
     "allSignals": "Tüm sinyaller",
@@ -9831,6 +9962,327 @@
     "emptyTitle": "Herhangi bir sayfayı AI arama hazırlığı için denetleyin",
     "emptyBody": "48 AEO/GEO sinyaline göre puanlamak ve AI tarafından yazılmış düzeltmeler almak için yukarıya bir URL girin."
   },
+  "auditRubric": {
+    "categories": {
+      "structure": {
+        "label": "Yapı",
+        "description": "Sayfanızın bir AI motoru tarafından ne kadar kolay ayrıştırılabildiği. Schema, başlıklar, listeler, tablolar, alt metin, OG meta. Diğer her şeyi okunabilir kılan temel katman."
+      },
+      "authority": {
+        "label": "Otorite",
+        "description": "Sayfanızın, gerçek kaynaklara atıf yapan bir uzman tarafından yazılmış gibi görünüp görünmediği. Yazar bilgisi, atıflar, istatistikler, alıntılar, güncellik, teknik terimler."
+      },
+      "content": {
+        "label": "İçerik",
+        "description": "Sayfanın alıcı sorgusunu gerçekten yanıtlayıp yanıtlamadığı: doğrudan, eksiksiz ve doğru üslupla. BLUF, sorgu kapsamı, alt soru kapsamı, okunabilirlik ve ürün sayfalarında açıklamanın girişi."
+      },
+      "trust": {
+        "label": "Güven",
+        "description": "Tarama ve paylaşım anındaki güven sinyalleri: HTTPS, canonical, viewport, robots.txt üzerinden AI bot erişimi ve her AI botu olarak yapılan canlı getirme, Twitter kartı, meta açıklama. llms.txt yalnızca bilgi amaçlı gösterilir."
+      },
+      "eeat": {
+        "label": "E-E-A-T",
+        "description": "Google'ın Deneyim, Uzmanlık, Yetkinlik ve Güvenilirlik çerçevesi. Birinci şahıs kanıtlar, vaka çalışmaları, yazar yetkinlikleri, Wikidata'da marka varlığı, basın bahsedilmeleri, gizlilik politikası, iletişim bilgileri."
+      }
+    },
+    "signals": {
+      "structural-depth": {
+        "label": "Yapısal derinlik (GEO-SFE)",
+        "what": "Başlık hiyerarşisi ve iç içe yapı derinliği: gerçek bir anahatı yansıtan H1→H2→H3 iç içeliği.",
+        "why": "arXiv:2603.29979, ölçülebilir yapısal derinliğe sahip sayfaların düz belgelere kıyasla %17,3 daha fazla atıf aldığını gösteriyor.",
+        "howToFix": "İçeriğinizi adlandırılmış H2 alt bölümleri altında gruplayın. Alt noktalar için H3 kullanın. Seviye atlamayın."
+      },
+      "internal-linking": {
+        "label": "Dahili bağlantılar",
+        "what": "Bu sayfadan sitenizdeki diğer sayfalara giden bağlantılar; gezilebilir bir yapının işareti.",
+        "why": "AI tarayıcıları, tarama yaparken olduğu gibi bağlamı da dahili bağlantılarla genişletir. Yalıtılmış sayfalar yeterince dizinlenmez.",
+        "howToFix": "Her sayfaya ilgili kavramlara, sözlük terimlerine veya destekleyici sayfalara giden 5–10 dahili bağlantı ekleyin."
+      },
+      "page-weight": {
+        "label": "Sayfa boyutu",
+        "what": "Toplam HTML boyutu; ne kadar düşükse o kadar iyi. 500 KB üzerindeki sayfaları işaretliyoruz.",
+        "why": "AI render botlarının zaman aşımı süreleri insanlara göre daha kısadır. Ağır sayfalar kesilir veya atlanır.",
+        "howToFix": "Kullanılmayan JS'yi temizleyin, ekranın altındaki görselleri erteleyin, render'ı engelleyen üçüncü taraf betikleri kaldırın."
+      },
+      "no-js-content": {
+        "label": "JavaScript olmadan ana metin",
+        "what": "Sayfanın ana metninin ne kadarının, herhangi bir JavaScript çalışmadan önce AI botuna ulaşan HTML'de olduğu; tarayıcının oluşturduğu sayfayla karşılaştırılır. %10 veya daha azı gizliyse geçer; %30'a kadar uyarı verir.",
+        "why": "GPTBot, ClaudeBot ve PerplexityBot gibi AI tarayıcıları JavaScript çalıştırmaz: yalnızca JavaScript çalışınca görünen metni hiç görmezler.",
+        "howToFix": "Ana içeriği sunucuda oluşturun (sunucu tarafı render veya statik sayfalar) ya da JavaScript ile yüklemek yerine botlar için önceden oluşturun."
+      },
+      "json-ld-presence": {
+        "label": "JSON-LD varlığı",
+        "what": "Sayfanın en az bir schema.org JSON-LD bloğu içerip içermediği.",
+        "why": "Schema.org, AI Overviews uygunluğu için en yüksek etkili tek sinyaldir; motorlar onu metinden önce ayrıştırır.",
+        "howToFix": "En az bir Organization veya Article bloğu ekleyin. /tools/schema-generator aracımız geçerli JSON-LD üretir."
+      },
+      "json-ld-validity": {
+        "label": "JSON-LD geçerliliği",
+        "what": "JSON-LD'nin ayrıştırılıp ayrıştırılmadığı, @context = schema.org olup olmadığı ve geçerli bir @type içerip içermediği.",
+        "why": "Hatalı biçimlendirilmiş JSON-LD, hiç olmamasından daha kötüdür; motorlar ayrıştırma hatası kaydeder ve güveni düşürür.",
+        "howToFix": "Yayına almadan önce JSON-LD'nizi Google'ın Rich Results Test aracından geçirin."
+      },
+      "json-ld-relevance": {
+        "label": "JSON-LD türü uygunluğu",
+        "what": "@type değerinin sayfa amacıyla eşleşip eşleşmediği (blogda Article, ürün sayfasında Product, SSS sayfasında FAQPage).",
+        "why": "Yanlış türdeki şema yok sayılır; ana sayfadaki Article işaretlemesi gürültü olarak işlenir.",
+        "howToFix": "Genel bir şema yerine, sayfanın gerçek içeriğine en yakın schema.org türünü seçin."
+      },
+      "faq-schema": {
+        "label": "FAQ şeması",
+        "what": "En az 2 soru-cevap çifti içeren FAQPage JSON-LD.",
+        "why": "Google'ın kendi SGE rehberliğine göre FAQPage, AI Overviews atıfları için tek başına en yüksek artışı sağlayan türdür.",
+        "howToFix": "Gerçek alıcı sorgularını yansıtan 3–5 soru/cevap çifti içeren FAQPage şeması ekleyin."
+      },
+      "h1-quality": {
+        "label": "H1 kalitesi",
+        "what": "Tam olarak bir H1, 20–70 karakter uzunluğunda ve birincil sorgu terimini içeriyor.",
+        "why": "AI motorları H1'i sayfanın iddiası olarak ele alır; birden fazla H1 konu modelini karıştırır.",
+        "howToFix": "Sayfa başına bir H1, açıklayıcı, 30–60 karakter ve sayfanın ana konusunu içeren bir başlık kullanın."
+      },
+      "h2-coverage": {
+        "label": "H2 kapsamı",
+        "what": "İçeriği hızlı taramaya uygun şekilde bölen ≥3 H2 alt bölümü.",
+        "why": "AI motorları H2'leri bölüm bağlantı noktaları olarak çıkarır; bunlar olmadan sayfaları özetlemek zorlaşır.",
+        "howToFix": "İçeriği her biri bir alt soruyu yanıtlayan 3–6 H2 alt bölümüne ayırın."
+      },
+      "lists": {
+        "label": "Listeler",
+        "what": "≥3 öğeli en az 1 <ul> veya <ol>.",
+        "why": "Listeler, AI motorlarının \"nasıl yapılır\" ve \"en iyi X\" sorguları için öncelikli olarak çıkardığı birimdir.",
+        "howToFix": "Sıralanmış nedenler veya adımlar içeren en az bir paragrafı gerçek bir <ul>/<ol> listesine dönüştürün."
+      },
+      "tables": {
+        "label": "Tablolar",
+        "what": "Yapılandırılmış veriler için uygun <thead>/<tbody> içeren en az 1 <table>.",
+        "why": "Tablolar, karşılaştırma ve teknik özellik sorguları için en yüksek çıkarım oranına sahip biçimdir.",
+        "howToFix": "Teknik özellikleriniz, fiyatlarınız veya karşılaştırmalarınız varsa bunları görsel yerine gerçek <table> olarak oluşturun."
+      },
+      "alt-text": {
+        "label": "Alt metin",
+        "what": "Anlamlı <img> etiketlerinin ≥%80'i boş olmayan alt özniteliğine sahip. Dekoratif görseller (alt=\"\", role=\"presentation\" veya aria-hidden) hariç tutulur.",
+        "why": "Çok modlu motorlar (Gemini, Claude, GPT-4o) alt metni sayfanın anlamsal bağlamı olarak okur.",
+        "howToFix": "Anlamlı her görsele açıklayıcı alt ekleyin. Dekoratif görsellere alt=\"\" verin."
+      },
+      "open-graph": {
+        "label": "Open Graph meta verileri",
+        "what": "og:title, og:description, og:image, og:type etiketlerinin hepsi mevcut.",
+        "why": "AI motorlarındaki bağlantı önizlemeleri ve sosyal paylaşımlar, atıf kartı olarak OG meta verilerini kullanır.",
+        "howToFix": "4 OG etiketini ekleyin. 1200×630 og:image kullanın. /tools/og-checker aracımız bunları doğrular."
+      },
+      "outbound-authority-links": {
+        "label": "Dışa giden otorite bağlantıları",
+        "what": "Resmi sitelere (devlet, akademik veya uluslararası kuruluşlar), referans ve araştırma sitelerine ya da büyük haber kaynaklarına verilen bağlantılar.",
+        "why": "Güvenilir kaynaklara bağlantı vermek otoriteyi geriye doğru aktarır (atıf grafiği etkisi).",
+        "howToFix": "Birincil kaynakları düz metin referansları yerine gerçek <a> etiketleriyle belirtin. Uzun sayfalarda 2–3 bağlantı hedefleyin."
+      },
+      "citation-density": {
+        "label": "Atıf yoğunluğu",
+        "what": "1000 kelime başına satır içi atıf sayısı (hedef ≥2).",
+        "why": "Kaynak gösteren sayfalar kaynak olarak gösterilir. Atıf yoğunluğu, bağlantı dışındaki en güçlü otorite sinyalidir.",
+        "howToFix": "'Araştırmalar gösteriyor' ifadesini '2024 tarihli bir Stanford araştırması (bağlantı)' ile değiştirin. Somutluk kazandırır."
+      },
+      "statistic-density": {
+        "label": "İstatistik yoğunluğu",
+        "what": "1000 kelime başına sayısal verilerle desteklenen niceliksel iddialar (hedef ≥3).",
+        "why": "AI motorları, belirsiz metinler yerine ölçülebilir iddialar içeren içerikleri tercihen atıf olarak kullanır.",
+        "howToFix": "İddialarınıza gerçek sayılar ekleyin: yüzdeler, tutarlar, süreler."
+      },
+      "quotations": {
+        "label": "Doğrudan alıntılar",
+        "what": "Satır içi <blockquote> veya alıntı yapılmış kaynak belirtmeleri.",
+        "why": "Alıntılar birincil araştırma izlenimi verir. GEO makalesi test setinde atıf oranlarını yaklaşık %12 artırır.",
+        "howToFix": "Her uzun sayfada bir müşteriden, bir uzmandan veya bir birincil kaynaktan alıntı yapın."
+      },
+      "author-byline": {
+        "label": "Yazar bilgisi",
+        "what": "Yazar alanında en azından gerçek bir ad içeren isimli bir yazar.",
+        "why": "Anonim içerik düşük E-E-A-T olarak değerlendirilir. AI motorları yazarı belli içerikleri öne çıkarır.",
+        "howToFix": "En üste 'Yazan: [Ad]' ekleyin. Gerçek bir yazar biyografi sayfasına bağlantı verin. Person şemasını kullanın."
+      },
+      "date-markup": {
+        "label": "Tarih işaretlemesi",
+        "what": "JSON-LD içinde datePublished + dateModified veya <time datetime>.",
+        "why": "Motorlar tarihsiz içeriği olası eski içerik olarak cezalandırır. Tarihli içerik güncellik puanı alır.",
+        "howToFix": "JSON-LD datePublished + dateModified ekleyin veya görünür bir <time datetime> etiketi kullanın."
+      },
+      "freshness": {
+        "label": "Güncellik",
+        "what": "Son 365 gün içinde değiştirilmiş tarih.",
+        "why": "Eski içerik, zamana duyarlı sorgularda geriye düşer. Tarihleri yeniden yayımlamak süreyi sıfırlar.",
+        "howToFix": "En önemli sayfaları en az yılda bir yenileyin. Bunu yaparken dateModified değerini güncelleyin."
+      },
+      "technical-terms": {
+        "label": "Teknik terim yoğunluğu",
+        "what": "Yüzeysel yazım yerine gerçek uzmanlığı gösteren alana özgü terminoloji.",
+        "why": "Kesin teknik kelime dağarcığı kullanan sayfalar gerçek uzmanlık sinyali verir.",
+        "howToFix": "Alanın gerçek teknik dilini kullanın. İlk geçtiği yerde sözlüğe bağlantı verin veya tanımlayın."
+      },
+      "direct-answer": {
+        "label": "Sorguya doğrudan yanıt",
+        "what": "Alıcı sorgusunun ilk 200 karakterde yanıtlanıp yanıtlanmadığı.",
+        "why": "AI motorları doğrudan yanıtları tercihen çıkarır. Yanıtı gömmek = atıf almamak.",
+        "howToFix": "Sayfayı ana sorguya 1–2 cümlelik doğrudan bir yanıtla açın. Sonra detaylandırın."
+      },
+      "bluf-answer": {
+        "label": "BLUF (Bottom Line Up Front)",
+        "what": "İlk paragrafta sayfanın ana iddiasını belirten net bir tez cümlesi.",
+        "why": "Askeri doktrin yazım tarzı: BLUF, AI'ın içeriği çıkarabilmesini büyük ölçüde artırır.",
+        "howToFix": "'Yanıt X. İşte nedeni.' ile başlayın. Asıl noktayı gömmeyin."
+      },
+      "query-coverage": {
+        "label": "Sorgu token kapsamı",
+        "what": "Sayfa gövdesinde geçen sorgu token'larının oranı (hedef ≥%80).",
+        "why": "Kapsam temel bir alaka sinyalidir; eksik token'lar sayfanın sorguyu karşılamadığı anlamına gelir.",
+        "howToFix": "Anlamlı her sorgu token'ının gövde içeriğinde en az bir kez geçtiğinden emin olun."
+      },
+      "entity-coverage": {
+        "label": "Varlık kapsamı",
+        "what": "Sorgunun varlık alanıyla eşleşen, bahsedilen adlandırılmış varlıklar.",
+        "why": "AI motorları her sayfa için bir varlık grafı oluşturur; ilgili varlıkların eksik olması konu otoritesini azaltır.",
+        "howToFix": "Sayfa X hakkındaysa, X ile bilinen ilişkili varlıklardan (kişiler, yerler, ürünler) söz edin."
+      },
+      "readability": {
+        "label": "Okunabilirlik",
+        "what": "Sayfa dilinde okunabilirlik puanı: İngilizce için Flesch Reading Ease (hedef 50–70), Türkçe için Ateşman (50 veya üzeri), Almanca, Fransızca veya İspanyolca için Amstad, Kandel–Moles ya da Fernández-Huerta (60 veya üzeri); diğer dillerde cümle ve kelime uzunluğuna göre.",
+        "why": "Motorlar, insanların okuyabildiği içerikten bilgi çıkarır. Yoğun, akademik metinler daha düşük performans gösterir; İngilizcede çok basit metin (70 üzeri) okuyucuların beklediği ayrıntıyı dışarıda bırakabilir.",
+        "howToFix": "Hedefin altındaysa: cümleleri kısaltın ve daha sade sözcükler kullanın, cümle başına yaklaşık 16 kelime. İngilizcede 70 üzeriyse: okuyucuların beklediği ayrıntıyı içeren daha dolu cümleler yazın."
+      },
+      "length": {
+        "label": "Sayfa uzunluğu",
+        "what": "Ana içerikteki kelime sayısı (hedef 800–3000).",
+        "why": "Çok kısa olması yetersiz kalır; çok uzun olması motorların içeriği kırpmasına yol açar. İdeal aralık orta-uzun formdur.",
+        "howToFix": "600 kelimenin altındaysa örnekler ve alt bölümlerle genişletin. 4000'in üzerindeyse ana sayfa + alt sayfalar olarak bölün."
+      },
+      "info-density": {
+        "label": "Bilgi yoğunluğu",
+        "what": "Özlü içeriğin dolgu metne oranı.",
+        "why": "Yoğun içerik tercihen atıf alır. Motorlar örtük olarak 'token başına değer'i modeller.",
+        "howToFix": "Giriş niteliğindeki gereksiz cümleleri çıkarın. 'Şunu belirtmek önemlidir ki' ifadesini asıl noktayla değiştirin."
+      },
+      "mega-page-coverage": {
+        "label": "Mega sayfa kapsamı",
+        "what": "Sayfanın, tek bir URL altında birbiriyle yakından ilişkili birden çok alt konuyu kapsayıp kapsamadığı.",
+        "why": "Mega sayfalar varlık çevrelerini kapsadığı için AI motorlarında yetersiz sayfaların önüne geçer.",
+        "howToFix": "3 yetersiz sayfayı, H2 ile bölümlenmiş alt konulara sahip tek kapsamlı bir sayfada birleştirin."
+      },
+      "youtube-embed": {
+        "label": "YouTube gömme",
+        "what": "Makalenin yanında gömülü YouTube videosu.",
+        "why": "Çok modlu motorlar konuyla ilgili video içeren sayfalara daha fazla ağırlık verir. Atıf oranıyla korelasyon: 0,737.",
+        "howToFix": "Sayfa konusuyla ilgili 2–4 dakikalık bir video oluşturun veya gömün. VideoObject şemasıyla işaretleyin."
+      },
+      "product-description-opening": {
+        "label": "Ürün açıklaması girişi",
+        "what": "Ürün sayfasında açıklamanın ilk 40 kelimesi (veya 250 karakteri) ürün türünü ve en az iki temel özelliği belirtir: ölçü, malzeme, kalıp veya kullanım.",
+        "why": "ChatGPT, ürünleri bir alışveriş sorusuyla eşleştirirken ürün açıklamasının yalnızca ilk 50 token'ı kadarını okuyor görünüyor. Markanın hikâyesiyle başlayan bir açıklama hiç eşleşmeyebilir.",
+        "howToFix": "Ürün türünü ve temel özellikleri ilk 40 kelimeye yerleştirin."
+      },
+      "sub-query-coverage": {
+        "label": "Alt sorgu kapsamı",
+        "what": "Ayrıştırılan alt soruların içerik gövdesinde yanıtlanan oranı.",
+        "why": "Motorlar başlangıç sorgularını 4–6 alt sorguya ayırır (Profound 'fanouts') — eksik yanıtlar eksik atıflar demektir.",
+        "howToFix": "Konunuzla ilgili ilk 5 alt soruyu açıkça yanıtlayan bir S&C bölümü ekleyin."
+      },
+      "definitions": {
+        "label": "Satır içi tanımlar",
+        "what": "İlk geçtiği yerde satır içinde tanımlanan terimler ('X (tanım…)').",
+        "why": "Yerinde tanımlanan sayfalar sözlük kaynağı olarak atıf alır. AI motorları bunlara tercihen bağlantı verir.",
+        "howToFix": "Temel 3–5 terimi ilk kullanımda satır içinde tanımlayın."
+      },
+      "ai-bot-access": {
+        "label": "AI bot erişimi",
+        "what": "robots.txt'in AI botlarına izin verip vermediği ve sayfanın onlara yanıt verip vermediği: CDN veya güvenlik duvarı engellerini yakalamak için sayfa GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot ve ClaudeBot olarak bir kez getirilir.",
+        "why": "CDN'inizin veya güvenlik duvarınızın geri çevirdiği bir bot, robots.txt ne derse desin sayfayı hiç okumaz. AI botlarını robots.txt'te adıyla belirtmek onların hoş karşılandığını gösterir.",
+        "howToFix": "GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot ve Google-Extended'a robots.txt'te ve CDN veya güvenlik duvarı bot kurallarında izin verin."
+      },
+      "llms-txt-presence": {
+        "label": "llms.txt varlığı",
+        "what": "llmstxt.org önerisine göre site kökünde /llms.txt dosyasının bulunup bulunmadığı. Yalnızca bilgi amaçlıdır: puanı değiştirmez.",
+        "why": "AI motorları için bir sitenin düz metin haritası olarak önerilmiştir.",
+        "howToFix": "İsteğe bağlı. İsterseniz sitenizin kök dizinine /llms.txt ekleyin; skoru değiştirmez.",
+        "evidenceNote": "Zayıf kanıt: Ahrefs, llms.txt dosyalarının %97'sinin hiç istenmediğini tespit etti ve Google'ın bir etkisi olmadığını söylüyor."
+      },
+      "https": {
+        "label": "HTTPS",
+        "what": "Site, karma içerik olmadan TLS üzerinden doğru yanıt verir.",
+        "why": "AI tarayıcıları karma içerikli sayfaları taramayı reddeder. HTTPS temel gerekliliktir.",
+        "howToFix": "HTTPS'e geçin. HSTS ile yönlendirmeyi zorunlu kılın. Karma içerik uyarılarını düzeltin."
+      },
+      "canonical": {
+        "label": "Canonical URL",
+        "what": "Sayfanın tercih edilen URL'sini gösteren <link rel=canonical>.",
+        "why": "Canonical olmadan AI motorları atıfları yinelenen URL'ler arasında bölebilir ve her birinin sırasını düşürebilir.",
+        "howToFix": "Her sayfaya <link rel=canonical href=…> ekleyin. Canonical sayfalarda kendine canonical verin."
+      },
+      "viewport": {
+        "label": "Viewport meta",
+        "what": "<meta name=viewport content=…> mevcut.",
+        "why": "Mobil görüntüleme sinyali: AI tarayıcıları mobil öncelikli içeriği tercih eder.",
+        "howToFix": "<meta name=viewport content=\"width=device-width, initial-scale=1\"> ekleyin."
+      },
+      "twitter-card": {
+        "label": "Twitter kartı",
+        "what": "<meta name=twitter:card> + twitter:image mevcut.",
+        "why": "AI motorları, OG desteği olmayan platformlarda Twitter kartına başvurur.",
+        "howToFix": "twitter:card=summary_large_image + twitter:image ekleyin (og:image yeniden kullanılabilir)."
+      },
+      "meta-description": {
+        "label": "Meta açıklama",
+        "what": "80–160 karakterlik özet metin içeren <meta name=description>.",
+        "why": "AI motorları, atıf oluştururken meta açıklamayı başlıca özet adayı olarak kullanır.",
+        "howToFix": "Her sayfa için 130 karakterlik bir meta açıklama yazın. Ana sorguyu ekleyin."
+      },
+      "first-person": {
+        "label": "Birinci şahıs kanıtı",
+        "what": "Gerçek deneyimi gösteren birinci şahıs cümleleri: 'we tested', 'I built' ve Türkçede 'gezdik' veya 'düşünüyoruz' gibi fiil ekleri. İki veya daha fazlası geçer. Alıntılar ve 'Bize ulaşın' gibi kalıp ifadeler sayılmaz. İngilizce ve Türkçe okunur.",
+        "why": "Google'ın E-E-A-T güncellemesi yaşanmış deneyime öncelik verir. Birinci şahıs anlatım bunu işaret eder.",
+        "howToFix": "Birinci şahsı az ama isabetli kullanın: 'we tested', 'in our experience', 'I found that…'."
+      },
+      "case-study-evidence": {
+        "label": "Vaka çalışması kanıtı",
+        "what": "Metin içinde adı belirtilmiş müşteri sonuçları, sayılar veya önce/sonra kanıtları.",
+        "why": "Vaka çalışmaları, dönüşümü en yüksek E-E-A-T sinyalidir: yalnızca iddia etmeyin, kanıtlayın.",
+        "howToFix": "Bir müşterinin adını verin. Bir sonucu sayılarla aktarın. 'We helped X go from Y → Z.'"
+      },
+      "author-credentials": {
+        "label": "Yazar yetkinlikleri",
+        "what": "Yazar; yazar satırında, sayfadaki herhangi bir yazar kutusunda veya Person JSON-LD'de (jobTitle, description) görünür yetkinliklere sahiptir: deneyim yılı, önceki görev, eğitim, sertifikalar.",
+        "why": "Anonim yazar satırları E-E-A-T'de başarısız olur. Yetkinliği olan yazarlar uzman kaynak sayılır.",
+        "howToFix": "Her yazar sayfasında yetkinlikler, önceki görevler, sektördeki yıllar ve LinkedIn/Twitter bağlantıları listelenir."
+      },
+      "byline-depth": {
+        "label": "Yazar satırı derinliği",
+        "what": "Yazar satırı, yeterli ayrıntıya sahip gerçek bir yazar biyografi sayfasına veya yazarın başka yerdeki profiline (LinkedIn, Person JSON-LD sameAs) bağlanır.",
+        "why": "Yazar satırı → biyografi sayfası → yetkin yazar zinciri, motorların izlediği E-E-A-T grafiğidir.",
+        "howToFix": "Her yazar satırını biyografi, fotoğraf, yetkinlikler ve önceki işlerle /authors/[name] sayfasına bağlayın."
+      },
+      "brand-entity": {
+        "label": "Wikidata'da marka varlığı",
+        "what": "Markanın, AI motorlarının çözümleyebildiği bir Wikidata varlığı (Q numarası) vardır.",
+        "why": "Wikidata, kanonik varlık veritabanıdır; arama motorları marka kimliğini doğrulamak için onu kullanır. Varlık yoksa güven çıpası da yoktur.",
+        "howToFix": "Bir Wikidata kaydı edinin: atıf olarak 2-3 basın bahsi gerektirir. wikidata.org adresinden gönderin."
+      },
+      "press-mentions": {
+        "label": "Basın bahsedilmeleri",
+        "what": "Üst düzey basına (NYT, WaPo, Bloomberg, FT vb.) yapılan referanslar veya onlardan gelen bağlantılar.",
+        "why": "Basın bahsedilmeleri, atıf grafiği boyunca otorite aktarır ve marka varlığı iddialarını doğrular.",
+        "howToFix": "Basında yer edinin. Logoları gösterin. Vaka çalışmanıza değil, orijinal habere bağlantı verin."
+      },
+      "privacy-terms": {
+        "label": "Gizlilik + şartlar",
+        "what": "Her sayfadan bağlantı verilen gizlilik politikası ve hizmet şartları.",
+        "why": "YMYL (Your-Money-Your-Life) kategorileri bunları zorunlu kılar; arama motorları da bunları her yerde meşruiyet sinyali olarak değerlendirir.",
+        "howToFix": "Gizlilik ve şartlar bağlantılarını her sayfanın alt bilgisine ekleyin. Yakında gelecek taslak değil, gerçek sayfalar olsun."
+      },
+      "contact-info": {
+        "label": "İletişim bilgileri",
+        "what": "Sayfada görünen veya /contact sayfasına bağlantılı gerçek iletişim bilgileri: e-posta, telefon veya adres.",
+        "why": "Anonim markalar E-E-A-T'de başarısız olur. Gerçek iletişim bilgileri, içeriğin arkasında gerçek bir kuruluş olduğunu gösterir.",
+        "howToFix": "Alt bilgiye bir e-posta ve fiziksel adres (gerçek veya tescilli merkez) ekleyin."
+      }
+    }
+  },
   "auth": {
     "signIn": "Giriş yap",
     "signUp": "Kayıt ol",
@@ -9840,6 +10292,8 @@
     "email": "E-posta",
     "workEmail": "İş e-postası",
     "workEmailSuggested": "İş e-postası önerilir",
+    "language": "Dil",
+    "languageFailed": "Dil değiştirilemedi. Lütfen tekrar deneyin.",
     "password": "Şifre",
     "forgotPassword": "Şifrenizi mi unuttunuz?",
     "noAccount": "Hesabınız yok mu?",
@@ -9978,6 +10432,53 @@
     },
     "errorRetry": "Bağlantıyı uygulamadan tekrar başlatın. Sorun devam ederse uygulama Ansvisor ile oturum açmayı desteklemiyor olabilir: bunun yerine bir API anahtarı kullanın.",
     "errorCode": "Kod: {code}"
+  },
+  "invite": {
+    "fallbackTeam": "bu ekip",
+    "invalid": {
+      "not_found": {
+        "title": "Davet bulunamadı",
+        "description": "Takip ettiğiniz bağlantı geçersiz."
+      },
+      "expired": {
+        "title": "Davetin süresi doldu",
+        "description": "Ekip adminizden yeni bir davet göndermesini isteyin."
+      },
+      "accepted": {
+        "title": "Davet zaten kullanıldı",
+        "description": "Bu davet daha önce kabul edilmiş."
+      },
+      "revoked": {
+        "title": "Davet iptal edildi",
+        "description": "Bu davet ekip admini tarafından iptal edildi."
+      },
+      "pending": {
+        "title": "Davet kullanılamıyor",
+        "description": "Lütfen tekrar deneyin veya ekip adminizle iletişime geçin."
+      }
+    },
+    "card": {
+      "title": "{organization} ekibine katılın",
+      "invitedAs": "<b>{role}</b> olarak katılmaya davet edildiniz",
+      "invitedEmail": "Davet edilen e-posta",
+      "signedInAs": "Oturum açılan hesap",
+      "wrongAccount": "Bu davet <b>{email}</b> adresine gönderildi, ancak siz {current} hesabıyla oturum açtınız. Devam etmek için lütfen hesap değiştirin.",
+      "switching": "Değiştiriliyor...",
+      "switchAccount": "Oturumu kapatıp doğru hesabı kullan",
+      "fullName": "Ad soyad",
+      "namePlaceholder": "Adınız",
+      "password": "Parola belirleyin",
+      "passwordPlaceholder": "En az 8 karakter",
+      "confirmPassword": "Parolayı onaylayın",
+      "confirmPlaceholder": "Parolayı tekrar girin",
+      "joining": "Katılınıyor...",
+      "accept": "Kabul et ve {organization} organizasyonuna katıl",
+      "passwordNote": "Bir sonraki girişinizde bu şifreyi kullanacaksınız.",
+      "passwordTooShort": "Şifre en az 8 karakter olmalıdır",
+      "passwordsDiffer": "Şifreler eşleşmiyor",
+      "welcome": "{organization} organizasyonuna hoş geldiniz!",
+      "failed": "Davet kabul edilemedi"
+    }
   },
   "dashboard": {
     "overview": "Genel Bakış",
@@ -10368,6 +10869,114 @@
         "failed": "Dosya içe aktarılamadı. Hiçbir şey kaydedilmedi.",
         "back": "Geri"
       }
+    },
+    "formulas": {
+      "button": "Formüller",
+      "title": "Metrikler nasıl hesaplanır",
+      "visibility": {
+        "title": "Görünürlük (0–100)",
+        "body": "Geçerli filtrelerle eşleşen tüm AI yanıtlarında markanızın ne kadar görünür olduğunu gösteren tek bir puan. Her yanıt sayılır; sizin yer almadığınız yanıtlar da dahildir. Bu yüzden puanı artırmak daha çok görünmek, daha çok atıf almak ve daha erken anılmak demektir.",
+        "formula": "Görünürlük = 100 × ({mention} × bahsedilme oranı + {citation} × atıf oranı + {position} × konum faktörü × güven)",
+        "confidence": "güven = sizden bahseden yanıtlar ÷ (sizden bahseden yanıtlar + {support})",
+        "mentionRate": "<b>Bahsedilme oranı (%{pct})</b> — markanızdan adıyla bahseden AI yanıtlarının payı.",
+        "citationRate": "<b>Atıf oranı (%{pct})</b> — web sitenizi kaynak olarak gösteren yanıtların payı.",
+        "positionFactor": "<b>Konum faktörü (%{pct})</b> — sizden bahseden yanıtlarda ne kadar erken anıldığınız: birinci anılma = 1, ikinci = 0,5, üçüncü = 0,33 ve böyle devam eder; ortalaması alınır. Güven faktörü, bunu markadan gerçekten kaç yanıtta bahsedildiğine göre ağırlıklandırır; böylece birkaç yanıttaki mükemmel bir konum, düzenli olarak görünen markaları geçemez.",
+        "competitors": "Liderlik tablosundaki rakipler aynı yanıt kümesi üzerinde tamamen aynı formülle puanlanır, dolayısıyla sayılar doğrudan karşılaştırılabilir."
+      },
+      "trend": {
+        "title": "Görünürlük trend grafiği",
+        "body": "Her nokta, o günde biten seçili zaman aralığı (kayan pencere) üzerinden hesaplanan Görünürlük değeridir. Bu nedenle en yeni nokta her zaman yukarıdaki Görünürlük kartıyla eşleşir. \"Tüm zamanlar\" seçildiğinde her nokta o güne kadar olan her şeyi kapsar."
+      },
+      "mentions": {
+        "title": "Bahsedilmeler",
+        "body": "Markanızın AI yanıtlarında adıyla anıldığı toplam sayı."
+      },
+      "citations": {
+        "title": "Atıflar",
+        "body": "Web sitenizin AI yanıtlarında kaynak olarak bağlantılandığı toplam sayı. Bahsedilmeler adınızı, atıflar alan adınızı sayar."
+      },
+      "sentiment": {
+        "title": "Net duygu",
+        "body": "Sizi adıyla anan yanıtlar arasında olumlu yanıtların payı eksi olumsuz yanıtların payı, puan cinsinden. Yalnızca sitenize atıf yapan yanıtlar sayılmaz; çünkü bunlar her zaman nötrdür. Duygu, Görünürlük ile birlikte gösterilir ancak puanın bir parçası değildir.",
+        "formula": "Net duygu = olumlu yanıt % − olumsuz yanıt % (sizi anan yanıtlar içinde, Bahsedilmeler sayfasındaki gibi)"
+      },
+      "position": {
+        "title": "Ort. konum",
+        "body": "Sizden bahseden yanıtlarda hangi sırada anıldığınızın ortalaması. Düşük olan daha iyidir: #1, genellikle ilk sırada anıldığınız anlamına gelir.",
+        "formula": "Ort. konum = konumlarınızın toplamı ÷ sizi anan yanıtlar"
+      },
+      "citationRate": {
+        "title": "Atıf oranı",
+        "body": "Web sitenize kaynak olarak bağlantı veren AI yanıtlarının payı.",
+        "formula": "Atıf oranı = alan adınıza atıf yapan yanıtlar ÷ tüm yanıtlar × 100"
+      },
+      "shareOfVoice": {
+        "title": "Share of Voice",
+        "body": "Toplam marka konuşmasındaki payınız: AI yanıtlarındaki tüm marka bahsedilmeleri içinde (sizinkiler ve takip ettiğiniz rakiplerinkiler) size ait olanların payı.",
+        "formula": "SOV = bahsedilmeleriniz ÷ (bahsedilmeleriniz + rakip bahsedilmeleri) × 100"
+      },
+      "coverage": {
+        "title": "Kapsam",
+        "body": "Seçili dönemde sonuç üreten tüm Promptlar içinde, en az bir kez yer aldığınız (anıldığınız veya atıf aldığınız) takip edilen Promptların payı.",
+        "formula": "Kapsam = yer aldığınız Promptlar ÷ yanıtlanan Promptlar × 100"
+      },
+      "changes": {
+        "title": "Değişimler",
+        "body": "Her kartın değişimi, seçili dönemi hemen öncesindeki aynı uzunluktaki dönemle yalnızca her iki dönemde de yanıtlanan Promptlar üzerinden karşılaştırır; böylece Prompt eklemek değişimi şişirmez. Sayıların kendisi yine tüm Promptları kapsar. \"Tüm zamanlar\" seçildiğinde önceki bir dönem olmadığından değişim gösterilmez."
+      }
+    },
+    "breakdownSheet": {
+      "title": "{metric, select, mentions {Bahsedilmeler} other {Görünürlük}} Dökümü",
+      "compareHint": "Seçilen aralık, önceki eşit uzunluktaki aralıkla karşılaştırılıyor.",
+      "allTimeHint": "Tüm zamanlar. Karşılaştırılacak aynı uzunlukta daha eski bir dönem yok.",
+      "lastVsPrevious": "{days, plural, one {Son # gün ve önceki # gün} other {Son # gün ve önceki # gün}}",
+      "loadFailed": "Döküm yüklenemedi",
+      "allTime": "Tüm zamanlar",
+      "current": "Mevcut {days} gün",
+      "noSamePrompt": "Her iki dönemde de yanıtlanan Prompt yok",
+      "samePrompts": "{count, plural, one {Aynı # Prompt:} other {Aynı # Prompt:}}",
+      "vsPrevious": "öncekine kıyasla",
+      "noData": "veri yok",
+      "newNotCounted": "{count, plural, one {Değişime dahil edilmedi: bu dönemde # yeni Prompt.} other {Değişime dahil edilmedi: bu dönemde # yeni Prompt.}}",
+      "newIncluded": "{count, plural, one {Değişim, bu dönemde eklenen # yeni Prompt'u içeriyor.} other {Değişim, bu dönemde eklenen # yeni Prompt'u içeriyor.}}",
+      "tabs": {
+        "prompts": "Prompts",
+        "platforms": "Platformlar",
+        "topics": "Konular"
+      },
+      "biggest": "{direction, select, down {En büyük düşüş} other {En büyük artış}}:",
+      "topPlatform": "En çok {direction, select, down {düşen} other {artan}} platform: {platform}",
+      "empty": "Bu aralıkta henüz veri yok.",
+      "columns": {
+        "name": "Ad",
+        "prev": "Önceki",
+        "cur": "Mevcut",
+        "change": "Değişim"
+      },
+      "pts": "puan",
+      "signedPts": "{value} puan",
+      "contributionPts": "{value} puan {direction, select, down {düştü} other {arttı}}",
+      "contributionMentions": "{count, plural, one {# bahsedilme} other {# bahsedilme}} {direction, select, down {kaybedildi} other {kazanıldı}}"
+    },
+    "page": {
+      "noDataTitle": "Henüz takip verisi yok",
+      "noDataBody": "Markanızın yapay zekâ yanıtlarında nasıl göründüğünü görmek için Prompt'larınızı AI platformlarında çalıştırın.",
+      "testSingle": "Veya tek bir Prompt'u test edin",
+      "noResults": "{period, select, 24h {Son 24 saat} 7d {Son 7 gün} 30d {Son 30 gün} 90d {Son 90 gün} other {Seçilen dönem}} için sonuç yok",
+      "otherPeriods": "Diğer zaman aralıklarında takip verisi mevcut. Daha geniş bir aralık deneyin veya \"Tüm zamanlar\"a geçin.",
+      "showAll": "Tüm verileri göster",
+      "noCompetitorsTitle": "Henüz takip edilen rakip yok",
+      "noCompetitorsBody": "Yapay zekâ yanıtlarında nasıl konumlandığınızı görmek için rakip ekleyin.",
+      "headToHead": "Karşılıklı Karşılaştırma",
+      "loadFailed": "İçgörüler yüklenemedi — lütfen tekrar deneyin",
+      "exportCapped": "Bellek sorunlarını önlemek için dışa aktarma 50.000 satırla sınırlandı",
+      "exportFailed": "CSV dışa aktarılamadı",
+      "noTrend": "Henüz trend verisi yok",
+      "yourBrand": "Markanız",
+      "avgCompetitor": "Ort. Rakip",
+      "noShareOfVoice": "Share of voice verisi yok",
+      "moreInfo": "Daha fazla bilgi",
+      "overallShareOfVoice": "Genel Share of Voice"
     }
   },
   "topics": {
@@ -11068,6 +11677,7 @@
     },
     "editor": {
       "back": "Kütüphaneye geri dön",
+      "newContent": "Yeni içerik",
       "closeHere": "Kapat",
       "untitled": "Başlıksız",
       "newPage": "Yeni sayfa",
@@ -11537,7 +12147,8 @@
           "attach": "Dosya ekle"
         },
         "openLink": "Bağlantıyı yeni sekmede açın (veya sayfada ⌘/Ctrl + tıklayın)",
-        "counter": "{count} / {target} karakter · {words, plural, one {# kelime} other {# kelime}}"
+        "counter": "{count} / {target} karakter · {words, plural, one {# kelime} other {# kelime}}",
+        "counterRange": "{count} / {min}–{max} karakter · {words, plural, one {# kelime} other {# kelime}}"
       },
       "link": {
         "title": "Bağlantı ekle",
@@ -12769,6 +13380,7 @@
         "tooShort": "Birkaç paragraf yazın: Okunabilirlik, siz yazdıkça sayfadan okunur.",
         "tooShortShort": "Henüz çok kısa",
         "notScored": "Henüz puanlanmadı",
+        "needsAuthor": "Sayfanın yazarı olduğunda puanlanır",
         "site": {
           "label": "Site güvenilirliği",
           "score": "Site güvenilirliği {score}/5",
@@ -13047,8 +13659,8 @@
           },
           "avgSentence": {
             "line": "Cümleler ortalama {words, number} kelime",
-            "detail": "15–20 kelimeyi hedefleyin: daha kısa cümleler daha hızlı okunur ve yapay zeka yanıtları bunları bütün olarak alıntılar.",
-            "detailShort": "15–20 kelimeyi hedefleyin: her biri tek bir ana fikir verecek şekilde bazı kısa olanları birleştirin."
+            "detail": "20 kelime veya daha azını hedefleyin: kısa cümleler daha hızlı okunur ve AI yanıtları bunları bütün olarak alıntılar.",
+            "detailShort": "Ortalama 8 kelimenin altı kesik kesik okunur: bazı kısa cümleleri birleştirin, böylece her biri tek bir bütün düşünceyi anlatsın."
           },
           "longSentences": {
             "line": "{count, plural, one {35 kelimenin üzerinde # cümle} other {35 kelimenin üzerinde # cümle}}",
@@ -13364,11 +13976,12 @@
     "autoGeneratedHint": "Takip verileriniz geldikçe fırsatlar otomatik olarak oluşturulur.",
     "generating": "Oluşturuluyor…",
     "sendToWorkflow": "İş Akışına Gönder",
-    "generateBrief": "Brief Oluştur",
-    "generatingBrief": "Oluşturuluyor...",
-    "briefGenerated": "Brief Oluşturuldu",
+    "generateBrief": "Brief oluştur",
+    "generatingBrief": "Brief oluşturuluyor…",
+    "briefGenerated": "Brief oluşturuldu",
+    "briefEmpty": "Önerilen başlık, taslak, hedef anahtar kelimeler ve rakip içgörüleriyle AI destekli bir içerik briefi oluşturun.",
     "briefLimitReached": "Bu ayın İçerik brief'lerini kullandınız",
-    "sendToActions": "Aksiyonlara Gönder",
+    "sendToActions": "Aksiyon Merkezi'ne gönder",
     "draftCheckFailed": "Taslak kontrol edilemedi · Tekrar dene",
     "sendToEditor": "Editöre Gönder",
     "writeThis": {
@@ -13383,7 +13996,7 @@
         "draftDetail": "İçerik Ajanı, sizin kurallarınıza ve sayfa türünün kurallarına göre brief'ten sayfayı yazar.",
         "draftDetailPage": "İçerik Ajanı, sizin kurallarınıza ve sayfa türünün kurallarına göre {page} için brief'ten değişiklikler önerir.",
         "review": "Siz inceleyin",
-        "reviewDetail": "Yazım sürerken Site Denetimi puanı tahminiyle birlikte editör açılır. Hiçbir şey yayınlanmaz."
+        "reviewDetail": "Editör, yazı yazılırken açılır. Hazır olarak işaretlediğinizde Site Denetimi puanının ücretsiz bir tahminini alırsınız. Hiçbir şey yayımlanmaz."
       },
       "usage": "{trial, select, yes {Deneme AI kredinizin} other {Aylık AI kullanımınızın}} yaklaşık <b>{estimate}</b> kadarını harcar · Şimdiye kadar {used} kullanıldı",
       "usageSmall": "{trial, select, yes {Deneme AI kredinizin} other {Aylık AI kullanımınızın}} <b>%1</b>'inden azını harcar · Şimdiye kadar {used} kullanıldı",
@@ -13407,7 +14020,7 @@
       "word": "Word olarak dışa aktar",
       "failed": "Bu fırsat dışa aktarılamadı. Lütfen tekrar deneyin."
     },
-    "openInActions": "Aksiyonlarda Aç",
+    "openInActions": "Aksiyon Merkezi'nde aç",
     "sendAgain": "Tekrar Gönder",
     "copyAllData": "Tüm Verileri Kopyala",
     "copiedToast": "Panoya kopyalandı",
@@ -13468,7 +14081,9 @@
       "avgScore": "Ort. Puan",
       "shown": "{count} gösteriliyor",
       "opportunities": "fırsat",
+      "opportunitiesAll": "tüm durumlar, tamamlananlar dahil",
       "outOf100": "100 üzerinden",
+      "outOf100All": "100 üzerinden · tüm durumlar",
       "fromSignals": "analiz edilen {count, plural, one {# sinyalden} other {# sinyalden}}"
     },
     "filters": {
@@ -13657,6 +14272,7 @@
       "sentAt": "{date} tarihinde gönderildi",
       "webhookResponse": "Webhook Yanıtı",
       "topCompetitor": "En Güçlü Rakip",
+      "gapPoints": "{gap, number} puan",
       "basketTitle": "Fırsat Sepeti",
       "basketSummary": "{prompts, plural, one {# prompt} other {# prompt}} · {included} arama dahil edildi · {excluded} hariç tutuldu",
       "basketIncluded": "AI motorlarının bu promptlar için çalıştırdığı aramalar",
@@ -13773,7 +14389,8 @@
     "mergedIntoOpen": "Aç",
     "newSignal": "Yeni sinyal algılandı",
     "newSignalScoreRose": "Daha önce tamamlandı ve fırsatı o zamandan bu yana büyüdü: puan {from} değerinden {to} değerine yükseldi.",
-    "newSignalGainLost": "Daha önce tamamlandı ancak elde edilen kazanım korunamadı: bu prompt'lardaki Görünürlük çalışmadan sonra %{after} iken şu anda %{now}."
+    "newSignalGainLost": "Daha önce tamamlandı ancak elde edilen kazanım korunamadı: bu prompt'lardaki Görünürlük çalışmadan sonra %{after} iken şu anda %{now}.",
+    "noWorkflowConnected": "Bağlı iş akışı yok."
   },
   "traffic": {
     "chat": {
@@ -14612,6 +15229,24 @@
           "query": "Eksik adreslerde sorgu var: Yönlendirme önerilmedi"
         }
       }
+    },
+    "page": {
+      "subtitle": "Web sitenize AI kaynaklı ziyaretler",
+      "range": "{start}–{end} / {total}",
+      "previous": "Önceki",
+      "next": "Sonraki",
+      "platformBreakdown": "Platform Dağılımı",
+      "referralsByPlatform": "Platforma Göre Yönlendirmeler",
+      "topLandingPages": "En Çok Ziyaret Edilen Giriş Sayfaları",
+      "recentVisits": "Son AI Yönlendirme Ziyaretleri",
+      "columns": {
+        "platform": "Platform",
+        "page": "Sayfa",
+        "visits": "Ziyaret",
+        "change": "Değişim",
+        "time": "Zaman",
+        "country": "Ülke"
+      }
     }
   },
   "ads": {
@@ -14915,7 +15550,10 @@
         "bodyUnlimited": "Planınızda bunlar için yer var. Bekleyen prompt'lar kendiliğinden başlamaz: Takip etmek için birini seçin.",
         "show": "Onları göster",
         "freeUp": "Yer aç",
-        "track": "Bekleyen bir prompt'u takip et"
+        "track": "Bekleyen bir prompt'u takip et",
+        "addTracking": "Daha fazla takip ekleyin",
+        "moved": "{count, plural, one {Bunlardan biri {date} tarihine kadar takip edildi} other {Bunlardan # tanesi {date} tarihine kadar takip edildi}}; o tarihte planınızın takibi {limit, number} prompt konumuna düştü.",
+        "movedNoLimit": "{count, plural, one {Bunlardan biri {date} tarihine kadar takip edildi} other {Bunlardan # tanesi {date} tarihine kadar takip edildi}}; o tarihte planınızın takibi düştü."
       },
       "dialog": {
         "pill": "Prompt limitine ulaşıldı · {used} / {max}",
@@ -14928,6 +15566,7 @@
         "needs": "{count} konumda takip ediliyor, bu nedenle {count} yere ihtiyacı var.",
         "howStarter": "Takip etmek için daha az ihtiyaç duyduğunuz bir Prompt'u duraklatın veya daha üst bir plana geçin.",
         "howContact": "Takip etmek için daha az ihtiyaç duyduğunuz bir Prompt'u duraklatın veya limitinizi artırmak için bizimle iletişime geçin.",
+        "howGrowth": "Takip etmek için daha az ihtiyaç duyduğunuz bir Prompt'u duraklatın veya planınıza daha fazla takip ekleyin.",
         "room": "Planınızda bunun için yer var. Bekleyen Prompts kendiliğinden başlamaz, bu yüzden takip etmenizi bekliyor.",
         "candidates": "Duraklatabileceğiniz Prompts",
         "candidatesMany": "Duraklatabileceğiniz Prompts: {count} yer açmaya yetecek kadar seçin",
@@ -14946,6 +15585,7 @@
         "pauseMany": "{count} tanesini duraklat ve yenisini takip et",
         "trackNow": "Takip et",
         "seeGrowth": "Growth planına bakın: {count} Prompt",
+        "addTracking": "Daha fazla takip ekleyin",
         "contact": "Bize ulaşın",
         "keepWaiting": "Bekletmeye devam et",
         "keepPaused": "Duraklatılmış olarak bırak",
@@ -15144,6 +15784,7 @@
       "showUsage": "Kullanımı göster",
       "hideUsage": "Kullanımı gizle",
       "locationsUsed": "{used} / {limit} prompt konumu kullanıldı",
+      "planEnded": "Planınız sona erdi: bir plan seçene kadar Prompt'lar takip edilmez",
       "view": {
         "label": "Prompt listesi",
         "tracked": "Takip Edilenler",
@@ -15162,6 +15803,95 @@
         "analyzing": "Analiz ediliyor…",
         "analyzingProgress": "{done}/{total} analiz ediliyor…",
         "limitReached": "Aylık sınıra ulaşıldı"
+      }
+    },
+    "info": {
+      "button": "Ansvisor Prompt'larla nasıl çalışır",
+      "whatTitle": "Prompt nedir?",
+      "whatText": "Potansiyel müşterilerinizin ChatGPT veya Gemini gibi bir AI asistanına yazdığı soru ya da istek; örneğin <example>\"En iyi açık kaynaklı AEO aracı hangisi?\"</example> veya <example>\"En iyi AEO platformlarını karşılaştır\"</example>",
+      "howTitle": "Ansvisor nasıl çalışır",
+      "systemsLine": "Akıllı AI sistemleri her gün arka planda sizin için çalışır.",
+      "steps": {
+        "find": {
+          "title": "En iyi Prompt'ları bulur.",
+          "text": "AI'mız sitenizi, rakiplerinizi, insanların aradıklarını (Search Console, Analytics) ve AI platformlarının verdiği yanıtları okur; önemli olanları önerir."
+        },
+        "pick": {
+          "title": "Neyi takip edeceğinizi siz seçersiniz.",
+          "text": "Bir öneride <b>+</b> düğmesine basın."
+        },
+        "ask": {
+          "title": "AI platformlarına her gün sorar.",
+          "text": "ChatGPT, Gemini, Google AI Overviews ve daha fazlası: sizden bahsediyorlar mı, sitenize bağlantı veriyorlar mı, sizi rakiplerin önüne koyuyorlar mı?"
+        },
+        "data": {
+          "title": "Kendi verinizi oluşturur.",
+          "text": "Her yanıt saklanır; böylece trendler, boşluklar ve rakiplerinizin hamleleri zamanla ortaya çıkar."
+        },
+        "next": {
+          "title": "Akıllı AI sistemleri bir sonraki adımı gösterir.",
+          "text": "Düşüşleri yakalar, içerik boşluklarını bulur ve AI görünürlüğü, trafik ve gelir kazanmanız için Aksiyon Merkezi'nde sayfalar ve düzeltmeler hazırlar."
+        }
+      },
+      "openGuide": "Adım adım rehberi aç"
+    },
+    "guide": {
+      "title": "En iyi Prompt'lar nasıl bulunur ve yanıtlarda nasıl konumlanılır",
+      "description": "Bunları bir kez yapın, sonra Önerileri her gün kontrol edin. Her adım yeni sekmede açılır, böylece bu rehber burada kalır.",
+      "progress": "{done}/{total} tamamlandı",
+      "progressLabel": "Tamamlanan adımlar",
+      "done": "Tamamlandı",
+      "comingSoon": "Yakında",
+      "footer": "Chat'ten bir adımı sizin yerinize yapmasını isteyin: “Search Console'umu bağla”.",
+      "steps": {
+        "gsc": {
+          "title": "Google Search Console'u bağlayın",
+          "text": "İnsanların sizi bulmak için neler aradığını görün; biz bunları Prompt'lara dönüştürürüz.",
+          "cta": "Bağla"
+        },
+        "ga": {
+          "title": "Google Analytics 4'ü bağlayın",
+          "text": "Hangi sayfaların ziyaretçi getirdiğini görerek önemli Prompt'ları bulun.",
+          "cta": "Bağla"
+        },
+        "trafficCode": {
+          "title": "Sitenize AI trafik kodunu ekleyin",
+          "text": "AI asistanlarının size gönderdiği ziyaretleri ve sayfalarınızı okuyan AI botlarını sayın.",
+          "cta": "Kodu al"
+        },
+        "suggestions": {
+          "title": "Önerileri her gün kontrol edin",
+          "text": "Sitenizden, rakiplerinizden ve aramalardan yeni Prompt'lar. İyi olanları takip etmek için + düğmesine basın.",
+          "cta": "Önerileri aç"
+        },
+        "content": {
+          "title": "Önerilerden içerik oluşturun",
+          "text": "Prompt'larınız için AI yanıtlarında eksik olan sayfaları yazın.",
+          "cta": "İçeriği aç"
+        },
+        "optimize": {
+          "title": "Sayfalarınızı optimize edin",
+          "text": "Yapay zeka yanıtlarının sayfalarınıza atıf yapması için mevcut sayfalarınızı Editör'de iyileştirin.",
+          "cta": "Editör'ü aç"
+        },
+        "audit": {
+          "title": "Teknik sorunları düzeltin",
+          "text": "Site Denetimi çalıştırın ve yapay zekanın sitenizi okumasını engelleyen sorunları düzeltin.",
+          "cta": "Denetim çalıştır"
+        },
+        "moreTracking": {
+          "title": "Daha fazla Prompt takip edin",
+          "text": "Planınıza daha fazla Prompt, konum veya yapay zeka platformu ekleyin.",
+          "cta": "Daha fazla takip edin"
+        },
+        "mentions": {
+          "title": "Diğer sitelerde bahsedilin",
+          "text": "Yapay zeka yanıtlarının güvendiği üçüncü taraf sitelerde adınız geçsin."
+        },
+        "ads": {
+          "title": "AI reklamları yayınlayın",
+          "text": "Sponsorlu yapay zeka yanıtlarında yer alın."
+        }
       }
     },
     "trackNow": {
@@ -15211,6 +15941,7 @@
       "unlimited": "Sınırsız",
       "cta": {
         "upgrade_growth": "Growth planına yükseltin",
+        "add_more": "Daha fazla ekle",
         "upgrade": "Planı yükseltin",
         "contact": "Bize ulaşın",
         "choose_plan": "Bir plan seçin"
@@ -15436,7 +16167,7 @@
       "unlimited": "{used} → {after} takip edilen konum · planınızda sınır yok",
       "usageHint": "Her konumdaki her Prompt, planınızda her gün kontrol edilen bir takip edilen konum sayılır. Duraklatılan Prompt'lar sayılmaz.",
       "over": "Bunun için {adding, plural, one {# takip edilen konum daha gerekiyor} other {# takip edilen konum daha gerekiyor}}; {plan} planınızda {left, plural, =0 {hiç kalmadı} one {# adet kaldı} other {# adet kaldı}}.",
-      "overHint": "Daha az Prompt veya konum seçin. {plan, select, starter {Veya planınızı yükseltin ya da özel bir plan için bizimle iletişime geçin.} growth {Veya özel bir plan için bizimle iletişime geçin.} other {Veya limitinizi artırmak için bizimle iletişime geçin.}}",
+      "overHint": "Daha az Prompt veya konum seçin. {plan, select, starter {Ya da planınızı yükseltin veya özel bir plan için bizimle iletişime geçin.} growth {Ya da planınıza daha fazla takip ekleyin.} other {Ya da limitinizi artırmak için bizimle iletişime geçin.}}",
       "nothing": "Bu Prompt'lar zaten bu konumlarda takip ediliyor.",
       "cityBlocked": "Bu Prompt'ların hiçbiri bir şehirden yanıt veren bir motor (Google AI Mode, AI Overviews veya bir API modeli) çalıştırmıyor. Önce Prompt'lara bu motorlardan birini ekleyin.",
       "cityPartly": "Bu Prompt'lardan {count, plural, one {# tanesi} other {# tanesi}} şehirden yanıt veren bir motor çalıştırmıyor; bunlar için şehir planda sayılır ancak orada sorulmaz.",
@@ -15487,7 +16218,79 @@
         "usedUp": "Bu ayki öneri bütçesi tükendi. Aboneliğiniz yenilendiğinde sıfırlanır.",
         "upgrade": "Daha fazlası için yükseltin",
         "startPlan": "Planınızı başlatın"
+      },
+      "loadFailed": "Öneriler yüklenemedi.",
+      "generateFailed": "Öneriler oluşturulamadı.",
+      "notConfigured": "Yapay zeka önerileri bu sunucuda henüz kurulmadı: bir yapay zeka sağlayıcı anahtarı eksik.",
+      "retry": "Tekrar dene",
+      "introTitle": "Platforma özel öneriler alın",
+      "introBody": "Her platformdaki bu döneme ait yanıtları (çalıştırdıkları alt sorgular, atıf yaptıkları kaynaklar ve sizin üstünüzde yer alan rakipler) analiz eder ve markanın yer almadığı ya da geç sıralandığı yerlerde ne yapılacağını önerir.",
+      "generate": "Öneri oluştur",
+      "generating": "Bu döneme ait yanıtlardan öneriler oluşturuluyor… Bu işlem 15 saniyeye kadar sürebilir.",
+      "stale": "Bu öneriler oluşturulduktan sonra yeni çalıştırmalar geldi.",
+      "regenerate": "Yeniden oluştur",
+      "noRuns": "Bu dönemde çalıştırma yok, bu yüzden henüz iyileştirilecek bir şey yok.",
+      "allWell": "İyileştirme gerekmiyor: marka bu dönemde her platformda ilk sırada anılıyor ve erken atıf alıyor.",
+      "selection": "{selected}/{total} seçildi · {platforms, plural, other {# platform}}",
+      "generated": "Oluşturulma: {date}",
+      "sent": "Gönderilme: {date} · {code}",
+      "discardConfirm": "Düzenlemeleriniz silinsin mi?",
+      "keepEditing": "Düzenlemeye devam et",
+      "discardRegenerate": "Sil ve yeniden oluştur",
+      "openInActions": "Aksiyonlar'da aç",
+      "sendActions": "Aksiyonları gönder",
+      "sentToast": "{count, plural, other {# görevli Aksiyon oluşturuldu}}",
+      "open": "Aç",
+      "states": {
+        "no_runs": "Bu dönemde çalıştırma yok",
+        "not_mentioned": "Bahsedilmedi",
+        "mentioned_late": "Bahsedildi · Geç",
+        "not_cited": "Erken bahsedildi · atıf yok",
+        "doing_well": "İyi gidiyor"
+      },
+      "mentionRate": "{runs, plural, one {# çalıştırmanın} other {# çalıştırmanın}} {mentioned} tanesinde bahsedildi",
+      "avgPosition": "ort. #{position} · {rate}",
+      "avgPositionOf": "ort. #{position} / {total} · {rate}",
+      "citedAt": "ort. #{rank} / {total} kaynak sırasında atıf aldı · {rate}",
+      "notCited": "atıf yok · {rate}",
+      "inputs": {
+        "fanouts": "{count, plural, one {# fan-out} other {# fan-out}}",
+        "citedDomains": "{count, plural, one {# atıf alan alan adı} other {# atıf alan alan adı}}",
+        "competitorUrls": "{count, plural, one {# rakip URL} other {# rakip URL}}",
+        "answer": "AI yanıtı",
+        "basedOn": "Dayanak: {parts}",
+        "basedOnAnswer": "Dayanak: AI yanıtı",
+        "noFanouts": "Kayıtlı fan-out yok. {based}"
+      },
+      "doingWell": "İyi gidiyor: öneri yok.",
+      "noneHeldUp": "Bu platformun kanıtlarıyla desteklenen bir öneri bulunamadı. Kendi önerinizi ekleyin veya yeniden oluşturun.",
+      "addOwn": "Kendi önerinizi ekleyin",
+      "removed": "Kaldırıldı: {title}",
+      "removedUntitled": "Kaldırıldı: öneriniz",
+      "undo": "Geri al",
+      "titlePlaceholder": "Başlık",
+      "bodyPlaceholder": "Ne yapılmalı ve neden",
+      "select": "\"{title}\" seç",
+      "edit": "Öneriyi düzenle",
+      "remove": "Öneriyi kaldır",
+      "alreadySent": "Zaten gönderildi",
+      "yourSuggestion": "Öneriniz",
+      "sources": {
+        "fanout": "Fan-out: {ref}",
+        "answer": "AI yanıtı",
+        "brandPage": "Sayfanız: {url}"
+      },
+      "locked": {
+        "title": "Improve, Growth planında kullanılabilir",
+        "body": "Her AI yanıtındaki alt sorgulara, kaynaklara ve rakiplere dayanarak bu Prompt'un konumunu iyileştirmek için platforma özel öneriler alın.",
+        "upgrade": "Planı yükselt"
       }
+    },
+    "errors": {
+      "updateFailed": "Prompt güncellenemedi. Lütfen tekrar deneyin.",
+      "noRoomToResume": "Devam ettirmek için yeterli yer yok",
+      "bulkFailed": "{action, select, resume {Prompt'lar devam ettirilemedi.} other {Prompt'lar duraklatılamadı.}}",
+      "bulkPartial": "{action, select, resume {{total} Prompt'tan {failed} tanesi devam ettirilemedi.} other {{total} Prompt'tan {failed} tanesi duraklatılamadı.}}"
     }
   },
   "volumeEstimate": {
@@ -15894,6 +16697,7 @@
     }
   },
   "competitors": {
+    "forbiddenRole": "Rakipleri yalnızca Admin veya Yönetici birleştirebilir.",
     "title": "Rakipler",
     "description": "Rakipleri yönetin ve AI görünürlüğünü doğrudan karşılaştırın.",
     "addCompetitor": "Rakip Ekle",
@@ -15906,7 +16710,7 @@
     "citations": "Atıflar",
     "trackedCompetitors": "Takip Edilen Rakipler",
     "selectToCompare": "Bire bir karşılaştırmayı görmek için bir rakip seçin.",
-    "windowLast30Days": "Skorlar son 30 günü kapsar.",
+    "windowLastDays": "{days, plural, one {Skorlar son 1 günü kapsar.} other {Skorlar son # günü kapsar.}}",
     "windowAllTime": "Skorlar tüm takip geçmişini kapsar.",
     "windowSelectedRange": "Skorlar seçilen tarih aralığını yansıtır.",
     "selected": "Seçildi",
@@ -16007,10 +16811,15 @@
     },
     "h2h": {
       "title": "{brand} vs {competitor}",
-      "yourAvg": "Ort. Puanınız",
-      "theirAvg": "Rakibin Ort. Puanı",
-      "overallDiff": "Puan Farkı",
+      "yourAvg": "Görünürlük skorunuz",
+      "theirAvg": "Onların Görünürlük skoru",
+      "overallDiff": "Fark",
+      "points": "{value} puan",
+      "scoreTip": "Görünürlük skoru, 0–100: bu dönemdeki yanıtların markayı ne sıklıkla andığı, sitesine ne sıklıkla atıf yaptığı ve markadan ne kadar erken söz ettiği; yanıtlarınız üzerinden hesaplanır. Kartlardaki skorla aynıdır.",
       "platformBreakdown": "Platform Dağılımı",
+      "viaBing": "· Bing AI Mode üzerinden",
+      "noAnswersEngine": "Bu dönemde yanıt yok",
+      "notInPlan": "Planınızda yer almadığı için gösterilmiyor: {engines}.",
       "promptByPrompt": "Prompt Bazında Karşılaştırma",
       "promptByPromptDesc": "Platform bazında dağılımı görmek için bir prompt'a tıklayarak genişletin.",
       "comparison": "Karşılaştırma",
@@ -16026,7 +16835,25 @@
       "noPromptData": "Prompt düzeyinde veri bulunmuyor. Önce bir takip kontrolü çalıştırın.",
       "noDataTitle": "Karşılaştırma verisi yok",
       "noDataDescription": "Bu rakip için karşılaştırma verisi oluşturmak üzere Görünürlük bölümünden bir takip kontrolü çalıştırın.",
-      "loadError": "Karşılaştırma verileri yüklenemedi."
+      "loadError": "Karşılaştırma verileri yüklenemedi.",
+      "promptCounts": "{engines, plural, one {# platform} other {# platform}} · {runs, plural, one {# çalıştırma} other {# çalıştırma}}",
+      "engineCounts": "{locations, plural, one {# konum} other {# konum}} · {runs, plural, one {# çalıştırma} other {# çalıştırma}}",
+      "runs": "{count, plural, one {# çalıştırma} other {# çalıştırma}}",
+      "noLocation": "Konum yok",
+      "lowSample": "Düşük örneklem",
+      "lowSampleTip": "10'dan az çalıştırma: tek bir yanıt bu skoru çok değiştirebilir.",
+      "list": {
+        "search": "Prompt ara",
+        "sortLabel": "Prompt'ları sırala",
+        "sortRecent": "Önce en yeni",
+        "sortDiff": "Önce en geniş fark",
+        "categoryLabel": "Kategori",
+        "allCategories": "Tüm kategoriler",
+        "count": "{shown} / {total, plural, one {# Prompt} other {# Prompt}}",
+        "noMatch": "Eşleşen Prompt yok.",
+        "more": "{count} tane daha göster",
+        "caseRepeats": "{count, plural, one {# Prompt, büyük/küçük harf farkı dışında başka bir Prompt'un aynısı} other {# Prompt, büyük/küçük harf farkı dışında diğerlerinin aynısı}}: yanıtları bir kez sayılsın diye fazla kopyayı Prompts sayfasında duraklatın."
+      }
     },
     "timeline": {
       "title": "Zaman içinde {competitor} sayfaları",
@@ -16076,7 +16903,127 @@
     "excludeOwnDomain": "Kendi alan adını hariç tut",
     "competitorsOnly": "Yalnızca rakipler",
     "noBrandTitle": "Marka seçilmedi",
-    "noBrandDescription": "AI platformlarının hakkında yanıt verirken kullandığı Atıflar'ı görmek için bir marka seçin veya oluşturun."
+    "noBrandDescription": "AI platformlarının hakkında yanıt verirken kullandığı Atıflar'ı görmek için bir marka seçin veya oluşturun.",
+    "addCompetitor": {
+      "added": "{domain} rakip olarak eklendi",
+      "failed": "Bu alan adı rakip olarak eklenemedi. Lütfen tekrar deneyin.",
+      "ariaLabel": "{domain} alan adını rakip olarak ekle",
+      "button": "Rakip olarak ekle",
+      "title": "{domain} rakip olarak eklensin mi?",
+      "description": "Bu alan adını rakip olarak takip edin. Adı aşağıdan düzenleyebilirsiniz.",
+      "name": "Ad",
+      "namePlaceholder": "Rakip adı",
+      "add": "Ekle"
+    },
+    "url": {
+      "back": "Atıflar",
+      "noUrl": "URL sağlanmadı. Bu sayfayı Görünürlük'ün Atıflar sekmesindeki bir atıf satırından açın.",
+      "noBrand": "Önce üstteki değiştiriciden bir marka seçin.",
+      "owned": "Sahip olunan",
+      "loadFailed": "Bu URL yüklenemedi — lütfen tekrar deneyin.",
+      "empty": "Seçilen aralıkta bu URL için kayıtlı atıf yok.",
+      "kpis": {
+        "citations": "Toplam atıf",
+        "citationsSub": "{answers, plural, one {# yanıtta} other {# yanıtta}}",
+        "answers": "Atıf yapan yanıtlar",
+        "answersSub": "AI yanıtları bu URL'yi içeriyor",
+        "prompts": "Prompts",
+        "promptsSub": "bunu tetikleyen benzersiz Prompts",
+        "platforms": "Platformlar",
+        "lastSeen": "Son görülme",
+        "firstSeen": "ilk görülme {date}"
+      },
+      "targeted": "{count, plural, one {# Prompt içinde hedeflendi} other {# Prompt içinde hedeflendi}}",
+      "targetedSub": "Prompt iş akışında bu URL'yi hedef olarak izleyen Prompts",
+      "notTargeted": "Henüz hedeflenmiyor — bir Prompt'un Hedef URL'ler kartından ekleyin.",
+      "citedCount": "{count}× atıf yapıldı",
+      "visits": "AI kaynaklı ziyaretler",
+      "visitsSub": "Seçili dönemde AI platformlarından bu sayfaya yapılan ziyaretler",
+      "noVisits": "Bu sayfa için henüz AI kaynaklı ziyaret kaydedilmedi.",
+      "unknownPlatform": "Bilinmiyor",
+      "citedIn": "Atıf yapılan yerler",
+      "citedInSub": "Seçili dönemde bu URL'ye atıf yapan tüm AI yanıtları",
+      "columns": {
+        "date": "Tarih",
+        "platform": "Platform",
+        "prompt": "Prompt",
+        "sentiment": "Duygu durumu",
+        "brandMentioned": "Bahsedilen marka",
+        "position": "Sıralama",
+        "answers": "Yanıtlar",
+        "citations": "Atıflar",
+        "lastSeen": "Son görülme"
+      },
+      "sentiments": {
+        "positive": "Olumlu",
+        "neutral": "Nötr",
+        "negative": "Olumsuz",
+        "mixed": "Karışık"
+      },
+      "breakdown": "Prompts dökümü",
+      "breakdownSub": "Bu sayfanın öne çıktığı sorgular, Prompt'a göre gruplanmış",
+      "noPrompts": "Seçili dönemde bu URL için kaydedilmiş Prompt yok."
+    },
+    "categories": {
+      "you": "Siz",
+      "competitor": "Rakip",
+      "editorial": "Editoryal",
+      "forum": "Forum",
+      "social": "Sosyal",
+      "review": "İnceleme",
+      "institutional": "Kurumsal",
+      "other": "Diğer"
+    },
+    "page": {
+      "noSources": "Henüz atıf kaynağı yok.",
+      "columns": {
+        "rank": "Sıra",
+        "domain": "Alan adı",
+        "url": "URL",
+        "platforms": "Platformlar",
+        "usage": "Kullanım",
+        "avgCitations": "Ort. Atıf",
+        "citations": "Atıflar",
+        "addCompetitor": "Rakip olarak ekle",
+        "sourceType": "Kaynak türü",
+        "competitorAnswers": "Rakip yanıtları",
+        "whichCompetitors": "Hangi rakipler",
+        "strength": "Güç",
+        "answersFeeding": "Besleyen yanıtlar",
+        "alsoCitesUs": "Bizden de atıf yapıyor mu?"
+      },
+      "openDomain": "{domain} alan adını yeni sekmede aç",
+      "openPage": "Atıf yapılan sayfayı yeni sekmede aç",
+      "openPageTitle": "Atıf yapılan sayfayı aç",
+      "loadFailedTitle": "Atıf verileri yüklenemedi",
+      "loadFailedBody": "Lütfen tekrar deneyin.",
+      "retry": "Tekrar dene",
+      "checking": "Atıf verileri kontrol ediliyor…",
+      "noneInPeriod": "{period, select, 24h {Son 24 saatte} 7d {Son 7 günde} 30d {Son 30 günde} 90d {Son 90 günde} other {Seçilen dönemde}} atıf yok",
+      "outsideWindow": "Bu zaman aralığının dışında atıf verileri var.",
+      "showAll": "Tüm verileri göster",
+      "noMatch": "Filtrelerinizle eşleşen atıf yok",
+      "noMatchBody": "Tarih aralığını genişletmeyi veya filtreleri kaldırmayı deneyin.",
+      "gapMethodology": "Rakiplerden bahseden ancak sizden bahsetmeyen yanıtlarda görünen kaynaklar; her yanıttaki kaynak sayısına göre ağırlıklandırılmıştır.",
+      "strengthTitle": "Güç %{pct}",
+      "noGaps": "Bu filtreler için boşluk alan adı yok",
+      "noGapsBody": "Bir rakibe atıf yapan her alan adı size de atıf yapıyor veya henüz yeterli veri yok.",
+      "noCompetitorData": "Henüz rakip kaynak verisi yok",
+      "noCompetitorDataBody": "Rakipleri (alan adlarıyla) ekleyin ve birkaç takip çalıştırmasının tamamlanmasını bekleyin.",
+      "competitor": "Rakip",
+      "selectCompetitor": "Rakip seçin",
+      "yes": "✓ Evet",
+      "no": "✗ Hayır",
+      "gapList": "Boşluk listesi",
+      "byCompetitor": "Rakibe göre",
+      "howItWorks": "Bu nasıl çalışır?",
+      "lowVisibility": "Bu aralıkta Görünürlüğünüz düşük, bu nedenle bu liste geniş olabilir — önce temel Görünürlüğe odaklanın.",
+      "loadFailedToast": "Atıf verileri yüklenemedi",
+      "checkFailedToast": "Atıf verileri kontrol edilemedi",
+      "exportFailed": "CSV dışa aktarılamadı",
+      "typesNotExportable": "Kaynak Türleri bir grafik dökümüdür ve dışa aktarılamaz — dışa aktarmak için Alan Adları, URL'ler veya Rakip Boşlukları sekmesine geçin.",
+      "tabGaps": "Rakip Boşlukları"
+    }
   },
   "shopping": {
     "title": "Ürün Görünürlüğü",
@@ -16580,6 +17527,16 @@
       "verifiedLabel": "ChatGPT'de doğrulanmış satıcı",
       "verifiedStatus": "Bilinmiyor",
       "verifiedDetail": "OpenAI doğrulanmış satıcı işaretinin nasıl verildiğini açıklamadı ve ilk testlerde bu işarete sahip olmayan mağazalar yanıtlara dahil edilmedi. Daha fazla bilgi verilene kadar doğrudan ürün akışı gönderin."
+    },
+    "page": {
+      "allTime": "Tüm zamanlar",
+      "last": "Son {period}",
+      "allPlatforms": "Tüm platformlar",
+      "allRegions": "Tüm bölgeler",
+      "noProducts": "Filtrelerle eşleşen ürün bulunamadı.",
+      "appearances": "{count, plural, one {# görünüm} other {# görünüm}}",
+      "brandAppearances": "{brand} • {count, plural, one {# görünüm} other {# görünüm}}",
+      "viewPrompt": "Prompt Ayrıntılarını Görüntüle"
     }
   },
   "reports": {
@@ -16608,14 +17565,18 @@
         "trafficConnectLink": "Bağla"
       },
       "method": {
-        "label": "Nasıl ölçülür?",
         "baseline": "Temel düzey: Yayınlamadan önceki 14 gün",
         "checkpoints": "Kontrol noktaları: 7 · 14 · 30 · 90 gün",
         "checkpointsTip": "7 gün: beklemede, erken sinyal · 14 gün: ilk sonuç · 30 gün: doğrulandı · 90 gün: kalıcı etki",
         "control": "Kontrol: dokunulmamış benzer Prompt'lar",
         "minChange": "Min. değişim: 3 puan",
         "noCost": "Zamanlanmış takip verileri · ek maliyet yok",
-        "correlation": "Korelasyon, nedensellik değil"
+        "correlation": "Korelasyon, nedensellik değil",
+        "howWeMeasure": "Nasıl ölçüyoruz",
+        "shippedDefinition": "Yayında anlamı, değişikliğin canlıya alınmasıdır: CMS'inizde yayınlanması, pull request'inin birleştirilmesi veya yayında olarak işaretlenmesi. İnceleme bekleyen bir taslak henüz yayında sayılmaz.",
+        "baselineHelp": "Her değişiklik, hedef Prompt'larının o günlerdeki Görünürlüğünden başlar.",
+        "controlHelp": "Bunlar, zaten ne olacağını gösterir.",
+        "correlationHelp": "Bir sonuç, şeylerin birlikte değiştiğini gösterir; değişikliğin tek başına bunlara yol açtığını göstermez."
       },
       "filterLabel": "Sonuca göre filtrele",
       "filters": {
@@ -16685,6 +17646,8 @@
       },
       "capped": "{month} ayında yayınlanan ilk {count, number} değişiklik gösteriliyor; yukarıdaki sayılar yalnızca bunları kapsar.",
       "empty": "{month} ayında hiçbir şey yayınlanmadı.",
+      "emptyNext": "Etkiyi ölçmeye başlamak için bir aksiyonu yayına alın.",
+      "emptyNextLink": "Bugünün odağını aç",
       "emptyFilter": "{month} ayında bu sonuca sahip hiçbir aksiyon yok.",
       "loadFailed": "Ansvisor'ın yaptıkları yüklenemedi. Tekrar deneyin.",
       "retry": "Yeniden Dene",
@@ -16763,6 +17726,10 @@
     "deleteTitle": "Raporu sil",
     "deleteConfirm": "Bu rapor silinsin mi?",
     "deleteFailed": "Rapor silinemedi",
+    "rowMenuLabel": "{title} için diğer işlemler",
+    "copyLink": "Bağlantıyı kopyala",
+    "linkCopied": "Bağlantı kopyalandı. Çalışma alanınızdaki kişiler için raporu açar.",
+    "copyLinkFailed": "Bağlantı kopyalanamadı. Bunun yerine raporu açıp adresini kopyalayın.",
     "selectDates": "Bir başlangıç ve bitiş tarihi seçin",
     "templateLabel": "Şablon",
     "templates": {
@@ -16799,7 +17766,7 @@
       "mentionEvidence": "Bahsedilme Kanıtları",
       "citationEvidence": "Atıf Kanıtları"
     },
-    "missingSections": "Bazı bölümler toplanamadı ve bu raporda yer almıyor:",
+    "missingSectionsAdmin": "Bunu yalnızca Adminler görür: {sections} ikinci denemede bile toplanamadı, bu yüzden rapor bunları dışarıda bırakıyor.",
     "brandLabel": "Marka",
     "sectionsLabel": "Bölümler",
     "selectSections": "En az bir bölüm seçin",
@@ -16878,9 +17845,11 @@
     "generatedOn": "Oluşturulma tarihi:",
     "executiveSummary": "Yönetici Özeti",
     "kpi": {
-      "visibility": "Görünürlük",
-      "visibilityRate": "Görünürlük",
-      "visibilityRateSub": "{visible}/{total} prompt",
+      "visibilityScore": "Görünürlük skoru",
+      "scoreValue": "{score}/100",
+      "promptsWithMention": "Bahsedilen Prompt'lar",
+      "promptsWithMentionSub": "{total} Prompt'tan {visible} tanesi",
+      "leaderboardPromptsSub": "Bahsedilen {total} Prompt'tan {visible} tanesi",
       "avgScore": "Ort. Puan",
       "mentions": "Bahsedilmeler",
       "citations": "Marka Atıfları",
@@ -17138,7 +18107,10 @@
       }
     },
     "notifications": "Bildirimler",
-    "notificationsDescription": "Daily Pulse — her takip çalıştırmasından sonra marka başına öne çıkanları ve uyarıları içeren kısa bir özet.",
+    "notificationsDescription": "Her marka iki e-posta gönderebilir: izleme çalışmalarından sonra Daily Pulse ve her Pazartesi AI Traffic haftalık özeti. İkisi de markanın Daily Pulse alıcılarına gider.",
+    "pulseSection": "Daily Pulse",
+    "pulseSectionDescription": "Her izleme çalışmasından sonra marka başına öne çıkanları ve uyarıları içeren kısa bir özet. Ne sıklıkla geleceğini ve kimlerin alacağını seçin.",
+    "pulseFrequencyLabel": "{brand} markasının Daily Pulse sıklığı",
     "pulseFrequency_daily": "Günlük",
     "pulseFrequency_weekly": "Haftalık",
     "pulseFrequency_notable": "Yalnızca önemli durumlarda",
@@ -17149,7 +18121,9 @@
     "pulseRecipientsHint": "Virgülle ayrılmış e-posta adresleri. Tüm organizasyon üyelerine göndermek için boş bırakın.",
     "pulseRecipientsInvalid": "Geçerli bir e-posta adresi değil: {emails}. Kaydetmeden önce düzeltin veya kaldırın.",
     "trafficDigest": "Haftalık AI Trafik özeti",
-    "trafficDigestHint": "Her Pazartesi: geçen haftanın AI ziyaretleri tek bir özet satırında, en büyük üç değişiklikle birlikte. Yukarıdaki alıcılara gönderilir.",
+    "trafficDigestDescription": "Her Pazartesi: geçen haftanın AI ziyaretleri tek satırlık bir özet ve en önemli üç değişiklikle. Her markanın Daily Pulse alıcılarına gider ve işaretlediğiniz veya işaretini kaldırdığınız anda kaydedilir.",
+    "trafficDigestTo": "Alıcılar: {emails}",
+    "trafficDigestToEveryone": "Kuruluşun tüm üyelerine",
     "trafficDigestPulseOff": "Daily Pulse kapalıyken gönderilmez. Tekrar almak için Daily Pulse'ı yeniden açın.",
     "pulseSaved": "Bildirim ayarları kaydedildi",
     "pulseSaveFailed": "Bildirim ayarları kaydedilemedi. Lütfen tekrar deneyin.",
@@ -17167,6 +18141,17 @@
       "empty": "Eşleşen saat dilimi bulunamadı.",
       "saved": "Saat dilimi kaydedildi",
       "saveFailed": "Saat diliminiz kaydedilemedi. Tekrar deneyin."
+    },
+    "language": {
+      "label": "Dil",
+      "automatic": "Otomatik ({language})",
+      "hint": "Ansvisor ekranlarının dili, yalnızca sizin için geçerlidir. Markalarınızın içerik dili değişmez.",
+      "loading": "Diller yükleniyor…",
+      "moreSoon": "Daha fazla dil yolda.",
+      "preview": "Ekip üyeleri ve test sürümleri, henüz çevirisi olmayan dilleri ve daha uzun metinli bir test dilini de görür. Metin eksikse İngilizce gösterilir.",
+      "testLanguage": "{language} · test",
+      "saved": "Dil kaydedildi",
+      "saveFailed": "Diliniz kaydedilemedi. Lütfen tekrar deneyin."
     },
     "save": "Değişiklikleri kaydet",
     "saved": "Değişiklikler kaydedildi!",
@@ -17286,6 +18271,81 @@
         }
       }
     },
+    "planAddOns": {
+      "title": "Planınıza daha fazlasını ekleyin",
+      "description": "Growth planınız için ek takip, ek markalar ve AI kullanım paketleri. Seçtiğiniz her şey, kayıtlı karta bir kez tahsil edilir.",
+      "tracking": {
+        "title": "Ek takip",
+        "description": "Planınızdaki motorlarda her gün takip edilen daha fazla Prompt konumu. Her seferinde bir kademe; istediğiniz zaman değiştirebilir veya kaldırabilirsiniz.",
+        "label": "Ek takip kademeleri",
+        "none": "Yok",
+        "tier": "+{units} Prompt konumu",
+        "price": "{price}/{interval, select, year {yıl} other {ay}}",
+        "contactSales": "Satışla iletişime geçin",
+        "yearly": "Yıllık fiyatlarda 2 ay ücretsiz."
+      },
+      "brands": {
+        "title": "Ek markalar",
+        "description": "Her marka kendi konularına, rakiplerine ve white-label raporlarına sahip olur. Marka başına {interval, select, year {yıllık} other {aylık}} {price}.",
+        "count": "{count} ek",
+        "fewer": "Bir marka daha az",
+        "more": "Bir marka daha fazla",
+        "note": "Mevcut marka sayınızın altına inemezsiniz: önce Markalar bölümünden birini kaldırın."
+      },
+      "topUp": {
+        "title": "AI kullanım paketi",
+        "description": "Tek ödeme. Planınız {date} tarihinde yenilenene kadar AI kullanımı, brief ve fırsat ekler; yenilenmez.",
+        "descriptionNoDate": "Tek ödeme. Planınız yenilenene kadar AI kullanımı, brief ve fırsat ekler; yenilenmez.",
+        "label": "AI kullanım paketleri",
+        "none": "Yok",
+        "option": "+{multiplier}x",
+        "adds": "Bu ayki AI kullanımının {multiplier}× katı · +{briefs} brief · +{opportunities} fırsat"
+      },
+      "summary": "{prompts} Prompt konumu · {brands} marka",
+      "nothing": "Yukarıdan değiştirmek istediğinizi seçin.",
+      "review": "İncele ve öde",
+      "reviewing": "Fiyat kontrol ediliyor…",
+      "dialog": {
+        "title": "Eklentilerinizi inceleyin",
+        "newLimits": "Yeni limitler",
+        "tracking": "Ek takip",
+        "trackingNone": "Ek takip yok",
+        "brands": "{count, plural, =0 {Ek marka yok} one {# ek marka} other {# ek marka}}",
+        "topUp": "AI kullanım paketi +{multiplier}x, tek ödeme",
+        "dueToday": "Bugün ödenecek tutar",
+        "dueTodayNote": "Ek takip ve markalar için bu dönemin kalan kısmı ile bir yüklemenin tamamı.",
+        "total": "Bir sonraki yenilemeden itibaren",
+        "totalValue": "{interval, select, year {Yıllık {price}} other {Aylık {price}}}",
+        "credit": "Daha düşük bir kademe veya daha az marka, sonraki faturalarınız için kredi bırakır.",
+        "pay": "{price} öde",
+        "confirm": "Onayla",
+        "cancel": "İptal",
+        "processing": "İşleniyor…"
+      },
+      "done": "Eklentileriniz güncellendi. Yükleme, ödeme onaylanır onaylanmaz hesaba katılır.",
+      "states": {
+        "not_admin": "Eklentileri yalnızca adminler değiştirebilir. Çalışma alanınızın bir adminine danışın.",
+        "starter": "Eklentiler Growth planıyla birlikte gelir. Takip, marka ve AI kullanımı eklemek için Growth'a yükseltin.",
+        "enterprise": "Limitlerinizi sözleşmeniz belirler. Daha fazlası için hesap yöneticinizle iletişime geçin.",
+        "trial": "Eklentiler, planınız başladıktan sonra satın alınabilir.",
+        "no_plan": "Eklentiler, planınız aktifken satın alınabilir.",
+        "ending": "Planınızın sona ermesi ayarlandı. Eklentilerini değiştirmek için planınızı sürdürün."
+      },
+      "errors": {
+        "not_cloud": "Eklentiler burada kullanılamıyor.",
+        "admin_only": "Eklentileri yalnızca adminler değiştirebilir.",
+        "not_growth": "Eklentiler Growth planıyla birlikte gelir.",
+        "trial": "Eklentiler, planınız başladıktan sonra satın alınabilir.",
+        "no_plan": "Eklentiler, planınız aktifken satın alınabilir.",
+        "ending": "Planınızın sona ermesi ayarlandı. Eklentilerini değiştirmek için planınızı sürdürün.",
+        "contact_sales": "Bu kademe satış ekibimiz tarafından satılmaktadır.",
+        "unavailable": "Bu eklenti şu anda satın alınamıyor.",
+        "below_usage": "{prompts} Prompt konumu ve {brands} marka kullanıyorsunuz; yeni limitler {limitPrompts} ve {limitBrands}. Önce Prompt'ları duraklatın veya markaları kaldırın.",
+        "payment_failed": "Ödeme gerçekleşmedi.",
+        "failed": "Eklentileriniz değiştirilemedi. Tekrar deneyin."
+      },
+      "readFailed": "Eklentileriniz okunamadı. Daha sonra tekrar deneyin."
+    },
     "cancelsOn": "Abonelik {date} tarihinde sona eriyor",
     "changePlan": "Planı Değiştir",
     "upgradeTo": "{plan} planına yükselt",
@@ -17366,14 +18426,13 @@
     "planChanged": "Plan başarıyla güncellendi.",
     "subscriptionCanceled": "Aboneliğiniz iptal edildi.",
     "needCustomPlan": "Özel bir plana mı ihtiyacınız var?",
-    "customPlanDescription": "Geniş ölçekte AI Görünürlük yöneten büyük şirketler ve ajanslar için. Aylık 499 $'dan başlayan fiyatlarla.",
+    "customPlanDescription": "AI görünürlüğünü büyük ölçekte yöneten büyük şirketler ve ajanslar için. Aylık ${price} fiyatından başlayan fiyatlarla.",
     "customPlanPoints": [
-      "Özel bir çalışma alanında sınırsız marka",
-      "Claude dahil tüm yanıt motorları",
-      "Özel Prompt ve konum takibi",
-      "Özel KPI çerçeveleri ve veri entegrasyonları",
-      "Öncelikli destek ve oryantasyon oturumları",
-      "SSO / SAML ve özel özellik talepleri",
+      "Başlangıç için 1 marka ve 3.000 Prompt, daha fazlası sözleşmeyle",
+      "Tüm yanıt motorları, Claude sözleşmeyle",
+      "Sınırsız içerik brief'i, fırsat ve site denetimi",
+      "SSO / SAML, öncelikli destek ve SLA",
+      "Faturayla ödeme ve API erişimi",
       "Kendi AI anahtarlarınız: OpenAI, Anthropic, Google, Azure veya OpenRouter"
     ],
     "customPlanPointsChat": [
@@ -17381,6 +18440,8 @@
       "Kendi kendine yayın yapan ajanlarla tam otomatik"
     ],
     "planCards": {
+      "expandable": "+ eklentiler",
+      "expandableHint": "Growth, Ayarlar › Faturalandırma bölümünden istediği zaman bunlardan daha fazlasını ekleyebilir: ek takip, ek markalar ve AI kullanım yüklemeleri.",
       "starter": {
         "tagline": "AI Görünürlük takibi ve optimizasyonuna yeni başlayan küçük ekipler için.",
         "engines": "ChatGPT ve Gemini takibi",
@@ -17589,6 +18650,8 @@
     "integrations_connectForbidden": "Yalnızca yöneticiler ve müdürler entegrasyon bağlayabilir.",
     "integrations_statusFailed": "{label} bağlantısının durumu kontrol edilemedi. Birazdan tekrar deneyin.",
     "integrations_statusTimedOut": "{label} kontrolü çok uzun sürdü. Birazdan tekrar deneyin.",
+    "integrations_propertiesFailed": "{source} özellikleri yüklenemedi.",
+    "integrations_propertiesNoAccess": "Google, Ansvisor'a {source} erişimi vermedi: Google ekranındaki bir kutu işaretlenmeden bırakıldı. Yukarıdan bağlantıyı kesin, ardından tekrar bağlanın ve tüm kutuları işaretleyin.",
     "integrations_propertiesTimedOut": "Mülklerin okunması çok uzun sürdü. Birazdan tekrar deneyin.",
     "integrations_retry": "Tekrar deneyin",
     "integrations_propertyMapping": "Mülk eşleme",
@@ -18398,14 +19461,30 @@
     "org_description": "Organizasyon adınızı yönetin ve plan detaylarını görüntüleyin.",
     "org_name": "Organizasyon Adı",
     "org_namePlaceholder": "Acme Inc.",
-    "org_slug": "Slug",
-    "org_slugHint": "API ve entegrasyon referanslarında kullanılır. Değiştirmek için destek ekibiyle iletişime geçin.",
     "org_plan": "Plan",
     "org_members": "Üyeler",
     "org_adminOnly": "Yalnızca yöneticiler organizasyonu yeniden adlandırabilir.",
     "org_loadFailed": "Organizasyon detayları yüklenemedi.",
     "org_saveFailed": "Organizasyon adı kaydedilemedi. Lütfen tekrar deneyin.",
-    "accountSaveFailed": "Hesap detayları kaydedilemedi. Lütfen tekrar deneyin."
+    "accountSaveFailed": "Hesap detayları kaydedilemedi. Lütfen tekrar deneyin.",
+    "teamErrors": {
+      "invalid_email": "Geçerli bir e-posta adresi girin.",
+      "no_brands": "Lütfen en az bir marka seçin.",
+      "already_member": "Bu kişi zaten ekibinizin bir üyesi.",
+      "already_invited": "Bu e-posta adresi için bekleyen bir davet zaten var.",
+      "admin_all_brands": "Adminler her zaman Tüm markalara sahiptir."
+    },
+    "changePlanFailed": "Plan değiştirilemedi. Lütfen tekrar deneyin.",
+    "cancelFailed": "Abonelik iptal edilemedi. Lütfen tekrar deneyin.",
+    "reactivateFailed": "Abonelik yeniden etkinleştirilemedi. Lütfen tekrar deneyin.",
+    "portalFailed": "Faturalandırma portalı açılamadı. Lütfen tekrar deneyin.",
+    "agent_loadFailed": "AI sağlayıcılarınız yüklenemedi. Lütfen sayfayı yenileyin.",
+    "agent_saveFailed": "Kaydedilemedi. Lütfen tekrar deneyin.",
+    "agent_testFailed": "Anahtar test edilemedi. Lütfen tekrar deneyin.",
+    "agent_clearFailed": "Anahtar kaldırılamadı. Lütfen tekrar deneyin.",
+    "integrations_disconnectFailed": "Bağlantı kesilemedi. Lütfen tekrar deneyin.",
+    "integrations_propertySaveFailed": "Mülk kaydedilemedi. Lütfen tekrar deneyin.",
+    "integrations_propertiesLoadFailed": "Mülkler yüklenemedi."
   },
   "brands": {
     "title": "Markalar",
@@ -18502,6 +19581,7 @@
     },
     "description": "Yapay zeka platformlarında takip ettiğiniz tüm markaları yönetin.",
     "addBrand": "Marka Ekle",
+    "addBrandAddOn": "Planınıza marka ekleyin",
     "showAllBrands": "Tüm Markalarımı Göster",
     "visitBrandSettings": "Marka Ayarlarına Git",
     "workspaceSettings": "Çalışma Alanı Ayarları",
@@ -18803,6 +19883,14 @@
         "hint": "Markanızın Prompt görünürlüğünü kontrol etmek için etkin platformlar yapılandırılan sıklıkta sorgulanacaktır.",
         "loadError": "AI platform ayarları yüklenemedi.",
         "saveError": "AI platform ayarları kaydedilemedi."
+      },
+      "errors": {
+        "save": "Kaydedilemedi. Lütfen tekrar deneyin.",
+        "saveDomains": "Alan adları kaydedilemedi. Lütfen tekrar deneyin.",
+        "loadCompetitors": "Rakipler yüklenemedi.",
+        "addCompetitor": "Rakip eklenemedi. Lütfen tekrar deneyin.",
+        "removeCompetitor": "Rakip kaldırılamadı. Lütfen tekrar deneyin.",
+        "deleteBrand": "Marka silinemedi. Lütfen tekrar deneyin."
       }
     },
     "card": {
