@@ -29,11 +29,11 @@ export type UiLocale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: UiLocale = 'en';
 
 /**
- * Languages the app knows but does not offer anyone yet, not even staff:
- * Arabic reads right to left, and the app has no RTL layout support. Turning
- * one on is its own job (see localeDirection).
+ * Languages the app knows but offers no one, not even staff. Empty since
+ * 2026-11-21: Arabic is listed like the others now that the layout follows
+ * the reading direction (RTL work, #2553–#2558, #2638).
  */
-export const HIDDEN_LOCALES: readonly UiLocale[] = ['ar'];
+export const HIDDEN_LOCALES: readonly UiLocale[] = [];
 
 /** The languages a person can pick (the list in the switcher, before the translation check). */
 export const SELECTABLE_LOCALES: readonly UiLocale[] = LOCALES.filter(
@@ -43,12 +43,7 @@ export const SELECTABLE_LOCALES: readonly UiLocale[] = LOCALES.filter(
 /** Languages written right to left. */
 const RTL_LOCALES: readonly string[] = ['ar'];
 
-/**
- * The text direction for <html dir>. Only the attribute is ready: before a
- * right-to-left language is turned on (HIDDEN_LOCALES), the layout needs RTL
- * support (logical margins and padding, mirrored icons and charts), which is
- * not built yet.
- */
+/** The text direction for <html dir>: Arabic reads right to left, and the layout follows it. */
 export function localeDirection(locale: string): 'ltr' | 'rtl' {
   return RTL_LOCALES.includes(locale.split('-')[0]) ? 'rtl' : 'ltr';
 }
@@ -77,7 +72,7 @@ export const LOCALE_NAMES: Record<AnyUiLocale, string> = {
   fr: 'Français',
   es: 'Español',
   it: 'Italiano',
-  'pt-BR': 'Português (Brasil)',
+  'pt-BR': 'Português',
   nl: 'Nederlands',
   ja: '日本語',
   pl: 'Polski',

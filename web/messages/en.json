@@ -17824,7 +17824,7 @@
       "hint": "The language of Ansvisor’s screens, for you only. Your brands’ content language doesn’t change.",
       "loading": "Loading languages…",
       "moreSoon": "More languages are on the way.",
-      "preview": "Staff and test builds also see the languages that have no translation yet, and a test language with longer text. They show English where text is missing.",
+      "preview": "Staff and test builds also see the languages that have no translation yet. They show English where text is missing.",
       "saved": "Language saved",
       "saveFailed": "Couldn’t save your language. Try again."
     },
