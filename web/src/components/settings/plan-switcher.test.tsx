@@ -166,7 +166,7 @@ describe('the plan cards', () => {
       Growth: [
         '4 brands+ add-ons',
         'Unlimited seats',
-        '200 prompts tracked+ add-ons',
+        '250 prompts tracked+ add-ons',
         'ChatGPT, Gemini, Google AI Mode and Google AI Overviews tracking',
         '50 content briefs a month',
         '500 site audits a month',
