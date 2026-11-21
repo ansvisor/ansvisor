@@ -29,6 +29,7 @@ import {
   HISTORY_STATUSES,
   filterHistory,
   summarize,
+  CLOSED_STATUSES,
   type ActionHistoryItem,
   type HistorySort,
 } from '@/lib/action-center/history';
@@ -205,10 +206,17 @@ export default function ActionCenterHistoryPage() {
     [items, status, type, priority, source, search, sort, tTexts],
   );
 
-  // The scorecard hides the filters, so its cards count the whole range.
+  // The scorecard hides the filters; its cards count what its table does,
+  // the actions closed in the range (UX audit AC-61, decision D13).
+  const onScorecard = view === 'scorecard';
   const summary = useMemo(
-    () => summarize(view === 'scorecard' ? (items ?? []) : filtered),
-    [view, items, filtered],
+    () =>
+      summarize(
+        onScorecard
+          ? (items ?? []).filter((item) => CLOSED_STATUSES.includes(item.status))
+          : filtered,
+      ),
+    [onScorecard, items, filtered],
   );
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / HISTORY_PAGE_SIZE));
@@ -349,22 +357,37 @@ export default function ActionCenterHistoryPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div
+            className={cn(
+              'grid gap-3 sm:grid-cols-2',
+              onScorecard ? 'lg:grid-cols-4' : 'lg:grid-cols-3 xl:grid-cols-6',
+            )}
+          >
             <SummaryCard
-              label={t('cards.total')}
+              label={onScorecard ? t('cards.closed') : t('cards.total')}
               value={summary.totalActions}
-              sub={t('cards.totalSub')}
+              sub={onScorecard ? t('cards.closedSub') : t('cards.totalSub')}
             />
             <SummaryCard
               label={t('cards.completed')}
               value={summary.completed}
               sub={t('cards.ofTotal', { percent: summary.completedPercent })}
             />
-            <SummaryCard
-              label={t('cards.inProgress')}
-              value={summary.inProgress}
-              sub={t('cards.ofTotal', { percent: summary.inProgressPercent })}
-            />
+            {/* Open actions are the list's; the scorecard counts closed ones. */}
+            {!onScorecard && (
+              <>
+                <SummaryCard
+                  label={t('cards.inProgress')}
+                  value={summary.inProgress}
+                  sub={t('cards.ofTotal', { percent: summary.inProgressPercent })}
+                />
+                <SummaryCard
+                  label={t('cards.onHold')}
+                  value={summary.onHold}
+                  sub={t('cards.ofTotal', { percent: summary.onHoldPercent })}
+                />
+              </>
+            )}
             <SummaryCard
               label={t('cards.noImprovement')}
               value={summary.noImprovement}

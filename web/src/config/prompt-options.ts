@@ -1,3 +1,4 @@
+import { ENGINE_NAMES } from '@/config/platform-labels';
 import { dayRangeBounds, viewerTimeZone } from '@/lib/time-zone';
 
 export const REGIONS = [
@@ -170,13 +171,17 @@ export const SCRAPER_GROUPS = [
   {
     provider: 'Cloro',
     scrapers: [
-      { id: 'chatgpt-web', label: 'ChatGPT (Web)', platform: 'chatgpt' },
-      { id: 'chatgpt-shopping', label: 'ChatGPT Shopping', platform: 'chatgpt-shopping' },
-      { id: 'google-aio', label: 'Google AI Overviews', platform: 'google-ai-overviews' },
-      { id: 'google-aimode', label: 'Google AI Mode', platform: 'google-ai-mode' },
-      { id: 'copilot-web', label: 'Microsoft Copilot', platform: 'copilot' },
-      { id: 'grok-web', label: 'Grok', platform: 'grok' },
-      { id: 'gemini-web', label: 'Google Gemini', platform: 'gemini' },
+      { id: 'chatgpt-web', label: ENGINE_NAMES['chatgpt-web'], platform: 'chatgpt' },
+      {
+        id: 'chatgpt-shopping',
+        label: ENGINE_NAMES['chatgpt-shopping'],
+        platform: 'chatgpt-shopping',
+      },
+      { id: 'google-aio', label: ENGINE_NAMES['google-aio'], platform: 'google-ai-overviews' },
+      { id: 'google-aimode', label: ENGINE_NAMES['google-aimode'], platform: 'google-ai-mode' },
+      { id: 'copilot-web', label: ENGINE_NAMES['copilot-web'], platform: 'copilot' },
+      { id: 'grok-web', label: ENGINE_NAMES['grok-web'], platform: 'grok' },
+      { id: 'gemini-web', label: ENGINE_NAMES['gemini-web'], platform: 'gemini' },
     ],
   },
 ] as const;

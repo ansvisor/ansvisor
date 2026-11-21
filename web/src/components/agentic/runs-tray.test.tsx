@@ -110,7 +110,8 @@ const openTray = async () => {
 describe('RunsTrayView', () => {
   it('says what runs and what needs the person on its pill', async () => {
     await render(<RunsTrayView data={TRAY} />);
-    expect(pill().textContent).toBe('1 running1');
+    // Named with its count, not "Runs" alone (UX audit CH-16).
+    expect(pill().textContent).toBe('Runs · 1 running1');
     expect(pill().getAttribute('aria-label')).toBe('Your runs: 1 running · 1 needs you');
     expect(pill().getAttribute('aria-expanded')).toBe('false');
     const count = pill().querySelector('[title]')!;
@@ -158,7 +159,7 @@ describe('RunsTrayView', () => {
 
   it('says when nothing runs, and when the runs could not be read', async () => {
     await render(<RunsTrayView data={{ runs: [], running: 0, needsYou: 0 }} />);
-    expect(pill().textContent).toBe('Runs');
+    expect(pill().textContent).toBe('Runs · none running');
     expect(pill().querySelectorAll('i')).toHaveLength(0);
     await openTray();
     expect(popup()!.textContent).toContain('No runs yet. Runs keep going when you leave a page.');
@@ -183,7 +184,8 @@ describe('RunsTray', () => {
       '/api/chat/runs/tray?brand=brand-1',
       { cache: 'no-store' },
     ]);
-    expect(pill().textContent).toBe('1 running1');
+    // Named with its count, not "Runs" alone (UX audit CH-16).
+    expect(pill().textContent).toBe('Runs · 1 running1');
 
     await act(async () => vi.advanceTimersByTimeAsync(TRAY_POLL_CLOSED_MS));
     expect(fetchMock).toHaveBeenCalledTimes(2);

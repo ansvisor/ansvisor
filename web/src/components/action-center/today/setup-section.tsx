@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -59,6 +60,7 @@ export function SetupSection({
 }) {
   const t = useTranslations('actionCenter.today.setup');
   const tAsk = useTranslations('actionCenter.gettingStarted.secondBrand');
+  const serverError = useServerErrorText();
   const { canManage } = useUserRole();
   const [version, setVersion] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -96,8 +98,8 @@ export function SetupSection({
       }
       track('today_setup_hidden', { by });
       setHiddenNow(brandId);
-    } catch {
-      toast.error(t('hideFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('hideFailed')));
     } finally {
       setBusy(false);
     }
@@ -109,8 +111,8 @@ export function SetupSection({
       if (run) await startGettingStarted(brandId);
       else await skipGettingStarted(brandId);
       setVersion((v) => v + 1);
-    } catch {
-      toast.error(t('askFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('askFailed')));
     } finally {
       setBusy(false);
     }

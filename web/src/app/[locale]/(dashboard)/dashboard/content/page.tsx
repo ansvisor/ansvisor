@@ -618,7 +618,7 @@ export default function ContentPage() {
         return data.total;
       } catch (err) {
         console.error('Failed to load opportunities:', err);
-        toast.error(t('loadError'));
+        toast.error(serverError(err, t('loadError')));
         return 0;
       } finally {
         if (!isCancelled?.()) {
@@ -627,7 +627,7 @@ export default function ContentPage() {
         }
       }
     },
-    [urlRead, activeBrandId, listFilters, pager.start, t],
+    [urlRead, activeBrandId, listFilters, pager.start, t, serverError],
   );
 
   useEffect(() => {
@@ -704,8 +704,8 @@ export default function ContentPage() {
       toast.success(t('sentToPlan'), {
         action: { label: t('openPlan'), onClick: () => router.push('/dashboard/content/plan') },
       });
-    } catch {
-      toast.error(t('sendToPlanError'));
+    } catch (err) {
+      toast.error(serverError(err, t('sendToPlanError')));
     }
   };
 
@@ -975,7 +975,7 @@ export default function ContentPage() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to export opportunities:', err);
-      toast.error(t('exportError'));
+      toast.error(serverError(err, t('exportError')));
     } finally {
       setExporting(false);
     }
@@ -992,7 +992,7 @@ export default function ContentPage() {
       idempotencyKey: crypto.randomUUID(),
     }).catch((err: unknown) => ({
       ok: false as const,
-      error: err instanceof Error ? err.message : t('generateError'),
+      error: caughtError(err, t('generateError')),
       failure: 'failed' as const,
       quotaExhausted: false,
       periodEnd: null,
@@ -1062,7 +1062,7 @@ export default function ContentPage() {
       }
     } catch (err) {
       console.error('Webhook send failed:', err);
-      toast.error(t('sendError'));
+      toast.error(serverError(err, t('sendError')));
     } finally {
       setSendingId(null);
     }
@@ -1079,15 +1079,15 @@ export default function ContentPage() {
             try {
               await updateOpportunityStatus(id, 'new');
               await loadData(true);
-            } catch {
-              toast.error(t('undoFailed'));
+            } catch (err) {
+              toast.error(serverError(err, t('undoFailed')));
             }
           },
         },
       });
     } catch (err) {
       console.error('Dismiss failed:', err);
-      toast.error(t('dismissError'));
+      toast.error(serverError(err, t('dismissError')));
     }
   };
 
@@ -1107,7 +1107,7 @@ export default function ContentPage() {
       await loadData(true);
     } catch (err) {
       console.error('Bulk webhook send failed:', err);
-      toast.error(t('bulkSendError'));
+      toast.error(serverError(err, t('bulkSendError')));
     } finally {
       setBulkSending(false);
     }

@@ -14,6 +14,67 @@
     "upgrade": "升级",
     "choosePlan": "选择方案"
   },
+  "locationPicker": {
+    "label": "地点",
+    "tracked": "已追踪",
+    "count": "· {count} 个{noun}",
+    "countOf": "· 共 {max} 个可用，已用 {count} 个",
+    "country": "国家/地区",
+    "countryMissing": "国家/地区 · {engines} 不支持",
+    "usState": "美国 · 州",
+    "city": "城市 · {country}",
+    "atCap": "已达套餐上限",
+    "add": "添加国家/地区、美国州或城市",
+    "search": "搜索地点…",
+    "empty": "没有匹配的地点。",
+    "already": "已{noun}",
+    "atCapHint": "已达套餐上限 — 请移除一个地点或升级",
+    "remove": "移除 {location}",
+    "cityNote": "Google AI Mode、AI Overviews 和 API 模型支持按城市提问。ChatGPT、Gemini 和 Grok 按国家/地区作答，因此请同时追踪国家/地区以查看其结果。"
+  },
+  "promptCard": {
+    "save": "保存更改",
+    "cancelEdit": "取消编辑",
+    "edit": "编辑 Prompt",
+    "delete": "删除 Prompt",
+    "deleteTitle": "删除 Prompt",
+    "deleteBody": "您确定要删除此 Prompt 吗？此操作无法撤销。",
+    "cancel": "取消",
+    "confirmDelete": "删除"
+  },
+  "brandGuard": {
+    "noBrandsTitle": "还没有品牌",
+    "noBrandsBody": "创建您的第一个品牌，开始追踪 AI 引擎如何谈论您。",
+    "createBrand": "创建品牌",
+    "selectTitle": "选择品牌",
+    "selectBody": "请选择您要使用的品牌。"
+  },
+  "runSingle": {
+    "title": "运行单个 Prompt",
+    "description": "选择要测试的 Prompt。仅该 Prompt 会在您已启用的平台上运行。",
+    "empty": "未找到可用的 Prompt。请先在品牌设置中添加 Prompt。",
+    "loadFailed": "加载 Prompt 失败",
+    "runFailed": "运行 Prompt 失败"
+  },
+  "responseDetail": {
+    "response": "AI 回复",
+    "showLess": "收起",
+    "showFull": "显示完整回复",
+    "citations": "引用来源（{count}）",
+    "fanOut": "查询 fan-out（{count}）"
+  },
+  "serverErrors": {
+    "invalid": "提交未成功：其中有内容无效。请检查后重试。",
+    "too_large": "内容过大,请尝试缩小后重试。",
+    "too_long": "内容过长,请缩短后重试。",
+    "rate_limited": "您的操作过于频繁,请等待几分钟后重试。",
+    "forbidden": "您没有执行此操作的权限,请联系管理员。",
+    "duplicate": "该内容已存在。",
+    "missing_ai_key": "请先在“设置 › AI 提供商”中添加 AI 提供商密钥。",
+    "server_error": "我们这边出了点问题,请重试。",
+    "location_limit": "您套餐的 Prompt 位置额度已满:每个 Prompt 在其跟踪的每个位置各计一次,已暂停的 Prompt 不计入。请删除或暂停部分 Prompt,或升级套餐。",
+    "brand_limit": "您套餐的品牌额度已全部用完。请升级套餐以添加更多。"
+  },
   "aiUsage": {
     "meter": {
       "ai": "AI",
@@ -41,6 +102,19 @@
       "startPlan": "启用方案"
     },
     "getMoreWindow": {
+      "topUp": {
+        "title": "AI 用量加购",
+        "label": "AI 用量加购包",
+        "buy": "购买 {option} · {price}",
+        "confirm": "现在使用已保存的银行卡支付 {price} 吗?加购额度将计入本周期,直至套餐续订。",
+        "pay": "支付 {price}",
+        "cancel": "取消",
+        "paying": "支付中…",
+        "done": "加购成功。付款确认后即刻生效。",
+        "starter": "Growth 套餐包含 5 倍 AI 用量,需要更多时还可随时加购 AI 用量。",
+        "seeGrowth": "查看 Growth",
+        "oldCredits": "AI 额度包已停售;您已购买的额度在到期前仍然有效。"
+      },
       "titleAi": "获取更多 AI 额度",
       "titleStorage": "获取更多存储空间",
       "description": "您的方案、当前限额状态以及用于扩充的资源包。",
@@ -49,7 +123,7 @@
       "aiLine": "本月 AI 用量：{percent} · {plan} · 重置日期：{date}",
       "aiLineNoDate": "本月 AI 用量：{percent} · {plan}",
       "ownKey": "使用您自己的密钥",
-      "askAi": "购买 AI 额度包",
+      "askAi": "购买 AI 用量加购包",
       "askStorage": "购买存储包",
       "estimates": {
         "title": "一个资源包大致可覆盖的内容",
@@ -673,6 +747,7 @@
     "billing": "方案与结算",
     "whatsNew": "最新动态",
     "whatsNewUnread": "新更新",
+    "language": "语言",
     "help": "帮助",
     "signOut": "退出登录"
   },
@@ -841,6 +916,7 @@
         "starting": "正在启动",
         "notYet": "尚未开始",
         "open": "{count} 项待处理",
+        "openBreakdown": "{onHold} 项搁置 · {mine} 项归您",
         "doneWeek": "本周已完成 {count} 项",
         "noChange": "无变化",
         "tomorrow": "明天"
@@ -919,7 +995,7 @@
           "openNewest": "在 Chat 中打开最新项"
         },
         "drafts": {
-          "line": "智能体已起草 {count, plural, other {# 个页面}}。未经您的确认，任何内容都不会发布。",
+          "line": "{count, plural, other {# 份草稿}}等待您审核。未经您同意,任何内容都不会上线。",
           "open": "{count, plural, other {审核 # 个草稿}}"
         },
         "due": {
@@ -1061,8 +1137,8 @@
         },
         "saved": {
           "title": "已为您保存",
-          "drafts": "{count, plural, other {智能体生成的 # 份草稿}}：{title}。",
-          "draftsUntitled": "{count, plural, other {智能体生成的 # 份草稿}}等待审核。",
+          "drafts": "{count, plural, other {# 份草稿}}等待您审核:{title}。",
+          "draftsUntitled": "{count, plural, other {# 份草稿}}等待您审核。",
           "kept": "选择方案以审核并发布它们。您的 {prompts, plural, other {# 个 Prompt}} 和 {competitors, plural, other {# 个竞争对手}}均已保留。"
         },
         "plan": {
@@ -1099,6 +1175,16 @@
       "content": "内容"
     },
     "kpis": {
+      "newGoal": {
+        "prompt": "目标已达成 · 设置新目标",
+        "title": "{name}的新目标",
+        "description": "当前为 {value},已超过目标 {goal}。新目标默认比当前值高 20%,您可以按需修改。",
+        "label": "新目标",
+        "cancel": "取消",
+        "save": "保存目标",
+        "saved": "新目标已保存",
+        "failed": "无法保存目标,请重试。"
+      },
       "title": "KPI",
       "subtitle": "追踪与您的目标紧密相关的关键指标。",
       "allKpis": "全部 KPI",
@@ -1121,6 +1207,7 @@
         "goal_reached": "已达成目标"
       },
       "pointsChange": "{value} 个百分点",
+      "score": "{value}/100",
       "vsGoalAria": "目标的 {progress}%",
       "editKpis": "编辑 KPI",
       "addKpi": "添加 KPI",
@@ -1193,7 +1280,8 @@
       },
       "targets": "目标值",
       "targetAria": "{name} 的目标值",
-      "invalidTarget": "目标值必须为正数；百分比目标不能超过 100。",
+      "invalidTarget": "目标值必须为正数;百分比和分数目标不能超过 100。",
+      "scoreSuffix": "/100",
       "callout": {
         "title": "此 KPI 框架将用于驱动您的行动中心。",
         "description": "操作与建议将根据您的 KPI 目标确定优先级。"
@@ -1244,7 +1332,8 @@
     },
     "signalsPage": {
       "title": "信号",
-      "subtitle": "来自 AI 搜索、您的网站以及全网的实时信号。这些信号将驱动行动中心。",
+      "subtitle": "来自您的 AI 回答、网站和网络的信号,它们驱动您的行动中心。",
+      "subtitleRun": "来自您最近一次 AI 回答运行({ago})的信号,它们驱动您的行动中心。",
       "cards": {
         "total": "信号总数",
         "totalPopulation": "过去 {days, plural, other {# 天}}内活跃",
@@ -1254,6 +1343,7 @@
         "newPopulation": "过去 {days, plural, other {# 天}}内检测到",
         "resolved": "已解决信号",
         "resolvedPopulation": "过去 {days, plural, other {# 天}}内已解决",
+        "resolvedNote": "可能多于“新增”:其中包括在本周期之前产生、并在本周期内已解决的信号。",
         "avgImpact": "平均信号影响",
         "avgImpactPopulation": "基于过去 {days, plural, other {# 天}}内活跃的信号",
         "noPrev": "无历史数据",
@@ -1857,14 +1947,15 @@
       "choices": {
         "approve_first": {
           "label": "由我先审批",
-          "note": "无论 Agent 处于何种模式，其进行的每项更改都需要等待人工审批。"
+          "note": "智能体所做的每项更改都需等待有人批准。"
         },
         "auto_start": {
           "label": "Agent 自主启动",
-          "note": "每个智能体都在各自的模式下运行：先询问我、自动或全自动。"
+          "note": "每个智能体遵循各自的模式:先询问我、自动或完全自动。"
         }
       },
-      "goLive": "两者都不会直接上线：智能体只有在人工点击后才会发布或发送，除非管理员允许其自主发布。",
+      "goLive": "智能体在发布或发送前始终会先询问。",
+      "goLiveAdmin": "例外:管理员已允许其自行发布和发送的智能体。",
       "changedBy": "由 {name} 更改 · {date}",
       "someone": "已不在工作区中的成员",
       "neverChanged": "尚未更改：每个工作区默认从“由我先审批”开始。",
@@ -1927,6 +2018,7 @@
         "actions": "操作"
       },
       "status": {
+        "open": "未处理",
         "new": "新建",
         "in_progress": "进行中",
         "on_hold": "暂停",
@@ -1937,6 +2029,7 @@
       "stale": {
         "pill": "已搁置",
         "hint": "处于“新建”状态已达 {days} 天或更久，且无人处理",
+        "quiet": "{days} 天无更新",
         "notice": "已搁置：此行动处于“新建”状态已达 {days} 天或更久，且无人处理。该行动尚未关闭：如果仍然相关请保留，或者将其忽略。",
         "keep": "仍然相关",
         "kept": "已保留：不再处于搁置状态"
@@ -1946,6 +2039,7 @@
       "everyoneTitle": "工作区中的所有人：尚未分配给任何人",
       "tags": {
         "signals": "{count, plural, other {# 个信号}}",
+        "signalResolved": "信号已解决,请复核",
         "prompts": "{count, plural, other {# 个 Prompt}}",
         "pages": "{count, plural, other {# 个页面}}",
         "sources": "{count, plural, other {# 个来源}}",
@@ -1957,8 +2051,15 @@
       },
       "removed": {
         "note": "（自创建此行动以来已移除 {items} 项）",
-        "hover": "自创建此行动以来已停止追踪：{names}",
-        "hoverMore": "自创建此行动以来已停止追踪：{names} 等另外 {more} 项"
+        "title": "自创建此行动以来已不再追踪",
+        "more": "以及另外 {count} 项",
+        "reasons": {
+          "deleted": "已删除",
+          "paused": "已暂停"
+        },
+        "replanHint": "此行动的大部分 Prompts 已不存在,因此其任务可能不适合剩余的 {count, plural, other {# 个 Prompts}}。",
+        "replan": "根据剩余 Prompts 重新规划",
+        "replanConfirm": "要针对剩余的 Prompts 重新编写此行动的任务吗?已完成、进行中和手动添加的任务将保留。"
       },
       "menu": {
         "label": "针对此项的操作"
@@ -1983,6 +2084,8 @@
         "description": "行动会在每日追踪运行后根据您的信号自动生成。一旦出现有价值的工作，就会显示在此处——重质不重量。"
       },
       "noResults": "没有符合这些筛选条件的行动。",
+      "noOpen": "没有未处理的行动。已完成和已忽略的行动在“所有状态”下。",
+      "showAllStatuses": "显示所有状态",
       "error": {
         "title": "无法加载您的行动。",
         "retry": "重试"
@@ -2002,6 +2105,10 @@
         },
         "notScored": "尚未评分",
         "why": "为什么是此优先级？",
+        "lowConfidence": {
+          "tip": "依据:{why}。置信度只是评分的一部分,因此影响和需求仍可能使其排名靠前。请在行动前核实。",
+          "sentTip": "根据发送时附带的信息评级,而非检测到的发现。请在行动前核实。"
+        },
         "reason": {
           "change": {
             "lost": "在{subject}上失去优势",
@@ -2163,7 +2270,7 @@
         "why": "为什么建议此操作？",
         "goal": "目标",
         "kpis": "KPI",
-        "kpiTarget": "目标 {target}",
+        "kpiBrandGoal": "{timeframe, select, weekly {品牌每周目标} quarterly {品牌季度目标} other {品牌每月目标}}:{target}",
         "noKpis": "未关联任何已配置的 KPI 至此操作。",
         "support": "{count, plural, =0 {不再有未解决信号支持此操作。} other {# 条信号支持此操作}}",
         "supportAll": "全部信号 ({count})",
@@ -2304,6 +2411,8 @@
         "assignee": "负责人",
         "assignTo": "指派给团队成员",
         "dueDate": "截止日期",
+        "goalPassed": "目标日期已过",
+        "setNewDate": "设置新日期",
         "statusLabel": "状态",
         "events": {
           "created": "{source, select, chat {操作创建自聊天} ads {操作创建自广告} other {操作已创建}}",
@@ -5252,7 +5361,7 @@
       "addedLabel": "已添加至 Action Center 操作项",
       "createdNote": "Action Center 会设定其优先级分数。您可以在该处完成其任务。",
       "addedNote": "已作为依据添加。其目标保持不变。",
-      "open": "在 Actions 中打开",
+      "open": "在行动中心打开",
       "toastCreated": "已发送至 Action Center",
       "toastAdded": "已添加至 Action Center 中的操作项"
     },
@@ -5327,6 +5436,8 @@
     "readOnly": "只读 · {role}",
     "readOnlyTitle": "{role}可以提问和查看。Admin 和 Manager 可以进行更改。查看您的可用权限。",
     "model": "模型",
+    "modelPrefix": "模型:",
+    "modelTip": "Chat 用于回答的 AI 模型及其投入程度。“自动”会为每一步选择一个模型。",
     "modelAuto": "自动",
     "modelWarn": "模型 · {usage}",
     "modelImage": "图像 · {model}",
@@ -5486,6 +5597,7 @@
     },
     "mode": {
       "label": "运行模式",
+      "prefix": "运行模式:",
       "current": "运行模式：{mode}",
       "ask_first": "先询问我",
       "auto": "自动，更改前询问",
@@ -5628,7 +5740,7 @@
       "save": "保存",
       "inFiles": "在文件中",
       "openEditor": "在编辑器中打开",
-      "sendToActionCenter": "发送到操作中心"
+      "sendToActionCenter": "发送到行动中心"
     }
   },
   "chatDeliverable": {
@@ -6021,7 +6133,8 @@
       "scheduledLabel": "已计划，已开启 {count, plural, other {# 项任务}}",
       "agents": "Agent",
       "agentsShort": "Agent",
-      "agentsLabel": "Agent · 位于操作中心"
+      "agentsLabel": "Agent · 位于操作中心",
+      "agentsTip": "打开行动中心 › 智能体,将离开 Chat"
     },
     "actions": {
       "more": "关于 {name} 的更多操作",
@@ -6118,7 +6231,7 @@
         "whatsNew": "新功能"
       },
       "byFocus": {
-        "rivalRose": "{rival} 的提及率本周上升了 {points, number} 个百分点。",
+        "rivalRose": "本周 <link>{rival}</link> 的提及率上升了 {points, number} 个百分点。",
         "startTitle": "从提问开始",
         "newForYou": {
           "title": "为您推荐的新功能",
@@ -8784,6 +8897,11 @@
       "createAgent": "创建 Agent",
       "connect": "连接 {name}",
       "notConnected": "{name} · 未连接",
+      "catalog": {
+        "name": "目录",
+        "connect": "连接目录(Shopify、Feed URL、CSV)"
+      },
+      "enabled": "已启用",
       "toggle": "为工作区开启 /{name}",
       "turnedOn": "已为工作区开启 /{name}。",
       "turnedOff": "已为工作区关闭 /{name}。",
@@ -9454,7 +9572,7 @@
       "pagesSubOther": "+ 其他站点上的 {count} 个页面",
       "coverageOf": "/ {count, plural, other {# 个站点页面}}",
       "coverageSub": "{never} 个从未审核 · {stale} 个已超过 {days} 天未审核",
-      "coverageTip": "过去 {days} 天内审核过的站点页面，取自 Ansvisor 从您的站点地图、Google Analytics 以及 AI 引用的页面中收录的部分（最多 500 个）。您在“站点审核”设置中排除的页面，以及结账、登录和法律条款页面均不计入。",
+      "coverageTip": "已审核的网站页面数(最近 {days} 天内未审核的页面会在旁边注明),统计范围为 Ansvisor 从您的站点地图、Google Analytics 以及 AI 引用的页面中保留的页面(最多 500 个)。您在站点审核设置中排除的页面,以及结账、登录和法律页面不计入。",
       "seeNotAudited": "查看未审核的 {count} 个页面 →",
       "authority": "权威度 · E-E-A-T",
       "authorityTip": "权威度和 E-E-A-T 评分（按各页面最新审核取平均值），以及在最多页面上出现未通过或警告的信号。",
@@ -9530,6 +9648,17 @@
       "saveFailed": "无法保存设置",
       "loadFailed": "无法加载设置"
     },
+    "batch": {
+      "title": "批量审核",
+      "progress": "已完成 {done}/{total}",
+      "timeLeft": "约剩 {minutes} 分钟",
+      "estimating": "正在估算剩余时间…",
+      "finished": "全部 {total, plural, other {# 项审核}}已完成",
+      "thisBatch": "本批次",
+      "thisBatchTip": "仅列出此批量审核中的页面",
+      "allPages": "所有页面",
+      "dismiss": "忽略"
+    },
     "autoRun": {
       "label": "自动审核",
       "done": "已审核 {pages, plural, other {# 个页面}} · {issues, plural, other {# 个严重问题}}",
@@ -9560,7 +9689,7 @@
       },
       "list": "{pages}{count, plural, =0 {} other { 以及另外 # 个}}",
       "recent": "排除在过去 {days} 天内已审核的 {count, plural, other {# 个页面}}",
-      "recentPages": "{pages}{count, plural, =0 {} other { 以及另外 # 个}}。未发生变化的页面得分保持不变。",
+      "recentPages": "{pages}{count, plural, =0 {} other {等另外 # 个页面}}。在对整个站点进行更改(例如修改 robots.txt 或模板)后,请重新审核这些页面。",
       "recentPage": "{page} 于 {date}",
       "noLimit": "您的方案没有每月限额。正在审核的页面不会重复开始。",
       "noneLeft": "本月审核次数已用尽。",
@@ -9696,7 +9825,7 @@
       "counts": {
         "official": "政府与学术网站：.gov、.edu、.mil 及其国家后缀形式，如 .gov.tr、.edu.tr、.ac.uk",
         "international": "国际组织：任何 .int 网站、un.org、unesco.org、europa.eu、oecd.org、worldbank.org、imf.org",
-        "research": "参考资料与研究：wikipedia.org、doi.org、arxiv.org、nature.com、sciencedirect.com、iso.org、w3.org",
+        "research": "参考资料、研究、标准和平台文档:wikipedia.org、doi.org、arxiv.org、nature.com、iso.org、w3.org、rfc-editor.org、schema.org、developers.google.com、developer.mozilla.org",
         "news": "主要新闻媒体：路透社 (Reuters)、彭博社 (Bloomberg)、金融时报 (Financial Times)、BBC、纽约时报 (The New York Times)、华盛顿邮报 (The Washington Post)",
         "trusted": "您信任的来源："
       },
@@ -9736,6 +9865,7 @@
       "firewall": "{count, plural, other {robots.txt 允许访问，但 {bots} 被您的 CDN 或防火墙拦截了。}}",
       "robots": "robots.txt 禁止了 {bots} 的访问。",
       "allLetIn": "所有测试的 AI 漫游器均已放行。",
+      "unnamed": "robots.txt 中未列出 AI 机器人,因此审核无法确认它们是否被允许访问。请为每个机器人添加一个规则组(例如 \"User-agent: GPTBot\" 搭配 \"Allow: /\")。",
       "inconclusive": "您的站点拒绝了 Ansvisor 自身的请求（{status}），因此未对漫游器进行测试。",
       "note": "测试请求由 Ansvisor 服务器模拟各漫游器分别发起一次。若防火墙校验抓取工具的真实 IP 地址，其实际访问情况可能有所不同。",
       "cell": {
@@ -9778,6 +9908,7 @@
       "tipSame": "该页面最近 {audits} 次审计的得分均为 {low} 分。"
     },
     "aiRecommendations": "AI 优化建议",
+    "topRecommendations": "重点建议",
     "signals": "信号",
     "onlyIssues": "仅显示问题",
     "allSignals": "所有信号",
@@ -9790,6 +9921,327 @@
     "emptyTitle": "审计任意页面在 AI 搜索中的就绪情况",
     "emptyBody": "在上方输入 URL，对照 48 项 AEO/GEO 信号进行评分，并获取由 AI 生成的修复建议。"
   },
+  "auditRubric": {
+    "categories": {
+      "structure": {
+        "label": "结构",
+        "description": "AI 引擎解析您页面的难易程度。包括 Schema、标题、列表、表格、替代文本、OG 元数据,是让其他一切内容可被理解的基础。"
+      },
+      "authority": {
+        "label": "权威性",
+        "description": "您的页面是否体现出由专家撰写并引用真实来源。包括署名、引用、统计数据、引文、时效性和专业术语。"
+      },
+      "content": {
+        "label": "内容",
+        "description": "页面是否真正回答了买家的查询——直接、完整且语气得当。包括 BLUF、查询覆盖度、子问题覆盖度、可读性,以及产品页面中描述的开头部分。"
+      },
+      "trust": {
+        "label": "信任",
+        "description": "抓取时和分享时的信任信号:HTTPS、canonical、viewport、通过 robots.txt 及以各 AI 机器人身份实时抓取得到的 AI 机器人访问情况、Twitter 卡片、元描述。llms.txt 仅供参考。"
+      },
+      "eeat": {
+        "label": "E-E-A-T",
+        "description": "Google 的经验、专业性、权威性、可信度框架。包括第一人称经历、案例研究、作者资历、Wikidata 中的品牌实体、媒体报道、隐私政策和联系信息。"
+      }
+    },
+    "signals": {
+      "structural-depth": {
+        "label": "结构深度(GEO-SFE)",
+        "what": "标题层级与嵌套结构深度——H1→H2→H3 的嵌套应体现真实的大纲。",
+        "why": "arXiv:2603.29979 显示,与扁平文档相比,具有可衡量结构深度的页面被引用率提升 17.3%。",
+        "howToFix": "将内容归入有명称的 H2 小节下,用 H3 表示细分要点,不要跳级。"
+      },
+      "internal-linking": {
+        "label": "内部链接",
+        "what": "此页面指向您站点其他页面的链接——体现可导航的链接图谱。",
+        "why": "AI 爬虫会像抓取一样通过内部链接扩展上下文。孤立的页面更容易被忽略收录。",
+        "howToFix": "每个页面添加 5–10 个指向相关概念、术语表或支持页面的内部链接。"
+      },
+      "page-weight": {
+        "label": "页面体积",
+        "what": "HTML 总大小,越小越好。我们会标记超过 500 KB 的页面。",
+        "why": "AI 渲染机器人的超时时间比人类用户更短。过重的页面会被截断或跳过。",
+        "howToFix": "移除未使用的 JS,延迟加载首屏以下的图片,去除阻塞渲染的第三方脚本。"
+      },
+      "no-js-content": {
+        "label": "无需 JavaScript 即可获取的正文",
+        "what": "与浏览器渲染后的页面相比,AI 机器人在运行任何 JavaScript 之前获取的 HTML 中包含多少页面正文。隐藏比例不超过 10% 为通过;最高 30% 为警告。",
+        "why": "GPTBot、ClaudeBot 和 PerplexityBot 等 AI 爬虫不会运行 JavaScript:只有运行后才出现的文本,它们永远看不到。",
+        "howToFix": "在服务器端渲染主要内容(服务器端渲染或静态页面),或为机器人预渲染,而不是通过 JavaScript 加载。"
+      },
+      "json-ld-presence": {
+        "label": "JSON-LD 存在性",
+        "what": "页面是否至少包含一个 schema.org JSON-LD 代码块。",
+        "why": "Schema.org 是影响 AI Overviews 入选资格最关键的单一信号——引擎会先解析它,再解析文本。",
+        "howToFix": "至少添加 Organization 或 Article 代码块。我们的 /tools/schema-generator 可输出有效的 JSON-LD。"
+      },
+      "json-ld-validity": {
+        "label": "JSON-LD 有效性",
+        "what": "JSON-LD 是否可解析、@context 是否为 schema.org,以及 @type 是否有效。",
+        "why": "格式错误的 JSON-LD 比没有更糟——引擎会记录解析错误并降低信任度。",
+        "howToFix": "发布前,请先用 Google 的富媒体搜索结果测试检查您的 JSON-LD。"
+      },
+      "json-ld-relevance": {
+        "label": "JSON-LD 类型相关性",
+        "what": "@type 是否与页面意图相符(博客用 Article、商品详情页用 Product、FAQ 页用 FAQPage)。",
+        "why": "类型错误的结构化数据会被忽略——首页上的 Article 标记会被当作噪音解析。",
+        "howToFix": "根据页面的实际内容选择最贴切的 schema.org 类型,而不是笼统的通用类型。"
+      },
+      "faq-schema": {
+        "label": "FAQ schema",
+        "what": "包含至少 2 组问答的 FAQPage JSON-LD。",
+        "why": "根据 Google 自己的 SGE 指南,FAQPage 是对 AI Overviews 引用提升最大的单一类型。",
+        "howToFix": "添加包含 3–5 组问答的 FAQPage schema,问题应贴近真实买家的查询。"
+      },
+      "h1-quality": {
+        "label": "H1 质量",
+        "what": "仅有一个 H1,长度为 20–70 个字符,并包含主要查询词。",
+        "why": "AI 引擎将 H1 视为页面的核心主张——多个 H1 会干扰主题模型。",
+        "howToFix": "每个页面只设一个 H1,表述清晰,30–60 个字符,并包含页面的主要主题。"
+      },
+      "h2-coverage": {
+        "label": "H2 覆盖度",
+        "what": "至少 3 个 H2 小节,用于分段内容,便于快速浏览。",
+        "why": "AI 引擎会提取 H2 作为章节锚点——没有 H2 的页面更难总结。",
+        "howToFix": "将内容拆分为 3–6 个 H2 小节,每个小节回答一个子问题。"
+      },
+      "lists": {
+        "label": "列表",
+        "what": "至少 1 个包含 3 项以上的 <ul> 或 <ol>。",
+        "why": "对于“如何做 X”和“最佳 Y”类查询,AI 引擎优先提取列表。",
+        "howToFix": "将至少一段列举原因或步骤的文字改为真正的 <ul>/<ol>。"
+      },
+      "tables": {
+        "label": "表格",
+        "what": "至少 1 个带有规范 <thead>/<tbody> 的 <table>,用于呈现结构化数据。",
+        "why": "对于对比和规格表类查询,表格是提取率最高的格式。",
+        "howToFix": "如果有规格、价格或对比内容,请使用真正的 <table> 呈现,而不是图片。"
+      },
+      "alt-text": {
+        "label": "替代文本",
+        "what": "至少 80% 的有意义 <img> 标签带有非空 alt 属性。装饰性图片(alt=\"\"、role=\"presentation\" 或 aria-hidden)不计入。",
+        "why": "多模态引擎(Gemini、Claude、GPT-4o)会将替代文本作为页面语义上下文来读取。",
+        "howToFix": "为每张有意义的图片添加描述性 alt。装饰性图片使用 alt=\"\"。"
+      },
+      "open-graph": {
+        "label": "Open Graph 元数据",
+        "what": "og:title、og:description、og:image、og:type 均已设置。",
+        "why": "AI 引擎的链接预览和社交分享会使用 OG 元数据作为引用卡片。",
+        "howToFix": "添加这 4 个 OG 标签。og:image 使用 1200×630 尺寸。我们的 /tools/og-checker 可以验证它们。"
+      },
+      "outbound-authority-links": {
+        "label": "外部权威链接",
+        "what": "指向官方网站(政府、学术或国际机构)、参考和研究网站或主流新闻媒体的链接。",
+        "why": "链接到可信来源会向被链接方回传权威性(引用图谱效应)。",
+        "howToFix": "使用真正的 <a> 标签引用原始来源,而不是纯文本引用。长页面建议设置 2–3 个。"
+      },
+      "citation-density": {
+        "label": "引用密度",
+        "what": "每 1000 字的行内引用数(目标 ≥2)。",
+        "why": "引用来源的页面也会被当作来源引用。引用密度是最强的非链接权威信号。",
+        "howToFix": "将“研究表明”替换为“2024 年斯坦福的一项研究(链接)”。具体才有说服力。"
+      },
+      "statistic-density": {
+        "label": "统计数据密度",
+        "what": "每1000字中包含数字的量化论述数量(目标 ≥3)。",
+        "why": "相比空洞的文字,AI 引擎更倾向于引用包含可衡量论述的内容。",
+        "howToFix": "在论述中加入真实数据,例如百分比、金额和时间长度。"
+      },
+      "quotations": {
+        "label": "直接引语",
+        "what": "内联的 <blockquote> 或带出处的引文。",
+        "why": "引语意味着一手研究。在 GEO 论文测试集中,引语可将被引用率提升约 12%。",
+        "howToFix": "每个长页面至少引用一位客户、一位专家或一个一手来源。"
+      },
+      "author-byline": {
+        "label": "作者署名",
+        "what": "署名区域中至少包含真实姓名的具名作者。",
+        "why": "匿名内容会被视为 E-E-A-T 较低。AI 引擎更倾向于呈现有作者署名的内容。",
+        "howToFix": "在页面顶部添加“作者:[姓名]”,链接到真实的作者简介页面,并使用 Person schema。"
+      },
+      "date-markup": {
+        "label": "日期标记",
+        "what": "JSON-LD 中的 datePublished + dateModified,或 <time datetime>。",
+        "why": "引擎可能会将未标注日期的内容视为过时而降低评价。标注日期的内容可获得时效性评分。",
+        "howToFix": "添加 JSON-LD 的 datePublished + dateModified,或可见的 <time datetime> 标签。"
+      },
+      "freshness": {
+        "label": "时效性",
+        "what": "最后修改日期在过去 365 天内。",
+        "why": "对于时效性强的查询,过时内容会被降权。重新发布日期可重置计时。",
+        "howToFix": "至少每年更新一次重点页面,并同步更新 dateModified。"
+      },
+      "technical-terms": {
+        "label": "技术术语密度",
+        "what": "体现真实专业水平(而非浅显写作)的领域专业术语。",
+        "why": "使用精确技术词汇的页面体现出真正的专业性。",
+        "howToFix": "使用该领域真实的技术语言,并为首次出现的术语添加术语表链接或给出定义。"
+      },
+      "direct-answer": {
+        "label": "直接回答查询",
+        "what": "前 200 个字符内是否已回答买家的查询。",
+        "why": "AI 引擎更倾向于提取直接答案。答案被埋没就不会被引用。",
+        "howToFix": "页面开头用 1–2 句话直接回答主要查询,然后再展开。"
+      },
+      "bluf-answer": {
+        "label": "BLUF(结论先行)",
+        "what": "首段中清晰的论点陈述,说明页面的核心主张。",
+        "why": "源自军事文书的写作风格,BLUF 可显著提升 AI 的可提取性。",
+        "howToFix": "以“答案是 X。原因如下。”开头,不要把重点埋没。"
+      },
+      "query-coverage": {
+        "label": "查询词覆盖率",
+        "what": "查询词出现在页面正文中的比例(目标 ≥80%)。",
+        "why": "覆盖率是基础相关性信号,缺少查询词意味着页面未能覆盖该查询。",
+        "howToFix": "确保每个有意义的查询词至少在正文中出现一次。"
+      },
+      "entity-coverage": {
+        "label": "实体覆盖率",
+        "what": "提及的命名实体与查询实体范围相匹配的程度。",
+        "why": "AI 引擎会为每个页面构建实体图谱,缺少相关实体会降低主题权威性。",
+        "howToFix": "如果页面主题是 X,请提及 X 已知的相关实体(人物、地点、产品)。"
+      },
+      "readability": {
+        "label": "可读性",
+        "what": "按页面语言计算的易读性得分:英文使用 Flesch Reading Ease(目标 50–70),土耳其语使用 Ateşman(50 及以上),德语、法语或西班牙语分别使用 Amstad、Kandel–Moles 或 Fernández-Huerta(60 及以上);其他语言根据句子和单词长度计算。",
+        "why": "引擎会从人类可读的内容中提取信息。晦涩、学术化的文本表现较差;对英文而言,过于简单的文本(超过 70)可能缺少读者期望的细节。",
+        "howToFix": "低于目标:缩短句子,使用更平实的词汇,每句约 16 个词。英文超过 70:撰写更完整的句子,并补充读者期望的细节。"
+      },
+      "length": {
+        "label": "页面长度",
+        "what": "主要内容的字数(目标 800–3000)。",
+        "why": "太短会显得内容单薄;太长则会被引擎截断。最佳范围是中长篇内容。",
+        "howToFix": "如果不足 600 字,请通过示例和子章节进行扩充。如果超过 4000 字,请拆分为中心页和分支页。"
+      },
+      "info-density": {
+        "label": "信息密度",
+        "what": "实质内容与冗余内容的比例。",
+        "why": "信息密度高的内容更容易被优先引用。引擎会隐式地评估“每个 token 的价值”。",
+        "howToFix": "删除铺垫性的句子。将“值得注意的是”替换为真正的要点。"
+      },
+      "mega-page-coverage": {
+        "label": "超级页面覆盖度",
+        "what": "页面是否在同一个 URL 下涵盖多个紧密相关的子主题。",
+        "why": "在 AI 引擎中,超级页面的排名高于内容单薄的页面,因为它们覆盖了实体的相关领域。",
+        "howToFix": "将 3 个内容单薄的页面合并为一个综合页面,并用 H2 划分子主题。"
+      },
+      "youtube-embed": {
+        "label": "YouTube 嵌入视频",
+        "what": "文章中嵌入的 YouTube 视频。",
+        "why": "多模态引擎会给予包含主题相关视频的页面更高权重。与引用率的相关系数为 0.737。",
+        "howToFix": "围绕页面主题制作或嵌入一段 2–4 分钟的视频,并使用 VideoObject schema 进行标记。"
+      },
+      "product-description-opening": {
+        "label": "产品描述开头",
+        "what": "在产品页面中,描述的前 40 个词(或 250 个字符)需要说明产品类型和至少两个关键属性:尺寸、材质、版型或用途。",
+        "why": "ChatGPT 在将产品与购物问题匹配时,似乎只读取产品描述的前 50 个 token 左右。以品牌故事开头的描述可能永远无法被匹配。",
+        "howToFix": "将产品类型和关键属性放在前 40 个词内。"
+      },
+      "sub-query-coverage": {
+        "label": "子查询覆盖度",
+        "what": "正文内容回答了多少比例的拆解子问题。",
+        "why": "引擎会将种子查询拆解为 4–6 个子查询(Profound 称为“fanouts”),缺少回答就意味着缺少引用。",
+        "howToFix": "添加问答部分,明确回答您主题下最重要的 5 个子问题。"
+      },
+      "definitions": {
+        "label": "行内定义",
+        "what": "在术语首次出现时进行行内定义(“X(定义……)”)。",
+        "why": "就地定义的页面会被当作术语表来源而被引用。AI 引擎会优先链接到这类页面。",
+        "howToFix": "在首次使用时,以行内方式定义 3–5 个关键术语。"
+      },
+      "ai-bot-access": {
+        "label": "AI 爬虫访问",
+        "what": "robots.txt 是否允许 AI 爬虫访问,以及页面是否会响应它们:系统会分别以 GPTBot、OAI-SearchBot、ChatGPT-User、PerplexityBot 和 ClaudeBot 身份抓取一次页面,以发现 CDN 或防火墙的拦截。",
+        "why": "无论 robots.txt 如何设置,被您的 CDN 或防火墙拒绝的爬虫都无法读取页面。在 robots.txt 中明确列出 AI 爬虫,表示欢迎它们访问。",
+        "howToFix": "在 robots.txt 以及 CDN 或防火墙的爬虫规则中,允许 GPTBot、OAI-SearchBot、ChatGPT-User、PerplexityBot、ClaudeBot 和 Google-Extended。"
+      },
+      "llms-txt-presence": {
+        "label": "llms.txt 是否存在",
+        "what": "根据 llmstxt.org 提案,检查网站根目录下是否存在 /llms.txt。仅供参考,不影响得分。",
+        "why": "被提议作为面向 AI 引擎的网站纯文本地图。",
+        "howToFix": "可选。如果需要,请在网站根目录添加 /llms.txt;它不会影响得分。",
+        "evidenceNote": "证据薄弱:Ahrefs 发现 97% 的 llms.txt 文件从未被请求,Google 也表示它没有任何影响。"
+      },
+      "https": {
+        "label": "HTTPS",
+        "what": "网站通过 TLS 正常响应，且不存在混合内容。",
+        "why": "AI 爬虫会拒绝抓取存在混合内容的页面。HTTPS 是基本要求。",
+        "howToFix": "迁移到 HTTPS，并通过 HSTS 强制重定向，修复混合内容警告。"
+      },
+      "canonical": {
+        "label": "规范 URL（Canonical）",
+        "what": "<link rel=canonical> 指向页面的首选 URL。",
+        "why": "没有 canonical，AI 引擎可能会将引用分散到重复的 URL 上，并降低每个 URL 的排名。",
+        "howToFix": "为每个页面添加 <link rel=canonical href=…>。规范页面应指向自身。"
+      },
+      "viewport": {
+        "label": "Viewport meta",
+        "what": "存在 <meta name=viewport content=…>。",
+        "why": "移动端渲染信号——AI 爬虫更青睐移动优先的内容。",
+        "howToFix": "添加 <meta name=viewport content=\"width=device-width, initial-scale=1\">。"
+      },
+      "twitter-card": {
+        "label": "Twitter 卡片",
+        "what": "存在 <meta name=twitter:card> 和 twitter:image。",
+        "why": "在不支持 OG 的平台上，AI 引擎会回退使用 Twitter 卡片。",
+        "howToFix": "添加 twitter:card=summary_large_image 和 twitter:image（可复用 og:image）。"
+      },
+      "meta-description": {
+        "label": "Meta 描述",
+        "what": "<meta name=description>，包含 80–160 个字符的摘要文本。",
+        "why": "AI 引擎在生成引用时，会将 meta 描述作为首选摘要候选。",
+        "howToFix": "为每个页面撰写约 130 个字符的 meta 描述，并包含主要查询词。"
+      },
+      "first-person": {
+        "label": "第一人称佐证",
+        "what": "以第一人称叙述、体现真实经验的句子，例如“we tested”“I built”，以及土耳其语中的动词词尾，如“gezdik”或“düşünüyoruz”。出现两处或以上即通过。引文和“Contact us”等套话不计入。支持英语和土耳其语检测。",
+        "why": "Google 的 E-E-A-T 更新优先考虑亲身经验，第一人称表达正是这一信号。",
+        "howToFix": "谨慎而准确地使用第一人称，例如“we tested”“in our experience”“I found that…”。"
+      },
+      "case-study-evidence": {
+        "label": "案例研究佐证",
+        "what": "正文中包含具名客户的成果、数据或前后对比证据。",
+        "why": "案例研究是转化率最高的 E-E-A-T 信号——用事实证明，而不是空口声称。",
+        "howToFix": "点名一位客户，用数据引述一项成果，例如“We helped X go from Y → Z.”"
+      },
+      "author-credentials": {
+        "label": "作者资质",
+        "what": "作者具有可见的资质（从业年限、过往职位、学历、认证），体现在署名栏、页面任意位置的作者信息框，或 Person JSON-LD（jobTitle、description）中。",
+        "why": "匿名署名不符合 E-E-A-T。具备资质的作者会被视为专家来源。",
+        "howToFix": "每个作者页面列出资质、过往职位、从业年限，以及 LinkedIn/Twitter 链接。"
+      },
+      "byline-depth": {
+        "label": "署名深度",
+        "what": "署名链接到内容详实的真实作者简介页，或作者在其他平台的资料（LinkedIn、Person JSON-LD sameAs）。",
+        "why": "署名 → 简介页 → 有资质的作者，这条链路就是引擎追踪的 E-E-A-T 图谱。",
+        "howToFix": "让每个署名都链接到 /authors/[name]，页面包含简介、照片、资质和过往作品。"
+      },
+      "brand-entity": {
+        "label": "Wikidata 中的品牌实体",
+        "what": "品牌在 Wikidata 中有实体（Q 编号），AI 引擎可以解析。",
+        "why": "Wikidata 是权威的实体数据库，引擎用它来验证品牌身份。没有实体，就没有信任锚点。",
+        "howToFix": "创建 Wikidata 条目：需要 2–3 篇媒体报道作为引用来源。请在 wikidata.org 提交。"
+      },
+      "press-mentions": {
+        "label": "媒体报道",
+        "what": "顶级媒体(如《纽约时报》、《华盛顿邮报》、彭博社、《金融时报》等)对您的提及或链接。",
+        "why": "媒体报道能在引用图谱中传递权威性,并验证品牌实体的相关声明。",
+        "howToFix": "争取媒体报道。展示媒体标识。链接回原始文章(而非您的案例研究)。"
+      },
+      "privacy-terms": {
+        "label": "隐私与条款",
+        "what": "每个页面都链接到隐私政策和服务条款。",
+        "why": "YMYL(影响钱财与生活)类别要求提供这些内容,而且各类引擎都将其视为合法性信号。",
+        "howToFix": "在每个页面的页脚链接隐私政策和条款。必须是真实页面,而不是“即将推出”的占位页。"
+      },
+      "contact-info": {
+        "label": "联系信息",
+        "what": "真实的联系信息——页面上可见的电子邮箱、电话或地址,或链接到 /contact。",
+        "why": "匿名品牌无法满足 E-E-A-T。真实的联系信息表明内容背后有真实的实体。",
+        "howToFix": "在页脚添加电子邮箱和实际地址(真实地址或注册办公地址)。"
+      }
+    }
+  },
   "auth": {
     "signIn": "登录",
     "signUp": "注册",
@@ -9799,6 +10251,8 @@
     "email": "邮箱",
     "workEmail": "工作邮箱",
     "workEmailSuggested": "建议使用工作邮箱",
+    "language": "语言",
+    "languageFailed": "无法更改语言,请重试。",
     "password": "密码",
     "forgotPassword": "忘记密码？",
     "noAccount": "还没有账号？",
@@ -9937,6 +10391,53 @@
     },
     "errorRetry": "请从应用重新发起连接。如果问题仍然存在，该应用可能不支持登录 Ansvisor：请改用 API 密钥。",
     "errorCode": "错误代码：{code}"
+  },
+  "invite": {
+    "fallbackTeam": "该团队",
+    "invalid": {
+      "not_found": {
+        "title": "未找到邀请",
+        "description": "您访问的链接无效。"
+      },
+      "expired": {
+        "title": "邀请已过期",
+        "description": "请联系团队管理员重新发送邀请。"
+      },
+      "accepted": {
+        "title": "邀请已被使用",
+        "description": "此邀请已被接受。"
+      },
+      "revoked": {
+        "title": "邀请已被撤销",
+        "description": "此邀请已被团队管理员撤销。"
+      },
+      "pending": {
+        "title": "邀请不可用",
+        "description": "请重试或联系团队管理员。"
+      }
+    },
+    "card": {
+      "title": "加入 {organization}",
+      "invitedAs": "您已受邀以<b>{role}</b>身份加入",
+      "invitedEmail": "受邀邮箱",
+      "signedInAs": "当前登录账号",
+      "wrongAccount": "此邀请发送至 <b>{email}</b>,但您当前登录的是 {current}。请切换账号后继续。",
+      "switching": "正在切换...",
+      "switchAccount": "退出并使用正确的账号",
+      "fullName": "全名",
+      "namePlaceholder": "您的姓名",
+      "password": "设置密码",
+      "passwordPlaceholder": "至少 8 个字符",
+      "confirmPassword": "确认密码",
+      "confirmPlaceholder": "再次输入密码",
+      "joining": "正在加入...",
+      "accept": "接受并加入 {organization}",
+      "passwordNote": "下次登录时,您将使用此密码。",
+      "passwordTooShort": "密码长度至少为 8 个字符",
+      "passwordsDiffer": "两次输入的密码不一致",
+      "welcome": "欢迎加入 {organization}!",
+      "failed": "接受邀请失败"
+    }
   },
   "dashboard": {
     "overview": "概览",
@@ -10327,6 +10828,114 @@
         "failed": "无法导入文件。未保存任何内容。",
         "back": "返回"
       }
+    },
+    "formulas": {
+      "button": "公式",
+      "title": "指标计算方式",
+      "visibility": {
+        "title": "可见度(0–100)",
+        "body": "一个综合分数,衡量您的品牌在符合当前筛选条件的所有 AI 回答中的可见程度。每条回答都会计入,包括未出现您品牌的回答,因此要提高分数,就需要更多出现、更多被引用、更早被提及。",
+        "formula": "可见度 = 100 × ({mention} × 提及率 + {citation} × 引用率 + {position} × 位置系数 × 置信度)",
+        "confidence": "置信度 = 提及您的回答数 ÷(提及您的回答数 + {support})",
+        "mentionRate": "<b>提及率({pct}%)</b> — 按名称提及您品牌的 AI 回答所占比例。",
+        "citationRate": "<b>引用率({pct}%)</b> — 将您的网站作为来源引用的回答所占比例。",
+        "positionFactor": "<b>位置系数({pct}%)</b> — 在提及您的回答中,您被提到的先后:第一位 = 1,第二位 = 0.5,第三位 = 0.33,依此类推,取平均值。置信度系数会按实际提及该品牌的回答数量进行加权,因此少量回答中的完美位置无法超过持续出现的品牌。",
+        "competitors": "排行榜中的竞争对手使用完全相同的公式,基于同一组回答计算分数,因此数值可直接比较。"
+      },
+      "trend": {
+        "title": "可见度趋势图",
+        "body": "每个点表示截至当天、在所选时间窗口内计算的可见度(滚动窗口)。因此最新的点始终与上方的可见度卡片一致。选择“全部时间”时,每个点涵盖截至当天的所有数据。"
+      },
+      "mentions": {
+        "title": "提及",
+        "body": "您的品牌在 AI 回答中被按名称提及的总次数。"
+      },
+      "citations": {
+        "title": "引用",
+        "body": "您的网站在 AI 回答中被作为来源链接的总次数。提及统计的是您的名称,引用统计的是您的域名。"
+      },
+      "sentiment": {
+        "title": "净情感值",
+        "body": "在提到您的回答中,正面回答占比减去负面回答占比,单位为百分点。仅引用您网站的回答不计入,因为它们始终为中性。情感值与可见度并列显示,但不属于分数的一部分。",
+        "formula": "净情感值 = 正面回答占比 % − 负面回答占比 %(基于提到您的回答,与“提及”页面一致)"
+      },
+      "position": {
+        "title": "平均位置",
+        "body": "在提及您的回答中,您被提到的位置的平均值。越低越好:#1 表示您通常被最先提到。",
+        "formula": "平均位置 = 您的位置之和 ÷ 提到您的回答数"
+      },
+      "citationRate": {
+        "title": "引用率",
+        "body": "将您的网站作为来源链接的 AI 回答所占比例。",
+        "formula": "引用率 = 引用您域名的回答数 ÷ 全部回答数 × 100"
+      },
+      "shareOfVoice": {
+        "title": "声量份额",
+        "body": "您在整体品牌讨论中所占的份额:在 AI 回答的所有品牌提及中(您的加上您跟踪的竞争对手的),属于您的比例。",
+        "formula": "声量份额 = 您的提及数 ÷(您的提及数 + 竞争对手提及数)× 100"
+      },
+      "coverage": {
+        "title": "覆盖率",
+        "body": "在所选时间段内,您至少出现过一次(被提及或被引用)的已跟踪 Prompt 占所有产生结果的 Prompt 的比例。",
+        "formula": "覆盖率 = 您出现的 Prompt 数 ÷ 已获回答的 Prompt 数 × 100"
+      },
+      "changes": {
+        "title": "变化",
+        "body": "每张卡片的变化是将所选时间段与紧邻其前、长度相同的时间段进行比较,仅针对两个时间段都有回答的 Prompt,因此新增 Prompt 不会使其虚高;数值本身仍涵盖所有 Prompt。选择“全部时间”时没有更早的时间段,因此不显示变化。"
+      }
+    },
+    "breakdownSheet": {
+      "title": "{metric, select, mentions {提及} other {可见度}}明细",
+      "compareHint": "将所选时间窗口与前一个等长时间窗口进行比较。",
+      "allTimeHint": "全部时间。没有可用于对比的相同时长的更早周期。",
+      "lastVsPrevious": "{days, plural, other {最近 # 天 vs 前 # 天}}",
+      "loadFailed": "加载明细失败",
+      "allTime": "全部时间",
+      "current": "当前 {days} 天",
+      "noSamePrompt": "没有 Prompt 在两个周期内均有回答",
+      "samePrompts": "{count, plural, other {相同的 # 个 Prompt：}}",
+      "vsPrevious": "对比上期",
+      "noData": "无数据",
+      "newNotCounted": "{count, plural, other {未计入变化：本周期有 # 个新 Prompt。}}",
+      "newIncluded": "{count, plural, other {变化中包含本周期新增的 # 个 Prompt。}}",
+      "tabs": {
+        "prompts": "Prompts",
+        "platforms": "平台",
+        "topics": "主题"
+      },
+      "biggest": "{direction, select, down {降幅最大} other {增幅最大}}：",
+      "topPlatform": "{direction, select, down {降幅最大的平台} other {增幅最大的平台}}：{platform}",
+      "empty": "此时间范围内暂无数据。",
+      "columns": {
+        "name": "名称",
+        "prev": "上期",
+        "cur": "本期",
+        "change": "变化"
+      },
+      "pts": "点",
+      "signedPts": "{value} 点",
+      "contributionPts": "{direction, select, down {下降} other {上升}} {value} 点",
+      "contributionMentions": "{direction, select, down {减少} other {增加}} {count, plural, other {# 次提及}}"
+    },
+    "page": {
+      "noDataTitle": "暂无追踪数据",
+      "noDataBody": "通过 AI 平台运行您的 Prompts，查看您的品牌在 AI 生成回答中的呈现情况。",
+      "testSingle": "或测试单个 Prompt",
+      "noResults": "{period, select, 24h {过去 24 小时} 7d {过去 7 天} 30d {过去 30 天} 90d {过去 90 天} other {所选周期}}内没有结果",
+      "otherPeriods": "其他时间段有可用的追踪数据。请尝试更宽的范围，或切换到“全部时间”。",
+      "showAll": "显示全部数据",
+      "noCompetitorsTitle": "暂无已追踪的竞争对手",
+      "noCompetitorsBody": "添加竞争对手，查看您在 AI 回答中的对比情况。",
+      "headToHead": "正面对比",
+      "loadFailed": "加载洞察失败，请重试",
+      "exportCapped": "为避免内存问题，导出已限制为 50,000 行",
+      "exportFailed": "导出 CSV 失败",
+      "noTrend": "暂无趋势数据",
+      "yourBrand": "您的品牌",
+      "avgCompetitor": "竞争对手平均",
+      "noShareOfVoice": "暂无声量占比数据",
+      "moreInfo": "更多信息",
+      "overallShareOfVoice": "整体声量占比"
     }
   },
   "topics": {
@@ -11027,6 +11636,7 @@
     },
     "editor": {
       "back": "返回内容库",
+      "newContent": "新建内容",
       "closeHere": "关闭",
       "untitled": "无标题",
       "newPage": "新页面",
@@ -11496,7 +12106,8 @@
           "attach": "附加文件"
         },
         "openLink": "在新标签页中打开链接（或在页面中按住 ⌘/Ctrl 并点击）",
-        "counter": "{count} / {target} 字符 · {words, plural, other {# 个单词}}"
+        "counter": "{count} / {target} 字符 · {words, plural, other {# 个单词}}",
+        "counterRange": "{count} / {min}–{max} 字符 · {words, plural, other {# 个词}}"
       },
       "link": {
         "title": "添加链接",
@@ -12728,6 +13339,7 @@
         "tooShort": "请多写几段：可读性会在您输入时从页面中实时读取。",
         "tooShortShort": "篇幅尚短",
         "notScored": "尚未评分",
+        "needsAuthor": "页面设置作者后才会评分",
         "site": {
           "label": "网站信任度",
           "score": "网站信任度 {score}/5",
@@ -13006,8 +13618,8 @@
           },
           "avgSentence": {
             "line": "句子平均包含 {words, number} 个词",
-            "detail": "建议控制在 15–20 个词：短句阅读更快，且 AI 回答会更完整地引用它们。",
-            "detailShort": "建议控制在 15–20 个词：合并部分过短的句子，确保每句话表达一个完整的意思。"
+            "detail": "建议每句不超过 20 个词:句子越短,读起来越快,AI 回答也会整句引用。",
+            "detailShort": "平均不足 8 个词会显得生硬:请合并一些短句,让每句话表达完整的意思。"
           },
           "longSentences": {
             "line": "{count, plural, other {# 个句子}}超过 35 个词",
@@ -13323,11 +13935,12 @@
     "autoGeneratedHint": "随着跟踪数据的不断积累，系统将自动生成内容机会。",
     "generating": "正在生成…",
     "sendToWorkflow": "发送到工作流",
-    "generateBrief": "生成大纲",
-    "generatingBrief": "正在生成...",
-    "briefGenerated": "大纲已生成",
+    "generateBrief": "生成简报",
+    "generatingBrief": "正在生成简报…",
+    "briefGenerated": "简报已生成",
+    "briefEmpty": "生成由 AI 驱动的内容简报,包含建议标题、大纲、目标关键词和竞争对手洞察。",
     "briefLimitReached": "您本月的内容大纲额度已用尽",
-    "sendToActions": "发送到操作",
+    "sendToActions": "发送到行动中心",
     "draftCheckFailed": "无法检查草稿 · 重试",
     "sendToEditor": "发送到编辑器",
     "writeThis": {
@@ -13342,7 +13955,7 @@
         "draftDetail": "内容 Agent 将根据大纲，结合您的规则和该页面类型的规范来撰写页面。",
         "draftDetailPage": "内容 Agent 将根据大纲，结合您的规则和该页面类型的规范对 {page} 提出修改建议。",
         "review": "由您审核",
-        "reviewDetail": "编辑器将在撰写过程中打开，并免费估算其网站审计得分。不会直接发布任何内容。"
+        "reviewDetail": "编辑器会在撰写过程中打开。标记为就绪后,您可以免费获得其站点审核得分的估算。不会发布任何内容。"
       },
       "usage": "大约消耗 <b>{estimate}</b> 的{trial, select, yes {试用 AI 额度} other {每月 AI 用量}} · 目前已用 {used}",
       "usageSmall": "消耗不足 <b>1%</b> 的{trial, select, yes {试用 AI 额度} other {每月 AI 用量}} · 目前已用 {used}",
@@ -13366,7 +13979,7 @@
       "word": "导出 Word",
       "failed": "无法导出此商机。请重试。"
     },
-    "openInActions": "在操作中打开",
+    "openInActions": "在行动中心打开",
     "sendAgain": "重新发送",
     "copyAllData": "复制全部数据",
     "copiedToast": "已复制到剪贴板",
@@ -13427,7 +14040,9 @@
       "avgScore": "平均得分",
       "shown": "已显示 {count} 项",
       "opportunities": "个机会",
+      "opportunitiesAll": "所有状态,包括已完成的",
       "outOf100": "/ 100",
+      "outOf100All": "满分 100 · 所有状态",
       "fromSignals": "基于分析的 {count, plural, other {# 个信号}}"
     },
     "filters": {
@@ -13616,6 +14231,7 @@
       "sentAt": "发送于 {date}",
       "webhookResponse": "Webhook 响应",
       "topCompetitor": "最强竞争对手",
+      "gapPoints": "{gap, number} 分",
       "basketTitle": "机会篮",
       "basketSummary": "{prompts, plural, other {# 个 Prompt}} · 包含 {included} 次搜索 · 排除 {excluded} 次",
       "basketIncluded": "AI 引擎针对这些 Prompt 运行的搜索",
@@ -13732,7 +14348,8 @@
     "mergedIntoOpen": "打开它",
     "newSignal": "检测到新信号",
     "newSignalScoreRose": "之前已完成，且其机会自那时起持续增长：评分从 {from} 升至 {to}。",
-    "newSignalGainLost": "之前已完成，但成效未能保持：在优化后这些 Prompt 上的可见度为 {after}%，而目前为 {now}%。"
+    "newSignalGainLost": "之前已完成，但成效未能保持：在优化后这些 Prompt 上的可见度为 {after}%，而目前为 {now}%。",
+    "noWorkflowConnected": "未连接工作流。"
   },
   "traffic": {
     "chat": {
@@ -14571,6 +15188,24 @@
           "query": "缺失的地址包含查询参数：不建议重定向"
         }
       }
+    },
+    "page": {
+      "subtitle": "来自 AI 的网站访问",
+      "range": "第 {start}–{end} 条,共 {total} 条",
+      "previous": "上一页",
+      "next": "下一页",
+      "platformBreakdown": "平台分布",
+      "referralsByPlatform": "各平台引荐",
+      "topLandingPages": "热门落地页",
+      "recentVisits": "近期 AI 引荐访问",
+      "columns": {
+        "platform": "平台",
+        "page": "页面",
+        "visits": "访问量",
+        "change": "变化",
+        "time": "时间",
+        "country": "国家/地区"
+      }
     }
   },
   "ads": {
@@ -14874,7 +15509,10 @@
         "bodyUnlimited": "您的套餐尚有余量。候补中的 Prompt 不会自动开始追踪：请选择一个开始追踪。",
         "show": "查看",
         "freeUp": "释放空位",
-        "track": "追踪候补 Prompt"
+        "track": "追踪候补 Prompt",
+        "addTracking": "增加更多追踪",
+        "moved": "{count, plural, other {其中 # 个}}在 {date} 之前一直被追踪,当时您的套餐追踪上限降至 {limit, number} 个 Prompt 位置。",
+        "movedNoLimit": "{count, plural, other {其中 # 个}}在 {date} 之前一直被追踪,当时您的套餐追踪额度减少了。"
       },
       "dialog": {
         "pill": "已达 Prompt 上限 · {used} / {max}",
@@ -14887,6 +15525,7 @@
         "needs": "该 Prompt 在 {count} 个位置被跟踪，因此需要 {count} 个空位。",
         "howStarter": "若要跟踪它，请暂停某个您较少需要的 Prompt，或升级到更高级别的方案。",
         "howContact": "若要跟踪它，请暂停某个您较少需要的 Prompt，或联系我们提升配额限制。",
+        "howGrowth": "要追踪它,请暂停一个不太需要的 Prompt,或为您的套餐增加更多追踪。",
         "room": "您的方案中尚有可用额度。处于等待状态的 Prompt 不会自动开始跟踪，正等待您手动启用跟踪。",
         "candidates": "可暂停的 Prompts",
         "candidatesMany": "可暂停的 Prompts：请选择足量项以释放 {count} 个空位",
@@ -14905,6 +15544,7 @@
         "pauseMany": "暂停 {count} 项并跟踪此 Prompt",
         "trackNow": "立即跟踪",
         "seeGrowth": "查看 Growth：{count} 个 Prompt",
+        "addTracking": "增加更多追踪",
         "contact": "联系我们",
         "keepWaiting": "保持等待",
         "keepPaused": "保持暂停",
@@ -15103,6 +15743,7 @@
       "showUsage": "显示用量",
       "hideUsage": "隐藏用量",
       "locationsUsed": "已使用 {used} / {limit} 个 Prompt 位置",
+      "planEnded": "您的套餐已到期:选择套餐前将不会追踪 Prompts",
       "view": {
         "label": "Prompt 列表",
         "tracked": "已跟踪",
@@ -15121,6 +15762,95 @@
         "analyzing": "正在分析…",
         "analyzingProgress": "正在分析 {done}/{total}…",
         "limitReached": "已达到月度限额"
+      }
+    },
+    "info": {
+      "button": "Ansvisor 如何处理 Prompts",
+      "whatTitle": "什么是 Prompt?",
+      "whatText": "潜在客户在 ChatGPT 或 Gemini 等 AI 助手中输入的问题或请求,例如 <example>\"最好的开源 AEO 工具是什么?\"</example> 或 <example>\"对比最好的 AEO 平台\"</example>",
+      "howTitle": "Ansvisor 的工作原理",
+      "systemsLine": "智能 AI 系统每天在后台为您工作。",
+      "steps": {
+        "find": {
+          "title": "找出最佳 Prompts。",
+          "text": "我们的 AI 会读取您的网站、竞争对手、用户的搜索内容(Search Console、Analytics)以及 AI 平台自身的回答,并推荐真正重要的 Prompts。"
+        },
+        "pick": {
+          "title": "由您选择要追踪的内容。",
+          "text": "点击推荐项上的 <b>+</b>。"
+        },
+        "ask": {
+          "title": "每天向 AI 平台提问。",
+          "text": "ChatGPT、Gemini、Google AI Overviews 等:它们是否提到您、链接到您的网站、将您排在竞争对手之前?"
+        },
+        "data": {
+          "title": "建立您自己的数据。",
+          "text": "每个回答都会被保存,因此趋势、差距和竞争对手的动向会随时间清晰呈现。"
+        },
+        "next": {
+          "title": "智能 AI 系统告诉您下一步该做什么。",
+          "text": "它们会发现下滑、找出内容差距,并在行动中心准备页面和修复方案,助您赢得 AI 可见度、流量和收入。"
+        }
+      },
+      "openGuide": "打开分步指南"
+    },
+    "guide": {
+      "title": "如何找到最佳 Prompts 并在其回答中获得推荐位置",
+      "description": "这些步骤只需完成一次,之后每天查看建议即可。每个步骤都会在新标签页中打开,本指南会保留在此处。",
+      "progress": "已完成 {done}/{total}",
+      "progressLabel": "已完成的步骤",
+      "done": "已完成",
+      "comingSoon": "即将推出",
+      "footer": "让 Chat 帮您完成某一步,例如:“连接我的 Search Console”。",
+      "steps": {
+        "gsc": {
+          "title": "连接 Google Search Console",
+          "text": "了解用户已经通过哪些搜索找到您,我们会将其转化为 Prompts。",
+          "cta": "连接"
+        },
+        "ga": {
+          "title": "连接 Google Analytics 4",
+          "text": "了解哪些页面带来访客,从而找出重要的 Prompts。",
+          "cta": "连接"
+        },
+        "trafficCode": {
+          "title": "将 AI 流量代码添加到您的网站",
+          "text": "统计 AI 助手为您带来的访问,以及读取您页面的 AI 爬虫。",
+          "cta": "获取代码"
+        },
+        "suggestions": {
+          "title": "每天查看建议",
+          "text": "来自您的网站、竞争对手和搜索的新 Prompts。点击 + 追踪优质的 Prompts。",
+          "cta": "打开建议"
+        },
+        "content": {
+          "title": "根据建议创建内容",
+          "text": "为您的 Prompts 撰写 AI 回答中缺失的页面。",
+          "cta": "打开内容"
+        },
+        "optimize": {
+          "title": "优化您的页面",
+          "text": "在编辑器中改进现有页面,让 AI 回答引用它们。",
+          "cta": "打开编辑器"
+        },
+        "audit": {
+          "title": "修复技术问题",
+          "text": "运行网站审核,修复阻碍 AI 读取您网站的问题。",
+          "cta": "运行审核"
+        },
+        "moreTracking": {
+          "title": "追踪更多 Prompts",
+          "text": "为您的方案添加更多 Prompts、地区或 AI 平台。",
+          "cta": "获取更多追踪"
+        },
+        "mentions": {
+          "title": "在其他网站获得提及",
+          "text": "在 AI 回答所信任的第三方网站上被提及。"
+        },
+        "ads": {
+          "title": "投放 AI 广告",
+          "text": "出现在 AI 的赞助回答中。"
+        }
       }
     },
     "trackNow": {
@@ -15170,6 +15900,7 @@
       "unlimited": "无限制",
       "cta": {
         "upgrade_growth": "升级至 Growth 方案",
+        "add_more": "添加更多",
         "upgrade": "升级方案",
         "contact": "联系我们",
         "choose_plan": "选择方案"
@@ -15395,7 +16126,7 @@
       "unlimited": "已跟踪地区：{used} → {after} · 您的套餐无限制",
       "usageHint": "每个 Prompt 在每个地区均计为套餐中的 1 个跟踪地区，每天检查一次。暂停的 Prompt 不计入。",
       "over": "这需要增加 {adding, plural, other {# 个跟踪地区}}；您的 {plan} 套餐还剩余 {left, plural, =0 {0 个} other {# 个}}。",
-      "overHint": "请选择较少的 Prompt 或地区。{plan, select, starter {或者升级您的套餐，或联系我们定制方案。} growth {或者联系我们定制方案。} other {或者联系我们提高额度。}}",
+      "overHint": "请减少所选 Prompts 或地区。{plan, select, starter {您也可以升级方案,或联系我们定制方案。} growth {或者为您的方案添加更多追踪。} other {或者联系我们提高您的上限。}}",
       "nothing": "这些 Prompt 已在这些地区进行跟踪。",
       "cityBlocked": "这些 Prompt 均未运行支持基于城市回答的引擎（Google AI Mode、AI Overviews 或 API 模型）。请先为 Prompt 添加其中一个引擎。",
       "cityPartly": "{count, plural, other {其中 # 个 Prompt}} 未运行支持基于城市回答的引擎；这些地区会计入套餐额度，但不会在当地发起查询。",
@@ -15446,7 +16177,79 @@
         "usedUp": "本月的建议额度已用尽。该额度将在您的订阅续费时重置。",
         "upgrade": "升级以获取更多额度",
         "startPlan": "开启您的方案"
+      },
+      "loadFailed": "加载建议失败。",
+      "generateFailed": "生成建议失败。",
+      "notConfigured": "此服务器尚未设置 AI 建议:缺少 AI 提供商密钥。",
+      "retry": "重试",
+      "introTitle": "获取针对各平台的建议",
+      "introBody": "分析本周期内各平台的回答(它们执行的子查询、引用的来源以及排名高于您的竞争对手),并针对品牌未被提及或排名靠后的情况给出行动建议。",
+      "generate": "生成建议",
+      "generating": "正在根据本周期的回答生成建议……最多可能需要 15 秒。",
+      "stale": "自生成这些建议以来,又有新的运行结果。",
+      "regenerate": "重新生成",
+      "noRuns": "本周期内没有运行记录,暂无可改进之处。",
+      "allWell": "无需改进:本周期内,品牌在每个平台上都被首先提及并被较早引用。",
+      "selection": "已选择 {selected}/{total} · {platforms, plural, other {# 个平台}}",
+      "generated": "生成于 {date}",
+      "sent": "发送于 {date} · {code}",
+      "discardConfirm": "要放弃您的修改吗?",
+      "keepEditing": "继续编辑",
+      "discardRegenerate": "放弃并重新生成",
+      "openInActions": "在 Actions 中打开",
+      "sendActions": "发送 Actions",
+      "sentToast": "{count, plural, other {已创建包含 # 项任务的 Action}}",
+      "open": "打开",
+      "states": {
+        "no_runs": "本周期内没有运行记录",
+        "not_mentioned": "未被提及",
+        "mentioned_late": "已提及 · 靠后",
+        "not_cited": "较早提及 · 未被引用",
+        "doing_well": "表现良好"
+      },
+      "mentionRate": "在 {runs, plural, other {# 次运行}}中被提及 {mentioned} 次",
+      "avgPosition": "平均第 {position} 位 · {rate}",
+      "avgPositionOf": "平均第 {position} 位（共 {total} 个）· {rate}",
+      "citedAt": "平均引用排名第 {rank} 位（共 {total} 个来源）· {rate}",
+      "notCited": "未被引用 · {rate}",
+      "inputs": {
+        "fanouts": "{count, plural, other {# 个 fan-out}}",
+        "citedDomains": "{count, plural, other {# 个被引用域名}}",
+        "competitorUrls": "{count, plural, other {# 个竞争对手 URL}}",
+        "answer": "AI 回答",
+        "basedOn": "基于 {parts}",
+        "basedOnAnswer": "基于 AI 回答",
+        "noFanouts": "未记录到 fan-out。{based}"
+      },
+      "doingWell": "表现良好：暂无建议。",
+      "noneHeldUp": "没有建议能经受住该平台证据的检验。请添加您自己的建议，或重新生成。",
+      "addOwn": "添加您自己的建议",
+      "removed": "已删除：{title}",
+      "removedUntitled": "已删除：您的建议",
+      "undo": "撤销",
+      "titlePlaceholder": "标题",
+      "bodyPlaceholder": "做什么以及原因",
+      "select": "选择“{title}”",
+      "edit": "编辑建议",
+      "remove": "删除建议",
+      "alreadySent": "已发送",
+      "yourSuggestion": "您的建议",
+      "sources": {
+        "fanout": "Fan-out：{ref}",
+        "answer": "AI 回答",
+        "brandPage": "您的页面：{url}"
+      },
+      "locked": {
+        "title": "Growth 套餐可使用“改进”功能",
+        "body": "根据每个 AI 回答中的子查询、来源和竞争对手，获取针对各平台的建议，以提升此 Prompt 的排名。",
+        "upgrade": "升级套餐"
       }
+    },
+    "errors": {
+      "updateFailed": "更新 Prompt 失败。请重试。",
+      "noRoomToResume": "空间不足，无法恢复",
+      "bulkFailed": "{action, select, resume {恢复 Prompts 失败。} other {暂停 Prompts 失败。}}",
+      "bulkPartial": "{action, select, resume {{total} 个中有 {failed} 个无法恢复。} other {{total} 个中有 {failed} 个无法暂停。}}"
     }
   },
   "volumeEstimate": {
@@ -15853,6 +16656,7 @@
     }
   },
   "competitors": {
+    "forbiddenRole": "只有管理员或经理可以合并竞争对手。",
     "title": "竞争对手",
     "description": "管理竞争对手并直接对比 AI 可见度。",
     "addCompetitor": "添加竞争对手",
@@ -15865,7 +16669,7 @@
     "citations": "引用次数",
     "trackedCompetitors": "追踪的竞争对手",
     "selectToCompare": "选择竞争对手以查看正面对比。",
-    "windowLast30Days": "评分涵盖过去 30 天。",
+    "windowLastDays": "{days, plural, other {分数涵盖最近 # 天。}}",
     "windowAllTime": "评分涵盖所有追踪历史。",
     "windowSelectedRange": "评分反映所选日期范围。",
     "selected": "已选择",
@@ -15966,10 +16770,15 @@
     },
     "h2h": {
       "title": "{brand} 对比 {competitor}",
-      "yourAvg": "您的平均得分",
-      "theirAvg": "对方平均得分",
-      "overallDiff": "得分差距",
+      "yourAvg": "您的可见度分数",
+      "theirAvg": "对方的可见度分数",
+      "overallDiff": "差异",
+      "points": "{value} 分",
+      "scoreTip": "可见度得分,0–100:衡量在此期间的回答中提及该品牌、引用其网站的频率,以及品牌被提及的先后位置,基于您的所有回答。与卡片中的得分相同。",
       "platformBreakdown": "平台明细",
+      "viaBing": "· 通过 Bing AI Mode",
+      "noAnswersEngine": "此期间没有回答",
+      "notInPlan": "不在您的套餐中,因此未显示:{engines}。",
       "promptByPrompt": "逐个 Prompt 对比",
       "promptByPromptDesc": "点击 Prompt 可展开并查看各平台的明细数据。",
       "comparison": "对比",
@@ -15985,7 +16794,25 @@
       "noPromptData": "暂无 Prompt 级别的数据。请先运行跟踪检查。",
       "noDataTitle": "暂无对比数据",
       "noDataDescription": "从“可见度”运行一次跟踪检查，以生成该竞争对手的对比数据。",
-      "loadError": "加载对比数据失败。"
+      "loadError": "加载对比数据失败。",
+      "promptCounts": "{engines, plural, other {# 个平台}} · {runs, plural, other {# 次运行}}",
+      "engineCounts": "{locations, plural, other {# 个地区}} · {runs, plural, other {# 次运行}}",
+      "runs": "{count, plural, other {# 次运行}}",
+      "noLocation": "无地区",
+      "lowSample": "样本量低",
+      "lowSampleTip": "运行次数少于 10 次:单个回答就可能大幅改变此得分。",
+      "list": {
+        "search": "搜索 Prompts",
+        "sortLabel": "排序 Prompts",
+        "sortRecent": "最近的优先",
+        "sortDiff": "差距最大的优先",
+        "categoryLabel": "类别",
+        "allCategories": "所有类别",
+        "count": "{shown} / {total, plural, other {# 个 Prompt}}",
+        "noMatch": "没有匹配的 Prompt。",
+        "more": "再显示 {count} 个",
+        "caseRepeats": "{count, plural, other {# 个 Prompt 与其他 Prompt 仅大小写不同}}:请在 Prompts 页面暂停多余的副本,以便其回答只计算一次。"
+      }
     },
     "timeline": {
       "title": "{competitor} 的页面随时间变化情况",
@@ -16035,7 +16862,127 @@
     "excludeOwnDomain": "排除自身域名",
     "competitorsOnly": "仅竞争对手",
     "noBrandTitle": "未选择品牌",
-    "noBrandDescription": "选择或创建品牌，即可查看 AI 平台在回答相关内容时引用的来源。"
+    "noBrandDescription": "选择或创建品牌，即可查看 AI 平台在回答相关内容时引用的来源。",
+    "addCompetitor": {
+      "added": "已将 {domain} 添加为竞争对手",
+      "failed": "无法将此域名添加为竞争对手。请重试。",
+      "ariaLabel": "将 {domain} 添加为竞争对手",
+      "button": "添加为竞争对手",
+      "title": "将 {domain} 添加为竞争对手?",
+      "description": "将此域名作为竞争对手进行跟踪。您可以在下方编辑名称。",
+      "name": "名称",
+      "namePlaceholder": "竞争对手名称",
+      "add": "添加"
+    },
+    "url": {
+      "back": "引用",
+      "noUrl": "未提供 URL。请从“可见度”的“引用”标签页中的引用行打开此页面。",
+      "noBrand": "请先从顶部切换器中选择一个品牌。",
+      "owned": "自有",
+      "loadFailed": "无法加载此 URL,请重试。",
+      "empty": "所选时间范围内没有此 URL 的引用记录。",
+      "kpis": {
+        "citations": "引用总数",
+        "citationsSub": "{answers, plural, other {涉及 # 个回答}}",
+        "answers": "引用的回答",
+        "answersSub": "包含此 URL 的 AI 回答",
+        "prompts": "Prompts",
+        "promptsSub": "触发它的不同 Prompts",
+        "platforms": "平台",
+        "lastSeen": "最近出现",
+        "firstSeen": "首次出现于 {date}"
+      },
+      "targeted": "{count, plural, other {已在 # 个 Prompts 中设为目标}}",
+      "targetedSub": "在 Prompt 工作流中将此 URL 作为目标进行追踪的 Prompts",
+      "notTargeted": "尚未设为目标——请在 Prompt 的“目标 URL”卡片中添加。",
+      "citedCount": "被引用 {count} 次",
+      "visits": "AI 引荐访问",
+      "visitsSub": "所选时间范围内来自 AI 平台的该页面访问量",
+      "noVisits": "尚未记录到该页面的 AI 引荐访问。",
+      "unknownPlatform": "未知",
+      "citedIn": "引用于",
+      "citedInSub": "所选时间范围内引用此 URL 的所有 AI 回答",
+      "columns": {
+        "date": "日期",
+        "platform": "平台",
+        "prompt": "Prompt",
+        "sentiment": "情感倾向",
+        "brandMentioned": "提及品牌",
+        "position": "位置",
+        "answers": "回答",
+        "citations": "引用",
+        "lastSeen": "最近出现"
+      },
+      "sentiments": {
+        "positive": "正面",
+        "neutral": "中性",
+        "negative": "负面",
+        "mixed": "混合"
+      },
+      "breakdown": "Prompts 明细",
+      "breakdownSub": "此页面所获得的查询，按 Prompt 分组",
+      "noPrompts": "所选时间范围内未记录到此 URL 的 Prompts。"
+    },
+    "categories": {
+      "you": "您",
+      "competitor": "竞争对手",
+      "editorial": "编辑媒体",
+      "forum": "论坛",
+      "social": "社交媒体",
+      "review": "评测",
+      "institutional": "机构",
+      "other": "其他"
+    },
+    "page": {
+      "noSources": "暂无引用来源。",
+      "columns": {
+        "rank": "排名",
+        "domain": "域名",
+        "url": "URL",
+        "platforms": "平台",
+        "usage": "使用情况",
+        "avgCitations": "平均引用数",
+        "citations": "引用",
+        "addCompetitor": "添加为竞争对手",
+        "sourceType": "来源类型",
+        "competitorAnswers": "竞争对手回答",
+        "whichCompetitors": "涉及哪些竞争对手",
+        "strength": "强度",
+        "answersFeeding": "相关回答",
+        "alsoCitesUs": "是否也引用了我们?"
+      },
+      "openDomain": "在新标签页中打开 {domain}",
+      "openPage": "在新标签页中打开被引用页面",
+      "openPageTitle": "打开被引用页面",
+      "loadFailedTitle": "无法加载引用数据",
+      "loadFailedBody": "请重试。",
+      "retry": "重试",
+      "checking": "正在检查引用数据…",
+      "noneInPeriod": "{period, select, 24h {过去 24 小时} 7d {过去 7 天} 30d {过去 30 天} 90d {过去 90 天} other {所选时间段}}内没有引用",
+      "outsideWindow": "此时间范围之外存在引用数据。",
+      "showAll": "显示全部数据",
+      "noMatch": "没有符合筛选条件的引用",
+      "noMatchBody": "请尝试扩大日期范围或移除筛选条件。",
+      "gapMethodology": "出现在提及竞争对手但未提及您的回答中的来源,并按每条回答的来源数量加权。",
+      "strengthTitle": "强度 {pct}%",
+      "noGaps": "这些筛选条件下没有差距域名",
+      "noGapsBody": "所有引用竞争对手的域名也都引用了您,或者目前数据不足。",
+      "noCompetitorData": "暂无竞争对手来源数据",
+      "noCompetitorDataBody": "请添加竞争对手(含域名),并等待几次跟踪运行完成。",
+      "competitor": "竞争对手",
+      "selectCompetitor": "选择竞争对手",
+      "yes": "✓ 是",
+      "no": "✗ 否",
+      "gapList": "差距列表",
+      "byCompetitor": "按竞争对手",
+      "howItWorks": "工作原理",
+      "lowVisibility": "在此时间范围内您的可见度较低,因此此列表可能较宽泛,请先关注基础可见度。",
+      "loadFailedToast": "加载引用数据失败",
+      "checkFailedToast": "检查引用数据失败",
+      "exportFailed": "导出 CSV 失败",
+      "typesNotExportable": "来源类型是图表分解视图，无法导出——请切换到域名、URL 或竞品差距后再导出。",
+      "tabGaps": "竞品差距"
+    }
   },
   "shopping": {
     "title": "产品可见度",
@@ -16539,6 +17486,16 @@
       "verifiedLabel": "ChatGPT 认证卖家",
       "verifiedStatus": "未知",
       "verifiedDetail": "OpenAI 尚未公布认证卖家标识的发放规则，且在早期测试中，未获得该标识的店铺未出现在回答中。在官方公布更多信息之前，建议直接提交商品 Feed。"
+    },
+    "page": {
+      "allTime": "全部时间",
+      "last": "最近 {period}",
+      "allPlatforms": "所有平台",
+      "allRegions": "所有地区",
+      "noProducts": "未找到符合筛选条件的产品。",
+      "appearances": "{count, plural, other {# 次出现}}",
+      "brandAppearances": "{brand} • {count, plural, other {# 次出现}}",
+      "viewPrompt": "查看 Prompt 详情"
     }
   },
   "reports": {
@@ -16567,14 +17524,18 @@
         "trafficConnectLink": "连接"
       },
       "method": {
-        "label": "衡量方式",
         "baseline": "基准：发布前 14 天",
         "checkpoints": "检查点：7 · 14 · 30 · 90 天",
         "checkpointsTip": "7 天：待定，早期信号 · 14 天：初步判定 · 30 天：已确认 · 90 天：持续效果",
         "control": "对照组：未修改的类似 Prompts",
         "minChange": "最小变动：3 点",
         "noCost": "计划跟踪数据 · 无额外费用",
-        "correlation": "相关性，非因果关系"
+        "correlation": "相关性，非因果关系",
+        "howWeMeasure": "我们如何衡量",
+        "shippedDefinition": "“已上线”是指变更已正式生效：已发布到您的 CMS、其拉取请求已合并，或已标记为已上线。等待审核的草稿尚不算已上线。",
+        "baselineHelp": "每项变更都以其目标 Prompts 在这些天内的可见度为基线。",
+        "controlHelp": "它们显示了即使不做变更也会发生的情况。",
+        "correlationHelp": "结果表明各项指标同步变化，但并不意味着仅由该变更导致。"
       },
       "filterLabel": "按结果筛选",
       "filters": {
@@ -16644,6 +17605,8 @@
       },
       "capped": "显示在 {month} 发布的生效前 {count, number} 项变更；上方计数仅包含这些变更。",
       "empty": "{month} 未发布任何内容。",
+      "emptyNext": "上线一项行动，即可开始衡量影响。",
+      "emptyNextLink": "打开今日重点",
       "emptyFilter": "{month} 无此结果的操作。",
       "loadFailed": "无法加载 Ansvisor 的操作记录。请重试。",
       "retry": "重试",
@@ -16722,6 +17685,10 @@
     "deleteTitle": "删除报告",
     "deleteConfirm": "删除此报告？",
     "deleteFailed": "删除报告失败",
+    "rowMenuLabel": "{title} 的更多操作",
+    "copyLink": "复制链接",
+    "linkCopied": "链接已复制。工作区内的成员可通过它打开该报告。",
+    "copyLinkFailed": "无法复制链接。请打开报告并复制其地址。",
     "selectDates": "选择开始和结束日期",
     "templateLabel": "模板",
     "templates": {
@@ -16758,7 +17725,7 @@
       "mentionEvidence": "提及证据",
       "citationEvidence": "引用证据"
     },
-    "missingSections": "部分板块未能成功获取，未包含在此报告中：",
+    "missingSectionsAdmin": "仅管理员可见：{sections} 即使重试一次也无法获取，因此报告中已省略这些内容。",
     "brandLabel": "品牌",
     "sectionsLabel": "板块",
     "selectSections": "至少选择一个板块",
@@ -16837,9 +17804,11 @@
     "generatedOn": "生成于",
     "executiveSummary": "管理层摘要",
     "kpi": {
-      "visibility": "可见度",
-      "visibilityRate": "可见度",
-      "visibilityRateSub": "{visible}/{total} 个 Prompts",
+      "visibilityScore": "可见度得分",
+      "scoreValue": "{score}/100",
+      "promptsWithMention": "被提及的 Prompts",
+      "promptsWithMentionSub": "{total} 个 Prompts 中的 {visible} 个",
+      "leaderboardPromptsSub": "{total} 个 Prompts 中有 {visible} 个被提及",
       "avgScore": "平均分",
       "mentions": "提及次数",
       "citations": "品牌引用次数",
@@ -17097,7 +18066,10 @@
       }
     },
     "notifications": "通知",
-    "notificationsDescription": "Daily Pulse —— 每次跟踪运行后针对每个品牌的简短摘要，包含亮点和预警。",
+    "notificationsDescription": "每个品牌可发送两类邮件：跟踪运行后的 Daily Pulse，以及每周一发送的 AI 流量周报。两者都会发送给该品牌的 Daily Pulse 收件人。",
+    "pulseSection": "Daily Pulse",
+    "pulseSectionDescription": "每次跟踪运行后按品牌生成的简短摘要，包含亮点和警告。可选择发送频率和接收人。",
+    "pulseFrequencyLabel": "{brand} 的 Daily Pulse 发送频率",
     "pulseFrequency_daily": "每天",
     "pulseFrequency_weekly": "每周",
     "pulseFrequency_notable": "仅在有值得关注的情况时",
@@ -17108,7 +18080,9 @@
     "pulseRecipientsHint": "以逗号分隔的邮箱地址。留空则发送给组织的所有成员。",
     "pulseRecipientsInvalid": "无效的电子邮件地址：{emails}。请在保存前修改或删除。",
     "trafficDigest": "AI 流量每周摘要",
-    "trafficDigestHint": "每周一发送：一行汇总上周的 AI 访问量，附带排名前三的变化。将发送给上述收件人。",
+    "trafficDigestDescription": "每周一发送：用一行摘要概括上周的 AI 访问量，并列出变化最大的三项。会发送给每个品牌的 Daily Pulse 收件人，勾选或取消勾选后立即保存。",
+    "trafficDigestTo": "收件人：{emails}",
+    "trafficDigestToEveryone": "发送给组织的所有成员",
     "trafficDigestPulseOff": "Daily Pulse 关闭期间不会发送。重新开启后即可恢复接收。",
     "pulseSaved": "通知设置已保存",
     "pulseSaveFailed": "无法保存通知设置。请重试。",
@@ -17126,6 +18100,17 @@
       "empty": "未找到匹配的时区。",
       "saved": "时区已保存",
       "saveFailed": "无法保存时区。请重试。"
+    },
+    "language": {
+      "label": "语言",
+      "automatic": "自动（{language}）",
+      "hint": "Ansvisor 界面的显示语言，仅对您本人生效。您品牌的内容语言不会改变。",
+      "loading": "正在加载语言…",
+      "moreSoon": "更多语言即将推出。",
+      "preview": "内部人员和测试版本还会看到尚未翻译的语言，以及一种文本更长的测试语言。缺少文本的地方将显示英文。",
+      "testLanguage": "{language} · 测试",
+      "saved": "语言已保存",
+      "saveFailed": "无法保存您的语言，请重试。"
     },
     "save": "保存更改",
     "saved": "更改已保存！",
@@ -17245,6 +18230,81 @@
         }
       }
     },
+    "planAddOns": {
+      "title": "为您的套餐添加更多内容",
+      "description": "为您的 Growth 套餐提供额外追踪、额外品牌和 AI 用量加购。您所选的所有项目将一次性从预留的银行卡中扣款。",
+      "tracking": {
+        "title": "额外追踪",
+        "description": "在您套餐的引擎上每天追踪更多 Prompt 地区。一次只能选择一个档位，可随时更改或移除。",
+        "label": "额外追踪档位",
+        "none": "无",
+        "tier": "+{units} 个 Prompt 地区",
+        "price": "{price}/{interval, select, year {年} other {月}}",
+        "contactSales": "联系销售",
+        "yearly": "年付价格：免费赠送 2 个月。"
+      },
+      "brands": {
+        "title": "额外品牌",
+        "description": "每个品牌都有独立的主题、竞争对手和白标报告。每个品牌每{interval, select, year {年} other {月}} {price}。",
+        "count": "额外 {count} 个",
+        "fewer": "减少一个品牌",
+        "more": "增加一个品牌",
+        "note": "品牌数量不能少于您现有的数量：请先在“品牌”中移除一个。"
+      },
+      "topUp": {
+        "title": "AI 用量加购",
+        "description": "一次性付款。在您的套餐于 {date} 续订前，增加 AI 用量、简报和机会数；不会自动续订。",
+        "descriptionNoDate": "一次性付款。在您的套餐续订前，增加 AI 用量、简报和机会数；不会自动续订。",
+        "label": "AI 用量加购",
+        "none": "无",
+        "option": "+{multiplier}倍",
+        "adds": "本月 AI 用量的 {multiplier}× · +{briefs} 份简报 · +{opportunities} 个机会"
+      },
+      "summary": "{prompts} 个 Prompt 地区 · {brands} 个品牌",
+      "nothing": "请在上方选择要更改的内容。",
+      "review": "查看并付款",
+      "reviewing": "正在核对价格…",
+      "dialog": {
+        "title": "查看您的加购项",
+        "newLimits": "新的限额",
+        "tracking": "额外追踪",
+        "trackingNone": "无额外追踪",
+        "brands": "{count, plural, =0 {无额外品牌} other {# 个额外品牌}}",
+        "topUp": "AI 用量加购 +{multiplier}倍，一次性付款",
+        "dueToday": "今日应付",
+        "dueTodayNote": "额外追踪和品牌按本周期剩余时间计费，加购按全额计费。",
+        "total": "自下次续订起",
+        "totalValue": "每{interval, select, year {年} other {月}} {price}",
+        "credit": "降低套餐档位或减少品牌后,剩余金额将作为余额抵扣您后续的账单。",
+        "pay": "支付 {price}",
+        "confirm": "确认",
+        "cancel": "取消",
+        "processing": "处理中…"
+      },
+      "done": "您的附加项已更新。充值将在付款确认后立即生效。",
+      "states": {
+        "not_admin": "只有管理员可以更改附加项。请联系您工作区的管理员。",
+        "starter": "附加项包含在 Growth 套餐中。升级到 Growth 即可添加追踪、品牌和 AI 用量。",
+        "enterprise": "您的限额由合同约定。如需更多,请联系您的客户经理。",
+        "trial": "套餐开始后即可购买附加项。",
+        "no_plan": "套餐生效期间可购买附加项。",
+        "ending": "您的套餐即将结束。请保留套餐以更改其附加项。"
+      },
+      "errors": {
+        "not_cloud": "此处不支持附加项。",
+        "admin_only": "只有管理员可以更改附加项。",
+        "not_growth": "附加项包含在 Growth 套餐中。",
+        "trial": "套餐开始后即可购买附加项。",
+        "no_plan": "套餐生效期间可购买附加项。",
+        "ending": "您的套餐即将结束。请保留套餐以更改其附加项。",
+        "contact_sales": "此档位由我们的销售团队提供。",
+        "unavailable": "此附加项目前无法购买。",
+        "below_usage": "您正在使用 {prompts} 个 Prompt 位置和 {brands} 个品牌;新的限额为 {limitPrompts} 和 {limitBrands}。请先暂停 Prompts 或移除品牌。",
+        "payment_failed": "付款未成功。",
+        "failed": "无法更改您的附加项。请重试。"
+      },
+      "readFailed": "无法读取您的附加项。请稍后重试。"
+    },
     "cancelsOn": "订阅将于 {date} 结束",
     "changePlan": "更改方案",
     "upgradeTo": "升级至 {plan}",
@@ -17325,18 +18385,19 @@
     "planChanged": "方案更新成功。",
     "subscriptionCanceled": "您的订阅已取消。",
     "needCustomPlan": "需要定制方案？",
-    "customPlanDescription": "适合需要大规模管理 AI 可见度的大型企业和代理商。每月 499 美元起。",
+    "customPlanDescription": "适用于大规模管理 AI 可见度的大型企业和代理机构。起价每月 ${price}。",
     "customPlanPoints": [
-      "定制工作空间中无限制的品牌数量",
-      "所有回答引擎，包含 Claude",
-      "自定义 Prompt 与地理位置追踪",
-      "定制 KPI 框架与数据集成",
-      "优先支持和专属入职培训",
-      "SSO / SAML 及定制功能需求",
-      "使用您自有的 AI 密钥：OpenAI、Anthropic、Google、Azure 或 OpenRouter"
+      "起步包含 1 个品牌和 3,000 个 Prompts,更多可通过合同约定",
+      "所有答案引擎,Claude 需通过合同约定",
+      "不限量的内容简报、优化机会和网站审核",
+      "SSO / SAML、优先支持和 SLA",
+      "发票结算和 API 访问",
+      "使用您自己的 AI 密钥:OpenAI、Anthropic、Google、Azure 或 OpenRouter"
     ],
     "customPlanPointsChat": ["Chat 与 Agent", "全自动模式，支持 Agent 独立发布"],
     "planCards": {
+      "expandable": "+ 附加项",
+      "expandableHint": "Growth 可随时在“设置 › 账单”中添加更多:额外追踪、额外品牌和 AI 用量充值。",
       "starter": {
         "tagline": "适合刚开始进行 AI 可见度监测与优化的小型团队。",
         "engines": "ChatGPT 和 Gemini 追踪",
@@ -17541,6 +18602,8 @@
     "integrations_connectForbidden": "只有管理员和经理可以连接集成。",
     "integrations_statusFailed": "无法检查 {label} 是否已连接。请稍后重试。",
     "integrations_statusTimedOut": "检查 {label} 超时。请稍后重试。",
+    "integrations_propertiesFailed": "无法加载 {source} 属性。",
+    "integrations_propertiesNoAccess": "Google 未向 Ansvisor 授予 {source} 的访问权限:Google 页面上有一个复选框未勾选。请在上方断开连接,然后重新连接并勾选所有复选框。",
     "integrations_propertiesTimedOut": "读取属性超时。请稍后重试。",
     "integrations_retry": "重试",
     "integrations_propertyMapping": "属性映射",
@@ -18350,14 +19413,30 @@
     "org_description": "管理您的组织名称并查看方案详情。",
     "org_name": "组织名称",
     "org_namePlaceholder": "Acme Inc.",
-    "org_slug": "Slug",
-    "org_slugHint": "用于 API 和集成引用。如需更改，请联系支持团队。",
     "org_plan": "方案",
     "org_members": "成员",
     "org_adminOnly": "仅管理员可以重命名组织。",
     "org_loadFailed": "无法加载组织详情。",
     "org_saveFailed": "无法保存组织名称。请重试。",
-    "accountSaveFailed": "无法保存账户详情。请重试。"
+    "accountSaveFailed": "无法保存账户详情。请重试。",
+    "teamErrors": {
+      "invalid_email": "请输入有效的电子邮件地址。",
+      "no_brands": "请至少选择一个品牌。",
+      "already_member": "此人已是您团队的成员。",
+      "already_invited": "此邮箱已有待处理的邀请。",
+      "admin_all_brands": "管理员始终拥有所有品牌的权限。"
+    },
+    "changePlanFailed": "无法更改套餐，请重试。",
+    "cancelFailed": "无法取消订阅，请重试。",
+    "reactivateFailed": "无法重新激活订阅，请重试。",
+    "portalFailed": "无法打开账单门户，请重试。",
+    "agent_loadFailed": "无法加载您的 AI 提供商，请刷新页面。",
+    "agent_saveFailed": "无法保存，请重试。",
+    "agent_testFailed": "无法测试密钥，请重试。",
+    "agent_clearFailed": "无法移除密钥，请重试。",
+    "integrations_disconnectFailed": "无法断开连接，请重试。",
+    "integrations_propertySaveFailed": "无法保存资源，请重试。",
+    "integrations_propertiesLoadFailed": "无法加载资源列表。"
   },
   "brands": {
     "title": "品牌",
@@ -18454,6 +19533,7 @@
     },
     "description": "管理您在各 AI 平台上追踪的所有品牌。",
     "addBrand": "添加品牌",
+    "addBrandAddOn": "为您的套餐添加品牌",
     "showAllBrands": "显示我的所有品牌",
     "visitBrandSettings": "访问品牌设置",
     "workspaceSettings": "工作区设置",
@@ -18755,6 +19835,14 @@
         "hint": "已启用的平台将按照配置的频率进行查询，以检查您品牌的 Prompt 可见度。",
         "loadError": "加载 AI 平台设置失败。",
         "saveError": "保存 AI 平台设置失败。"
+      },
+      "errors": {
+        "save": "保存失败，请重试。",
+        "saveDomains": "保存域名失败，请重试。",
+        "loadCompetitors": "加载竞争对手失败。",
+        "addCompetitor": "添加竞争对手失败，请重试。",
+        "removeCompetitor": "移除竞争对手失败，请重试。",
+        "deleteBrand": "删除品牌失败，请重试。"
       }
     },
     "card": {

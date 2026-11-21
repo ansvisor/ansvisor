@@ -46,7 +46,7 @@ const isStatus = (status: string): status is ChatStepStatus =>
 const text = (value: unknown) =>
   typeof value === 'string' && value !== '' ? maskIds(value) : undefined;
 
-/** scope_json's names (subject, dateRange, platforms, brand, unit), and nothing else it may hold. */
+/** scope_json's names (subject, dateRange, platforms, brand, unit, record), and nothing else it may hold. */
 function scopeOf(json: unknown): ChatStepScope | undefined {
   if (!json || typeof json !== 'object' || Array.isArray(json)) return undefined;
   const raw = json as Record<string, unknown>;
@@ -54,6 +54,7 @@ function scopeOf(json: unknown): ChatStepScope | undefined {
   const subject = text(raw.subject);
   const dateRange = text(raw.dateRange);
   const brand = text(raw.brand);
+  const record = text(raw.record);
   const platforms = Array.isArray(raw.platforms)
     ? raw.platforms.map(text).filter((name): name is string => !!name)
     : [];
@@ -61,6 +62,7 @@ function scopeOf(json: unknown): ChatStepScope | undefined {
   if (dateRange) scope.dateRange = dateRange;
   if (platforms.length > 0) scope.platforms = platforms;
   if (brand) scope.brand = brand;
+  if (record) scope.record = record;
   if (raw.unit === 'items' || raw.unit === 'parts') scope.unit = raw.unit;
   return Object.keys(scope).length > 0 ? scope : undefined;
 }

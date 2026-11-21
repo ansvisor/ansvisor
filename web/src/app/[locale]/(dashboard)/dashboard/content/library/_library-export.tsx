@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { ChevronDown, Download } from 'lucide-react';
 import { ExportFormatIcon } from '@/components/content/export-format-icon';
@@ -46,6 +47,7 @@ export function useLibraryExport(brandId: string | null) {
   const tStatus = useTranslations('contentEditor.status');
   const tMethod = useTranslations('contentEditor.method');
   const tTypes = useTranslations('contentEditor.pageTypes');
+  const serverError = useServerErrorText();
   const [exporting, setExporting] = useState(false);
 
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
@@ -104,7 +106,7 @@ export function useLibraryExport(brandId: string | null) {
       }
     } catch (err) {
       console.error('Failed to export the Library:', err);
-      toast.error(t('export.failed'));
+      toast.error(serverError(err, t('export.failed')));
     } finally {
       setExporting(false);
     }
@@ -131,7 +133,7 @@ export function useLibraryExport(brandId: string | null) {
       );
     } catch (err) {
       console.error('Failed to export the draft:', err);
-      toast.error(t('export.failed'));
+      toast.error(serverError(err, t('export.failed')));
     }
   };
 

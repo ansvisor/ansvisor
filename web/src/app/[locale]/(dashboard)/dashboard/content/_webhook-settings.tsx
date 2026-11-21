@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,8 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
   // Save open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
   // Only admins and managers save the webhook (RLS) and test it (the API):
   // a member sees it, and why it can't be changed, before pressing anything.
   const { canManage } = useUserRole();
@@ -112,7 +115,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
       onOpenChange(false);
     } catch (err) {
       console.error('Save webhook failed:', err);
-      toast.error(t('saveError'));
+      toast.error(serverError(err, t('saveError')));
     } finally {
       setSaving(false);
     }
@@ -143,7 +146,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
     } catch (err) {
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : 'Test failed',
+        message: caughtError(err, t('testNotRun')),
       });
     } finally {
       setTesting(false);

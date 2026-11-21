@@ -18,6 +18,12 @@ vi.mock('@/i18n/navigation', () => ({
     ) : null,
 }));
 
+// The send-to-CMS target reads the brand's Wix and HubSpot connections in an effect. With no
+// session those reads end at once, so no browser client is made after the test tears down.
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }) } }),
+}));
+
 const { RunAnswer } = await import('./run-answer');
 
 /**

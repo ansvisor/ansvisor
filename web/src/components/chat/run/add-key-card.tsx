@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { Check, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ export function AddKeyCard({
 }) {
   const t = useTranslations('chatKeys');
   const tProviders = useTranslations('settings.agent_providers');
+  const serverError = useServerErrorText();
   const { canAdmin } = useUserRole();
   const fieldId = useId();
   const [access, setAccess] = useState<Access | null | 'failed'>(null);
@@ -97,7 +99,7 @@ export function AddKeyCard({
         check?: Saved;
       } | null;
       if (!res.ok || !body?.ok) {
-        setError(body?.error ?? t('failed'));
+        setError(serverError(body, body?.error ?? t('failed'), res.status));
         return;
       }
       // Kept: the field is cleared, and only its outcome shows.

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createBrand, markBrandAsEcommerce } from '@/lib/actions/brand';
@@ -202,6 +203,8 @@ export default function OnboardingPage() {
   const tSetup = useTranslations('onboarding');
   const tStart = useTranslations('onboarding.start');
   const tExplore = useTranslations('demo.explore');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
   // The name a workspace made on the choice screen has until its first brand.
   const workspacePlaceholder = tStart('workspaceName');
   const workspaceFailed = tStart('workspaceFailed');
@@ -857,7 +860,7 @@ export default function OnboardingPage() {
           domains: domain ? [{ domain, isPrimary: true }] : [],
         });
         if ('error' in result) {
-          toast.error(result.error);
+          toast.error(serverError(result, result.error));
           return;
         }
         const { brand } = result;
@@ -898,7 +901,7 @@ export default function OnboardingPage() {
         fetchTopicSuggestions();
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : tSetup('setup.createBrandFailed'));
+      toast.error(caughtError(err, tSetup('setup.createBrandFailed')));
     } finally {
       setIsLoading(false);
     }
@@ -1291,7 +1294,7 @@ export default function OnboardingPage() {
       // /dashboard opens the person's start page.
       window.location.href = '/dashboard';
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save competitors');
+      toast.error(caughtError(err, tSetup('setup.saveCompetitorsFailed')));
       setSavingCompetitors(false);
     }
   };

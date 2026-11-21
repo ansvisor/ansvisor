@@ -204,7 +204,7 @@ describe('the preview', () => {
     expect(preview).toMatchObject({
       ok: true,
       changed: true,
-      limits: { prompts: 1200, brands: 7 },
+      limits: { prompts: 1250, brands: 7 },
       dueTodayCents: 4120,
       // $249 + $750 (here 1,000 × 75¢) + 3 × $25
       totalCents: 24900 + 75000 + 7500,
@@ -246,7 +246,7 @@ describe('applying', () => {
         extraBrands: 2,
         prorationDate: preview.prorationDate,
       }),
-    ).resolves.toEqual({ ok: true, changed: true, limits: { prompts: 300, brands: 6 } });
+    ).resolves.toEqual({ ok: true, changed: true, limits: { prompts: 350, brands: 6 } });
     expect(guard.assertWritable).toHaveBeenCalled();
     const [id, params, options] = stripeApi.update.mock.calls[0];
     expect(id).toBe('sub_1');
@@ -284,7 +284,7 @@ describe('applying', () => {
     await expect(applyAddOnChange({ trackingUnits: 100, extraBrands: 0 })).resolves.toEqual({
       ok: true,
       changed: false,
-      limits: { prompts: 300, brands: 4 },
+      limits: { prompts: 350, brands: 4 },
     });
     expect(stripeApi.update).not.toHaveBeenCalled();
   });
@@ -390,7 +390,7 @@ describe('is refused', () => {
       ok: false,
       failure: 'below_usage',
       inUse: { prompts: 950, brands: 6 },
-      limits: { prompts: 300, brands: 6 },
+      limits: { prompts: 350, brands: 6 },
     });
     // Brands 6 of 6 and prompts within: lowering the tier only is fine.
     usage.prompts = 250;
@@ -544,7 +544,7 @@ describe('what Billing shows', () => {
       addOns: {
         state: 'open',
         interval: 'month',
-        base: { prompts: 200, brands: 4 },
+        base: { prompts: 250, brands: 4 },
         current: { trackingUnits: 100, extraBrands: 2 },
         tiers: [
           { units: 100, priceCents: 7500, contactSales: false },

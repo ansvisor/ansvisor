@@ -7,20 +7,15 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SuggestTranslationLink } from '@/components/settings/suggest-translation';
 import { useUiLanguage } from '@/hooks/use-ui-language';
-import { LOCALE_NAMES, TRANSLATED_LOCALES, type AnyUiLocale } from '@/i18n/locales';
+import { LOCALE_NAMES, type AnyUiLocale } from '@/i18n/locales';
 import { cn } from '@/lib/utils';
 
 /**
- * The name a language is listed with: its own (Türkçe, Deutsch), and "· test"
- * for those only staff and previews have (no translation yet, or en-XA).
+ * The name a language is listed with: its own (Türkçe, Deutsch), with no
+ * mark for those still being translated.
  */
 export function useLanguageLabel() {
-  const t = useTranslations('settings.language');
-  return (locale: AnyUiLocale) => {
-    const name = LOCALE_NAMES[locale];
-    const translated = (TRANSLATED_LOCALES as readonly string[]).includes(locale);
-    return translated ? name : t('testLanguage', { language: name });
-  };
+  return (locale: AnyUiLocale) => LOCALE_NAMES[locale];
 }
 
 /**

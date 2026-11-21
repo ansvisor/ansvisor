@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText } from '@/hooks/use-server-error';
 import { useSearchParams } from 'next/navigation';
 import { FileText, FlaskConical, Loader2, Play } from 'lucide-react';
 import { toast } from 'sonner';
@@ -66,6 +67,7 @@ export function BrandVisibilityShellView({ children }: { children: ReactNode }) 
   const t = useTranslations('brandVisibility');
   const tInsights = useTranslations('insights');
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
   const pathname = usePathname();
   const tab = brandVisibilityTabOf(pathname);
   const brandId = useBrandStore((s) => s.activeBrandId);
@@ -275,7 +277,7 @@ export function BrandVisibilityShellView({ children }: { children: ReactNode }) 
       startJob(jobId);
     } catch (err) {
       setIsRunning(false);
-      toast.error(err instanceof Error ? err.message : 'Failed to trigger tracking');
+      toast.error(caughtError(err, tInsights('tracking.startFailed')));
     }
   };
 

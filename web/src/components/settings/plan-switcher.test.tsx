@@ -159,17 +159,19 @@ describe('the plan cards', () => {
         '10 content briefs a month',
         '100 site audits a month',
         '1x AI usage',
+        'Up to 25 new pages or 50 page optimizations a month',
         'MCP & API access',
       ],
       // Growth's brands, prompts and AI usage grow with add-ons (00546).
       Growth: [
         '4 brands+ add-ons',
         'Unlimited seats',
-        '200 prompts tracked+ add-ons',
+        '250 prompts tracked+ add-ons',
         'ChatGPT, Gemini, Google AI Mode and Google AI Overviews tracking',
         '50 content briefs a month',
         '500 site audits a month',
         '5x AI usage+ add-ons',
+        'Up to 125 new pages or 250 page optimizations a month',
         'Multi-region tracking',
         'White-label reports & exports',
         'Looker Studio',
@@ -190,14 +192,25 @@ describe('the plan cards', () => {
     expect(container.textContent).toContain(
       'For small teams getting started with AI visibility monitoring and optimization.',
     );
+    // The content estimate says it shares the AI allowance.
+    const pages = [...container.querySelectorAll('li span')].find((el) =>
+      el.textContent?.startsWith('Up to 125 new pages'),
+    );
+    expect(pages?.getAttribute('title')).toContain('shared with Chat and agents');
   });
 
   it('lists Chat and Agents once the new Chat is on, Full auto from Growth up', async () => {
     await render('starter', { chatAgentic: true });
     const { Starter, Growth } = cards();
-    expect(Starter.slice(6)).toEqual(['1x AI usage', 'Chat and Agents', 'MCP & API access']);
+    expect(Starter.slice(6)).toEqual([
+      '1x AI usage',
+      'Up to 25 new pages or 50 page optimizations a month',
+      'Chat and Agents',
+      'MCP & API access',
+    ]);
     expect(Growth.slice(6)).toEqual([
       '5x AI usage+ add-ons',
+      'Up to 125 new pages or 250 page optimizations a month',
       'Chat and Agents',
       'Full auto, with agents that publish on their own',
       'Multi-region tracking',

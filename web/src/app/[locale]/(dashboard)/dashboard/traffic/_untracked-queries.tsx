@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,8 @@ export function UntrackedQueriesCard({
   // upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
   // A brand with no topic yet: Track asks for one first.
   const topicFirst = useTopicFirstDialog();
   // Tracking reads the list again: the tracked queries leave it.
@@ -123,7 +126,11 @@ export function UntrackedQueriesCard({
         brandId,
         null,
         queries.map((text) => ({ text, topic: '' })),
-      ).catch((err: Error) => ({ promptIds: [] as string[], error: err.message, code: undefined }));
+      ).catch((err: unknown) => ({
+        promptIds: [] as string[],
+        error: caughtError(err, t('trackFailed')),
+        code: undefined,
+      }));
       setTracking(new Set());
       const tracked = outcome.promptIds.length;
       const waiting = ('waitingIds' in outcome && outcome.waitingIds?.length) || 0;
@@ -136,7 +143,7 @@ export function UntrackedQueriesCard({
         toast.error(
           outcome.code === 'plan_limit'
             ? t('planLimit', { count: queries.length - tracked })
-            : outcome.error,
+            : serverError(outcome, outcome.error),
         );
       }
       if (tracked > 0) {
