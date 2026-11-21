@@ -34,6 +34,35 @@
     "footer": "You get this as an Admin of the workspace, by your Chat settings' Notify me when an agent needs me.",
     "fallbackWorkspace": "your workspace"
   },
+  "notifications": {
+    "change": "Change your e-mails",
+    "categories": {
+      "growth": "Growth",
+      "protect": "Protect",
+      "recover": "Recover",
+      "fix": "Fix",
+      "compete": "Compete"
+    },
+    "critical": {
+      "subjectOne": "{brand}: a new Critical action, {code}",
+      "subjectMany": "{brand}: {count, plural, one {# new Critical action} other {# new Critical actions}}",
+      "title": "{count, plural, one {A new Critical action} other {# new Critical actions}}",
+      "item": "{code} · {category}",
+      "lineOne": "{brand} has a new Critical action, {item}: one of the most important things to do now.",
+      "lineMany": "{brand} has {count, plural, one {# new Critical action} other {# new Critical actions}} since yesterday:",
+      "button": "{count, plural, one {Open the action} other {Open Actions}}",
+      "why": "You get this because you chose to hear about new Critical actions."
+    },
+    "drafts": {
+      "subject": "{brand}: {count, plural, one {# draft waits} other {# drafts wait}} for your review",
+      "title": "{count, plural, one {# draft waits for your review} other {# drafts wait for your review}}",
+      "line": "{brand} has {count, plural, one {# draft} other {# drafts}} in review in the Content Library:",
+      "untitled": "Untitled draft",
+      "more": "and {count} more",
+      "button": "Open Library › In review",
+      "why": "You get this because you chose to hear about drafts waiting for your review."
+    }
+  },
   "autoAudit": {
     "subject": "Site Audit: {summary}",
     "title": "Auto-audit finished",
