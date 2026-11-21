@@ -4067,10 +4067,13 @@
       },
       "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
       "view": {
-        "actions": "Actions",
-        "scorecard": "Scorecard",
+        "actions": "Past actions",
+        "scorecard": "Results by kind",
         "kpis": "KPIs",
-        "label": "History views"
+        "label": "History views",
+        "actionsHint": "Each action that's underway or closed, one by one: what it set out to do and what was measured since.",
+        "scorecardHint": "What each kind of action achieved overall: how many were completed, their success rate and the median change.",
+        "kpisHint": "Your brand's goals and how close each one is."
       },
       "scorecard": {
         "note": "What each kind of action did at this brand, from its own actions only. Results are the readings so far; each is final a month after its action closed. Median change is in each action's main metric.",
