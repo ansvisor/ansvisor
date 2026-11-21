@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import {
   Search,
@@ -131,6 +132,8 @@ export default function SiteAuditPage() {
   // instead; the settings open to read, and their Save asks too.
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
 
   // Prefill the URL with the active brand's primary domain (read once at init).
   const [url, setUrl] = useState(() => {
@@ -298,7 +301,7 @@ export default function SiteAuditPage() {
       } catch (err) {
         console.error('Failed to load audit hub data:', err);
         if (!cancelled) {
-          const msg = err instanceof Error ? err.message : t('failed');
+          const msg = caughtError(err, t('failed'));
           setError(msg);
           toast.error(msg);
         }
@@ -312,7 +315,7 @@ export default function SiteAuditPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, refreshKey, t]);
+  }, [activeBrandId, refreshKey, t, caughtError]);
 
   useEffect(() => {
     if (!groupByTemplate || !activeBrandId) return;
@@ -324,7 +327,7 @@ export default function SiteAuditPage() {
       .catch((err) => {
         console.error('Failed to load the page templates:', err);
         if (!cancelled) {
-          toast.error(t('pages.templatesFailed'));
+          toast.error(serverError(err, t('pages.templatesFailed')));
           setGroupByTemplate(false);
         }
       });
@@ -332,7 +335,7 @@ export default function SiteAuditPage() {
       cancelled = true;
       setTemplates(null);
     };
-  }, [groupByTemplate, activeBrandId, refreshKey, t]);
+  }, [groupByTemplate, activeBrandId, refreshKey, t, serverError]);
 
   // Without an active plan the quota reads 0 of 0: not used up. Run audit
   // stays clickable, and opens the plan dialog.
@@ -398,7 +401,7 @@ export default function SiteAuditPage() {
       router.push(`/dashboard/audit/${started.audit.id}`);
     } catch (err) {
       SITE_AUDIT_RUN.failed();
-      toast.error(err instanceof Error ? err.message : t('failed'));
+      toast.error(caughtError(err, t('failed')));
       setRunning(false);
     }
   };
@@ -470,7 +473,7 @@ export default function SiteAuditPage() {
       });
       setPagesTotal(next.total);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('failed'));
+      toast.error(caughtError(err, t('failed')));
     } finally {
       setLoadingMore(false);
     }
@@ -531,7 +534,7 @@ export default function SiteAuditPage() {
       await deleteAudit(id);
       await reloadInPlace(activeBrandId);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('failed'));
+      toast.error(caughtError(err, t('failed')));
     }
   };
 
@@ -571,7 +574,7 @@ export default function SiteAuditPage() {
         );
         await reloadInPlace(brandId);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : t('failed'));
+        toast.error(caughtError(err, t('failed')));
       }
     });
   };
@@ -597,7 +600,7 @@ export default function SiteAuditPage() {
       await reloadInPlace(activeBrandId);
     } catch (err) {
       SITE_AUDIT_RUN.failed();
-      toast.error(err instanceof Error ? err.message : t('failed'));
+      toast.error(caughtError(err, t('failed')));
     } finally {
       setStartingBulk(false);
     }
@@ -653,7 +656,7 @@ export default function SiteAuditPage() {
       await reloadInPlace(activeBrandId);
     } catch (err) {
       SITE_AUDIT_RUN.failed();
-      toast.error(err instanceof Error ? err.message : t('failed'));
+      toast.error(caughtError(err, t('failed')));
     } finally {
       setStartingBulk(false);
     }
@@ -678,7 +681,7 @@ export default function SiteAuditPage() {
       await reloadInPlace(activeBrandId);
     } catch (err) {
       console.error('Failed to update the opportunities:', err);
-      toast.error(t('opportunities.prefsFailed'));
+      toast.error(serverError(err, t('opportunities.prefsFailed')));
     }
   };
 
@@ -704,7 +707,7 @@ export default function SiteAuditPage() {
       );
       await reloadInPlace(activeBrandId);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('opportunities.prefsFailed'));
+      toast.error(caughtError(err, t('opportunities.prefsFailed')));
     }
   };
   const excludeTemplates = async (templates: string[]) => {
@@ -713,7 +716,7 @@ export default function SiteAuditPage() {
     try {
       before = (await getAuditSettings(activeBrandId)).excludePatterns;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('opportunities.prefsFailed'));
+      toast.error(caughtError(err, t('opportunities.prefsFailed')));
       return;
     }
     await savePatterns(

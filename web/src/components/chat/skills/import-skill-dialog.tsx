@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,6 +45,7 @@ export function ImportSkillDialog({
   onImported: (skill: ImportedSkillRef) => void;
 }) {
   const t = useTranslations('chatSkills.import');
+  const serverError = useServerErrorText();
   // The browser's own file field speaks its language: a button and the file's name in ours.
   const picker = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -81,7 +83,7 @@ export function ImportSkillDialog({
     } | null;
     setBusy(false);
     if (!res?.ok || !body?.ok || !body.skill) {
-      setProblem(body?.error ?? t('failed'));
+      setProblem(serverError(body, body?.error ?? t('failed'), res?.status));
       return;
     }
     toast.success(body.skill.requested ? t('requested') : t('imported'));

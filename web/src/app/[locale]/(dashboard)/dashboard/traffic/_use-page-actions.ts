@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { useFailureToast } from '@/hooks/use-failure-toast';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
@@ -39,6 +40,8 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
   const { saySkipped } = useRecentAudit();
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
   const [sending, setSending] = useState(false);
   const [auditing, setAuditing] = useState(false);
   // The page whose content suggestion is being written.
@@ -63,7 +66,10 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
       try {
         const result = await sendTrafficPagesToActionCenter(brandId, dateWindow, sent, reason);
         if ('error' in result) {
-          toast.error(t('sendFailed'), { id: toastId, description: result.error });
+          toast.error(t('sendFailed'), {
+            id: toastId,
+            description: serverError(result, result.error, result.status),
+          });
           return false;
         }
         const open = {
@@ -86,14 +92,14 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
           });
         }
         return true;
-      } catch {
-        toast.error(t('sendFailed'), { id: toastId });
+      } catch (err) {
+        toast.error(serverError(err, t('sendFailed')), { id: toastId });
         return false;
       } finally {
         setSending(false);
       }
     },
-    [brandId, dateWindow, router, t],
+    [brandId, dateWindow, router, t, serverError],
   );
 
   const auditMany = useCallback(
@@ -128,7 +134,8 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
         } catch (err) {
           toast.error(t('auditsFailed'), {
             id: toastId,
-            description: err instanceof Error ? err.message : undefined,
+            // The reason in the person's language when its code is mapped (LOC-008).
+            description: caughtError(err, '') || undefined,
           });
           return false;
         } finally {
@@ -138,7 +145,7 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
       };
       return start(urls, false);
     },
-    [brandId, loadQuota, router, saySkipped, t],
+    [brandId, loadQuota, router, saySkipped, t, caughtError],
   );
 
   /**

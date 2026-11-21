@@ -50,10 +50,10 @@ async function draw() {
 }
 
 describe('Agent Center’s layout', () => {
-  it('puts the Action Center’s header and tabs above the page', async () => {
+  it('puts the Agents title, as the other tabs show theirs, and the tabs above the page', async () => {
     await draw();
     expect(container.querySelector('[data-testid="seen"]')).not.toBeNull();
-    expect(container.querySelector('h1')?.textContent).toBe('Action Center');
+    expect(container.querySelector('h1')?.textContent).toBe('Agents');
     expect(container.textContent).toContain('Agents do recurring work for you.');
     const frame = container.querySelector('[data-frame="action-center"]')!;
     const tabs = frame.querySelector('[data-testid="tabs"]')!;

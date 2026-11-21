@@ -15,14 +15,18 @@ The **Competitors** page, under **Analytics** in the sidebar, right after **Visi
 
 ## Tracked Competitors
 
-The **Tracked Competitors** card lists every competitor with its domain and:
+The **Tracked Competitors** card lists every competitor with its logo (its site's icon or initials), its domain and:
 
-- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.
+- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover it for its answers, citations and position factor.
 - the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.
 
-**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.
+**No data** means no answer in the window was measured for that competitor yet, such as one you've just added.
 
-The **Date Range** under the page's title (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as "Scores cover the last 7 days." **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations.
+The **Date Range** under the page's title (7d, 30d by default, 90d, All or Custom) sets the window for these scores, and the line under the list says which days they cover, such as "Scores cover the last 7 days." **Export CSV** on the card downloads every brand's scores, visible prompts, mentions and citations.
+
+## Order and rank
+
+The cards run from the highest score to the lowest, each with its rank, such as **#2**. Your brand sits among them as **You**, in its place. One named in fewer than 10 prompts in the window shows **Low sample** and no rank, after the ranked ones.
 
 ## Filter and group by type
 
@@ -35,7 +39,7 @@ They only change which cards show and in what order: scores, the date range and 
 
 ## Open a head-to-head comparison
 
-Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.
+Click a competitor's card to compare it with your brand under **Your brand vs competitor**, with both names filled in. The selected card has a dark border. Click the card again to close the comparison. The selected competitor is kept in the page's address, so a refresh or a shared link opens the same one.
 
 The comparison reads the same **Date Range** as the cards: its scores, **Gaps**, **Strengths**, **Prompt-by-Prompt** and the runs you open cover those days, and change with it. Its scores are the same AI Visibility Score as the cards, from 0 to 100 and not a percentage, for your brand and for the competitor alike over your answers: for the whole comparison, each platform, each prompt and each answer.
 
@@ -87,3 +91,7 @@ Only what Site Audit's checks found and a summary of the page's words are kept, 
 2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on Visibility's **Citations** tab lists the sources AI cites with the competitor and not with you.
 3. Create content for that prompt in **Content**.
 4. Publish it, earn placements on those sources, and watch the prompt in the comparison as new answers are tracked.
+
+## Which prompts a count is out of
+
+Point at a card's prompt count, such as 12/40 prompts, to see which prompts it's out of: "40 prompts with answers in the last 30 days". It counts the prompts that got an AI answer in the date range, so it changes with the range. A report counts its own period, and Today counts the prompts you track now, active ones only, so their numbers can differ from this one.

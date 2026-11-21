@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { track } from '@/lib/analytics';
@@ -9,11 +9,15 @@ import { dayIn, nextDay } from '@/lib/time-zone';
 import { signalTexts } from '@/lib/signals/display';
 import type { Signal } from '@/lib/signals/map';
 import type { TodayStanding } from '@/lib/action-center/focus';
+import { ChevronDown } from 'lucide-react';
 import {
+  GROUP_TITLE_KINDS,
   asSentence,
   changeDirection,
+  groupChanges,
   largestRivalMove,
   type ChangeDirection,
+  type ChangeGroup,
 } from '@/lib/action-center/since';
 import type { TodayChanges } from '@/lib/actions/today-changes';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -73,7 +77,6 @@ export function SinceSection({
 }) {
   const t = useTranslations('actionCenter.today.since');
   const tToday = useTranslations('actionCenter.today');
-  const tTexts = useTranslations('actionCenter.signalTexts');
   const titleOf = useSinceTitle();
   const load = useTodayPart(read);
 
@@ -124,48 +127,137 @@ export function SinceSection({
         />
       ) : (
         <ul>
-          {load.data.items.map((signal) => {
-            const direction = changeDirection(signal);
-            const line = signalTexts(signal, tTexts).title;
-            return (
-              <li
-                key={signal.id}
-                data-signal-id={signal.id}
-                className="flex gap-3 border-t py-3 text-sm leading-relaxed"
-              >
-                <span
-                  className={cn(
-                    'inline-flex h-[22px] shrink-0 items-center rounded-full px-2 text-xs font-semibold',
-                    PILL[direction],
-                  )}
-                >
-                  {t(`direction.${direction}`)}
-                </span>
-                <span>
-                  {signal.actionId ? asSentence(line) : line}
-                  {signal.actionId && (
-                    <>
-                      {' '}
-                      {t.rich('actionAdded', {
-                        link: (chunks) => (
-                          <Link
-                            href={actionHref(signal.actionId!)}
-                            onClick={() => clicked(signal, 'action')}
-                            className="underline underline-offset-2"
-                          >
-                            {chunks}
-                          </Link>
-                        ),
-                      })}
-                    </>
-                  )}
-                </span>
-              </li>
-            );
-          })}
+          {groupChanges(load.data.items).map((group) => (
+            <ChangeRow key={group.kind} group={group} onAction={clicked} />
+          ))}
         </ul>
       )}
     </TodaySection>
+  );
+}
+
+/** A link over its whole row (AC-06): the row is the link's box, the text stays as it reads. */
+const ROW_LINK = 'underline underline-offset-2 after:absolute after:inset-0';
+
+/**
+ * One row of Since yesterday. A lone change reads as before, its "An action
+ * was added" opening its action from anywhere on the row. Several changes of
+ * one kind read as one line ("5 rivals are mentioned far more than you · 1
+ * action"), with the action one link opens or, past one, each change's own
+ * under Show all.
+ */
+function ChangeRow({
+  group,
+  onAction,
+}: {
+  group: ChangeGroup;
+  onAction: (signal: Signal, target: 'action') => void;
+}) {
+  const t = useTranslations('actionCenter.today.since');
+  const tTexts = useTranslations('actionCenter.signalTexts');
+  const [open, setOpen] = useState(false);
+  const [lead] = group.signals;
+  const direction = changeDirection(lead);
+  const pill = (
+    <span
+      className={cn(
+        'inline-flex h-[22px] shrink-0 items-center rounded-full px-2 text-xs font-semibold',
+        PILL[direction],
+      )}
+    >
+      {t(`direction.${direction}`)}
+    </span>
+  );
+  const actionLink = (signal: Signal, className: string) =>
+    t.rich('actionAdded', {
+      link: (chunks) => (
+        <Link
+          href={actionHref(signal.actionId!)}
+          onClick={() => onAction(signal, 'action')}
+          className={className}
+        >
+          {chunks}
+        </Link>
+      ),
+    });
+
+  if (group.signals.length === 1) {
+    const line = signalTexts(lead, tTexts).title;
+    return (
+      <li
+        data-signal-id={lead.id}
+        className={cn(
+          'relative flex gap-3 border-t py-3 text-sm leading-relaxed',
+          lead.actionId && 'rounded-sm hover:bg-muted/40',
+        )}
+      >
+        {pill}
+        <span>
+          {lead.actionId ? asSentence(line) : line}
+          {lead.actionId && <> {actionLink(lead, ROW_LINK)}</>}
+        </span>
+      </li>
+    );
+  }
+
+  const count = group.signals.length;
+  const title = GROUP_TITLE_KINDS.includes(group.kind)
+    ? t(`group.${group.kind}`, { count })
+    : t('group.other', { title: signalTexts(lead, tTexts).title, more: count - 1 });
+  const single = group.actionIds.length === 1 ? group.signals.find((s) => s.actionId) : undefined;
+  const listId = `since-group-${group.kind}`;
+  return (
+    <li data-signal-group={group.kind} className="border-t py-3 text-sm leading-relaxed">
+      <div className={cn('relative flex gap-3', single && 'rounded-sm hover:bg-muted/40')}>
+        {pill}
+        <span className="min-w-0 flex-1">
+          {title}
+          {group.actionIds.length > 0 && (
+            <>
+              {' · '}
+              {single ? (
+                <Link
+                  href={actionHref(single.actionId!)}
+                  onClick={() => onAction(single, 'action')}
+                  className={ROW_LINK}
+                >
+                  {t('groupActions', { count: 1 })}
+                </Link>
+              ) : (
+                t('groupActions', { count: group.actionIds.length })
+              )}
+            </>
+          )}
+        </span>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => setOpen((value) => !value)}
+          className="relative z-10 inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {open ? t('hideGroup') : t('showGroup', { count })}
+          <ChevronDown
+            aria-hidden="true"
+            className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')}
+          />
+        </button>
+      </div>
+      {open && (
+        <ul id={listId} className="mt-2 space-y-1.5 border-s ps-3 text-muted-foreground">
+          {group.signals.map((signal) => (
+            <li key={signal.id} data-signal-id={signal.id}>
+              {signal.actionId
+                ? asSentence(signalTexts(signal, tTexts).title)
+                : signalTexts(signal, tTexts).title}
+              {signal.actionId && (
+                <> {actionLink(signal, 'underline underline-offset-2 hover:text-foreground')}</>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 

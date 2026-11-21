@@ -48,9 +48,6 @@ export const FANOUT_NOT_SHARED_PLATFORMS: readonly string[] = [
  */
 export const FANOUT_MIN_SILENT_ANSWERS = 20;
 
-/** The API-model platforms, whose labels match a scraper's ("ChatGPT"). */
-export const API_MODEL_PLATFORMS: readonly string[] = ['claude', 'gemini', 'chatgpt'];
-
 export type FanoutSharing = 'shares' | 'not-shared' | 'unknown';
 
 export function fanoutSharing(platform: string): FanoutSharing {

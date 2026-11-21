@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { useFailureToast } from '@/hooks/use-failure-toast';
 import { ArrowRight, Loader2, MessageCircle, Tag } from 'lucide-react';
 import { toast } from 'sonner';
@@ -79,6 +80,7 @@ export function Opportunities({
   // managers do both; anyone else reads the list and sends a topic's action.
   const { canManage } = useUserRole();
   const tManagers = useTranslations('managersOnly');
+  const serverError = useServerErrorText();
   const failureToast = useFailureToast();
   const format = useFormatter();
   const f = numberFormat(useLocale());
@@ -134,7 +136,11 @@ export function Opportunities({
         if ('error' in result) {
           // The suggestions can be older than the server's: refreshed or handled since.
           if (result.code === 'stale') toast.error(t('sendStale'));
-          else toast.error(t('sendFailed'), { description: result.error });
+          else {
+            toast.error(t('sendFailed'), {
+              description: serverError(result, result.error, result.status),
+            });
+          }
           return;
         }
         toast.success(
@@ -149,8 +155,8 @@ export function Opportunities({
             },
           },
         );
-      } catch {
-        toast.error(t('sendFailed'));
+      } catch (err) {
+        toast.error(serverError(err, t('sendFailed')));
       }
     });
 
@@ -199,9 +205,9 @@ export function Opportunities({
         } else {
           toast.info(t('stillWriting'), { id: toastId, description: t('stillWritingWhy') });
         }
-      } catch {
+      } catch (err) {
         // Nothing may be left spinning, whatever went wrong on the way.
-        toast.error(t('writeFailed'), { id: toastId, description });
+        toast.error(serverError(err, t('writeFailed')), { id: toastId, description });
       }
     });
 
@@ -269,11 +275,11 @@ export function Opportunities({
       } else if (code === NO_TOPICS) {
         topicFirst.show();
       } else {
-        toast.error(t('trackFailed'), { description: error });
+        toast.error(t('trackFailed'), { description: serverError({ code, error }, error) });
       }
-    } catch {
+    } catch (err) {
       tab.close();
-      toast.error(t('trackFailed'));
+      toast.error(serverError(err, t('trackFailed')));
     } finally {
       setBusy(null);
     }
