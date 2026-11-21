@@ -53,8 +53,8 @@
     "title": "Run Single Prompt",
     "description": "Pick a prompt to test. Only that prompt will run across your enabled platforms.",
     "empty": "No active prompts found. Add prompts in brand settings first.",
-    "loadFailed": "Failed to load prompts",
-    "runFailed": "Failed to run prompt"
+    "loadFailed": "Couldn't load your prompts. Try again.",
+    "runFailed": "Couldn't run the prompt. Try again."
   },
   "responseDetail": {
     "response": "AI Response",
@@ -73,7 +73,9 @@
     "missing_ai_key": "Add an AI provider key in Settings › AI Providers first.",
     "server_error": "Something went wrong on our side. Try again.",
     "location_limit": "Your plan's prompt locations are full: each prompt counts once per location it tracks, and paused prompts don't count. Remove or pause some, or upgrade your plan.",
-    "brand_limit": "Your plan's brands are all in use. Upgrade your plan to add more."
+    "brand_limit": "Your plan's brands are all in use. Upgrade your plan to add more.",
+    "demo_brand": "This is the demo brand: its data is sample data, so it can't be changed or run. Make the change on your own brand.",
+    "admin_required": "Only an Admin can do this. Ask an Admin of your workspace."
   },
   "aiUsage": {
     "meter": {
@@ -502,7 +504,8 @@
       "companyName": "Company name",
       "competitorsToTrack": "Competitors to track",
       "finishingSetup": "Finishing setup...",
-      "competitorsTitle": "Competitors"
+      "competitorsTitle": "Competitors",
+      "saveCompetitorsFailed": "Couldn't save the competitors. Try again."
     },
     "prompts": {
       "removeTopic": "Remove topic",
@@ -10167,7 +10170,8 @@
       "doneCount": "{count, plural, one {Analysis complete — # answer saved.} other {Analysis complete — # answers saved.}}",
       "doneSoFar": "{count, plural, one {Almost done — # answer saved so far, the rest still arriving.} other {Almost done — # answers saved so far, the rest still arriving.}}",
       "failed": "Job failed: {reason}",
-      "unknownError": "Unknown error"
+      "unknownError": "Unknown error",
+      "startFailed": "Couldn't start tracking. Try again."
     },
     "runPrompts": "Run Prompts",
     "runPromptsNow": "Run Prompts Now",
@@ -10588,7 +10592,7 @@
       "compareHint": "Comparing the selected window with the previous equal-length window.",
       "allTimeHint": "All time. There is no earlier period of the same length to compare.",
       "lastVsPrevious": "{days, plural, one {Last # day vs previous # day} other {Last # days vs previous # days}}",
-      "loadFailed": "Failed to load breakdown",
+      "loadFailed": "Couldn't load the breakdown. Try again.",
       "allTime": "All time",
       "current": "Current {days}d",
       "noSamePrompt": "No prompt was answered in both periods",
@@ -10626,9 +10630,9 @@
       "noCompetitorsTitle": "No competitors tracked yet",
       "noCompetitorsBody": "Add competitors to see how you compare in AI answers.",
       "headToHead": "Head-to-Head Comparison",
-      "loadFailed": "Failed to load insights — please try again",
+      "loadFailed": "Couldn't load insights. Try again.",
       "exportCapped": "Export capped at 50,000 rows to prevent memory issues",
-      "exportFailed": "Failed to export CSV",
+      "exportFailed": "Couldn't export the CSV. Try again.",
       "noTrend": "No trend data available yet",
       "yourBrand": "Your Brand",
       "avgCompetitor": "Avg. Competitor",
@@ -13960,7 +13964,8 @@
       "setupFirst": "Set up a webhook to send opportunities to your workflow tools.",
       "urlRequired": "Webhook URL is required",
       "urlRequiredTest": "Enter a webhook URL first",
-      "saveError": "Failed to save webhook config"
+      "saveError": "Failed to save webhook config",
+      "testNotRun": "The test didn't run. Try again."
     },
     "loadError": "Failed to load content opportunities",
     "exportError": "Failed to export opportunities",
@@ -14605,7 +14610,8 @@
         "trackNotAllowed": "Only admins and managers can add prompts.",
         "failed": "Couldn't load these queries.",
         "noData": "Google Search Console has no queries for this brand yet.",
-        "empty": "Every Google query with clicks in this range is tracked."
+        "empty": "Every Google query with clicks in this range is tracked.",
+        "trackFailed": "Couldn't track these queries. Try again."
       }
     },
     "summaryLine": {
@@ -16646,9 +16652,9 @@
       "byCompetitor": "By competitor",
       "howItWorks": "How this works",
       "lowVisibility": "Your visibility is low in this window, so this list may be broad — focus on baseline visibility first.",
-      "loadFailedToast": "Failed to load citation data",
-      "checkFailedToast": "Failed to check citation data",
-      "exportFailed": "Failed to export CSV",
+      "loadFailedToast": "Couldn't load citation data. Try again.",
+      "checkFailedToast": "Couldn't check for citation data. Try again.",
+      "exportFailed": "Couldn't export the CSV. Try again.",
       "typesNotExportable": "Source Types is a chart breakdown, not exportable — switch to Domains, URLs, or Competitor Gaps to export.",
       "tabGaps": "Competitor Gaps"
     }

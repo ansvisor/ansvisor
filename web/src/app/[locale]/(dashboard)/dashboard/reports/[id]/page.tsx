@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import dynamic from 'next/dynamic';
 import { Link } from '@/i18n/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -190,6 +191,7 @@ export default function ReportDetailPage() {
   // saved report it holds open by its id, and the days it covers. Its sections are a snapshot:
   // get_report reads them whole, so no row is sent.
   const tChatRange = useTranslations('chatPanel.range');
+  const serverError = useServerErrorText();
   const period = report && {
     from: report.dateFrom.slice(0, 10),
     to: report.dateTo.slice(0, 10),
@@ -294,7 +296,7 @@ export default function ReportDetailPage() {
       await saveReportPdf(report, kit);
     } catch (err) {
       console.error('PDF download error:', err);
-      toast.error(t('downloadFailed'));
+      toast.error(serverError(err, t('downloadFailed')));
     } finally {
       setDownloading(false);
     }

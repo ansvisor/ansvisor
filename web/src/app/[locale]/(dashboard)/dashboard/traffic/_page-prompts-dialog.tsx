@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -70,6 +71,7 @@ export function PagePromptsDialog({
   const showWaiting = useWaitingForSpotToast();
   // Prompts past the free slots are saved waiting for a spot, not held back.
   const tWaiting = useTranslations('prompts.waiting');
+  const serverError = useServerErrorText();
   // The loaded suggestions carry the page they are for, so another page's
   // never show while this one's load.
   const [loaded, setLoaded] = useState<{
@@ -154,8 +156,8 @@ export function PagePromptsDialog({
       } else {
         toast.error(t('trackFailed'), { description: result.error });
       }
-    } catch {
-      toast.error(t('trackFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('trackFailed')));
     } finally {
       setTracking(false);
     }

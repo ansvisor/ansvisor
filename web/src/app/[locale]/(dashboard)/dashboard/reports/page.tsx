@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -102,6 +103,7 @@ export default function ReportsPage() {
   // the upgrade dialog instead; reading and downloading reports stay open.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const brands = useBrandStore((s) => s.brands);
@@ -171,11 +173,11 @@ export default function ReportsPage() {
       setReports(await getReports(activeBrandId));
     } catch (err) {
       console.error('Failed to load reports:', err);
-      toast.error(t('loadFailed'));
+      toast.error(serverError(err, t('loadFailed')));
     } finally {
       setLoading(false);
     }
-  }, [activeBrandId, t]);
+  }, [activeBrandId, t, serverError]);
 
   useEffect(() => {
     load();
@@ -226,7 +228,7 @@ export default function ReportsPage() {
       router.push(`/dashboard/reports/${id}`);
     } catch (err) {
       console.error('Report generation error:', err);
-      toast.error(t('generateFailed'));
+      toast.error(serverError(err, t('generateFailed')));
     } finally {
       setGenerating(false);
     }
@@ -277,7 +279,7 @@ export default function ReportsPage() {
       setPendingConfirm(null);
     } catch (err) {
       console.error('Report delete error:', err);
-      toast.error(t('deleteFailed'));
+      toast.error(serverError(err, t('deleteFailed')));
     } finally {
       setDeletingId(null);
     }
