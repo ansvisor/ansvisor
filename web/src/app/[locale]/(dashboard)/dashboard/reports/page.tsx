@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -643,20 +644,20 @@ export default function ReportsPage() {
               </div>
               {preset === 'custom' && (
                 <div className="flex items-center gap-2 pt-1">
-                  <Input
-                    type="date"
-                    value={customRange.from}
-                    onChange={(e) => setCustomRange((r) => ({ ...r, from: e.target.value }))}
+                  <DatePicker
+                    aria-label={tc('from')}
+                    value={customRange.from || null}
+                    onChange={(day) => setCustomRange((r) => ({ ...r, from: day ?? '' }))}
                     disabled={generating}
-                    className="text-sm"
+                    className="h-9 text-sm"
                   />
                   <span className="text-xs text-muted-foreground">—</span>
-                  <Input
-                    type="date"
-                    value={customRange.to}
-                    onChange={(e) => setCustomRange((r) => ({ ...r, to: e.target.value }))}
+                  <DatePicker
+                    aria-label={tc('to')}
+                    value={customRange.to || null}
+                    onChange={(day) => setCustomRange((r) => ({ ...r, to: day ?? '' }))}
                     disabled={generating}
-                    className="text-sm"
+                    className="h-9 text-sm"
                   />
                 </div>
               )}

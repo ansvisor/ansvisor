@@ -6703,7 +6703,7 @@
         },
         {
           "heading": "Filters and date range",
-          "text": "Under the tabs:\n\n- **Date Range**: **24h** (the default, the latest completed run), **7d**, **30d**, **90d**, **All** or **Custom**.\n- **Topic**: one topic, shown when the brand has topics.\n- **Region**: one region your prompts run in.\n- **AI Model**: one AI platform; versions of the same engine count as one.\n\nThe filters apply to everything on the tab except **Opportunities**, which lists your stored suggestions. They're kept in the page's address, so a link you share opens with the same filters, and the date range, AI model, region and topic carry over to the other tabs."
+          "text": "Under the tabs:\n\n- **Date Range**: **24h** (the default, the latest completed run), **7d**, **30d**, **90d**, **All** or **Custom**. With **Custom**, **From** and **To** open a calendar in your language: pick a day with the mouse, or the arrow keys and Enter. The same calendar sets dates elsewhere in the app.\n- **Topic**: one topic, shown when the brand has topics.\n- **Region**: one region your prompts run in.\n- **AI Model**: one AI platform; versions of the same engine count as one.\n\nThe filters apply to everything on the tab except **Opportunities**, which lists your stored suggestions. They're kept in the page's address, so a link you share opens with the same filters, and the date range, AI model, region and topic carry over to the other tabs."
         },
         {
           "heading": "A weekly review",
