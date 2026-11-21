@@ -62,6 +62,13 @@ describe('the interface languages', () => {
   });
 });
 
+describe('languages offered to customers', () => {
+  it('are every selectable language, Arabic included', () => {
+    expect([...TRANSLATED_LOCALES]).toEqual([...SELECTABLE_LOCALES]);
+    expect(TRANSLATED_LOCALES).toContain('ar');
+  });
+});
+
 describe('Arabic', () => {
   it('is known, right to left, and listed like the others', () => {
     expect(LOCALES).toContain('ar');

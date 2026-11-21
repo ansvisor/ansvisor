@@ -1,5 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// These tests cover a customer meeting a language that isn't offered yet, so the
+// customer list is pinned to English here (in the app every language is offered).
+vi.mock('@/i18n/locales', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n/locales')>()),
+  TRANSLATED_LOCALES: ['en'],
+}));
 
 /**
  * The person's interface language (00549): their own profile row and the
