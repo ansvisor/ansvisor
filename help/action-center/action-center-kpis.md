@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-**KPIs**, one of the views of the Action Center's **History** tab, tracks the goals you set for the brand. Each KPI shows its **Value**, **Change**, **Trend (7D)**, **Goal**, progress **vs Goal** and a **Status**. An action's Overview lists the KPIs it is linked to.
+**KPIs**, one of the views of the Action Center's **History** tab, tracks the goals you set for the brand. The page keeps the **History** title; **KPIs** is picked in the views below it. Each KPI shows its **Value**, **Change**, **Trend (7D)**, **Goal**, progress **vs Goal** and a **Status**. An action's Overview lists the KPIs it is linked to.
 
 ## KPIs you can track
 

@@ -32,7 +32,8 @@ const AI_PROVIDER_META: Record<AIProviderKey, { label: string; shortLabel: strin
   };
 
 export function resolveAIProvider(model: string, platform?: string): AIProviderKey {
-  const key = platform || model;
+  // An API platform's name ("Gemini API") is its engine's.
+  const key = (platform || model).replace(/ API$/, '');
 
   if (key === 'ChatGPT' || key === 'chatgpt' || key === 'chatgpt-web' || key.startsWith('gpt-')) {
     return 'openai';

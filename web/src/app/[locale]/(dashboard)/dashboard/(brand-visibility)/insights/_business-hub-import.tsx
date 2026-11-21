@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,7 @@ export function BusinessHubImport({
 }) {
   const t = useTranslations('insights.businessHub.import');
   const tAll = useTranslations('insights.businessHub');
+  const serverError = useServerErrorText();
   const locale = useLocale();
   const f = numberFormat(locale);
   const [preview, setPreview] = useState<CsvPreview | null>(null);
@@ -89,8 +91,8 @@ export function BusinessHubImport({
       }
       toast.success(t('imported', { count: result.saved }));
       onImported();
-    } catch {
-      toast.error(t('failed'));
+    } catch (err) {
+      toast.error(serverError(err, t('failed')));
     } finally {
       setImporting(false);
     }

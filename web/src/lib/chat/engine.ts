@@ -374,6 +374,7 @@ import {
   type SubtasksInput,
 } from './subtasks';
 import { replayFrame, replayableThinking, tagThinking } from './thinking-replay';
+import { stepRecord } from './step-record';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -4838,6 +4839,8 @@ async function readCall(
     const card = auditCard(read.value);
     if (card) rc.sink.emit('audit.ready', card);
   }
+  // The one record it read, by name, for "Data used" (UX audit CH-10).
+  const record = page === null ? stepRecord(tool.name, read.value) : null;
   row = await updateStep(
     row.id,
     page !== null
@@ -4850,6 +4853,7 @@ async function readCall(
         }
       : {
           status: 'done',
+          ...(record ? { scope: { ...scope, used: { ...scoped.used }, record } } : {}),
           // What's new says what it found for the plan (CHAT-11 item 11).
           detail:
             tool.name === WHATS_NEW_TOOL ? whatsNewStepDetail(read.value) : scopeDetail(scope),

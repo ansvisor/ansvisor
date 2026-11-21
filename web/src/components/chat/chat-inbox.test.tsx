@@ -248,13 +248,13 @@ const rowTitles = () =>
   );
 
 describe('the topic tabs', () => {
-  it('shows All, Daily suggestions, Needs you and Runs with their counts, and the week in the subtitle', async () => {
+  it('shows All, Daily suggestions, Needs you and Runs with their counts, and only the Needs you count in the subtitle', async () => {
     await render(<ChatInbox suggestions={ok()} />);
     expect(tabs()).toEqual(['All5', 'Daily suggestions3', 'Needs you1', 'Runs1']);
     expect(text()).not.toContain('Reports');
     expect(text()).not.toContain('Alerts');
     expect(text()).toContain(
-      '1 needs you · 1 running · 3 suggestions this week. Results from your agents and daily suggestions land here.',
+      '1 needs you. Results from your agents and daily suggestions land here.',
     );
     expect(host.querySelector('[aria-selected="true"]')?.textContent).toBe('All5');
   });
@@ -313,7 +313,7 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
   it('leads Needs you and All with the key’s notice, counted in both, with Fix it', async () => {
     await render(<ChatInbox suggestions={ok()} notices={withNotice()} />);
     expect(tabs()).toEqual(['All6', 'Daily suggestions3', 'Needs you2', 'Runs1']);
-    expect(text()).toContain('2 need you · 1 running · 3 suggestions this week.');
+    expect(text()).toContain('2 need you. Results');
     const [row] = noticeRows();
     expect(row.textContent).toContain('Your OpenAI key isn’t working · agents are paused');
     expect(row.textContent).toContain('Your OpenAI account is out of credit.');
@@ -917,7 +917,7 @@ describe('who gets them', () => {
       <ChatInbox suggestions={ok({ roleFeed: 'never', state: 'none', suggestions: [] })} />,
     );
     expect(tabs()).toEqual(['All2', 'Needs you1', 'Runs1']);
-    expect(text()).toContain('1 needs you · 1 running. Results from your agents land here.');
+    expect(text()).toContain('1 needs you. Results from your agents land here.');
     expect(server.start).not.toHaveBeenCalled();
     expect(server.seen).not.toHaveBeenCalled();
   });
@@ -1133,7 +1133,7 @@ describe('more than the read lists', () => {
   it('counts them all, and says how many the list shows', async () => {
     await render(<ChatInbox suggestions={ok({ total: 140 })} />);
     expect(tabs()).toEqual(['All142', 'Daily suggestions140', 'Needs you1', 'Runs1']);
-    expect(text()).toContain('140 suggestions this week');
+    expect(text()).toContain('Daily suggestions140');
     expect(text()).toContain('Showing the newest 3 of 140.');
     await openTab('suggestions');
     expect(text()).toContain('Showing the newest 3 of 140.');

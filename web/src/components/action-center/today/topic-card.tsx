@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { track } from '@/lib/analytics';
@@ -79,6 +80,7 @@ export function TopicCard({ brandId }: { brandId: string }) {
 function TopicCardBody({ brandId, data }: { brandId: string; data: TodayTopic }) {
   const t = useTranslations('topicCard');
   const tWaiting = useTranslations('prompts.waiting');
+  const serverError = useServerErrorText();
   const showWaiting = useWaitingForSpotToast();
   const { candidate, spots } = data;
   const [step, setStep] = useState<Step>({ kind: 'offer' });
@@ -148,7 +150,9 @@ function TopicCardBody({ brandId, data }: { brandId: string; data: TodayTopic })
     const result = await trackTopicPrompts(brandId, topic.id, picks).catch(() => null);
     setBusy(false);
     if (!result?.ok) {
-      toast.error(result && !result.ok && result.error ? result.error : t('trackFailed'));
+      toast.error(
+        result && !result.ok && result.error ? serverError(result, result.error) : t('trackFailed'),
+      );
       return;
     }
     showWaiting('topic_card', result.added, result.waiting);

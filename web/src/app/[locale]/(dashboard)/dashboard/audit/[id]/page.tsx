@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Loader2, ArrowLeft, Trash2, RefreshCw, AlertCircle, ListChecks } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -47,6 +48,7 @@ export default function AuditDetailPage() {
   const { guard, isLocked, openUpgrade } = useUpgradeGate();
   const { canManage } = useUserRole();
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
 
   const [audit, setAudit] = useState<AuditResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,13 +101,13 @@ export default function AuditDetailPage() {
     } catch (err) {
       if (cancelled()) return;
 
-      const message = err instanceof Error ? err.message : tFailed;
+      const message = caughtError(err, tFailed);
 
       setError(message);
       setLoading(false);
       toast.error(message);
     }
-  }, [id, tFailed]);
+  }, [id, tFailed, caughtError]);
 
   useEffect(() => {
     const startPolling = async () => {
@@ -136,7 +138,7 @@ export default function AuditDetailPage() {
       await deleteAudit(id);
       router.push('/dashboard/audit');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : tFailed);
+      toast.error(caughtError(err, tFailed));
     }
   };
 
@@ -144,6 +146,7 @@ export default function AuditDetailPage() {
   // report it holds open by its id, named by the page it audits, and once complete the checks it
   // fails or warns on, in the report's order, by their keys.
   const tChatPanel = useTranslations('chatPanel');
+  const serverError = useServerErrorText();
   const shown = audit?.id === id ? audit : null;
   useChatPageContext(
     shown
@@ -200,7 +203,9 @@ export default function AuditDetailPage() {
         toast.error(t('sendToAction.failed'), {
           id: toastId,
           description:
-            result.code === 'nothing_to_fix' ? t('sendToAction.nothingToFix') : result.error,
+            result.code === 'nothing_to_fix'
+              ? t('sendToAction.nothingToFix')
+              : serverError(result, result.error),
         });
         return;
       }
@@ -229,7 +234,8 @@ export default function AuditDetailPage() {
     } catch (err) {
       toast.error(t('sendToAction.failed'), {
         id: toastId,
-        description: err instanceof Error ? err.message : undefined,
+        // The reason in the person's language when its code is mapped (LOC-008).
+        description: caughtError(err, '') || undefined,
       });
     } finally {
       setSendingToAction(false);
@@ -252,7 +258,7 @@ export default function AuditDetailPage() {
       }
       router.push(`/dashboard/audit/${started.audit.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : tFailed);
+      toast.error(caughtError(err, tFailed));
     } finally {
       setRerunning(false);
     }

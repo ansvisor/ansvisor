@@ -35,6 +35,10 @@ vi.mock('@/lib/supabase/server', () => ({
           return chain;
         },
         maybeSingle: async () => ({ data: { time_zone: stored }, error: null }),
+        single: async () => ({
+          data: { id: ME, role: 'manager', organization_id: 'org-1' },
+          error: null,
+        }),
         then: (resolve: (value: unknown) => unknown) =>
           Promise.resolve({ data: null, error: null }).then(resolve),
       };
@@ -54,6 +58,7 @@ const {
   updateAccountTimeZone,
   ensureMyOrganization,
   markMyOnboardingCompleted,
+  updateOrganizationName,
 } = await import('./organization');
 
 beforeEach(() => {
@@ -94,6 +99,15 @@ describe('the Account time zone', () => {
     await expect(updateAccountTimeZone('Asia/Tokyo')).rejects.toThrow('Unauthorized');
     await expect(getAccountTimeZone()).rejects.toThrow('Unauthorized');
     expect(calls).toEqual([]);
+  });
+});
+
+describe('an Admin-only change by someone else (LOC-008)', () => {
+  it('refuses with a stable code as its digest, for the browser to say in their language', async () => {
+    const refused = await updateOrganizationName('Acme').catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(Error);
+    expect(refused).toMatchObject({ code: 'admin_required', digest: 'admin_required' });
+    expect(calls.some((c) => c.table === 'organizations')).toBe(false);
   });
 });
 

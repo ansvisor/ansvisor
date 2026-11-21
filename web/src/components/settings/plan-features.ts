@@ -13,6 +13,17 @@ export interface PlanFeature {
   expandable?: boolean;
 }
 
+/**
+ * About how many pages a plan's AI allowance writes or optimizes in a month,
+ * as the pricing page says it (owner's decision, 2026-11-20): kept low on
+ * purpose, as the allowance is shared with Chat and agents (about $0.10–0.15
+ * a new page, $0.04–0.08 an optimization, on Auto).
+ */
+export const CONTENT_ESTIMATE: Partial<Record<PlanId, { pages: number; optimizations: number }>> = {
+  starter: { pages: 25, optimizations: 50 },
+  growth: { pages: 125, optimizations: 250 },
+};
+
 /** The plans whose brands, prompts and AI usage can be grown with add-ons. */
 const EXPANDABLE_PLANS: readonly PlanId[] = ['growth'];
 
@@ -78,6 +89,14 @@ export function usePlanFeatures(): (planId: PlanId) => PlanFeature[] {
               text: tCards('aiUsage', { count: aiUsage }),
               hint: tCards(chatMetered ? 'aiUsageHintChat' : 'aiUsageHint'),
               expandable,
+            },
+          ]
+        : []),
+      ...(CONTENT_ESTIMATE[planId]
+        ? [
+            {
+              text: tCards('contentEstimate', CONTENT_ESTIMATE[planId]),
+              hint: tCards('contentEstimateHint'),
             },
           ]
         : []),
