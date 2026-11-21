@@ -145,6 +145,9 @@ vi.mock('@/lib/mcp/content-plan', async (importOriginal) =>
 vi.mock('@/lib/mcp/catalog', async (importOriginal) =>
   tracked.all('mcp/catalog', await importOriginal<Record<string, unknown>>()),
 );
+vi.mock('@/lib/mcp/crawler-access', async (importOriginal) =>
+  tracked.all('mcp/crawler-access', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/mcp/product-visibility', async (importOriginal) =>
   tracked.all('mcp/product-visibility', await importOriginal<Record<string, unknown>>()),
 );

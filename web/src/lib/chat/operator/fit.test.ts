@@ -84,6 +84,7 @@ describe('the skills’ fit', () => {
     ['wrongclaim', ['protect'], ['mention']],
     ['facts', ['protect'], ['mention']],
     ['audit-fix', ['fix'], ['technical']],
+    ['tech-fix', ['fix'], ['technical']],
     ['faq', ['growth'], ['visibility']],
     ['fanout', ['growth'], ['visibility']],
     ['answerfirst', ['growth'], ['visibility']],

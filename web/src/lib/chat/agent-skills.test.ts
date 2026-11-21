@@ -23,11 +23,11 @@ const FOCUS_SKILLS = [
 ];
 
 describe('ANSVISOR_SKILLS', () => {
-  it("lists every library skill, in the library's order, the focus areas' seven, the AGENTS plan's three, /plan, the packs' three, /ai-revenue, Ads' two and the Operator's own", () => {
+  it("lists every library skill, in the library's order, the focus areas' seven, the AGENTS plan's three, /plan, the packs' three, /ai-revenue, /tech-fix, Ads' two and the Operator's own", () => {
     expect(ANSVISOR_SKILLS.map((skill) => skill.id)).toEqual([...SKILL_ORDER]);
     // The fourteen and /chatgpt-profile (after /facts, ChatGPT Business Hub plan PR 7), then the seven.
     expect(ANSVISOR_SKILLS.slice(15, 22).map((skill) => skill.id)).toEqual(FOCUS_SKILLS);
-    expect(ANSVISOR_SKILLS.slice(-11).map((skill) => skill.id)).toEqual([
+    expect(ANSVISOR_SKILLS.slice(-12).map((skill) => skill.id)).toEqual([
       'setup',
       'fanout',
       'prompts',
@@ -36,6 +36,8 @@ describe('ANSVISOR_SKILLS', () => {
       'seasonal',
       'traffic',
       'ai-revenue',
+      // The Crawler & Technical Fixer's.
+      'tech-fix',
       // Ads Phase 0 PR 15, offered only with Ads on.
       'earn-or-pay',
       'ad-drafts',

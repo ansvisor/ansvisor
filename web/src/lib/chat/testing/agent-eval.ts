@@ -231,6 +231,8 @@ const AGENT_PROMISES: Readonly<
   'ceo-brief': { must: ['report'] },
   // Sign-ups are "Not measured" here: the workspace has no Google Analytics.
   'ai-traffic-signups': { must: ['report'] },
+  // What keeps AI crawlers out, with fixes; an action it sends waits on a card.
+  'technical-fixer': { must: ['list'], review: ['action'] },
   'unmet-needs-miner': { must: ['list'] },
   'market-source-finder': { must: ['list'] },
   // AEO Operator plan §4.6: one card, today's plan from its scope, and nothing else.
@@ -423,6 +425,10 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
   },
   'ai-revenue': {
     message: 'Which pages and AI assistants bring us customers, and how much revenue?',
+    must: ['list'],
+  },
+  'tech-fix': {
+    message: 'Can AI crawlers get into our site? Write the fixes for what keeps them out.',
     must: ['list'],
   },
 };

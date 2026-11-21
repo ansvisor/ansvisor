@@ -222,6 +222,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'Which pages and AI assistants bring you customers, sign-ups, forms, orders and revenue, and what to set up where nothing is measured yet.',
   },
+  'tech-fix': {
+    title: 'Crawler and technical fixes',
+    description:
+      'Finds what keeps AI crawlers out of your site, from your Site Audits, and writes each fix ready for your developer: robots.txt rules, CDN and firewall settings, rendering and tags. Fixes go to the Action Center only on your approval.',
+  },
   'earn-or-pay': {
     title: 'Earn or pay',
     description:
@@ -281,7 +286,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's thirty-two and the Operator's own, with their titles and descriptions", () => {
+  it("are Ansvisor's thirty-three and the Operator's own, with their titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {
@@ -549,7 +554,7 @@ describe("Ads' skills (Ads Phase 0 PR 15)", () => {
   });
 });
 
-describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan §8.1, §8.3)", () => {
+describe("the packs' skills: /content-plan, /seasonal, /traffic and /tech-fix (AGENTS plan §8)", () => {
   /** Each skill, its agent, and the only writes it may ask for. */
   const PACKS = [
     {
@@ -563,6 +568,13 @@ describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan 
       writes: ['add_prompts', 'create_action'],
     },
     { skill: 'traffic', agent: 'ai-traffic-signups', writes: ['create_action'] },
+    // The Crawler & Technical Fixer's (AGENTS plan §8): its fixes on a card, and an audit
+    // only where there is none, on its own card.
+    {
+      skill: 'tech-fix',
+      agent: 'technical-fixer',
+      writes: ['create_action', 'run_site_audit'],
+    },
   ];
   const body = (name: string) => SKILL_LIBRARY.find((skill) => skill.name === name)?.body ?? '';
   const named = (text: string) => [
@@ -610,9 +622,11 @@ describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan 
           expect(['ask', 'ask_full_auto'], at).toContain(tool.defaultPolicy);
         }
       }
-      // Auto, or Ask me first for Seasonal (the owner's choice, as Prompt Portfolio Manager):
-      // either way each write is a card.
-      expect(preset.mode, agent).toBe(agent === 'seasonal-prompt-planner' ? 'ask_first' : 'auto');
+      // Auto, or Ask me first for Seasonal and the Technical Fixer (the owner's choice, as
+      // Prompt Portfolio Manager): either way each write is a card.
+      expect(preset.mode, agent).toBe(
+        ['seasonal-prompt-planner', 'technical-fixer'].includes(agent) ? 'ask_first' : 'auto',
+      );
     }
   });
 
