@@ -1,0 +1,28 @@
+name: Zapier community app
+
+on:
+  push:
+    paths:
+      - "integrations/zapier/**"
+      - ".github/workflows/zapier-community-app.yml"
+  pull_request:
+    paths:
+      - "integrations/zapier/**"
+      - ".github/workflows/zapier-community-app.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/zapier
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: integrations/zapier/package.json
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run validate

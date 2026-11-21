@@ -330,3 +330,43 @@ A few writes stay open, such as disconnecting an outside account; the FAQ lists 
 <Card title="Help center" icon="circle-question" href="/faq">
   Common questions and troubleshooting.
 </Card>
+
+
+
+## Manage programmatic subscriptions
+
+Zapier and other approved integrations can manage their own webhook configurations through the API. These records are separate from the dashboard's **Default** webhook configuration, and multiple integrations can subscribe to the same brand.
+
+### Create or update a subscription
+
+POST /api/v1/webhooks
+
+Requires an API key whose user is an admin or manager, has access to the brand, and has webhook write access on the workspace plan.
+
+~~~json
+{
+  "brand_id": "brand-uuid",
+  "event": "daily_pulse.created",
+  "webhook_url": "https://hooks.zapier.com/hooks/catch/123/456",
+  "webhook_secret": "the-brand-webhook-secret",
+  "subscription_id": "32-lowercase-hex-characters"
+}
+~~~
+
+Supported events are daily_pulse.created, action_task.sent and content_draft.sent. The URL must use HTTPS. The subscription ID is a client-generated, stable 32-character hexadecimal identifier; it makes repeated registration idempotent for the same brand and integration subscription.
+
+The response contains the webhook configuration ID:
+
+~~~json
+{ "id": "webhook-config-uuid" }
+~~~
+
+### Remove a subscription
+
+DELETE /api/v1/webhooks/{id}
+
+Requires the same brand access and role checks. This endpoint only removes configurations created by the programmatic subscription API; it cannot delete the dashboard's **Default** webhook.
+
+Zapier calls the create endpoint when a Zap is enabled and the delete endpoint when it is disabled or removed. The webhook secret is stored on the brand-specific configuration and is used for X-Webhook-Secret and the Content Draft HMAC signature.
+
+The dashboard's Test Webhook action sends webhook.test to the Default webhook URL entered in the dashboard. It does not broadcast to API-managed Zapier subscriptions.

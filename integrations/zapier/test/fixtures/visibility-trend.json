@@ -1,0 +1,14 @@
+{
+  "granularity": "day",
+  "buckets": [
+    {
+      "date": "2026-11-01",
+      "result_count": 24,
+      "ai_visibility_score": 42.5,
+      "avg_visibility_score": 47,
+      "total_mentions": 31,
+      "total_citations": 12,
+      "avg_competitor_score": 39
+    }
+  ]
+}
