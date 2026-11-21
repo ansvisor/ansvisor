@@ -3,6 +3,7 @@
 import { brandGoalText } from '@/lib/kpis/brand-goal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { ChevronRight, Paperclip, Plus, Trash2 } from 'lucide-react';
@@ -188,6 +189,7 @@ export function ActionDrawer({
   const tActions = useTranslations('readOnly.actions');
   // Check now (AC-010): the task being checked, and the card's words.
   const tTaskCard = useTranslations('actionCenter.actionsPage.drawer.task');
+  const serverError = useServerErrorText();
   const missingText = useMissingText();
   const [checking, setChecking] = useState<string | null>(null);
   // Dismissed from the status select: why, first (learning A5).
@@ -232,11 +234,11 @@ export function ActionDrawer({
       if (openId.current !== id) return null;
       setDetail(next);
       return next;
-    } catch {
-      toast.error(t('error.title'));
+    } catch (err) {
+      toast.error(serverError(err, t('error.title')));
       return null;
     }
-  }, [brandId, action, t]);
+  }, [brandId, action, t, serverError]);
 
   useEffect(() => {
     openId.current = action?.id ?? null;
@@ -330,7 +332,7 @@ export function ActionDrawer({
             ? tSend(result.error)
             : result.code && SEND_ERRORS.includes(result.code)
               ? tSend(`errors.${result.code}`)
-              : result.message,
+              : serverError(result, result.message),
         );
         return;
       }
@@ -403,8 +405,8 @@ export function ActionDrawer({
     setIsBusy(true);
     try {
       await fn();
-    } catch {
-      toast.error(t('updateFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('updateFailed')));
       setIsBusy(false);
       return false;
     }
@@ -437,8 +439,8 @@ export function ActionDrawer({
     onPatched(action.id, { ...patch, staleAt: null, updatedAt: new Date().toISOString() });
     try {
       await save();
-    } catch {
-      toast.error(t('updateFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('updateFailed')));
       onChanged();
       return;
     }

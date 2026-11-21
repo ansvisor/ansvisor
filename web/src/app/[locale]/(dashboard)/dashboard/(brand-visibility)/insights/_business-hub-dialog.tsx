@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -77,6 +78,7 @@ export function BusinessHubDialog({
   onSaved: () => void;
 }) {
   const t = useTranslations('insights.businessHub');
+  const serverError = useServerErrorText();
   const [draft, setDraft] = useState<EntryDraft>(() => draftOf(entry));
   const [problems, setProblems] = useState<Problems>({});
   const [saving, setSaving] = useState(false);
@@ -122,8 +124,8 @@ export function BusinessHubDialog({
       toast.success(t('saved'));
       onOpenChange(false);
       onSaved();
-    } catch {
-      toast.error(t('saveFailed'));
+    } catch (err) {
+      toast.error(serverError(err, t('saveFailed')));
     } finally {
       setSaving(false);
     }

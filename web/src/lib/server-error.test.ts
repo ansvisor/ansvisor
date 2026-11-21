@@ -16,7 +16,8 @@ describe('serverErrorKey (LOC-008)', () => {
   it('maps the server’s stable codes to message keys that exist', () => {
     const cases: Array<[unknown, number | undefined, string]> = [
       [{ code: 'subscription_inactive' }, 402, 'apiFailure.subscription'],
-      [{ code: 'demo_brand' }, 403, 'apiFailure.subscription'],
+      // The demo brand has words of its own: its plan is fine, its data is a sample.
+      [{ code: 'demo_brand' }, 403, 'serverErrors.demo_brand'],
       [{ code: 'not_in_workspace' }, 403, 'apiFailure.workspace'],
       [{ code: 'no_brand_access' }, 403, 'apiFailure.workspace'],
       [{ code: 'not_found' }, 404, 'apiFailure.not_found'],
@@ -53,6 +54,16 @@ describe('serverErrorKey (LOC-008)', () => {
       [{ code: 'not_allowed' }, 'serverErrors.forbidden'],
       [{ code: 'forbidden_role' }, 'serverErrors.forbidden'],
       [{ code: 'role_required' }, 'serverErrors.forbidden'],
+      // An Admin-only change: requireAdmin's digest, the plan routes' admin_only.
+      [
+        Object.assign(new Error('masked'), { digest: 'admin_required' }),
+        'serverErrors.admin_required',
+      ],
+      [
+        { code: 'admin_only', error: 'Only admins can change the plan' },
+        'serverErrors.admin_required',
+      ],
+      [Object.assign(new Error('masked'), { digest: 'demo_brand' }), 'serverErrors.demo_brand'],
       // Production keeps only a thrown server action error's digest.
       [
         Object.assign(new Error('masked'), { digest: 'subscription_inactive' }),

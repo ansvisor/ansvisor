@@ -30,10 +30,11 @@ import {
   Image,
 } from '@react-pdf/renderer';
 import type { Report, ReportPromptPerf } from '@/lib/actions/reports';
-import { formatDate, formatMoney, percentChange } from '@/lib/format';
+import { formatDate, formatMoney, formatNumber, percentChange } from '@/lib/format';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { withInter } from '@/lib/pdf-font';
 import { auditScoreView } from '@/lib/reports/audit-score';
+import { shownMentionEvidence } from '@/lib/reports/mention-evidence';
 import { visibilityKpis } from '@/lib/reports/visibility-kpis';
 import type { ScoreRange } from '@/lib/audit/score-range';
 import { reportLook, type ReportBranding } from '@/lib/white-label/kit';
@@ -153,7 +154,7 @@ function DeltaText({
   unit?: '%' | '';
 }) {
   if (zeroBaseCount !== undefined) {
-    return <Text style={[styles.delta, { color: GREEN }]}>+{zeroBaseCount} new</Text>;
+    return <Text style={[styles.delta, { color: GREEN }]}>+{formatNumber(zeroBaseCount)} new</Text>;
   }
   if (value === null) return null;
   const up = value >= 0;
@@ -268,7 +269,7 @@ function PromptTable({ title, prompts }: { title: string; prompts: ReportPromptP
                 : `${p.avgVisibility}/100`}
           </Text>
           <Text style={[styles.cell, { width: 40, textAlign: 'right', color: MUTED }]}>
-            {p.runs}
+            {formatNumber(p.runs)}
           </Text>
         </View>
       ))}
@@ -318,7 +319,7 @@ export function ReportPdfDocument({
         ),
         {
           label: 'Mentions',
-          value: String(payload.insights.totalMentions),
+          value: formatNumber(payload.insights.totalMentions),
           change: payload.insights.mentionsChange,
           zeroBaseCount:
             Object.hasOwn(payload.insights, 'prevMentions') &&
@@ -329,7 +330,7 @@ export function ReportPdfDocument({
         },
         {
           label: 'Brand Citations',
-          value: String(payload.insights.totalCitations),
+          value: formatNumber(payload.insights.totalCitations),
           change: payload.insights.citationsChange,
           zeroBaseCount:
             Object.hasOwn(payload.insights, 'prevCitations') &&
@@ -509,10 +510,10 @@ export function ReportPdfDocument({
                   <DeltaText value={typeof c.score === 'number' ? c.scoreChange : c.change} />
                 </View>
                 <Text style={[styles.cell, { width: 55, textAlign: 'right' }]}>
-                  {c.totalMentions}
+                  {formatNumber(c.totalMentions)}
                 </Text>
                 <Text style={[styles.cell, { width: 55, textAlign: 'right' }]}>
-                  {c.totalCitations}
+                  {formatNumber(c.totalCitations)}
                 </Text>
               </View>
             ))}
@@ -574,7 +575,7 @@ export function ReportPdfDocument({
               <Text style={[styles.tableHeaderCell, { width: 50 }]}>Date</Text>
               <Text style={[styles.tableHeaderCell, { flex: 1 }]}>How you were mentioned</Text>
             </View>
-            {payload.mentionEvidence.map((m, idx) => (
+            {shownMentionEvidence(payload.mentionEvidence).map((m, idx) => (
               <View key={`${m.promptText}-${idx}`} style={styles.tableRow}>
                 <Text style={[styles.cell, { width: 130, paddingRight: 6 }]}>{m.promptText}</Text>
                 <Text style={[styles.cell, { width: 60, color: MUTED }]}>{m.platform}</Text>
@@ -603,7 +604,7 @@ export function ReportPdfDocument({
                   {q.engines.join(', ')}
                 </Text>
                 <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
-                  {q.timesSearched}
+                  {formatNumber(q.timesSearched)}
                 </Text>
               </View>
             ))}
@@ -615,7 +616,7 @@ export function ReportPdfDocument({
           <View style={styles.section} wrap={false}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
               <Text style={styles.sectionTitle}>
-                AI Traffic — {payload.aiTraffic.totalVisits} visits
+                AI Traffic — {formatNumber(payload.aiTraffic.totalVisits)} visits
               </Text>
               <View style={{ marginBottom: 6 }}>
                 <DeltaText value={payload.aiTraffic.change} />
@@ -631,7 +632,9 @@ export function ReportPdfDocument({
             {payload.aiTraffic.platformBreakdown.map((p) => (
               <View key={p.platform} style={styles.tableRow}>
                 <Text style={[styles.cell, { flex: 1 }]}>{p.platform}</Text>
-                <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>{p.visits}</Text>
+                <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
+                  {formatNumber(p.visits)}
+                </Text>
               </View>
             ))}
             {payload.aiTraffic.topPages.length > 0 && (
@@ -645,7 +648,9 @@ export function ReportPdfDocument({
                 {payload.aiTraffic.topPages.map((p) => (
                   <View key={p.url} style={styles.tableRow}>
                     <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{p.url}</Text>
-                    <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>{p.visits}</Text>
+                    <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
+                      {formatNumber(p.visits)}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -661,7 +666,7 @@ export function ReportPdfDocument({
               {[
                 {
                   label: 'AI-sourced contacts',
-                  value: String(payload.aiPipeline.totals.contacts),
+                  value: formatNumber(payload.aiPipeline.totals.contacts),
                   change: percentChange(
                     payload.aiPipeline.totals.contacts,
                     payload.aiPipeline.totals.contactsPrev,
@@ -669,7 +674,7 @@ export function ReportPdfDocument({
                 },
                 {
                   label: 'AI-influenced deals',
-                  value: String(payload.aiPipeline.totals.deals),
+                  value: formatNumber(payload.aiPipeline.totals.deals),
                   change: null,
                 },
                 {
@@ -716,7 +721,7 @@ export function ReportPdfDocument({
                   <View key={e.source} style={styles.tableRow}>
                     <Text style={[styles.cell, { flex: 1 }]}>{getPlatformName(e.source)}</Text>
                     <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
-                      {e.contacts}
+                      {formatNumber(e.contacts)}
                     </Text>
                     <Text style={[styles.cell, { width: 80, textAlign: 'right' }]}>
                       {formatMoney(e.wonRevenue, payload.aiPipeline!.currency)}
@@ -777,7 +782,9 @@ export function ReportPdfDocument({
               </View>
               <View style={styles.kpiBox}>
                 <Text style={styles.kpiLabel}>Products Surfaced</Text>
-                <Text style={styles.kpiValue}>{payload.shoppingVisibility.productsSurfaced}</Text>
+                <Text style={styles.kpiValue}>
+                  {formatNumber(payload.shoppingVisibility.productsSurfaced)}
+                </Text>
               </View>
               <View style={styles.kpiBox}>
                 <Text style={styles.kpiLabel}>Card Rate</Text>
@@ -825,8 +832,8 @@ export function ReportPdfDocument({
         {payload.citations && (
           <View style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>
-              Top Citation Sources — {payload.citations.totals.domains} domains ·{' '}
-              {payload.citations.totals.citations} citations
+              Top Citation Sources — {formatNumber(payload.citations.totals.domains)} domains ·{' '}
+              {formatNumber(payload.citations.totals.citations)} citations
             </Text>
             {payload.citations.topDomains.length > 0 && (
               <View style={{ marginTop: 8 }}>
@@ -845,7 +852,7 @@ export function ReportPdfDocument({
                     <Text style={[styles.cell, { flex: 1, paddingRight: 8 }]}>{d.domain}</Text>
                     <Text style={[styles.cell, { width: 80, color: MUTED }]}>{d.category}</Text>
                     <Text style={[styles.cell, { width: 60, textAlign: 'right' }]}>
-                      {d.totalCitations}
+                      {formatNumber(d.totalCitations)}
                     </Text>
                     <Text style={[styles.cell, { width: 50, textAlign: 'right' }]}>
                       {d.usagePct}%
@@ -875,7 +882,7 @@ export function ReportPdfDocument({
                   <Text style={[styles.cell, { color: MUTED, fontSize: 7 }]}>{c.url}</Text>
                 </View>
                 <Text style={[styles.cell, { width: 55, textAlign: 'right' }]}>
-                  {c.totalCitations}
+                  {formatNumber(c.totalCitations)}
                 </Text>
                 <Text style={[styles.cell, { width: 170, color: MUTED, fontSize: 7 }]}>
                   {c.sourcedPrompts.join(' · ')}

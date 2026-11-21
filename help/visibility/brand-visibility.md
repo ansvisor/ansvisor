@@ -59,6 +59,8 @@ The **Leaderboard** ranks you against your competitors, with each brand's score,
 
 A platform with too few answers shows **Low sample** or **No runs this period** instead of numbers. Use the table to send your content work toward your weakest platform.
 
+Each platform has one name everywhere in Ansvisor, in reports and e-mails too: Google's Gemini app is **Gemini**. Answers from an AI model asked directly, not through its app, have **API** after the name: **ChatGPT API**, **Gemini API** and **Claude API**.
+
 ## Why it changed
 
 **Why it changed** lists the platforms, topics and prompts that moved your Visibility most, under **Gains** and **Drops**. Each row shows its own score before and after, and its effect on your overall score. A note counts the prompts added during the period, which aren't counted in the change.

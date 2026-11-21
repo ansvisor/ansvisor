@@ -131,7 +131,13 @@ describe('markTaskDoneFromCard', () => {
     expect(db.tables.chat_file_task_links).toEqual([
       expect.objectContaining({ file_id: FILE, action_task_id: TASK, attached_by: ME }),
     ]);
+    // A done task starts its New action (UX audit AC-24), then the task's own event, the latest.
     expect(events()).toEqual([
+      expect.objectContaining({
+        action_id: ACTION,
+        event: 'status_changed',
+        data: { to: 'in_progress', by: 'task' },
+      }),
       expect.objectContaining({
         action_id: ACTION,
         event: 'task_status',
@@ -144,14 +150,17 @@ describe('markTaskDoneFromCard', () => {
           fileId: FILE,
           fileFrom: 'draft',
           linked: true,
-          actionStatus: 'new',
+          actionStatus: 'in_progress',
           conversationId: CHAT,
           runId: RUN,
         },
       }),
     ]);
-    // The action's progress moves as a tick in Action Center moves it; its status stays.
-    expect(db.tables.actions[0]).toMatchObject({ status: 'new', updated_at: expect.any(String) });
+    // The action's progress moves as a tick in Action Center moves it, and it is under way.
+    expect(db.tables.actions[0]).toMatchObject({
+      status: 'in_progress',
+      updated_at: expect.any(String),
+    });
   });
 
   it('writes no second event for a task already completed', async () => {
@@ -164,8 +173,9 @@ describe('markTaskDoneFromCard', () => {
     const both = await Promise.all([markTaskDoneFromCard(RUN, 1), markTaskDoneFromCard(RUN, 1)]);
     for (const result of both) expect(result).toMatchObject({ ok: true, status: 'done' });
     expect(task().status).toBe('completed');
-    expect(events()).toHaveLength(1);
-    expect(events()[0].data).toMatchObject({ to: 'completed', from: 'todo', linked: true });
+    const done = events().filter((e) => e.event === 'task_status');
+    expect(done).toHaveLength(1);
+    expect(done[0].data).toMatchObject({ to: 'completed', from: 'todo', linked: true });
   });
 
   it('finds the task by the file’s one attachment when its run didn’t draft it for one', async () => {
@@ -174,7 +184,9 @@ describe('markTaskDoneFromCard', () => {
     expect(await markTaskDoneFromCard(RUN, 1)).toMatchObject({ ok: true, strip: null });
     expect(task().status).toBe('completed');
     // Already attached: the event says the click didn't link it.
-    expect(events()[0].data).toMatchObject({ linked: false });
+    expect(events().find((e) => e.event === 'task_status')!.data).toMatchObject({
+      linked: false,
+    });
   });
 
   it('refuses a teammate’s chat, a deleted one, a card without a task and a bad place', async () => {
@@ -247,8 +259,18 @@ describe('markTaskDoneFromCard', () => {
 });
 
 describe('undoTaskDoneFromCard', () => {
+  /**
+   * Mark done, then the task's action as a join would read it now: done, a
+   * New action is under way (UX audit AC-24); the fake rows don't join.
+   */
+  async function markDone() {
+    const result = await markTaskDoneFromCard(RUN, 1);
+    task().actions = { ...parent, status: (db.tables.actions[0] as { status: string }).status };
+    return result;
+  }
+
   it('puts the task, the file and the link back, as a new History event from Chat', async () => {
-    await markTaskDoneFromCard(RUN, 1);
+    await markDone();
     const result = await undoTaskDoneFromCard(RUN, 1);
     expect(result).toMatchObject({
       ok: true,
@@ -260,32 +282,38 @@ describe('undoTaskDoneFromCard', () => {
     expect(task().status).toBe('todo');
     expect(file().status).toBe('draft');
     expect(db.tables.chat_file_task_links).toEqual([]);
+    // The action started with the done task stays under way (AC-24).
     expect(events().map((e) => [e.event, (e.data as { to: string }).to, e.actor_id])).toEqual([
+      ['status_changed', 'in_progress', ME],
       ['task_status', 'completed', ME],
       ['task_status', 'todo', ME],
     ]);
-    expect(events()[1].data).toMatchObject({ source: 'chat', via: 'undo' });
+    expect(events()[2].data).toMatchObject({ source: 'chat', via: 'undo' });
   });
 
   it('writes one event for two Undos at once', async () => {
-    await markTaskDoneFromCard(RUN, 1);
+    await markDone();
     const both = await Promise.all([undoTaskDoneFromCard(RUN, 1), undoTaskDoneFromCard(RUN, 1)]);
     for (const result of both) expect(result).toMatchObject({ ok: true, status: 'draft' });
     expect(task().status).toBe('todo');
-    expect(events().map((e) => (e.data as { to: string }).to)).toEqual(['completed', 'todo']);
+    expect(events().map((e) => (e.data as { to: string }).to)).toEqual([
+      'in_progress',
+      'completed',
+      'todo',
+    ]);
   });
 
   it('puts a skipped task back with its why', async () => {
     task().status = 'skipped';
     task().skip_reason = 'Covered by the new page';
-    await markTaskDoneFromCard(RUN, 1);
+    await markDone();
     expect(task().skip_reason).toBeNull();
     expect(await undoTaskDoneFromCard(RUN, 1)).toMatchObject({ ok: true });
     expect(task()).toMatchObject({ status: 'skipped', skip_reason: 'Covered by the new page' });
   });
 
   it('changes nothing on a brand the person may no longer use', async () => {
-    await markTaskDoneFromCard(RUN, 1);
+    await markDone();
     access.brand = false;
     expect(await undoTaskDoneFromCard(RUN, 1)).toEqual({ ok: false, failure: 'not_found' });
     expect(task().status).toBe('completed');
@@ -297,14 +325,14 @@ describe('undoTaskDoneFromCard', () => {
     db.tables.chat_file_task_links = [{ file_id: FILE, action_task_id: TASK, attached_by: ME }];
     file().status = 'attached';
     task().status = 'in_progress';
-    await markTaskDoneFromCard(RUN, 1);
+    await markDone();
     expect(await undoTaskDoneFromCard(RUN, 1)).toMatchObject({ ok: true, status: 'attached' });
     expect(task().status).toBe('in_progress');
     expect(db.tables.chat_file_task_links).toHaveLength(1);
   });
 
   it('says changed, and changes nothing, once anything happened since', async () => {
-    await markTaskDoneFromCard(RUN, 1);
+    await markDone();
     // Someone reopened the task in Action Center.
     task().status = 'in_progress';
     expect(await undoTaskDoneFromCard(RUN, 1)).toEqual({ ok: false, failure: 'changed' });
@@ -327,8 +355,9 @@ describe('undoTaskDoneFromCard', () => {
   });
 
   it('says changed after its hour, and for a task this card never marked done', async () => {
-    await markTaskDoneFromCard(RUN, 1);
-    events()[0].created_at = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await markDone();
+    const done = events().find((e) => e.event === 'task_status')!;
+    done.created_at = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     expect(await undoTaskDoneFromCard(RUN, 1)).toEqual({ ok: false, failure: 'changed' });
     events().length = 0;
     task().status = 'completed';
@@ -337,7 +366,7 @@ describe('undoTaskDoneFromCard', () => {
   });
 
   it('is an Admin’s or a Manager’s, in a workspace that can write', async () => {
-    await markTaskDoneFromCard(RUN, 1);
+    await markDone();
     manager.is = false;
     expect(await undoTaskDoneFromCard(RUN, 1)).toEqual({ ok: false, failure: 'forbidden' });
     manager.is = true;

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { AgentDetail } from '@/lib/chat/agents';
@@ -62,6 +63,7 @@ export function useAgentActions(
   } = {},
 ) {
   const t = useTranslations('chatAgents');
+  const serverError = useServerErrorText();
   const { isLocked, openUpgrade } = useUpgradeGate();
   const [busy, setBusy] = useState<{ id: string; button: AgentButton } | null>(null);
   const [denial, setDenial] = useState<ChatDenialCard | null>(null);
@@ -71,9 +73,9 @@ export function useAgentActions(
     (button: AgentButton, answer: AgentRefused) => {
       if (answer.denial) setDenial(answer.denial);
       else if (answer.failure === 'subscription') openUpgrade(t(`asked.${ASKED[button]}`));
-      else toast.error(answer.message ?? t('toast.failed'));
+      else toast.error(serverError(answer, answer.message ?? t('toast.failed')));
     },
-    [openUpgrade, t],
+    [openUpgrade, t, serverError],
   );
 
   const act = useCallback(

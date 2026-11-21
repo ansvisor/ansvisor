@@ -223,6 +223,9 @@ export interface HistorySummary {
   completedPercent: number;
   inProgress: number;
   inProgressPercent: number;
+  /** On hold: counted in the total, so it has a tile of its own (AC-61). */
+  onHold: number;
+  onHoldPercent: number;
   noImprovement: number;
   noImprovementPercent: number;
   dismissed: number;
@@ -240,6 +243,27 @@ export const HISTORY_STATUSES: readonly ActionStatus[] = [
   'completed',
   'dismissed',
 ];
+
+/**
+ * History's range as a PostgREST `or` filter (UX audit AC-60, decision D13):
+ * a completed action by when it was completed; a dismissed one, and one
+ * still in progress or on hold, by its last change (dismissing sets no
+ * completed_at). Null without a bound.
+ */
+export function historyWindowFilter(from?: string, to?: string): string | null {
+  if (!from && !to) return null;
+  const within = (column: string) =>
+    [from ? `${column}.gte."${from}"` : null, to ? `${column}.lte."${to}"` : null]
+      .filter(Boolean)
+      .join(',');
+  return [
+    `and(status.eq.completed,${within('completed_at')})`,
+    `and(status.in.(dismissed,in_progress,on_hold),${within('updated_at')})`,
+  ].join(',');
+}
+
+/** The statuses an action is closed in: the Scorecard counts these alone. */
+export const CLOSED_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
 
 export const HISTORY_SORTS = ['newest', 'oldest', 'priority'] as const;
 export type HistorySort = (typeof HISTORY_SORTS)[number];
@@ -306,6 +330,7 @@ export function summarize(items: ActionHistoryItem[]): HistorySummary {
   const count = (status: ActionStatus) => items.filter((i) => i.status === status).length;
   const completed = count('completed');
   const inProgress = count('in_progress');
+  const onHold = count('on_hold');
   // An outcome, not a status: an action reaches it by being completed and
   // then measured, so it is counted from the outcome column.
   const noImprovement = items.filter((i) => i.outcome === 'no_meaningful_change').length;
@@ -317,6 +342,8 @@ export function summarize(items: ActionHistoryItem[]): HistorySummary {
     completedPercent: pct(completed, total),
     inProgress,
     inProgressPercent: pct(inProgress, total),
+    onHold,
+    onHoldPercent: pct(onHold, total),
     noImprovement,
     noImprovementPercent: pct(noImprovement, total),
     dismissed,

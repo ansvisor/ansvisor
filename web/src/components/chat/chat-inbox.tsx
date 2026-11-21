@@ -44,22 +44,6 @@ export function ofBrand(chats: ChatListItem[], brandId: string | null | undefine
   return brandId ? chats.filter((chat) => !chat.brandId || chat.brandId === brandId) : chats;
 }
 
-/** The Inbox's counts: needs you, running, and results that came in today. */
-export function inboxCounts(items: ChatListItem[], now = new Date()) {
-  const today = now.toDateString();
-  return {
-    total: items.length,
-    needsYou: items.filter((c) => c.state === 'needsYou').length,
-    running: items.filter((c) => c.state === 'running' || c.state === 'paused').length,
-    doneToday: items.filter(
-      (c) =>
-        (c.state === 'done' || c.state === 'failed') &&
-        !!c.finishedAt &&
-        new Date(c.finishedAt).toDateString() === today,
-    ).length,
-  };
-}
-
 /**
  * The Inbox's topics (CHAT-26 §2.1): everything, the daily suggestions, what
  * needs the person, and their agents' runs. Reports and Alerts stay hidden
@@ -257,14 +241,9 @@ function PlainInboxView({
   brandId,
 }: Omit<ChatInboxViewProps, 'daily' | 'initialTab'>) {
   const t = useTranslations('chatShell.inbox');
-  const counts = inboxCounts(items, now ?? new Date());
   const waiting = notices.length + outside.length;
-  const needsYou = counts.needsYou + waiting;
-  const summary = [
-    needsYou ? t('summary.needsYou', { count: needsYou }) : null,
-    counts.running ? t('summary.running', { count: counts.running }) : null,
-    counts.doneToday ? t('summary.doneToday', { count: counts.doneToday }) : null,
-  ].filter(Boolean);
+  // One number, the one Needs you holds (UX audit CH-04).
+  const needsYou = items.filter((c) => c.state === 'needsYou').length + waiting;
 
   return (
     <div className="max-w-[880px]">
@@ -273,7 +252,7 @@ function PlainInboxView({
       </div>
       {status === 'ready' && items.length + waiting > 0 && (
         <p className="-mt-1 mb-3.5 text-[13px] text-muted-foreground">
-          {summary.length > 0 && `${summary.join(' · ')}. `}
+          {needsYou > 0 && `${t('summary.needsYou', { count: needsYou })}. `}
           {t('lands')}
         </p>
       )}
@@ -318,7 +297,7 @@ function PlainInboxView({
 
 /**
  * The Inbox in topic tabs (CHAT-26 §2.1, §2.2; mockup #d-inbox): the
- * subtitle keeps its counts, with the week's suggestions; each tab shows
+ * subtitle gives one number, Needs you's (UX audit CH-04); each tab shows
  * its count and only its rows. All opens first, or the topic the address
  * names (`?tab=`), which the address keeps as the person moves between
  * them, so coming back from a row opens the same one. The arrow keys move
@@ -353,14 +332,7 @@ function TabbedInboxView({
   const suggestionsTotal = gets ? daily.read.total : 0;
   const tabs = INBOX_TABS.filter((name) => gets || name !== 'suggestions');
   const ready = status === 'ready';
-  const counts = inboxCounts(items, now ?? new Date());
   const tabCounts = inboxTabCounts(items, suggestionsTotal, notices.length + outside.length);
-  const summary = [
-    tabCounts.needsYou ? t('summary.needsYou', { count: tabCounts.needsYou }) : null,
-    counts.running ? t('summary.running', { count: counts.running }) : null,
-    counts.doneToday ? t('summary.doneToday', { count: counts.doneToday }) : null,
-    suggestionsTotal ? t('summary.suggestions', { count: suggestionsTotal }) : null,
-  ].filter(Boolean);
 
   const switchTab = (next: InboxTab) => {
     setTab(next);
@@ -417,7 +389,9 @@ function TabbedInboxView({
       </div>
       {ready && (
         <p className="-mt-1 mb-3.5 text-[13px] text-muted-foreground">
-          {summary.length > 0 ? `${summary.join(' · ')}. ` : `${t('nothingNeedsYou')} `}
+          {tabCounts.needsYou > 0
+            ? `${t('summary.needsYou', { count: tabCounts.needsYou })}. `
+            : `${t('nothingNeedsYou')} `}
           {t(gets ? 'landsWithSuggestions' : 'lands')}
         </p>
       )}

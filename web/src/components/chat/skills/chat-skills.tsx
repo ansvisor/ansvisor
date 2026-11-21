@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Bot, ChevronDown, Search } from 'lucide-react';
 import { FormSwitch } from '@/components/chat/agents/agent-form-triggers';
@@ -87,15 +88,19 @@ async function readConnected(brandId: string): Promise<Set<string> | null> {
 }
 
 /** Turns a skill on or off; the API's words when it refused. */
-async function patchEnabled(url: string, enabled: boolean): Promise<string | null> {
+async function patchEnabled(
+  url: string,
+  enabled: boolean,
+): Promise<{ error?: string; code?: string; status?: number } | null> {
   const res = await fetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
   }).catch(() => null);
   if (res?.ok) return null;
-  const body = (await res?.json().catch(() => null)) as { error?: string } | null;
-  return body?.error ?? '';
+  const body = (await res?.json().catch(() => null)) as { error?: string; code?: string } | null;
+  // The code too, for the toast to say a mapped refusal in the person's language (LOC-008).
+  return { ...(body ?? {}), status: res?.status ?? 0 };
 }
 
 const matches = (query: string, skill: { name: string; title: string; description: string }) => {
@@ -110,6 +115,7 @@ const matches = (query: string, skill: { name: string; title: string; descriptio
 
 export function ChatSkills() {
   const t = useTranslations('chatSkills.page');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { isLocked, openUpgrade } = useUpgradeGate();
@@ -168,7 +174,7 @@ export function ChatSkills() {
       setStarting(null);
       // A read-only workspace, or a skill run on the demo brand: the plans.
       if (started.code === 'subscription_inactive' || started.code === 'demo_brand') openUpgrade();
-      else toast.error(started.error ?? t('runFailed'));
+      else toast.error(serverError(started, started.error ?? t('runFailed')));
       return;
     }
     router.push(`/dashboard/chat/${started.chatId}`);
@@ -182,7 +188,7 @@ export function ChatSkills() {
       enabled,
     );
     if (refused !== null) {
-      toast.error(refused || t('changeFailed'));
+      toast.error(serverError(refused, refused.error || t('changeFailed'), refused.status));
       return;
     }
     toast.success(t(enabled ? 'turnedOn' : 'turnedOff', { name: skill.name }));
@@ -192,7 +198,7 @@ export function ChatSkills() {
   async function toggleOwn(skill: WorkspaceSkillView, enabled: boolean) {
     const refused = await patchEnabled(`/api/chat/skills/${skill.id}`, enabled);
     if (refused !== null) {
-      toast.error(refused || t('changeFailed'));
+      toast.error(serverError(refused, refused.error || t('changeFailed'), refused.status));
       return;
     }
     toast.success(t(enabled ? 'turnedOn' : 'turnedOff', { name: skill.name }));
@@ -742,6 +748,7 @@ function SkillDetails({
   onChanged: () => void;
 }) {
   const t = useTranslations('chatSkills.page');
+  const serverError = useServerErrorText();
   const own = 'id' in skill ? skill : null;
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -760,7 +767,7 @@ function SkillDetails({
     } | null;
     setBusy(false);
     if (!res?.ok || !body?.ok) {
-      toast.error(body?.error ?? t('changeFailed'));
+      toast.error(serverError(body, body?.error ?? t('changeFailed'), res?.status));
       return;
     }
     toast.success(body.requested ? t('details.requested') : t('details.shared'));
@@ -774,7 +781,7 @@ function SkillDetails({
     const body = (await res?.json().catch(() => null)) as { error?: string } | null;
     setBusy(false);
     if (!res?.ok) {
-      toast.error(body?.error ?? t('changeFailed'));
+      toast.error(serverError(body, body?.error ?? t('changeFailed'), res?.status));
       return;
     }
     toast.success(t('details.deleted', { name: own.name }));

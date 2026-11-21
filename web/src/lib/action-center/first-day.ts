@@ -38,7 +38,7 @@ export function demandTiers(volumes: ReadonlyMap<string, number>): Map<string, D
 /**
  * The engines the first answers come from, by name, in the app's order:
  * those the brand's prompts track that the plan allows ("ChatGPT and
- * Google Gemini"). Shopping is the same engine's other face, and left out.
+ * Gemini"). Shopping is the same engine's other face, and left out.
  */
 export function engineNames(
   tracked: readonly string[],
@@ -50,7 +50,7 @@ export function engineNames(
       on.has(scraper.id) &&
       scraper.id !== 'chatgpt-shopping' &&
       (!allowed || allowed.includes(scraper.id)),
-  ).map((scraper) => scraper.label.replace(/\s*\(Web\)$/, ''));
+  ).map((scraper) => scraper.label);
 }
 
 /** The first word of a person's name, for "Welcome, Alex"; null without one. */

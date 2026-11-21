@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Lock, LockOpen, Plus, RefreshCw, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -79,6 +80,7 @@ export function ShoppingPathSection({
   const [hits, setHits] = useState<CatalogProductHit[] | 'failed' | null>(null);
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const needsPlan = { action: tActions('changeShoppingPath') };
 
   const load = useCallback(async () => {
@@ -182,7 +184,7 @@ export function ShoppingPathSection({
       }
     } catch (err) {
       console.error('Failed to build the shopping path:', err);
-      toast.error(t('saveFailed'));
+      toast.error(serverError(err, t('saveFailed')));
     } finally {
       setBusy(null);
     }
@@ -198,7 +200,7 @@ export function ShoppingPathSection({
       if (saved) setState({ status: 'ready', path: saved, none: null });
     } catch (err) {
       console.error('Failed to save the shopping path:', err);
-      toast.error(t('saveFailed'));
+      toast.error(serverError(err, t('saveFailed')));
       setState(before);
     } finally {
       setBusy(null);
