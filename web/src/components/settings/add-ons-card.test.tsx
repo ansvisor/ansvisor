@@ -197,9 +197,6 @@ describe('for an Admin', () => {
         .filter((b) => b.getAttribute('aria-pressed') === 'true')
         .map((b) => [b.textContent, b.classList.contains('bg-primary')]);
     expect(picked()).toEqual([['AI credits', true]]);
-    expect(button('Storage')?.classList.contains('bg-primary')).toBe(false);
-    await click(button('Storage'));
-    expect(picked()).toEqual([['Storage', true]]);
   });
 
   it('says a purchase that failed to start, and lets the person try again', async () => {
@@ -210,33 +207,25 @@ describe('for an Admin', () => {
     expect(button('Continue to payment')?.disabled).toBe(false);
   });
 
-  it('confirms storage before adding it to the plan, as it is charged at once', async () => {
-    vi.mocked(startAddOnPurchase).mockResolvedValue({ ok: true, next: 'added' });
+  it('never sells storage packs here, as they read as confusing next to the plan', async () => {
     await render(addOns());
-    await click(button('Storage'));
-    expect(cards().map((c) => c.textContent)).toEqual([
-      '$5+25 GB of storageMonthlyMost picked',
-      '$15+100 GB of storageMonthly',
-    ]);
-    await click(button('Continue to payment'));
-    expect(startAddOnPurchase).not.toHaveBeenCalled();
-    expect(text()).toContain('Add 25 GB to your plan?');
-    expect(text()).toContain('$5 a month, renewed with your plan.');
-
-    await click(button('Add to plan'));
-    expect(startAddOnPurchase).toHaveBeenCalledWith('storage_25');
-    expect(text()).toContain('Added to your plan.');
-    // Read again, to show it.
-    expect(getBillingAddOns).toHaveBeenCalledTimes(2);
+    expect(button('Storage')).toBeUndefined();
+    expect(cards().some((c) => c.textContent?.includes('GB of storage'))).toBe(false);
   });
 
-  it('opens on storage, with no AI tab, once the AI packs have left the sale (00547)', async () => {
+  it('shows only the credit and the purchases once only storage packs are on sale (00547)', async () => {
     await render(addOns({ packs: PACKS.filter((p) => p.kind === 'storage') }));
-    expect(buttons().some((b) => b.textContent === 'AI credits')).toBe(false);
-    expect(cards().map((c) => c.textContent)).toEqual([
-      '$5+25 GB of storageMonthlyMost picked',
-      '$15+100 GB of storageMonthly',
-    ]);
+    expect(text()).toContain('AI credit: $48.20 left');
+    expect(cards()).toHaveLength(0);
+    expect(button('Continue to payment')).toBeUndefined();
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
+  });
+
+  it('shows no card with nothing on sale, no credit and nothing bought', async () => {
+    await render(
+      addOns({ packs: PACKS.filter((p) => p.kind === 'storage'), credit: null, purchases: [] }),
+    );
+    expect(container.innerHTML).toBe('');
   });
 
   it('shows Stripe’s words when the card is declined', async () => {
@@ -246,9 +235,7 @@ describe('for an Admin', () => {
       message: 'Your card was declined.',
     });
     await render(addOns());
-    await click(button('Storage'));
     await click(button('Continue to payment'));
-    await click(button('Add to plan'));
     expect(container.querySelector('[role="alert"]')?.textContent).toBe('Your card was declined.');
   });
 
