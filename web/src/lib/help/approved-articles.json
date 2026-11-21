@@ -1854,7 +1854,7 @@
         },
         {
           "heading": "Inbox",
-          "text": "**Inbox** in the chat menu lists what your agents did: chats waiting for your OK first, with **Review**, then chats still working, with their progress and **Watch**, then results you haven't opened yet, with **Open**. Click a row to open its chat. A result leaves the Inbox once you open it. The Inbox shows the brand you have selected: another brand's chats are on that brand's Inbox. The count next to **Inbox** shows how many items there are, with an amber dot when something needs you. Daily suggestions aren't in that count: the **Daily suggestions** tab shows theirs.\n\nTabs on top, each with its count, show **All**, your **Daily suggestions**, what **Needs you** and your **Runs**."
+          "text": "**Inbox** in the chat menu lists what your agents did: chats waiting for your OK first, with **Review**, then chats still working, with their progress and **Watch**, then results you haven't opened yet, with **Open**. Click a row to open its chat. A result leaves the Inbox once you open it. The Inbox shows the brand you have selected: another brand's chats are on that brand's Inbox. The count next to **Inbox**, with an amber dot, shows how many chats need you, the same number as the **Needs you** tab; with nothing waiting for you there's no count.\n\nTabs on top, each with its count, show **All**, your **Daily suggestions**, what **Needs you** and your **Runs**."
         },
         {
           "heading": "The chat menu",
@@ -2077,7 +2077,7 @@
         },
         {
           "heading": "The Inbox tabs",
-          "text": "The **Inbox** has tabs on top, each with its count:\n\n- **All**: everything below.\n- **Daily suggestions**: the actions picked for you.\n- **Needs you**: chats waiting for your OK.\n- **Runs**: chats still working, and results you haven't opened.\n\nThe line under **Inbox** counts what needs you, what runs and the suggestions of this week."
+          "text": "The **Inbox** has tabs on top, each with its count:\n\n- **All**: everything below.\n- **Daily suggestions**: the actions picked for you.\n- **Needs you**: chats waiting for your OK.\n- **Runs**: chats still working, and results you haven't opened.\n\nThe line under **Inbox** says how many things need you, the number on the **Needs you** tab, or **Nothing needs you**."
         },
         {
           "heading": "Daily suggestions",

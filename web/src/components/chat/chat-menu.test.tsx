@@ -408,7 +408,7 @@ describe('ChatMenuView', () => {
     vi.unstubAllGlobals();
   });
 
-  it('counts the Inbox, and lists Agents at work in three rows until See all', async () => {
+  it('counts what needs the person on the Inbox, and lists Agents at work in three rows until See all', async () => {
     const chats = [
       chat('a', { state: 'needsYou', progress: { done: 3, total: 6 } }),
       chat('b', {
@@ -422,10 +422,10 @@ describe('ChatMenuView', () => {
       chat('e'),
     ];
     await render(menu(chats));
-    // The Inbox counts its own and their unread results, with a dot while one needs the person.
+    // The Inbox counts what needs the person, as its Needs you tab (CH-04).
     const inbox = action('chatMenu.openInbox')[0];
-    expect(inbox.textContent).toBe('Inbox5');
-    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 5 items · 1 needs you');
+    expect(inbox.textContent).toBe('Inbox1');
+    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 1 needs you');
     // Agents at work: what is under way or waits (UX audit CH-03), not a finished answer.
     expect(text()).toContain('Agents at work4');
     expect(text()).toContain('Waiting for your OK · step 4 of 6');
@@ -504,8 +504,8 @@ describe('ChatMenuView', () => {
       ]),
     );
     const inbox = action('chatMenu.openInbox')[0];
-    expect(inbox.textContent).toBe('Inbox1');
-    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 1 item');
+    expect(inbox.textContent).toBe('Inbox');
+    expect(inbox.getAttribute('aria-label')).toBeNull();
   });
 
   it('groups the other chats by day, bold while unread, and folds Chats', async () => {

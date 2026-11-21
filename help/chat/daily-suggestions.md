@@ -22,7 +22,7 @@ The **Inbox** has tabs on top, each with its count:
 - **Needs you**: chats waiting for your OK.
 - **Runs**: chats still working, and results you haven't opened.
 
-The line under **Inbox** counts what needs you, what runs and the suggestions of this week.
+The line under **Inbox** says how many things need you, the number on the **Needs you** tab, or **Nothing needs you**.
 
 ## Daily suggestions
 
