@@ -10,10 +10,20 @@
  *
  *   node src/scripts/probe-google-ads.js composio <connectedAccountId>
  *   node src/scripts/probe-google-ads.js direct
+ *   node src/scripts/probe-google-ads.js composio-tools <entityId> <connectedAccountId>
  *
- * Both modes need, in server/.env:
+ * composio-tools runs Composio's own Google Ads tools (toolkit 20261116_00,
+ * or GOOGLEADS_TOOLKIT_VERSION): GOOGLEADS_LIST_ACCESSIBLE_CUSTOMERS and
+ * GOOGLEADS_SEARCH_GAQL, with no developer token of ours. Composio's docs
+ * disagree on whose token those use (the toolkit page calls the auth
+ * config's Developer Token field legacy; its knowledge base says the token
+ * belongs on the auth config), so this mode shows what actually happens.
+ * The entity is `org_<organizationId>`. If GAQL's argument names differ, the
+ * printed error names the ones the tool wants.
+ *
+ * composio and direct need, in server/.env:
  *   GOOGLE_ADS_DEVELOPER_TOKEN   our developer token (server-side only);
- *   GOOGLE_ADS_API_VERSION       e.g. v24, a version Google still serves;
+ *   GOOGLE_ADS_API_VERSION       e.g. v26, a version Google still serves;
  *   GOOGLE_ADS_LOGIN_CUSTOMER_ID optional: the MANAGER account's id when the
  *                                account is reached through one.
  *
@@ -59,13 +69,49 @@ function stop(message) {
   process.exit(1);
 }
 
+if (mode === 'composio-tools') {
+  const [entityId, accountId] = process.argv.slice(3);
+  if (!process.env.COMPOSIO_API_KEY || !entityId || !accountId) {
+    stop('composio-tools needs COMPOSIO_API_KEY, an entity id and a connected account id.');
+  }
+  const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
+  const toolkitVersion = process.env.GOOGLEADS_TOOLKIT_VERSION || '20261116_00';
+  const run = (slug, args) =>
+    composio.tools.execute(slug, {
+      userId: entityId,
+      connectedAccountId: accountId,
+      arguments: args,
+      version: toolkitVersion,
+    });
+  say(`Google Ads probe · composio-tools · toolkit ${toolkitVersion}`);
+  const listed = await run('GOOGLEADS_LIST_ACCESSIBLE_CUSTOMERS', {}).catch((err) => ({
+    successful: false,
+    error: err.message,
+  }));
+  const ids = accessibleCustomerIds(listed?.data);
+  say(
+    `\n1. Accessible accounts: ${listed?.successful === false ? `failed · ${String(listed.error).slice(0, 300)}` : 'OK'} · ${ids.length} account(s)${ids.length ? `: ${ids.slice(0, 10).join(', ')}` : ''}`,
+  );
+  if (ids.length) {
+    const searched = await run('GOOGLEADS_SEARCH_GAQL', {
+      customer_id: ids[0],
+      query: 'SELECT customer.id, customer.manager, customer.test_account FROM customer LIMIT 1',
+    }).catch((err) => ({ successful: false, error: err.message }));
+    say(
+      `\n2. GAQL on ${ids[0]}: ${searched?.successful === false ? `failed · ${String(searched.error).slice(0, 300)}` : `OK · ${JSON.stringify(searched?.data ?? null).length} chars`}`,
+    );
+  }
+  process.exit(0);
+}
 if (mode !== 'composio' && mode !== 'direct') {
-  stop('Usage: probe-google-ads.js composio <connectedAccountId> | direct');
+  stop(
+    'Usage: probe-google-ads.js composio <connectedAccountId> | direct | composio-tools <entityId> <connectedAccountId>',
+  );
 }
 if (!developerToken) stop('GOOGLE_ADS_DEVELOPER_TOKEN is not set (server/.env).');
 if (!/^v\d+$/.test(version ?? '')) {
   stop(
-    'Set GOOGLE_ADS_API_VERSION (e.g. v24) to a version Google still serves; see the Google Ads API release notes.',
+    'Set GOOGLE_ADS_API_VERSION (e.g. v26) to a version Google still serves; see the Google Ads API release notes.',
   );
 }
 if (mode === 'composio' && (!process.env.COMPOSIO_API_KEY || !connectedAccountId)) {
