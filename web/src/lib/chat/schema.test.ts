@@ -1264,6 +1264,46 @@ describe('When a brand is added (00482)', () => {
   });
 });
 
+describe('When a page is published, When the catalog syncs (00558)', () => {
+  const sql = migration('00558');
+
+  it('adds both kinds to the triggers and to the runs, keeping every kind before them', () => {
+    expect(allowed(constraint(sql, 'chat_agent_triggers_kind_check'), 'kind')).toEqual([
+      'schedule',
+      'signal',
+      'kpi',
+      'watch_rule',
+      'brand_added',
+      'page_published',
+      'catalog_synced',
+    ]);
+    expect(allowed(constraint(sql, 'chat_agent_runs_trigger_kind_check'), 'trigger_kind')).toEqual([
+      'schedule',
+      'signal',
+      'kpi',
+      'watch_rule',
+      'brand_added',
+      'page_published',
+      'catalog_synced',
+      'manual',
+      'action',
+      'agent',
+    ]);
+  });
+
+  it('claims a fire once per agent, kind, brand and event, schema only', () => {
+    expect(sql).toMatch(/add column if not exists ref text not null default ''/);
+    expect(sql).toMatch(/primary key \(agent_id, kind, brand_id, ref\)/);
+    expect(allowed(constraint(sql, 'chat_agent_trigger_claims_kind_check'), 'kind')).toEqual([
+      'brand_added',
+      'page_published',
+      'catalog_synced',
+    ]);
+    // No grant or policy of its own (00482's stand), and nothing written to rows.
+    expect(sql).not.toMatch(/\bgrant\b|create policy|\bupdate public\.|\binsert into\b/);
+  });
+});
+
 describe('Agents for you hidden (00483)', () => {
   const sql = migration('00483');
 

@@ -20,6 +20,10 @@
  *     definitions each feeds and the pages and engines it names, so Signal
  *     triggers fire. It never waits on the web and never fails the pass: a
  *     Chat agent never slows an engine job (CHAT-21 boundary).
+ *   - After a page goes live in a brand's CMS (content-published.js),
+ *     notifyChatAgentsOfPagePublished tells the web's
+ *     POST /api/internal/chat/agents/events, so When a page is published
+ *     triggers fire (00558). Ids only, and never for a page an agent made.
  *
  * Both send `Authorization: Bearer ${CHAT_INTERNAL_SECRET}` to the web app
  * at PUBLIC_APP_URL; without the secret, or with the new Chat off, nothing
@@ -56,7 +60,7 @@ export function webAppOrigin() {
  * Answers { status, body }, or null when nothing was sent (Chat off, no
  * secret) or the web didn't answer in time; never throws.
  *
- * @param {'agents/tick' | 'agents/signals' | 'schedules/tick' | 'slack/card' | 'slack/decide'} path
+ * @param {'agents/tick' | 'agents/signals' | 'agents/events' | 'schedules/tick' | 'slack/card' | 'slack/decide'} path
  * @param {object} body
  * @param {{ timeoutMs?: number }} [options]
  */
@@ -85,7 +89,7 @@ export async function postToChatInternal(
 /**
  * POSTs to one of the web's internal agents endpoints (postToChatInternal).
  *
- * @param {'tick' | 'signals'} path
+ * @param {'tick' | 'signals' | 'events'} path
  * @param {object} body
  */
 export function postToChatAgents(path, body) {
@@ -232,6 +236,49 @@ export async function notifyChatAgentsOfSignals(brandId, detectedAt) {
     return res;
   } catch (err) {
     logger.error({ err, brandId }, '[chat-agents] could not tell the agents about new signals');
+    return null;
+  }
+}
+
+/**
+ * Tells the web a page went live in its brand's CMS (00558: When a page is
+ * published): the send's id, once per send on the web's side, and the
+ * page's draft id, for the agents that fire to read. Nothing for a page an
+ * agent's run made (origin agent: an agent never starts itself again), for
+ * a workspace without the new Chat, or without the secret. Ids only: the
+ * page's text stays where the run reads it as untrusted. Never throws.
+ *
+ * @param {{ draftId: string, deliveryId: string }} page
+ */
+export async function notifyChatAgentsOfPagePublished({ draftId, deliveryId }) {
+  try {
+    if (!chatAgenticDeployed() || !process.env.CHAT_INTERNAL_SECRET) return null;
+    const { data: draft, error } = await supabaseAdmin
+      .from('content_drafts')
+      .select('brand_id, origin')
+      .eq('id', draftId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!draft?.brand_id || draft.origin === 'agent') return null;
+    const { data: brand, error: brandError } = await supabaseAdmin
+      .from('brands')
+      .select('organization_id')
+      .eq('id', draft.brand_id)
+      .maybeSingle();
+    if (brandError) throw new Error(brandError.message);
+    if (!brand || !chatAgenticEnabled(brand.organization_id)) return null;
+    const res = await postToChatAgents('events', {
+      kind: 'page_published',
+      brandId: draft.brand_id,
+      ref: deliveryId,
+      draftId,
+    });
+    if (res && res.status !== 200) {
+      logger.error({ status: res.status, draftId }, '[chat-agents] page-published triggers failed');
+    }
+    return res;
+  } catch (err) {
+    logger.error({ err, draftId }, '[chat-agents] could not tell the agents a page was published');
     return null;
   }
 }
