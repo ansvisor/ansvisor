@@ -3579,7 +3579,7 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
@@ -3599,7 +3599,7 @@
         },
         {
           "heading": "Filter, sort and export",
-          "text": "- Search the opportunities, and narrow the list by topic, prompt, type, impact, **Source** and status. The sources are **System**, suggested automatically; **Manual**, made with **New**; **Prompt**, suggested from a prompt; and **Action**, sent from an Action Center task.\n- **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.\n- Archived opportunities stay hidden unless you filter to them.\n- Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.\n- **Export CSV** downloads every opportunity that matches the filters and the search, not only the page you see."
+          "text": "- Search the opportunities, and narrow the list by topic, prompt, type, impact, **Source** and status. The sources are **System**, suggested automatically; **Manual**, made with **New**; **Prompt**, suggested from a prompt; and **Action**, sent from an Action Center task.\n- **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.\n- Archived opportunities stay hidden unless you filter to them.\n- Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.\n- **Export CSV**, the download icon at the top right, downloads every opportunity that matches the filters and the search, not only the page you see."
         },
         {
           "heading": "Quick actions on a row",
@@ -3677,11 +3677,11 @@
         "editorial plan"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "The **Content plan**, **Plan** under **Content** in the sidebar, ranks what to create, optimize or protect next. It covers the last 7, 30 or 90 days: pick the period at the top right."
+          "text": "The **Content plan**, **Plan** under **Content** in the sidebar, ranks what to create, optimize or protect next. It covers the last 7, 30 or 90 days: pick **7**, **30** or **90 days** at the top right."
         },
         {
           "heading": "The four cards",

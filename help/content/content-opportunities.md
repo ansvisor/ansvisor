@@ -4,7 +4,7 @@ route: /dashboard/content
 keywords: [content opportunities, opportunity score, impact, visibility gap, content ideas, export csv, filter opportunities, bulk actions]
 synonyms: [content optimization, content gaps, what to write, content suggestions]
 plan: all
-updated: 2026-11-19
+updated: 2026-11-21
 last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
@@ -37,7 +37,7 @@ Ansvisor writes each opportunity's title and reason in English. When your interf
 - **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.
 - Archived opportunities stay hidden unless you filter to them.
 - Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.
-- **Export CSV** downloads every opportunity that matches the filters and the search, not only the page you see.
+- **Export CSV**, the download icon at the top right, downloads every opportunity that matches the filters and the search, not only the page you see.
 
 ## Quick actions on a row
 

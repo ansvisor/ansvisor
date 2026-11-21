@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useFailureToast } from '@/hooks/use-failure-toast';
 import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
@@ -139,6 +139,7 @@ import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { actionCode } from '@/lib/action-center/action-ref';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state';
 import { useFirstRun } from '@/hooks/use-first-run';
 
@@ -260,6 +261,21 @@ const STATUS_COLORS: Record<string, string> = {
   dismissed: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-500 dark:text-zinc-400',
   archived: 'border-zinc-500/30 bg-zinc-500/5 text-zinc-500 dark:text-zinc-400',
 };
+
+/**
+ * A header icon button, named in a tooltip on hover. The trigger is a span so
+ * a disabled button still says what it is.
+ */
+function HeaderIconButton({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger delay={150} closeDelay={0} render={<span className="inline-flex" />}>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 function KpiCard({
   title,
@@ -1287,19 +1303,28 @@ export default function ContentPage() {
           </div>
           <div className="flex items-center gap-2">
             {newButton}
-            <Button
-              onClick={handleExportCsv}
-              disabled={exporting || loading || total === 0}
-              variant="outline"
-              className="gap-2"
-            >
-              {exporting ? <LoadingDots /> : <Download className="h-4 w-4" />}
-              {tCommon('exportCsv')}
-            </Button>
-            <Button onClick={() => setWebhookOpen(true)} variant="outline" className="gap-2">
-              <Settings2 className="h-4 w-4" />
-              {t('webhook.title')}
-            </Button>
+            {/* Icons only, named on hover and to screen readers. */}
+            <HeaderIconButton label={tCommon('exportCsv')}>
+              <Button
+                onClick={handleExportCsv}
+                disabled={exporting || loading || total === 0}
+                variant="outline"
+                size="icon"
+                aria-label={tCommon('exportCsv')}
+              >
+                {exporting ? <LoadingDots /> : <Download className="h-4 w-4" />}
+              </Button>
+            </HeaderIconButton>
+            <HeaderIconButton label={t('webhook.title')}>
+              <Button
+                onClick={() => setWebhookOpen(true)}
+                variant="outline"
+                size="icon"
+                aria-label={t('webhook.title')}
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </HeaderIconButton>
           </div>
         </div>
       </HeaderWithAiUsage>
