@@ -79,6 +79,7 @@ import {
   getGenerationJobStatus,
   getContentUsage,
   getOpportunities,
+  getOpportunityAvailability,
   getOpportunityPrompts,
   getOpportunityTopics,
   type OpportunityPrompt,
@@ -118,6 +119,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { OpportunityDetail } from '@/components/content/opportunity-detail';
 import { ContentUsageCard } from '@/components/content/content-usage-card';
+import { OpportunityFlowNote } from '@/components/content/opportunity-flow-note';
+import { opportunityFlowState } from '@/lib/opportunity-flow';
 import { hasContentQuota, onDemandMax, type ContentUsage } from '@/lib/content-usage';
 import { isNoPlan } from '@/lib/billing/no-plan';
 import { suggestedBounds, suggestedDate, type SuggestedRange } from '@/lib/suggested-date';
@@ -521,6 +524,9 @@ export default function ContentPage() {
   const [contentUsage, setContentUsage] = useState<ContentUsage | null>(null);
   // Bumped after a "+ New" run, which may use quota without changing the total.
   const [usageVersion, setUsageVersion] = useState(0);
+  // Needs with and without an opportunity, for the note on why none arrive
+  // overnight; null hides it.
+  const [needs, setNeeds] = useState<{ needs: number; open: number } | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   // Placeholder rows while a "+ New" request runs (CONTENT-003).
   const [pendingCount, setPendingCount] = useState(0);
@@ -849,6 +855,20 @@ export default function ContentPage() {
     };
   }, [activeBrandId, total, usageVersion, listReady]);
 
+  // Read with the usage, when the list's size may have moved. A failure only
+  // hides the note.
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeBrandId || !listReady) return;
+    getOpportunityAvailability(activeBrandId).then(
+      (result) => !cancelled && setNeeds(result),
+      () => !cancelled && setNeeds(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, total, usageVersion, listReady]);
+
   const pollJob = useCallback(
     (jobId: string, startedAt: number) => {
       pollRef.current = true;
@@ -1034,6 +1054,7 @@ export default function ContentPage() {
         timeZone: 'UTC',
       })
     : '';
+  const flowState = opportunityFlowState({ limitReached, needs });
   // Generating opportunities costs AI: admins and managers start it, and
   // anyone else reads who can.
   const newButton = canManage ? (
@@ -1330,6 +1351,9 @@ export default function ContentPage() {
         </Card>
       ) : (
         <>
+          {flowState && (
+            <OpportunityFlowNote state={flowState} resetsOn={resetsOn} canManage={canManage} />
+          )}
           <div
             className={cn(
               'grid grid-cols-2 gap-4 sm:grid-cols-3',
