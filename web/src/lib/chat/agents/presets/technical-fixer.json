@@ -7,12 +7,12 @@
     "aeo",
     "developers"
   ],
-  "skills": [],
+  "skills": [
+    "tech-fix"
+  ],
   "triggers": [],
   "mode": "ask_first",
   "connections": [],
-  "status": "soon",
-  "needs": [
-    "ship_as_pr"
-  ]
+  "status": "ready",
+  "needs": []
 }

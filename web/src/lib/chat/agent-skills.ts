@@ -50,6 +50,11 @@
  * it is connected: Optional, as for /traffic. What isn't set up is "Not
  * measured", with the step that sets it up.
  *
+ * Then /tech-fix, the Crawler & Technical Fixer's: what keeps AI crawlers out
+ * of the site, from Site Audit's own results, so it uses no connection. Its
+ * fixes go to the Action Center with create_action, each on a card, for a
+ * developer to apply: it never changes the site or opens a pull request.
+ *
  * Last, /operator: the AEO Operator's own skill, an agent made of it alone
  * (agent-rules.ts isOperatorSkills), which reads only Ansvisor's own numbers
  * and uses no connection.
@@ -134,6 +139,8 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'seasonal', uses: [optional('google_search_console')] },
   { id: 'traffic', uses: [optional('google_analytics')] },
   { id: 'ai-revenue', uses: [optional('google_analytics')] },
+  // The Crawler & Technical Fixer's: Site Audit's own results, no connection.
+  { id: 'tech-fix', uses: [] },
   // Ads Phase 0 PR 15, only with Ads on: Ansvisor's own Ads reads, and drafts saved in it.
   { id: 'earn-or-pay', uses: [] },
   { id: 'ad-drafts', uses: [] },

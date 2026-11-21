@@ -71,6 +71,8 @@ export const SKILL_FIT: Readonly<Record<string, SkillFit>> = Object.freeze({
   'chatgpt-profile': PROTECT,
   // Site audit findings.
   'audit-fix': FIX,
+  // What keeps AI crawlers out of the site, from the same audits.
+  'tech-fix': FIX,
   // New answers and pages for prompts and questions where the brand isn't seen.
   faq: GROWTH,
   fanout: GROWTH,
