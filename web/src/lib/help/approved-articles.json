@@ -131,12 +131,7 @@
         "visibility score",
         "out of 100"
       ],
-      "synonyms": [
-        "key metrics",
-        "objectives",
-        "set goals",
-        "performance targets"
-      ],
+      "synonyms": ["key metrics", "objectives", "set goals", "performance targets"],
       "plan": "all",
       "updated": "2026-11-20",
       "sections": [
@@ -170,21 +165,8 @@
       "id": "action-center/action-center-overview",
       "title": "Action Center overview",
       "route": "/dashboard/action-center",
-      "keywords": [
-        "action center",
-        "actions",
-        "signals",
-        "kpis",
-        "history",
-        "prioritized work"
-      ],
-      "synonyms": [
-        "to-do list",
-        "work list",
-        "what to do next",
-        "recommendations",
-        "home page"
-      ],
+      "keywords": ["action center", "actions", "signals", "kpis", "history", "prioritized work"],
+      "synonyms": ["to-do list", "work list", "what to do next", "recommendations", "home page"],
       "plan": "all",
       "updated": "2026-11-17",
       "sections": [
@@ -223,12 +205,7 @@
         "signal code",
         "find signal by number"
       ],
-      "synonyms": [
-        "alerts",
-        "changes",
-        "detections",
-        "findings"
-      ],
+      "synonyms": ["alerts", "changes", "detections", "findings"],
       "plan": "all",
       "updated": "2026-11-20",
       "sections": [
@@ -266,12 +243,7 @@
         "measured outcome",
         "by play"
       ],
-      "synonyms": [
-        "what worked",
-        "past actions",
-        "completed actions",
-        "did it work"
-      ],
+      "synonyms": ["what worked", "past actions", "completed actions", "did it work"],
       "plan": "all",
       "updated": "2026-11-20",
       "sections": [
@@ -321,12 +293,7 @@
         "action ranking",
         "low confidence"
       ],
-      "synonyms": [
-        "action priority",
-        "ranking",
-        "how actions are sorted",
-        "urgency"
-      ],
+      "synonyms": ["action priority", "ranking", "how actions are sorted", "urgency"],
       "plan": "all",
       "updated": "2026-11-20",
       "sections": [
@@ -380,12 +347,7 @@
         "removed prompts",
         "re-plan"
       ],
-      "synonyms": [
-        "steps",
-        "subtasks",
-        "to-do items",
-        "task checks"
-      ],
+      "synonyms": ["steps", "subtasks", "to-do items", "task checks"],
       "plan": "all",
       "updated": "2026-11-20",
       "sections": [
@@ -489,12 +451,7 @@
         "new brand",
         "hide setup"
       ],
-      "synonyms": [
-        "first steps",
-        "setup list",
-        "where do I start",
-        "onboarding"
-      ],
+      "synonyms": ["first steps", "setup list", "where do I start", "onboarding"],
       "plan": "all",
       "updated": "2026-11-16",
       "sections": [
@@ -629,19 +586,8 @@
       "id": "action-center/task-review-queue",
       "title": "Review tasks waiting in Needs review",
       "route": "/dashboard/action-center/review",
-      "keywords": [
-        "needs review",
-        "approve task",
-        "dismiss task",
-        "task review",
-        "missing fields"
-      ],
-      "synonyms": [
-        "review queue",
-        "pending tasks",
-        "tasks to approve",
-        "incomplete tasks"
-      ],
+      "keywords": ["needs review", "approve task", "dismiss task", "task review", "missing fields"],
+      "synonyms": ["review queue", "pending tasks", "tasks to approve", "incomplete tasks"],
       "plan": "all",
       "updated": "2026-11-11",
       "sections": [
@@ -678,13 +624,7 @@
         "new area to track",
         "waiting for a spot"
       ],
-      "synonyms": [
-        "start page",
-        "home page",
-        "daily summary",
-        "what to do today",
-        "my day"
-      ],
+      "synonyms": ["start page", "home page", "daily summary", "what to do today", "my day"],
       "plan": "all",
       "updated": "2026-11-20",
       "sections": [
@@ -804,12 +744,7 @@
         "chatgpt visits",
         "referral trend"
       ],
-      "synonyms": [
-        "traffic from ai",
-        "visitors from chatgpt",
-        "ai referrals",
-        "ai sessions"
-      ],
+      "synonyms": ["traffic from ai", "visitors from chatgpt", "ai referrals", "ai sessions"],
       "plan": "all",
       "updated": "2026-11-20",
       "sections": [
@@ -1194,7 +1129,7 @@
         "ai visitors who sign up"
       ],
       "plan": "all",
-      "updated": "2026-11-18",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
@@ -1258,11 +1193,11 @@
         },
         {
           "heading": "What this agent did",
-          "text": "On an agent's page, **What this agent did** covers the last 30 days. **Changes shipped** counts the pages that went live from its runs. **Improved** says how many of those with a verdict improved, counting only Medium and High confidence verdicts, as **Reports** does. A **Pending** change gets its first verdict 14 days after it goes live.\n\nEach change shows the run it came from, its outcome and its next check, and how it went live: **on its own**, **you approved** when you sent or published it on a card in the run's chat, or **by** and the name of the teammate who did. A line counts the agent's drafts that aren't live yet: drafts aren't measured until they go live. You see only the brands you have access to. **Open in Reports** opens **What Ansvisor did for you**, where each change has its details."
+          "text": "On an agent's page, **What this agent did** covers the last 30 days. **Changes shipped** counts the pages that went live from its runs. **Improved** says how many of those with a verdict improved, counting only Medium and High confidence verdicts, as **Reports** does. A **Pending** change gets its first verdict 14 days after it goes live.\n\nEach change shows the run it came from, its outcome and its next check, and how it went live: **on its own**, **you approved** when you sent or published it on a card in the run's chat, or **by** and the name of the teammate who did. A line counts the agent's drafts that aren't live yet: drafts aren't measured until they go live. You see only the brands you have access to."
         },
         {
           "heading": "What a run's outcome means",
-          "text": "A run's **Outcome** in **Run history** shows what the pages it took live did in AI answers, measured as in **What Ansvisor did for you**. A page counts for the run once it is live, when the agent sent or published it on its own, or when you approved sending or publishing it on a card in the run's chat. A page you send or publish later from the Content Editor or the Library counts as yours, not the agent's.\n\nA run that took nothing live shows \"—\". Once the run has ended and one of its pages is live, it shows **Pending**. Day 14 gives the first verdict, such as **Improved** or **No meaningful change**, and days 30 and 90 can change it. A finished run is never **Improved** by itself."
+          "text": "A run's **Outcome** in **Run history** shows what the pages it took live did in AI answers, against untouched similar prompts. A page counts for the run once it is live, when the agent sent or published it on its own, or when you approved sending or publishing it on a card in the run's chat. A page you send or publish later from the Content Editor or the Library counts as yours, not the agent's.\n\nA run that took nothing live shows \"—\". Once the run has ended and one of its pages is live, it shows **Pending**. Day 14 gives the first verdict, such as **Improved** or **No meaningful change**, and days 30 and 90 can change it. A finished run is never **Improved** by itself."
         },
         {
           "heading": "Run, pause and archive",
@@ -1363,12 +1298,7 @@
         "archive selected",
         "ctrl k"
       ],
-      "synonyms": [
-        "chat history",
-        "old chats",
-        "past conversations",
-        "look up a chat"
-      ],
+      "synonyms": ["chat history", "old chats", "past conversations", "look up a chat"],
       "plan": "all",
       "updated": "2026-10-30",
       "sections": [
@@ -1627,12 +1557,7 @@
         "product page",
         "report page"
       ],
-      "synonyms": [
-        "assistant",
-        "ai agent",
-        "agent chat",
-        "ask ansvisor"
-      ],
+      "synonyms": ["assistant", "ai agent", "agent chat", "ask ansvisor"],
       "plan": "all",
       "updated": "2026-11-19",
       "sections": [
@@ -1944,11 +1869,7 @@
         "ask chat on every page",
         "full auto"
       ],
-      "synonyms": [
-        "chat preferences",
-        "chat options",
-        "run mode default"
-      ],
+      "synonyms": ["chat preferences", "chat options", "run mode default"],
       "plan": "all",
       "updated": "2026-11-16",
       "sections": [
@@ -2012,13 +1933,7 @@
         "product feed",
         "connected tools"
       ],
-      "synonyms": [
-        "connected apps",
-        "linked tools",
-        "data sources",
-        "plug in a tool",
-        "hook up"
-      ],
+      "synonyms": ["connected apps", "linked tools", "data sources", "plug in a tool", "hook up"],
       "plan": "all",
       "updated": "2026-11-02",
       "sections": [
@@ -2213,12 +2128,7 @@
         "after a change",
         "impact"
       ],
-      "synonyms": [
-        "check back",
-        "remind me to check",
-        "measure a change",
-        "follow up on a fix"
-      ],
+      "synonyms": ["check back", "remind me to check", "measure a change", "follow up on a fix"],
       "plan": "all",
       "updated": "2026-11-02",
       "sections": [
@@ -2396,13 +2306,7 @@
         "images key",
         "use ansvisor's limit"
       ],
-      "synonyms": [
-        "ai model",
-        "llm",
-        "which model",
-        "switch model",
-        "thinking effort"
-      ],
+      "synonyms": ["ai model", "llm", "which model", "switch model", "thinking effort"],
       "plan": "starter",
       "updated": "2026-11-14",
       "sections": [
@@ -3265,12 +3169,7 @@
         "integrations",
         "application password"
       ],
-      "synonyms": [
-        "cms integration",
-        "link my blog",
-        "set up send to cms",
-        "connect my website"
-      ],
+      "synonyms": ["cms integration", "link my blog", "set up send to cms", "connect my website"],
       "plan": "all",
       "updated": "2026-11-10",
       "sections": [
@@ -3400,12 +3299,7 @@
         "rejected suggestions",
         "read your choices in the editor"
       ],
-      "synonyms": [
-        "write an article",
-        "edit a draft",
-        "page editor",
-        "finish a page"
-      ],
+      "synonyms": ["write an article", "edit a draft", "page editor", "finish a page"],
       "plan": "all",
       "updated": "2026-11-19",
       "sections": [
@@ -3515,12 +3409,7 @@
         "first ai crawl",
         "ai bot visit after publish"
       ],
-      "synonyms": [
-        "content list",
-        "my articles",
-        "saved pages",
-        "draft list"
-      ],
+      "synonyms": ["content list", "my articles", "saved pages", "draft list"],
       "plan": "all",
       "updated": "2026-11-11",
       "sections": [
@@ -3572,12 +3461,7 @@
         "filter opportunities",
         "bulk actions"
       ],
-      "synonyms": [
-        "content optimization",
-        "content gaps",
-        "what to write",
-        "content suggestions"
-      ],
+      "synonyms": ["content optimization", "content gaps", "what to write", "content suggestions"],
       "plan": "all",
       "updated": "2026-11-19",
       "sections": [
@@ -3670,12 +3554,7 @@
         "create optimize protect",
         "losing ground"
       ],
-      "synonyms": [
-        "what to write next",
-        "content roadmap",
-        "content priorities",
-        "editorial plan"
-      ],
+      "synonyms": ["what to write next", "content roadmap", "content priorities", "editorial plan"],
       "plan": "all",
       "updated": "2026-11-11",
       "sections": [
@@ -4033,12 +3912,7 @@
         "page type",
         "site type"
       ],
-      "synonyms": [
-        "write a new article",
-        "start a draft",
-        "new page",
-        "improve an existing page"
-      ],
+      "synonyms": ["write a new article", "start a draft", "new page", "improve an existing page"],
       "plan": "all",
       "updated": "2026-11-19",
       "sections": [
@@ -4384,12 +4258,7 @@
       "id": "mentions/correct-mention-sentiment",
       "title": "Correct a wrong mention sentiment",
       "route": "/dashboard/mentions",
-      "keywords": [
-        "sentiment is wrong",
-        "correct sentiment",
-        "sentiment correction",
-        "wrong tone"
-      ],
+      "keywords": ["sentiment is wrong", "correct sentiment", "sentiment correction", "wrong tone"],
       "synonyms": [
         "fix sentiment",
         "change sentiment",
@@ -4557,11 +4426,7 @@
         "generate by topic",
         "track now"
       ],
-      "synonyms": [
-        "add a question",
-        "add queries",
-        "track a search"
-      ],
+      "synonyms": ["add a question", "add queries", "track a search"],
       "plan": "all",
       "updated": "2026-11-18",
       "sections": [
@@ -4608,12 +4473,7 @@
         "head terms",
         "opportunity volume"
       ],
-      "synonyms": [
-        "how many people ask",
-        "monthly AI searches",
-        "AI volume",
-        "est. ai volume"
-      ],
+      "synonyms": ["how many people ask", "monthly AI searches", "AI volume", "est. ai volume"],
       "plan": "all",
       "updated": "2026-11-06",
       "sections": [
@@ -4666,11 +4526,7 @@
         "open draft",
         "content for a prompt"
       ],
-      "synonyms": [
-        "write a page for a prompt",
-        "improve ranking",
-        "start a draft from a prompt"
-      ],
+      "synonyms": ["write a page for a prompt", "improve ranking", "start a draft from a prompt"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -4712,12 +4568,7 @@
         "people also ask",
         "search console"
       ],
-      "synonyms": [
-        "single prompt view",
-        "is this asked for real",
-        "real demand",
-        "prompt results"
-      ],
+      "synonyms": ["single prompt view", "is this asked for real", "real demand", "prompt results"],
       "plan": "all",
       "updated": "2026-10-31",
       "sections": [
@@ -4763,12 +4614,7 @@
         "similar topics",
         "high opportunity prompts"
       ],
-      "synonyms": [
-        "prompt volume",
-        "search demand",
-        "keyword volume",
-        "volume analysis"
-      ],
+      "synonyms": ["prompt volume", "search demand", "keyword volume", "volume analysis"],
       "plan": "all",
       "updated": "2026-11-17",
       "sections": [
@@ -4991,12 +4837,7 @@
         "top competitor",
         "catalog topics"
       ],
-      "synonyms": [
-        "themes",
-        "prompt groups",
-        "clusters",
-        "categories"
-      ],
+      "synonyms": ["themes", "prompt groups", "clusters", "categories"],
       "plan": "all",
       "updated": "2026-11-11",
       "sections": [
@@ -5068,12 +4909,7 @@
         "track now",
         "no answers yet"
       ],
-      "synonyms": [
-        "prompt list",
-        "my prompts",
-        "prompt table",
-        "tracked queries"
-      ],
+      "synonyms": ["prompt list", "my prompts", "prompt table", "tracked queries"],
       "plan": "all",
       "updated": "2026-11-20",
       "sections": [
@@ -5253,13 +5089,7 @@
       "id": "reports/looker-studio",
       "title": "Connect Looker Studio",
       "route": "/dashboard/settings/api-keys",
-      "keywords": [
-        "Looker Studio",
-        "connector",
-        "GA4",
-        "blend data",
-        "metric sets"
-      ],
+      "keywords": ["Looker Studio", "connector", "GA4", "blend data", "metric sets"],
       "synonyms": [
         "Google Data Studio",
         "visibility in my own dashboard",
@@ -5365,54 +5195,6 @@
       ]
     },
     {
-      "id": "reports/what-ansvisor-did",
-      "title": "See what Ansvisor did for you",
-      "route": "/dashboard/reports/impact",
-      "keywords": [
-        "what ansvisor did for you",
-        "impact",
-        "shipped changes",
-        "results",
-        "improved",
-        "pending",
-        "not measurable",
-        "checkpoints",
-        "control prompts",
-        "export csv"
-      ],
-      "synonyms": [
-        "did it work",
-        "results of my changes",
-        "impact report",
-        "proof of results",
-        "what changed after publishing"
-      ],
-      "plan": "all",
-      "updated": "2026-11-01",
-      "sections": [
-        {
-          "heading": null,
-          "text": "**What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**, and go back with **Back to Reports**. It shows the brand you have open."
-        },
-        {
-          "heading": "What shipped means",
-          "text": "A change is shipped once it went live: published to your CMS, its pull request merged, or marked as shipped. A draft waiting for review isn't shipped yet, so it isn't measured. A month with nothing shipped says so and points to **Today's focus**, where you can start an action."
-        },
-        {
-          "heading": "How a change is measured",
-          "text": "The page sums this up under **How we measure**. Each change is compared on its target prompts: the 14 days before it shipped against the days after. The same is done for similar prompts nothing touched, the control. The **Lift** is how much more the target prompts moved than the control, in points. A change needs a lift of at least 3 points to count as **Improved** or **Declined**.\n\nResults come at **checkpoints**: day 7 shows only the early direction (**Pending · early signal**), day 14 gives the first verdict, day 30 confirms it and day 90 shows whether it lasted. In a change's details, day 90 says **Held** when it kept the verdict before it, or **Faded** when it didn't. It all comes from your scheduled tracking, so it costs nothing extra.\n\nA result shows that things moved together, not that the change alone made them move."
-        },
-        {
-          "heading": "Read the page",
-          "text": "The cards count the changes shipped this month, and **Improved** out of the changes with a verdict of Medium or High confidence. Low confidence and **Not measurable** changes are listed in the table but not counted. **AI traffic to changed pages** compares the AI visits those pages had this month and last month, from Google Analytics.\n\nPercentages and lifts are shown to one decimal. Filter the table by outcome, and click a change to see its windows, numbers, other changes on the same prompts and each checkpoint. A change is **Not measurable** when, for example, too few similar prompts exist to compare.\n\nA month with more than 500 changes lists its first 500, and says so; the cards count only those."
-        },
-        {
-          "heading": "Export",
-          "text": "Click **Export** and **Download CSV** to save the month's changes and results, with the same numbers and days the table shows."
-        }
-      ]
-    },
-    {
       "id": "settings/add-ons",
       "title": "Add-ons: extra tracking, brands, AI top-ups and packs",
       "route": "/dashboard/settings/billing",
@@ -5506,12 +5288,7 @@
         "agents on your key",
         "key limit"
       ],
-      "synonyms": [
-        "bring your own key",
-        "byok",
-        "my own openai key",
-        "connect my ai account"
-      ],
+      "synonyms": ["bring your own key", "byok", "my own openai key", "connect my ai account"],
       "plan": "enterprise",
       "updated": "2026-11-01",
       "sections": [
@@ -6078,12 +5855,7 @@
         "wrong time",
         "schedule time zone"
       ],
-      "synonyms": [
-        "change my clock",
-        "times are off",
-        "local time",
-        "set my region time"
-      ],
+      "synonyms": ["change my clock", "times are off", "local time", "set my region time"],
       "plan": "all",
       "updated": "2026-11-11",
       "sections": [
@@ -6258,12 +6030,7 @@
         "sections off your menu",
         "agents for you"
       ],
-      "synonyms": [
-        "missing menu item",
-        "where is a page",
-        "simplify my menu",
-        "my role focus"
-      ],
+      "synonyms": ["missing menu item", "where is a page", "simplify my menu", "my role focus"],
       "plan": "all",
       "updated": "2026-11-11",
       "sections": [
@@ -6299,12 +6066,7 @@
         "translated",
         "your language"
       ],
-      "synonyms": [
-        "audit fixes",
-        "improve audit score",
-        "fix failed signals",
-        "raise page score"
-      ],
+      "synonyms": ["audit fixes", "improve audit score", "fix failed signals", "raise page score"],
       "plan": "all",
       "updated": "2026-11-19",
       "sections": [
@@ -6478,12 +6240,7 @@
         "audit all",
         "your language"
       ],
-      "synonyms": [
-        "page audit",
-        "check my page",
-        "scan a page",
-        "AI readiness check"
-      ],
+      "synonyms": ["page audit", "check my page", "scan a page", "AI readiness check"],
       "plan": "all",
       "updated": "2026-11-19",
       "sections": [
@@ -6557,12 +6314,7 @@
         "audit coverage",
         "score range"
       ],
-      "synonyms": [
-        "audit overview",
-        "audit history",
-        "which pages to audit",
-        "audit priority"
-      ],
+      "synonyms": ["audit overview", "audit history", "which pages to audit", "audit priority"],
       "plan": "all",
       "updated": "2026-11-19",
       "sections": [

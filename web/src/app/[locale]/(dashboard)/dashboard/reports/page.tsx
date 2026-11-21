@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useRouter } from '@/i18n/navigation';
+import { useRouter } from '@/i18n/navigation';
 import { useTranslations } from 'next-intl';
 import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
@@ -20,8 +20,7 @@ import { saveReportPdf } from './_save-pdf';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { viewRows } from '@/lib/chat/page-view';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -98,7 +97,6 @@ function getDateRange(preset: DatePreset, custom: { from: string; to: string }) 
 
 export default function ReportsPage() {
   const t = useTranslations('reports');
-  const chatAgentic = useChatAgentic();
   const tc = useTranslations('common');
   // A read-only workspace (plan not active): Generate report and Delete open
   // the upgrade dialog instead; reading and downloading reports stay open.
@@ -313,16 +311,6 @@ export default function ReportsPage() {
             <p className="text-muted-foreground">{t('description')}</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* What Ansvisor did for you (CHAT-22 §2 item 5): kept only with the new Chat on. */}
-            {chatAgentic && (
-              <Link
-                href="/dashboard/reports/impact"
-                data-action="reports.openImpact"
-                className={buttonVariants({ variant: 'outline' })}
-              >
-                {t('impactLink')}
-              </Link>
-            )}
             <Button className="gap-2" onClick={openDialog} disabled={!activeBrandId}>
               <Plus className="h-4 w-4" />
               {t('generateReport')}

@@ -2,12 +2,11 @@ import { actionCode } from '@/lib/action-center/action-ref';
 import { csvLine } from '@/lib/csv';
 
 /**
- * Reports › "What Ansvisor did for you" (CHAT-22 feature 2 item 5, mockup
- * signature #f-impact): what a month's shipped changes did, read as W2-20's
- * measuring job keeps them (ship_events, impact_measurements, 00421), the
- * one source Action Center › History reads too. Pure: the server action in
- * lib/actions/impact-report.ts reads, the page words. Nothing here judges:
- * every outcome, effect and confidence is the job's.
+ * What shipped changes did, read as W2-20's measuring job keeps them
+ * (ship_events, impact_measurements, 00421), the one source Action Center ›
+ * History reads too; an agent's "What this agent did" shows them. Pure:
+ * lib/chat/agent-impact.ts reads. Nothing here judges: every outcome,
+ * effect and confidence is the job's.
  */
 
 export const OUTCOMES = [

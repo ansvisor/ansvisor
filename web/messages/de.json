@@ -8743,7 +8743,6 @@
         "draftsNote": "Entwürfe werden erst gemessen, wenn sie live gehen.",
         "emptyTitle": "Von diesem Agenten ist noch nichts live gegangen.",
         "emptyBody": "Sobald eine Seite aus einem seiner Durchläufe live geht, wird sie hier angezeigt: ein erstes Signal nach 7 Tagen, das erste Ergebnis nach 14 Tagen.",
-        "openReports": "In Berichte öffnen",
         "loadFailed": "Die Aktionen dieses Agenten konnten nicht geladen werden."
       }
     },
@@ -17552,7 +17551,6 @@
     }
   },
   "reports": {
-    "impactLink": "Was Ansvisor für Sie getan hat",
     "impact": {
       "title": "Was Ansvisor für Sie getan hat",
       "subtitle": "{brand} · umgesetzte Aktionen gemessen an unveränderten ähnlichen Prompts",

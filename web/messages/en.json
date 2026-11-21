@@ -8420,7 +8420,6 @@
         "draftsNote": "Drafts aren't measured until they go live.",
         "emptyTitle": "Nothing from this agent has gone live yet.",
         "emptyBody": "When a page from one of its runs goes live, it shows here: an early signal 7 days later, the first verdict at 14 days.",
-        "openReports": "Open in Reports",
         "loadFailed": "Couldn't load what this agent did."
       }
     },
@@ -17209,7 +17208,6 @@
     }
   },
   "reports": {
-    "impactLink": "What Ansvisor did for you",
     "impact": {
       "title": "What Ansvisor did for you",
       "subtitle": "{brand} · shipped actions measured against untouched similar prompts",

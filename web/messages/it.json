@@ -8739,7 +8739,6 @@
         "draftsNote": "Le bozze non vengono misurate finché non vanno online.",
         "emptyTitle": "Niente di questo agente è ancora online.",
         "emptyBody": "Quando una pagina creata da una delle sue esecuzioni va online, viene mostrata qui: un primo segnale dopo 7 giorni, il primo verdetto dopo 14 giorni.",
-        "openReports": "Apri in Report",
         "loadFailed": "Impossibile caricare le attività di questo agente."
       }
     },
@@ -17548,7 +17547,6 @@
     }
   },
   "reports": {
-    "impactLink": "Cosa ha fatto Ansvisor per te",
     "impact": {
       "title": "Cosa ha fatto Ansvisor per te",
       "subtitle": "{brand} · azioni implementate misurate rispetto a Prompt simili non modificati",

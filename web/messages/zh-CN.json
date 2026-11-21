@@ -8690,7 +8690,6 @@
         "draftsNote": "草稿在上线前不会进行效果衡量。",
         "emptyTitle": "该智能体尚无任何内容上线。",
         "emptyBody": "当来自其运行的页面上线后，将在此显示：7 天后提供早期信号，14 天后得出初次结论。",
-        "openReports": "在报告中打开",
         "loadFailed": "无法加载该智能体的执行记录。"
       }
     },
@@ -17499,7 +17498,6 @@
     }
   },
   "reports": {
-    "impactLink": "Ansvisor 为您带来的成效",
     "impact": {
       "title": "Ansvisor 为您带来的成效",
       "subtitle": "{brand} · 已发布的优化操作与未优化的类似 Prompt 对比",

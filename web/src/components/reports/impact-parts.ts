@@ -2,9 +2,8 @@ import type { useTranslations } from 'next-intl';
 import type { ImpactOutcome, ImpactRow } from '@/lib/impact/report';
 
 /**
- * How a shipped change's outcome reads wherever the impact ledger shows it:
- * Reports › "What Ansvisor did for you" and an agent's "What this agent
- * did". One set of pills, words and numbers for both.
+ * How a shipped change's outcome reads in an agent's "What this agent did":
+ * its pills, words and numbers.
  */
 
 /** Each outcome's pill, in both themes (the Action Center's colors). */
@@ -26,7 +25,7 @@ export const PILL =
 export const signed = (value: number) =>
   value > 0 ? `+${value}` : value < 0 ? `−${Math.abs(value)}` : '0';
 
-/** The words of Reports' impact page (reports.impact). */
+/** The impact ledger's words (reports.impact). */
 export type ImpactWords = ReturnType<typeof useTranslations<'reports.impact'>>;
 
 /** "Pending · early signal" once day 7 is in; else the outcome's word. */
