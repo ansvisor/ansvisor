@@ -30,6 +30,10 @@ export const SKIPPED = {
   brand_filter_values_backfill:
     'Where each brand stands in the filter options backfill (00544): a demo brand made after 00544 is listed ready by the brands trigger, and one from before by the backfill script (src/scripts/backfill-filter-values.js); nothing is built for it.',
   webhook_configs: 'Outgoing webhooks: a demo brand never calls out.',
+  notification_preferences:
+    "A person's own e-mail choices (00554), made with their own clicks: nobody is mailed about a demo brand, and Settings › Notifications doesn't list it.",
+  notification_sends:
+    'Which notification e-mail went to whom (00556): written as an e-mail goes, and nobody is mailed about a demo brand.',
   prompt_table_views:
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
