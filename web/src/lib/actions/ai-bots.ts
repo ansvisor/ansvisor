@@ -19,6 +19,8 @@ export type BotConnectionKind =
   | 'vercel_drain'
   // Fastly HTTPS log streaming (#2164, 00495).
   | 'fastly_log_stream'
+  // Netlify log drain (#2167, 00553).
+  | 'netlify_log_drain'
   // A generic sender of JSON lines (#2170, 00492).
   | 'log_webhook';
 
@@ -70,6 +72,7 @@ export interface NewBotConnection {
   logpushJob: Record<string, unknown> | null;
   vercelDrain: { endpoint: string; format: string; headers: string[]; sources: string[] } | null;
   fastlyLogFormat: string | null;
+  netlifyDrain: { endpoint: string; format: string; headers: string[] } | null;
 }
 
 /** The API's stable code (plan_limit, or another it sends) and status, for the browser to say it in the person's language (LOC-008). */
@@ -157,6 +160,7 @@ export async function createBotConnection(
     logpushJob: (b.logpushJob as Record<string, unknown> | null) ?? null,
     vercelDrain: (b.vercelDrain as NewBotConnection['vercelDrain']) ?? null,
     fastlyLogFormat: typeof b.fastlyLogFormat === 'string' ? b.fastlyLogFormat : null,
+    netlifyDrain: (b.netlifyDrain as NewBotConnection['netlifyDrain']) ?? null,
   };
 }
 
