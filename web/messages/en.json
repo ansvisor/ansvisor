@@ -8204,7 +8204,8 @@
       },
       "agency-reporter": {
         "name": "Agency Client Reporter",
-        "description": "A monthly report for each client brand, for agencies."
+        "description": "A monthly report for each client brand, for agencies.",
+        "instructions": "Report on last month, the 1st to its last day, against the month before, in place of a week. Write it for the client brand: plain words, no internal notes."
       },
       "paid-opportunity": {
         "name": "Paid Opportunity",
