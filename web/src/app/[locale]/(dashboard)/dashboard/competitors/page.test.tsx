@@ -363,6 +363,57 @@ describe('the prompt set under each card’s score (UX audit CP-03)', () => {
   });
 });
 
+describe('the grid by Visibility score, You in its place (UX audit CP-06)', () => {
+  it('ranks the cards highest first with You among them, and leaves a low sample unranked', async () => {
+    const tracking = await import('@/lib/actions/tracking');
+    competitorActions.getCompetitors.mockResolvedValue([
+      { id: 'c1', brandId: 'b1', name: 'Rival', domain: 'rival.com', type: null },
+      { id: 'c2', brandId: 'b1', name: 'Bigger', domain: 'big.example', type: null },
+      { id: 'c3', brandId: 'b1', name: 'Tiny', domain: 'tiny.example', type: null },
+    ]);
+    const entry = (name: string, isOwnBrand: boolean, score: number, visiblePrompts = 20) => ({
+      name,
+      isOwnBrand,
+      avgVisibilityScore: 0,
+      visibilityRate: 0,
+      visiblePrompts,
+      promptCount: 100,
+      change: null,
+      score,
+      scoreChange: null,
+      mentionAnswers: 10,
+      citationAnswers: 1,
+      positionFactor: 0.5,
+      totalMentions: 10,
+      totalCitations: 1,
+      resultCount: 100,
+    });
+    vi.mocked(tracking.getCompetitorComparison).mockResolvedValue({
+      brands: [
+        entry('Acme', true, 40),
+        entry('Rival', false, 30),
+        entry('Bigger', false, 55),
+        entry('Tiny', false, 80, 2),
+      ],
+      providerRows: [],
+    });
+    await render(false);
+    const grid = container.querySelector('[data-slot="you-card"]')!.parentElement!;
+    const rows = [...grid.children].map((card) => [
+      card.querySelector('[data-slot="grid-rank"]')?.textContent,
+      card.querySelector('span.text-sm.font-medium')?.textContent,
+      !!card.querySelector('[data-slot="low-sample"]'),
+    ]);
+    expect(rows).toEqual([
+      ['#1', 'Bigger', false],
+      ['#2', 'Acme', false],
+      ['#3', 'Rival', false],
+      ['', 'Tiny', true],
+    ]);
+    expect(grid.querySelector('[data-slot="you-card"]')!.textContent).toContain('You');
+  });
+});
+
 describe('the head-to-head over the picker’s days (UX audit CP-02, CP-08)', () => {
   beforeEach(() => {
     // The competitor's timeline chart sizes itself; jsdom has no ResizeObserver.
