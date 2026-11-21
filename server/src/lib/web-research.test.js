@@ -63,6 +63,13 @@ const FIRECRAWL_RESULTS = {
   },
 };
 
+const KEENABLE_RESULTS = {
+  results: [
+    { title: 'A', url: 'https://a', snippet: 'a', description: '' },
+    { title: 'B', url: 'https://b', snippet: 'b', description: '' },
+  ],
+};
+
 describe('webResearch', () => {
   it('carries the search with Tavily when a key is set', async () => {
     vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
@@ -245,6 +252,81 @@ describe('webResearch', () => {
     vi.stubEnv('CONTEXT_DEV_API_KEY', 'ctxt_test');
 
     expect(serpProviderOrder().map((p) => p.name)).toEqual(['tavily']);
+  });
+
+  it('runs Keenable keyless on the public endpoint when it is named', async () => {
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'keenable');
+    vi.stubEnv('KEENABLE_API_KEY', '');
+    state.generateText
+      .mockResolvedValueOnce({ text: 'a query' })
+      .mockResolvedValueOnce({ text: 'the synthesis' });
+    state.fetch.mockResolvedValue({ ok: true, json: async () => KEENABLE_RESULTS });
+
+    const out = await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(out).toEqual({ text: 'the synthesis', searched: true, sources: 2 });
+    expect(state.fetch).toHaveBeenCalledTimes(1);
+    expect(state.fetch.mock.calls[0][0]).toBe('https://api.keenable.ai/v1/search/public');
+    const init = state.fetch.mock.calls[0][1];
+    expect(init.headers['X-Keenable-Title']).toBe('Ansvisor');
+    expect(init.headers['X-API-Key']).toBeUndefined();
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(JSON.parse(init.body)).toEqual({
+      query: 'a query',
+      max_results: 8,
+      snippet_max_length: 1000,
+      disable_cards: true,
+    });
+    const synthesis = state.generateText.mock.calls[1][0].prompt;
+    expect(synthesis).toContain('[A](https://a)\na');
+  });
+
+  it('uses the keyed Keenable endpoint when KEENABLE_API_KEY is set', async () => {
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'keenable');
+    vi.stubEnv('KEENABLE_API_KEY', 'kn_test');
+    state.generateText
+      .mockResolvedValueOnce({ text: 'a query' })
+      .mockResolvedValueOnce({ text: 'the synthesis' });
+    state.fetch.mockResolvedValue({ ok: true, json: async () => KEENABLE_RESULTS });
+
+    await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(state.fetch.mock.calls[0][0]).toBe('https://api.keenable.ai/v1/search');
+    expect(state.fetch.mock.calls[0][1].headers['X-API-Key']).toBe('kn_test');
+  });
+
+  it('falls back past Keenable when it fails and drops rows without a usable url', async () => {
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'keenable');
+    state.generateText
+      .mockResolvedValueOnce({ text: 'a query' })
+      .mockResolvedValueOnce({ text: 'grounded answer', sources: [{}] });
+    state.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ results: [{ title: 'x', url: 42 }, 'row', { title: 'y' }] }),
+    });
+
+    const out = await webResearch('google/gemini-3-flash', 'research this');
+
+    expect(out).toEqual({ text: 'grounded answer', searched: true, sources: 1 });
+    expect(logger.warn).toHaveBeenCalledWith(
+      { err: 'Keenable returned no results' },
+      'keenable research failed; falling back',
+    );
+  });
+
+  it('keeps Keenable out of the default chain', () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    vi.stubEnv('KEENABLE_API_KEY', 'kn_test');
+
+    expect(serpProviderOrder().map((p) => p.name)).toEqual(['tavily']);
+  });
+
+  it('places keyless Keenable where WEB_RESEARCH_PROVIDERS names it', () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    vi.stubEnv('KEENABLE_API_KEY', '');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'tavily, Keenable, cloro');
+
+    expect(serpProviderOrder().map((p) => p.name)).toEqual(['tavily', 'keenable']);
   });
 
   it('distills the query once for the whole chain', async () => {

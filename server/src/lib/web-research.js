@@ -223,6 +223,59 @@ async function firecrawlResearch(modelString, prompt, query) {
 }
 
 /**
+ * Research via Keenable's search API, only when `WEB_RESEARCH_PROVIDERS` names
+ * `keenable`. Keenable answers without a key on its public endpoint (rate
+ * limited per IP, no charge), so a self-host install can get searched
+ * suggestions without signing up for anything; with `KEENABLE_API_KEY` set the
+ * keyed endpoint is used instead. Cards (answers Keenable writes itself at
+ * short-lived cards.keenable.ai URLs) are turned off so every source is a page
+ * that can be cited. Same distill-search-synthesize shape as Tavily; any
+ * failure returns null so the caller falls through.
+ */
+async function keenableResearch(modelString, prompt, query) {
+  const key = process.env.KEENABLE_API_KEY;
+  try {
+    if (!query) throw new Error('empty search query');
+    const headers = { 'Content-Type': 'application/json', 'X-Keenable-Title': 'Ansvisor' };
+    if (key) headers['X-API-Key'] = key;
+    const res = await fetch(
+      key ? 'https://api.keenable.ai/v1/search' : 'https://api.keenable.ai/v1/search/public',
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          query,
+          max_results: 8,
+          snippet_max_length: 1000,
+          disable_cards: true,
+        }),
+        signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+        redirect: 'error',
+      },
+    );
+    if (!res.ok) throw new Error(`Keenable search HTTP ${res.status}`);
+    const data = await res.json();
+    const results = (Array.isArray(data?.results) ? data.results : []).filter(
+      (r) => typeof r?.url === 'string' && URL.canParse(r.url),
+    );
+    if (!results.length) throw new Error('Keenable returned no results');
+    return await synthesize(
+      modelString,
+      prompt,
+      results.map((r) => [
+        typeof r.title === 'string' ? r.title : '',
+        r.url,
+        typeof r.snippet === 'string' ? r.snippet : '',
+      ]),
+      results.length,
+    );
+  } catch (err) {
+    logger.warn({ err: err?.message }, 'keenable research failed; falling back');
+    return null;
+  }
+}
+
+/**
  * The plain-model synthesis every SERP provider shares: turn the fetched
  * results into the research answer the caller asked for.
  */
@@ -237,23 +290,29 @@ async function synthesize(modelString, prompt, rows, sources) {
   return { text, searched: true, sources };
 }
 
-/** The SERP providers that can carry the search, each behind its own key. */
+/**
+ * The SERP providers that can carry the search, each behind its own key.
+ * `keyless` providers also run without their key once they are named in
+ * `WEB_RESEARCH_PROVIDERS`; the key only lifts their limits.
+ */
 const SERP_PROVIDERS = [
   { name: 'tavily', keyEnv: 'TAVILY_API_KEY', search: tavilyResearch },
   { name: 'cloro', keyEnv: 'CLORO_API_KEY', search: cloroResearch },
   { name: 'context', keyEnv: 'CONTEXT_DEV_API_KEY', search: contextResearch },
   { name: 'scrapedo', keyEnv: 'SCRAPEDO_API_KEY', search: scrapedoResearch },
   { name: 'firecrawl', keyEnv: 'FIRECRAWL_API_KEY', search: firecrawlResearch },
+  { name: 'keenable', keyEnv: 'KEENABLE_API_KEY', keyless: true, search: keenableResearch },
 ];
 
 /**
  * The providers that will actually run, in order: `WEB_RESEARCH_PROVIDERS`
  * (comma-separated, default `tavily`) names them and their
- * order, so Cloro, Context, Scrape.do and Firecrawl are opt-in
- * (`WEB_RESEARCH_PROVIDERS=tavily,cloro,context,scrapedo,firecrawl`): an install that
+ * order, so Cloro, Context, Scrape.do, Firecrawl and Keenable are opt-in
+ * (`WEB_RESEARCH_PROVIDERS=tavily,cloro,context,scrapedo,firecrawl,keenable`): an install that
  * already holds one of those keys for tracking or Site Audit should not start
  * spending those credits on suggestion research it never signed up for.
- * Unknown names are ignored and a provider without its API key is skipped, so
+ * Unknown names are ignored and a provider without its API key is skipped
+ * (Keenable, which has a keyless endpoint, runs either way once named), so
  * an install that holds only a Tavily key behaves exactly as it did before
  * this chain existed.
  * @returns {Array<{ name: string, keyEnv: string, search: (modelString: string, prompt: string, query: string) => Promise<{ text: string, searched: boolean, sources: number } | null> }>}
@@ -264,14 +323,16 @@ export function serpProviderOrder() {
     .map((name) => name.trim().toLowerCase())
     .filter(Boolean);
   const byName = new Map(SERP_PROVIDERS.map((provider) => [provider.name, provider]));
-  return requested.map((name) => byName.get(name)).filter((p) => p && process.env[p.keyEnv]);
+  return requested
+    .map((name) => byName.get(name))
+    .filter((p) => p && (p.keyless || process.env[p.keyEnv]));
 }
 
 /**
  * The research phase of the suggestion routes: one generateText call, with web
  * search attached when available — the SERP providers in
- * `WEB_RESEARCH_PROVIDERS` order (Tavily by default; Cloro, Context, Scrape.do and
- * Firecrawl opt-in), then the provider's own tool. The search query is distilled once for the whole chain, not once per
+ * `WEB_RESEARCH_PROVIDERS` order (Tavily by default; Cloro, Context, Scrape.do,
+ * Firecrawl and Keenable opt-in), then the provider's own tool. The search query is distilled once for the whole chain, not once per
  * provider, so a quota wall on that call cannot repeat itself down the line.
  * Returns the text plus how many sources the answer drew on, so callers can
  * log it — a research step that silently stops searching shows up as
