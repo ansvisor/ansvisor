@@ -63,7 +63,11 @@ function Delta({
   unit?: '%' | '';
 }) {
   if (zeroBaseCount !== undefined) {
-    return <span className="text-xs font-medium text-emerald-600">+{zeroBaseCount} new</span>;
+    return (
+      <span className="text-xs font-medium text-emerald-600">
+        +{formatNumber(zeroBaseCount)} new
+      </span>
+    );
   }
   if (value === null) return null;
   const up = value >= 0;
@@ -391,7 +395,7 @@ export default function ReportDetailPage() {
             )}
             <KpiCard
               label={t('kpi.mentions')}
-              value={String(payload.insights.totalMentions)}
+              value={formatNumber(payload.insights.totalMentions)}
               change={payload.insights.mentionsChange}
               zeroBaseCount={
                 Object.hasOwn(payload.insights, 'prevMentions') &&
@@ -403,7 +407,7 @@ export default function ReportDetailPage() {
             />
             <KpiCard
               label={t('kpi.citations')}
-              value={String(payload.insights.totalCitations)}
+              value={formatNumber(payload.insights.totalCitations)}
               change={payload.insights.citationsChange}
               zeroBaseCount={
                 Object.hasOwn(payload.insights, 'prevCitations') &&
@@ -529,8 +533,8 @@ export default function ReportDetailPage() {
                         <TableCell className="text-end">
                           <Delta value={typeof c.score === 'number' ? c.scoreChange : c.change} />
                         </TableCell>
-                        <TableCell className="text-end">{c.totalMentions}</TableCell>
-                        <TableCell className="text-end">{c.totalCitations}</TableCell>
+                        <TableCell className="text-end">{formatNumber(c.totalMentions)}</TableCell>
+                        <TableCell className="text-end">{formatNumber(c.totalCitations)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -625,7 +629,7 @@ export default function ReportDetailPage() {
                                       : `${p.avgVisibility}/100`}
                                 </TableCell>
                                 <TableCell className="text-end text-muted-foreground">
-                                  {p.runs}
+                                  {formatNumber(p.runs)}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -720,7 +724,7 @@ export default function ReportDetailPage() {
                       <TableCell className="text-muted-foreground">
                         {q.engines.map((e) => PLATFORM_LABELS[e] ?? e).join(', ')}
                       </TableCell>
-                      <TableCell className="text-end">{q.timesSearched}</TableCell>
+                      <TableCell className="text-end">{formatNumber(q.timesSearched)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -734,7 +738,9 @@ export default function ReportDetailPage() {
             <CardHeader>
               <CardTitle className="flex items-baseline gap-2 text-base">
                 {t('aiTraffic')}
-                <span className="text-2xl font-bold">{payload.aiTraffic.totalVisits}</span>
+                <span className="text-2xl font-bold">
+                  {formatNumber(payload.aiTraffic.totalVisits)}
+                </span>
                 <Delta value={payload.aiTraffic.change} />
                 {/* No % on a handful of visits, as on the AI Traffic page. */}
                 {payload.aiTraffic.changeNote === 'new' && (
@@ -763,7 +769,7 @@ export default function ReportDetailPage() {
                   payload.aiTraffic.platformBreakdown.map((p) => (
                     <div key={p.platform} className="flex items-center justify-between text-sm">
                       <span className="truncate">{PLATFORM_LABELS[p.platform] ?? p.platform}</span>
-                      <span className="font-medium tabular-nums">{p.visits}</span>
+                      <span className="font-medium tabular-nums">{formatNumber(p.visits)}</span>
                     </div>
                   ))
                 )}
@@ -778,7 +784,9 @@ export default function ReportDetailPage() {
                   payload.aiTraffic.topPages.map((p) => (
                     <div key={p.url} className="flex items-center justify-between gap-3 text-sm">
                       <span className="min-w-0 truncate text-muted-foreground">{p.url}</span>
-                      <span className="shrink-0 font-medium tabular-nums">{p.visits}</span>
+                      <span className="shrink-0 font-medium tabular-nums">
+                        {formatNumber(p.visits)}
+                      </span>
                     </div>
                   ))
                 )}
@@ -922,7 +930,7 @@ export default function ReportDetailPage() {
                   {t('shopping.products')}
                 </p>
                 <p className="mt-1 text-2xl font-bold">
-                  {payload.shoppingVisibility.productsSurfaced}
+                  {formatNumber(payload.shoppingVisibility.productsSurfaced)}
                 </p>
               </div>
               <div>
@@ -1006,7 +1014,7 @@ export default function ReportDetailPage() {
                         <TableCell className="capitalize text-muted-foreground">
                           {d.category}
                         </TableCell>
-                        <TableCell className="text-end">{d.totalCitations}</TableCell>
+                        <TableCell className="text-end">{formatNumber(d.totalCitations)}</TableCell>
                         <TableCell className="text-end">{d.usagePct}%</TableCell>
                       </TableRow>
                     ))}
@@ -1049,7 +1057,7 @@ export default function ReportDetailPage() {
                           {c.domain}
                         </span>
                       </TableCell>
-                      <TableCell className="text-end">{c.totalCitations}</TableCell>
+                      <TableCell className="text-end">{formatNumber(c.totalCitations)}</TableCell>
                       <TableCell className="whitespace-normal text-xs text-muted-foreground">
                         {c.sourcedPrompts.join(' · ')}
                       </TableCell>
