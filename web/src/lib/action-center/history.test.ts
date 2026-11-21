@@ -38,6 +38,11 @@ describe('summarize', () => {
     ).toBe('critical');
     expect(summarize([item()]).topPriority).toBeNull();
   });
+
+  it('gives on-hold actions a count of their own, so the total adds up (UX audit AC-61)', () => {
+    const summary = summarize([item({ status: 'on_hold' }), item({ status: 'completed' })]);
+    expect(summary).toMatchObject({ totalActions: 2, onHold: 1, onHoldPercent: 50, completed: 1 });
+  });
 });
 
 describe('controlNetOf', () => {

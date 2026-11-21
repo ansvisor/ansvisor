@@ -13,9 +13,12 @@ import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
  */
 export function ActionCenterHeader({
   subtitle,
+  note,
   aside,
 }: {
   subtitle: ReactNode;
+  /** A second line under the subtitle, such as Today's "Since yesterday: 3 changes" (AC-07). */
+  note?: ReactNode;
   aside?: ReactNode;
 }) {
   const t = useTranslations('actionCenter.header');
@@ -25,6 +28,7 @@ export function ActionCenterHeader({
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+          {note && <p className="mt-0.5 text-[13px] text-muted-foreground">{note}</p>}
         </div>
         {aside && <p className="text-[13px] text-muted-foreground">{aside}</p>}
       </div>

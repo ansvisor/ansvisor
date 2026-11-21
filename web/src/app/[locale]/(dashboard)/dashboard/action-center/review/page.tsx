@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -74,6 +75,7 @@ function ReviewContent({ brandId }: { brandId: string }) {
   // open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
 
   const load = useCallback(async () => {
     try {
@@ -81,9 +83,9 @@ function ReviewContent({ brandId }: { brandId: string }) {
     } catch (err) {
       console.error('Failed to load the tasks waiting for review:', err);
       setReviews([]);
-      toast.error(t('loadFailed'));
+      toast.error(serverError(err, t('loadFailed')));
     }
-  }, [brandId, t]);
+  }, [brandId, t, serverError]);
 
   useEffect(() => {
     if (canManage) void load();
@@ -160,7 +162,7 @@ function ReviewContent({ brandId }: { brandId: string }) {
       }
     } catch (err) {
       console.error('Failed to approve the task:', err);
-      toast.error(t('failed'));
+      toast.error(serverError(err, t('failed')));
     } finally {
       setBusy(null);
     }
@@ -175,7 +177,7 @@ function ReviewContent({ brandId }: { brandId: string }) {
       gone(review.id);
     } catch (err) {
       console.error('Failed to dismiss the task:', err);
-      toast.error(t('failed'));
+      toast.error(serverError(err, t('failed')));
     } finally {
       setBusy(null);
     }

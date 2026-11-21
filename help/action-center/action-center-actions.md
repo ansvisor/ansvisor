@@ -115,7 +115,7 @@ The run drafts the work, but closing tasks stays your click. If the action is co
 
 ## Assign work
 
-An action with no one on it belongs to **Everyone** in the workspace until someone takes it. Pick a teammate in the action's **Assignee** field, and set a **Due date** if it has one. The **Assignee** filter on the Actions tab shows one person's actions, or **Everyone** for the unassigned ones.
+An action with no one on it belongs to **Everyone** in the workspace until someone takes it. Pick a teammate in the action's **Assignee** field, and set a **Due date** if it has one: click the date to open a calendar in your language, pick a day with the mouse or the arrow keys and Enter, or use **Today**; **Clear** removes it. The date saves as you pick it. The **Assignee** filter on the Actions tab shows one person's actions, or **Everyone** for the unassigned ones.
 
 ## Export actions
 

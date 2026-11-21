@@ -142,6 +142,16 @@ describe('RegenerateTasks', () => {
     await act(async () => button('Regenerate').click());
     expect(toast.error).toHaveBeenLastCalledWith('Server error: 502');
 
+    // A shared refusal's code, in the person's language rather than the server's English (LOC-008).
+    regenerate.mockResolvedValueOnce({
+      error: 'server',
+      code: 'demo_brand',
+      message: 'This is the demo brand: its data is a sample…',
+    });
+    act(() => button('Regenerate tasks').click());
+    await act(async () => button('Regenerate').click());
+    expect(toast.error).toHaveBeenLastCalledWith(messages.serverErrors.demo_brand);
+
     regenerate.mockResolvedValueOnce({ error: 'timeout' });
     act(() => button('Regenerate tasks').click());
     await act(async () => button('Regenerate').click());

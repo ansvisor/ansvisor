@@ -1,3 +1,4 @@
+import { engineName } from '../../config/engine-names.js';
 import { webAppOrigin } from '../chat-agents.js';
 import { deliverEmail } from '../email.js';
 import logger from '../logger.js';
@@ -24,14 +25,6 @@ export const MAX_PDF_ATTEMPTS = 30;
 /** The web's answer for figures it will never draw: the only failure given up at once. */
 const UNPROCESSABLE = 422;
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-const ENGINE_NAMES = {
-  'chatgpt-web': 'ChatGPT',
-  'copilot-web': 'Microsoft Copilot',
-  'gemini-web': 'Gemini',
-  'google-aio': 'Google AI Overviews',
-  'google-aimode': 'Google AI Mode',
-};
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -401,7 +394,7 @@ export function renderReportCardEmail({
   const visibility = answers ? Math.round((named / answers) * 100) : 0;
   const leader = payload.competitors[0];
   const site = escapeHtml(payload.domain);
-  const nameOf = (e) => ENGINE_NAMES[e.engine] ?? e.engine;
+  const nameOf = (e) => engineName(e.engine);
   const engines = escapeHtml(listIn(main.map(nameOf), t.and));
   const growthLine = growth.length ? t.growth(escapeHtml(listIn(growth.map(nameOf), t.and))) : '';
   const country = escapeHtml(t.country(payload.country.code, payload.country.name));

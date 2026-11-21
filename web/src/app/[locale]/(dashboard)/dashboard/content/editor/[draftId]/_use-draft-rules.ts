@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { getMyRuleSets, saveDraftRules, saveMyRuleSet } from '@/lib/actions/content-drafts';
 import { isPageType, type ContentDraft, type PageType } from '@/lib/content/drafts';
@@ -152,6 +153,7 @@ export function useDraftRules({
   // saved as My rules opens the upgrade dialog instead, and nothing changes.
   const { isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const locked = () => {
     if (isLocked) openUpgrade(tActions('editRules'));
     return isLocked;
@@ -314,7 +316,7 @@ export function useDraftRules({
         if (!waiting.current) {
           latest.current = saved.current;
           setChoices(saved.current);
-          toast.error(t('saveFailed'));
+          toast.error(serverError(err, t('saveFailed')));
         }
       })
       .finally(() => {
@@ -433,7 +435,7 @@ export function useDraftRules({
         })
         .catch((err) => {
           console.error('Failed to save My rules:', err);
-          toast.error(t('saveMineFailed'));
+          toast.error(serverError(err, t('saveMineFailed')));
         });
     },
     reset: () =>

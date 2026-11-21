@@ -6,13 +6,15 @@
  * the provider adds reads right without a list here.
  */
 
-/** The provider's engines, as the location picker names them. */
+import { ENGINE_NAMES } from '@/config/platform-labels';
+
+/** The provider's engines, as the location picker names them: each by its scraper's name. */
 export const ENGINE_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  aimode: 'Google AI Mode',
-  aioverview: 'Google AI Overview',
-  bing_aimode: 'Microsoft Copilot',
+  chatgpt: ENGINE_NAMES['chatgpt-web'],
+  gemini: ENGINE_NAMES['gemini-web'],
+  aimode: ENGINE_NAMES['google-aimode'],
+  aioverview: ENGINE_NAMES['google-aio'],
+  bing_aimode: ENGINE_NAMES['copilot-web'],
 };
 
 /** The provider's model for each scraper, as the API's CLORO_COUNTRY_MODELS. */

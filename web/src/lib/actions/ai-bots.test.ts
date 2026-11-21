@@ -94,6 +94,7 @@ describe('AI bot connection actions', () => {
     expect(await createBotConnection('b1', 'cloudflare_worker')).toEqual({
       error: 'Growth plan',
       code: 'plan_limit',
+      status: 403,
     });
   });
 

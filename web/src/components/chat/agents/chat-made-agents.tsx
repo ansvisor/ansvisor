@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { useScheduleWords } from '@/components/chat/scheduled/schedule-words';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -56,6 +57,7 @@ export function ChatMadeAgents({
   const tList = useTranslations('chatAgents.list');
   const tActions = useTranslations('chatAgents.actions');
   const tPage = useTranslations('chatSchedules.page');
+  const serverError = useServerErrorText();
   const [now] = useState(() => nowProp ?? new Date());
   const words = useScheduleWords(now);
   const { guard } = useUpgradeGate();
@@ -87,11 +89,18 @@ export function ChatMadeAgents({
   };
   const toggle = guard((job: ScheduleListItem) =>
     act(job, async () => {
-      const done: { ok: boolean; message?: string } = await setChatScheduleOn(
+      const done: { ok: boolean; reason?: string; message?: string } = await setChatScheduleOn(
         job.id,
         !job.enabled,
-      ).catch(() => ({ ok: false, message: tPage('errors.failed') }));
-      if (!done.ok) toast.error(done.message ?? tPage('errors.failed'));
+      ).catch((err: unknown) => ({ ok: false, message: serverError(err, tPage('errors.failed')) }));
+      // The refusal's reason in the person's language (LOC-008), else the server's words.
+      if (!done.ok) {
+        toast.error(
+          done.reason && tPage.has(`errors.${done.reason}`)
+            ? tPage(`errors.${done.reason}`)
+            : (done.message ?? tPage('errors.failed')),
+        );
+      }
     }),
   );
   const runNow = guard((job: ScheduleListItem) =>
