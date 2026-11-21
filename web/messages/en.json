@@ -2056,8 +2056,10 @@
         "pill": "Stale",
         "hint": "New for {days} days or more, with no one working on it",
         "quiet": "No update in {days} d",
-        "notice": "Stale: this action has been New for {days} days or more and no one has worked on it. It isn't closed: keep it if it still matters, or dismiss it.",
-        "keep": "Still relevant",
+        "notice": "No one has worked on this for {days} days or more.",
+        "keep": "Keep",
+        "keepHint": "Still relevant: keep it open, and it's no longer stale",
+        "dismiss": "Dismiss",
         "kept": "Kept: it's no longer stale"
       },
       "taskProgress": "{completed}/{total} tasks done",
@@ -2296,20 +2298,34 @@
       "drawer": {
         "actionId": "Action ID",
         "previousCode": "Previously {code}",
+        "more": "More actions",
+        "priorityLine": "Priority <b>{score}</b> · {level}",
+        "stats": {
+          "prompts": "{count, plural, one {prompt} other {prompts}}",
+          "pages": "{count, plural, one {page} other {pages}}",
+          "platforms": "{count, plural, one {platform} other {platforms}}",
+          "competitors": "{count, plural, one {competitor} other {competitors}}",
+          "topics": "{count, plural, one {topic} other {topics}}"
+        },
         "tabs": {
           "overview": "Overview",
           "affected": "Affected",
           "tasks": "Tasks",
           "signals": "Signals",
-          "history": "History"
+          "history": "History",
+          "tasksProgress": "Tasks {completed}/{total}"
         },
         "why": "Why this action?",
         "goal": "Goal",
+        "doneWhen": "Done when",
+        "whatHappened": "What happened",
         "kpis": "KPIs",
         "kpiBrandGoal": "{timeframe, select, weekly {Brand weekly goal} quarterly {Brand quarterly goal} other {Brand monthly goal}}: {target}",
         "noKpis": "No configured KPIs are linked to this action.",
         "support": "{count, plural, =0 {No open signal supports this action any more.} one {# signal supports this action} other {# signals support this action}}",
         "supportAll": "All signals ({count})",
+        "supportTimes": "×{count}",
+        "supportSame": "{count} signals that read the same: the Signals tab lists each",
         "affected": {
           "prompts": "{count, plural, one {# prompt} other {# prompts}}",
           "pages": "{count, plural, one {# page} other {# pages}}",
@@ -2448,6 +2464,7 @@
         "assignTo": "Assign to teammate",
         "dueDate": "Due date",
         "noDueDate": "No due date",
+        "addDueDate": "Add due date",
         "goalPassed": "Goal date passed",
         "setNewDate": "Set a new date",
         "statusLabel": "Status",

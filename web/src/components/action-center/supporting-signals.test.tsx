@@ -89,7 +89,9 @@ describe('SupportingSignals', () => {
   it('opens a signal, and the Signals tab for the rest', () => {
     const onOpenSignal = vi.fn();
     const onShowAll = vi.fn();
-    const many = Array.from({ length: 7 }, (_, i) => signal({ id: `s${i}` }));
+    const many = Array.from({ length: 7 }, (_, i) =>
+      signal({ id: `s${i}`, payload: { promptText: `Prompt ${i}` } }),
+    );
     render(
       <SupportingSignals
         actionId="a1"
@@ -111,6 +113,32 @@ describe('SupportingSignals', () => {
       b.textContent?.startsWith('All signals'),
     )!;
     act(() => all.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(onShowAll).toHaveBeenCalled();
+  });
+
+  it('shows signals that read the same as one row with how many, which opens the Signals tab', () => {
+    const onOpenSignal = vi.fn();
+    const onShowAll = vi.fn();
+    const same = Array.from({ length: 3 }, (_, i) => signal({ id: `s${i}` }));
+    render(
+      <SupportingSignals
+        actionId="a1"
+        signals={same}
+        onOpenSignal={onOpenSignal}
+        onShowAll={onShowAll}
+      />,
+    );
+
+    expect(container.textContent).toContain('3 signals support this action');
+    expect(lines()).toEqual([
+      'Citation · LostChatGPT, Gemini · What is the best AI rank tracker?×3',
+    ]);
+    act(() =>
+      container
+        .querySelector('li button')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    );
+    expect(onOpenSignal).not.toHaveBeenCalled();
     expect(onShowAll).toHaveBeenCalled();
   });
 
