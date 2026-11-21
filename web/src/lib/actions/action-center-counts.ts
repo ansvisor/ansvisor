@@ -1,7 +1,9 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { closedSince } from '@/lib/action-center/actions-visit';
 import {
+  CLOSED_ACTION_STATUSES,
   OPEN_ACTION_STATUSES,
   countOpenActions,
   type ActionStatus,
@@ -36,4 +38,23 @@ export async function getOpenActionCounts(brandId: string): Promise<OpenActionCo
     rows.map((row) => ({ status: row.status, assigneeId: row.assignee_id })),
     user.id,
   );
+}
+
+/**
+ * A brand's actions closed this week, for the Actions list's summary:
+ * completed or dismissed, last changed in the past 7 days (isClosedThisWeek
+ * is the same rule on the list's rows). A count only, read as the person
+ * (RLS). Throws when it can't be read, so a failed count shows nothing.
+ */
+export async function getClosedThisWeekCount(brandId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from('actions')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .in('status', [...CLOSED_ACTION_STATUSES])
+    .is('deleted_at', null)
+    .gte('updated_at', closedSince(new Date()));
+  if (error) throw new Error(error.message);
+  return count ?? 0;
 }
