@@ -922,6 +922,40 @@ describe('Action Center › Today', () => {
     ]);
   });
 
+  it('reads near-identical changes as one row, with its one action and each change under Show all (AC-06)', async () => {
+    const rival = (id: string, name: string) =>
+      signal(id, {
+        category: 'competitor',
+        kind: 'competitor_leads',
+        impact: 'high',
+        actionId: 'a7',
+        previousValue: 3,
+        currentValue: 40,
+        payload: { entity: 'competitors', targets: [{ label: name }] },
+      });
+    reads.getTodayChanges.mockResolvedValue({
+      ...changes,
+      items: [rival('c1', 'Northbound'), rival('c2', 'Morning Ritual'), rival('c3', 'Bean Co')],
+      total: 3,
+    });
+    await draw();
+    const part = container.querySelector('[data-today-part="since"]')!;
+    const row = part.querySelector('[data-signal-group="competitor_leads"]')!;
+    expect(row.textContent).toContain('3 rivals are mentioned far more than you · 1 action');
+    const link = row.querySelector('a')!;
+    expect(link.textContent).toBe('1 action');
+    expect(link.getAttribute('href')).toBe('/dashboard/action-center/actions?action=a7');
+    const toggle = row.querySelector('button')!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const each = [...row.querySelectorAll('ul li')];
+    expect(each).toHaveLength(3);
+    expect(each[1].textContent).toBe(
+      'Morning Ritual is mentioned far more than you. An action was added.',
+    );
+  });
+
   it('names the day the window starts when it is before yesterday', async () => {
     const friday = new Date(Date.now() - 3 * 86_400_000);
     reads.getTodayChanges.mockResolvedValue({ ...changes, since: friday.toISOString() });

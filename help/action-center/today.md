@@ -36,7 +36,7 @@ Each card keeps its place while Today loads and fills in as soon as its own data
 
 Both run across the page, under the two cards.
 
-- **Since yesterday**: the 3 to 5 biggest changes the nightly checks found since your last visit, each marked **Up**, **Down** or **Rival**, with a link to the action it added. Only high and medium impact signals count; the rest are in **All signals**. On a Monday it reads "Since Friday". A quiet day says so.
+- **Since yesterday**: up to 5 rows of the biggest changes since your last visit, marked **Up**, **Down** or **Rival**; click a row to open its action. Changes of one kind share a row ("5 rivals are mentioned far more than you · 1 action"); **Show all** lists each. Low-impact ones are in **All signals**. On a Monday it reads "Since Friday". A quiet day says so.
 - **Today's focus**: your three highest-impact actions, picked as Chat's daily suggestion picks them and shown highest impact first (Critical, High, Medium, Low), then by priority. Each card's first step names the action's own prompts, pages or rivals, the same count as its title. They stay until you finish them; **Skip for now** hides one from your focus for 7 days without changing it. A new one is marked **New**.
 
 ## Finish setting up
