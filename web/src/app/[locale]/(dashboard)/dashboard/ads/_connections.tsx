@@ -22,8 +22,9 @@ import { useBrandStore } from '@/stores/use-brand-store';
 
 /** Where Google Analytics is connected and managed, as Chat's Connections opens it. */
 const INTEGRATIONS_GA = '/dashboard/settings/integrations#google-analytics';
-const SOON = ['chatgpt', 'google', 'microsoft'] as const;
-const LATER: AdsLaterPlatform[] = ['meta', 'linkedin'];
+const SOON = ['chatgpt', 'google'] as const;
+// Microsoft waits for its API access (owner, 2026-11-21), so it comes later too.
+const LATER: AdsLaterPlatform[] = ['microsoft', 'meta', 'linkedin'];
 type PlatformId = (typeof SOON)[number] | AdsLaterPlatform | 'analytics';
 
 function Platform({ id, children }: { id: PlatformId; children: ReactNode }) {
@@ -114,7 +115,7 @@ function Analytics({ brandId }: { brandId: string }) {
 
 /**
  * Ads' Connections (ADS-01 §3.5, mockup `#con`): no ad account connects in
- * this preview. ChatGPT Ads, Google Ads and Microsoft Advertising come soon,
+ * this preview. ChatGPT Ads and Google Ads come soon; Microsoft Advertising,
  * Meta and LinkedIn later, with Notify me; Google Analytics is the app's
  * own, connected anywhere means connected here. Each platform keeps its own
  * billing: said, never shown.

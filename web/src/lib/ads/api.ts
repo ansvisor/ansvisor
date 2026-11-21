@@ -305,7 +305,7 @@ export function saveAdsSettings(thresholds: { [K in keyof AdsThresholds]?: numbe
 }
 
 /** The ad platforms that come later (ADS-01 §3.5), each with Notify me. */
-export type AdsLaterPlatform = 'meta' | 'linkedin';
+export type AdsLaterPlatform = 'microsoft' | 'meta' | 'linkedin';
 
 /** Notify me (`conn.notify`): logged once per person and platform; again, `logged` is false. */
 export function notifyAdsPlatform(brandId: string, platform: AdsLaterPlatform) {
