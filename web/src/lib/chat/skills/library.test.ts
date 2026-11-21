@@ -222,6 +222,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'Which pages and AI assistants bring you customers, sign-ups, forms, orders and revenue, and what to set up where nothing is measured yet.',
   },
+  'feed-advisor': {
+    title: 'Shopping feed gaps',
+    description:
+      'A weekly list of what your product feed is missing for AI shopping answers, ordered by impact, with the fix for each. Fixes go to the Action Center only on your approval.',
+  },
   'earn-or-pay': {
     title: 'Earn or pay',
     description:
@@ -281,7 +286,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's thirty-two and the Operator's own, with their titles and descriptions", () => {
+  it("are Ansvisor's thirty-three and the Operator's own, with their titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {
@@ -549,7 +554,7 @@ describe("Ads' skills (Ads Phase 0 PR 15)", () => {
   });
 });
 
-describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan §8.1, §8.3)", () => {
+describe("the packs' skills: /content-plan, /seasonal, /traffic and /feed-advisor (AGENTS plan §8)", () => {
   /** Each skill, its agent, and the only writes it may ask for. */
   const PACKS = [
     {
@@ -563,6 +568,8 @@ describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan 
       writes: ['add_prompts', 'create_action'],
     },
     { skill: 'traffic', agent: 'ai-traffic-signups', writes: ['create_action'] },
+    // The Shopping Feed Advisor's (AGENTS plan §8): the feed's gaps, its fixes sent on a card.
+    { skill: 'feed-advisor', agent: 'shopping-feed-advisor', writes: ['create_action'] },
   ];
   const body = (name: string) => SKILL_LIBRARY.find((skill) => skill.name === name)?.body ?? '';
   const named = (text: string) => [
