@@ -220,7 +220,7 @@ function PromptsCheck({
   );
 }
 
-/** "ChatGPT and Google Gemini". */
+/** "ChatGPT and Gemini". */
 function listOf(items: string[]): string {
   return new Intl.ListFormat('en-US', { type: 'conjunction' }).format(items);
 }

@@ -6656,7 +6656,7 @@
         },
         {
           "heading": "By AI platform",
-          "text": "**By AI platform** is a table with each platform's **Visibility**, **Change**, **Coverage**, **Share of voice** and **Avg. pos**. The row with the biggest drop is highlighted.\n\nA platform with too few answers shows **Low sample** or **No runs this period** instead of numbers. Use the table to send your content work toward your weakest platform."
+          "text": "**By AI platform** is a table with each platform's **Visibility**, **Change**, **Coverage**, **Share of voice** and **Avg. pos**. The row with the biggest drop is highlighted.\n\nA platform with too few answers shows **Low sample** or **No runs this period** instead of numbers. Use the table to send your content work toward your weakest platform.\n\nEach platform has one name everywhere in Ansvisor, in reports and e-mails too: Google's Gemini app is **Gemini**. Answers from an AI model asked directly, not through its app, have **API** after the name: **ChatGPT API**, **Gemini API** and **Claude API**."
         },
         {
           "heading": "Why it changed",

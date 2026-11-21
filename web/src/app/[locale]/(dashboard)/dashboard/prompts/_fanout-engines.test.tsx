@@ -99,7 +99,7 @@ describe('FanoutEngineStrip', () => {
     // Never-sharing engines are labels, not filters.
     expect(container.textContent).not.toContain('ChatGPT · not shared');
     expect(container.textContent).toContain('Google AI Overviews · not shared');
-    expect(container.textContent).toContain('Google Gemini · not shared');
+    expect(container.textContent).toContain('Gemini · not shared');
 
     act(() => container.querySelectorAll('button')[2].click());
     expect(onSelect).toHaveBeenCalledWith('perplexity-web');
@@ -140,7 +140,7 @@ describe('FanoutEngineNotices', () => {
       'Perplexity usually shares the searches behind its answers, but none arrived since Sep 29.',
     );
     expect(container.textContent).toContain(
-      "Google AI Overviews and Google Gemini don't come with the searches behind their answers",
+      "Google AI Overviews and Gemini don't come with the searches behind their answers",
     );
     expect(container.textContent).not.toContain('ChatGPT');
   });
