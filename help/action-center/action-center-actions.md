@@ -59,7 +59,7 @@ Below them, filter by category, **Priority**, **Status** (including **Open** and
 
 ## New and closed actions
 
-Above the list, a short line reads like "55 open · 12 closed this week · 3 new since your last visit". The open count can stay level for days: new actions come in while others are dismissed or completed, by hand or when all their tasks are checked.
+Above the list, a short line reads like "55 open · 12 closed this week · 3 new since your last visit". The open count doesn't always grow: a new finding on a subject with an open action joins that action, and completed or dismissed actions leave the count.
 
 - **New**: a mark beside the title of each action created since your last visit to the list, on this browser. It shows for the whole visit and is gone on the next one. An older action that a new signal updated moves to the top without it.
 - **Closed this week**: actions completed or dismissed in the last 7 days. Click it to list them; **Clear filters** goes back.
