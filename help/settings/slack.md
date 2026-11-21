@@ -4,8 +4,8 @@ route: /dashboard/settings/integrations
 keywords: [slack, slack channel, connect slack, pulse in slack, daily pulse, drop alert, daily suggestion, agent needs me, notifications, approve from slack, reject from slack]
 synonyms: [post to slack, slack integration, send updates to a channel, slack app, team chat alerts, approve in slack, slack buttons]
 plan: starter
-updated: 2026-11-15
-last_checked: 2026-11-15
+updated: 2026-11-20
+last_checked: 2026-11-20
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -27,7 +27,7 @@ If another brand already posts to a Slack workspace, **Use the same workspace as
 
 ## When the Pulse is posted
 
-With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable** (the default). Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.
+With **Daily Pulse** on under the channel, the Pulse is posted as often as the brand's Pulse is set to go out: **Daily**, **Weekly** on Mondays, or **Only when notable** (the default). An Admin changes how often for the brand under **Send to people outside the workspace** in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.
 
 Each Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day.
 
